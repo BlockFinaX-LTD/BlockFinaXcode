@@ -4,7 +4,7 @@
  * Integrates Vite's frontend dev server with the Express backend in development mode.
  * In production, serves the pre-built static frontend files.
  * Also exports the log() utility used across the server for timestamped console output.
- * DO NOT MODIFY — this file is managed by Replit's build system.
+ * DO NOT MODIFY — .
  */
 import express, { type Express } from "express";
 import fs from "fs";
