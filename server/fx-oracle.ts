@@ -132,6 +132,18 @@ async function get24hChangeFromDB(pair: string, currentRate: number): Promise<nu
 
 const CACHE_TTL = 5 * 60 * 1000;
 const API_URL = "https://open.er-api.com/v6/latest";
+const BACKUP_API_URL = "https://api.exchangerate-api.com/v4/latest";
+
+async function fetchRatesFromBackupSource(base: string): Promise<Record<string, number>> {
+  try {
+    const response = await fetch(`${BACKUP_API_URL}/${base}`);
+    if (!response.ok) throw new Error(`Backup API returned ${response.status}`);
+    const data = await response.json();
+    return data.rates ?? {};
+  } catch {
+    return {};
+  }
+}
 
 const DIAMOND_ADDRESS = '0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf';
 const LISK_SEPOLIA_RPC = 'https://rpc.sepolia-api.lisk.com';
@@ -231,29 +243,42 @@ export async function fetchAllRates(): Promise<Record<string, FXRate>> {
   const bases = [...new Set(Object.values(FX_PAIRS).map(p => p.base))];
   const allRates: Record<string, Record<string, number>> = {};
 
+  const backupRates: Record<string, Record<string, number>> = {};
+
   const [cryptoPrices, commodityPrices] = await Promise.all([
     fetchCryptoPrices(),
     fetchCommodityPrices(),
     ...bases.map(async (base) => {
       allRates[base] = await fetchRatesForBase(base);
     }),
+    ...bases.map(async (base) => {
+      backupRates[base] = await fetchRatesFromBackupSource(base);
+    }),
   ]);
 
   const result: Record<string, FXRate> = {};
 
   const fxEntries = Object.entries(FX_PAIRS)
-    .map(([pair, { base, quote }]) => ({ pair, rate: allRates[base]?.[quote] }))
-    .filter(e => !!e.rate) as Array<{ pair: string; rate: number }>;
+    .map(([pair, { base, quote }]) => {
+      const primary = allRates[base]?.[quote];
+      const backup = backupRates[base]?.[quote];
+      const available = [primary, backup].filter((v): v is number => !!v && v > 0);
+      if (available.length === 0) return null;
+      const rate = available.reduce((a, b) => a + b, 0) / available.length;
+      const source = available.length === 2
+        ? "open.er-api.com + exchangerate-api.com (avg)"
+        : available[0] === primary ? "open.er-api.com" : "exchangerate-api.com";
+      return { pair, rate, source };
+    })
+    .filter((e): e is { pair: string; rate: number; source: string } => e !== null && !!e.rate);
 
-  const [fxChanges] = await Promise.all([
-    Promise.all(fxEntries.map(e => get24hChangeFromDB(e.pair, e.rate))),
-  ]);
+  const fxChanges = await Promise.all(fxEntries.map(e => get24hChangeFromDB(e.pair, e.rate)));
 
   for (let i = 0; i < fxEntries.length; i++) {
-    const { pair, rate } = fxEntries[i];
+    const { pair, rate, source } = fxEntries[i];
     result[pair] = {
       pair, rate,
-      source: "exchangerate-api.com",
+      source,
       timestamp: now,
       lastUpdated: new Date().toISOString(),
       change24h: fxChanges[i],
