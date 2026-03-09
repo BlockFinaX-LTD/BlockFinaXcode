@@ -20,3 +20,6 @@ replit.md
 .upm/
 .agents/
 .pythonlibs/
+
+# Attached assets from Replit chat — not part of the codebase
+attached_assets/
