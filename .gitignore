@@ -21,5 +21,10 @@ replit.md
 .agents/
 .pythonlibs/
 
-# Attached assets from Replit chat — not part of the codebase
-attached_assets/
+# Junk files in attached_assets — exclude non-image files only
+attached_assets/*.txt
+attached_assets/*.pdf
+attached_assets/*.xlsx
+attached_assets/*.html
+attached_assets/generated_images/
+attached_assets/generated_videos/
