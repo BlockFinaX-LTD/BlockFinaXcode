@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2E5BBA;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Hexagon shape -->
+  <polygon points="10,30 22,15 38,15 50,30 38,45 22,45" fill="url(#blueGradient)" stroke="#1a4480" stroke-width="1"/>
+  
+  <!-- X symbol -->
+  <path d="M20,22 L32,38 M32,22 L20,38" stroke="#000" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- BlockFinaX text -->
+  <text x="60" y="28" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#2E5BBA">BlockFinaX</text>
+  <text x="60" y="42" font-family="Arial, sans-serif" font-size="10" fill="#666">Connecting Global Trade</text>
+</svg>

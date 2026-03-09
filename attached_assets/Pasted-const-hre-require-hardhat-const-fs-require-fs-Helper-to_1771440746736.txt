@@ -1,0 +1,121 @@
+const hre = require("hardhat");
+const fs = require("fs");
+
+// Helper to wait between deployments
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function main() {
+  console.log("🚀 Deploying PoolGuaranteeFacet to Base Sepolia...\n");
+
+  const [deployer] = await hre.ethers.getSigners();
+  console.log("📝 Deploying with account:", deployer.address);
+  
+  const balance = await hre.ethers.provider.getBalance(deployer.address);
+  console.log("💰 Account balance:", hre.ethers.formatEther(balance), "ETH\n");
+
+  // Existing Diamond address from deployment
+  const DIAMOND_ADDRESS = "0x2813e4a2Bd8d59A75db298a31e2b71191214F203";
+  
+  console.log("📦 Deploying PoolGuaranteeFacet...");
+  const PoolGuaranteeFacet = await hre.ethers.getContractFactory("PoolGuaranteeFacet");
+  const poolGuaranteeFacet = await PoolGuaranteeFacet.deploy();
+  await poolGuaranteeFacet.waitForDeployment();
+  const poolGuaranteeAddress = await poolGuaranteeFacet.getAddress();
+  console.log("✅ PoolGuaranteeFacet deployed at:", poolGuaranteeAddress);
+  await wait(3000);
+
+  // Get function selectors for PoolGuaranteeFacet
+  console.log("\n🔗 Preparing to add PoolGuaranteeFacet to Diamond...");
+  
+  const selectors = [
+    poolGuaranteeFacet.interface.getFunction("createPoolGuarantee").selector,
+    poolGuaranteeFacet.interface.getFunction("payIssuanceFee").selector,
+    poolGuaranteeFacet.interface.getFunction("updateGoodsInspection").selector,
+    poolGuaranteeFacet.interface.getFunction("issueGuarantee").selector,
+    poolGuaranteeFacet.interface.getFunction("submitDeliveryProof").selector,
+    poolGuaranteeFacet.interface.getFunction("verifyDeliveryProof").selector,
+    poolGuaranteeFacet.interface.getFunction("buyerPayment").selector,
+    poolGuaranteeFacet.interface.getFunction("submitClaim").selector,
+    poolGuaranteeFacet.interface.getFunction("approveClaim").selector,
+    poolGuaranteeFacet.interface.getFunction("executeClaim").selector,
+    poolGuaranteeFacet.interface.getFunction("getGoodsDetails").selector,
+    poolGuaranteeFacet.interface.getFunction("getDeliveryProof").selector,
+    poolGuaranteeFacet.interface.getFunction("getClaim").selector,
+    poolGuaranteeFacet.interface.getFunction("getPoolGuaranteeStats").selector
+  ];
+
+  console.log(`📋 Function selectors (${selectors.length}):`, selectors.map(s => s.slice(0, 10) + "..."));
+
+  // Add facet to Diamond using DiamondCut
+  const diamondCutFacet = await hre.ethers.getContractAt("DiamondCutFacet", DIAMOND_ADDRESS);
+  
+  const FacetCutAction = { Add: 0, Replace: 1, Remove: 2 };
+  
+  const cut = [{
+    facetAddress: poolGuaranteeAddress,
+    action: FacetCutAction.Add,
+    functionSelectors: selectors
+  }];
+
+  console.log("\n🔄 Adding PoolGuaranteeFacet to Diamond...");
+  const tx = await diamondCutFacet.diamondCut(cut, hre.ethers.ZeroAddress, "0x");
+  const receipt = await tx.wait();
+  console.log("✅ PoolGuaranteeFacet added to Diamond!");
+  console.log("📝 Transaction hash:", receipt.hash);
+
+  // Verify facet was added successfully
+  const loupeFacet = await hre.ethers.getContractAt("DiamondLoupeFacet", DIAMOND_ADDRESS);
+  const facets = await loupeFacet.facets();
+  console.log("\n🔍 Total facets in Diamond:", facets.length);
+  
+  // Find the newly added facet
+  const newFacet = facets.find(f => f.facetAddress.toLowerCase() === poolGuaranteeAddress.toLowerCase());
+  if (newFacet) {
+    console.log("✅ PoolGuaranteeFacet verified:");
+    console.log("   Address:", newFacet.facetAddress);
+    console.log("   Functions:", newFacet.functionSelectors.length);
+  }
+
+  // Update deployment JSON
+  const deploymentFile = "deployments-diamond-baseSepolia.json";
+  let deployment = {};
+  
+  if (fs.existsSync(deploymentFile)) {
+    deployment = JSON.parse(fs.readFileSync(deploymentFile, 'utf8'));
+  }
+
+  deployment.poolGuaranteeFacet = {
+    address: poolGuaranteeAddress,
+    deploymentTx: receipt.hash,
+    functionCount: selectors.length,
+    deployedAt: new Date().toISOString()
+  };
+
+  deployment.lastUpdated = new Date().toISOString();
+
+  fs.writeFileSync(deploymentFile, JSON.stringify(deployment, null, 2));
+  console.log("\n💾 Deployment info saved to", deploymentFile);
+
+  // Summary
+  console.log("\n" + "=".repeat(70));
+  console.log("📋 POOL GUARANTEE FACET DEPLOYMENT SUMMARY");
+  console.log("=".repeat(70));
+  console.log("Network:", hre.network.name);
+  console.log("Diamond:", DIAMOND_ADDRESS);
+  console.log("PoolGuaranteeFacet:", poolGuaranteeAddress);
+  console.log("Functions Added:", selectors.length);
+  console.log("Total Facets:", facets.length);
+  console.log("=".repeat(70));
+  
+  console.log("\n📝 Verify on Basescan:");
+  console.log(`npx hardhat verify --network baseSepolia ${poolGuaranteeAddress}`);
+  
+  console.log("\n✅ Pool Guarantee system is now live on Base Sepolia!");
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

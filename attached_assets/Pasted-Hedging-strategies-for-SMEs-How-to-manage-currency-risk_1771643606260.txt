@@ -1,0 +1,97 @@
+Hedging strategies for SMEs: How to manage currency risk and protect your margins
+7 min read | 5 June 2025 | Author: Eliot Bassett
+
+Share:
+Director of Strategy, Eliot Basset
+Eliot Bassett
+
+Director of Strategy with 10+ years delivering risk-led FX solutions that protect businesses and unlock opportunity.
+
+Table of Contents
+
+Step 1: Understand your currency exposure 
+Step 2: Clarify the purpose of your hedging strategy 
+Step 3: Hedging tools every SME should understand 
+Step 4: Setting a hedging ratio that fits your business 
+Lumon: Helping with your currency risk management strategy
+How to take control of your foreign currency risk 
+Most large companies exposed to exchange rate volatility choose to hedge against currency risk by using hedging strategies. Most SMEs don’t. If you’re a small or medium-sized business owner, that puts you at significant competitive disadvantage. 
+
+Many SMEs are put off by the perceived complexity of hedging strategies, coupled with a lack of in-house expertise. But ignoring the impact of FX risk could be costing you significant amounts of money. 
+
+At its simplest, hedging strategies are ways to reduce the risk that comes with changing exchange rates. By using tools such as forward contracts or setting up regular payments at agreed rates, businesses can protect their cash flow from currency swings. This helps keep international costs predictable, supports financial planning, and safeguards profit margins when trading or operating overseas. 
+
+You could be exposed to FX risk if: 
+
+You export goods or services 
+You import goods or components 
+You run an overseas office or pay overseas employees 
+In any of these instances you could be exposed to FX risk, which in turn makes pricing and financial forecasting more difficult and can undermine profitability. It’s why large companies hedge against this risk as part of routine treasury operation, but you don’t need an in-house treasury function to mitigate currency risk.  
+
+Hedging might seem daunting at first, especially if you have little previous experience of money markets. But the role of a currency expert like Lumon is to provide simplified and low-cost strategies that are proportionate to your risk and designed to meet your goals. In this article we’ll explain the basics of hedging and how any business with overseas interests can benefit from it, in four straightforward steps. 
+
+Step 1: Understand your currency exposure 
+Put simply, currency risk is the threat of financial loss due to fluctuating exchange rates in the usual course of doing business. When currencies strengthen or weaken relative to each other, businesses with international sales, operations or suppliers can see costs and revenues rise or fall.1
+
+To hedge against these risks, businesses need to know where their exposure lies and how big it is. Our article on identifying your risk summarises potential exposure linked to payables, receivables, overseas payroll and more. 
+
+Step 2: Clarify the purpose of your hedging strategy 
+After identifying your risk, the next step is to understand what you hope to achieve with a hedging strategy. This could include: 
+
+Locking in margins. FX fluctuations can impact the profitability of goods and services, but effective hedging can mitigate this risk. 
+Reducing P&L volatility. Profit and loss can fluctuate widely based on translation risk, which is costs associated with converting overseas assets and revenues into sterling. 
+Protecting budgets. Unexpected costs associated with exchange rate movements can make financial forecasting difficult and impact budgets. 
+Of course, you might answer “all of the above” and that’s fine too. Your risk will depend to a large extent on your business size, sector and FX exposure. You should work towards a tailored approach to hedging that takes the details of your commercials into account. 
+
+Choose your hedging strategy carefully. A currency specialist like Lumon can help align your objectives with a strategy for achieving them.
+
+Step 3: Hedging tools every SME should understand 
+Once you’ve identified risk and defined what you want your hedging strategy to achieve, the next step is to choose the tools in your hedging toolkit There isn’t a one-size-fits-all hedging toolkit, however. The financial instruments you choose will depend on your objectives and the needs of your business.  
+
+Forward contracts 
+Forward contracts are commonly used by SMEs. Put simply, they are customised agreements between two parties – in this case, your business and a financial institution –  to lock in an exchange rate for future use. You buy a set amount of currency at today’s rate and use it several months down the line, even if the rate has changed.  
+
+Forward contracts work best when you have clear currency commitments and a regular pipeline of payments. Let’s say you regularly pay a supplier in the United States. A forward contract lets you set the dollar/pound exchange rate months in advance of the payment, giving you certainty over how much you will have to pay for the goods or services, regardless of fluctuations in money markets in the intervening period. 
+
+Market orders 
+For businesses that make payments abroad, a market order allows you to target an exchange rate in advance which triggers the transaction when the rate is met. This type of market order is also called a limit order.  
+
+Limit orders simplify FX transactions by executing automatically at your desired rate; so that if you have an overseas payment to make, you can avoid the task of constantly monitoring the market or having to act manually. This device can also be used to protect against an adverse drop in the form of a stop loss.  
+
+Spot contracts 
+Spot contracts are not hedging as such but are a useful tool to minimise FX risk. Quite simply, a spot contract is a “buy now, pay now” transaction, in which all elements of the deal happen quickly (or over the course of 2 days) to lock in the current exchange rate. It means you can make use of a beneficial exchange rate immediately, before it changes. 
+
+Step 4: Setting a hedging ratio that fits your business 
+Once you know your FX exposure and have tools to mitigate risk, it’s time to plan a hedging strategy. The most important thing to decide at the start of this process is how much of your FX exposure to hedge, which is also known as your hedging ratio. 
+
+Most SMEs don’t hedge 100% of their FX exposure because hedging comes with costs, and some international transactions may be too small or sporadic to make it worthwhile. Many SMEs find that hedging is most effective for regular contractual payments. 
+
+So to start with, you need to work out the hedging ratio that best suits your business goals. For example, your hedging ratio may cover 70% of your FX exposure for the next six months, after which you will review the situation to ensure it is meeting your needs.  
+
+Your hedging ratio is at the heart of a basic FX policy. To put that policy into effect, you’ll also need to determine: 
+
+Who makes the final decisions over hedging 
+What tool(s) to use in your hedging strategy 
+When to review the strategy 
+There’s no one-size-fits-all solution to successful FX hedging, so working with a currency expert like Lumon can help to make these decisions easier, especially for lean teams with limited time and resources. 
+
+Lumon: Helping with your currency risk management strategy
+The good news is that you don’t need an in-house treasury function to hedge against FX risk. Working with a currency specialist like Lumon provides: 
+
+Custom strategies: we help create an FX strategy that is tailored to your goals and exposure. 
+Market insight: we monitor the markets on your behalf and feed insight into the strategies we recommend to help you minimise FX risk. 
+Competitive rates: our competitive rates and tailored service put hedging within reach of all SMEs with FX exposure.  
+Why Every SME Needs an FX Strategy in Place 
+
+How to take control of your foreign currency risk 
+If your SME buys, sells or operates overseas, FX risk is not something you should ignore. Luckily, even a light-touch FX strategy can go a long way towards protecting your cash flow and margins, and avoiding the most damaging consequences of exchange rate volatility. 
+
+That strategy should have four key elements: 
+
+Know your exposure 
+Define your goals 
+Use the right tools 
+Create a simple, repeatable hedging policy 
+Once you’ve put it in place, you should review your strategy regularly to make sure it’s achieving the goals you’ve set. You may need to tweak it if your cross-border operations change or exchange rates become more unpredictable.  
+
+You don’t need an in-house treasury function for any of this, and you don’t have to do it alone. A currency specialist can help you identify your FX exposure, create your strategy and refine it over time, continually reducing the currency risks that are an inevitable byproduct of international commerce.   

@@ -1,0 +1,301 @@
+Below is a clean, developer-ready product idea/spec you can copy and send. It’s written to be clear, buildable, and not full of theory.
+
+⸻
+
+P2P Trade Hedge Product (Web3) — Developer Brief
+
+1) Goal
+
+Build a Web3-based P2P hedging system for importers/exporters.
+
+Users should be able to buy protection against a measurable event (example: USD/GHS crossing a level).
+Multiple users should be able to hedge the same event at the same time.
+
+The system must:
+	•	allow many “buyers of protection”
+	•	allow many “sellers / liquidity providers”
+	•	settle automatically using an oracle
+	•	pay out in stablecoin (USDC/USDT)
+
+⸻
+
+2) Core Concept
+
+We create “Events” (risk contracts).
+Each Event has:
+	•	a trigger condition
+	•	a time window
+	•	a settlement rule
+	•	a payout formula
+	•	a liquidity pool
+
+Users join the event on either side:
+
+Side A: Hedgers (Buy Protection)
+
+They pay a premium and get a payout if the event happens.
+
+Side B: Risk Providers (Sell Protection)
+
+They deposit capital into the pool and earn premium.
+If event happens, their pool pays the hedgers.
+
+This is pooled P2P hedging (many-to-many).
+
+⸻
+
+3) MVP Event Type (start with this only)
+
+Event: FX Devaluation Protection
+	•	Underlying: USD/GHS reference rate
+	•	Condition: “USD/GHS >= Strike”
+	•	Settlement: at expiry time (European style) OR any time during window (American style)
+	•	Payout: fixed payout or linear payout
+
+Recommended for MVP
+European style (simpler, less oracle updates):
+
+Check FX at expiry time only.
+
+⸻
+
+4) User Flows
+
+4.1 Hedger Flow (Importer)
+	1.	Connect wallet
+	2.	Select event: “USD/GHS protection”
+	3.	Enter:
+	•	Notional (coverage amount) e.g. $10,000
+	•	Strike e.g. 16.0
+	•	Expiry e.g. 30 days
+	4.	UI shows:
+	•	premium required
+	•	max payout
+	5.	User pays premium in USDC
+	6.	System mints a “Protection Position NFT” or stores position in contract mapping
+	7.	At expiry:
+	•	if event triggered, payout is sent automatically to user wallet
+	•	if not triggered, position expires worthless
+
+⸻
+
+4.2 Liquidity Provider Flow (Risk Seller)
+	1.	Connect wallet
+	2.	Choose event pool to provide liquidity
+	3.	Deposit stablecoin (USDC)
+	4.	LP receives “LP shares” (ERC20 token) representing ownership of pool
+	5.	LP earns:
+	•	premiums collected from hedgers
+	6.	At expiry:
+	•	if event triggers, pool pays hedgers
+	•	LP share value decreases accordingly
+	7.	LP can withdraw liquidity after lock period
+
+⸻
+
+5) Pricing Model (MVP simple)
+
+We need a simple pricing model first. Don’t over-engineer.
+
+Option A (fastest)
+
+Admin sets premium rate per strike/tenor:
+	•	Example:
+	•	30 days, strike 16.0 = 2.5% premium
+	•	30 days, strike 15.5 = 4.0% premium
+
+This is easiest to ship.
+
+Option B (later)
+
+Dynamic pricing based on:
+	•	pool utilization
+	•	implied volatility
+	•	demand/supply
+
+For MVP use Option A.
+
+⸻
+
+6) Smart Contracts Needed
+
+6.1 EventFactory.sol
+	•	creates events
+	•	stores event metadata
+	•	permissions: admin can create events (for MVP)
+
+6.2 EventPool.sol (main contract)
+
+For each event:
+	•	accepts hedger premiums
+	•	stores hedger positions
+	•	accepts LP deposits
+	•	tracks total pool liquidity
+	•	tracks total exposure sold
+	•	handles settlement & payouts
+
+6.3 LPToken.sol (optional)
+
+ERC20 token for LP shares.
+Or keep shares in EventPool state.
+
+6.4 OracleAdapter.sol
+	•	fetches USD/GHS rate at expiry
+	•	stores final settlement price
+	•	ensures price can only be set once
+
+⸻
+
+7) Settlement & Oracle Design
+
+Settlement
+
+At expiry time:
+	1.	anyone can call settleEvent()
+	2.	contract requests final FX rate
+	3.	oracle posts rate
+	4.	contract marks event as settled
+	5.	hedgers can claim payout (or auto-send)
+
+Oracle Options
+
+For MVP:
+	•	use a trusted backend server (centralized oracle) posting signed rates
+	•	contract verifies signature from oracle signer address
+
+Later:
+	•	integrate decentralized oracle (Chainlink etc.)
+
+⸻
+
+8) Payout Logic
+
+Fixed payout (simplest)
+
+If USD/GHS >= strike at expiry:
+	•	payout = notional * payoutRate
+Example:
+	•	notional = $10,000
+	•	payoutRate = 10%
+	•	payout = $1,000
+
+If not triggered:
+	•	payout = 0
+
+This is easiest and clean.
+
+⸻
+
+Linear payout (more accurate but still simple)
+
+If USD/GHS > strike:
+	•	payout = notional * min( cap, (rate - strike) / strike )
+
+Example:
+	•	strike = 16.0
+	•	rate = 17.0
+	•	move = 6.25%
+	•	payout = notional * 6.25% (capped at e.g. 20%)
+
+⸻
+
+9) Risk Controls (important)
+
+We must prevent the pool from selling more protection than it can pay.
+
+Exposure rule
+
+Pool must enforce:
+	•	max payout obligations <= pool liquidity * safetyFactor
+
+Example:
+	•	safetyFactor = 0.8
+	•	If pool has $100,000, maximum total possible payout = $80,000
+
+So:
+	•	before accepting a new hedger position, check remaining capacity
+
+⸻
+
+10) UX Requirements
+
+The app must show clearly:
+
+For Hedgers:
+	•	premium
+	•	expiry date
+	•	strike
+	•	max payout
+	•	“what happens if triggered”
+
+For LPs:
+	•	pool size
+	•	utilization %
+	•	premiums earned
+	•	risk rating (simple label)
+	•	lock period
+
+⸻
+
+11) MVP Scope (Phase 1)
+
+Only build:
+
+✅ 1 Event Type: USD/GHS above strike at expiry
+✅ 1 Stablecoin: USDC or USDT
+✅ Admin-created events
+✅ Centralized oracle (signed price feed)
+✅ Pool model (many-to-many)
+✅ Fixed payout
+
+No orderbook.
+No trading positions.
+No secondary market.
+No leverage.
+
+⸻
+
+12) Example Event Setup (for testing)
+
+Event:
+	•	Name: USD/GHS Devaluation Protection
+	•	Strike: 16.0
+	•	Expiry: 30 days
+	•	Premium: 2.5% of notional
+	•	Payout: 10% of notional if triggered
+	•	Max pool payout: 80% of pool liquidity
+
+Example:
+	•	User hedges $10,000
+	•	Pays $250
+	•	If USD/GHS >= 16.0 at expiry, receives $1,000
+
+⸻
+
+13) Key Functions (Contract)
+
+EventPool.sol should expose:
+	•	depositLiquidity(amount)
+	•	withdrawLiquidity(shares)
+	•	buyProtection(notional)
+	•	settleEvent()
+	•	claimPayout(positionId)
+	•	getEventState()
+	•	getPoolStats()
+
+⸻
+
+14) Security Notes
+	•	oracle price must be set once only
+	•	event must settle once only
+	•	protect against reentrancy
+	•	protect against over-selling coverage
+	•	enforce expiry times
+	•	stablecoin should be ERC20 safe transfer
+
+⸻
+
+If you want, I can also write:
+	•	the database schema for the frontend
+	•	a simple UI screen list
+	•	or a Solidity pseudo-code version so your dev can start immediately

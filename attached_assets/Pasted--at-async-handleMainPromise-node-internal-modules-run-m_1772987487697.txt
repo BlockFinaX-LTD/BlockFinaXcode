@@ -1,0 +1,92 @@
+    at async handleMainPromise (node:internal/modules/run_main:106:12) {
+  code: 'ERR_INVALID_ARG_TYPE'
+TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" argument must be of type string. Received undefined
+}
+Node.js v18.20.5
+    at new NodeError (node:internal/errors:405:5)
+    at validateString (node:internal/validators:162:11)
+node:internal/errors:496
+    at Object.resolve (node:path:1097:7)
+    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)
+    ErrorCaptureStackTrace(err);
+    at file:///app/dist/index.js:3252:17
+    ^
+    at async ModuleLoader.import (node:internal/modules/esm/loader:337:24)
+    at async loadESM (node:internal/process/esm_loader:34:7)
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.js
+npm warn config production Use `--omit=dev` instead.
+node:internal/errors:496
+    ErrorCaptureStackTrace(err);
+    ^
+TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" argument must be of type string. Received undefined
+    at new NodeError (node:internal/errors:405:5)
+    at validateString (node:internal/validators:162:11)
+    at Object.resolve (node:path:1097:7)
+    at file:///app/dist/index.js:3252:17
+    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:337:24)
+    at async loadESM (node:internal/process/esm_loader:34:7)
+    at async handleMainPromise (node:internal/modules/run_main:106:12) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+Node.js v18.20.5
+Node.js v18.20.5
+TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" argument must be of type string. Received undefined
+    at new NodeError (node:internal/errors:405:5)
+    at validateString (node:internal/validators:162:11)
+    at async loadESM (node:internal/process/esm_loader:34:7)
+    at async handleMainPromise (node:internal/modules/run_main:106:12) {
+npm warn config production Use `--omit=dev` instead.
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+    at Object.resolve (node:path:1097:7)
+> rest-express@1.0.0 start
+    at file:///app/dist/index.js:3252:17
+    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)
+> NODE_ENV=production node dist/index.js
+    at async ModuleLoader.import (node:internal/modules/esm/loader:337:24)
+node:internal/errors:496
+    ErrorCaptureStackTrace(err);
+    ^
+npm warn config production Use `--omit=dev` instead.
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.js
+node:internal/errors:496
+    ErrorCaptureStackTrace(err);
+    ^
+TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" argument must be of type string. Received undefined
+    at new NodeError (node:internal/errors:405:5)
+    at validateString (node:internal/validators:162:11)
+    at Object.resolve (node:path:1097:7)
+    at file:///app/dist/index.js:3252:17
+    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:337:24)
+    at async loadESM (node:internal/process/esm_loader:34:7)
+    at async handleMainPromise (node:internal/modules/run_main:106:12) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+Node.js v18.20.5
+npm warn config production Use `--omit=dev` instead.
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.js
+node:internal/errors:496
+    ErrorCaptureStackTrace(err);
+    ^
+TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" argument must be of type string. Received undefined
+    at new NodeError (node:internal/errors:405:5)
+    at validateString (node:internal/validators:162:11)
+    at Object.resolve (node:path:1097:7)
+    at file:///app/dist/index.js:3252:17
+    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:337:24)
+    at async loadESM (node:internal/process/esm_loader:34:7)
+    at async handleMainPromise (node:internal/modules/run_main:106:12) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+Node.js v18.20.5
+npm warn config production Use `--omit=dev` instead.
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.js
+  code: 'ERR_INVALID_ARG_TYPE'
+}

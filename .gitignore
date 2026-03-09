@@ -1,0 +1,22 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Python files — not part of this project
+pyproject.toml
+uv.lock
+main.py
+
+# Replit internal files — do not upload to GitHub
+.replit
+replit.md
+.semgrep
+.local/
+.cache/
+.config/
+.upm/
+.agents/
+.pythonlibs/
