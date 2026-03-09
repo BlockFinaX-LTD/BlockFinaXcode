@@ -10,7 +10,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import type { Referral } from "../shared/referral-schema";
-import { wallets, subscribers, transactions, balances, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees } from "../shared/schema";
+import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees } from "../shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
@@ -69,72 +69,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ═══════════════════════════════════════════════════════
-  // [USER] User Role Management
-  // ═══════════════════════════════════════════════════════
-  app.get("/api/user/role/:walletAddress", async (req, res) => {
-    try {
-      const { walletAddress } = req.params;
-      
-      if (!walletAddress) {
-        return res.status(400).json({ message: "Wallet address is required" });
-      }
-
-      const userRole = await storage.getUserRole(walletAddress);
-      
-      if (!userRole) {
-        return res.status(404).json({ message: "User role not found" });
-      }
-
-      res.json(userRole);
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to fetch user role" 
-      });
-    }
-  });
-
-  app.post("/api/user/role", async (req, res) => {
-    try {
-      const { walletAddress, role } = req.body;
-      
-      if (!walletAddress || !role) {
-        return res.status(400).json({ message: "Wallet address and role are required" });
-      }
-
-      const validRoles = ['individual', 'business'];
-      if (!validRoles.includes(role)) {
-        return res.status(400).json({ message: "Invalid role specified" });
-      }
-
-      // Check if user already has a role
-      const existingRole = await storage.getUserRole(walletAddress);
-      
-      if (existingRole) {
-        // Update existing role
-        const updatedRole = await storage.updateUserRole(walletAddress, {
-          role,
-          lastActivity: new Date(),
-          isActive: true
-        });
-        res.json({ message: "Role updated successfully", role: updatedRole });
-      } else {
-        // Create new role
-        const newRole = await storage.createUserRole({
-          walletAddress,
-          role,
-          kycStatus: 'pending',
-          isActive: true
-        });
-        res.json({ message: "Role assigned successfully", role: newRole });
-      }
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to assign role" 
-      });
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════
   // [ADMIN] Admin Dashboard
   // ═══════════════════════════════════════════════════════
   const adminSessions = new Set<string>();
@@ -182,7 +116,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/overview", async (_req, res) => {
     try {
       const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(wallets);
-      const [txCount] = await db.select({ count: sql<number>`count(*)::int`, volume: sql<string>`coalesce(sum(value::numeric), 0)::text` }).from(transactions);
       const [taskCompletionCount] = await db.select({ count: sql<number>`count(*)::int`, totalPoints: sql<number>`coalesce(sum(points_earned), 0)::int` }).from(userTaskCompletions);
 
       const chainEvents = await readChainEvents();
@@ -195,8 +128,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         totalUsers: userCount.count,
-        totalTransactions: txCount.count,
-        transactionVolume: txCount.volume,
         totalHedgeEvents: chainEvents.length,
         activeHedgeEvents,
         totalPositions,
@@ -229,23 +160,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch users" });
-    }
-  });
-
-  app.get("/api/admin/transactions", async (req, res) => {
-    try {
-      const status = req.query.status as string | undefined;
-      const wallet = (req.query.wallet as string || "").toLowerCase();
-      let query = db.select().from(transactions).orderBy(desc(transactions.timestamp));
-      const allTx = await query;
-      const filtered = allTx.filter(tx => {
-        if (status && tx.status !== status) return false;
-        if (wallet && !tx.from.toLowerCase().includes(wallet) && !tx.to.toLowerCase().includes(wallet)) return false;
-        return true;
-      });
-      res.json(filtered.slice(0, 200));
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch transactions" });
     }
   });
 
@@ -398,12 +312,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         count: sql<number>`count(*)::int`,
       }).from(wallets).where(sql`created_at is not null`).groupBy(sql`to_char(created_at, 'YYYY-MM-DD')`).orderBy(sql`to_char(created_at, 'YYYY-MM-DD')`);
 
-      const txByDay = await db.select({
-        date: sql<string>`to_char(timestamp, 'YYYY-MM-DD')`,
-        count: sql<number>`count(*)::int`,
-        volume: sql<string>`coalesce(sum(value::numeric), 0)::text`,
-      }).from(transactions).where(sql`timestamp is not null`).groupBy(sql`to_char(timestamp, 'YYYY-MM-DD')`).orderBy(sql`to_char(timestamp, 'YYYY-MM-DD')`);
-
       const chainEvents = await readChainEvents();
       const pairMap: Record<string, number> = {};
       const statusMap: Record<string, number> = {};
@@ -414,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hedgesByPair = Object.entries(pairMap).map(([pair, count]) => ({ pair, count }));
       const hedgesByStatus = Object.entries(statusMap).map(([status, count]) => ({ status, count }));
 
-      res.json({ usersByDay, hedgesByPair, hedgesByStatus, txByDay });
+      res.json({ usersByDay, hedgesByPair, hedgesByStatus });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch analytics" });
     }
@@ -461,70 +369,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ═══════════════════════════════════════════════════════
-  // [ADMIN ARTICLES] Article Content Management
-  // ═══════════════════════════════════════════════════════
-  app.get("/api/admin/articles", async (_req, res) => {
-    try {
-      const allArticles = await storage.getArticles(false);
-      res.json(allArticles);
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch articles" });
-    }
-  });
-
-  app.post("/api/admin/articles", async (req, res) => {
-    try {
-      const article = await storage.createArticle(req.body);
-      res.status(201).json(article);
-    } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Failed to create article" });
-    }
-  });
-
-  app.patch("/api/admin/articles/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const article = await storage.updateArticle(id, req.body);
-      if (!article) return res.status(404).json({ message: "Article not found" });
-      res.json(article);
-    } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Failed to update article" });
-    }
-  });
-
-  app.delete("/api/admin/articles/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteArticle(id);
-      if (!deleted) return res.status(404).json({ message: "Article not found" });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to delete article" });
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════
-  // [PUBLIC ARTICLES] Published Articles API
-  // ═══════════════════════════════════════════════════════
-  app.get("/api/articles", async (_req, res) => {
-    try {
-      const publishedArticles = await storage.getArticles(true);
-      res.json(publishedArticles);
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch articles" });
-    }
-  });
-
-  app.get("/api/articles/:slug", async (req, res) => {
-    try {
-      const article = await storage.getArticleBySlug(req.params.slug);
-      if (!article || !article.isPublished) return res.status(404).json({ message: "Article not found" });
-      res.json(article);
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch article" });
-    }
-  });
   // ═══════════════════════════════════════════════════════
   // [WALLET] Wallet & Transaction Management
   // ═══════════════════════════════════════════════════════
@@ -760,143 +604,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Transaction management endpoints
-  app.get("/api/transactions", async (req, res) => {
-    try {
-      const { walletId, networkId, limit = 50 } = req.query;
-      const transactions = await storage.getTransactions({
-        walletId: walletId ? parseInt(walletId as string) : undefined,
-        networkId: networkId ? parseInt(networkId as string) : undefined,
-        limit: parseInt(limit as string)
-      });
-      res.json(transactions);
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to fetch transactions" 
-      });
-    }
-  });
-
-  app.post("/api/transactions", async (req, res) => {
-    try {
-      const existingTx = await storage.getTransactionByHash(req.body.hash);
-      if (existingTx) {
-        return res.status(200).json(existingTx);
-      }
-      const transaction = await storage.createTransaction(req.body);
-      
-      // Check if this is the user's first transaction and award bonus
-      if (transaction.from) {
-        // Get all transactions from this wallet address
-        const wallet = await storage.getWalletByAddress(transaction.from);
-        if (wallet) {
-          const userTransactions = await storage.getTransactions({ walletId: wallet.id });
-          
-          // If this is the first transaction (only one exists), award bonus
-          if (userTransactions.length === 1) {
-            const FIRST_TRANSACTION_BONUS = 25;
-            
-            // Award points
-            let userPoints = await storage.getUserPoints(transaction.from);
-            if (!userPoints) {
-              userPoints = await storage.createUserPoints({
-                walletAddress: transaction.from,
-                totalPoints: FIRST_TRANSACTION_BONUS,
-                referralPoints: 0,
-              });
-            } else {
-              await storage.updateUserPoints(transaction.from, FIRST_TRANSACTION_BONUS);
-            }
-            
-            // Create point transaction record
-            await storage.createPointTransaction({
-              walletAddress: transaction.from,
-              type: 'first_transaction_bonus',
-              points: FIRST_TRANSACTION_BONUS,
-              description: 'Bonus for completing your first transaction',
-              referenceId: transaction.hash,
-            });
-          }
-        }
-      }
-      
-      res.status(201).json(transaction);
-    } catch (error) {
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : "Failed to create transaction" 
-      });
-    }
-  });
-
-  app.get("/api/transactions/:hash", async (req, res) => {
-    try {
-      const transaction = await storage.getTransactionByHash(req.params.hash);
-      if (!transaction) {
-        return res.status(404).json({ message: "Transaction not found" });
-      }
-      res.json(transaction);
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to fetch transaction" 
-      });
-    }
-  });
-
-  app.patch("/api/transactions/:hash", async (req, res) => {
-    try {
-      const transaction = await storage.updateTransaction(req.params.hash, req.body);
-      if (!transaction) {
-        return res.status(404).json({ message: "Transaction not found" });
-      }
-      res.json(transaction);
-    } catch (error) {
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : "Failed to update transaction" 
-      });
-    }
-  });
-
-  // Balance management endpoints
-  app.get("/api/balances", async (req, res) => {
-    try {
-      const { walletId, networkId } = req.query;
-      const balances = await storage.getBalances({
-        walletId: walletId ? parseInt(walletId as string) : undefined,
-        networkId: networkId ? parseInt(networkId as string) : undefined
-      });
-      res.json(balances);
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to fetch balances" 
-      });
-    }
-  });
-
-  app.post("/api/balances", async (req, res) => {
-    try {
-      const balance = await storage.createBalance(req.body);
-      res.status(201).json(balance);
-    } catch (error) {
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : "Failed to create balance" 
-      });
-    }
-  });
-
-  app.patch("/api/balances/:id", async (req, res) => {
-    try {
-      const balance = await storage.updateBalance(parseInt(req.params.id), req.body);
-      if (!balance) {
-        return res.status(404).json({ message: "Balance not found" });
-      }
-      res.json(balance);
-    } catch (error) {
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : "Failed to update balance" 
-      });
-    }
-  });
-
   app.get("/api/stats/platform", async (_req, res) => {
     try {
       const { db } = await import("./db");
@@ -918,93 +625,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Platform stats error:", error);
       res.json({ totalWallets: 0, totalProfiles: 0, activeHedgeEvents: 0, totalHedgeEvents: 0 });
-    }
-  });
-
-  // Statistics endpoints
-  app.get("/api/stats/portfolio/:walletId", async (req, res) => {
-    try {
-      const walletId = parseInt(req.params.walletId);
-      const stats = await storage.getPortfolioStats(walletId);
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to fetch portfolio stats" 
-      });
-    }
-  });
-  // ═══════════════════════════════════════════════════════
-  // [WAITLIST] Early Adopter Waitlist
-  // ═══════════════════════════════════════════════════════
-  app.post("/api/waitlist", async (req, res) => {
-    try {
-      const { insertWaitlistSchema } = await import("@shared/schema");
-      
-      // Normalize email to lowercase
-      const data = {
-        ...req.body,
-        email: req.body.email?.toLowerCase()
-      };
-      
-      const validatedData = insertWaitlistSchema.parse(data);
-      
-      // Check if email already exists
-      const existing = await storage.getWaitlistByEmail(validatedData.email);
-      if (existing) {
-        return res.status(409).json({ 
-          message: "This email is already on the waitlist. We'll be in touch soon!" 
-        });
-      }
-      
-      const entry = await storage.createWaitlistEntry(validatedData);
-      
-      res.status(201).json({ 
-        message: "Successfully joined the waitlist! We'll be in touch soon.",
-        id: entry.id
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('unique')) {
-        return res.status(409).json({ 
-          message: "This email is already on the waitlist." 
-        });
-      }
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to join waitlist" 
-      });
-    }
-  });
-
-  // Get waitlist count (public)
-  app.get("/api/waitlist/count", async (req, res) => {
-    try {
-      const count = await storage.getWaitlistCount();
-      res.json({ count });
-    } catch (error) {
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to get waitlist count" 
-      });
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════
-  // [SUBSCRIBERS] Email subscribers
-  // ═══════════════════════════════════════════════════════
-
-  app.post("/api/subscribe", async (req, res) => {
-    try {
-      const { email } = req.body;
-      if (!email || typeof email !== 'string' || !email.includes('@')) {
-        return res.status(400).json({ error: "Valid email required" });
-      }
-      const normalized = email.toLowerCase().trim();
-      const existing = await db.select().from(subscribers).where(eq(subscribers.email, normalized)).limit(1);
-      if (existing.length > 0) {
-        return res.json({ message: "You're already subscribed!" });
-      }
-      await db.insert(subscribers).values({ email: normalized });
-      res.json({ message: "You're in! We'll keep you updated." });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to subscribe" });
     }
   });
 

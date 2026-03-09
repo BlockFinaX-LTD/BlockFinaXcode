@@ -15,8 +15,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Website from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
-import Waitlist from "@/pages/waitlist";
-import InsightsPage from "@/pages/insights";
 import NotFound from "@/pages/not-found";
 
 // Wallet & auth
@@ -45,10 +43,6 @@ function Router() {
       <Route path="/" component={Website} />
       <Route path="/pitch" component={PitchDeck} />
       <Route path="/whitepaper" component={Whitepaper} />
-      <Route path="/insights/:slug" component={InsightsPage} />
-      <Route path="/insights" component={InsightsPage} />
-      <Route path="/waitlist" component={Waitlist} />
-
       {/* Wallet & auth */}
       <Route path="/wallet" component={Wallet} />
       <Route path="/create-wallet" component={CreateWallet} />

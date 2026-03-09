@@ -137,24 +137,6 @@ export function useTransactions(networkId: number) {
         description: `Transaction hash: ${data.hash.slice(0, 10)}...`,
       });
 
-      if (address) {
-        try {
-          const network = NETWORKS.find(n => n.id === variables.networkId);
-          fetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              hash: data.hash,
-              from: address,
-              to: variables.to,
-              value: variables.amount,
-              status: 'confirmed',
-              networkId: network?.chainId || variables.networkId,
-            }),
-          }).catch(() => {});
-        } catch {}
-      }
-
       walletBalances.refreshAll();
       queryClient.invalidateQueries({ queryKey: ['transactions', networkId] });
     },

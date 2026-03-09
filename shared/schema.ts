@@ -37,43 +37,6 @@ export const networks = pgTable("networks", {
   usdcContractAddress: text("usdc_contract_address"),
 });
 
-// Transaction history tracking
-export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
-  walletId: integer("wallet_id").references(() => wallets.id),
-  hash: text("hash").notNull().unique(),
-  from: text("from").notNull(),
-  to: text("to").notNull(),
-  value: decimal("value", { precision: 78, scale: 18 }).notNull(),
-  gasPrice: decimal("gas_price", { precision: 78, scale: 0 }),
-  gasUsed: decimal("gas_used", { precision: 78, scale: 0 }),
-  status: text("status").notNull(), // pending, confirmed, failed
-  blockNumber: integer("block_number"),
-  networkId: integer("network_id").references(() => networks.id),
-  timestamp: timestamp("timestamp").defaultNow(),
-});
-
-// Wallet balance tracking across networks
-export const balances = pgTable("balances", {
-  id: serial("id").primaryKey(),
-  walletId: integer("wallet_id").references(() => wallets.id),
-  networkId: integer("network_id").references(() => networks.id),
-  balance: decimal("balance", { precision: 78, scale: 18 }).notNull(),
-  usdValue: decimal("usd_value", { precision: 10, scale: 2 }),
-  lastUpdated: timestamp("last_updated").defaultNow(),
-});
-
-export const userRoles = pgTable("user_roles", {
-  id: serial("id").primaryKey(),
-  walletAddress: text("wallet_address").notNull().unique(),
-  role: text("role").notNull(), // individual, business, admin
-  kycStatus: text("kyc_status").default("pending"), // pending, approved, failed
-  kycDocuments: text("kyc_documents"), // JSON string of document links
-  lastActivity: timestamp("last_activity").defaultNow(),
-  referralSource: text("referral_source"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
 
 export const insertWalletSchema = createInsertSchema(wallets).omit({
   id: true,
@@ -84,70 +47,11 @@ export const insertNetworkSchema = createInsertSchema(networks).omit({
   id: true,
 });
 
-export const insertTransactionSchema = createInsertSchema(transactions).omit({
-  id: true,
-  timestamp: true,
-});
-
-export const insertBalanceSchema = createInsertSchema(balances).omit({
-  id: true,
-  lastUpdated: true,
-});
-
-export const insertUserRoleSchema = createInsertSchema(userRoles).omit({
-  id: true,
-  createdAt: true,
-});
-
 export type InsertWallet = z.infer<typeof insertWalletSchema>;
 export type Wallet = typeof wallets.$inferSelect;
 export type InsertNetwork = z.infer<typeof insertNetworkSchema>;
 export type Network = typeof networks.$inferSelect;
-export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
-export type Transaction = typeof transactions.$inferSelect;
-export type InsertBalance = z.infer<typeof insertBalanceSchema>;
-export type Balance = typeof balances.$inferSelect;
 
-export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
-export type UserRole = typeof userRoles.$inferSelect;
-
-export const waitlist = pgTable("waitlist", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  role: text("role").notNull(), // 'individual' or 'business'
-  companyName: text("company_name"),
-  country: text("country").notNull(),
-  goodsTraded: text("goods_traded"),
-  tradingVolume: text("trading_volume"),
-  challenges: text("challenges"),
-  preferredChannel: text("preferred_channel").notNull(), // 'email', 'whatsapp', 'other'
-  preferredChannelOther: text("preferred_channel_other"),
-  additionalComments: text("additional_comments"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertWaitlistSchema = createInsertSchema(waitlist).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type InsertWaitlist = z.infer<typeof insertWaitlistSchema>;
-export type Waitlist = typeof waitlist.$inferSelect;
-
-export const subscribers = pgTable("subscribers", {
-  id: serial("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertSubscriberSchema = createInsertSchema(subscribers).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type InsertSubscriber = z.infer<typeof insertSubscriberSchema>;
-export type Subscriber = typeof subscribers.$inferSelect;
 
 export const hedgeEvents = pgTable("hedge_events", {
   id: serial("id").primaryKey(),
@@ -291,29 +195,6 @@ export const insertPlatformFeeSchema = createInsertSchema(platformFees).omit({
 export type PlatformFee = typeof platformFees.$inferSelect;
 export type InsertPlatformFee = z.infer<typeof insertPlatformFeeSchema>;
 
-export const articles = pgTable("articles", {
-  id: serial("id").primaryKey(),
-  slug: text("slug").notNull().unique(),
-  title: text("title").notNull(),
-  subtitle: text("subtitle").notNull(),
-  category: text("category").notNull(),
-  readTime: text("read_time").notNull(),
-  date: text("date").notNull(),
-  content: jsonb("content").notNull(),
-  isPublished: boolean("is_published").default(true),
-  sortOrder: integer("sort_order").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertArticleSchema = createInsertSchema(articles).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type Article = typeof articles.$inferSelect;
-export type InsertArticle = z.infer<typeof insertArticleSchema>;
 
 export const rateSnapshots = pgTable("rate_snapshots", {
   id: serial("id").primaryKey(),

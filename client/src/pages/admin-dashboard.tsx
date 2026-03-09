@@ -32,16 +32,14 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "users" | "transactions" | "hedge" | "revenue" | "tasks" | "content" | "analytics";
+type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "analytics";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   { key: "users", label: "Users", icon: Users },
-  { key: "transactions", label: "Transactions", icon: TrendingUp },
   { key: "hedge", label: "Hedge", icon: Shield },
   { key: "revenue", label: "Revenue & Fees", icon: DollarSign },
   { key: "tasks", label: "Tasks & Points", icon: ListChecks },
-  { key: "content", label: "Content", icon: FileText },
   { key: "analytics", label: "Analytics", icon: Activity },
 ];
 
@@ -92,7 +90,6 @@ function DashboardSection() {
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Users" value={s.totalUsers || 0} sub="Registered wallets" icon={Users} color="text-blue-600" />
-        <StatCard title="Transactions" value={s.totalTransactions || 0} sub={`Volume: ${parseFloat(s.transactionVolume || 0).toFixed(2)}`} icon={TrendingUp} color="text-green-600" />
         <StatCard title="Hedge Events" value={s.totalHedgeEvents || 0} sub={`${s.activeHedgeEvents || 0} active`} icon={Shield} color="text-purple-600" />
         <StatCard title="Tasks" value={s.totalTaskCompletions || 0} sub={`${s.totalPointsAwarded || 0} points awarded`} icon={ListChecks} color="text-orange-600" />
       </div>
@@ -165,74 +162,6 @@ function UsersSection() {
         </Card>
       )}
       <p className="text-sm text-gray-400">{filtered.length} users total</p>
-    </div>
-  );
-}
-
-function TransactionsSection() {
-  const [statusFilter, setStatusFilter] = useState("");
-  const [walletFilter, setWalletFilter] = useState("");
-  const { token } = useAdminToken();
-  const { data: txs, isLoading } = useQuery({ queryKey: ["/api/admin/transactions"], queryFn: () => adminFetch("/api/admin/transactions", token).then(r => r.json()), refetchInterval: 30000 });
-
-  const filtered = (txs as any[] || []).filter((tx: any) => {
-    if (statusFilter && tx.status !== statusFilter) return false;
-    if (walletFilter && !tx.from?.toLowerCase().includes(walletFilter.toLowerCase()) && !tx.to?.toLowerCase().includes(walletFilter.toLowerCase())) return false;
-    return true;
-  });
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Transaction Monitoring</h2>
-      <div className="flex gap-3 flex-wrap">
-        <Input placeholder="Filter by wallet address..." value={walletFilter} onChange={e => setWalletFilter(e.target.value)} className="max-w-xs" />
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-white">
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="failed">Failed</option>
-        </select>
-      </div>
-      {isLoading ? <LoadingSkeleton /> : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="text-left p-3 font-medium">Hash</th>
-                    <th className="text-left p-3 font-medium">From</th>
-                    <th className="text-left p-3 font-medium">To</th>
-                    <th className="text-left p-3 font-medium">Value</th>
-                    <th className="text-left p-3 font-medium">Status</th>
-                    <th className="text-left p-3 font-medium hidden md:table-cell">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((tx: any) => (
-                    <tr key={tx.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-mono text-xs">{shortenAddr(tx.hash)}</td>
-                      <td className="p-3 font-mono text-xs">{shortenAddr(tx.from)}</td>
-                      <td className="p-3 font-mono text-xs">{shortenAddr(tx.to)}</td>
-                      <td className="p-3 font-mono">{parseFloat(tx.value).toFixed(4)}</td>
-                      <td className="p-3">
-                        <Badge variant={tx.status === "confirmed" ? "default" : tx.status === "failed" ? "destructive" : "outline"} className="text-xs">
-                          {tx.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-gray-500 text-xs hidden md:table-cell">{tx.timestamp ? new Date(tx.timestamp).toLocaleDateString() : "-"}</td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">No transactions found</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      <p className="text-sm text-gray-400">{filtered.length} transactions</p>
     </div>
   );
 }
@@ -620,406 +549,12 @@ function TasksSection() {
   );
 }
 
-const ARTICLE_CATEGORIES = ["FX Protection", "Payments", "DeFi", "Education", "Earning"];
-
-function ContentSection() {
-  const { token } = useAdminToken();
-  const { toast } = useToast();
-  const [editingArticle, setEditingArticle] = useState<any>(null);
-  const [showEditor, setShowEditor] = useState(false);
-
-  const { data: articles = [], isLoading } = useQuery({
-    queryKey: ["/api/admin/articles"],
-    queryFn: () => adminFetch("/api/admin/articles", token).then(r => r.json()),
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async (article: any) => {
-      const isNew = !article.id;
-      const url = isNew ? "/api/admin/articles" : `/api/admin/articles/${article.id}`;
-      const method = isNew ? "POST" : "PATCH";
-      const { id, createdAt, updatedAt, ...body } = article;
-      const res = await adminFetch(url, token, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Failed to save article");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/articles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
-      setShowEditor(false);
-      setEditingArticle(null);
-      toast({ title: "Article saved" });
-    },
-    onError: () => toast({ variant: "destructive", title: "Failed to save article" }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await adminFetch(`/api/admin/articles/${id}`, token, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/articles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
-      toast({ title: "Article deleted" });
-    },
-  });
-
-  const togglePublish = useMutation({
-    mutationFn: async ({ id, isPublished }: { id: number; isPublished: boolean }) => {
-      const res = await adminFetch(`/api/admin/articles/${id}`, token, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isPublished }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/articles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
-    },
-  });
-
-  const openNewArticle = () => {
-    setEditingArticle({
-      slug: "",
-      title: "",
-      subtitle: "",
-      category: "Education",
-      readTime: "5 min read",
-      date: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-      content: [{ type: "heading", content: "" }, { type: "text", content: "" }],
-      isPublished: true,
-      sortOrder: (articles as any[]).length,
-    });
-    setShowEditor(true);
-  };
-
-  const openEditArticle = (article: any) => {
-    setEditingArticle({ ...article });
-    setShowEditor(true);
-  };
-
-  if (isLoading) return <LoadingSkeleton />;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Content Management</h2>
-        <Button onClick={openNewArticle} className="bg-[#1a4480] hover:bg-[#153a6e]">
-          <Plus className="h-4 w-4 mr-2" /> New Article
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Insights Articles</CardTitle>
-          <CardDescription>{(articles as any[]).length} articles total</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left p-3 font-medium text-gray-500">Title</th>
-                  <th className="text-left p-3 font-medium text-gray-500">Category</th>
-                  <th className="text-left p-3 font-medium text-gray-500">Date</th>
-                  <th className="text-center p-3 font-medium text-gray-500">Published</th>
-                  <th className="text-right p-3 font-medium text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {(articles as any[]).map((article: any) => (
-                  <tr key={article.id} className="hover:bg-gray-50">
-                    <td className="p-3">
-                      <div className="font-medium text-gray-900 line-clamp-1">{article.title}</div>
-                      <div className="text-xs text-gray-400 font-mono">{article.slug}</div>
-                    </td>
-                    <td className="p-3">
-                      <Badge variant="outline" className="text-xs">{article.category}</Badge>
-                    </td>
-                    <td className="p-3 text-gray-500 text-xs">{article.date}</td>
-                    <td className="p-3 text-center">
-                      <Switch
-                        checked={article.isPublished}
-                        onCheckedChange={(checked) => togglePublish.mutate({ id: article.id, isPublished: checked })}
-                      />
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => openEditArticle(article)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => {
-                            if (confirm("Delete this article?")) deleteMutation.mutate(article.id);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {(articles as any[]).length === 0 && (
-                  <tr><td colSpan={5} className="p-6 text-center text-gray-400">No articles yet</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Dialog open={showEditor} onOpenChange={(open) => { if (!open) { setShowEditor(false); setEditingArticle(null); } }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {editingArticle && (
-            <ArticleEditor
-              article={editingArticle}
-              onSave={(article) => saveMutation.mutate(article)}
-              onCancel={() => { setShowEditor(false); setEditingArticle(null); }}
-              isSaving={saveMutation.isPending}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function ArticleEditor({ article, onSave, onCancel, isSaving }: {
-  article: any;
-  onSave: (article: any) => void;
-  onCancel: () => void;
-  isSaving: boolean;
-}) {
-  const [form, setForm] = useState(article);
-  const [contentSections, setContentSections] = useState<any[]>(
-    Array.isArray(article.content) ? article.content : []
-  );
-
-  const updateField = (field: string, value: any) => {
-    setForm((f: any) => ({ ...f, [field]: value }));
-  };
-
-  const addSection = (type: string) => {
-    if (type === "list") {
-      setContentSections([...contentSections, { type: "list", items: [""] }]);
-    } else if (type === "cta") {
-      setContentSections([...contentSections, { type: "cta", title: "", description: "", link: "/hedge", linkText: "Learn More" }]);
-    } else {
-      setContentSections([...contentSections, { type, content: "" }]);
-    }
-  };
-
-  const updateSection = (index: number, updates: any) => {
-    const updated = [...contentSections];
-    updated[index] = { ...updated[index], ...updates };
-    setContentSections(updated);
-  };
-
-  const removeSection = (index: number) => {
-    setContentSections(contentSections.filter((_, i) => i !== index));
-  };
-
-  const moveSection = (index: number, direction: -1 | 1) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= contentSections.length) return;
-    const updated = [...contentSections];
-    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
-    setContentSections(updated);
-  };
-
-  const handleSave = () => {
-    const slug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    onSave({ ...form, slug, content: contentSections });
-  };
-
-  return (
-    <div>
-      <DialogHeader className="flex flex-row items-center justify-between pb-4">
-        <DialogTitle>{article.id ? "Edit Article" : "New Article"}</DialogTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={isSaving}>Cancel</Button>
-          <Button onClick={handleSave} disabled={isSaving} className="bg-[#1a4480] hover:bg-[#153a6e]">
-            {isSaving ? "Saving..." : "Save Article"}
-          </Button>
-        </div>
-      </DialogHeader>
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Title</Label>
-            <Input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="Article title" />
-          </div>
-          <div className="space-y-2">
-            <Label>Slug (URL path)</Label>
-            <Input value={form.slug} onChange={(e) => updateField("slug", e.target.value)} placeholder="auto-generated-from-title" />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Subtitle</Label>
-          <Textarea value={form.subtitle} onChange={(e) => updateField("subtitle", e.target.value)} placeholder="Brief description" rows={2} />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label>Category</Label>
-            <Select value={form.category} onValueChange={(v) => updateField("category", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ARTICLE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Read Time</Label>
-            <Input value={form.readTime || form.read_time || ""} onChange={(e) => updateField("readTime", e.target.value)} placeholder="5 min read" />
-          </div>
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <Input value={form.date} onChange={(e) => updateField("date", e.target.value)} placeholder="February 15, 2026" />
-          </div>
-          <div className="space-y-2">
-            <Label>Sort Order</Label>
-            <Input type="number" value={form.sortOrder ?? 0} onChange={(e) => updateField("sortOrder", parseInt(e.target.value) || 0)} />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Switch checked={form.isPublished ?? true} onCheckedChange={(v) => updateField("isPublished", v)} />
-          <Label>Published</Label>
-        </div>
-
-        <div className="border-t pt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Content Sections</h3>
-            <div className="flex gap-1 flex-wrap">
-              {[
-                { type: "heading", label: "Heading" },
-                { type: "subheading", label: "Subheading" },
-                { type: "text", label: "Text" },
-                { type: "list", label: "List" },
-                { type: "callout", label: "Callout" },
-                { type: "cta", label: "CTA" },
-              ].map(s => (
-                <Button key={s.type} size="sm" variant="outline" onClick={() => addSection(s.type)} className="text-xs">
-                  <Plus className="h-3 w-3 mr-1" /> {s.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {contentSections.map((section, index) => (
-              <div key={index} className="border rounded-lg p-3 bg-gray-50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs capitalize">{section.type}</Badge>
-                    <span className="text-xs text-gray-400">#{index + 1}</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => moveSection(index, -1)} disabled={index === 0} className="h-6 w-6 p-0">
-                      <span className="text-xs">&#x25B2;</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => moveSection(index, 1)} disabled={index === contentSections.length - 1} className="h-6 w-6 p-0">
-                      <span className="text-xs">&#x25BC;</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => removeSection(index)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700">
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-
-                {(section.type === "heading" || section.type === "subheading" || section.type === "callout") && (
-                  <Input
-                    value={section.content || ""}
-                    onChange={(e) => updateSection(index, { content: e.target.value })}
-                    placeholder={`${section.type} text...`}
-                  />
-                )}
-
-                {section.type === "text" && (
-                  <Textarea
-                    value={section.content || ""}
-                    onChange={(e) => updateSection(index, { content: e.target.value })}
-                    placeholder="Paragraph text..."
-                    rows={3}
-                  />
-                )}
-
-                {section.type === "list" && (
-                  <div className="space-y-2">
-                    {(section.items || [""]).map((item: string, i: number) => (
-                      <div key={i} className="flex gap-2">
-                        <Input
-                          value={item}
-                          onChange={(e) => {
-                            const items = [...(section.items || [""])];
-                            items[i] = e.target.value;
-                            updateSection(index, { items });
-                          }}
-                          placeholder={`List item ${i + 1}`}
-                        />
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            const items = (section.items || [""]).filter((_: any, j: number) => j !== i);
-                            updateSection(index, { items: items.length ? items : [""] });
-                          }}
-                          className="text-red-400 h-9 w-9 p-0 flex-shrink-0"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => updateSection(index, { items: [...(section.items || [""]), ""] })}
-                      className="text-xs"
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Add Item
-                    </Button>
-                  </div>
-                )}
-
-                {section.type === "cta" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input value={section.title || ""} onChange={(e) => updateSection(index, { title: e.target.value })} placeholder="CTA Title" />
-                    <Input value={section.link || ""} onChange={(e) => updateSection(index, { link: e.target.value })} placeholder="/hedge" />
-                    <Input value={section.description || ""} onChange={(e) => updateSection(index, { description: e.target.value })} placeholder="CTA Description" />
-                    <Input value={section.linkText || ""} onChange={(e) => updateSection(index, { linkText: e.target.value })} placeholder="Button text" />
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {contentSections.length === 0 && (
-              <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg">
-                No content sections yet. Add sections using the buttons above.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function AnalyticsSection() {
   const { token } = useAdminToken();
   const { data, isLoading, refetch: refetchAnalytics, dataUpdatedAt: analyticsUpdatedAt } = useQuery({ queryKey: ["/api/admin/analytics"], queryFn: () => adminFetch("/api/admin/analytics", token).then(r => r.json()), refetchInterval: 30000 });
   if (isLoading) return <LoadingSkeleton />;
-  const { usersByDay = [], hedgesByPair = [], hedgesByStatus = [], txByDay = [] } = (data as any) || {};
+  const { usersByDay = [], hedgesByPair = [], hedgesByStatus = [] } = (data as any) || {};
 
   return (
     <div className="space-y-6">
@@ -1094,27 +629,6 @@ function AnalyticsSection() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Transaction Volume</CardTitle>
-            <CardDescription>Daily transaction count and volume</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {txByDay.length > 0 ? (
-              <div className="space-y-2">
-                {txByDay.slice(-14).map((d: any) => (
-                  <div key={d.date} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">{d.date}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-400">{d.count} txs</span>
-                      <span className="font-mono font-semibold">{parseFloat(d.volume).toFixed(2)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-gray-400 text-center py-4">No data yet</p>}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
@@ -1252,11 +766,9 @@ export default function AdminDashboard() {
       <main className="flex-1 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
         {section === "dashboard" && <DashboardSection />}
         {section === "users" && <UsersSection />}
-        {section === "transactions" && <TransactionsSection />}
         {section === "hedge" && <HedgeSection />}
         {section === "revenue" && <RevenueSection />}
         {section === "tasks" && <TasksSection />}
-        {section === "content" && <ContentSection />}
         {section === "analytics" && <AnalyticsSection />}
       </main>
     </div>

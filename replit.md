@@ -50,7 +50,15 @@ The user interface is designed with shadcn/ui (based on Radix UI) and styled usi
 - **crypto-js**: Used for client-side AES-256 encryption.
 
 ## Third-party Services
-- **Zoho Forms**: Integrated for waitlist management.
-- **ExchangeRate-API**: Provides FX rates.
+- **ExchangeRate-API**: Provides FX rates (dual-source: open.er-api.com + api.exchangerate-api.com, averaged).
 - **Yahoo Finance**: Sourced for commodity prices.
 - **CoinGecko**: Used for fetching cryptocurrency prices (free tier).
+
+## Database Tables (Active)
+Nine tables in production:
+- `wallets`, `networks` — core infrastructure
+- `hedge_events`, `hedge_positions`, `hedge_lp_deposits` — on-chain hedge tracking
+- `daily_tasks`, `user_task_completions` — engagement system
+- `platform_fees` — fee revenue tracking
+- `rate_snapshots` — FX oracle history
+Plus profile/referral tables from separate schema files.

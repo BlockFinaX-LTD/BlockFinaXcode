@@ -8,25 +8,15 @@
 import { 
   wallets, 
   networks, 
-  transactions, 
-  balances,
   userProfiles,
   referralCodes,
   referrals,
   userPoints,
   pointTransactions,
-  userRoles,
-  waitlist,
-  type Waitlist,
-  type InsertWaitlist,
   type Wallet, 
   type InsertWallet,
   type Network,
   type InsertNetwork,
-  type Transaction,
-  type InsertTransaction,
-  type Balance,
-  type InsertBalance,
   type UserProfile,
   type InsertUserProfile,
   type ReferralCode,
@@ -37,8 +27,6 @@ import {
   type InsertUserPoints,
   type PointTransaction,
   type InsertPointTransaction,
-  type UserRole,
-  type InsertUserRole,
   hedgeEvents,
   type HedgeEvent,
   type InsertHedgeEvent,
@@ -48,9 +36,6 @@ import {
   hedgeLpDeposits,
   type HedgeLpDeposit,
   type InsertHedgeLpDeposit,
-  articles,
-  type Article,
-  type InsertArticle,
   rateSnapshots,
   type RateSnapshot,
   type InsertRateSnapshot
@@ -93,27 +78,6 @@ export interface IStorage {
   createNetwork(network: InsertNetwork): Promise<Network>;
   updateNetwork(id: number, updates: Partial<InsertNetwork>): Promise<Network | undefined>;
 
-  // Transaction operations
-  getTransaction(id: number): Promise<Transaction | undefined>;
-  getTransactionByHash(hash: string): Promise<Transaction | undefined>;
-  getTransactions(filters: {
-    walletId?: number;
-    networkId?: number;
-    status?: string;
-    limit?: number;
-  }): Promise<Transaction[]>;
-  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
-  updateTransaction(hash: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
-
-  // Balance operations
-  getBalance(id: number): Promise<Balance | undefined>;
-  getBalances(filters: {
-    walletId?: number;
-    networkId?: number;
-  }): Promise<Balance[]>;
-  createBalance(balance: InsertBalance): Promise<Balance>;
-  updateBalance(id: number, updates: Partial<InsertBalance>): Promise<Balance | undefined>;
-
   // Profile operations
   getUserProfile(walletAddress: string): Promise<UserProfile | undefined>;
   createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
@@ -139,25 +103,6 @@ export interface IStorage {
   createPointTransaction(transaction: InsertPointTransaction): Promise<PointTransaction>;
   getPointTransactions(walletAddress: string): Promise<PointTransaction[]>;
 
-  // User Role operations
-  getUserRole(walletAddress: string): Promise<UserRole | undefined>;
-  getAllUserRoles(): Promise<UserRole[]>;
-  createUserRole(role: InsertUserRole): Promise<UserRole>;
-  updateUserRole(walletAddress: string, updates: Partial<InsertUserRole>): Promise<UserRole | undefined>;
-
-  // Statistics
-  getPortfolioStats(walletId: number): Promise<{
-    totalValue: number;
-    networkBreakdown: Array<{
-      networkId: number;
-      balance: string;
-      usdValue: number;
-      percentage: number;
-    }>;
-    transactionCount: number;
-    lastActivity: Date | null;
-  }>;
-
   // Hedge Event operations
   createHedgeEvent(event: InsertHedgeEvent): Promise<HedgeEvent>;
   getHedgeEvent(id: number): Promise<HedgeEvent | undefined>;
@@ -179,14 +124,6 @@ export interface IStorage {
   getHedgeLpDepositsByWallet(wallet: string): Promise<HedgeLpDeposit[]>;
   updateHedgeLpDeposit(id: number, updates: Partial<HedgeLpDeposit>): Promise<HedgeLpDeposit | undefined>;
 
-  // Article operations
-  getArticles(onlyPublished?: boolean): Promise<Article[]>;
-  getArticleBySlug(slug: string): Promise<Article | undefined>;
-  getArticle(id: number): Promise<Article | undefined>;
-  createArticle(article: InsertArticle): Promise<Article>;
-  updateArticle(id: number, updates: Partial<InsertArticle>): Promise<Article | undefined>;
-  deleteArticle(id: number): Promise<boolean>;
-
   // Rate Snapshot operations
   saveRateSnapshots(snapshots: InsertRateSnapshot[]): Promise<void>;
   getRateSnapshotBefore(pair: string, beforeMs: number): Promise<RateSnapshot | undefined>;
@@ -196,44 +133,30 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private wallets: Map<number, Wallet>;
   private networks: Map<number, Network>;
-  private transactions: Map<number, Transaction>;
-  private balances: Map<number, Balance>;
   private profiles: Map<string, UserProfile>;
-  private transactionsByHash: Map<string, Transaction>;
   private referralCodes: Map<string, ReferralCode>;
   private referrals: Map<number, Referral>;
   private userPoints: Map<string, UserPoints>;
   private pointTransactions: Map<number, PointTransaction>;
-  private userRoles: Map<string, UserRole>;
   private currentWalletId: number;
   private currentNetworkId: number;
-  private currentTransactionId: number;
-  private currentBalanceId: number;
   private currentProfileId: number;
   private currentReferralId: number;
   private currentPointTransactionId: number;
-  private currentUserRoleId: number;
 
   constructor() {
     this.wallets = new Map();
     this.networks = new Map();
-    this.transactions = new Map();
-    this.balances = new Map();
     this.profiles = new Map();
-    this.transactionsByHash = new Map();
     this.referralCodes = new Map();
     this.referrals = new Map();
     this.userPoints = new Map();
     this.pointTransactions = new Map();
-    this.userRoles = new Map();
     this.currentWalletId = 1;
     this.currentNetworkId = 1;
-    this.currentTransactionId = 1;
-    this.currentBalanceId = 1;
     this.currentProfileId = 1;
     this.currentReferralId = 1;
     this.currentPointTransactionId = 1;
-    this.currentUserRoleId = 1;
 
     // Initialize with default testnet networks
     this.initializeDefaultNetworks();
@@ -333,170 +256,6 @@ export class MemStorage implements IStorage {
     const updatedNetwork = { ...network, ...updates };
     this.networks.set(id, updatedNetwork);
     return updatedNetwork;
-  }
-
-  // Transaction operations
-  async getTransaction(id: number): Promise<Transaction | undefined> {
-    return this.transactions.get(id);
-  }
-
-  async getTransactionByHash(hash: string): Promise<Transaction | undefined> {
-    return this.transactionsByHash.get(hash);
-  }
-
-  async getTransactions(filters: {
-    walletId?: number;
-    networkId?: number;
-    status?: string;
-    limit?: number;
-  }): Promise<Transaction[]> {
-    let result = Array.from(this.transactions.values());
-
-    if (filters.walletId) {
-      result = result.filter(tx => tx.walletId === filters.walletId);
-    }
-
-    if (filters.networkId) {
-      result = result.filter(tx => tx.networkId === filters.networkId);
-    }
-
-    if (filters.status) {
-      result = result.filter(tx => tx.status === filters.status);
-    }
-
-    // Sort by timestamp, newest first
-    result.sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return bTime - aTime;
-    });
-
-    if (filters.limit) {
-      result = result.slice(0, filters.limit);
-    }
-
-    return result;
-  }
-
-  async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
-    const id = this.currentTransactionId++;
-    const transaction: Transaction = {
-      ...insertTransaction,
-      id,
-      walletId: insertTransaction.walletId || null,
-      networkId: insertTransaction.networkId || null,
-      gasPrice: insertTransaction.gasPrice || null,
-      gasUsed: insertTransaction.gasUsed || null,
-      blockNumber: insertTransaction.blockNumber || null,
-      timestamp: new Date()
-    };
-    
-    this.transactions.set(id, transaction);
-    this.transactionsByHash.set(transaction.hash, transaction);
-    return transaction;
-  }
-
-  async updateTransaction(hash: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined> {
-    const transaction = this.transactionsByHash.get(hash);
-    if (!transaction) return undefined;
-
-    const updatedTransaction = { ...transaction, ...updates };
-    this.transactions.set(transaction.id, updatedTransaction);
-    this.transactionsByHash.set(hash, updatedTransaction);
-    return updatedTransaction;
-  }
-
-  // Balance operations
-  async getBalance(id: number): Promise<Balance | undefined> {
-    return this.balances.get(id);
-  }
-
-  async getBalances(filters: {
-    walletId?: number;
-    networkId?: number;
-  }): Promise<Balance[]> {
-    let result = Array.from(this.balances.values());
-
-    if (filters.walletId) {
-      result = result.filter(balance => balance.walletId === filters.walletId);
-    }
-
-    if (filters.networkId) {
-      result = result.filter(balance => balance.networkId === filters.networkId);
-    }
-
-    return result;
-  }
-
-  async createBalance(insertBalance: InsertBalance): Promise<Balance> {
-    const id = this.currentBalanceId++;
-    const balance: Balance = {
-      ...insertBalance,
-      id,
-      walletId: insertBalance.walletId || null,
-      networkId: insertBalance.networkId || null,
-      usdValue: insertBalance.usdValue || null,
-      lastUpdated: new Date()
-    };
-    this.balances.set(id, balance);
-    return balance;
-  }
-
-  async updateBalance(id: number, updates: Partial<InsertBalance>): Promise<Balance | undefined> {
-    const balance = this.balances.get(id);
-    if (!balance) return undefined;
-
-    const updatedBalance = { 
-      ...balance, 
-      ...updates,
-      lastUpdated: new Date()
-    };
-    this.balances.set(id, updatedBalance);
-    return updatedBalance;
-  }
-
-  // Statistics
-  async getPortfolioStats(walletId: number): Promise<{
-    totalValue: number;
-    networkBreakdown: Array<{
-      networkId: number;
-      balance: string;
-      usdValue: number;
-      percentage: number;
-    }>;
-    transactionCount: number;
-    lastActivity: Date | null;
-  }> {
-    const balances = await this.getBalances({ walletId });
-    const transactions = await this.getTransactions({ walletId });
-
-    const totalValue = balances.reduce((sum, balance) => {
-      return sum + (balance.usdValue ? parseFloat(balance.usdValue) : 0);
-    }, 0);
-
-    const networkBreakdown = balances.map(balance => {
-      const usdValue = balance.usdValue ? parseFloat(balance.usdValue) : 0;
-      return {
-        networkId: balance.networkId!,
-        balance: balance.balance,
-        usdValue,
-        percentage: totalValue > 0 ? (usdValue / totalValue) * 100 : 0
-      };
-    });
-
-    const lastActivity = transactions.length > 0 
-      ? transactions.reduce((latest, tx) => {
-          const txTime = tx.timestamp ? new Date(tx.timestamp) : new Date(0);
-          return txTime > latest ? txTime : latest;
-        }, new Date(0))
-      : null;
-
-    return {
-      totalValue,
-      networkBreakdown,
-      transactionCount: transactions.length,
-      lastActivity
-    };
   }
 
   // Profile operations (MemStorage placeholders)
@@ -664,39 +423,6 @@ export class MemStorage implements IStorage {
     return Array.from(this.pointTransactions.values()).filter(t => t.walletAddress === walletAddress);
   }
 
-  // User Role operations
-  async getUserRole(walletAddress: string): Promise<UserRole | undefined> {
-    return this.userRoles.get(walletAddress);
-  }
-
-  async getAllUserRoles(): Promise<UserRole[]> {
-    return Array.from(this.userRoles.values());
-  }
-
-  async createUserRole(role: InsertUserRole): Promise<UserRole> {
-    const newRole: UserRole = {
-      id: this.currentUserRoleId++,
-      walletAddress: role.walletAddress,
-      role: role.role,
-      kycStatus: role.kycStatus || 'pending',
-      kycDocuments: role.kycDocuments || null,
-      lastActivity: new Date(),
-      referralSource: role.referralSource || null,
-      isActive: role.isActive !== undefined ? role.isActive : true,
-      createdAt: new Date()
-    };
-    this.userRoles.set(newRole.walletAddress, newRole);
-    return newRole;
-  }
-
-  async updateUserRole(walletAddress: string, updates: Partial<InsertUserRole>): Promise<UserRole | undefined> {
-    const userRole = this.userRoles.get(walletAddress);
-    if (userRole) {
-      Object.assign(userRole, { ...updates, lastActivity: new Date() });
-    }
-    return userRole;
-  }
-
   // Hedge operations (stubs)
   async createHedgeEvent(event: InsertHedgeEvent): Promise<HedgeEvent> { throw new Error("MemStorage: Hedge not implemented - use DatabaseStorage"); }
   async getHedgeEvent(id: number): Promise<HedgeEvent | undefined> { return undefined; }
@@ -713,13 +439,6 @@ export class MemStorage implements IStorage {
   async getHedgeLpDepositsByEvent(eventId: number): Promise<HedgeLpDeposit[]> { return []; }
   async getHedgeLpDepositsByWallet(wallet: string): Promise<HedgeLpDeposit[]> { return []; }
   async updateHedgeLpDeposit(id: number, updates: Partial<HedgeLpDeposit>): Promise<HedgeLpDeposit | undefined> { return undefined; }
-
-  async getArticles(onlyPublished?: boolean): Promise<Article[]> { return []; }
-  async getArticleBySlug(slug: string): Promise<Article | undefined> { return undefined; }
-  async getArticle(id: number): Promise<Article | undefined> { return undefined; }
-  async createArticle(article: InsertArticle): Promise<Article> { throw new Error("MemStorage: Articles not implemented"); }
-  async updateArticle(id: number, updates: Partial<InsertArticle>): Promise<Article | undefined> { return undefined; }
-  async deleteArticle(id: number): Promise<boolean> { return false; }
 
   async saveRateSnapshots(_snapshots: InsertRateSnapshot[]): Promise<void> {}
   async getRateSnapshotBefore(_pair: string, _beforeMs: number): Promise<RateSnapshot | undefined> { return undefined; }
@@ -800,153 +519,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(networks.id, id))
       .returning();
     return network || undefined;
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // [TRANSACTION] Transaction Management
-  // ═══════════════════════════════════════════════════════
-
-  async getTransaction(id: number): Promise<Transaction | undefined> {
-    const [transaction] = await db.select().from(transactions).where(eq(transactions.id, id));
-    return transaction || undefined;
-  }
-
-  async getTransactionByHash(hash: string): Promise<Transaction | undefined> {
-    const [transaction] = await db.select().from(transactions).where(eq(transactions.hash, hash));
-    return transaction || undefined;
-  }
-
-  async getTransactions(filters: {
-    walletId?: number;
-    networkId?: number;
-    status?: string;
-    limit?: number;
-  }): Promise<Transaction[]> {
-    let query = db.select().from(transactions);
-    
-    if (filters.walletId) {
-      query = query.where(eq(transactions.walletId, filters.walletId)) as any;
-    }
-    if (filters.networkId) {
-      query = query.where(eq(transactions.networkId, filters.networkId)) as any;
-    }
-    if (filters.status) {
-      query = query.where(eq(transactions.status, filters.status)) as any;
-    }
-    
-    query = query.orderBy(desc(transactions.timestamp)) as any;
-    
-    if (filters.limit) {
-      query = query.limit(filters.limit) as any;
-    }
-    
-    return await query;
-  }
-
-  async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
-    const [transaction] = await db
-      .insert(transactions)
-      .values(insertTransaction)
-      .returning();
-    return transaction;
-  }
-
-  async updateTransaction(hash: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined> {
-    const [transaction] = await db
-      .update(transactions)
-      .set(updates)
-      .where(eq(transactions.hash, hash))
-      .returning();
-    return transaction || undefined;
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // [BALANCE] Balance Management
-  // ═══════════════════════════════════════════════════════
-
-  async getBalance(id: number): Promise<Balance | undefined> {
-    const [balance] = await db.select().from(balances).where(eq(balances.id, id));
-    return balance || undefined;
-  }
-
-  async getBalances(filters: {
-    walletId?: number;
-    networkId?: number;
-  }): Promise<Balance[]> {
-    let query = db.select().from(balances);
-    
-    if (filters.walletId) {
-      query = query.where(eq(balances.walletId, filters.walletId)) as any;
-    }
-    if (filters.networkId) {
-      query = query.where(eq(balances.networkId, filters.networkId)) as any;
-    }
-    
-    return await query;
-  }
-
-  async createBalance(insertBalance: InsertBalance): Promise<Balance> {
-    const [balance] = await db
-      .insert(balances)
-      .values(insertBalance)
-      .returning();
-    return balance;
-  }
-
-  async updateBalance(id: number, updates: Partial<InsertBalance>): Promise<Balance | undefined> {
-    const [balance] = await db
-      .update(balances)
-      .set(updates)
-      .where(eq(balances.id, id))
-      .returning();
-    return balance || undefined;
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // [PORTFOLIO] Portfolio Stats
-  // ═══════════════════════════════════════════════════════
-
-  async getPortfolioStats(walletId: number): Promise<{
-    totalValue: number;
-    networkBreakdown: Array<{
-      networkId: number;
-      balance: string;
-      usdValue: number;
-      percentage: number;
-    }>;
-    transactionCount: number;
-    lastActivity: Date | null;
-  }> {
-    const walletBalances = await this.getBalances({ walletId });
-    const walletTransactions = await this.getTransactions({ walletId });
-
-    const totalValue = walletBalances.reduce((sum, balance) => {
-      return sum + (balance.usdValue ? parseFloat(balance.usdValue) : 0);
-    }, 0);
-
-    const networkBreakdown = walletBalances.map(balance => {
-      const usdValue = balance.usdValue ? parseFloat(balance.usdValue) : 0;
-      return {
-        networkId: balance.networkId!,
-        balance: balance.balance,
-        usdValue,
-        percentage: totalValue > 0 ? (usdValue / totalValue) * 100 : 0
-      };
-    });
-
-    const lastActivity = walletTransactions.length > 0 
-      ? walletTransactions.reduce((latest, tx) => {
-          const txTime = tx.timestamp ? new Date(tx.timestamp) : new Date(0);
-          return txTime > latest ? txTime : latest;
-        }, new Date(0))
-      : null;
-
-    return {
-      totalValue,
-      networkBreakdown,
-      transactionCount: walletTransactions.length,
-      lastActivity
-    };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1107,67 +679,6 @@ export class DatabaseStorage implements IStorage {
     return this.getPointTransactions(walletAddress);
   }
 
-  // User Role operations
-  async getUserRole(walletAddress: string): Promise<UserRole | undefined> {
-    const [role] = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.walletAddress, walletAddress));
-    return role;
-  }
-
-  async getAllUserRoles(): Promise<UserRole[]> {
-    return await db.select().from(userRoles);
-  }
-
-  async createUserRole(insertRole: InsertUserRole): Promise<UserRole> {
-    const [role] = await db
-      .insert(userRoles)
-      .values(insertRole)
-      .returning();
-    return role;
-  }
-
-  async updateUserRole(walletAddress: string, updates: Partial<InsertUserRole>): Promise<UserRole | undefined> {
-    const [updated] = await db
-      .update(userRoles)
-      .set({ ...updates, lastActivity: new Date() })
-      .where(eq(userRoles.walletAddress, walletAddress))
-      .returning();
-    return updated;
-  }
-
-  // Waitlist operations
-  async createWaitlistEntry(entry: InsertWaitlist): Promise<Waitlist> {
-    const [created] = await db
-      .insert(waitlist)
-      .values(entry)
-      .returning();
-    return created;
-  }
-
-  async getWaitlistByEmail(email: string): Promise<Waitlist | undefined> {
-    const [entry] = await db
-      .select()
-      .from(waitlist)
-      .where(eq(waitlist.email, email.toLowerCase()));
-    return entry;
-  }
-
-  async getAllWaitlistEntries(): Promise<Waitlist[]> {
-    return await db
-      .select()
-      .from(waitlist)
-      .orderBy(desc(waitlist.createdAt));
-  }
-
-  async getWaitlistCount(): Promise<number> {
-    const result = await db
-      .select()
-      .from(waitlist);
-    return result.length;
-  }
-
   // ═══════════════════════════════════════════════════════
   // [HEDGE] P2P Trade Hedge
   // ═══════════════════════════════════════════════════════
@@ -1241,38 +752,6 @@ export class DatabaseStorage implements IStorage {
   async updateHedgeLpDeposit(id: number, updates: Partial<HedgeLpDeposit>): Promise<HedgeLpDeposit | undefined> {
     const [updated] = await db.update(hedgeLpDeposits).set(updates).where(eq(hedgeLpDeposits.id, id)).returning();
     return updated;
-  }
-
-  async getArticles(onlyPublished = false): Promise<Article[]> {
-    if (onlyPublished) {
-      return await db.select().from(articles).where(eq(articles.isPublished, true)).orderBy(articles.sortOrder, desc(articles.createdAt));
-    }
-    return await db.select().from(articles).orderBy(articles.sortOrder, desc(articles.createdAt));
-  }
-
-  async getArticleBySlug(slug: string): Promise<Article | undefined> {
-    const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
-    return article;
-  }
-
-  async getArticle(id: number): Promise<Article | undefined> {
-    const [article] = await db.select().from(articles).where(eq(articles.id, id));
-    return article;
-  }
-
-  async createArticle(article: InsertArticle): Promise<Article> {
-    const [created] = await db.insert(articles).values(article).returning();
-    return created;
-  }
-
-  async updateArticle(id: number, updates: Partial<InsertArticle>): Promise<Article | undefined> {
-    const [updated] = await db.update(articles).set({ ...updates, updatedAt: new Date() }).where(eq(articles.id, id)).returning();
-    return updated;
-  }
-
-  async deleteArticle(id: number): Promise<boolean> {
-    const result = await db.delete(articles).where(eq(articles.id, id));
-    return (result.rowCount ?? 0) > 0;
   }
 
   async saveRateSnapshots(snapshots: InsertRateSnapshot[]): Promise<void> {
