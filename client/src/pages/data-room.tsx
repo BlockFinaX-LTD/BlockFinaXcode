@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock, LogOut, ExternalLink, FileText, BarChart2, Globe,
   PlayCircle, Beaker, ShieldCheck, BookOpen, ChevronRight,
-  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3
+  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3, Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,6 +153,7 @@ const CATEGORIES = [
       { id: "compliance-proposals", title: "Compliance Proposals", description: "Proposals and recommendations from legal and compliance consultants — admin editable", href: null, type: "modal" as const, badge: "Internal", badgeColor: "bg-purple-100 text-purple-700", icon: BookOpen },
       { id: "bog-sandbox", title: "Bank of Ghana Sandbox", description: "Regulatory sandbox application status, compliance framework, and market entry roadmap", href: null, type: "modal" as const, badge: "In Progress", badgeColor: "bg-orange-100 text-orange-700", icon: ShieldCheck },
       { id: "token-legal", title: "Token Legal Opinion", description: "USDC-only model — no native token, no securities classification risk", href: null, type: "coming-soon" as const, badge: "Coming Soon", badgeColor: "bg-slate-100 text-slate-400", icon: FileText },
+      { id: "book-call", title: "Book a Discovery Call", description: "Schedule a 30-minute call with the founder — ask anything, explore the opportunity", href: "https://calendly.com/anthonykumako8/30min", type: "external" as const, badge: "Calendly", badgeColor: "bg-blue-100 text-blue-700", icon: Calendar },
       { id: "nda-request", title: "Request NDA / Term Sheet", description: "Contact us to request a non-disclosure agreement or investment term sheet", href: "mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20NDA%20Request", type: "external" as const, badge: "Email", badgeColor: "bg-slate-100 text-slate-600", icon: ExternalLink },
     ],
   },
@@ -196,6 +197,18 @@ function ExecSummary() {
           <tr><td style={S.td}><span style={S.tag("amber")}>Series B</span></td><td style={S.td}>$7M</td><td style={S.td}>H2 2028</td><td style={S.td}>New markets (Kenya, Nigeria), enterprise integrations, liquidity depth</td></tr>
         </tbody>
       </table>
+
+      <div style={{ margin: "16px 0", padding: "16px", background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)", borderRadius: "10px", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" as const }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "15px", color: "#1e3a8a", marginBottom: "4px" }}>Ready to explore the opportunity?</div>
+          <div style={{ fontSize: "13px", color: "#3b82f6" }}>Schedule a 30-minute discovery call with the founder — no commitment required.</div>
+        </div>
+        <a href="https://calendly.com/anthonykumako8/30min" target="_blank" rel="noopener noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#2563eb", color: "#fff", fontWeight: 600, fontSize: "14px", padding: "10px 20px", borderRadius: "8px", textDecoration: "none", whiteSpace: "nowrap" as const, flexShrink: 0 }}>
+          <Calendar style={{ width: "16px", height: "16px" }} />
+          Book a Call
+        </a>
+      </div>
 
       <h2 style={S.h2}>Mainnet Timeline</h2>
       <p style={S.p}><strong>July 7, 2026</strong> — Mainnet launch on Lisk L2, following third-party security audit and Bank of Ghana sandbox approval.</p>
