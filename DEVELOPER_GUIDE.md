@@ -165,7 +165,7 @@ blockfinax/
 │
 ├── HEDGE_DEVELOPER_NOTES.md         # Detailed hedge system documentation
 ├── DEVELOPER_GUIDE.md               # This file
-├── replit.md                        # Project config and context
+├── project.md                       # Project config and context
 ├── drizzle.config.ts                # Drizzle ORM migration config
 ├── package.json                     # Root dependencies
 ├── tailwind.config.ts               # Tailwind CSS config

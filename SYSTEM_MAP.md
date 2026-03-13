@@ -97,7 +97,7 @@ BLOCKFINAX — FOLDER & FILE MAP
 
 📄 ROOT FILES
 ├── SYSTEM_MAP.md               This file — full folder and file map
-├── replit.md                   Project overview and architecture notes
+├── project.md                  Project overview and architecture notes
 ├── HEDGE_DEVELOPER_NOTES.md    Technical docs for the smart contract
 ├── CONTENT.md                  12 video scripts for YouTube/social
 ├── ADVANCE_V2.md               v2 protocol spec (deferred to Q2 2027)

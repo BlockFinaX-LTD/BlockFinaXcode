@@ -40,7 +40,7 @@ BlockFinaX uses a **custodial push oracle** model. The platform backend fetches 
 The oracle is controlled by a single private key. If this key is compromised, an attacker can submit fraudulent settlement prices and drain liquidity pools. Users must fully trust the platform operator to report accurate prices.
 
 ### 3.2 Single Point of Failure
-If the Replit backend goes offline, no events are settled. Hedgers may be left in limbo with active positions that cannot resolve until the server is restored.
+If the application server goes offline, no events are settled. Hedgers may be left in limbo with active positions that cannot resolve until the server is restored.
 
 ### 3.3 No On-Chain Price Provenance
 The smart contract records the settlement price but not its source. There is no on-chain proof that the submitted price came from a legitimate data provider rather than an arbitrary value.
