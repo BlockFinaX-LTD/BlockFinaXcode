@@ -51,6 +51,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ═══════════════════════════════════════════════════════
+  // [INVESTOR] Data Room Auth
+  // ═══════════════════════════════════════════════════════
+  const investorSessions = new Map<string, number>(); // token → expiry timestamp
+  const investorLoginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+  function generateInvestorToken(): string {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let token = "";
+    for (let i = 0; i < 64; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+    return token;
+  }
+
+  // Clean up expired investor sessions every hour
+  setInterval(() => {
+    const now = Date.now();
+    for (const [token, expiry] of investorSessions.entries()) {
+      if (now > expiry) investorSessions.delete(token);
+    }
+  }, 3600_000);
+
+  app.post("/api/investor/auth", (req, res) => {
+    const ip = req.ip || "unknown";
+    const now = Date.now();
+
+    // Brute-force protection: max 5 attempts per 15 minutes
+    const attempts = investorLoginAttempts.get(ip);
+    if (attempts) {
+      if (now < attempts.resetAt && attempts.count >= 5) {
+        return res.status(429).json({ message: "Too many attempts. Try again in 15 minutes." });
+      }
+      if (now >= attempts.resetAt) {
+        investorLoginAttempts.delete(ip);
+      }
+    }
+
+    const { password } = req.body;
+    const investorPassword = process.env.INVESTOR_PASSWORD || process.env.ADMIN_PASSWORD;
+
+    if (!investorPassword) {
+      return res.status(500).json({ message: "Data room not configured" });
+    }
+
+    if (password !== investorPassword) {
+      const current = investorLoginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60_000 };
+      investorLoginAttempts.set(ip, { count: current.count + 1, resetAt: current.resetAt });
+      return res.status(401).json({ message: "Invalid access code" });
+    }
+
+    // Clear attempts on success
+    investorLoginAttempts.delete(ip);
+
+    const token = generateInvestorToken();
+    const expiry = now + 24 * 60 * 60_000; // 24 hours
+    investorSessions.set(token, expiry);
+
+    res.json({ token, expiresAt: expiry });
+  });
+
+  app.get("/api/investor/verify", (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    if (!token) return res.status(401).json({ valid: false });
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) {
+      investorSessions.delete(token);
+      return res.status(401).json({ valid: false });
+    }
+    res.json({ valid: true });
+  });
+
+  app.post("/api/investor/logout", (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    if (token) investorSessions.delete(token);
+    res.json({ success: true });
+  });
+
+  // ═══════════════════════════════════════════════════════
   // [HEALTH] Health Check
   // ═══════════════════════════════════════════════════════
   app.get("/api/health", (req, res) => {
