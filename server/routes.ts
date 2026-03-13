@@ -7,6 +7,9 @@
 
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import type { Referral } from "../shared/referral-schema";
@@ -140,6 +143,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
     if (typeof req.body !== "object" || Array.isArray(req.body)) return res.status(400).json({ error: "Invalid data" });
     await storage.setDataRoomContent(req.params.docId, req.body as Record<string, string>);
+    res.json({ ok: true });
+  });
+
+  // ─── Compliance file uploads ──────────────────────────────────────────────
+  const UPLOAD_DIR = path.join(process.cwd(), "server", "uploads", "compliance");
+  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+  const complianceStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => {
+      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+      cb(null, `${Date.now()}_${safe}`);
+    },
+  });
+
+  const complianceUpload = multer({
+    storage: complianceStorage,
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB max
+    fileFilter: (_req, file, cb) => {
+      const allowed = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain",
+      ];
+      if (allowed.includes(file.mimetype)) cb(null, true);
+      else cb(new Error("Only PDF, Word, Excel, PowerPoint, and text files are allowed"));
+    },
+  });
+
+  app.post("/api/investor/upload", (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+
+    complianceUpload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      if (!req.file) return res.status(400).json({ error: "No file provided" });
+      res.json({
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimeType: req.file.mimetype,
+        url: `/api/investor/files/${encodeURIComponent(req.file.filename)}`,
+      });
+    });
+  });
+
+  app.get("/api/investor/files/:filename", (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+
+    const filename = decodeURIComponent(req.params.filename);
+    const filepath = path.join(UPLOAD_DIR, path.basename(filename));
+    if (!filepath.startsWith(UPLOAD_DIR)) return res.status(400).json({ error: "Invalid path" });
+    if (!fs.existsSync(filepath)) return res.status(404).json({ error: "File not found" });
+    res.download(filepath, filename.replace(/^\d+_/, ""));
+  });
+
+  app.delete("/api/investor/files/:filename", (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+
+    const filename = decodeURIComponent(req.params.filename);
+    const filepath = path.join(UPLOAD_DIR, path.basename(filename));
+    if (!filepath.startsWith(UPLOAD_DIR)) return res.status(400).json({ error: "Invalid path" });
+    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
     res.json({ ok: true });
   });
 

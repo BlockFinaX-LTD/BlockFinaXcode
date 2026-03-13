@@ -1001,7 +1001,21 @@ function AgreementsDoc() {
   );
 }
 
-type Proposal = { id: string; name: string; consultant: string; date: string; status: string; notes: string };
+type ProposalFile = { filename: string; originalName: string; size: number; mimeType: string };
+type Proposal = { id: string; name: string; consultant: string; date: string; status: string; notes: string; files?: ProposalFile[] };
+
+function fileIcon(mime: string) {
+  if (mime === "application/pdf") return "📄";
+  if (mime.includes("word")) return "📝";
+  if (mime.includes("excel") || mime.includes("spreadsheet")) return "📊";
+  if (mime.includes("powerpoint") || mime.includes("presentation")) return "📋";
+  return "📎";
+}
+function fmtSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function ComplianceProposalsDoc({ token }: { token: string }) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -1009,13 +1023,15 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<Omit<Proposal, "id">>({ name: "", consultant: "", date: "", status: "Draft", notes: "" });
+  const [uploading, setUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<ProposalFile[]>([]);
+  const [form, setForm] = useState<Omit<Proposal, "id" | "files">>({ name: "", consultant: "", date: "", status: "Draft", notes: "" });
   const { toast } = useToast();
 
   useEffect(() => {
     fetch("/api/investor/content/compliance-proposals", { headers: { "x-investor-token": token } })
       .then(r => r.json())
-      .then(d => { setProposals(d.proposals || []); })
+      .then(d => setProposals(d.proposals || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [token]);
@@ -1028,13 +1044,51 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
     });
   };
 
-  const resetForm = () => setForm({ name: "", consultant: "", date: "", status: "Draft", notes: "" });
+  const resetForm = () => {
+    setForm({ name: "", consultant: "", date: "", status: "Draft", notes: "" });
+    setPendingFiles([]);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const uploaded: ProposalFile[] = [];
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch("/api/investor/upload", { method: "POST", headers: { "x-investor-token": token }, body: fd });
+        if (!r.ok) { const err = await r.json(); throw new Error(err.error || "Upload failed"); }
+        uploaded.push(await r.json());
+      }
+      setPendingFiles(prev => [...prev, ...uploaded]);
+      toast({ title: `${uploaded.length} file${uploaded.length > 1 ? "s" : ""} uploaded` });
+    } catch (err: unknown) {
+      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const removePendingFile = async (filename: string) => {
+    await fetch(`/api/investor/files/${encodeURIComponent(filename)}`, { method: "DELETE", headers: { "x-investor-token": token } }).catch(() => {});
+    setPendingFiles(prev => prev.filter(f => f.filename !== filename));
+  };
+
+  const removeFileFromProposal = async (proposalId: string, filename: string) => {
+    await fetch(`/api/investor/files/${encodeURIComponent(filename)}`, { method: "DELETE", headers: { "x-investor-token": token } }).catch(() => {});
+    const updated = proposals.map(p => p.id === proposalId ? { ...p, files: (p.files || []).filter(f => f.filename !== filename) } : p);
+    await saveToDb(updated);
+    setProposals(updated);
+  };
 
   const handleAdd = async () => {
     if (!form.name.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const entry: Proposal = { ...form, id: Date.now().toString() };
+      const entry: Proposal = { ...form, id: Date.now().toString(), files: pendingFiles };
       const updated = [...proposals, entry];
       await saveToDb(updated);
       setProposals(updated);
@@ -1049,7 +1103,9 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
     if (!form.name.trim() || !editingId) return;
     setSaving(true);
     try {
-      const updated = proposals.map(p => p.id === editingId ? { ...form, id: p.id } : p);
+      const existing = proposals.find(p => p.id === editingId);
+      const mergedFiles = [...(existing?.files || []), ...pendingFiles];
+      const updated = proposals.map(p => p.id === editingId ? { ...form, id: p.id, files: mergedFiles } : p);
       await saveToDb(updated);
       setProposals(updated);
       setEditingId(null);
@@ -1059,8 +1115,11 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
     finally { setSaving(false); }
   };
 
-  const handleDelete = async (id: string) => {
-    const updated = proposals.filter(p => p.id !== id);
+  const handleDelete = async (p: Proposal) => {
+    for (const f of p.files || []) {
+      await fetch(`/api/investor/files/${encodeURIComponent(f.filename)}`, { method: "DELETE", headers: { "x-investor-token": token } }).catch(() => {});
+    }
+    const updated = proposals.filter(pr => pr.id !== p.id);
     await saveToDb(updated);
     setProposals(updated);
     toast({ title: "Proposal removed" });
@@ -1069,110 +1128,128 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
   const startEdit = (p: Proposal) => {
     setEditingId(p.id);
     setForm({ name: p.name, consultant: p.consultant, date: p.date, status: p.status, notes: p.notes });
+    setPendingFiles([]);
     setShowForm(false);
   };
 
   const statusColor: Record<string, string> = {
     "Draft": "slate", "Under Review": "blue", "Approved": "green", "Rejected": "red", "Implemented": "amber",
   };
-
   const fieldStyle: React.CSSProperties = { width: "100%", padding: "7px 10px", fontSize: "13px", border: "1px solid #e2e8f0", borderRadius: "6px", outline: "none", fontFamily: "inherit", color: "#334155", background: "white" };
+
+  const FileUploadArea = () => (
+    <div>
+      <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "6px" }}>
+        Attach Files <span style={{ fontWeight: 400, color: "#94a3b8" }}>(PDF, Word, Excel, PowerPoint — max 20 MB each)</span>
+      </label>
+      <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px", background: "#f8fafc", border: "2px dashed #cbd5e1", borderRadius: "8px", cursor: "pointer", transition: "border-color 0.2s" }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = "#3b82f6")}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = "#cbd5e1")}>
+        <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileSelect} style={{ display: "none" }} />
+        <span style={{ fontSize: "20px" }}>📁</span>
+        <span style={{ fontSize: "13px", color: "#475569" }}>
+          {uploading ? "Uploading…" : "Click to browse or drag files here"}
+        </span>
+      </label>
+      {pendingFiles.length > 0 && (
+        <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          {pendingFiles.map(f => (
+            <div key={f.filename} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: "#eff6ff", borderRadius: "6px", fontSize: "12px" }}>
+              <span>{fileIcon(f.mimeType)}</span>
+              <span style={{ flex: 1, color: "#1e40af", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.originalName}</span>
+              <span style={{ color: "#64748b", flexShrink: 0 }}>{fmtSize(f.size)}</span>
+              <button onClick={() => removePendingFile(f.filename)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: "14px", padding: "0 2px", lineHeight: 1 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const ProposalForm = ({ onSave, onCancel, saveLabel }: { onSave: () => void; onCancel: () => void; saveLabel: string }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+        <div>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Proposal Name *</label>
+          <input style={fieldStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. AML/KYC Framework Proposal" />
+        </div>
+        <div>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Consultant / Firm</label>
+          <input style={fieldStyle} value={form.consultant} onChange={e => setForm(f => ({ ...f, consultant: e.target.value }))} placeholder="e.g. LexCorps Advisory" />
+        </div>
+        <div>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Date Received</label>
+          <input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+        </div>
+        <div>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Status</label>
+          <select style={fieldStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+            {["Draft", "Under Review", "Approved", "Rejected", "Implemented"].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Notes / Summary</label>
+        <textarea style={{ ...fieldStyle, resize: "vertical" as const }} rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Key points, recommendations, estimated cost, next steps…" />
+      </div>
+      <FileUploadArea />
+      <div style={{ display: "flex", gap: "8px" }}>
+        <Button onClick={onSave} disabled={saving || uploading} style={{ background: "#2563eb", color: "white" }}>
+          <Check style={{ width: "13px", height: "13px", marginRight: "5px" }} />{saving ? "Saving…" : saveLabel}
+        </Button>
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
+  );
 
   return (
     <div>
-      <p style={S.p}>Track all compliance and legal proposals received from external consultants. Each entry records the proposal name, consultant or firm, date received, current status, and internal notes. Only visible to authenticated investors and admins.</p>
+      <p style={S.p}>Track all compliance and legal proposals from external consultants. Attach the original PDF, Word document, or spreadsheet directly — files are stored securely and only accessible to authenticated users.</p>
 
-      {/* Action bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <h2 style={{ ...S.h2, marginTop: 0, marginBottom: 0, border: "none", paddingBottom: 0 }}>Proposals ({proposals.length})</h2>
         {!showForm && !editingId && (
-          <Button size="sm" onClick={() => setShowForm(true)} style={{ background: "#2563eb", color: "white", display: "flex", alignItems: "center", gap: "5px" }}>
-            + Add Proposal
-          </Button>
+          <Button size="sm" onClick={() => setShowForm(true)} style={{ background: "#2563eb", color: "white" }}>+ Add Proposal</Button>
         )}
       </div>
 
-      {/* Add form */}
       {showForm && (
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h3 style={{ ...S.h3, marginTop: 0 }}>New Compliance Proposal</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Proposal Name *</label>
-              <input style={fieldStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. AML/KYC Framework Proposal" />
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Consultant / Firm</label>
-              <input style={fieldStyle} value={form.consultant} onChange={e => setForm(f => ({ ...f, consultant: e.target.value }))} placeholder="e.g. LexCorps Advisory" />
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Date Received</label>
-              <input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Status</label>
-              <select style={fieldStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                {["Draft", "Under Review", "Approved", "Rejected", "Implemented"].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Notes / Summary</label>
-            <textarea style={{ ...fieldStyle, resize: "vertical" as const }} rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Key points, recommendations, estimated cost, next steps..." />
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <Button onClick={handleAdd} disabled={saving} style={{ background: "#2563eb", color: "white" }}>
-              <Check style={{ width: "13px", height: "13px", marginRight: "5px" }} />{saving ? "Saving…" : "Add Proposal"}
-            </Button>
-            <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</Button>
-          </div>
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", marginBottom: "16px" }}>
+          <h3 style={{ ...S.h3, marginTop: 0, marginBottom: "12px" }}>New Compliance Proposal</h3>
+          <ProposalForm onSave={handleAdd} onCancel={() => { setShowForm(false); resetForm(); }} saveLabel="Add Proposal" />
         </div>
       )}
 
-      {/* List */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>Loading proposals…</div>
+        <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>Loading…</div>
       ) : proposals.length === 0 ? (
         <div style={{ textAlign: "center", padding: "50px 20px", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
           <BookOpen style={{ width: "36px", height: "36px", color: "#94a3b8", margin: "0 auto 10px" }} />
           <p style={{ fontSize: "14px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>No proposals yet</p>
-          <p style={{ fontSize: "13px", color: "#64748b" }}>Click "Add Proposal" to log your first compliance proposal from a consultant.</p>
+          <p style={{ fontSize: "13px", color: "#64748b" }}>Click "Add Proposal" to log your first compliance proposal and attach the document.</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {proposals.map(p => editingId === p.id ? (
-            <div key={p.id} style={{ background: "#f8fafc", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
-              <h3 style={{ ...S.h3, marginTop: 0 }}>Edit Proposal</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Proposal Name *</label>
-                  <input style={fieldStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <div key={p.id} style={{ background: "#f8fafc", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "16px" }}>
+              <h3 style={{ ...S.h3, marginTop: 0, marginBottom: "12px" }}>Edit Proposal</h3>
+              {/* Existing files in edit mode */}
+              {(p.files || []).length > 0 && (
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Existing attachments</div>
+                  {(p.files || []).map(f => (
+                    <div key={f.filename} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: "#f0fdf4", borderRadius: "6px", fontSize: "12px", marginBottom: "4px" }}>
+                      <span>{fileIcon(f.mimeType)}</span>
+                      <a href={`/api/investor/files/${encodeURIComponent(f.filename)}`}
+                        onClick={e => { e.preventDefault(); fetch(`/api/investor/files/${encodeURIComponent(f.filename)}`, { headers: { "x-investor-token": token } }).then(r => r.blob()).then(blob => { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = f.originalName; a.click(); URL.revokeObjectURL(url); }); }}
+                        style={{ flex: 1, color: "#16a34a", fontWeight: 500, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.originalName}</a>
+                      <span style={{ color: "#64748b", flexShrink: 0 }}>{fmtSize(f.size)}</span>
+                      <button onClick={() => removeFileFromProposal(p.id, f.filename)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: "14px", padding: "0 2px", lineHeight: 1 }}>✕</button>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Consultant / Firm</label>
-                  <input style={fieldStyle} value={form.consultant} onChange={e => setForm(f => ({ ...f, consultant: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Date Received</label>
-                  <input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Status</label>
-                  <select style={fieldStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                    {["Draft", "Under Review", "Approved", "Rejected", "Implemented"].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Notes / Summary</label>
-                <textarea style={{ ...fieldStyle, resize: "vertical" as const }} rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-              </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <Button onClick={handleUpdate} disabled={saving} style={{ background: "#2563eb", color: "white" }}>
-                  <Check style={{ width: "13px", height: "13px", marginRight: "5px" }} />{saving ? "Saving…" : "Save Changes"}
-                </Button>
-                <Button variant="outline" onClick={() => { setEditingId(null); resetForm(); }}>Cancel</Button>
-              </div>
+              )}
+              <ProposalForm onSave={handleUpdate} onCancel={() => { setEditingId(null); resetForm(); }} saveLabel="Save Changes" />
             </div>
           ) : (
             <div key={p.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px" }}>
@@ -1188,10 +1265,23 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                   <span style={S.tag(statusColor[p.status] || "slate")}>{p.status}</span>
                   <button onClick={() => startEdit(p)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#475569" }}>Edit</button>
-                  <button onClick={() => handleDelete(p.id)} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
+                  <button onClick={() => handleDelete(p)} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
                 </div>
               </div>
-              {p.notes && <p style={{ ...S.p, marginBottom: 0, fontSize: "13px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>{p.notes}</p>}
+              {p.notes && <p style={{ ...S.p, marginBottom: (p.files || []).length > 0 ? "10px" : 0, fontSize: "13px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>{p.notes}</p>}
+              {(p.files || []).length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {(p.files || []).map(f => (
+                    <div key={f.filename} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px" }}>
+                      <span>{fileIcon(f.mimeType)}</span>
+                      <a href="#"
+                        onClick={e => { e.preventDefault(); fetch(`/api/investor/files/${encodeURIComponent(f.filename)}`, { headers: { "x-investor-token": token } }).then(r => r.blob()).then(blob => { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = f.originalName; a.click(); URL.revokeObjectURL(url); }); }}
+                        style={{ flex: 1, color: "#2563eb", fontWeight: 500, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.originalName}</a>
+                      <span style={{ color: "#94a3b8", flexShrink: 0 }}>{fmtSize(f.size)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
