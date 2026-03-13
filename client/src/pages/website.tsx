@@ -758,12 +758,22 @@ export default function Website() {
                   Resources <ChevronDown className={`h-3.5 w-3.5 transition-transform ${exploreOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {exploreOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-100 shadow-lg rounded-xl py-1">
+                  <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-100 shadow-lg rounded-xl py-1">
                     <Link href="/whitepaper">
                       <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Whitepaper</button>
                     </Link>
                     <Link href="/insights">
                       <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Insights</button>
+                    </Link>
+                    <Link href="/pitch">
+                      <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Pitch Deck</button>
+                    </Link>
+                    <div className="border-t border-gray-100 my-1" />
+                    <Link href="/data-room">
+                      <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-[#1a4480] font-medium hover:bg-blue-50 transition-colors flex items-center gap-1.5">
+                        <span>Investor Access</span>
+                        <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">NDA</span>
+                      </button>
                     </Link>
                   </div>
                 )}
@@ -794,6 +804,8 @@ export default function Website() {
                     <div className="pl-6 space-y-1">
                       <Link href="/whitepaper"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Whitepaper</button></Link>
                       <Link href="/insights"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Insights</button></Link>
+                      <Link href="/pitch"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Pitch Deck</button></Link>
+                      <Link href="/data-room"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-[#1a4480] font-medium hover:bg-blue-50 rounded-lg">Investor Access (NDA)</button></Link>
                     </div>
                   )}
                 </div>
