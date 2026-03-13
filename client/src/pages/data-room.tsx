@@ -557,20 +557,21 @@ function MarketOpportunityDoc() {
 
 function CompetitiveLandscapeDoc() {
   const rows = [
-    ["Min trade size",        "$10 USDC",   "~$250K+",      "~$100K+",    "Gas-limited"],
-    ["African pair coverage", "40+ pairs",  "❌ None",      "❌ None",    "❌ None"],
-    ["Transparent pricing",   "✅ On-chain", "❌ Opaque",   "❌ Opaque",  "⚡ Varies"],
-    ["Instant settlement",    "✅ Auto",     "3–5 days",    "1–3 days",   "✅ On-chain"],
-    ["SME accessible",        "✅",          "❌ Ignored",  "❌ Opaque",  "❌ Complex"],
-    ["Regulatory engagement", "✅ BoG sandbox", "✅ Licensed", "⚡ Varies", "❌"],
+    ["Min trade size",        "$10 USDC",      "~$250K+",     "~$100K+",    "❌ None",     "~$1+"],
+    ["African pair coverage", "40+ pairs",     "❌ None",     "❌ None",    "❌ None",     "❌ None"],
+    ["Real-world hedging",    "✅ Yes",         "✅ Yes",      "✅ Yes",     "⚡ Limited",  "❌ Speculative"],
+    ["Transparent pricing",   "✅ On-chain",    "❌ Opaque",   "❌ Opaque",  "⚡ Varies",   "✅ On-chain"],
+    ["Instant settlement",    "✅ Auto",        "3–5 days",   "1–3 days",   "✅ On-chain", "✅ On-chain"],
+    ["SME accessible",        "✅",             "❌ Ignored",  "❌ Opaque",  "❌ Complex",  "⚡ Partial"],
+    ["Regulatory engagement", "✅ BoG sandbox", "✅ Licensed", "⚡ Varies",  "❌",          "❌"],
   ];
 
   return (
     <div>
-      <p style={S.p}>Banks ignore sub-$1M trade flows. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs. BlockFinaX is the only accessible, transparent hedging product built for African SMEs.</p>
+      <p style={S.p}>Banks ignore sub-$1M trade flows. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs. Prediction markets are booming — but built for speculation, not real-world business hedging. BlockFinaX is the only accessible, transparent protection product built for African SMEs.</p>
 
       <div style={{ overflowX: "auto", margin: "20px 0" }}>
-        <table style={{ ...S.table, minWidth: "580px" }}>
+        <table style={{ ...S.table, minWidth: "680px" }}>
           <thead>
             <tr>
               <th style={S.th}> </th>
@@ -578,6 +579,7 @@ function CompetitiveLandscapeDoc() {
               <th style={S.th}>Banks</th>
               <th style={S.th}>OTC Brokers</th>
               <th style={S.th}>DeFi</th>
+              <th style={S.th}>Prediction Markets</th>
             </tr>
           </thead>
           <tbody>
@@ -588,6 +590,7 @@ function CompetitiveLandscapeDoc() {
                 <td style={S.td}>{vals[1]}</td>
                 <td style={S.td}>{vals[2]}</td>
                 <td style={S.td}>{vals[3]}</td>
+                <td style={S.td}>{vals[4]}</td>
               </tr>
             ))}
           </tbody>
