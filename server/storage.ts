@@ -38,7 +38,8 @@ import {
   type InsertHedgeLpDeposit,
   rateSnapshots,
   type RateSnapshot,
-  type InsertRateSnapshot
+  type InsertRateSnapshot,
+  dataRoomContent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, and, sql, lt, lte } from "drizzle-orm";
@@ -128,6 +129,10 @@ export interface IStorage {
   saveRateSnapshots(snapshots: InsertRateSnapshot[]): Promise<void>;
   getRateSnapshotBefore(pair: string, beforeMs: number): Promise<RateSnapshot | undefined>;
   pruneOldRateSnapshots(olderThanMs: number): Promise<void>;
+
+  // Data Room Content operations
+  getDataRoomContent(docId: string): Promise<Record<string, string>>;
+  setDataRoomContent(docId: string, data: Record<string, string>): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -443,6 +448,10 @@ export class MemStorage implements IStorage {
   async saveRateSnapshots(_snapshots: InsertRateSnapshot[]): Promise<void> {}
   async getRateSnapshotBefore(_pair: string, _beforeMs: number): Promise<RateSnapshot | undefined> { return undefined; }
   async pruneOldRateSnapshots(_olderThanMs: number): Promise<void> {}
+
+  private _dataRoomContent: Map<string, Record<string, string>> = new Map();
+  async getDataRoomContent(docId: string): Promise<Record<string, string>> { return this._dataRoomContent.get(docId) || {}; }
+  async setDataRoomContent(docId: string, data: Record<string, string>): Promise<void> { this._dataRoomContent.set(docId, data); }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -773,6 +782,16 @@ export class DatabaseStorage implements IStorage {
   async pruneOldRateSnapshots(olderThanMs: number): Promise<void> {
     const cutoff = new Date(olderThanMs);
     await db.delete(rateSnapshots).where(lt(rateSnapshots.recordedAt, cutoff));
+  }
+
+  async getDataRoomContent(docId: string): Promise<Record<string, string>> {
+    const [row] = await db.select().from(dataRoomContent).where(eq(dataRoomContent.docId, docId)).limit(1);
+    return (row?.data as Record<string, string>) || {};
+  }
+
+  async setDataRoomContent(docId: string, data: Record<string, string>): Promise<void> {
+    await db.insert(dataRoomContent).values({ docId, data })
+      .onConflictDoUpdate({ target: dataRoomContent.docId, set: { data, updatedAt: new Date() } });
   }
 }
 

@@ -207,3 +207,12 @@ export const rateSnapshots = pgTable("rate_snapshots", {
 export type RateSnapshot = typeof rateSnapshots.$inferSelect;
 export type InsertRateSnapshot = typeof rateSnapshots.$inferInsert;
 
+export const dataRoomContent = pgTable("data_room_content", {
+  id: serial("id").primaryKey(),
+  docId: text("doc_id").notNull().unique(),
+  data: jsonb("data").$type<Record<string, string>>().notNull().default({}),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type DataRoomContentRow = typeof dataRoomContent.$inferSelect;
+

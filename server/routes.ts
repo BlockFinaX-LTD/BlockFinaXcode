@@ -126,6 +126,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  app.get("/api/investor/content/:docId", async (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+    const data = await storage.getDataRoomContent(req.params.docId);
+    res.json(data);
+  });
+
+  app.post("/api/investor/content/:docId", async (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+    if (typeof req.body !== "object" || Array.isArray(req.body)) return res.status(400).json({ error: "Invalid data" });
+    await storage.setDataRoomContent(req.params.docId, req.body as Record<string, string>);
+    res.json({ ok: true });
+  });
+
   // ═══════════════════════════════════════════════════════
   // [HEALTH] Health Check
   // ═══════════════════════════════════════════════════════
