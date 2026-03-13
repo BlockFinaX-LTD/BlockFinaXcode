@@ -599,44 +599,134 @@ function CompetitiveLandscapeDoc() {
   );
 }
 
-function GTMStrategyDoc() {
-  const phases = [
-    {
-      num: "1", title: "Community Beta", period: "H1 2026", color: "#dbeafe",
-      target: "Crypto-native users, DeFi traders, Web3 community members",
-      channels: "Discord, Twitter/X, Web3 communities, testnet campaigns, hackathons",
-      goal: "1,000 wallets, 500 active hedge positions, $500K TVL",
-      metrics: "Cost of acquisition: <$10/user · Avg position size: $500",
-    },
-    {
-      num: "2", title: "SME Direct", period: "H2 2026 – H1 2027", color: "#dcfce7",
-      target: "African SMEs with structured FX exposure: importers, exporters, diaspora businesses",
-      channels: "Direct sales, fintech conferences (AfricaFinTech, Money2020 Africa), referral programme",
-      goal: "10,000 wallets, $50M monthly notional, Bank of Ghana approval",
-      metrics: "Cost of acquisition: <$50/user · Avg position size: $5,000",
-    },
-    {
-      num: "3", title: "Channel Partners", period: "H2 2027 – H1 2028", color: "#fef3c7",
-      target: "Banks, fintechs, treasury desks, payment platforms",
-      channels: "API integration, white-label product, revenue-share partnerships",
-      goal: "3 institutional LP partners, $200M monthly notional",
-      metrics: "Revenue share: 15% of platform fees to channel partners",
-    },
-    {
-      num: "4", title: "Flywheel", period: "H2 2028+", color: "#f3e8ff",
-      target: "Full regional expansion: East Africa, Francophone, Southern Africa",
-      channels: "Network effects, LP depth driving better pricing, new pair additions",
-      goal: "$1B+ monthly notional, 50,000+ active users, multi-regulator approvals",
-      metrics: "LTV:CAC >10x · Net revenue retention >120%",
-    },
-  ];
+const GTM_DEFAULTS = {
+  intro: "BlockFinaX's go-to-market strategy follows a deliberate 4-phase progression: build community trust and product-market fit, then expand to SME direct sales, then leverage channel partners for institutional liquidity, then activate the LP network flywheel for exponential growth.",
+  phases: [
+    { num: "1", title: "Community Beta",   period: "H1 2026",           color: "#dbeafe", target: "Crypto-native users, DeFi traders, Web3 community members",                              channels: "Discord, Twitter/X, Web3 communities, testnet campaigns, hackathons",       goal: "1,000 wallets, 500 active hedge positions, $500K TVL",                     metrics: "Cost of acquisition: <$10/user · Avg position size: $500" },
+    { num: "2", title: "SME Direct",       period: "H2 2026 – H1 2027", color: "#dcfce7", target: "African SMEs with structured FX exposure: importers, exporters, diaspora businesses",   channels: "Direct sales, fintech conferences (AfricaFinTech, Money2020 Africa), referral programme", goal: "10,000 wallets, $50M monthly notional, Bank of Ghana approval", metrics: "Cost of acquisition: <$50/user · Avg position size: $5,000" },
+    { num: "3", title: "Channel Partners", period: "H2 2027 – H1 2028", color: "#fef3c7", target: "Banks, fintechs, treasury desks, payment platforms",                                    channels: "API integration, white-label product, revenue-share partnerships",         goal: "3 institutional LP partners, $200M monthly notional",                     metrics: "Revenue share: 15% of platform fees to channel partners" },
+    { num: "4", title: "Flywheel",         period: "H2 2028+",          color: "#f3e8ff", target: "Full regional expansion: East Africa, Francophone, Southern Africa",                    channels: "Network effects, LP depth driving better pricing, new pair additions",    goal: "$1B+ monthly notional, 50,000+ active users, multi-regulator approvals",  metrics: "LTV:CAC >10x · Net revenue retention >120%" },
+  ],
+  partnerships: [
+    { type: "Mobile money",        examples: "M-Pesa, MTN MoMo",          value: "On/off ramp + distribution",              phase: "2" },
+    { type: "Pan-African fintechs", examples: "Chipper Cash, Flutterwave", value: "User distribution, FX corridors",         phase: "2" },
+    { type: "Trade finance banks", examples: "Ecobank, Access Bank",       value: "LP liquidity + institutional credibility", phase: "3" },
+    { type: "Lisk ecosystem",      examples: "Lisk Foundation",            value: "Grant funding + co-marketing",            phase: "1" },
+  ],
+};
+
+type GTMData = typeof GTM_DEFAULTS;
+
+function GTMStrategyDoc({ token }: { token: string }) {
+  const { editUnlocked, requestEdit } = useEditAuth();
+  const [data, setData] = useState<GTMData>(GTM_DEFAULTS);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<GTMData>(GTM_DEFAULTS);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetch(`/api/investor/content/gtm-strategy`, { headers: { "x-investor-token": token } })
+      .then(r => r.json())
+      .then(d => { if (d.gtm) setData(d.gtm); })
+      .catch(() => {});
+  }, [token]);
+
+  const startEdit = () => { setDraft(JSON.parse(JSON.stringify(data))); setEditing(true); };
+  const cancelEdit = () => setEditing(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/investor/content/gtm-strategy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-investor-token": token },
+        body: JSON.stringify({ gtm: draft }),
+      });
+      setData(draft);
+      setEditing(false);
+      toast({ title: "GTM strategy saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const setPhaseField = (idx: number, field: string, val: string) =>
+    setDraft(d => ({ ...d, phases: d.phases.map((p, i) => i === idx ? { ...p, [field]: val } : p) }));
+
+  const setPartnerField = (idx: number, field: string, val: string) =>
+    setDraft(d => ({ ...d, partnerships: d.partnerships.map((p, i) => i === idx ? { ...p, [field]: val } : p) }));
+
+  const addPartner = () => setDraft(d => ({ ...d, partnerships: [...d.partnerships, { type: "", examples: "", value: "", phase: "1" }] }));
+  const removePartner = (idx: number) => setDraft(d => ({ ...d, partnerships: d.partnerships.filter((_, i) => i !== idx) }));
+
+  const inp: React.CSSProperties = { width: "100%", fontSize: "12px", padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: "5px", background: "white", boxSizing: "border-box" };
+  const phaseColors = ["#dbeafe", "#dcfce7", "#fef3c7", "#f3e8ff"];
+  const phaseTagColors: Array<"blue"|"green"|"amber"|"violet"> = ["blue", "green", "amber", "violet"];
+
+  if (editing) {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748b" }}>Editing GTM Strategy</span>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={cancelEdit} style={{ fontSize: "12px", padding: "6px 14px", border: "1px solid #e2e8f0", borderRadius: "6px", background: "white", cursor: "pointer" }}>Cancel</button>
+            <button onClick={save} disabled={saving} style={{ fontSize: "12px", padding: "6px 14px", border: "none", borderRadius: "6px", background: "#2563eb", color: "white", cursor: "pointer", fontWeight: 600 }}>{saving ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: "8px" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Intro paragraph</label>
+          <textarea value={draft.intro} onChange={e => setDraft(d => ({ ...d, intro: e.target.value }))} rows={3} style={{ ...inp, resize: "vertical" }} />
+        </div>
+
+        {draft.phases.map((ph, i) => (
+          <div key={ph.num} style={{ background: phaseColors[i] || "#f8fafc", border: "1px solid rgba(0,0,0,0.06)", borderRadius: "10px", padding: "14px 16px", marginBottom: "10px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", marginBottom: "10px" }}>Phase {ph.num}: {ph.title}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              {(["title","period","target","channels","goal","metrics"] as const).map(f => (
+                <div key={f}>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "2px", textTransform: "capitalize" }}>{f}</label>
+                  <input value={(ph as Record<string,string>)[f]} onChange={e => setPhaseField(i, f, e.target.value)} style={inp} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <h2 style={S.h2}>Partnership Pipeline</h2>
+        <table style={{ ...S.table, width: "100%" }}>
+          <thead><tr><th style={S.th}>Partner Type</th><th style={S.th}>Examples</th><th style={S.th}>Value</th><th style={S.th}>Phase</th><th style={S.th}></th></tr></thead>
+          <tbody>
+            {draft.partnerships.map((p, i) => (
+              <tr key={i}>
+                {(["type","examples","value","phase"] as const).map(f => (
+                  <td key={f} style={S.td}><input value={p[f]} onChange={e => setPartnerField(i, f, e.target.value)} style={inp} /></td>
+                ))}
+                <td style={S.td}><button onClick={() => removePartner(i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Remove</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button onClick={addPartner} style={{ marginTop: "8px", fontSize: "12px", color: "#2563eb", background: "none", border: "1px dashed #93c5fd", borderRadius: "6px", padding: "5px 14px", cursor: "pointer" }}>+ Add partner</button>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <p style={S.p}>BlockFinaX's go-to-market strategy follows a deliberate 4-phase progression: build community trust and product-market fit, then expand to SME direct sales, then leverage channel partners for institutional liquidity, then activate the LP network flywheel for exponential growth.</p>
+      {editUnlocked && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+          <button onClick={() => requestEdit(startEdit)} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", padding: "6px 14px", border: "1px solid #e2e8f0", borderRadius: "6px", background: "white", cursor: "pointer", fontWeight: 500 }}>
+            <Edit3 style={{ width: "13px", height: "13px" }} /> Edit Strategy
+          </button>
+        </div>
+      )}
 
-      {phases.map(ph => (
-        <div key={ph.num} style={{ background: ph.color, border: "1px solid rgba(0,0,0,0.06)", borderRadius: "12px", padding: "18px 20px", marginBottom: "14px" }}>
+      <p style={S.p}>{data.intro}</p>
+
+      {data.phases.map((ph, i) => (
+        <div key={ph.num} style={{ background: phaseColors[i] || "#f8fafc", border: "1px solid rgba(0,0,0,0.06)", borderRadius: "12px", padding: "18px 20px", marginBottom: "14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
             <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#0f172a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, flexShrink: 0 }}>{ph.num}</div>
             <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Phase {ph.num}: {ph.title}</div><div style={{ fontSize: "12px", color: "#64748b" }}>{ph.period}</div></div>
@@ -654,10 +744,14 @@ function GTMStrategyDoc() {
       <table style={S.table}>
         <thead><tr><th style={S.th}>Partner Type</th><th style={S.th}>Examples</th><th style={S.th}>Value</th><th style={S.th}>Phase</th></tr></thead>
         <tbody>
-          <tr><td style={S.td}>Mobile money</td><td style={S.td}>M-Pesa, MTN MoMo</td><td style={S.td}>On/off ramp + distribution</td><td style={S.td}><span style={S.tag("green")}>Phase 2</span></td></tr>
-          <tr><td style={S.td}>Pan-African fintechs</td><td style={S.td}>Chipper Cash, Flutterwave</td><td style={S.td}>User distribution, FX corridors</td><td style={S.td}><span style={S.tag("green")}>Phase 2</span></td></tr>
-          <tr><td style={S.td}>Trade finance banks</td><td style={S.td}>Ecobank, Access Bank</td><td style={S.td}>LP liquidity + institutional credibility</td><td style={S.td}><span style={S.tag("amber")}>Phase 3</span></td></tr>
-          <tr><td style={S.td}>Lisk ecosystem</td><td style={S.td}>Lisk Foundation</td><td style={S.td}>Grant funding + co-marketing</td><td style={S.td}><span style={S.tag("blue")}>Phase 1</span></td></tr>
+          {data.partnerships.map((p, i) => (
+            <tr key={i}>
+              <td style={S.td}>{p.type}</td>
+              <td style={S.td}>{p.examples}</td>
+              <td style={S.td}>{p.value}</td>
+              <td style={S.td}><span style={S.tag(phaseTagColors[Number(p.phase) - 1] || "blue")}>Phase {p.phase}</span></td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -1520,7 +1614,7 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       {docId === "demo-video" && <DemoVideoDoc token={token} />}
       {docId === "market-opportunity" && <MarketOpportunityDoc />}
       {docId === "competitive-landscape" && <CompetitiveLandscapeDoc />}
-      {docId === "gtm-strategy" && <GTMStrategyDoc />}
+      {docId === "gtm-strategy" && <GTMStrategyDoc token={token} />}
       {docId === "incorporation"        && <IncorporationDoc />}
       {docId === "agreements"           && <AgreementsDoc />}
       {docId === "compliance-proposals" && <ComplianceProposalsDoc token={token} />}
