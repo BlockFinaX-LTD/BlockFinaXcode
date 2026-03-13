@@ -204,6 +204,11 @@ export default function CreateWallet() {
       case 1:
         return (
           <div className="space-y-6">
+            <div className="flex justify-start -mt-2">
+              <Link href="/wallet" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <ArrowLeft className="h-3.5 w-3.5" /> Back
+              </Link>
+            </div>
             <div className="text-center space-y-2">
               <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
                 <User className="h-7 w-7 text-primary" />

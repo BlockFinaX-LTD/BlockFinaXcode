@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, CheckCircle2, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, AlertTriangle, HandCoins, Users, Megaphone, Building2, Gift } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, AlertTriangle, HandCoins, Users, Megaphone, Building2, Gift, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -89,7 +90,13 @@ export default function PitchDeck() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col" style={{ background: 'linear-gradient(135deg, #0c1222 0%, #162040 50%, #0f1a30 100%)' }} data-slide-container>
-      <div className="fixed top-6 right-6 z-50">
+      <div className="fixed top-6 right-6 z-50 flex items-center gap-2">
+        <Link href="/">
+          <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white/70 border border-white/10">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Home
+          </Button>
+        </Link>
         <Button onClick={downloadPDF} disabled={isDownloading} size="sm" className="bg-white/10 hover:bg-white/20 text-white/70 border border-white/10" data-testid="button-download-pdf">
           <Download className="w-4 h-4 mr-2" />
           {isDownloading ? "..." : "PDF"}

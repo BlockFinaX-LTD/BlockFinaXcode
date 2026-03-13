@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { Link } from 'wouter';
 import {
   INITIAL_INPUTS, INITIAL_CONSTANTS, INITIAL_FUNDING, MONTH_LABELS, buildModel,
 } from '@/lib/financial-model-data';
@@ -9,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TrendingUp, TrendingDown, DollarSign, Users, AlertCircle, CheckCircle, Download, RotateCcw, Info, Edit3, Eye } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Users, AlertCircle, CheckCircle, Download, RotateCcw, Info, Edit3, Eye, ArrowLeft } from 'lucide-react';
 
 function Tip({ text }: { text: string }) {
   return (
@@ -358,6 +359,12 @@ export default function FinancialModel() {
         {/* ── Header ── */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
+            <Link href="/data-room">
+              <button className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-2 transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Data Room
+              </button>
+            </Link>
             <h1 className="text-2xl font-bold text-slate-900">BlockFinaX — Financial Model</h1>
             <p className="text-sm text-slate-500 mt-1">
               54-Month Interactive Pro-Forma P&L · Jul 2026 – Dec 2030 · Edit any input and all figures update live

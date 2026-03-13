@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useWallet } from '@/hooks/use-wallet';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { FinanceAnimatedBackground } from '@/components/ui/finance-background';
 import logoPath from "@/assets/logo.png";
 
@@ -59,6 +59,11 @@ export default function UnlockWallet() {
 
       <Card className="w-full max-w-md relative z-10 shadow-xl border-border/60 backdrop-blur-sm bg-card/95">
         <CardHeader className="text-center">
+          <div className="flex justify-start mb-1">
+            <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to site
+            </Link>
+          </div>
           <CardTitle className="text-2xl font-bold">
             <div className="flex items-center justify-center space-x-2 mb-2">
               <img 

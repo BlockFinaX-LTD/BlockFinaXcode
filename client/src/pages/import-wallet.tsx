@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff, CheckCircle2, ArrowLeft } from 'lucide-react';
 import logoPath from "@/assets/logo.png";
 import { ethers } from 'ethers';
 
@@ -109,6 +109,11 @@ export default function ImportWallet() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="flex justify-start mb-1">
+            <Link href="/wallet" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </Link>
+          </div>
           <CardTitle className="text-2xl font-bold">
             <div className="flex items-center justify-center space-x-2 mb-2">
               <img 
