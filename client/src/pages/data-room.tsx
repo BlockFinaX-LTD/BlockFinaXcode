@@ -557,32 +557,27 @@ function MarketOpportunityDoc() {
 
 function CompetitiveLandscapeDoc() {
   const rows = [
-    ["P2P structure", "✅", "❌", "❌", "⚡ Partial", "✅"],
-    ["African FX coverage", "✅", "✅ Limited", "⚡ Some", "❌", "❌"],
-    ["On-chain settlement", "✅", "❌", "❌", "✅", "✅"],
-    ["No counterparty risk", "✅", "❌", "❌", "⚡ Varies", "⚡ Varies"],
-    ["Accessible to SMEs", "✅", "❌ Min $1M+", "❌ Opaque", "❌ Complex", "⚡ Limited"],
-    ["Fully collateralised", "✅", "❌", "❌", "✅", "⚡"],
-    ["Regulatory sandbox", "✅ In progress", "✅", "⚡ Varies", "❌", "❌"],
-    ["Min trade size", "$10 USDC", "~$250K", "~$100K", "Gas-limited", "~$10"],
-    ["Africa-native product", "✅", "❌", "❌", "❌", "❌"],
+    ["Min trade size",        "$10 USDC",   "~$250K+",      "~$100K+",    "Gas-limited"],
+    ["African pair coverage", "40+ pairs",  "❌ None",      "❌ None",    "❌ None"],
+    ["Transparent pricing",   "✅ On-chain", "❌ Opaque",   "❌ Opaque",  "⚡ Varies"],
+    ["Instant settlement",    "✅ Auto",     "3–5 days",    "1–3 days",   "✅ On-chain"],
+    ["SME accessible",        "✅",          "❌ Ignored",  "❌ Opaque",  "❌ Complex"],
+    ["Regulatory engagement", "✅ BoG sandbox", "✅ Licensed", "⚡ Varies", "❌"],
   ];
 
   return (
     <div>
-      <p style={S.p}>BlockFinaX occupies a unique position — the only blockchain-native P2P parametric protection platform designed specifically for African FX, commodity, and crypto pairs. No direct competitor combines all five core attributes: P2P structure, African pair coverage, on-chain settlement, SME accessibility, and regulatory engagement.</p>
+      <p style={S.p}>Banks ignore sub-$1M trade flows. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs. BlockFinaX is the only accessible, transparent hedging product built for African SMEs.</p>
 
-      <h2 style={S.h2}>Comparison Table</h2>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ ...S.table, minWidth: "700px" }}>
+      <div style={{ overflowX: "auto", margin: "20px 0" }}>
+        <table style={{ ...S.table, minWidth: "580px" }}>
           <thead>
             <tr>
-              <th style={S.th}>Feature</th>
+              <th style={S.th}> </th>
               <th style={{ ...S.th, background: "#eff6ff", color: "#1d4ed8" }}>BlockFinaX</th>
-              <th style={S.th}>Traditional Banks</th>
+              <th style={S.th}>Banks</th>
               <th style={S.th}>OTC Brokers</th>
-              <th style={S.th}>DeFi Protocols</th>
-              <th style={S.th}>Prediction Markets</th>
+              <th style={S.th}>DeFi</th>
             </tr>
           </thead>
           <tbody>
@@ -593,27 +588,10 @@ function CompetitiveLandscapeDoc() {
                 <td style={S.td}>{vals[1]}</td>
                 <td style={S.td}>{vals[2]}</td>
                 <td style={S.td}>{vals[3]}</td>
-                <td style={S.td}>{vals[4]}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      <h2 style={S.h2}>Key Differentiators</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", margin: "12px 0" }}>
-        {[
-          ["Africa-first by design", "63 pairs launch with 40+ African FX pairs — no competitor covers this universe"],
-          ["Fully collateralised P2P", "LP capital locks payout before any hedger buys — zero platform risk"],
-          ["Parametric = instant settlement", "No disputes, no documentation — price touches strike, payout triggers automatically"],
-          ["Lisk L2 economics", "Gas fees under $0.01 per transaction make micro-hedges viable for the first time"],
-          ["Regulatory-aligned", "USDC-only, no leverage, on-chain audit trail — designed for sandbox approval"],
-        ].map(([title, desc]) => (
-          <div key={title as string} style={{ padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b", marginBottom: "3px" }}>{title}</div>
-            <div style={{ fontSize: "13px", color: "#64748b" }}>{desc}</div>
-          </div>
-        ))}
       </div>
     </div>
   );
