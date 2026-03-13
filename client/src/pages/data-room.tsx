@@ -12,8 +12,6 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 /* ─── EDIT AUTH CONTEXT ─── */
-const EDIT_PASS = "DeTrade@23";
-
 type EditAuthCtx = {
   editUnlocked: boolean;
   requestEdit: (callback: () => void) => void;
@@ -21,21 +19,36 @@ type EditAuthCtx = {
 const EditAuthContext = createContext<EditAuthCtx>({ editUnlocked: false, requestEdit: () => {} });
 const useEditAuth = () => useContext(EditAuthContext);
 
-function EditPasswordModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
+function EditPasswordModal({ onSuccess, onClose, token }: { onSuccess: () => void; onClose: () => void; token: string }) {
   const [pw, setPw] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [shaking, setShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pw === EDIT_PASS) { onSuccess(); }
-    else {
-      setError("Incorrect edit password");
-      setPw("");
-      setShaking(true);
-      setTimeout(() => setShaking(false), 500);
+    if (!pw.trim()) return;
+    setLoading(true); setError("");
+    try {
+      const res = await fetch("/api/investor/unlock-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-investor-token": token },
+        body: JSON.stringify({ password: pw }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) { onSuccess(); }
+      else {
+        setError(data.message || "Incorrect edit password");
+        setPw("");
+        setShaking(true);
+        setTimeout(() => setShaking(false), 500);
+      }
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,7 +72,7 @@ function EditPasswordModal({ onSuccess, onClose }: { onSuccess: () => void; onCl
             onChange={e => { setPw(e.target.value); setError(""); }}
             style={{ width: "100%", padding: "11px 14px", fontSize: "14px", border: `1px solid ${error ? "#fca5a5" : "#e2e8f0"}`, borderRadius: "8px", outline: "none", fontFamily: "inherit", background: error ? "#fff5f5" : "white", textAlign: "center", letterSpacing: "0.1em", boxSizing: "border-box" }} />
           {error && <p style={{ color: "#dc2626", fontSize: "13px", textAlign: "center", margin: 0 }}>{error}</p>}
-          <Button type="submit" style={{ background: "#2563eb", color: "white", height: "42px", fontWeight: 600 }}>Unlock Editing</Button>
+          <Button type="submit" disabled={loading || !pw.trim()} style={{ background: "#2563eb", color: "white", height: "42px", fontWeight: 600 }}>{loading ? "Verifying…" : "Unlock Editing"}</Button>
           <Button type="button" variant="outline" onClick={onClose} style={{ height: "38px" }}>Cancel</Button>
         </form>
       </motion.div>
@@ -1535,7 +1548,7 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
   return (
     <EditAuthContext.Provider value={{ editUnlocked, requestEdit }}>
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
-      {showEditModal && <EditPasswordModal onSuccess={handleEditSuccess} onClose={() => { setShowEditModal(false); pendingEditCb.current = null; }} />}
+      {showEditModal && <EditPasswordModal token={token} onSuccess={handleEditSuccess} onClose={() => { setShowEditModal(false); pendingEditCb.current = null; }} />}
 
       {/* Header */}
       <div style={{ background: "white", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, zIndex: 40 }}>

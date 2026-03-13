@@ -125,6 +125,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ valid: true, editEnabled: investorEditSessions.has(token) });
   });
 
+  app.post("/api/investor/unlock-edit", (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) return res.status(401).json({ success: false, message: "Session expired" });
+    const { password } = req.body;
+    if (password !== EDIT_ACCESS_CODE) return res.status(403).json({ success: false, message: "Incorrect edit password" });
+    investorEditSessions.add(token);
+    res.json({ success: true });
+  });
+
   app.post("/api/investor/logout", (req, res) => {
     const token = req.headers["x-investor-token"] as string;
     if (token) { investorSessions.delete(token); investorEditSessions.delete(token); }
