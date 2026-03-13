@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TrendingUp, TrendingDown, DollarSign, Users, AlertCircle, CheckCircle, Download, RotateCcw, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Users, AlertCircle, CheckCircle, Download, RotateCcw, Info, Edit3, Eye } from 'lucide-react';
 
 function Tip({ text }: { text: string }) {
   return (
@@ -294,6 +294,7 @@ export default function FinancialModel() {
   const [constants, setConstants] = useState<Constants>(INITIAL_CONSTANTS);
   const [funding,   setFunding]   = useState<FundingEntry[]>(INITIAL_FUNDING);
   const [activePeriod, setActivePeriod] = useState(0);
+  const [activeTab, setActiveTab] = useState('monthly');
 
   const model         = useMemo(() => buildModel(inputs, constants, funding), [inputs, constants, funding]);
   const annualSummary = useMemo(() => computeAnnualSummary(model), [model]);
@@ -366,10 +367,29 @@ export default function FinancialModel() {
             <Badge variant="outline" className="text-xs">Base Case</Badge>
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">$12.5M Raise Target</Badge>
             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">Mainnet Jul 7, 2026</Badge>
+            {activeTab === 'inputs' ? (
+              <Button
+                size="sm" variant="outline"
+                onClick={() => setActiveTab('monthly')}
+                className="gap-1.5 ml-2 text-slate-600 border-slate-300"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Done Editing
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => setActiveTab('inputs')}
+                className="gap-1.5 ml-2 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                Edit Model
+              </Button>
+            )}
             <Button
               size="sm" variant="outline"
               onClick={resetAll}
-              className="gap-1.5 ml-2 text-slate-600"
+              className="gap-1.5 text-slate-600"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Reset
@@ -417,7 +437,7 @@ export default function FinancialModel() {
         </div>
 
         {/* ── Main Tabs ── */}
-        <Tabs defaultValue="monthly">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-white border border-slate-200 flex-wrap h-auto gap-0.5">
             <TabsTrigger value="monthly"  className="text-xs">Monthly P&L</TabsTrigger>
             <TabsTrigger value="annual"   className="text-xs">Annual Summary</TabsTrigger>
