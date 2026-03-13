@@ -59,7 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const investorSessions = new Map<string, number>(); // token → expiry timestamp
   const investorEditSessions = new Set<string>(); // tokens with edit access
   const investorLoginAttempts = new Map<string, { count: number; resetAt: number }>();
-  const EDIT_ACCESS_CODE = "DeTrade@23";
+  const EDIT_ACCESS_CODE = process.env.EDIT_ACCESS_CODE || "";
 
   function generateInvestorToken(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
