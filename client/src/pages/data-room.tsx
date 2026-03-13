@@ -167,10 +167,11 @@ function ExecSummary() {
 
       <h2 style={S.h2}>The Problem</h2>
       <p style={S.p}>African SMEs conducting cross-border trade are structurally exposed to FX volatility, with swings of <strong>8–25%</strong> common on pairs like GHS/USD, NGN/USD, and KES/USD. No accessible, transparent hedging product exists for sub-$1M trade flows. Banks ignore them. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs.</p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", margin: "16px 0" }}>
-        <div style={S.stat}><div style={S.statVal}>$210B</div><div style={S.statLbl}>African cross-border trade (2024)</div></div>
-        <div style={S.stat}><div style={S.statVal}>$35B</div><div style={S.statLbl}>Annual FX losses for SMEs</div></div>
-        <div style={S.stat}><div style={S.statVal}>63</div><div style={S.statLbl}>Asset pairs covered at launch</div></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", margin: "16px 0" }}>
+        <div style={S.stat}><div style={S.statVal}>$210B</div><div style={S.statLbl}>TAM — African cross-border trade (2024)</div></div>
+        <div style={S.stat}><div style={S.statVal}>$35B</div><div style={S.statLbl}>SAM — Annual FX losses for SMEs</div></div>
+        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>{fmtUSD(DEFAULT_ANNUALS[1].notionalHedged)}</div><div style={S.statLbl}>SOM Year 1 — {((DEFAULT_ANNUALS[1].notionalHedged / 35_000_000_000) * 100).toFixed(1)}% of SAM (2027)</div></div>
+        <div style={S.stat}><div style={S.statVal}>63</div><div style={S.statLbl}>Asset pairs at launch</div></div>
       </div>
 
       <h2 style={S.h2}>The Solution</h2>
@@ -489,12 +490,16 @@ function DemoVideoDoc({ token }: { token: string }) {
 }
 
 function MarketOpportunityDoc() {
+  const SAM = 35_000_000_000;
+  const som27 = DEFAULT_ANNUALS[1].notionalHedged;
+  const som28 = DEFAULT_ANNUALS[2].notionalHedged;
+  const som29 = DEFAULT_ANNUALS[3].notionalHedged;
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "20px" }}>
         <div style={S.stat}><div style={S.statVal}>$210B</div><div style={S.statLbl}>TAM — African cross-border trade (2024)</div></div>
         <div style={S.stat}><div style={S.statVal}>$35B</div><div style={S.statLbl}>SAM — Annual FX losses for SMEs</div></div>
-        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>$583M</div><div style={S.statLbl}>SOM Year 1 — 1.7% of SAM (2027)</div></div>
+        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>{fmtUSD(som27)}</div><div style={S.statLbl}>SOM Year 1 — {((som27 / SAM) * 100).toFixed(1)}% of SAM (2027)</div></div>
       </div>
 
       <h2 style={S.h2}>Total Addressable Market (TAM)</h2>
@@ -506,11 +511,11 @@ function MarketOpportunityDoc() {
 
       <h2 style={S.h2}>Serviceable Obtainable Market (SOM) — Projections</h2>
       <table style={S.table}>
-        <thead><tr><th style={S.th}>Year</th><th style={S.th}>Notional Hedged</th><th style={S.th}>SAM Share</th><th style={S.th}>Active Users</th><th style={S.th}>Revenue</th></tr></thead>
+        <thead><tr><th style={S.th}>Year</th><th style={S.th}>Notional Hedged</th><th style={S.th}>SAM Share</th><th style={S.th}>Active Wallets</th><th style={S.th}>Revenue</th></tr></thead>
         <tbody>
-          <tr><td style={S.td}><strong>2027</strong></td><td style={S.td}>$583M</td><td style={S.td}>1.7%</td><td style={S.td}>~2,500</td><td style={S.td}><strong>$5.5M</strong></td></tr>
-          <tr><td style={S.td}><strong>2028</strong></td><td style={S.td}>$3.3B</td><td style={S.td}>9.4%</td><td style={S.td}>~15,000</td><td style={S.td}><strong>$32M</strong></td></tr>
-          <tr><td style={S.td}><strong>2029</strong></td><td style={S.td}>$11B</td><td style={S.td}>31%</td><td style={S.td}>~50,000</td><td style={S.td}><strong>$108M</strong></td></tr>
+          <tr><td style={S.td}><strong>2027</strong></td><td style={S.td}>{fmtUSD(som27)}</td><td style={S.td}>{((som27 / SAM) * 100).toFixed(1)}%</td><td style={S.td}>~{(DEFAULT_ANNUALS[1].totalNewWallets / 1000).toFixed(0)}K</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[1].totalRevenue)}</strong></td></tr>
+          <tr><td style={S.td}><strong>2028</strong></td><td style={S.td}>{fmtUSD(som28)}</td><td style={S.td}>{((som28 / SAM) * 100).toFixed(1)}%</td><td style={S.td}>~{(DEFAULT_ANNUALS[2].totalNewWallets / 1000).toFixed(0)}K</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[2].totalRevenue)}</strong></td></tr>
+          <tr><td style={S.td}><strong>2029</strong></td><td style={S.td}>{fmtUSD(som29)}</td><td style={S.td}>{((som29 / SAM) * 100).toFixed(1)}%</td><td style={S.td}>~{(DEFAULT_ANNUALS[3].totalNewWallets / 1000).toFixed(0)}K</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[3].totalRevenue)}</strong></td></tr>
         </tbody>
       </table>
 
