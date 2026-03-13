@@ -228,7 +228,7 @@ export default function PitchDeck() {
                     <p className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-2">SOM</p>
                     <p className="text-4xl font-bold text-white mb-2">$2B</p>
                     <p className="text-lg font-semibold text-slate-200 mb-2">Serviceable Obtainable Market</p>
-                    <p className="text-sm text-slate-300">1% of SME trade volume in Year 3 — generating $12M+ in platform revenue at 0.7% blended take rate plus $25/event creation fee</p>
+                    <p className="text-sm text-slate-300">Achievable by Year 2 (2028) — generating $32M+ in platform revenue at 0.7% blended take rate plus $25/event creation fee</p>
                   </motion.div>
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="grid grid-cols-3 gap-4">
@@ -345,28 +345,27 @@ export default function PitchDeck() {
             {slide.type === "financials" && (
               <div className="space-y-8">
                 <h2 className="text-5xl font-bold text-center text-white">3-Year Financial Projections</h2>
-                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto">Conservative growth from testnet to $2B volume</p>
+                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto">Mainnet Jul 2026 · Year 1 = 2027 · Year 2 = 2028 · Year 3 = 2029</p>
                 <div className="overflow-hidden rounded-xl border border-white/[0.08]">
                   <table className="w-full text-base">
                     <thead>
                       <tr className="bg-white/[0.04]">
                         <th className="text-left p-4 text-slate-300 font-medium">Metric</th>
-                        <th className="text-center p-4 text-slate-400 font-medium">Year 1</th>
-                        <th className="text-center p-4 text-slate-400 font-medium">Year 2</th>
-                        <th className="text-center p-4 text-emerald-400 font-bold">Year 3</th>
+                        <th className="text-center p-4 text-slate-400 font-medium">Year 1 (2027)</th>
+                        <th className="text-center p-4 text-slate-400 font-medium">Year 2 (2028)</th>
+                        <th className="text-center p-4 text-emerald-400 font-bold">Year 3 (2029)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[
-                        { metric: "Transaction Volume", y1: "$50M", y2: "$500M", y3: "$2B" },
-                        { metric: "Active Users", y1: "5,000", y2: "15,000", y3: "50,000" },
-                        { metric: "Transfer Fee Revenue (0.3%)", y1: "$150K", y2: "$1.5M", y3: "$6M" },
-                        { metric: "Hedge Fee Revenue (0.5%)", y1: "$88K", y2: "$875K", y3: "$3.5M" },
-                        { metric: "Settlement Fee Revenue (1%)", y1: "$50K", y2: "$500K", y3: "$2M" },
-                        { metric: "Event Creation Fee ($25/event)", y1: "$12K", y2: "$125K", y3: "$500K" },
-                        { metric: "Total Revenue", y1: "$300K", y2: "$3M", y3: "$12M", highlight: true },
-                        { metric: "Operating Costs", y1: "$100K", y2: "$500K", y3: "$1.5M" },
-                        { metric: "Net Income", y1: "$200K", y2: "$2.5M", y3: "$10.5M", highlight: true },
+                        { metric: "Hedge Notional Volume", y1: "$583M", y2: "$3.3B", y3: "$11B" },
+                        { metric: "New Wallets (Cumulative)", y1: "55,000", y2: "296,000", y3: "790,000" },
+                        { metric: "Hedge Protocol Fees (0.7% net)", y1: "$4.1M", y2: "$23M", y3: "$77M" },
+                        { metric: "Event Creation Fees ($25/event)", y1: "$900K", y2: "$4.4M", y3: "$12.2M" },
+                        { metric: "Wallet Transfer Fees (0.3%)", y1: "$493K", y2: "$4.8M", y3: "$18.6M" },
+                        { metric: "Total Revenue", y1: "$5.5M", y2: "$32M", y3: "$108M", highlight: true },
+                        { metric: "Total Operating Costs", y1: "$2.5M", y2: "$12M", y3: "$35M" },
+                        { metric: "EBITDA", y1: "$1.9M", y2: "$14M", y3: "$60M", highlight: true },
                       ].map((row, idx) => (
                         <tr key={idx} className={`border-t border-white/[0.04] ${row.highlight ? 'bg-white/[0.03]' : ''}`}>
                           <td className={`p-4 font-medium ${row.highlight ? 'text-white' : 'text-slate-200'}`}>{row.metric}</td>
@@ -380,15 +379,15 @@ export default function PitchDeck() {
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="grid grid-cols-3 gap-5">
                   <div className="bg-blue-500/[0.08] border border-blue-500/25 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-400">87%</p>
+                    <p className="text-3xl font-bold text-blue-400">~80%</p>
                     <p className="text-sm text-slate-300">Gross margin at scale</p>
                   </div>
                   <div className="bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-emerald-400">Day 1</p>
-                    <p className="text-sm text-slate-300">Profitable from launch</p>
+                    <p className="text-3xl font-bold text-emerald-400">EBITDA+</p>
+                    <p className="text-sm text-slate-300">Positive from H2 of Year 1</p>
                   </div>
                   <div className="bg-purple-500/[0.08] border border-purple-500/25 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-purple-400">40x</p>
+                    <p className="text-3xl font-bold text-purple-400">19x</p>
                     <p className="text-sm text-slate-300">Volume growth (Y1 → Y3)</p>
                   </div>
                 </motion.div>

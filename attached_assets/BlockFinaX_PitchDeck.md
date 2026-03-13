@@ -149,15 +149,38 @@ Entrepreneurs and institutions who open hedge markets for specific pairs, set te
 
 ---
 
-## SLIDE 11 — THE RAISE
+## SLIDE 11 — FINANCIAL PROJECTIONS
+
+# 3-Year Financial Projections
+*Mainnet Jul 2026 · Year 1 = 2027 · Year 2 = 2028 · Year 3 = 2029*
+
+| Metric | Year 1 (2027) | Year 2 (2028) | Year 3 (2029) |
+|---|---|---|---|
+| Hedge Notional Volume | $583M | $3.3B | $11B |
+| New Wallets (Cumulative) | 55,000 | 296,000 | 790,000 |
+| Hedge Protocol Fees (0.7% net) | $4.1M | $23M | $77M |
+| Event Creation Fees ($25/event) | $900K | $4.4M | $12.2M |
+| Wallet Transfer Fees (0.3%) | $493K | $4.8M | $18.6M |
+| **Total Revenue** | **$5.5M** | **$32M** | **$108M** |
+| Total Operating Costs | $2.5M | $12M | $35M |
+| **EBITDA** | **$1.9M** | **$14M** | **$60M** |
+
+**Key Metrics:**
+- ~80% gross margin at scale
+- EBITDA positive from H2 of Year 1 (post Series A deployment)
+- 19x volume growth from Year 1 to Year 3
+
+---
+
+## SLIDE 12 — THE RAISE
 
 # $12.5M to build the protection layer for African commerce.
 
 | Round | Amount | Use of Funds |
 |---|---|---|
-| Pre-Seed | $500K | Team, infrastructure, regulatory |
-| Series A | $4M | Market expansion, liquidity bootstrapping, BD |
-| Series B | $8M | Multi-country rollout, oracle network, institutional partnerships |
+| Pre-Seed | $500K | Team, infrastructure, regulatory (Jul 2026) |
+| Series A | $5M | Market expansion, liquidity bootstrapping, BD (closes H2 2027) |
+| Series B | $7M | Multi-country rollout, oracle network, institutional partnerships (closes H2 2028) |
 
 **What we are building with this capital:**
 - Expand to 10 African markets in year one
