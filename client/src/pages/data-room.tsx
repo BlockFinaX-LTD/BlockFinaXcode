@@ -1,14 +1,70 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock, LogOut, ExternalLink, FileText, BarChart2, Globe,
   PlayCircle, Beaker, ShieldCheck, BookOpen, ChevronRight,
-  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video
+  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+
+/* ─── EDIT AUTH CONTEXT ─── */
+const EDIT_PASS = "DeTrade@23";
+
+type EditAuthCtx = {
+  editUnlocked: boolean;
+  requestEdit: (callback: () => void) => void;
+};
+const EditAuthContext = createContext<EditAuthCtx>({ editUnlocked: false, requestEdit: () => {} });
+const useEditAuth = () => useContext(EditAuthContext);
+
+function EditPasswordModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState("");
+  const [shaking, setShaking] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pw === EDIT_PASS) { onSuccess(); }
+    else {
+      setError("Incorrect edit password");
+      setPw("");
+      setShaking(true);
+      setTimeout(() => setShaking(false), 500);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 12 }}
+        animate={shaking ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: shaking ? 0.4 : 0.2 }}
+        style={{ background: "white", borderRadius: "16px", padding: "32px", width: "100%", maxWidth: "380px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
+        <div style={{ textAlign: "center", marginBottom: "24px" }}>
+          <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "#eff6ff", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+            <Edit3 style={{ width: "20px", height: "20px", color: "#2563eb" }} />
+          </div>
+          <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>Edit Access Required</h2>
+          <p style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>Enter the edit password to unlock content editing for this session.</p>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <input ref={inputRef} type="password" placeholder="Edit password" value={pw}
+            onChange={e => { setPw(e.target.value); setError(""); }}
+            style={{ width: "100%", padding: "11px 14px", fontSize: "14px", border: `1px solid ${error ? "#fca5a5" : "#e2e8f0"}`, borderRadius: "8px", outline: "none", fontFamily: "inherit", background: error ? "#fff5f5" : "white", textAlign: "center", letterSpacing: "0.1em", boxSizing: "border-box" }} />
+          {error && <p style={{ color: "#dc2626", fontSize: "13px", textAlign: "center", margin: 0 }}>{error}</p>}
+          <Button type="submit" style={{ background: "#2563eb", color: "white", height: "42px", fontWeight: 600 }}>Unlock Editing</Button>
+          <Button type="button" variant="outline" onClick={onClose} style={{ height: "38px" }}>Cancel</Button>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
 
 const SESSION_KEY = "bfx_investor_token";
 
@@ -285,6 +341,7 @@ function SecurityAuditDoc() {
 }
 
 function DemoVideoDoc({ token }: { token: string }) {
+  const { requestEdit } = useEditAuth();
   const [data, setData] = useState<{ videoUrl?: string; description?: string }>({});
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ videoUrl: "", description: "" });
@@ -325,7 +382,7 @@ function DemoVideoDoc({ token }: { token: string }) {
     <div>
       {!editing && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <Button variant="outline" size="sm" onClick={() => requestEdit(() => setEditing(true))} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <Pencil style={{ width: "13px", height: "13px" }} /> Edit video
           </Button>
         </div>
@@ -1018,6 +1075,7 @@ function fmtSize(bytes: number) {
 }
 
 function ComplianceProposalsDoc({ token }: { token: string }) {
+  const { requestEdit } = useEditAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -1209,7 +1267,7 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <h2 style={{ ...S.h2, marginTop: 0, marginBottom: 0, border: "none", paddingBottom: 0 }}>Proposals ({proposals.length})</h2>
         {!showForm && !editingId && (
-          <Button size="sm" onClick={() => setShowForm(true)} style={{ background: "#2563eb", color: "white" }}>+ Add Proposal</Button>
+          <Button size="sm" onClick={() => requestEdit(() => setShowForm(true))} style={{ background: "#2563eb", color: "white" }}>+ Add Proposal</Button>
         )}
       </div>
 
@@ -1264,8 +1322,8 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                   <span style={S.tag(statusColor[p.status] || "slate")}>{p.status}</span>
-                  <button onClick={() => startEdit(p)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#475569" }}>Edit</button>
-                  <button onClick={() => handleDelete(p)} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
+                  <button onClick={() => requestEdit(() => startEdit(p))} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#475569" }}>Edit</button>
+                  <button onClick={() => requestEdit(() => handleDelete(p))} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
                 </div>
               </div>
               {p.notes && <p style={{ ...S.p, marginBottom: (p.files || []).length > 0 ? "10px" : 0, fontSize: "13px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>{p.notes}</p>}
@@ -1392,6 +1450,25 @@ function DataRoomContent({ token, onLogout }: { token: string; onLogout: () => v
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const { toast } = useToast();
 
+  /* edit-auth state */
+  const [editUnlocked, setEditUnlocked] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const pendingEditCb = useRef<(() => void) | null>(null);
+
+  const requestEdit = useCallback((cb: () => void) => {
+    if (editUnlocked) { cb(); return; }
+    pendingEditCb.current = cb;
+    setShowEditModal(true);
+  }, [editUnlocked]);
+
+  const handleEditSuccess = () => {
+    setEditUnlocked(true);
+    setShowEditModal(false);
+    pendingEditCb.current?.();
+    pendingEditCb.current = null;
+    toast({ title: "Edit mode unlocked", description: "You can now edit content for this session." });
+  };
+
   const handleLogout = useCallback(async () => {
     await fetch("/api/investor/logout", { method: "POST", headers: { "x-investor-token": token } });
     sessionStorage.removeItem(SESSION_KEY);
@@ -1408,7 +1485,10 @@ function DataRoomContent({ token, onLogout }: { token: string; onLogout: () => v
   const active = CATEGORIES.find(c => c.id === activeCategory)!;
 
   return (
+    <EditAuthContext.Provider value={{ editUnlocked, requestEdit }}>
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
+      {showEditModal && <EditPasswordModal onSuccess={handleEditSuccess} onClose={() => { setShowEditModal(false); pendingEditCb.current = null; }} />}
+
       {/* Header */}
       <div style={{ background: "white", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, zIndex: 40 }}>
         <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1423,6 +1503,14 @@ function DataRoomContent({ token, onLogout }: { token: string; onLogout: () => v
             <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "999px", padding: "4px 10px" }}>
               <Clock style={{ width: "12px", height: "12px" }} /> 24h session
             </span>
+            <AnimatePresence>
+              {editUnlocked && (
+                <motion.span initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }}
+                  style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: "999px", padding: "4px 10px", fontWeight: 600 }}>
+                  <Edit3 style={{ width: "11px", height: "11px" }} /> Edit mode
+                </motion.span>
+              )}
+            </AnimatePresence>
             <Button variant="outline" size="sm" onClick={handleLogout} style={{ color: "#64748b", fontSize: "13px" }}>
               <LogOut style={{ width: "13px", height: "13px", marginRight: "5px" }} /> Sign out
             </Button>
@@ -1517,6 +1605,7 @@ function DataRoomContent({ token, onLogout }: { token: string; onLogout: () => v
         </p>
       </div>
     </div>
+    </EditAuthContext.Provider>
   );
 }
 
