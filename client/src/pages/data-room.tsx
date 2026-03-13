@@ -1393,7 +1393,7 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
 }
 
 /* ─── PASSWORD GATE ─── */
-function PasswordGate({ onSuccess }: { onSuccess: (token: string) => void }) {
+function PasswordGate({ onSuccess }: { onSuccess: (token: string, editEnabled: boolean) => void }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1408,7 +1408,7 @@ function PasswordGate({ onSuccess }: { onSuccess: (token: string) => void }) {
       const data = await res.json();
       if (!res.ok) { setError(data.message || "Invalid access code"); return; }
       sessionStorage.setItem(SESSION_KEY, data.token);
-      onSuccess(data.token);
+      onSuccess(data.token, !!data.editEnabled);
       toast({ title: "Access granted", description: "Welcome to the BlockFinaX Investor Data Room." });
     } catch { setError("Connection error. Please try again."); }
     finally { setLoading(false); }
@@ -1444,14 +1444,14 @@ function PasswordGate({ onSuccess }: { onSuccess: (token: string) => void }) {
 }
 
 /* ─── MAIN DATA ROOM CONTENT ─── */
-function DataRoomContent({ token, onLogout }: { token: string; onLogout: () => void }) {
+function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { token: string; onLogout: () => void; initialEditEnabled?: boolean }) {
   const [, navigate] = useLocation();
   const [activeCategory, setActiveCategory] = useState("overview");
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const { toast } = useToast();
 
   /* edit-auth state */
-  const [editUnlocked, setEditUnlocked] = useState(false);
+  const [editUnlocked, setEditUnlocked] = useState(initialEditEnabled);
   const [showEditModal, setShowEditModal] = useState(false);
   const pendingEditCb = useRef<(() => void) | null>(null);
 
@@ -1612,6 +1612,7 @@ function DataRoomContent({ token, onLogout }: { token: string; onLogout: () => v
 /* ─── ROOT EXPORT ─── */
 export default function DataRoom() {
   const [token, setToken] = useState<string | null>(null);
+  const [initialEditEnabled, setInitialEditEnabled] = useState(false);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -1619,7 +1620,10 @@ export default function DataRoom() {
     if (!stored) { setChecking(false); return; }
     fetch("/api/investor/verify", { headers: { "x-investor-token": stored } })
       .then(r => r.json())
-      .then(d => { if (d.valid) setToken(stored); else sessionStorage.removeItem(SESSION_KEY); })
+      .then(d => {
+        if (d.valid) { setToken(stored); setInitialEditEnabled(!!d.editEnabled); }
+        else sessionStorage.removeItem(SESSION_KEY);
+      })
       .catch(() => sessionStorage.removeItem(SESSION_KEY))
       .finally(() => setChecking(false));
   }, []);
@@ -1630,6 +1634,12 @@ export default function DataRoom() {
     </div>
   );
 
-  if (token) return <DataRoomContent token={token} onLogout={() => setToken(null)} />;
-  return <PasswordGate onSuccess={setToken} />;
+  if (token) return (
+    <DataRoomContent
+      token={token}
+      initialEditEnabled={initialEditEnabled}
+      onLogout={() => { setToken(null); setInitialEditEnabled(false); }}
+    />
+  );
+  return <PasswordGate onSuccess={(tok, editEnabled) => { setToken(tok); setInitialEditEnabled(editEnabled); }} />;
 }

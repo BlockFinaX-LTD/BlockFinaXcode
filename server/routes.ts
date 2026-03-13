@@ -57,7 +57,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // [INVESTOR] Data Room Auth
   // ═══════════════════════════════════════════════════════
   const investorSessions = new Map<string, number>(); // token → expiry timestamp
+  const investorEditSessions = new Set<string>(); // tokens with edit access
   const investorLoginAttempts = new Map<string, { count: number; resetAt: number }>();
+  const EDIT_ACCESS_CODE = "DeTrade@23";
 
   function generateInvestorToken(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -91,12 +93,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const { password } = req.body;
     const investorPassword = process.env.INVESTOR_PASSWORD || process.env.ADMIN_PASSWORD;
+    const isEditCode = password === EDIT_ACCESS_CODE;
+    const isInvestorCode = investorPassword && password === investorPassword;
 
-    if (!investorPassword) {
-      return res.status(500).json({ message: "Data room not configured" });
-    }
-
-    if (password !== investorPassword) {
+    if (!isEditCode && !isInvestorCode) {
       const current = investorLoginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60_000 };
       investorLoginAttempts.set(ip, { count: current.count + 1, resetAt: current.resetAt });
       return res.status(401).json({ message: "Invalid access code" });
@@ -108,8 +108,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const token = generateInvestorToken();
     const expiry = now + 24 * 60 * 60_000; // 24 hours
     investorSessions.set(token, expiry);
+    if (isEditCode) investorEditSessions.add(token);
 
-    res.json({ token, expiresAt: expiry });
+    res.json({ token, expiresAt: expiry, editEnabled: isEditCode });
   });
 
   app.get("/api/investor/verify", (req, res) => {
@@ -118,14 +119,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const expiry = investorSessions.get(token);
     if (!expiry || Date.now() > expiry) {
       investorSessions.delete(token);
+      investorEditSessions.delete(token);
       return res.status(401).json({ valid: false });
     }
-    res.json({ valid: true });
+    res.json({ valid: true, editEnabled: investorEditSessions.has(token) });
   });
 
   app.post("/api/investor/logout", (req, res) => {
     const token = req.headers["x-investor-token"] as string;
-    if (token) investorSessions.delete(token);
+    if (token) { investorSessions.delete(token); investorEditSessions.delete(token); }
     res.json({ success: true });
   });
 
