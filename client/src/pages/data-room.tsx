@@ -45,6 +45,7 @@ const CATEGORIES = [
     documents: [
       { id: "financial-model", title: "Financial Model", description: "54-month bottom-up P&L (Jul 2026–Dec 2030), editable inputs, scenario analysis", href: "/financial-model", type: "navigate" as const, badge: "Interactive", badgeColor: "bg-blue-100 text-blue-700", icon: BarChart2 },
       { id: "revenue-breakdown", title: "Revenue Breakdown", description: "Full fee structure, blended take rate, unit economics, and per-product revenue analysis", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: FileText },
+      { id: "cost-breakdown", title: "Cost Breakdown", description: "Annual COGS and OpEx by category — personnel, marketing, gas, oracle, legal, KYC and efficiency metrics", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: BarChart2 },
     ],
   },
   {
@@ -617,11 +618,236 @@ function BoGSandboxDoc() {
   );
 }
 
+function CostBreakdownDoc() {
+  const years = [
+    {
+      period: "2026 (H2 only)",
+      revenue: "$60K",
+      personnel: "$95K", marketing: "$14K", legal: "$102K", infra: "$6K", ga: "$10K", totalOpEx: "$227K",
+      gas: "$16K", oracle: "$3K", loyalty: "$2K", kyc: "$2K", totalCOGS: "$23K",
+      totalCosts: "$250K", costPct: "n/a",
+      stage: "Invest", stageColor: "#d97706", stageBg: "#fef3c7",
+      note: "Pre-revenue burn phase. Legal & pre-seed setup dominate.",
+    },
+    {
+      period: "2027 (Full Year)",
+      revenue: "$5.5M",
+      personnel: "$552K", marketing: "$750K", legal: "$252K", infra: "$42K", ga: "$63K", totalOpEx: "$1.66M",
+      gas: "$450K", oracle: "$22K", loyalty: "$245K", kyc: "$43K", totalCOGS: "$760K",
+      totalCosts: "$2.42M", costPct: "44%",
+      stage: "Scale", stageColor: "#1d4ed8", stageBg: "#dbeafe",
+      note: "Series A year. Marketing spend drives wallet growth. Gas & creator loyalty grow with volume.",
+    },
+    {
+      period: "2028 (Full Year)",
+      revenue: "$32M",
+      personnel: "$924K", marketing: "$1.68M", legal: "$300K", infra: "$93K", ga: "$105K", totalOpEx: "$3.10M",
+      gas: "$1.26M", oracle: "$39K", loyalty: "$1.37M", kyc: "$126K", totalCOGS: "$2.80M",
+      totalCosts: "$5.90M", costPct: "18%",
+      stage: "Profitable", stageColor: "#16a34a", stageBg: "#dcfce7",
+      note: "Break-even achieved. Revenue scales faster than costs. COGS grows with user volume.",
+    },
+    {
+      period: "2029 (Full Year)",
+      revenue: "$108M",
+      personnel: "$1.68M", marketing: "$4.60M", legal: "$444K", infra: "$456K", ga: "$270K", totalOpEx: "$7.45M",
+      gas: "$4.32M", oracle: "$156K", loyalty: "$4.72M", kyc: "$432K", totalCOGS: "$9.63M",
+      totalCosts: "$17.1M", costPct: "16%",
+      stage: "High Growth", stageColor: "#7c3aed", stageBg: "#ede9fe",
+      note: "Creator loyalty and gas sponsorship dominate COGS — both tied directly to revenue volume.",
+    },
+    {
+      period: "2030 (Full Year)",
+      revenue: "$240M",
+      personnel: "$2.40M", marketing: "$8.80M", legal: "$528K", infra: "$852K", ga: "$432K", totalOpEx: "$13.0M",
+      gas: "$5.94M", oracle: "$330K", loyalty: "$10.0M", kyc: "$594K", totalCOGS: "$16.9M",
+      totalCosts: "$29.9M", costPct: "12%",
+      stage: "Mature", stageColor: "#0f766e", stageBg: "#ccfbf1",
+      note: "Strong EBITDA margin at scale. Infrastructure costs sub-linear vs revenue growth.",
+    },
+  ];
+
+  function Bar({ pct, color }: { pct: number; color: string }) {
+    return (
+      <div style={{ background: "#f1f5f9", borderRadius: "4px", height: "8px", width: "100%", overflow: "hidden" }}>
+        <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: color, borderRadius: "4px", transition: "width 0.3s" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p style={S.p}>BlockFinaX operates a lean cost structure split into two buckets: <strong>Cost of Goods Sold (COGS)</strong> — direct costs tied to revenue delivery (gas sponsorship, oracle infrastructure, creator loyalty, and KYC compliance) — and <strong>Operating Expenses (OpEx)</strong> — team, marketing, legal, infra, and G&A. Total costs fall sharply as a percentage of revenue as the platform scales, from ~44% in 2027 to ~12% by 2030.</p>
+
+      {/* Annual overview table */}
+      <h2 style={S.h2}>Annual Cost Overview</h2>
+      <div style={{ overflowX: "auto" }}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              {["Period", "Revenue", "Total COGS", "Total OpEx", "Total Costs", "Costs / Rev", "Stage"].map(h => (
+                <th key={h} style={S.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {years.map(r => (
+              <tr key={r.period}>
+                <td style={S.td}><strong>{r.period}</strong></td>
+                <td style={{ ...S.td, color: "#1d4ed8", fontWeight: 600 }}>{r.revenue}</td>
+                <td style={{ ...S.td, color: "#c2410c" }}>{r.totalCOGS}</td>
+                <td style={{ ...S.td, color: "#7c3aed" }}>{r.totalOpEx}</td>
+                <td style={{ ...S.td, fontWeight: 700 }}>{r.totalCosts}</td>
+                <td style={{ ...S.td, fontWeight: 600, color: r.costPct === "n/a" ? "#94a3b8" : parseFloat(r.costPct) > 50 ? "#dc2626" : parseFloat(r.costPct) > 25 ? "#d97706" : "#16a34a" }}>{r.costPct}</td>
+                <td style={S.td}><span style={{ ...S.tag(""), background: r.stageBg, color: r.stageColor }}>{r.stage}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* COGS breakdown */}
+      <h2 style={S.h2}>COGS Breakdown — Direct Delivery Costs</h2>
+      <p style={S.p}>All COGS items scale with volume, not headcount. They represent the real cost of delivering each hedge event and wallet onboarding.</p>
+      <div style={{ overflowX: "auto" }}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              {["Cost Item", "2027", "2028", "2029", "2030", "Driver"].map(h => (
+                <th key={h} style={S.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { label: "Gas Sponsorship",      vals: ["$450K","$1.26M","$4.32M","$5.94M"], driver: "New wallets × $15/wallet — gasless UX subsidy" },
+              { label: "Oracle / RPC",          vals: ["$22K",  "$39K",  "$156K", "$330K"],  driver: "On-chain settlement infrastructure, scales with pairs" },
+              { label: "Creator Loyalty (5%)",  vals: ["$245K","$1.37M","$4.72M","$10.0M"], driver: "5% of hedge fees paid to event creators" },
+              { label: "KYC / AML",             vals: ["$43K",  "$126K", "$432K", "$594K"],  driver: "AML identity verification at $1.50/wallet" },
+              { label: "Total COGS",            vals: ["$760K","$2.80M","$9.63M","$16.9M"], driver: "", bold: true },
+            ].map(row => (
+              <tr key={row.label} style={{ background: row.bold ? "#fff7ed" : undefined }}>
+                <td style={{ ...S.td, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#c2410c" : undefined }}>{row.label}</td>
+                {row.vals.map((v, i) => <td key={i} style={{ ...S.td, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#c2410c" : "#475569" }}>{v}</td>)}
+                <td style={{ ...S.td, fontSize: "12px", color: "#94a3b8" }}>{row.driver}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* OpEx breakdown */}
+      <h2 style={S.h2}>OpEx Breakdown — Operating Expenses</h2>
+      <div style={{ overflowX: "auto" }}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              {["Cost Item", "2027", "2028", "2029", "2030", "Driver"].map(h => (
+                <th key={h} style={S.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { label: "Personnel",     vals: ["$552K","$924K",  "$1.68M","$2.40M"], driver: "Headcount × salary/FTE — lean Africa-based team" },
+              { label: "Marketing/CAC", vals: ["$750K","$1.68M", "$4.60M","$8.80M"], driver: "New wallets × CAC — paid acquisition & partnerships" },
+              { label: "Legal",         vals: ["$252K","$300K",  "$444K", "$528K"],  driver: "Regulatory counsel, sandbox fees, IP, compliance" },
+              { label: "Infra / Cloud", vals: ["$42K", "$93K",   "$456K", "$852K"],  driver: "Hosting, RPC nodes, CDN, monitoring, CI/CD" },
+              { label: "G&A",           vals: ["$63K", "$105K",  "$270K", "$432K"],  driver: "Office, finance ops, tooling, HR, insurance" },
+              { label: "Total OpEx",    vals: ["$1.66M","$3.10M","$7.45M","$13.0M"], driver: "", bold: true },
+            ].map(row => (
+              <tr key={row.label} style={{ background: row.bold ? "#f5f3ff" : undefined }}>
+                <td style={{ ...S.td, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#7c3aed" : undefined }}>{row.label}</td>
+                {row.vals.map((v, i) => <td key={i} style={{ ...S.td, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#7c3aed" : "#475569" }}>{v}</td>)}
+                <td style={{ ...S.td, fontSize: "12px", color: "#94a3b8" }}>{row.driver}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Cost composition bars */}
+      <h2 style={S.h2}>Cost Composition — 2027 vs 2030</h2>
+      <p style={S.p}>As revenue grows 44× from 2027 to 2030, the cost mix shifts: personnel dominates early, while creator loyalty and gas (both volume-linked) grow to represent the majority of COGS at scale.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", margin: "12px 0" }}>
+        {[
+          {
+            year: "2027", total: 2.42,
+            items: [
+              { label: "Marketing/CAC", val: 0.75,  pct: 31, color: "#a855f7" },
+              { label: "Personnel",     val: 0.552, pct: 23, color: "#3b82f6" },
+              { label: "Creator Loyalty", val: 0.245, pct: 10, color: "#ec4899" },
+              { label: "Gas Sponsorship", val: 0.45,  pct: 19, color: "#f97316" },
+              { label: "Legal",         val: 0.252, pct: 10, color: "#f59e0b" },
+              { label: "Other",         val: 0.171, pct: 7,  color: "#94a3b8" },
+            ],
+          },
+          {
+            year: "2030", total: 29.9,
+            items: [
+              { label: "Creator Loyalty", val: 10.0, pct: 33, color: "#ec4899" },
+              { label: "Marketing/CAC", val: 8.8,  pct: 29, color: "#a855f7" },
+              { label: "Gas Sponsorship", val: 5.94, pct: 20, color: "#f97316" },
+              { label: "Personnel",     val: 2.4,  pct: 8,  color: "#3b82f6" },
+              { label: "Other",         val: 2.76, pct: 10, color: "#94a3b8" },
+            ],
+          },
+        ].map(({ year, items }) => (
+          <div key={year} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "12px" }}>{year} Cost Mix</div>
+            {items.map(item => (
+              <div key={item.label} style={{ marginBottom: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#475569", marginBottom: "3px" }}>
+                  <span>{item.label}</span><span style={{ fontWeight: 600 }}>{item.pct}%</span>
+                </div>
+                <Bar pct={item.pct} color={item.color} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Key efficiency metrics */}
+      <h2 style={S.h2}>Cost Efficiency Metrics</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "10px", margin: "12px 0" }}>
+        <div style={S.stat}><div style={S.statVal}>$2.42M</div><div style={S.statLbl}>Total costs Year 1 (2027)</div></div>
+        <div style={S.stat}><div style={S.statVal}>12%</div><div style={S.statLbl}>Cost/Revenue ratio by 2030</div></div>
+        <div style={S.stat}><div style={S.statVal}>$96</div><div style={S.statLbl}>Cost per hedge event (2027)</div></div>
+        <div style={S.stat}><div style={S.statVal}>$19</div><div style={S.statLbl}>Cost per hedge event (2030)</div></div>
+      </div>
+      <table style={S.table}>
+        <thead><tr><th style={S.th}>Metric</th><th style={S.th}>2027</th><th style={S.th}>2028</th><th style={S.th}>2029</th><th style={S.th}>2030</th></tr></thead>
+        <tbody>
+          {[
+            { label: "Total Costs",            vals: ["$2.42M","$5.90M","$17.1M","$29.9M"] },
+            { label: "Cost per Hedge Event",   vals: ["$96",   "$43",   "$22",   "$19"] },
+            { label: "Cost per New Wallet",    vals: ["$80",   "$70",   "$60",   "$51"] },
+            { label: "Personnel % Total Cost", vals: ["23%",   "16%",   "10%",   "8%"] },
+            { label: "Gross Margin",           vals: ["86%",   "91%",   "91%",   "93%"] },
+            { label: "EBITDA Margin",          vals: ["56%",   "80%",   "83%",   "88%"] },
+          ].map(row => (
+            <tr key={row.label}>
+              <td style={{ ...S.td, fontWeight: 600 }}>{row.label}</td>
+              {row.vals.map((v, i) => <td key={i} style={S.td}>{v}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px", padding: "14px 18px", marginTop: "20px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "#0369a1" }}>📊 Full Interactive Model</div>
+        <div style={{ fontSize: "13px", color: "#0284c7", marginTop: "4px" }}>The Financial Model tab contains the full 54-month bottom-up model with editable inputs, adjustable headcount, CAC, legal, and infrastructure assumptions — all cost lines update in real time.</div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── MODAL CONTENT ROUTER ─── */
 function DocContent({ docId, token }: { docId: string; token: string }) {
   const meta: Record<string, { title: string; subtitle: string }> = {
     "exec-summary": { title: "Executive Summary", subtitle: "Company overview, problem, solution, and the ask" },
     "revenue-breakdown": { title: "Revenue Breakdown", subtitle: "Fee structure, projections, and unit economics" },
+    "cost-breakdown":    { title: "Cost Breakdown",    subtitle: "Annual COGS & OpEx by category with efficiency metrics" },
     "oracle-strategy": { title: "Oracle Strategy", subtitle: "Architecture, limitations, and decentralisation roadmap" },
     "security-audit": { title: "Security Audit", subtitle: "Pre-audit scan results and pre-mainnet checklist" },
     "demo-video": { title: "Product Demo Video", subtitle: "Video walkthrough of the Wallet and Hedge products" },
@@ -642,6 +868,7 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       </div>
       {docId === "exec-summary" && <ExecSummary />}
       {docId === "revenue-breakdown" && <RevenueBreakdown />}
+      {docId === "cost-breakdown"    && <CostBreakdownDoc />}
       {docId === "oracle-strategy" && <OracleStrategyDoc />}
       {docId === "security-audit" && <SecurityAuditDoc />}
       {docId === "demo-video" && <DemoVideoDoc token={token} />}
