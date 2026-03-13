@@ -78,6 +78,9 @@ const CATEGORIES = [
     id: "legal", label: "Legal & Compliance", icon: FileText,
     color: "border-slate-200 bg-slate-50", iconColor: "text-slate-600",
     documents: [
+      { id: "incorporation", title: "Incorporation", description: "Ghana incorporation (active) · Delaware C-Corp in progress — dual-entity structure for US investors", href: null, type: "modal" as const, badge: "Active", badgeColor: "bg-emerald-100 text-emerald-700", icon: Building2 },
+      { id: "agreements", title: "Agreements", description: "NDA templates, service agreements, consulting contracts, and investor term sheet status", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: FileText },
+      { id: "compliance-proposals", title: "Compliance Proposals", description: "Proposals and recommendations from legal and compliance consultants — admin editable", href: null, type: "modal" as const, badge: "Internal", badgeColor: "bg-purple-100 text-purple-700", icon: BookOpen },
       { id: "bog-sandbox", title: "Bank of Ghana Sandbox", description: "Regulatory sandbox application status, compliance framework, and market entry roadmap", href: null, type: "modal" as const, badge: "In Progress", badgeColor: "bg-orange-100 text-orange-700", icon: ShieldCheck },
       { id: "token-legal", title: "Token Legal Opinion", description: "USDC-only model — no native token, no securities classification risk", href: null, type: "coming-soon" as const, badge: "Coming Soon", badgeColor: "bg-slate-100 text-slate-400", icon: FileText },
       { id: "nda-request", title: "Request NDA / Term Sheet", description: "Contact us to request a non-disclosure agreement or investment term sheet", href: "mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20NDA%20Request", type: "external" as const, badge: "Email", badgeColor: "bg-slate-100 text-slate-600", icon: ExternalLink },
@@ -842,6 +845,361 @@ function CostBreakdownDoc() {
   );
 }
 
+function IncorporationDoc() {
+  return (
+    <div>
+      <p style={S.p}>BlockFinaX operates under a dual-entity structure: a primary operating company incorporated in Ghana, with a Delaware C-Corporation in progress to accommodate US institutional investors and standard venture capital term sheets.</p>
+
+      {/* Ghana entity */}
+      <h2 style={S.h2}>Ghana — Primary Operating Entity</h2>
+      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+          <span style={{ fontSize: "22px" }}>🇬🇭</span>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#14532d" }}>BlockFinaX Limited</div>
+            <div style={{ fontSize: "13px", color: "#16a34a" }}>Incorporated · Active</div>
+          </div>
+          <span style={{ marginLeft: "auto", ...S.tag("green") }}>Active</span>
+        </div>
+        <table style={S.table}>
+          <tbody>
+            {[
+              ["Entity type",       "Company Limited by Shares (Private)"],
+              ["Governing law",     "Companies Act, 2019 (Act 992) — Republic of Ghana"],
+              ["Registered with",   "Registrar General's Department (RGD), Accra"],
+              ["Country",           "Ghana, West Africa"],
+              ["Primary market",    "Ghana (Bank of Ghana sandbox), with East & West Africa expansion"],
+              ["Tax jurisdiction",  "Ghana Revenue Authority (GRA)"],
+            ].map(([k, v]) => (
+              <tr key={k as string}>
+                <td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" }}>{k}</td>
+                <td style={S.td}>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Delaware entity */}
+      <h2 style={S.h2}>Delaware — US Holding Entity (In Progress)</h2>
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+          <span style={{ fontSize: "22px" }}>🇺🇸</span>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>BlockFinaX Inc. (planned)</div>
+            <div style={{ fontSize: "13px", color: "#64748b" }}>Delaware C-Corporation — Formation in progress</div>
+          </div>
+          <span style={{ marginLeft: "auto", ...S.tag("amber") }}>In Progress</span>
+        </div>
+        <table style={S.table}>
+          <tbody>
+            {[
+              ["Entity type",    "Delaware C-Corporation"],
+              ["Purpose",        "US investor vehicle, Series A/B term sheet compatibility, stock option pool"],
+              ["Timeline",       "Q1–Q2 2027 (ahead of Series A close)"],
+              ["Structure",      "Delaware parent holding 100% of Ghana operating subsidiary"],
+              ["Legal counsel",  "US counsel to be engaged on Series A raise"],
+            ].map(([k, v]) => (
+              <tr key={k as string}>
+                <td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" }}>{k}</td>
+                <td style={S.td}>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Formation timeline */}
+      <h2 style={S.h2}>Entity Formation Timeline</h2>
+      <table style={S.table}>
+        <thead><tr><th style={S.th}>Milestone</th><th style={S.th}>Jurisdiction</th><th style={S.th}>Target</th><th style={S.th}>Status</th></tr></thead>
+        <tbody>
+          <tr><td style={S.td}>Ghana private limited company incorporated</td><td style={S.td}>Ghana</td><td style={S.td}>Q1 2026</td><td style={S.td}><span style={S.tag("green")}>Complete</span></td></tr>
+          <tr><td style={S.td}>Ghana operating bank account opened</td><td style={S.td}>Ghana</td><td style={S.td}>Q1 2026</td><td style={S.td}><span style={S.tag("green")}>Complete</span></td></tr>
+          <tr><td style={S.td}>BoG sandbox application filed</td><td style={S.td}>Ghana</td><td style={S.td}>Q1 2026</td><td style={S.td}><span style={S.tag("green")}>Complete</span></td></tr>
+          <tr><td style={S.td}>Delaware C-Corp formation</td><td style={S.td}>United States</td><td style={S.td}>Q1–Q2 2027</td><td style={S.td}><span style={S.tag("amber")}>Planned</span></td></tr>
+          <tr><td style={S.td}>IP assignment Ghana → Delaware</td><td style={S.td}>International</td><td style={S.td}>Q2 2027</td><td style={S.td}><span style={S.tag("amber")}>Planned</span></td></tr>
+          <tr><td style={S.td}>Kenya subsidiary registration</td><td style={S.td}>Kenya</td><td style={S.td}>2027</td><td style={S.td}><span style={S.tag("blue")}>Roadmap</span></td></tr>
+          <tr><td style={S.td}>Nigeria subsidiary registration</td><td style={S.td}>Nigeria</td><td style={S.td}>2028</td><td style={S.td}><span style={S.tag("blue")}>Roadmap</span></td></tr>
+        </tbody>
+      </table>
+
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "14px 18px", marginTop: "20px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "#1d4ed8" }}>ℹ Investor Note</div>
+        <div style={{ fontSize: "13px", color: "#1e40af", marginTop: "4px" }}>Series A investment will be structured through the Delaware C-Corp, enabling standard US venture term sheets, stock option pools, and SAFE/priced round mechanics. The Ghana entity continues as the operational subsidiary.</div>
+      </div>
+    </div>
+  );
+}
+
+function AgreementsDoc() {
+  return (
+    <div>
+      <p style={S.p}>This section tracks the status of all formal agreements — investor NDAs, service agreements with contractors and advisors, consulting contracts, and template legal documents. Signed agreements are held by BlockFinaX's legal counsel and available to verified investors on request.</p>
+
+      <h2 style={S.h2}>Investor Agreements</h2>
+      <table style={S.table}>
+        <thead><tr><th style={S.th}>Document</th><th style={S.th}>Counterparty</th><th style={S.th}>Status</th><th style={S.th}>Notes</th></tr></thead>
+        <tbody>
+          {[
+            ["Non-Disclosure Agreement (NDA)", "Pre-seed investors", "Template Ready", "amber", "Available on request — email to initiate"],
+            ["SAFE Note / Investment Agreement", "Pre-seed round", "In Drafting", "amber", "Being prepared ahead of pre-seed close"],
+            ["Investor Term Sheet", "Series A", "Not Yet", "slate", "Will be issued Q4 2027 ahead of Series A"],
+          ].map(([doc, party, status, color, note]) => (
+            <tr key={doc as string}>
+              <td style={{ ...S.td, fontWeight: 600 }}>{doc}</td>
+              <td style={S.td}>{party}</td>
+              <td style={S.td}><span style={S.tag(color as string)}>{status}</span></td>
+              <td style={{ ...S.td, fontSize: "12px", color: "#64748b" }}>{note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2 style={S.h2}>Service & Consulting Agreements</h2>
+      <table style={S.table}>
+        <thead><tr><th style={S.th}>Agreement Type</th><th style={S.th}>Party</th><th style={S.th}>Status</th><th style={S.th}>Notes</th></tr></thead>
+        <tbody>
+          {[
+            ["Smart Contract Audit Agreement", "Third-party auditor (TBD)", "Pending Auditor Selection", "amber", "Planned pre-mainnet — budget allocated"],
+            ["Legal Advisory Retainer", "Ghana corporate counsel", "Active", "green", "Ongoing advisory on BoG sandbox application"],
+            ["Compliance Consulting", "AML/KYC consultant", "In Negotiation", "amber", "See Compliance Proposals for details"],
+            ["Cloud Services Agreement", "AWS / GCP", "Active", "green", "Standard cloud services — no special terms"],
+            ["Delaware Formation Counsel", "US law firm (TBD)", "Not Started", "slate", "To be engaged Q4 2026 ahead of formation"],
+          ].map(([doc, party, status, color, note]) => (
+            <tr key={doc as string}>
+              <td style={{ ...S.td, fontWeight: 600 }}>{doc}</td>
+              <td style={S.td}>{party}</td>
+              <td style={S.td}><span style={S.tag(color as string)}>{status}</span></td>
+              <td style={{ ...S.td, fontSize: "12px", color: "#64748b" }}>{note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2 style={S.h2}>IP & Ownership</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0" }}>
+        {[
+          ["All source code owned by BlockFinaX Limited", "No third-party IP encumbrances on the core protocol", "done"],
+          ["Smart contracts deployed from founder-controlled wallet", "Full on-chain ownership of Diamond proxy", "done"],
+          ["No open-source licence conflicts", "Dependencies are MIT / Apache 2.0 compatible", "done"],
+          ["IP assignment to Delaware holding company", "Planned on Delaware formation (Q2 2027)", "pending"],
+          ["Trademark registration — BlockFinaX", "Ghana and international filing planned", "pending"],
+        ].map(([title, desc, status]) => (
+          <div key={title as string} style={{ display: "flex", gap: "10px", padding: "10px 14px", background: status === "done" ? "#f0fdf4" : "#f8fafc", borderRadius: "6px", border: `1px solid ${status === "done" ? "#bbf7d0" : "#e2e8f0"}` }}>
+            <span style={{ fontSize: "16px", flexShrink: 0 }}>{status === "done" ? "✅" : "⬜"}</span>
+            <div><div style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>{title}</div><div style={{ fontSize: "12px", color: "#64748b" }}>{desc}</div></div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px 18px", marginTop: "20px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>📩 Request Documents</div>
+        <div style={{ fontSize: "13px", color: "#475569", marginTop: "4px" }}>To request a signed NDA, term sheet, or specific agreement, email <a href="mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20Agreement%20Request" style={{ color: "#2563eb" }}>anthonykumako8@gmail.com</a> with the subject "BlockFinaX Agreement Request".</div>
+      </div>
+    </div>
+  );
+}
+
+type Proposal = { id: string; name: string; consultant: string; date: string; status: string; notes: string };
+
+function ComplianceProposalsDoc({ token }: { token: string }) {
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<Omit<Proposal, "id">>({ name: "", consultant: "", date: "", status: "Draft", notes: "" });
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetch("/api/investor/content/compliance-proposals", { headers: { "x-investor-token": token } })
+      .then(r => r.json())
+      .then(d => { setProposals(d.proposals || []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const saveToDb = async (updated: Proposal[]) => {
+    await fetch("/api/investor/content/compliance-proposals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-investor-token": token },
+      body: JSON.stringify({ proposals: updated }),
+    });
+  };
+
+  const resetForm = () => setForm({ name: "", consultant: "", date: "", status: "Draft", notes: "" });
+
+  const handleAdd = async () => {
+    if (!form.name.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const entry: Proposal = { ...form, id: Date.now().toString() };
+      const updated = [...proposals, entry];
+      await saveToDb(updated);
+      setProposals(updated);
+      resetForm();
+      setShowForm(false);
+      toast({ title: "Proposal added" });
+    } catch { toast({ title: "Save failed", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  const handleUpdate = async () => {
+    if (!form.name.trim() || !editingId) return;
+    setSaving(true);
+    try {
+      const updated = proposals.map(p => p.id === editingId ? { ...form, id: p.id } : p);
+      await saveToDb(updated);
+      setProposals(updated);
+      setEditingId(null);
+      resetForm();
+      toast({ title: "Proposal updated" });
+    } catch { toast({ title: "Save failed", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    const updated = proposals.filter(p => p.id !== id);
+    await saveToDb(updated);
+    setProposals(updated);
+    toast({ title: "Proposal removed" });
+  };
+
+  const startEdit = (p: Proposal) => {
+    setEditingId(p.id);
+    setForm({ name: p.name, consultant: p.consultant, date: p.date, status: p.status, notes: p.notes });
+    setShowForm(false);
+  };
+
+  const statusColor: Record<string, string> = {
+    "Draft": "slate", "Under Review": "blue", "Approved": "green", "Rejected": "red", "Implemented": "amber",
+  };
+
+  const fieldStyle: React.CSSProperties = { width: "100%", padding: "7px 10px", fontSize: "13px", border: "1px solid #e2e8f0", borderRadius: "6px", outline: "none", fontFamily: "inherit", color: "#334155", background: "white" };
+
+  return (
+    <div>
+      <p style={S.p}>Track all compliance and legal proposals received from external consultants. Each entry records the proposal name, consultant or firm, date received, current status, and internal notes. Only visible to authenticated investors and admins.</p>
+
+      {/* Action bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <h2 style={{ ...S.h2, marginTop: 0, marginBottom: 0, border: "none", paddingBottom: 0 }}>Proposals ({proposals.length})</h2>
+        {!showForm && !editingId && (
+          <Button size="sm" onClick={() => setShowForm(true)} style={{ background: "#2563eb", color: "white", display: "flex", alignItems: "center", gap: "5px" }}>
+            + Add Proposal
+          </Button>
+        )}
+      </div>
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <h3 style={{ ...S.h3, marginTop: 0 }}>New Compliance Proposal</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Proposal Name *</label>
+              <input style={fieldStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. AML/KYC Framework Proposal" />
+            </div>
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Consultant / Firm</label>
+              <input style={fieldStyle} value={form.consultant} onChange={e => setForm(f => ({ ...f, consultant: e.target.value }))} placeholder="e.g. LexCorps Advisory" />
+            </div>
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Date Received</label>
+              <input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Status</label>
+              <select style={fieldStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                {["Draft", "Under Review", "Approved", "Rejected", "Implemented"].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Notes / Summary</label>
+            <textarea style={{ ...fieldStyle, resize: "vertical" as const }} rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Key points, recommendations, estimated cost, next steps..." />
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button onClick={handleAdd} disabled={saving} style={{ background: "#2563eb", color: "white" }}>
+              <Check style={{ width: "13px", height: "13px", marginRight: "5px" }} />{saving ? "Saving…" : "Add Proposal"}
+            </Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>Loading proposals…</div>
+      ) : proposals.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "50px 20px", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
+          <BookOpen style={{ width: "36px", height: "36px", color: "#94a3b8", margin: "0 auto 10px" }} />
+          <p style={{ fontSize: "14px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>No proposals yet</p>
+          <p style={{ fontSize: "13px", color: "#64748b" }}>Click "Add Proposal" to log your first compliance proposal from a consultant.</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {proposals.map(p => editingId === p.id ? (
+            <div key={p.id} style={{ background: "#f8fafc", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <h3 style={{ ...S.h3, marginTop: 0 }}>Edit Proposal</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Proposal Name *</label>
+                  <input style={fieldStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Consultant / Firm</label>
+                  <input style={fieldStyle} value={form.consultant} onChange={e => setForm(f => ({ ...f, consultant: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Date Received</label>
+                  <input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Status</label>
+                  <select style={fieldStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                    {["Draft", "Under Review", "Approved", "Rejected", "Implemented"].map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Notes / Summary</label>
+                <textarea style={{ ...fieldStyle, resize: "vertical" as const }} rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <Button onClick={handleUpdate} disabled={saving} style={{ background: "#2563eb", color: "white" }}>
+                  <Check style={{ width: "13px", height: "13px", marginRight: "5px" }} />{saving ? "Saving…" : "Save Changes"}
+                </Button>
+                <Button variant="outline" onClick={() => { setEditingId(null); resetForm(); }}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <div key={p.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "8px" }}>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{p.name}</div>
+                  <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                    {p.consultant && <span>{p.consultant}</span>}
+                    {p.consultant && p.date && <span> · </span>}
+                    {p.date && <span>Received {new Date(p.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                  <span style={S.tag(statusColor[p.status] || "slate")}>{p.status}</span>
+                  <button onClick={() => startEdit(p)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#475569" }}>Edit</button>
+                  <button onClick={() => handleDelete(p.id)} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
+                </div>
+              </div>
+              {p.notes && <p style={{ ...S.p, marginBottom: 0, fontSize: "13px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>{p.notes}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── MODAL CONTENT ROUTER ─── */
 function DocContent({ docId, token }: { docId: string; token: string }) {
   const meta: Record<string, { title: string; subtitle: string }> = {
@@ -854,6 +1212,9 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
     "market-opportunity": { title: "Market Opportunity", subtitle: "TAM / SAM / SOM and growth drivers" },
     "competitive-landscape": { title: "Competitive Landscape", subtitle: "Side-by-side comparison across key dimensions" },
     "gtm-strategy": { title: "Go-to-Market Strategy", subtitle: "4-phase GTM, partnerships, and flywheel" },
+    "incorporation":         { title: "Incorporation",         subtitle: "Ghana entity (active) · Delaware C-Corp in progress" },
+    "agreements":            { title: "Agreements",            subtitle: "NDAs, service contracts, IP ownership, and investor docs" },
+    "compliance-proposals":  { title: "Compliance Proposals",  subtitle: "Consultant proposals — admin editable" },
     "bog-sandbox": { title: "Bank of Ghana Sandbox", subtitle: "Application status, compliance framework, and timeline" },
   };
 
@@ -875,7 +1236,10 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       {docId === "market-opportunity" && <MarketOpportunityDoc />}
       {docId === "competitive-landscape" && <CompetitiveLandscapeDoc />}
       {docId === "gtm-strategy" && <GTMStrategyDoc />}
-      {docId === "bog-sandbox" && <BoGSandboxDoc />}
+      {docId === "incorporation"        && <IncorporationDoc />}
+      {docId === "agreements"           && <AgreementsDoc />}
+      {docId === "compliance-proposals" && <ComplianceProposalsDoc token={token} />}
+      {docId === "bog-sandbox"          && <BoGSandboxDoc />}
     </div>
   );
 }
