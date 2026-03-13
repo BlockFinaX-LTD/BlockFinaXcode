@@ -153,6 +153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const token = req.headers["x-investor-token"] as string;
     const expiry = investorSessions.get(token);
     if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+    if (!investorEditSessions.has(token)) return res.status(403).json({ error: "Edit access required" });
     if (typeof req.body !== "object" || Array.isArray(req.body)) return res.status(400).json({ error: "Invalid data" });
     await storage.setDataRoomContent(req.params.docId, req.body as Record<string, string>);
     res.json({ ok: true });
@@ -193,6 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const token = req.headers["x-investor-token"] as string;
     const expiry = investorSessions.get(token);
     if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+    if (!investorEditSessions.has(token)) return res.status(403).json({ error: "Edit access required" });
 
     complianceUpload.single("file")(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message });
@@ -223,6 +225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const token = req.headers["x-investor-token"] as string;
     const expiry = investorSessions.get(token);
     if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
+    if (!investorEditSessions.has(token)) return res.status(403).json({ error: "Edit access required" });
 
     const filename = decodeURIComponent(req.params.filename);
     const filepath = path.join(UPLOAD_DIR, path.basename(filename));

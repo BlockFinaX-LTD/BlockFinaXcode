@@ -1136,7 +1136,7 @@ function fmtSize(bytes: number) {
 }
 
 function ComplianceProposalsDoc({ token }: { token: string }) {
-  const { requestEdit } = useEditAuth();
+  const { editUnlocked, requestEdit } = useEditAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -1327,8 +1327,8 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <h2 style={{ ...S.h2, marginTop: 0, marginBottom: 0, border: "none", paddingBottom: 0 }}>Proposals ({proposals.length})</h2>
-        {!showForm && !editingId && (
-          <Button size="sm" onClick={() => requestEdit(() => setShowForm(true))} style={{ background: "#2563eb", color: "white" }}>+ Add Proposal</Button>
+        {editUnlocked && !showForm && !editingId && (
+          <Button size="sm" onClick={() => setShowForm(true)} style={{ background: "#2563eb", color: "white" }}>+ Add Proposal</Button>
         )}
       </div>
 
@@ -1383,8 +1383,10 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                   <span style={S.tag(statusColor[p.status] || "slate")}>{p.status}</span>
-                  <button onClick={() => requestEdit(() => startEdit(p))} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#475569" }}>Edit</button>
-                  <button onClick={() => requestEdit(() => handleDelete(p))} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
+                  {editUnlocked && <>
+                    <button onClick={() => startEdit(p)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#475569" }}>Edit</button>
+                    <button onClick={() => handleDelete(p)} style={{ background: "none", border: "1px solid #fee2e2", borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "12px", color: "#dc2626" }}>Remove</button>
+                  </>}
                 </div>
               </div>
               {p.notes && <p style={{ ...S.p, marginBottom: (p.files || []).length > 0 ? "10px" : 0, fontSize: "13px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>{p.notes}</p>}
@@ -1405,6 +1407,82 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── ADMIN NOTES SECTION ─── */
+function AdminNotesSection({ docId, token }: { docId: string; token: string }) {
+  const { editUnlocked } = useEditAuth();
+  const { toast } = useToast();
+  const [notes, setNotes] = useState("");
+  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const notesKey = `${docId}-admin-notes`;
+
+  useEffect(() => {
+    fetch(`/api/investor/content/${notesKey}`, { headers: { "x-investor-token": token } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.notes) { setNotes(d.notes); setDraft(d.notes); } })
+      .catch(() => {});
+  }, [notesKey, token]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch(`/api/investor/content/${notesKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-investor-token": token },
+        body: JSON.stringify({ notes: draft }),
+      });
+      setNotes(draft);
+      setEditing(false);
+      toast({ title: "Notes saved" });
+    } catch { toast({ title: "Save failed", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  if (!editUnlocked && !notes) return null;
+
+  return (
+    <div style={{ marginTop: "28px", borderTop: "1px solid #e2e8f0", paddingTop: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+          <Pencil style={{ width: "13px", height: "13px", color: "#92400e" }} />
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "#92400e", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {editUnlocked ? "Admin Notes (editable)" : "Admin Notes"}
+          </span>
+        </div>
+        {editUnlocked && !editing && (
+          <button onClick={() => { setDraft(notes); setEditing(true); }}
+            style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "3px 10px", cursor: "pointer", fontWeight: 500 }}>
+            {notes ? "Edit" : "Add Notes"}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            rows={5}
+            placeholder="Add internal notes, status updates, or content overrides for this document…"
+            style={{ width: "100%", padding: "10px 12px", fontSize: "13px", border: "1px solid #bfdbfe", borderRadius: "8px", outline: "none", fontFamily: "inherit", resize: "vertical", background: "#fffbeb", boxSizing: "border-box" as const }}
+          />
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button size="sm" onClick={handleSave} disabled={saving} style={{ background: "#2563eb", color: "white" }}>
+              <Check style={{ width: "12px", height: "12px", marginRight: "4px" }} />{saving ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : notes ? (
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "12px 14px", fontSize: "13px", color: "#78350f", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+          {notes}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1449,6 +1527,9 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       {docId === "agreements"           && <AgreementsDoc />}
       {docId === "compliance-proposals" && <ComplianceProposalsDoc token={token} />}
       {docId === "bog-sandbox"          && <BoGSandboxDoc />}
+      {docId !== "revenue-breakdown" && docId !== "cost-breakdown" && (
+        <AdminNotesSection docId={docId} token={token} />
+      )}
     </div>
   );
 }
