@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
+import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -189,6 +190,27 @@ function ExecSummary() {
 }
 
 function RevenueBreakdown() {
+  const a = DEFAULT_ANNUALS; // [0]=2026H2 [1]=2027 [2]=2028 [3]=2029 [4]=2030
+
+  const revRows = [
+    { label: "2026 (H2 — launch)", notional: a[0].notionalHedged, hedgeRev: a[0].hedgeFees + a[0].eventCreationFees, walletRev: a[0].walletFees, total: a[0].totalRevenue },
+    { label: "2027 (Year 1)",      notional: a[1].notionalHedged, hedgeRev: a[1].hedgeFees + a[1].eventCreationFees, walletRev: a[1].walletFees, total: a[1].totalRevenue },
+    { label: "2028 (Year 2)",      notional: a[2].notionalHedged, hedgeRev: a[2].hedgeFees + a[2].eventCreationFees, walletRev: a[2].walletFees, total: a[2].totalRevenue },
+    { label: "2029 (Year 3)",      notional: a[3].notionalHedged, hedgeRev: a[3].hedgeFees + a[3].eventCreationFees, walletRev: a[3].walletFees, total: a[3].totalRevenue },
+    { label: "2030 (Year 4)",      notional: a[4].notionalHedged, hedgeRev: a[4].hedgeFees + a[4].eventCreationFees, walletRev: a[4].walletFees, total: a[4].totalRevenue },
+  ];
+
+  const y27 = a[1];
+  const hedgePct27 = y27.totalRevenue > 0 ? Math.round(((y27.hedgeFees + y27.eventCreationFees) / y27.totalRevenue) * 100) : 0;
+  const walletPct27 = 100 - hedgePct27;
+
+  const avgNotional27 = y27.totalEvents > 0 ? Math.round(y27.notionalHedged / y27.totalEvents) : 0;
+  const avgRevPerEvent27 = y27.totalEvents > 0 ? Math.round(y27.totalRevenue / y27.totalEvents) : 0;
+  const blendedTakeRate27 = y27.notionalHedged > 0 ? ((y27.totalRevenue / y27.notionalHedged) * 100).toFixed(2) : "0";
+
+  const y30 = a[4];
+  const grossMargin30 = y30.totalRevenue > 0 ? Math.round((y30.grossProfit / y30.totalRevenue) * 100) : 0;
+
   return (
     <div>
       <p style={S.p}>BlockFinaX generates revenue from two products: <strong>Hedge</strong> (P2P parametric contracts) and <strong>Wallet</strong> (USDC cross-border transfers). Both use a low-friction fee model designed for high volume.</p>
@@ -205,28 +227,44 @@ function RevenueBreakdown() {
       </table>
 
       <h2 style={S.h2}>Revenue Projections</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Year</th><th style={S.th}>Notional Hedged</th><th style={S.th}>Hedge Revenue</th><th style={S.th}>Wallet Revenue</th><th style={S.th}>Total Revenue</th></tr></thead>
-        <tbody>
-          <tr><td style={S.td}><strong>2027 (Year 1)</strong></td><td style={S.td}>$583M</td><td style={S.td}>$4.8M</td><td style={S.td}>$0.7M</td><td style={S.td}><strong>$5.5M</strong></td></tr>
-          <tr><td style={S.td}><strong>2028 (Year 2)</strong></td><td style={S.td}>$3.3B</td><td style={S.td}>$28M</td><td style={S.td}>$4M</td><td style={S.td}><strong>$32M</strong></td></tr>
-          <tr><td style={S.td}><strong>2029 (Year 3)</strong></td><td style={S.td}>$11B</td><td style={S.td}>$94M</td><td style={S.td}>$14M</td><td style={S.td}><strong>$108M</strong></td></tr>
-        </tbody>
-      </table>
+      <div style={{ overflowX: "auto" }}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              <th style={S.th}>Year</th>
+              <th style={S.th}>Notional Hedged</th>
+              <th style={S.th}>Hedge Revenue</th>
+              <th style={S.th}>Wallet Revenue</th>
+              <th style={S.th}>Total Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {revRows.map(r => (
+              <tr key={r.label}>
+                <td style={S.td}><strong>{r.label}</strong></td>
+                <td style={S.td}>{fmtUSD(r.notional)}</td>
+                <td style={S.td}>{fmtUSD(r.hedgeRev)}</td>
+                <td style={S.td}>{fmtUSD(r.walletRev)}</td>
+                <td style={{ ...S.td, fontWeight: 700, color: "#1d4ed8" }}>{fmtUSD(r.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <h2 style={S.h2}>Unit Economics</h2>
+      <h2 style={S.h2}>Unit Economics (2027 baseline)</h2>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "10px", margin: "12px 0" }}>
-        <div style={S.stat}><div style={S.statVal}>~0.94%</div><div style={S.statLbl}>Blended take rate (hedge)</div></div>
-        <div style={S.stat}><div style={S.statVal}>$50K</div><div style={S.statLbl}>Avg hedge event notional</div></div>
-        <div style={S.stat}><div style={S.statVal}>$470</div><div style={S.statLbl}>Avg revenue per event</div></div>
+        <div style={S.stat}><div style={S.statVal}>~{blendedTakeRate27}%</div><div style={S.statLbl}>Blended take rate on notional</div></div>
+        <div style={S.stat}><div style={S.statVal}>{fmtUSD(avgNotional27)}</div><div style={S.statLbl}>Avg event notional</div></div>
+        <div style={S.stat}><div style={S.statVal}>{fmtUSD(avgRevPerEvent27)}</div><div style={S.statLbl}>Avg revenue per event</div></div>
         <div style={S.stat}><div style={S.statVal}>14–30d</div><div style={S.statLbl}>Avg hedge duration</div></div>
       </div>
 
-      <h2 style={S.h2}>Revenue Mix</h2>
-      <p style={S.p}>In Year 1 (2027), hedge fees account for approximately <strong>87%</strong> of total revenue, with wallet transfers contributing <strong>13%</strong>. By Year 3, the wallet share grows as cross-border payment volume scales independently of hedge activity.</p>
+      <h2 style={S.h2}>Revenue Mix (2027)</h2>
+      <p style={S.p}>In 2027, hedge fees (including event creation) account for approximately <strong>{hedgePct27}%</strong> of total revenue, with wallet transfers contributing <strong>{walletPct27}%</strong>. By 2030, the wallet share grows as cross-border payment volume scales independently of hedge activity.</p>
 
       <h2 style={S.h2}>Margin Profile</h2>
-      <p style={S.p}>The platform is asset-light — BlockFinaX does not take principal risk. Hedges are fully collateralised by LPs. Revenue is purely fee-based. Gross margins are expected to exceed <strong>80%</strong> at scale, as infrastructure costs (Lisk L2 gas, oracle, hosting) do not scale linearly with volume.</p>
+      <p style={S.p}>The platform is asset-light — BlockFinaX does not take principal risk. Hedges are fully collateralised by LPs. Revenue is purely fee-based. Gross margins reach <strong>{grossMargin30}%</strong> by 2030, as infrastructure costs (Lisk L2 gas, oracle, hosting) scale sub-linearly with volume.</p>
     </div>
   );
 }
@@ -679,49 +717,56 @@ function BoGSandboxDoc() {
 }
 
 function CostBreakdownDoc() {
+  const a = DEFAULT_ANNUALS; // [0]=2026H2 [1]=2027 [2]=2028 [3]=2029 [4]=2030
+
+  function pct(costs: number, rev: number): string {
+    if (rev <= 0) return "n/a";
+    return `${Math.round((costs / rev) * 100)}%`;
+  }
+
   const years = [
     {
       period: "2026 (H2 only)",
-      revenue: "$60K",
-      personnel: "$95K", marketing: "$14K", legal: "$102K", infra: "$6K", ga: "$10K", totalOpEx: "$227K",
-      gas: "$16K", oracle: "$3K", loyalty: "$2K", kyc: "$2K", totalCOGS: "$23K",
-      totalCosts: "$250K", costPct: "n/a",
+      revenue: fmtUSD(a[0].totalRevenue),
+      personnel: fmtUSD(a[0].personnel), marketing: fmtUSD(a[0].marketing), legal: fmtUSD(a[0].legal), infra: fmtUSD(a[0].infraCloud), ga: fmtUSD(a[0].ga), totalOpEx: fmtUSD(a[0].totalOpEx),
+      gas: fmtUSD(a[0].gasCost), oracle: fmtUSD(a[0].oracleCost), loyalty: fmtUSD(a[0].creatorLoyalty), kyc: fmtUSD(a[0].kycCost), totalCOGS: fmtUSD(a[0].totalCOGS),
+      totalCosts: fmtUSD(a[0].totalCosts), costPct: "n/a",
       stage: "Invest", stageColor: "#d97706", stageBg: "#fef3c7",
       note: "Pre-revenue burn phase. Legal & pre-seed setup dominate.",
     },
     {
       period: "2027 (Full Year)",
-      revenue: "$5.5M",
-      personnel: "$552K", marketing: "$750K", legal: "$252K", infra: "$42K", ga: "$63K", totalOpEx: "$1.66M",
-      gas: "$450K", oracle: "$22K", loyalty: "$245K", kyc: "$43K", totalCOGS: "$760K",
-      totalCosts: "$2.42M", costPct: "44%",
+      revenue: fmtUSD(a[1].totalRevenue),
+      personnel: fmtUSD(a[1].personnel), marketing: fmtUSD(a[1].marketing), legal: fmtUSD(a[1].legal), infra: fmtUSD(a[1].infraCloud), ga: fmtUSD(a[1].ga), totalOpEx: fmtUSD(a[1].totalOpEx),
+      gas: fmtUSD(a[1].gasCost), oracle: fmtUSD(a[1].oracleCost), loyalty: fmtUSD(a[1].creatorLoyalty), kyc: fmtUSD(a[1].kycCost), totalCOGS: fmtUSD(a[1].totalCOGS),
+      totalCosts: fmtUSD(a[1].totalCosts), costPct: pct(a[1].totalCosts, a[1].totalRevenue),
       stage: "Scale", stageColor: "#1d4ed8", stageBg: "#dbeafe",
       note: "Series A year. Marketing spend drives wallet growth. Gas & creator loyalty grow with volume.",
     },
     {
       period: "2028 (Full Year)",
-      revenue: "$32M",
-      personnel: "$924K", marketing: "$1.68M", legal: "$300K", infra: "$93K", ga: "$105K", totalOpEx: "$3.10M",
-      gas: "$1.26M", oracle: "$39K", loyalty: "$1.37M", kyc: "$126K", totalCOGS: "$2.80M",
-      totalCosts: "$5.90M", costPct: "18%",
+      revenue: fmtUSD(a[2].totalRevenue),
+      personnel: fmtUSD(a[2].personnel), marketing: fmtUSD(a[2].marketing), legal: fmtUSD(a[2].legal), infra: fmtUSD(a[2].infraCloud), ga: fmtUSD(a[2].ga), totalOpEx: fmtUSD(a[2].totalOpEx),
+      gas: fmtUSD(a[2].gasCost), oracle: fmtUSD(a[2].oracleCost), loyalty: fmtUSD(a[2].creatorLoyalty), kyc: fmtUSD(a[2].kycCost), totalCOGS: fmtUSD(a[2].totalCOGS),
+      totalCosts: fmtUSD(a[2].totalCosts), costPct: pct(a[2].totalCosts, a[2].totalRevenue),
       stage: "Profitable", stageColor: "#16a34a", stageBg: "#dcfce7",
       note: "Break-even achieved. Revenue scales faster than costs. COGS grows with user volume.",
     },
     {
       period: "2029 (Full Year)",
-      revenue: "$108M",
-      personnel: "$1.68M", marketing: "$4.60M", legal: "$444K", infra: "$456K", ga: "$270K", totalOpEx: "$7.45M",
-      gas: "$4.32M", oracle: "$156K", loyalty: "$4.72M", kyc: "$432K", totalCOGS: "$9.63M",
-      totalCosts: "$17.1M", costPct: "16%",
+      revenue: fmtUSD(a[3].totalRevenue),
+      personnel: fmtUSD(a[3].personnel), marketing: fmtUSD(a[3].marketing), legal: fmtUSD(a[3].legal), infra: fmtUSD(a[3].infraCloud), ga: fmtUSD(a[3].ga), totalOpEx: fmtUSD(a[3].totalOpEx),
+      gas: fmtUSD(a[3].gasCost), oracle: fmtUSD(a[3].oracleCost), loyalty: fmtUSD(a[3].creatorLoyalty), kyc: fmtUSD(a[3].kycCost), totalCOGS: fmtUSD(a[3].totalCOGS),
+      totalCosts: fmtUSD(a[3].totalCosts), costPct: pct(a[3].totalCosts, a[3].totalRevenue),
       stage: "High Growth", stageColor: "#7c3aed", stageBg: "#ede9fe",
       note: "Creator loyalty and gas sponsorship dominate COGS — both tied directly to revenue volume.",
     },
     {
       period: "2030 (Full Year)",
-      revenue: "$240M",
-      personnel: "$2.40M", marketing: "$8.80M", legal: "$528K", infra: "$852K", ga: "$432K", totalOpEx: "$13.0M",
-      gas: "$5.94M", oracle: "$330K", loyalty: "$10.0M", kyc: "$594K", totalCOGS: "$16.9M",
-      totalCosts: "$29.9M", costPct: "12%",
+      revenue: fmtUSD(a[4].totalRevenue),
+      personnel: fmtUSD(a[4].personnel), marketing: fmtUSD(a[4].marketing), legal: fmtUSD(a[4].legal), infra: fmtUSD(a[4].infraCloud), ga: fmtUSD(a[4].ga), totalOpEx: fmtUSD(a[4].totalOpEx),
+      gas: fmtUSD(a[4].gasCost), oracle: fmtUSD(a[4].oracleCost), loyalty: fmtUSD(a[4].creatorLoyalty), kyc: fmtUSD(a[4].kycCost), totalCOGS: fmtUSD(a[4].totalCOGS),
+      totalCosts: fmtUSD(a[4].totalCosts), costPct: pct(a[4].totalCosts, a[4].totalRevenue),
       stage: "Mature", stageColor: "#0f766e", stageBg: "#ccfbf1",
       note: "Strong EBITDA margin at scale. Infrastructure costs sub-linear vs revenue growth.",
     },
@@ -780,11 +825,11 @@ function CostBreakdownDoc() {
           </thead>
           <tbody>
             {[
-              { label: "Gas Sponsorship",      vals: ["$450K","$1.26M","$4.32M","$5.94M"], driver: "New wallets × $15/wallet — gasless UX subsidy" },
-              { label: "Oracle / RPC",          vals: ["$22K",  "$39K",  "$156K", "$330K"],  driver: "On-chain settlement infrastructure, scales with pairs" },
-              { label: "Creator Loyalty (5%)",  vals: ["$245K","$1.37M","$4.72M","$10.0M"], driver: "5% of hedge fees paid to event creators" },
-              { label: "KYC / AML",             vals: ["$43K",  "$126K", "$432K", "$594K"],  driver: "AML identity verification at $1.50/wallet" },
-              { label: "Total COGS",            vals: ["$760K","$2.80M","$9.63M","$16.9M"], driver: "", bold: true },
+              { label: "Gas Sponsorship",      vals: [fmtUSD(a[1].gasCost),      fmtUSD(a[2].gasCost),      fmtUSD(a[3].gasCost),      fmtUSD(a[4].gasCost)],      driver: "New wallets × $15/wallet — gasless UX subsidy" },
+              { label: "Oracle / RPC",          vals: [fmtUSD(a[1].oracleCost),   fmtUSD(a[2].oracleCost),   fmtUSD(a[3].oracleCost),   fmtUSD(a[4].oracleCost)],   driver: "On-chain settlement infrastructure, scales with pairs" },
+              { label: "Creator Loyalty (5%)",  vals: [fmtUSD(a[1].creatorLoyalty),fmtUSD(a[2].creatorLoyalty),fmtUSD(a[3].creatorLoyalty),fmtUSD(a[4].creatorLoyalty)], driver: "5% of hedge fees paid to event creators" },
+              { label: "KYC / AML",             vals: [fmtUSD(a[1].kycCost),      fmtUSD(a[2].kycCost),      fmtUSD(a[3].kycCost),      fmtUSD(a[4].kycCost)],      driver: "AML identity verification at $1.50/wallet" },
+              { label: "Total COGS",            vals: [fmtUSD(a[1].totalCOGS),    fmtUSD(a[2].totalCOGS),    fmtUSD(a[3].totalCOGS),    fmtUSD(a[4].totalCOGS)],    driver: "", bold: true },
             ].map(row => (
               <tr key={row.label} style={{ background: row.bold ? "#fff7ed" : undefined }}>
                 <td style={{ ...S.td, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#c2410c" : undefined }}>{row.label}</td>
@@ -809,12 +854,12 @@ function CostBreakdownDoc() {
           </thead>
           <tbody>
             {[
-              { label: "Personnel",     vals: ["$552K","$924K",  "$1.68M","$2.40M"], driver: "Headcount × salary/FTE — lean Africa-based team" },
-              { label: "Marketing/CAC", vals: ["$750K","$1.68M", "$4.60M","$8.80M"], driver: "New wallets × CAC — paid acquisition & partnerships" },
-              { label: "Legal",         vals: ["$252K","$300K",  "$444K", "$528K"],  driver: "Regulatory counsel, sandbox fees, IP, compliance" },
-              { label: "Infra / Cloud", vals: ["$42K", "$93K",   "$456K", "$852K"],  driver: "Hosting, RPC nodes, CDN, monitoring, CI/CD" },
-              { label: "G&A",           vals: ["$63K", "$105K",  "$270K", "$432K"],  driver: "Office, finance ops, tooling, HR, insurance" },
-              { label: "Total OpEx",    vals: ["$1.66M","$3.10M","$7.45M","$13.0M"], driver: "", bold: true },
+              { label: "Personnel",     vals: [fmtUSD(a[1].personnel),  fmtUSD(a[2].personnel),  fmtUSD(a[3].personnel),  fmtUSD(a[4].personnel)],  driver: "Headcount × salary/FTE — lean Africa-based team" },
+              { label: "Marketing/CAC", vals: [fmtUSD(a[1].marketing),  fmtUSD(a[2].marketing),  fmtUSD(a[3].marketing),  fmtUSD(a[4].marketing)],  driver: "New wallets × CAC — paid acquisition & partnerships" },
+              { label: "Legal",         vals: [fmtUSD(a[1].legal),      fmtUSD(a[2].legal),      fmtUSD(a[3].legal),      fmtUSD(a[4].legal)],      driver: "Regulatory counsel, sandbox fees, IP, compliance" },
+              { label: "Infra / Cloud", vals: [fmtUSD(a[1].infraCloud), fmtUSD(a[2].infraCloud), fmtUSD(a[3].infraCloud), fmtUSD(a[4].infraCloud)], driver: "Hosting, RPC nodes, CDN, monitoring, CI/CD" },
+              { label: "G&A",           vals: [fmtUSD(a[1].ga),         fmtUSD(a[2].ga),         fmtUSD(a[3].ga),         fmtUSD(a[4].ga)],         driver: "Office, finance ops, tooling, HR, insurance" },
+              { label: "Total OpEx",    vals: [fmtUSD(a[1].totalOpEx),  fmtUSD(a[2].totalOpEx),  fmtUSD(a[3].totalOpEx),  fmtUSD(a[4].totalOpEx)],  driver: "", bold: true },
             ].map(row => (
               <tr key={row.label} style={{ background: row.bold ? "#f5f3ff" : undefined }}>
                 <td style={{ ...S.td, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#7c3aed" : undefined }}>{row.label}</td>
@@ -828,29 +873,32 @@ function CostBreakdownDoc() {
 
       {/* Cost composition bars */}
       <h2 style={S.h2}>Cost Composition — 2027 vs 2030</h2>
-      <p style={S.p}>As revenue grows 44× from 2027 to 2030, the cost mix shifts: personnel dominates early, while creator loyalty and gas (both volume-linked) grow to represent the majority of COGS at scale.</p>
+      {(() => {
+        const revenueGrowth = a[0].totalRevenue > 0 ? Math.round(a[4].totalRevenue / a[1].totalRevenue) : 0;
+        return <p style={S.p}>As revenue grows {revenueGrowth}× from 2027 to 2030, the cost mix shifts: personnel dominates early, while creator loyalty and gas (both volume-linked) grow to represent the majority of COGS at scale.</p>;
+      })()}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", margin: "12px 0" }}>
         {[
           {
-            year: "2027", total: 2.42,
+            year: "2027", total27: a[1].totalCosts,
             items: [
-              { label: "Marketing/CAC", val: 0.75,  pct: 31, color: "#a855f7" },
-              { label: "Personnel",     val: 0.552, pct: 23, color: "#3b82f6" },
-              { label: "Creator Loyalty", val: 0.245, pct: 10, color: "#ec4899" },
-              { label: "Gas Sponsorship", val: 0.45,  pct: 19, color: "#f97316" },
-              { label: "Legal",         val: 0.252, pct: 10, color: "#f59e0b" },
-              { label: "Other",         val: 0.171, pct: 7,  color: "#94a3b8" },
-            ],
+              { label: "Marketing/CAC",   raw: a[1].marketing,      color: "#a855f7" },
+              { label: "Gas Sponsorship", raw: a[1].gasCost,        color: "#f97316" },
+              { label: "Personnel",       raw: a[1].personnel,      color: "#3b82f6" },
+              { label: "Legal",           raw: a[1].legal,          color: "#f59e0b" },
+              { label: "Creator Loyalty", raw: a[1].creatorLoyalty, color: "#ec4899" },
+              { label: "Other",           raw: a[1].oracleCost + a[1].kycCost + a[1].infraCloud + a[1].ga, color: "#94a3b8" },
+            ].map(i => ({ ...i, pct: a[1].totalCosts > 0 ? Math.round((i.raw / a[1].totalCosts) * 100) : 0 })),
           },
           {
-            year: "2030", total: 29.9,
+            year: "2030", total27: a[4].totalCosts,
             items: [
-              { label: "Creator Loyalty", val: 10.0, pct: 33, color: "#ec4899" },
-              { label: "Marketing/CAC", val: 8.8,  pct: 29, color: "#a855f7" },
-              { label: "Gas Sponsorship", val: 5.94, pct: 20, color: "#f97316" },
-              { label: "Personnel",     val: 2.4,  pct: 8,  color: "#3b82f6" },
-              { label: "Other",         val: 2.76, pct: 10, color: "#94a3b8" },
-            ],
+              { label: "Creator Loyalty", raw: a[4].creatorLoyalty, color: "#ec4899" },
+              { label: "Marketing/CAC",   raw: a[4].marketing,      color: "#a855f7" },
+              { label: "Gas Sponsorship", raw: a[4].gasCost,        color: "#f97316" },
+              { label: "Personnel",       raw: a[4].personnel,      color: "#3b82f6" },
+              { label: "Other",           raw: a[4].oracleCost + a[4].kycCost + a[4].infraCloud + a[4].ga + a[4].legal, color: "#94a3b8" },
+            ].map(i => ({ ...i, pct: a[4].totalCosts > 0 ? Math.round((i.raw / a[4].totalCosts) * 100) : 0 })),
           },
         ].map(({ year, items }) => (
           <div key={year} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px" }}>
@@ -870,21 +918,21 @@ function CostBreakdownDoc() {
       {/* Key efficiency metrics */}
       <h2 style={S.h2}>Cost Efficiency Metrics</h2>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "10px", margin: "12px 0" }}>
-        <div style={S.stat}><div style={S.statVal}>$2.42M</div><div style={S.statLbl}>Total costs Year 1 (2027)</div></div>
-        <div style={S.stat}><div style={S.statVal}>12%</div><div style={S.statLbl}>Cost/Revenue ratio by 2030</div></div>
-        <div style={S.stat}><div style={S.statVal}>$96</div><div style={S.statLbl}>Cost per hedge event (2027)</div></div>
-        <div style={S.stat}><div style={S.statVal}>$19</div><div style={S.statLbl}>Cost per hedge event (2030)</div></div>
+        <div style={S.stat}><div style={S.statVal}>{fmtUSD(a[1].totalCosts)}</div><div style={S.statLbl}>Total costs 2027 (Year 1)</div></div>
+        <div style={S.stat}><div style={S.statVal}>{a[4].totalRevenue > 0 ? Math.round((a[4].totalCosts / a[4].totalRevenue) * 100) : 0}%</div><div style={S.statLbl}>Cost/Revenue ratio by 2030</div></div>
+        <div style={S.stat}><div style={S.statVal}>{a[1].totalEvents > 0 ? `$${Math.round(a[1].totalCosts / a[1].totalEvents)}` : "—"}</div><div style={S.statLbl}>Cost per hedge event (2027)</div></div>
+        <div style={S.stat}><div style={S.statVal}>{a[4].totalEvents > 0 ? `$${Math.round(a[4].totalCosts / a[4].totalEvents)}` : "—"}</div><div style={S.statLbl}>Cost per hedge event (2030)</div></div>
       </div>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Metric</th><th style={S.th}>2027</th><th style={S.th}>2028</th><th style={S.th}>2029</th><th style={S.th}>2030</th></tr></thead>
         <tbody>
           {[
-            { label: "Total Costs",            vals: ["$2.42M","$5.90M","$17.1M","$29.9M"] },
-            { label: "Cost per Hedge Event",   vals: ["$96",   "$43",   "$22",   "$19"] },
-            { label: "Cost per New Wallet",    vals: ["$80",   "$70",   "$60",   "$51"] },
-            { label: "Personnel % Total Cost", vals: ["23%",   "16%",   "10%",   "8%"] },
-            { label: "Gross Margin",           vals: ["86%",   "91%",   "91%",   "93%"] },
-            { label: "EBITDA Margin",          vals: ["56%",   "80%",   "83%",   "88%"] },
+            { label: "Total Costs",            vals: [fmtUSD(a[1].totalCosts), fmtUSD(a[2].totalCosts), fmtUSD(a[3].totalCosts), fmtUSD(a[4].totalCosts)] },
+            { label: "Cost per Hedge Event",   vals: [a[1],a[2],a[3],a[4]].map(y => y.totalEvents > 0 ? `$${Math.round(y.totalCosts / y.totalEvents)}` : "—") },
+            { label: "Cost per New Wallet",    vals: [a[1],a[2],a[3],a[4]].map(y => y.totalNewWallets > 0 ? `$${Math.round(y.totalCosts / y.totalNewWallets)}` : "—") },
+            { label: "Personnel % Total Cost", vals: [a[1],a[2],a[3],a[4]].map(y => y.totalCosts > 0 ? `${Math.round((y.personnel / y.totalCosts) * 100)}%` : "—") },
+            { label: "Gross Margin",           vals: [a[1],a[2],a[3],a[4]].map(y => y.totalRevenue > 0 ? `${Math.round((y.grossProfit / y.totalRevenue) * 100)}%` : "—") },
+            { label: "EBITDA Margin",          vals: [a[1],a[2],a[3],a[4]].map(y => y.totalRevenue > 0 ? `${Math.round((y.ebitda / y.totalRevenue) * 100)}%` : "—") },
           ].map(row => (
             <tr key={row.label}>
               <td style={{ ...S.td, fontWeight: 600 }}>{row.label}</td>
