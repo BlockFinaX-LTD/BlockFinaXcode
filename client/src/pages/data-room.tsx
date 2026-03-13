@@ -563,7 +563,6 @@ function CompetitiveLandscapeDoc() {
     ["Transparent pricing",   "✅ On-chain",    "❌ Opaque",   "❌ Opaque",  "⚡ Varies",   "✅ On-chain"],
     ["Instant settlement",    "✅ Auto",        "3–5 days",   "1–3 days",   "✅ On-chain", "✅ On-chain"],
     ["SME accessible",        "✅",             "❌ Ignored",  "❌ Opaque",  "❌ Complex",  "⚡ Partial"],
-    ["Regulatory engagement", "✅ BoG sandbox", "✅ Licensed", "⚡ Varies",  "❌",          "❌"],
   ];
 
   return (
