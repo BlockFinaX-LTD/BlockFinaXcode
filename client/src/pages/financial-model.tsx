@@ -438,6 +438,39 @@ function downloadExcel(
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPUTE ANNUAL SUMMARY (from live model)
 // ─────────────────────────────────────────────────────────────────────────────
+function computeAnnualCosts(model: MonthRow[]) {
+  return ANNUAL_GROUPS.map(g => {
+    const ms = model.slice(g.range[0], g.range[1]);
+    const sum = (f: (r: MonthRow) => number) => ms.reduce((s, r) => s + f(r), 0);
+    const personnel      = sum(r => r.personnel);
+    const marketing      = sum(r => r.marketing);
+    const legal          = sum(r => r.legal);
+    const infraCloud     = sum(r => r.infraCloud);
+    const ga             = sum(r => r.ga);
+    const gas            = sum(r => r.gasCost);
+    const oracle         = sum(r => r.oracleCost);
+    const creatorLoyalty = sum(r => r.creatorLoyalty);
+    const kyc            = sum(r => r.kycCost);
+    const totalCOGS      = gas + oracle + creatorLoyalty + kyc;
+    const totalOpEx      = personnel + marketing + legal + infraCloud + ga;
+    const totalCosts     = totalCOGS + totalOpEx;
+    const revenue        = sum(r => r.totalRevenue);
+    const events         = sum(r => r.events);
+    const newWallets     = sum(r => r.newWallets);
+    return {
+      period: g.label, revenue, events, newWallets,
+      personnel, marketing, legal, infraCloud, ga,
+      gas, oracle, creatorLoyalty, kyc,
+      totalCOGS, totalOpEx, totalCosts,
+      costPct:   revenue > 0 ? (totalCosts  / revenue) * 100 : 0,
+      opexPct:   revenue > 0 ? (totalOpEx   / revenue) * 100 : 0,
+      cogsPct:   revenue > 0 ? (totalCOGS   / revenue) * 100 : 0,
+      costPerEvent:  events     > 0 ? totalCosts / events     : 0,
+      costPerWallet: newWallets > 0 ? totalCosts / newWallets : 0,
+    };
+  });
+}
+
 function computeAnnualSummary(model: MonthRow[]) {
   return ANNUAL_GROUPS.map(g => {
     const ms     = model.slice(g.range[0], g.range[1]);
@@ -473,6 +506,7 @@ export default function FinancialModel() {
 
   const model         = useMemo(() => buildModel(inputs, constants, funding), [inputs, constants, funding]);
   const annualSummary = useMemo(() => computeAnnualSummary(model), [model]);
+  const annualCosts   = useMemo(() => computeAnnualCosts(model),   [model]);
 
   const updateInput = useCallback((i: number, field: keyof InputRow, val: number) => {
     setInputs(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
@@ -593,9 +627,10 @@ export default function FinancialModel() {
 
         {/* ── Main Tabs ── */}
         <Tabs defaultValue="monthly">
-          <TabsList className="bg-white border border-slate-200">
+          <TabsList className="bg-white border border-slate-200 flex-wrap h-auto gap-0.5">
             <TabsTrigger value="monthly"  className="text-xs">Monthly P&L</TabsTrigger>
             <TabsTrigger value="annual"   className="text-xs">Annual Summary</TabsTrigger>
+            <TabsTrigger value="costs"    className="text-xs">Cost Breakdown</TabsTrigger>
             <TabsTrigger value="uniteco"  className="text-xs">IRR & Unit Economics</TabsTrigger>
             <TabsTrigger value="inputs"   className="text-xs font-semibold text-blue-700">✏ Edit Inputs</TabsTrigger>
           </TabsList>
@@ -806,6 +841,201 @@ export default function FinancialModel() {
                 </table>
               </div>
             </Card>
+          </TabsContent>
+
+          {/* ════════════════ COST BREAKDOWN ════════════════ */}
+          <TabsContent value="costs" className="mt-4 space-y-4">
+
+            {/* Annual cost breakdown table */}
+            <Card className="border-slate-200 overflow-hidden">
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-semibold text-slate-700">Annual Cost Breakdown — COGS &amp; OpEx by Year</CardTitle>
+              </CardHeader>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-slate-800 min-w-[700px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left text-xs px-3 py-2 text-slate-600 font-semibold sticky left-0 bg-slate-50 min-w-[200px] border-r border-slate-200">Line Item</th>
+                      {annualCosts.map(r => (
+                        <th key={r.period} className="text-right text-xs px-3 py-2 text-slate-600 font-semibold whitespace-nowrap">{r.period}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Revenue reference */}
+                    <tr className="border-b border-slate-200 bg-blue-50/40">
+                      <td className="text-xs px-3 py-2 font-semibold text-blue-800 sticky left-0 bg-blue-50/40 border-r border-slate-200">Total Revenue</td>
+                      {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono font-semibold text-blue-700">{fmt(r.revenue, true)}</td>)}
+                    </tr>
+
+                    {/* COGS section */}
+                    <tr><td colSpan={annualCosts.length + 1} className="text-[10px] px-3 py-1.5 bg-orange-50 text-orange-700 font-bold uppercase tracking-wider border-y border-orange-200">Cost of Goods Sold (COGS)</td></tr>
+                    {[
+                      { key: 'gas'            as const, label: 'Gas Sponsorship',      tip: 'Platform sponsors $15 ETH gas per new wallet onboarded — enabling friction-free signup.' },
+                      { key: 'oracle'         as const, label: 'Oracle / RPC',         tip: 'On-chain price feed & settlement infrastructure costs (FX, commodity, crypto every 5 min).' },
+                      { key: 'creatorLoyalty' as const, label: 'Creator Loyalty (5%)', tip: '5% of hedge fees distributed to event creators as a protocol loyalty incentive.' },
+                      { key: 'kyc'            as const, label: 'KYC / AML',            tip: '$1.50/wallet AML identity verification required for African market regulatory compliance.' },
+                    ].map(row => (
+                      <tr key={row.key} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="text-xs px-3 py-2 text-slate-600 sticky left-0 bg-white border-r border-slate-100">
+                          <span className="flex items-center gap-1 pl-3">{row.label}<Tip text={row.tip} /></span>
+                        </td>
+                        {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono text-slate-600">{fmt(r[row.key], true)}</td>)}
+                      </tr>
+                    ))}
+                    <tr className="border-b border-orange-200 bg-orange-50/30">
+                      <td className="text-xs px-3 py-2 font-semibold text-orange-800 sticky left-0 bg-orange-50/30 border-r border-slate-200">Total COGS</td>
+                      {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono font-semibold text-orange-700">{fmt(r.totalCOGS, true)}</td>)}
+                    </tr>
+                    <tr className="border-b border-slate-100 bg-orange-50/10">
+                      <td className="text-xs px-3 py-2 text-slate-500 sticky left-0 bg-orange-50/10 border-r border-slate-200 pl-3 italic">COGS as % Revenue</td>
+                      {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono text-slate-500">{pct(r.cogsPct)}</td>)}
+                    </tr>
+
+                    {/* OpEx section */}
+                    <tr><td colSpan={annualCosts.length + 1} className="text-[10px] px-3 py-1.5 bg-purple-50 text-purple-700 font-bold uppercase tracking-wider border-y border-purple-200">Operating Expenses (OpEx)</td></tr>
+                    {[
+                      { key: 'personnel'  as const, label: 'Personnel',       tip: 'Headcount × salary/FTE per month. Lean Africa-based team; scaling from 4 FTE (H2 2026) to 30 FTE (2030).' },
+                      { key: 'marketing'  as const, label: 'Marketing / CAC', tip: 'New wallets × CAC per wallet. Represents paid acquisition, partnerships, and community campaigns.' },
+                      { key: 'legal'      as const, label: 'Legal',           tip: 'Legal counsel, BoG sandbox regulatory fees, IP, contract review, and compliance advisory.' },
+                      { key: 'infraCloud' as const, label: 'Infra / Cloud',   tip: 'Cloud hosting, RPC node access, CDN, monitoring, CI/CD, and database scaling costs.' },
+                      { key: 'ga'         as const, label: 'G&A',             tip: 'General & administrative: office, finance ops, software tools, insurance, HR overhead.' },
+                    ].map(row => (
+                      <tr key={row.key} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="text-xs px-3 py-2 text-slate-600 sticky left-0 bg-white border-r border-slate-100">
+                          <span className="flex items-center gap-1 pl-3">{row.label}<Tip text={row.tip} /></span>
+                        </td>
+                        {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono text-slate-600">{fmt(r[row.key], true)}</td>)}
+                      </tr>
+                    ))}
+                    <tr className="border-b border-purple-200 bg-purple-50/30">
+                      <td className="text-xs px-3 py-2 font-semibold text-purple-800 sticky left-0 bg-purple-50/30 border-r border-slate-200">Total OpEx</td>
+                      {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono font-semibold text-purple-700">{fmt(r.totalOpEx, true)}</td>)}
+                    </tr>
+                    <tr className="border-b border-slate-100 bg-purple-50/10">
+                      <td className="text-xs px-3 py-2 text-slate-500 sticky left-0 bg-purple-50/10 border-r border-slate-200 pl-3 italic">OpEx as % Revenue</td>
+                      {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2 text-right font-mono text-slate-500">{pct(r.opexPct)}</td>)}
+                    </tr>
+
+                    {/* Totals */}
+                    <tr className="border-b border-slate-300 bg-slate-100">
+                      <td className="text-xs px-3 py-2.5 font-bold text-slate-900 sticky left-0 bg-slate-100 border-r border-slate-300">Total Costs (COGS + OpEx)</td>
+                      {annualCosts.map(r => <td key={r.period} className="text-xs px-3 py-2.5 text-right font-mono font-bold text-slate-800">{fmt(r.totalCosts, true)}</td>)}
+                    </tr>
+                    <tr className="border-b border-slate-100">
+                      <td className="text-xs px-3 py-2 text-slate-500 sticky left-0 bg-white border-r border-slate-100 italic">Total Costs as % Revenue</td>
+                      {annualCosts.map(r => <td key={r.period} className={`text-xs px-3 py-2 text-right font-mono font-semibold ${r.costPct > 100 ? 'text-red-600' : r.costPct > 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{pct(r.costPct)}</td>)}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Cost composition stacked bars */}
+            <Card className="border-slate-200">
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-semibold text-slate-700">Cost Composition by Year — Stacked View</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pb-5">
+                {/* Legend */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] text-slate-600">
+                  {[
+                    { color: 'bg-blue-500',    label: 'Personnel'       },
+                    { color: 'bg-purple-500',  label: 'Marketing'       },
+                    { color: 'bg-amber-400',   label: 'Legal'           },
+                    { color: 'bg-cyan-500',    label: 'Infra / Cloud'   },
+                    { color: 'bg-slate-400',   label: 'G&A'             },
+                    { color: 'bg-orange-500',  label: 'Gas Sponsorship' },
+                    { color: 'bg-indigo-500',  label: 'Oracle / RPC'    },
+                    { color: 'bg-pink-500',    label: 'Creator Loyalty' },
+                    { color: 'bg-red-400',     label: 'KYC / AML'      },
+                  ].map(({ color, label }) => (
+                    <span key={label} className="flex items-center gap-1">
+                      <span className={`w-2.5 h-2.5 rounded-sm inline-block ${color}`} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+
+                {annualCosts.map(r => {
+                  const tc = r.totalCosts || 1;
+                  const segments = [
+                    { pct: (r.personnel      / tc) * 100, color: 'bg-blue-500',   label: 'Personnel',       val: r.personnel      },
+                    { pct: (r.marketing      / tc) * 100, color: 'bg-purple-500', label: 'Marketing',       val: r.marketing      },
+                    { pct: (r.legal          / tc) * 100, color: 'bg-amber-400',  label: 'Legal',           val: r.legal          },
+                    { pct: (r.infraCloud     / tc) * 100, color: 'bg-cyan-500',   label: 'Infra/Cloud',     val: r.infraCloud     },
+                    { pct: (r.ga             / tc) * 100, color: 'bg-slate-400',  label: 'G&A',             val: r.ga             },
+                    { pct: (r.gas            / tc) * 100, color: 'bg-orange-500', label: 'Gas',             val: r.gas            },
+                    { pct: (r.oracle         / tc) * 100, color: 'bg-indigo-500', label: 'Oracle',          val: r.oracle         },
+                    { pct: (r.creatorLoyalty / tc) * 100, color: 'bg-pink-500',   label: 'Creator Loyalty', val: r.creatorLoyalty },
+                    { pct: (r.kyc            / tc) * 100, color: 'bg-red-400',    label: 'KYC',             val: r.kyc            },
+                  ];
+                  return (
+                    <div key={r.period} className="space-y-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-xs font-semibold text-slate-700">{r.period}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">{fmt(r.totalCosts, true)} total · {pct(r.costPct)} of revenue</span>
+                      </div>
+                      <div className="flex h-6 w-full rounded overflow-hidden gap-px bg-slate-100">
+                        {segments.filter(s => s.pct > 0.5).map(s => (
+                          <div
+                            key={s.label}
+                            title={`${s.label}: ${fmt(s.val, true)} (${s.pct.toFixed(1)}%)`}
+                            className={`${s.color} cursor-help transition-opacity hover:opacity-80`}
+                            style={{ width: `${s.pct}%` }}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex gap-3 flex-wrap text-[9px] text-slate-500">
+                        {segments.filter(s => s.pct > 0.5).map(s => (
+                          <span key={s.label}>{s.label} {s.pct.toFixed(0)}%</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            {/* Cost efficiency metrics */}
+            <Card className="border-slate-200">
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-semibold text-slate-700">Cost Efficiency Metrics — By Year</CardTitle>
+              </CardHeader>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-slate-800 min-w-[600px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left text-xs px-3 py-2 text-slate-600 font-semibold sticky left-0 bg-slate-50 min-w-[220px] border-r border-slate-200">Metric</th>
+                      {annualCosts.map(r => (
+                        <th key={r.period} className="text-right text-xs px-3 py-2 text-slate-600 font-semibold whitespace-nowrap">{r.period}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { label: 'Total Costs', tip: 'Sum of all COGS and OpEx for the period.', fmt_: (r: typeof annualCosts[0]) => fmt(r.totalCosts, true), bold: true },
+                      { label: 'COGS', tip: 'Gas + Oracle + Creator Loyalty + KYC.', fmt_: (r: typeof annualCosts[0]) => fmt(r.totalCOGS, true) },
+                      { label: 'OpEx', tip: 'Personnel + Marketing + Legal + Infra + G&A.', fmt_: (r: typeof annualCosts[0]) => fmt(r.totalOpEx, true) },
+                      { label: 'Cost as % Revenue', tip: 'Total costs as a share of total revenue. <100% = profitable. Targeting 60-70% at scale.', fmt_: (r: typeof annualCosts[0]) => pct(r.costPct) },
+                      { label: 'Personnel as % Total Costs', tip: 'How much of the total cost structure is people. High early; should fall as revenue scales faster than team.', fmt_: (r: typeof annualCosts[0]) => r.totalCosts > 0 ? pct((r.personnel / r.totalCosts) * 100) : '—' },
+                      { label: 'Cost per Hedge Event', tip: 'Total costs ÷ total hedge events in the period. Measures unit-level cost efficiency.', fmt_: (r: typeof annualCosts[0]) => r.events > 0 ? `$${r.costPerEvent.toFixed(2)}` : '—' },
+                      { label: 'Cost per New Wallet', tip: 'Total costs ÷ new wallets onboarded. Should decline sharply as platform scales and marketing efficiency improves.', fmt_: (r: typeof annualCosts[0]) => r.newWallets > 0 ? `$${Math.round(r.costPerWallet)}` : '—' },
+                    ].map(row => (
+                      <tr key={row.label} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className={`text-xs px-3 py-2 sticky left-0 border-r border-slate-100 ${row.bold ? 'font-semibold text-slate-800 bg-slate-50' : 'text-slate-600 bg-white'}`}>
+                          <span className="flex items-center gap-1">{row.label}<Tip text={row.tip} /></span>
+                        </td>
+                        {annualCosts.map(r => (
+                          <td key={r.period} className={`text-xs px-3 py-2 text-right font-mono ${row.bold ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>{row.fmt_(r)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
           </TabsContent>
 
           {/* ════════════════ IRR & UNIT ECONOMICS ════════════════ */}
