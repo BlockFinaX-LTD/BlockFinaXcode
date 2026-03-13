@@ -1695,9 +1695,14 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
           <div style={{ marginTop: "28px", padding: "14px", background: "#f1f5f9", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
             <p style={{ fontSize: "12px", fontWeight: 600, color: "#334155", marginBottom: "3px" }}>Need something else?</p>
             <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "10px" }}>Request documents or schedule a call.</p>
-            <a href="mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20Investor%20Request" style={{ fontSize: "13px", color: "#2563eb", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", textDecoration: "none" }}>
-              Contact us <ExternalLink style={{ width: "11px", height: "11px" }} />
-            </a>
+            <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+              <a href="mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20Investor%20Request" style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600, display: "flex", alignItems: "center", gap: "5px", textDecoration: "none", padding: "7px 10px", background: "white", border: "1px solid #dbeafe", borderRadius: "7px" }}>
+                <ExternalLink style={{ width: "11px", height: "11px", flexShrink: 0 }} /> Send an email
+              </a>
+              <a href="https://calendly.com/anthonykumako8/30min" target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#fff", fontWeight: 600, display: "flex", alignItems: "center", gap: "5px", textDecoration: "none", padding: "7px 10px", background: "#2563eb", border: "1px solid #2563eb", borderRadius: "7px" }}>
+                <Calendar style={{ width: "11px", height: "11px", flexShrink: 0 }} /> Book a call
+              </a>
+            </div>
           </div>
         </aside>
 
