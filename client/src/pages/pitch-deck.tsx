@@ -50,19 +50,33 @@ export default function PitchDeck() {
     try {
       setIsDownloading(true);
       const originalSlide = currentSlide;
-      toast({ title: "Generating PDF", description: `Capturing ${slides.length} slides...` });
+      toast({ title: "Generating PDF", description: `Capturing ${slides.length} slides — please wait...` });
 
       const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [1920, 1080] });
 
       for (let i = 0; i < slides.length; i++) {
         setDirection(0);
         setCurrentSlide(i);
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // Wait long enough for Framer Motion animations (max delay 0.7s + duration 0.3s + buffer)
+        await new Promise(resolve => setTimeout(resolve, 1400));
         const el = document.querySelector('[data-slide-container]');
         if (!el) throw new Error("Slide container not found");
         const canvas = await html2canvas(el as HTMLElement, {
-          scale: 1.5, backgroundColor: "#0c1222", logging: false, useCORS: true, allowTaint: true,
-          windowWidth: 1920, windowHeight: 1080, foreignObjectRendering: false, imageTimeout: 0,
+          scale: 2,
+          backgroundColor: "#0c1222",
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          windowWidth: 1920,
+          windowHeight: 1080,
+          foreignObjectRendering: true,
+          imageTimeout: 15000,
+          onclone: (_doc, cloned) => {
+            // Remove navigation UI elements so they don't appear on slides
+            cloned.querySelectorAll('[data-pdf-hide]').forEach(el => {
+              (el as HTMLElement).style.display = 'none';
+            });
+          },
         });
         const imgData = canvas.toDataURL("image/png", 1.0);
         if (i > 0) pdf.addPage();
@@ -90,7 +104,7 @@ export default function PitchDeck() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col" style={{ background: 'linear-gradient(135deg, #0c1222 0%, #162040 50%, #0f1a30 100%)' }} data-slide-container>
-      <div className="fixed top-6 right-6 z-50 flex items-center gap-2">
+      <div className="fixed top-6 right-6 z-50 flex items-center gap-2" data-pdf-hide>
         <Link href="/">
           <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white/70 border border-white/10">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -459,7 +473,7 @@ export default function PitchDeck() {
         </AnimatePresence>
       </div>
 
-      <div className="flex items-center justify-between px-16 pb-6">
+      <div className="flex items-center justify-between px-16 pb-6" data-pdf-hide>
         <Button onClick={prevSlide} variant="ghost" size="icon" className="text-slate-500 hover:text-white hover:bg-white/10" disabled={currentSlide === 0} data-testid="button-prev-slide">
           <ChevronLeft className="w-5 h-5" />
         </Button>
