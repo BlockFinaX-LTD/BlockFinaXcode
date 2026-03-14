@@ -1284,6 +1284,45 @@ export default function FinancialModel() {
                   </div>
                 </div>
 
+                {/* Growth inflection points */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">G · User Growth — What Drives Each Inflection Point</p>
+                  <p className="text-slate-500 mb-3 text-xs">The wallet growth curve accelerates in four distinct steps, each tied to a specific event. This section documents the assumptions behind each jump so they can be independently verified.</p>
+                  <div className="space-y-3">
+                    {[
+                      {
+                        date: 'Jan 2027 — Seed Round ($1.5M)',
+                        color: 'text-blue-700',
+                        bg: 'bg-blue-50 border-blue-100',
+                        detail: 'New wallets jump from ~600 → ~800/month. The seed capital funds 3 additional hires (team: 6 → 9), enabling the first meaningful paid acquisition push. CAC remains high at ~$38 — this is pure top-of-funnel spend with no organic leverage yet.',
+                      },
+                      {
+                        date: 'Jan 2028 — Series A ($8M)',
+                        color: 'text-indigo-700',
+                        bg: 'bg-indigo-50 border-indigo-100',
+                        detail: "New wallets jump from ~10,200 → ~14,000/month. Series A unlocks a 25-person team and multi-country expansion into Nigeria, Kenya, and Côte d'Ivoire. CAC is falling organically ($23–26) as early adopters begin referring trading partners.",
+                      },
+                      {
+                        date: 'Mid-2028 — Viral Tipping Point (sharpest acceleration)',
+                        color: 'text-emerald-700',
+                        bg: 'bg-emerald-50 border-emerald-100',
+                        detail: "Three forces converge simultaneously: (1) Bank of Ghana sandbox approval — regulatory credibility converts trust-skeptical SMEs waiting for a licensed product; (2) Referral flywheel — users actively refer trading partners, driving CAC from $26 to $10–15 in under 6 months; (3) Crypto community flywheel — blockchain-native West African users spread adoption organically. Comparable to Wave's trajectory ($38 → $6 CAC in 18 months after West Africa critical mass) and OPay Nigeria ($40 → $5 in 24 months). New wallets grow from ~30K to ~72K/month across this window.",
+                      },
+                      {
+                        date: 'Jul 2029 — Series B ($20M)',
+                        color: 'text-amber-700',
+                        bg: 'bg-amber-50 border-amber-100',
+                        detail: 'New wallets jump from ~120K → ~132K/month. Product-market fit is proven and the referral flywheel is established. Series B funds deeper penetration across East and Southern Africa, infrastructure scaling, and enterprise corridor partnerships. CAC steady-state target: $4–5 by 2030.',
+                      },
+                    ].map(r => (
+                      <div key={r.date} className={`rounded-lg p-3 border ${r.bg}`}>
+                        <p className={`font-semibold text-[11px] mb-1 ${r.color}`}>{r.date}</p>
+                        <p className="text-slate-600 text-xs leading-relaxed">{r.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </CardContent>
             </Card>
           </TabsContent>
