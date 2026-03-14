@@ -1809,32 +1809,32 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
 // Share structure tied to $5M pre-money valuation at Pre-Seed ($0.067/share)
 // Dilution waterfall: Pre-Seed 9.1% → Seed 13% → Series A 24% → Series B 25%
 const CAP_TABLE_D = {
-  notes: "Share price at Pre-Seed: $0.067 ($5M pre-money ÷ 75M founding shares). All founder and option pool shares subject to vesting. Investor allocations subject to final term sheet. AYAHQ shares issued for incubation services.",
-  total_authorized: "200000000",
+  notes: "Share price at Pre-Seed: $11.12/share ($5M pre-money ÷ 449,500 founding shares). All founder and option pool shares subject to vesting. Investor allocations subject to final term sheet. AYAHQ shares issued for incubation services.",
+  total_authorized: "1000000",
   founders: [
-    { name: "Anthony Kumako", role: "CEO & Co-Founder", shares: "52500000", vesting: "4-year, 1-year cliff" },
-    { name: "[Co-Founder 2]", role: "[Role]",            shares: "12500000", vesting: "4-year, 1-year cliff" },
+    { name: "Anthony Kumako", role: "CEO & Co-Founder", shares: "315000", vesting: "4-year, 1-year cliff" },
+    { name: "[Co-Founder 2]", role: "[Role]",            shares: "75000",  vesting: "4-year, 1-year cliff" },
   ],
   option_pool: [
-    { name: "Employee Option Pool", shares: "9250000", vesting: "4-year, 1-year cliff per grant" },
+    { name: "Employee Option Pool", shares: "55000", vesting: "4-year, 1-year cliff per grant" },
   ],
   investors: [
-    { name: "AYAHQ",               round: "Incubation", amount: "Services", shares: "750000",  vesting: "2-year, 6-month cliff" },
-    { name: "[Pre-Seed Investor]", round: "Pre-Seed",   amount: "$500K",    shares: "7500000",  vesting: "None" },
-    { name: "[Seed Investor]",     round: "Seed",       amount: "$1.5M",    shares: "12375000", vesting: "None" },
-    { name: "[Series A Investor]", round: "Series A",   amount: "$8M",      shares: "30300000", vesting: "None" },
-    { name: "[Series B Investor]", round: "Series B",   amount: "$20M",     shares: "41736000", vesting: "None" },
+    { name: "AYAHQ",               round: "Incubation", amount: "Services", shares: "4500",  vesting: "2-year, 6-month cliff" },
+    { name: "[Pre-Seed Investor]", round: "Pre-Seed",   amount: "$500K",    shares: "45000", vesting: "None" },
+    { name: "[Seed Investor]",     round: "Seed",       amount: "$1.5M",    shares: "74000", vesting: "None" },
+    { name: "[Series A Investor]", round: "Series A",   amount: "$8M",      shares: "182000", vesting: "None" },
+    { name: "[Series B Investor]", round: "Series B",   amount: "$20M",     shares: "249500", vesting: "None" },
   ],
 };
 type CapTableData = typeof CAP_TABLE_D;
 
-// Dilution waterfall: cumulative shares issued at each round
+// Dilution waterfall: cumulative shares issued at each round (1M total authorized)
 const DILUTION_ROUNDS = [
-  { round: "Founding",  preMoney: "—",    raise: "—",    newShares: 75_000_000,  totalShares: 75_000_000,  pricePerShare: "—"      },
-  { round: "Pre-Seed",  preMoney: "$5M",  raise: "$500K", newShares: 7_500_000,  totalShares: 82_500_000,  pricePerShare: "$0.067" },
-  { round: "Seed",      preMoney: "$10M", raise: "$1.5M", newShares: 12_375_000, totalShares: 94_875_000,  pricePerShare: "$0.121" },
-  { round: "Series A",  preMoney: "$25M", raise: "$8M",   newShares: 30_300_000, totalShares: 125_175_000, pricePerShare: "$0.264" },
-  { round: "Series B",  preMoney: "$60M", raise: "$20M",  newShares: 41_736_000, totalShares: 166_911_000, pricePerShare: "$0.479" },
+  { round: "Founding",  preMoney: "—",    raise: "—",     newShares: 449_500, totalShares: 449_500,   pricePerShare: "—"       },
+  { round: "Pre-Seed",  preMoney: "$5M",  raise: "$500K", newShares: 45_000,  totalShares: 494_500,   pricePerShare: "$11.12"  },
+  { round: "Seed",      preMoney: "$10M", raise: "$1.5M", newShares: 74_000,  totalShares: 568_500,   pricePerShare: "$20.27"  },
+  { round: "Series A",  preMoney: "$25M", raise: "$8M",   newShares: 182_000, totalShares: 750_500,   pricePerShare: "$43.96"  },
+  { round: "Series B",  preMoney: "$60M", raise: "$20M",  newShares: 249_500, totalShares: 1_000_000, pricePerShare: "$80.16"  },
 ];
 
 const parseShares = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
@@ -2045,7 +2045,7 @@ function CapTableDoc({ token }: { token: string }) {
           <th style={hStyle}>CEO Ownership</th>
         </tr></thead>
         <tbody>{DILUTION_ROUNDS.map((r, i) => {
-          const ceoPct = (52_500_000 / r.totalShares * 100).toFixed(1) + "%";
+          const ceoPct = (315_000 / r.totalShares * 100).toFixed(1) + "%";
           const isHighlight = i === 1;
           return (
             <tr key={i} style={{ background: isHighlight ? "#eff6ff" : undefined }}>
