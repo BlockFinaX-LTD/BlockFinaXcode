@@ -90,7 +90,7 @@ function downloadExcel(
     [''],
     ['CONSTANTS', '', 'Value', 'Description'],
     ['Hedge Yield (net)', '', constants.hedgeYield, '= events × notional × yield → hedge fees'],
-    ['Gas / Hedge Event ($)', '', constants.gasPerEvent,  '~6 on-chain txns × $0.25 Lisk L2 gas = $1.50'],
+    ['Gas / Hedge Event ($)', '', constants.gasPerEvent,  'Lisk L2 (OP Stack) — ~6 txns × ~$0.008 each = ~$0.05'],
     ['Gas Cost / Wallet ($)', '', constants.gasPerWallet, 'One-time wallet creation gas, sponsored by platform'],
     ['D&A / Month ($)', '', constants.daMonthly, 'Audit + infra setup amortised over 24 months'],
     ['Tax Rate', '', constants.taxRate, 'Applied only on profitable months (EBT > 0)'],
@@ -525,7 +525,7 @@ export default function FinancialModel() {
 
                     <tr><td colSpan={slice.length + 1} className={secCls}>Cost of Goods Sold</td></tr>
                     {[
-                      { label: 'Gas Costs',             tip: 'Two components: (1) Wallet onboarding gas — platform sponsors gas per new wallet for frictionless UX. (2) Hedge execution gas — each hedge event requires ~6 on-chain transactions (createEvent, deposit, buyProtection, settleEvent, claimPayout, etc.). Both scale with the business: more wallets = more onboarding gas; more hedge events = more execution gas. Formula: (newWallets × $3) + (events × $1.50).', vals: slice.map(r => r.gasCost) },
+                      { label: 'Gas Costs',             tip: 'Two components: (1) Wallet onboarding gas — platform sponsors gas per new wallet for frictionless UX. (2) Hedge execution gas — each hedge event requires ~6 on-chain transactions (createEvent, deposit, buyProtection, settleEvent, claimPayout, etc.). On Lisk L2 (OP Stack), each transaction costs ~$0.008, so ~$0.05 per full event lifecycle. Formula: (newWallets × $3) + (events × $0.05).', vals: slice.map(r => r.gasCost) },
                       { label: 'Oracle / RPC',          tip: 'One-touch settlement infrastructure. The oracle polls FX, commodity, and crypto prices every 5 minutes and auto-settles contracts when the strike price is hit.', vals: slice.map(r => r.oracleCost) },
                       { label: 'Creator Loyalty (5%)',  tip: '5% of hedge protocol fees distributed to event creators as a loyalty reward. Incentivises experienced traders and institutions to create high-quality hedge events that attract LPs and hedgers.', vals: slice.map(r => r.creatorLoyalty) },
                       { label: 'KYC / AML Compliance', tip: 'Per-wallet AML/KYC identity verification cost ($1.50/wallet). Required for regulatory compliance in all African markets — includes identity checks, sanctions screening, and ongoing monitoring.', vals: slice.map(r => r.kycCost) },

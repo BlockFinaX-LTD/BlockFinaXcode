@@ -85,7 +85,7 @@ export const MONTH_LABELS = [
 export const INITIAL_CONSTANTS: Constants = {
   hedgeYield: 0.007,
   eventCreationFee: 25,
-  gasPerEvent: 1.50,            // Lisk L2: ~6 txns/event lifecycle × ~$0.25 avg gas = $1.50
+  gasPerEvent: 0.05,            // Lisk L2 (OP Stack): ~6 txns × ~$0.008 per txn = ~$0.05
   gasPerWallet: 3,
   kycPerWallet: 1.50,
   avgMonthlyTransferUSD: 500,
