@@ -55,7 +55,6 @@ function useEditableDoc<T extends object>(docId: string, token: string, defaults
 function DocEditBar({ editUnlocked, editing, saving, onEdit, onSave, onCancel }: {
   editUnlocked: boolean; editing: boolean; saving: boolean; onEdit: () => void; onSave: () => void; onCancel: () => void;
 }) {
-  if (!editUnlocked) return null;
   const b: React.CSSProperties = { fontSize: "12px", padding: "5px 14px", borderRadius: "6px", cursor: "pointer" };
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px", gap: "8px" }}>
@@ -65,8 +64,10 @@ function DocEditBar({ editUnlocked, editing, saving, onEdit, onSave, onCancel }:
           <button onClick={onSave} disabled={saving} style={{ ...b, border: "none", background: "#2563eb", color: "white", fontWeight: 600 }}>{saving ? "Saving…" : "Save"}</button>
         </>
       ) : (
-        <button onClick={onEdit} style={{ ...b, display: "flex", alignItems: "center", gap: "5px", border: "1px solid #e2e8f0", background: "white" }}>
-          <Edit3 style={{ width: "12px", height: "12px" }} /> Edit
+        <button onClick={onEdit} style={{ ...b, display: "flex", alignItems: "center", gap: "5px", border: "1px solid #e2e8f0", background: "white", color: editUnlocked ? "#0f172a" : "#64748b" }}>
+          <Edit3 style={{ width: "12px", height: "12px" }} />
+          Edit
+          {!editUnlocked && <span style={{ fontSize: "10px", color: "#94a3b8" }}>🔒</span>}
         </button>
       )}
     </div>
@@ -1829,7 +1830,7 @@ const CAP_TABLE_D = {
 type CapTableData = typeof CAP_TABLE_D;
 
 function CapTableDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField } =
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } =
     useEditableDoc<CapTableData>("cap-table", token, CAP_TABLE_D);
 
   /* ── shared cell styles ── */
@@ -1970,7 +1971,7 @@ function CapTableDoc({ token }: { token: string }) {
 
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
+      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
 
       {/* ── Summary stats ── */}
       <div style={{ display: "flex", gap: "14px", marginBottom: "20px", flexWrap: "wrap" as const }}>
@@ -2100,7 +2101,7 @@ const TEAM_D = {
 type TeamData = typeof TEAM_D;
 
 function TeamInfoDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField } =
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } =
     useEditableDoc<TeamData>("team-info", token, TEAM_D);
 
   const setMember = (key: "members" | "advisors", i: number, k: string, v: string) => {
@@ -2154,7 +2155,7 @@ function TeamInfoDoc({ token }: { token: string }) {
 
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
+      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
       <p style={S.p}>{data.intro}</p>
       <h3 style={S.h3}>Founding Team</h3>
       {data.members.map((m, i) => (
