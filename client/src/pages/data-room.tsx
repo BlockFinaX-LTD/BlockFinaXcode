@@ -1817,7 +1817,8 @@ const CAP_TABLE_D = {
     { name: "Employee Option Pool", shares: "10,000,000", pct: "13.3%" },
   ],
   investors: [
-    { name: "[Pre-Seed Investor]", round: "Pre-Seed", amount: "$500K", shares: "5,000,000", pct: "6.7%" },
+    { name: "AYAHQ", round: "Incubation", amount: "Services", shares: "750,000", pct: "1.0%" },
+    { name: "[Pre-Seed Investor]", round: "Pre-Seed", amount: "$500K", shares: "4,250,000", pct: "5.7%" },
   ],
 };
 type CapTableData = typeof CAP_TABLE_D;
