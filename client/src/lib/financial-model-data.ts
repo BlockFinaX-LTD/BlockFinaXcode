@@ -18,6 +18,7 @@ export type InputRow = {
 export type Constants = {
   hedgeYield: number;
   eventCreationFee: number;
+  gasPerEvent: number;          // on-chain gas per full hedge lifecycle (create→settle→claim)
   gasPerWallet: number;
   kycPerWallet: number;
   avgMonthlyTransferUSD: number; // avg monthly USDC transfer volume per active wallet
@@ -84,9 +85,10 @@ export const MONTH_LABELS = [
 export const INITIAL_CONSTANTS: Constants = {
   hedgeYield: 0.007,
   eventCreationFee: 25,
+  gasPerEvent: 1.50,            // Lisk L2: ~6 txns/event lifecycle × ~$0.25 avg gas = $1.50
   gasPerWallet: 3,
   kycPerWallet: 1.50,
-  avgMonthlyTransferUSD: 500, // $500/mo per active wallet (blended: SMEs $500–2K, retail $100–500)
+  avgMonthlyTransferUSD: 500,
   daMonthly: 4000,
   taxRate: 0.25,
 };
@@ -201,8 +203,10 @@ export function buildModel(inputs: InputRow[], c: Constants, funding: FundingEnt
     const walletFees        = Math.round(cumWallets * (inp.walletPct / 100) * c.avgMonthlyTransferUSD * 0.003);
     const totalRevenue      = hedgeFees + eventCreationFees + walletFees;
 
-    const gasCost        = inp.newWallets * c.gasPerWallet;
+    // Gas: wallet onboarding gas + hedge lifecycle execution gas (scales with events)
+    const gasCost        = Math.round(inp.newWallets * c.gasPerWallet + inp.events * c.gasPerEvent);
     const oracleCost     = inp.oracle;
+    // Creator loyalty: 5% of hedge fees paid out to event creators — scales with hedge revenue
     const creatorLoyalty = Math.round(hedgeFees * 0.05);
     const kycCost        = Math.round(inp.newWallets * c.kycPerWallet);
     const totalCOGS      = gasCost + oracleCost + creatorLoyalty + kycCost;

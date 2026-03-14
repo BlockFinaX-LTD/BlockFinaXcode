@@ -90,7 +90,8 @@ function downloadExcel(
     [''],
     ['CONSTANTS', '', 'Value', 'Description'],
     ['Hedge Yield (net)', '', constants.hedgeYield, '= events × notional × yield → hedge fees'],
-    ['Gas Cost / Wallet ($)', '', constants.gasPerWallet, '0.005 ETH × $3,000 avg ETH price'],
+    ['Gas / Hedge Event ($)', '', constants.gasPerEvent,  '~6 on-chain txns × $0.25 Lisk L2 gas = $1.50'],
+    ['Gas Cost / Wallet ($)', '', constants.gasPerWallet, 'One-time wallet creation gas, sponsored by platform'],
     ['D&A / Month ($)', '', constants.daMonthly, 'Audit + infra setup amortised over 24 months'],
     ['Tax Rate', '', constants.taxRate, 'Applied only on profitable months (EBT > 0)'],
     [''],
@@ -524,7 +525,7 @@ export default function FinancialModel() {
 
                     <tr><td colSpan={slice.length + 1} className={secCls}>Cost of Goods Sold</td></tr>
                     {[
-                      { label: 'Gas Sponsorship',       tip: 'Platform sponsors $15 of ETH gas per new wallet — enabling gasless onboarding. Cost = New Wallets × $15. A key growth lever: zero friction for new users.', vals: slice.map(r => r.gasCost) },
+                      { label: 'Gas Costs',             tip: 'Two components: (1) Wallet onboarding gas — platform sponsors gas per new wallet for frictionless UX. (2) Hedge execution gas — each hedge event requires ~6 on-chain transactions (createEvent, deposit, buyProtection, settleEvent, claimPayout, etc.). Both scale with the business: more wallets = more onboarding gas; more hedge events = more execution gas. Formula: (newWallets × $3) + (events × $1.50).', vals: slice.map(r => r.gasCost) },
                       { label: 'Oracle / RPC',          tip: 'One-touch settlement infrastructure. The oracle polls FX, commodity, and crypto prices every 5 minutes and auto-settles contracts when the strike price is hit.', vals: slice.map(r => r.oracleCost) },
                       { label: 'Creator Loyalty (5%)',  tip: '5% of hedge protocol fees distributed to event creators as a loyalty reward. Incentivises experienced traders and institutions to create high-quality hedge events that attract LPs and hedgers.', vals: slice.map(r => r.creatorLoyalty) },
                       { label: 'KYC / AML Compliance', tip: 'Per-wallet AML/KYC identity verification cost ($1.50/wallet). Required for regulatory compliance in all African markets — includes identity checks, sanctions screening, and ongoing monitoring.', vals: slice.map(r => r.kycCost) },
@@ -1067,6 +1068,14 @@ export default function FinancialModel() {
                     <input type="number" step="1" min="0"
                       value={constants.eventCreationFee}
                       onChange={e => updateConstant('eventCreationFee', parseFloat(e.target.value) || 0)}
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-600 block mb-1">Gas / Hedge Event ($)</label>
+                    <input type="number" step="0.25" min="0"
+                      value={constants.gasPerEvent}
+                      onChange={e => updateConstant('gasPerEvent', parseFloat(e.target.value) || 0)}
                       className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>

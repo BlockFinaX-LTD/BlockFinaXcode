@@ -1178,7 +1178,7 @@ function CostBreakdownDoc() {
           </thead>
           <tbody>
             {[
-              { label: "Gas Sponsorship",      vals: [fmtUSD(a[1].gasCost),      fmtUSD(a[2].gasCost),      fmtUSD(a[3].gasCost),      fmtUSD(a[4].gasCost)],      driver: "New wallets × $15/wallet — gasless UX subsidy" },
+              { label: "Gas Costs",             vals: [fmtUSD(a[1].gasCost),      fmtUSD(a[2].gasCost),      fmtUSD(a[3].gasCost),      fmtUSD(a[4].gasCost)],      driver: "Wallet onboarding gas + hedge execution gas (~6 on-chain txns per event on Lisk L2)" },
               { label: "Oracle / RPC",          vals: [fmtUSD(a[1].oracleCost),   fmtUSD(a[2].oracleCost),   fmtUSD(a[3].oracleCost),   fmtUSD(a[4].oracleCost)],   driver: "On-chain settlement infrastructure, scales with pairs" },
               { label: "Creator Loyalty (5%)",  vals: [fmtUSD(a[1].creatorLoyalty),fmtUSD(a[2].creatorLoyalty),fmtUSD(a[3].creatorLoyalty),fmtUSD(a[4].creatorLoyalty)], driver: "5% of hedge fees paid to event creators" },
               { label: "KYC / AML",             vals: [fmtUSD(a[1].kycCost),      fmtUSD(a[2].kycCost),      fmtUSD(a[3].kycCost),      fmtUSD(a[4].kycCost)],      driver: "AML identity verification at $1.50/wallet" },
@@ -1236,7 +1236,7 @@ function CostBreakdownDoc() {
             year: "2027", total27: a[1].totalCosts,
             items: [
               { label: "Marketing/CAC",   raw: a[1].marketing,      color: "#a855f7" },
-              { label: "Gas Sponsorship", raw: a[1].gasCost,        color: "#f97316" },
+              { label: "Gas Costs",       raw: a[1].gasCost,        color: "#f97316" },
               { label: "Personnel",       raw: a[1].personnel,      color: "#3b82f6" },
               { label: "Legal",           raw: a[1].legal,          color: "#f59e0b" },
               { label: "Creator Loyalty", raw: a[1].creatorLoyalty, color: "#ec4899" },
@@ -1248,7 +1248,7 @@ function CostBreakdownDoc() {
             items: [
               { label: "Creator Loyalty", raw: a[4].creatorLoyalty, color: "#ec4899" },
               { label: "Marketing/CAC",   raw: a[4].marketing,      color: "#a855f7" },
-              { label: "Gas Sponsorship", raw: a[4].gasCost,        color: "#f97316" },
+              { label: "Gas Costs",       raw: a[4].gasCost,        color: "#f97316" },
               { label: "Personnel",       raw: a[4].personnel,      color: "#3b82f6" },
               { label: "Other",           raw: a[4].oracleCost + a[4].kycCost + a[4].infraCloud + a[4].ga + a[4].legal, color: "#94a3b8" },
             ].map(i => ({ ...i, pct: a[4].totalCosts > 0 ? Math.round((i.raw / a[4].totalCosts) * 100) : 0 })),
