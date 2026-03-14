@@ -98,71 +98,79 @@ export const INITIAL_FUNDING: FundingEntry[] = [
   { monthIndex: 48, amount: 0,         label: 'Tranche 5 (optional)' },
 ];
 
-// ── 54-month input data ───────────────────────────────────────────────────────
+// ── 54-month input data (Realistic — v2) ─────────────────────────────────────
+// Assumptions:
+//   • Events: 20 → 53,000/month over 4.5 years (~200x, not 3,500x)
+//   • Avg notional: $8K → $15K (African SME FX trade sizes)
+//   • Wallets: organic growth, ~48K new/month by Dec 2030
+//   • Headcount: 5 → 65 people; revenue/employee target ~$400–600K
+//   • CAC: $30–45 (African digital + field sales; slightly rising at scale)
+//   • Legal: rising as we expand across multiple African jurisdictions
+//   • EBITDA margin target: 25–40% at maturity (not 80%)
 export const INITIAL_INPUTS: InputRow[] = [
-  // H2 2026 (months 1-6)
-  { events:    50, avgNotional:14500, walletPct:10, newWallets:    50, headcount: 4, salaryPerFTE:3500, cac:15, legal:18000, infraCloud:  800, oracle:  400, ga: 1500 },
-  { events:    80, avgNotional:14500, walletPct:10, newWallets:    80, headcount: 4, salaryPerFTE:3500, cac:15, legal:18000, infraCloud:  800, oracle:  400, ga: 1500 },
-  { events:   120, avgNotional:14500, walletPct:10, newWallets:   120, headcount: 5, salaryPerFTE:3500, cac:15, legal:16000, infraCloud: 1000, oracle:  500, ga: 1800 },
-  { events:   180, avgNotional:14500, walletPct:10, newWallets:   180, headcount: 5, salaryPerFTE:3500, cac:15, legal:16000, infraCloud: 1000, oracle:  500, ga: 1800 },
-  { events:   260, avgNotional:14500, walletPct:10, newWallets:   260, headcount: 5, salaryPerFTE:3500, cac:15, legal:15000, infraCloud: 1200, oracle:  600, ga: 2000 },
-  { events:   400, avgNotional:14500, walletPct:10, newWallets:   400, headcount: 5, salaryPerFTE:3500, cac:15, legal:15000, infraCloud: 1200, oracle:  600, ga: 2000 },
-  // H1 2027 (months 7-12)
-  { events:   600, avgNotional:15200, walletPct:12, newWallets:  1200, headcount: 8, salaryPerFTE:5000, cac:25, legal:20000, infraCloud: 3000, oracle: 1500, ga: 5000 },
-  { events:   800, avgNotional:15200, walletPct:12, newWallets:  1500, headcount: 8, salaryPerFTE:5000, cac:25, legal:20000, infraCloud: 3000, oracle: 1500, ga: 5000 },
-  { events:  1000, avgNotional:15500, walletPct:12, newWallets:  1800, headcount: 8, salaryPerFTE:5000, cac:25, legal:21000, infraCloud: 3500, oracle: 1800, ga: 5000 },
-  { events:  1300, avgNotional:15500, walletPct:12, newWallets:  2200, headcount: 9, salaryPerFTE:5000, cac:25, legal:21000, infraCloud: 3500, oracle: 1800, ga: 5500 },
-  { events:  1700, avgNotional:15800, walletPct:12, newWallets:  2800, headcount: 9, salaryPerFTE:5000, cac:25, legal:22000, infraCloud: 3500, oracle: 2000, ga: 5500 },
-  { events:  2200, avgNotional:15800, walletPct:12, newWallets:  3500, headcount: 9, salaryPerFTE:5000, cac:25, legal:22000, infraCloud: 4000, oracle: 2000, ga: 6000 },
-  // H2 2027 (months 13-18)
-  { events:  3200, avgNotional:16000, walletPct:12, newWallets:  5000, headcount:13, salaryPerFTE:5500, cac:20, legal:24000, infraCloud: 7000, oracle: 3000, ga: 8000 },
-  { events:  3700, avgNotional:16200, walletPct:12, newWallets:  5800, headcount:13, salaryPerFTE:5500, cac:20, legal:24000, infraCloud: 7000, oracle: 3000, ga: 8000 },
-  { events:  4300, avgNotional:16200, walletPct:12, newWallets:  6500, headcount:14, salaryPerFTE:5500, cac:20, legal:25000, infraCloud: 7500, oracle: 3200, ga: 8500 },
-  { events:  5000, avgNotional:16500, walletPct:12, newWallets:  7200, headcount:14, salaryPerFTE:5500, cac:20, legal:25000, infraCloud: 7500, oracle: 3200, ga: 8500 },
-  { events:  5700, avgNotional:16500, walletPct:12, newWallets:  8000, headcount:15, salaryPerFTE:5500, cac:18, legal:26000, infraCloud: 8000, oracle: 3500, ga: 9000 },
-  { events:  6500, avgNotional:17000, walletPct:12, newWallets:  9000, headcount:15, salaryPerFTE:5500, cac:18, legal:26000, infraCloud: 8000, oracle: 3500, ga: 9000 },
-  // H1 2028 (months 19-24)
-  { events:  5800, avgNotional:18000, walletPct:15, newWallets: 10000, headcount:18, salaryPerFTE:6000, cac:18, legal:28000, infraCloud:14000, oracle: 5500, ga:12000 },
-  { events:  7200, avgNotional:18000, walletPct:15, newWallets: 11500, headcount:18, salaryPerFTE:6000, cac:18, legal:28000, infraCloud:14000, oracle: 5500, ga:12000 },
-  { events:  8600, avgNotional:18000, walletPct:15, newWallets: 13000, headcount:20, salaryPerFTE:6000, cac:18, legal:30000, infraCloud:15000, oracle: 6000, ga:12500 },
-  { events: 10000, avgNotional:18000, walletPct:15, newWallets: 14500, headcount:20, salaryPerFTE:6000, cac:16, legal:30000, infraCloud:15000, oracle: 6000, ga:12500 },
-  { events: 12000, avgNotional:18000, walletPct:15, newWallets: 16500, headcount:22, salaryPerFTE:6000, cac:16, legal:32000, infraCloud:16000, oracle: 6500, ga:13000 },
-  { events: 14000, avgNotional:18000, walletPct:15, newWallets: 18500, headcount:22, salaryPerFTE:6000, cac:16, legal:32000, infraCloud:16000, oracle: 6500, ga:13000 },
-  // H2 2028 (months 25-30)
-  { events: 15500, avgNotional:20000, walletPct:15, newWallets: 21000, headcount:26, salaryPerFTE:6500, cac:15, legal:34000, infraCloud:22000, oracle: 8500, ga:16000 },
-  { events: 17000, avgNotional:20000, walletPct:15, newWallets: 23000, headcount:26, salaryPerFTE:6500, cac:15, legal:34000, infraCloud:23000, oracle: 8500, ga:16000 },
-  { events: 18500, avgNotional:20500, walletPct:15, newWallets: 25000, headcount:28, salaryPerFTE:6500, cac:14, legal:36000, infraCloud:24000, oracle: 9000, ga:17000 },
-  { events: 20000, avgNotional:20500, walletPct:15, newWallets: 27000, headcount:28, salaryPerFTE:6500, cac:14, legal:36000, infraCloud:25000, oracle: 9000, ga:17000 },
-  { events: 22000, avgNotional:21000, walletPct:15, newWallets: 29000, headcount:30, salaryPerFTE:6500, cac:14, legal:38000, infraCloud:26000, oracle: 9500, ga:18000 },
-  { events: 24000, avgNotional:21000, walletPct:15, newWallets: 31000, headcount:30, salaryPerFTE:6500, cac:14, legal:38000, infraCloud:26000, oracle: 9500, ga:18000 },
-  // H1 2029 (months 31-36)
-  { events: 21000, avgNotional:22000, walletPct:18, newWallets: 33000, headcount:36, salaryPerFTE:7000, cac:13, legal:40000, infraCloud:36000, oracle:13000, ga:22000 },
-  { events: 24000, avgNotional:22000, walletPct:18, newWallets: 36000, headcount:36, salaryPerFTE:7000, cac:13, legal:40000, infraCloud:38000, oracle:13000, ga:22000 },
-  { events: 27000, avgNotional:22000, walletPct:18, newWallets: 39000, headcount:40, salaryPerFTE:7000, cac:13, legal:42000, infraCloud:40000, oracle:14000, ga:24000 },
-  { events: 30000, avgNotional:22000, walletPct:18, newWallets: 42000, headcount:40, salaryPerFTE:7000, cac:12, legal:42000, infraCloud:42000, oracle:14000, ga:24000 },
-  { events: 34000, avgNotional:22000, walletPct:18, newWallets: 46000, headcount:44, salaryPerFTE:7000, cac:12, legal:44000, infraCloud:44000, oracle:15000, ga:26000 },
-  { events: 38000, avgNotional:22000, walletPct:18, newWallets: 50000, headcount:44, salaryPerFTE:7000, cac:12, legal:44000, infraCloud:46000, oracle:15000, ga:26000 },
-  // H2 2029 (months 37-42)
-  { events: 42000, avgNotional:23000, walletPct:18, newWallets: 54000, headcount:48, salaryPerFTE:7500, cac:11, legal:46000, infraCloud:60000, oracle:19000, ga:30000 },
-  { events: 46000, avgNotional:23000, walletPct:18, newWallets: 58000, headcount:48, salaryPerFTE:7500, cac:11, legal:46000, infraCloud:63000, oracle:19000, ga:30000 },
-  { events: 50000, avgNotional:23000, walletPct:18, newWallets: 62000, headcount:52, salaryPerFTE:7500, cac:11, legal:48000, infraCloud:66000, oracle:20000, ga:32000 },
-  { events: 54000, avgNotional:23000, walletPct:18, newWallets: 66000, headcount:52, salaryPerFTE:7500, cac:10, legal:48000, infraCloud:69000, oracle:20000, ga:32000 },
-  { events: 58000, avgNotional:23000, walletPct:18, newWallets: 70000, headcount:56, salaryPerFTE:7500, cac:10, legal:50000, infraCloud:72000, oracle:21000, ga:34000 },
-  { events: 63000, avgNotional:23000, walletPct:18, newWallets: 74000, headcount:56, salaryPerFTE:7500, cac:10, legal:50000, infraCloud:75000, oracle:21000, ga:34000 },
-  // H1 2030 (months 43-48)
-  { events:  48000, avgNotional:24000, walletPct:20, newWallets:  85000, headcount:62, salaryPerFTE:8000, cac: 9, legal:52000, infraCloud: 92000, oracle:30000, ga:42000 },
-  { events:  58000, avgNotional:24000, walletPct:20, newWallets:  92000, headcount:62, salaryPerFTE:8000, cac: 9, legal:52000, infraCloud: 97000, oracle:30000, ga:42000 },
-  { events:  68000, avgNotional:24000, walletPct:20, newWallets: 100000, headcount:68, salaryPerFTE:8000, cac: 9, legal:54000, infraCloud:102000, oracle:32000, ga:45000 },
-  { events:  78000, avgNotional:24000, walletPct:20, newWallets: 108000, headcount:68, salaryPerFTE:8000, cac: 8, legal:54000, infraCloud:107000, oracle:32000, ga:45000 },
-  { events:  92000, avgNotional:24000, walletPct:20, newWallets: 118000, headcount:74, salaryPerFTE:8000, cac: 8, legal:56000, infraCloud:115000, oracle:34000, ga:48000 },
-  { events: 107000, avgNotional:24000, walletPct:20, newWallets: 128000, headcount:74, salaryPerFTE:8000, cac: 8, legal:56000, infraCloud:120000, oracle:34000, ga:48000 },
-  // H2 2030 (months 49-54)
-  { events: 120000, avgNotional:25000, walletPct:20, newWallets: 138000, headcount:80, salaryPerFTE:8500, cac: 8, legal:58000, infraCloud:136000, oracle:40000, ga:55000 },
-  { events: 135000, avgNotional:25000, walletPct:20, newWallets: 148000, headcount:80, salaryPerFTE:8500, cac: 7, legal:58000, infraCloud:142000, oracle:40000, ga:55000 },
-  { events: 150000, avgNotional:25000, walletPct:20, newWallets: 158000, headcount:86, salaryPerFTE:8500, cac: 7, legal:60000, infraCloud:148000, oracle:42000, ga:58000 },
-  { events: 162000, avgNotional:25000, walletPct:20, newWallets: 168000, headcount:86, salaryPerFTE:8500, cac: 7, legal:60000, infraCloud:154000, oracle:42000, ga:58000 },
-  { events: 173000, avgNotional:25000, walletPct:20, newWallets: 180000, headcount:92, salaryPerFTE:8500, cac: 7, legal:62000, infraCloud:162000, oracle:44000, ga:62000 },
-  { events: 174000, avgNotional:25000, walletPct:20, newWallets: 190000, headcount:92, salaryPerFTE:8500, cac: 7, legal:62000, infraCloud:168000, oracle:44000, ga:62000 },
+  // H2 2026 — Beta/Pilot (months 1-6)
+  { events:    20, avgNotional: 8000, walletPct: 5, newWallets:    30, headcount: 5, salaryPerFTE:4500, cac:40, legal:15000, infraCloud:  600, oracle:  300, ga: 1200 },
+  { events:    35, avgNotional: 8000, walletPct: 5, newWallets:    55, headcount: 5, salaryPerFTE:4500, cac:40, legal:15000, infraCloud:  600, oracle:  300, ga: 1200 },
+  { events:    60, avgNotional: 8500, walletPct: 5, newWallets:    90, headcount: 5, salaryPerFTE:4500, cac:38, legal:13000, infraCloud:  800, oracle:  400, ga: 1500 },
+  { events:    95, avgNotional: 8500, walletPct: 5, newWallets:   140, headcount: 6, salaryPerFTE:4500, cac:38, legal:13000, infraCloud:  800, oracle:  400, ga: 1500 },
+  { events:   140, avgNotional: 9000, walletPct: 5, newWallets:   200, headcount: 6, salaryPerFTE:4500, cac:36, legal:12000, infraCloud: 1000, oracle:  500, ga: 1800 },
+  { events:   200, avgNotional: 9000, walletPct: 5, newWallets:   280, headcount: 6, salaryPerFTE:4500, cac:36, legal:12000, infraCloud: 1000, oracle:  500, ga: 1800 },
+  // H1 2027 — Early Traction, Series A prep (months 7-12)
+  { events:   280, avgNotional: 9500, walletPct: 6, newWallets:   380, headcount: 9, salaryPerFTE:5000, cac:38, legal:18000, infraCloud: 1800, oracle:  900, ga: 3500 },
+  { events:   380, avgNotional: 9500, walletPct: 6, newWallets:   500, headcount: 9, salaryPerFTE:5000, cac:38, legal:18000, infraCloud: 1800, oracle:  900, ga: 3500 },
+  { events:   500, avgNotional:10000, walletPct: 6, newWallets:   650, headcount:10, salaryPerFTE:5000, cac:38, legal:19000, infraCloud: 2200, oracle: 1100, ga: 4000 },
+  { events:   650, avgNotional:10000, walletPct: 6, newWallets:   820, headcount:10, salaryPerFTE:5000, cac:38, legal:19000, infraCloud: 2200, oracle: 1100, ga: 4000 },
+  { events:   840, avgNotional:10000, walletPct: 7, newWallets:  1020, headcount:11, salaryPerFTE:5000, cac:37, legal:20000, infraCloud: 2600, oracle: 1300, ga: 4500 },
+  { events:  1080, avgNotional:10000, walletPct: 7, newWallets:  1260, headcount:11, salaryPerFTE:5000, cac:37, legal:20000, infraCloud: 2600, oracle: 1300, ga: 4500 },
+  // H2 2027 — Series A deployed, Ghana + Nigeria expansion (months 13-18)
+  { events:  1380, avgNotional:10500, walletPct: 7, newWallets:  1550, headcount:16, salaryPerFTE:5200, cac:37, legal:24000, infraCloud: 5000, oracle: 2500, ga: 7000 },
+  { events:  1730, avgNotional:10500, walletPct: 7, newWallets:  1900, headcount:16, salaryPerFTE:5200, cac:37, legal:24000, infraCloud: 5000, oracle: 2500, ga: 7000 },
+  { events:  2100, avgNotional:11000, walletPct: 8, newWallets:  2300, headcount:18, salaryPerFTE:5200, cac:36, legal:25000, infraCloud: 5500, oracle: 2800, ga: 7500 },
+  { events:  2500, avgNotional:11000, walletPct: 8, newWallets:  2750, headcount:18, salaryPerFTE:5200, cac:36, legal:25000, infraCloud: 5500, oracle: 2800, ga: 7500 },
+  { events:  2950, avgNotional:11000, walletPct: 8, newWallets:  3250, headcount:20, salaryPerFTE:5200, cac:36, legal:26000, infraCloud: 6000, oracle: 3000, ga: 8000 },
+  { events:  3450, avgNotional:11500, walletPct: 8, newWallets:  3800, headcount:20, salaryPerFTE:5200, cac:36, legal:26000, infraCloud: 6000, oracle: 3000, ga: 8000 },
+  // H1 2028 — Scaling multi-country (months 19-24)
+  { events:  4000, avgNotional:11500, walletPct: 9, newWallets:  4400, headcount:25, salaryPerFTE:5600, cac:36, legal:30000, infraCloud: 9000, oracle: 4500, ga:11000 },
+  { events:  4600, avgNotional:12000, walletPct: 9, newWallets:  5100, headcount:25, salaryPerFTE:5600, cac:35, legal:30000, infraCloud: 9500, oracle: 4500, ga:11000 },
+  { events:  5250, avgNotional:12000, walletPct: 9, newWallets:  5800, headcount:27, salaryPerFTE:5600, cac:35, legal:32000, infraCloud:10000, oracle: 5000, ga:11500 },
+  { events:  5950, avgNotional:12000, walletPct: 9, newWallets:  6600, headcount:27, salaryPerFTE:5600, cac:35, legal:32000, infraCloud:10000, oracle: 5000, ga:11500 },
+  { events:  6700, avgNotional:12500, walletPct:10, newWallets:  7400, headcount:30, salaryPerFTE:5600, cac:35, legal:34000, infraCloud:11000, oracle: 5500, ga:12000 },
+  { events:  7500, avgNotional:12500, walletPct:10, newWallets:  8300, headcount:30, salaryPerFTE:5600, cac:35, legal:34000, infraCloud:11000, oracle: 5500, ga:12000 },
+  // H2 2028 — Series B deployed (months 25-30)
+  { events:  8400, avgNotional:13000, walletPct:10, newWallets:  9300, headcount:34, salaryPerFTE:5800, cac:36, legal:36000, infraCloud:14000, oracle: 7000, ga:14000 },
+  { events:  9350, avgNotional:13000, walletPct:10, newWallets: 10400, headcount:34, salaryPerFTE:5800, cac:36, legal:36000, infraCloud:14500, oracle: 7000, ga:14000 },
+  { events: 10350, avgNotional:13000, walletPct:10, newWallets: 11500, headcount:36, salaryPerFTE:5800, cac:36, legal:38000, infraCloud:15000, oracle: 7500, ga:15000 },
+  { events: 11400, avgNotional:13500, walletPct:10, newWallets: 12700, headcount:36, salaryPerFTE:5800, cac:36, legal:38000, infraCloud:15500, oracle: 7500, ga:15000 },
+  { events: 12500, avgNotional:13500, walletPct:11, newWallets: 13900, headcount:38, salaryPerFTE:5800, cac:37, legal:40000, infraCloud:16000, oracle: 8000, ga:16000 },
+  { events: 13700, avgNotional:13500, walletPct:11, newWallets: 15200, headcount:38, salaryPerFTE:5800, cac:37, legal:40000, infraCloud:16500, oracle: 8000, ga:16000 },
+  // H1 2029 — East + West Africa full rollout (months 31-36)
+  { events: 15000, avgNotional:14000, walletPct:11, newWallets: 16600, headcount:43, salaryPerFTE:6000, cac:37, legal:44000, infraCloud:21000, oracle:10500, ga:19000 },
+  { events: 16400, avgNotional:14000, walletPct:11, newWallets: 18100, headcount:43, salaryPerFTE:6000, cac:37, legal:44000, infraCloud:21500, oracle:10500, ga:19000 },
+  { events: 17900, avgNotional:14000, walletPct:11, newWallets: 19700, headcount:46, salaryPerFTE:6000, cac:38, legal:46000, infraCloud:22000, oracle:11000, ga:20000 },
+  { events: 19500, avgNotional:14500, walletPct:11, newWallets: 21400, headcount:46, salaryPerFTE:6000, cac:38, legal:46000, infraCloud:22500, oracle:11000, ga:20000 },
+  { events: 21200, avgNotional:14500, walletPct:12, newWallets: 23200, headcount:49, salaryPerFTE:6000, cac:38, legal:48000, infraCloud:23000, oracle:11500, ga:21000 },
+  { events: 23000, avgNotional:14500, walletPct:12, newWallets: 25100, headcount:49, salaryPerFTE:6000, cac:38, legal:48000, infraCloud:23500, oracle:11500, ga:21000 },
+  // H2 2029 — Commodities & crypto verticals live (months 37-42)
+  { events: 25000, avgNotional:14500, walletPct:12, newWallets: 27100, headcount:53, salaryPerFTE:6300, cac:39, legal:52000, infraCloud:29000, oracle:14500, ga:24000 },
+  { events: 27100, avgNotional:15000, walletPct:12, newWallets: 29200, headcount:53, salaryPerFTE:6300, cac:39, legal:52000, infraCloud:30000, oracle:14500, ga:24000 },
+  { events: 29300, avgNotional:15000, walletPct:12, newWallets: 31400, headcount:56, salaryPerFTE:6300, cac:40, legal:54000, infraCloud:31000, oracle:15000, ga:25000 },
+  { events: 31600, avgNotional:15000, walletPct:12, newWallets: 33700, headcount:56, salaryPerFTE:6300, cac:40, legal:54000, infraCloud:32000, oracle:15000, ga:25000 },
+  { events: 34000, avgNotional:15000, walletPct:12, newWallets: 36100, headcount:59, salaryPerFTE:6300, cac:40, legal:56000, infraCloud:33000, oracle:15500, ga:26000 },
+  { events: 36500, avgNotional:15000, walletPct:12, newWallets: 38600, headcount:59, salaryPerFTE:6300, cac:40, legal:56000, infraCloud:34000, oracle:15500, ga:26000 },
+  // H1 2030 — Maturity phase (months 43-48)
+  { events: 39100, avgNotional:15000, walletPct:12, newWallets: 41200, headcount:62, salaryPerFTE:6600, cac:41, legal:60000, infraCloud:40000, oracle:20000, ga:30000 },
+  { events: 41800, avgNotional:15000, walletPct:12, newWallets: 43900, headcount:62, salaryPerFTE:6600, cac:41, legal:60000, infraCloud:41000, oracle:20000, ga:30000 },
+  { events: 44600, avgNotional:15000, walletPct:12, newWallets: 46700, headcount:64, salaryPerFTE:6600, cac:42, legal:62000, infraCloud:42000, oracle:21000, ga:31000 },
+  { events: 47500, avgNotional:15000, walletPct:12, newWallets: 49600, headcount:64, salaryPerFTE:6600, cac:42, legal:62000, infraCloud:43000, oracle:21000, ga:31000 },
+  { events: 50500, avgNotional:15000, walletPct:12, newWallets: 52600, headcount:65, salaryPerFTE:6600, cac:43, legal:64000, infraCloud:44000, oracle:22000, ga:32000 },
+  { events: 53600, avgNotional:15000, walletPct:12, newWallets: 55700, headcount:65, salaryPerFTE:6600, cac:43, legal:64000, infraCloud:45000, oracle:22000, ga:32000 },
+  // H2 2030 — Sustained growth (months 49-54)
+  { events: 56800, avgNotional:15000, walletPct:12, newWallets: 58900, headcount:67, salaryPerFTE:6800, cac:43, legal:66000, infraCloud:47000, oracle:23500, ga:33000 },
+  { events: 60100, avgNotional:15000, walletPct:12, newWallets: 62200, headcount:67, salaryPerFTE:6800, cac:43, legal:66000, infraCloud:48000, oracle:23500, ga:33000 },
+  { events: 63500, avgNotional:15000, walletPct:12, newWallets: 65600, headcount:69, salaryPerFTE:6800, cac:44, legal:68000, infraCloud:49000, oracle:24000, ga:34000 },
+  { events: 67000, avgNotional:15000, walletPct:12, newWallets: 69100, headcount:69, salaryPerFTE:6800, cac:44, legal:68000, infraCloud:50000, oracle:24000, ga:34000 },
+  { events: 70600, avgNotional:15000, walletPct:12, newWallets: 72700, headcount:71, salaryPerFTE:6800, cac:45, legal:70000, infraCloud:51000, oracle:24500, ga:35000 },
+  { events: 74300, avgNotional:15000, walletPct:12, newWallets: 76400, headcount:71, salaryPerFTE:6800, cac:45, legal:70000, infraCloud:52000, oracle:24500, ga:35000 },
 ];
 
 // ── Core model computation ────────────────────────────────────────────────────
