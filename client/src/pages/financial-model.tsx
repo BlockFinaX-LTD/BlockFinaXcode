@@ -1021,11 +1021,10 @@ export default function FinancialModel() {
 
                       {/* Section C — Wallet Customer Full Unit Economics */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet Customer — Conservative Blended View</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet — Blended View (most conservative)</p>
                         <p className="text-xs text-slate-400 mb-3">
-                          <strong>CAC</strong> = total marketing spend ÷ total wallets acquired (blended across all channels). &nbsp;
-                          <strong>LTV</strong> = 2030 annual revenue per wallet × 2-year average wallet retention. &nbsp;
-                          This is the most conservative view — it includes passive wallets that generate little revenue, making it a stress-test of the business model.
+                          <strong>Not every wallet will hedge.</strong> Many users will create a wallet purely for cross-border USDC payments and never place a protection event — they only generate the 0.3% transfer fee. This section divides <em>all</em> platform revenue by <em>all</em> wallets, including those payment-only users. That makes these figures a deliberate stress-test: even in a world where most wallets stay passive, the model still clears the 3× LTV/CAC benchmark. Every wallet that activates as a protection buyer lifts the actual per-wallet value well above these numbers. &nbsp;
+                          <strong>CAC</strong> = total marketing ÷ total wallets. <strong>LTV</strong> = annual rev per wallet × 2-year avg retention.
                         </p>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                           {statBox('CAC',              `$${Math.round(walletCac)}`,             'Total mktg ÷ total wallets',      'text-amber-600')}
