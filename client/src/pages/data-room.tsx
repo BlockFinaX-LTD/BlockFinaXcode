@@ -32,7 +32,7 @@ function useEditableDoc<T extends object>(docId: string, token: string, defaults
   const { toast } = useToast();
   useEffect(() => {
     fetch(`/api/investor/content/${docId}`, { headers: { "x-investor-token": token } })
-      .then(r => r.json()).then(d => { if (d.content) setData(d.content as T); }).catch(() => {});
+      .then(r => r.json()).then(d => { if (d.content) setData({ ...defaults, ...d.content } as T); }).catch(() => {});
   }, [docId, token]);
   const startEdit = () => { setDraft(JSON.parse(JSON.stringify(data))); setEditing(true); };
   const cancelEdit = () => setEditing(false);
@@ -1810,6 +1810,7 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
 // When a new member joins at X%, all existing holders dilute proportionally.
 const CAP_TABLE_D = {
   notes: "All shares subject to vesting as noted. Total authorized: 1,000,000. Investor rounds will be added as they close.",
+  valuation: "5000000",
   members: [
     { name: "Anthony Kumako", role: "CEO & Co-Founder", type: "founder", pct: "31.5", vesting: "4-year, 1-year cliff" },
     { name: "[Co-Founder 2]", role: "[Role]",            type: "founder", pct: "7.5",  vesting: "4-year, 1-year cliff" },
@@ -1870,6 +1871,10 @@ function CapTableDoc({ token }: { token: string }) {
           <div style={{ flex: 1, background: available < 0 ? "#fef2f2" : "#f0fdf4", borderRadius: "6px", padding: "8px 12px", minWidth: "120px" }}>
             <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Available Pool</p>
             <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: available < 0 ? "#ef4444" : "#059669" }}>{available.toFixed(2)}% · {fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))} shares</p>
+          </div>
+          <div style={{ flex: 1, minWidth: "140px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Company Valuation ($)</label>
+            <input type="number" value={draft.valuation} onChange={e => setField("valuation", e.target.value)} style={{ ...EI, fontFamily: "monospace" }} placeholder="e.g. 5000000" />
           </div>
         </div>
 
@@ -1937,61 +1942,83 @@ function CapTableDoc({ token }: { token: string }) {
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
 
       {/* Summary stats */}
-      <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
-        <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Authorized</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(TOTAL_AUTHORIZED)}</p>
-        </div>
-        <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Allocated</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0" }}>{vTotal.toFixed(2)}% · {fmtN(Math.round(vTotal / 100 * TOTAL_AUTHORIZED))} shares</p>
-        </div>
-        <div style={{ flex: 1, background: "#f0fdf4", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Available for Future Rounds</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#059669" }}>{available.toFixed(2)}% · {fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))} shares</p>
-        </div>
-      </div>
+      {(() => {
+        const valuation = parseNum(data.valuation);
+        const fmtVal = (n: number) => n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${fmtN(n)}`;
+        return (
+          <>
+            <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
+              <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
+                <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Authorized</p>
+                <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(TOTAL_AUTHORIZED)}</p>
+              </div>
+              <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
+                <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Allocated</p>
+                <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0" }}>{vTotal.toFixed(2)}% · {fmtN(Math.round(vTotal / 100 * TOTAL_AUTHORIZED))} shares</p>
+              </div>
+              <div style={{ flex: 1, background: "#f0fdf4", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
+                <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Available for Future Rounds</p>
+                <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#059669" }}>{available.toFixed(2)}% · {fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))} shares</p>
+              </div>
+              {valuation > 0 && (
+                <div style={{ flex: 1, background: "linear-gradient(135deg, #eff6ff, #dbeafe)", borderRadius: "8px", padding: "12px 16px", minWidth: "130px", border: "1px solid #bfdbfe" }}>
+                  <p style={{ fontSize: "11px", color: "#2563eb", margin: 0, fontWeight: 600 }}>Company Valuation</p>
+                  <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#1d4ed8" }}>{fmtVal(valuation)}</p>
+                </div>
+              )}
+            </div>
 
-      {/* Ownership table */}
-      <table style={S.table}>
-        <thead><tr>
-          <th style={hStyle}>Name</th>
-          <th style={hStyle}>Role</th>
-          <th style={hStyle}>Type</th>
-          <th style={hStyle}>Ownership %</th>
-          <th style={hStyle}>Shares</th>
-          <th style={hStyle}>Vesting</th>
-        </tr></thead>
-        <tbody>
-          {data.members.map((m, i) => (
-            <tr key={i}>
-              <td style={{ ...rowStyle, fontWeight: 600 }}>{m.name}</td>
-              <td style={rowStyle}>{m.role}</td>
-              <td style={{ ...rowStyle, fontSize: "12px", color: typeColor[m.type] || "#64748b" }}>{typeLabel[m.type] || m.type}</td>
-              <td style={{ ...rowStyle, fontWeight: 700, color: typeColor[m.type] || "#2563eb" }}>{parseNum(m.pct).toFixed(2)}%</td>
-              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(Math.round(parseNum(m.pct) / 100 * TOTAL_AUTHORIZED))}</td>
-              <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{m.vesting}</td>
-            </tr>
-          ))}
-          {available > 0.01 && (
-            <tr style={{ background: "#f0fdf4" }}>
-              <td style={{ ...rowStyle, fontWeight: 600, color: "#059669" }}>Available Pool</td>
-              <td style={{ ...rowStyle, color: "#94a3b8" }}>Future Rounds</td>
-              <td style={{ ...rowStyle, color: "#94a3b8", fontSize: "12px" }}>Unissued</td>
-              <td style={{ ...rowStyle, fontWeight: 700, color: "#059669" }}>{available.toFixed(2)}%</td>
-              <td style={{ ...rowStyle, fontFamily: "monospace", color: "#059669" }}>{fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))}</td>
-              <td style={{ ...rowStyle, color: "#94a3b8", fontSize: "12px" }}>—</td>
-            </tr>
-          )}
-          <tr style={{ background: "#f8fafc" }}>
-            <td style={{ ...rowStyle, fontWeight: 700 }}>Total</td>
-            <td colSpan={2} style={rowStyle}></td>
-            <td style={{ ...rowStyle, fontWeight: 700 }}>100.00%</td>
-            <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 700 }}>{fmtN(TOTAL_AUTHORIZED)}</td>
-            <td style={rowStyle}></td>
-          </tr>
-        </tbody>
-      </table>
+            {/* Ownership table */}
+            <table style={S.table}>
+              <thead><tr>
+                <th style={hStyle}>Name</th>
+                <th style={hStyle}>Role</th>
+                <th style={hStyle}>Type</th>
+                <th style={hStyle}>Ownership %</th>
+                <th style={hStyle}>Shares</th>
+                {valuation > 0 && <th style={hStyle}>Stake Value</th>}
+                <th style={hStyle}>Vesting</th>
+              </tr></thead>
+              <tbody>
+                {data.members.map((m, i) => {
+                  const pct = parseNum(m.pct);
+                  const stakeVal = valuation > 0 ? pct / 100 * valuation : 0;
+                  return (
+                    <tr key={i}>
+                      <td style={{ ...rowStyle, fontWeight: 600 }}>{m.name}</td>
+                      <td style={rowStyle}>{m.role}</td>
+                      <td style={{ ...rowStyle, fontSize: "12px", color: typeColor[m.type] || "#64748b" }}>{typeLabel[m.type] || m.type}</td>
+                      <td style={{ ...rowStyle, fontWeight: 700, color: typeColor[m.type] || "#2563eb" }}>{pct.toFixed(2)}%</td>
+                      <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(Math.round(pct / 100 * TOTAL_AUTHORIZED))}</td>
+                      {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", color: "#1d4ed8", fontWeight: 600 }}>{fmtVal(stakeVal)}</td>}
+                      <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{m.vesting}</td>
+                    </tr>
+                  );
+                })}
+                {available > 0.01 && (
+                  <tr style={{ background: "#f0fdf4" }}>
+                    <td style={{ ...rowStyle, fontWeight: 600, color: "#059669" }}>Available Pool</td>
+                    <td style={{ ...rowStyle, color: "#94a3b8" }}>Future Rounds</td>
+                    <td style={{ ...rowStyle, color: "#94a3b8", fontSize: "12px" }}>Unissued</td>
+                    <td style={{ ...rowStyle, fontWeight: 700, color: "#059669" }}>{available.toFixed(2)}%</td>
+                    <td style={{ ...rowStyle, fontFamily: "monospace", color: "#059669" }}>{fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))}</td>
+                    {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", color: "#059669" }}>{fmtVal(available / 100 * valuation)}</td>}
+                    <td style={{ ...rowStyle, color: "#94a3b8", fontSize: "12px" }}>—</td>
+                  </tr>
+                )}
+                <tr style={{ background: "#f8fafc" }}>
+                  <td style={{ ...rowStyle, fontWeight: 700 }}>Total</td>
+                  <td colSpan={2} style={rowStyle}></td>
+                  <td style={{ ...rowStyle, fontWeight: 700 }}>100.00%</td>
+                  <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 700 }}>{fmtN(TOTAL_AUTHORIZED)}</td>
+                  {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 700, color: "#1d4ed8" }}>{fmtVal(valuation)}</td>}
+                  <td style={rowStyle}></td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        );
+      })()}
 
       <p style={{ ...S.p, fontStyle: "italic", color: "#94a3b8", marginTop: "16px", fontSize: "12px" }}>{data.notes}</p>
     </div>
