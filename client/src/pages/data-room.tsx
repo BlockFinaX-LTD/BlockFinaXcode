@@ -1825,23 +1825,27 @@ const CAP_TABLE_D = {
 };
 type CapTableData = typeof CAP_TABLE_D;
 
+const TOTAL_AUTHORIZED = 1_000_000;
 const parseNum  = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
 const fmtN      = (n: number) => Math.round(n).toLocaleString();
 const fmtRaise  = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}K` : `$${n}`;
 
 function buildWaterfall(d: CapTableData) {
   const foundingTotal = d.members.reduce((s, m) => s + parseNum(m.shares), 0);
-  let running = foundingTotal;
-  const stages: { name: string; investor: string; preMoney: number; raise: number; price: number; newShares: number; total: number }[] = [];
+  let running   = foundingTotal;
+  let available = TOTAL_AUTHORIZED - foundingTotal;
+  const stages: { name: string; investor: string; preMoney: number; raise: number; price: number; newShares: number; total: number; poolLeft: number }[] = [];
   for (const r of d.rounds) {
-    const preMoney = parseNum(r.preMoney);
-    const raise    = parseNum(r.raise);
-    const price    = running > 0 ? preMoney / running : 0;
-    const newShares = price > 0 ? Math.round(raise / price) : 0;
-    running += newShares;
-    stages.push({ name: r.name, investor: r.investor, preMoney, raise, price, newShares, total: running });
+    const preMoney   = parseNum(r.preMoney);
+    const raise      = parseNum(r.raise);
+    const price      = running > 0 ? preMoney / running : 0;
+    const calculated = price > 0 ? Math.round(raise / price) : 0;
+    const newShares  = Math.min(calculated, Math.max(0, available));
+    available -= newShares;
+    running   += newShares;
+    stages.push({ name: r.name, investor: r.investor, preMoney, raise, price, newShares, total: running, poolLeft: available });
   }
-  return { foundingTotal, stages, finalTotal: running };
+  return { foundingTotal, stages, finalTotal: running, unissued: TOTAL_AUTHORIZED - running };
 }
 
 function CapTableDoc({ token }: { token: string }) {
@@ -1974,12 +1978,16 @@ function CapTableDoc({ token }: { token: string }) {
       {/* Summary stats */}
       <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
         <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Founding Shares</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(wf.foundingTotal)}</p>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Authorized</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(TOTAL_AUTHORIZED)}</p>
         </div>
-        <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Shares (post-{data.rounds[data.rounds.length - 1]?.name || "all rounds"})</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(wf.finalTotal)}</p>
+        <div style={{ flex: 1, background: wf.unissued === 0 ? "#f0fdf4" : "#fefce8", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Issued</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: wf.unissued === 0 ? "#059669" : "#0f172a" }}>{fmtN(wf.finalTotal)}</p>
+        </div>
+        <div style={{ flex: 1, background: wf.unissued === 0 ? "#f0fdf4" : "#fefce8", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Unissued</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: wf.unissued === 0 ? "#059669" : "#f59e0b" }}>{fmtN(wf.unissued)}</p>
         </div>
         {wf.stages[0] && (
           <div style={{ flex: 1, background: "#eff6ff", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
@@ -2007,19 +2015,21 @@ function CapTableDoc({ token }: { token: string }) {
           <th style={hStyle}>Pre-Money</th>
           <th style={hStyle}>Raise</th>
           <th style={hStyle}>Price/Share</th>
-          <th style={hStyle}>New Shares</th>
-          <th style={hStyle}>Total Shares</th>
+          <th style={hStyle}>Shares Issued</th>
+          <th style={hStyle}>Total Issued</th>
+          <th style={hStyle}>Pool Left</th>
           <th style={hStyle}>Investor %</th>
         </tr></thead>
         <tbody>
           <tr style={{ background: "#f8fafc" }}>
-            <td style={{ ...rowStyle, fontWeight: 600 }}>Founding</td>
-            <td style={{ ...rowStyle, color: "#94a3b8" }}>—</td>
+            <td style={{ ...rowStyle, fontWeight: 600 }}>Day 1</td>
+            <td style={{ ...rowStyle, color: "#94a3b8" }}>Founders / Pool / AYAHQ</td>
             <td style={{ ...rowStyle, color: "#94a3b8" }}>—</td>
             <td style={{ ...rowStyle, color: "#94a3b8" }}>—</td>
             <td style={{ ...rowStyle, color: "#94a3b8" }}>—</td>
             <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(wf.foundingTotal)}</td>
             <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 600 }}>{fmtN(wf.foundingTotal)}</td>
+            <td style={{ ...rowStyle, fontFamily: "monospace", color: "#f59e0b", fontWeight: 600 }}>{fmtN(TOTAL_AUTHORIZED - wf.foundingTotal)}</td>
             <td style={{ ...rowStyle, color: "#94a3b8" }}>—</td>
           </tr>
           {wf.stages.map((s, i) => (
@@ -2031,6 +2041,7 @@ function CapTableDoc({ token }: { token: string }) {
               <td style={{ ...rowStyle, fontFamily: "monospace", color: "#2563eb", fontWeight: 700 }}>${s.price.toFixed(2)}</td>
               <td style={{ ...rowStyle, fontFamily: "monospace" }}>+{fmtN(s.newShares)}</td>
               <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 600 }}>{fmtN(s.total)}</td>
+              <td style={{ ...rowStyle, fontFamily: "monospace", color: s.poolLeft === 0 ? "#059669" : "#f59e0b", fontWeight: 600 }}>{fmtN(s.poolLeft)}</td>
               <td style={{ ...rowStyle, fontWeight: 700, color: "#059669" }}>{(s.newShares / s.total * 100).toFixed(1)}%</td>
             </tr>
           ))}
