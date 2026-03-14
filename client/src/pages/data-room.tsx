@@ -1828,14 +1828,6 @@ const CAP_TABLE_D = {
 };
 type CapTableData = typeof CAP_TABLE_D;
 
-// Dilution waterfall: cumulative shares issued at each round (1M total authorized)
-const DILUTION_ROUNDS = [
-  { round: "Founding",  preMoney: "—",    raise: "—",     newShares: 449_500, totalShares: 449_500,   pricePerShare: "—"       },
-  { round: "Pre-Seed",  preMoney: "$5M",  raise: "$500K", newShares: 45_000,  totalShares: 494_500,   pricePerShare: "$11.12"  },
-  { round: "Seed",      preMoney: "$10M", raise: "$1.5M", newShares: 74_000,  totalShares: 568_500,   pricePerShare: "$20.27"  },
-  { round: "Series A",  preMoney: "$25M", raise: "$8M",   newShares: 182_000, totalShares: 750_500,   pricePerShare: "$43.96"  },
-  { round: "Series B",  preMoney: "$60M", raise: "$20M",  newShares: 249_500, totalShares: 1_000_000, pricePerShare: "$80.16"  },
-];
 
 const parsePct  = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
 const fmtN      = (n: number) => n.toLocaleString();
@@ -2048,37 +2040,6 @@ function CapTableDoc({ token }: { token: string }) {
         <span style={{ fontSize: "13px", fontWeight: 700, color: pctWarn(viewTotalPct) }}>Total: {viewTotalPct.toFixed(2)}%</span>
       </div>
 
-      {/* Dilution Waterfall */}
-      <h3 style={{ ...S.h3, marginTop: "24px" }}>Round-by-Round Dilution Waterfall</h3>
-      <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "6px", padding: "8px 12px", marginBottom: "10px", fontSize: "12px", color: "#0369a1" }}>
-        Founder ownership (Anthony Kumako) after each round. All figures assume no option pool top-ups between rounds.
-      </div>
-      <table style={S.table}>
-        <thead><tr>
-          <th style={hStyle}>Round</th>
-          <th style={hStyle}>Pre-Money</th>
-          <th style={hStyle}>Raise</th>
-          <th style={hStyle}>Price/Share</th>
-          <th style={hStyle}>New Shares</th>
-          <th style={hStyle}>Total Shares</th>
-          <th style={hStyle}>CEO Ownership</th>
-        </tr></thead>
-        <tbody>{DILUTION_ROUNDS.map((r, i) => {
-          const ceoPct = (315_000 / r.totalShares * 100).toFixed(1) + "%";
-          const isHighlight = i === 1;
-          return (
-            <tr key={i} style={{ background: isHighlight ? "#eff6ff" : undefined }}>
-              <td style={{ ...rowStyle, fontWeight: 600 }}>{r.round}</td>
-              <td style={rowStyle}>{r.preMoney}</td>
-              <td style={rowStyle}>{r.raise}</td>
-              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{r.pricePerShare}</td>
-              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{r.newShares.toLocaleString()}</td>
-              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{r.totalShares.toLocaleString()}</td>
-              <td style={{ ...rowStyle, fontWeight: 700, color: "#2563eb" }}>{ceoPct}</td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
 
       {/* Vesting Summary */}
       <h3 style={{ ...S.h3, marginTop: "24px" }}>Vesting Schedule Summary</h3>
