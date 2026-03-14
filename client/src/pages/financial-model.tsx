@@ -577,7 +577,7 @@ export default function FinancialModel() {
                     <tr><td colSpan={slice.length + 1} className={secCls}>Operating Expenses</td></tr>
                     {[
                       { label: 'Personnel',          tip: 'Headcount × salary/FTE/month. Starts at $3,500/FTE (lean Africa-based team, Jul 2026) and scales to $8,500/FTE by 2030 as the team internationalises and senior hires are made.', vals: slice.map(r => r.personnel) },
-                      { label: 'Sales & Marketing',  tip: 'New Wallets acquired × cost-per-acquisition (CAC). CAC starts at $15 (community/organic) and falls to $7 at scale as brand recognition lowers paid acquisition costs.', vals: slice.map(r => r.marketing) },
+                      { label: 'Sales & Marketing',  tip: 'New Wallets acquired × cost-per-acquisition (CAC). CAC is $38–40 in the paid-acquisition phase, drops to $10–15 in H2 2028 as viral referrals dominate, and reaches $4–5 at steady state in 2030 (comparable to Wave, OPay at scale).', vals: slice.map(r => r.marketing) },
                       { label: 'Legal & Compliance', tip: 'Regulatory counsel retainer, Bank of Ghana sandbox compliance, multi-country fintech licensing (Nigeria, Kenya, Rwanda), AML policy maintenance, and ongoing legal filings. This is a major fixed cost for any regulated African fintech — $15K–62K/month across the model lifetime.', vals: slice.map(r => r.legal) },
                       { label: 'Infra & Cloud',      tip: 'Cloud hosting, Neon serverless Postgres, API gateway, monitoring, and CDN. Scales with user volume and transaction throughput — from $800/mo (launch) to $168K/mo (Dec 2030).', vals: slice.map(r => r.infraCloud) },
                       { label: 'G&A',                tip: 'General and administrative: finance, HR, office, software subscriptions. Kept lean early as founders handle multiple roles.', vals: slice.map(r => r.ga) },
@@ -1232,8 +1232,9 @@ export default function FinancialModel() {
                       { label: 'Avg Monthly Transfer $500', note: 'Conservative estimate for active wallet transfer volume. Many African SMEs move $1,000–$5,000/month for trade settlement. Adjustable in constants.' },
                       { label: 'Tax Rate 25%', note: 'Approximate corporate tax rate for a Ghana-domiciled entity. No loss carryforward modelled — tax applies to all positive EBT months individually.' },
                       { label: 'D&A $4,000/month', note: 'Non-cash amortisation of capitalised platform development costs (smart contract audits, initial infrastructure). Has no cash impact — only affects EBIT and below.' },
+                      { label: 'CAC Trajectory', note: 'H2 2026–H1 2028: paid acquisition ($21–40). H2 2028 viral tipping point: CAC drops sharply to $10–15 as BoG sandbox credibility, Series B deployment, and crypto community flywheel converge — comparable to Wave ($38→$6 in 18 months) and OPay ($40→$5 in 24 months). 2030 steady state: $4–5.' },
                       { label: '12× EBITDA Exit Multiple', note: 'Conservative. African fintech comparables trade at 15–20× EBITDA. Using 12× to present a floor-case valuation to investors.' },
-                      { label: 'Break-even Definition', note: 'First calendar month where NET INCOME > 0 (after all costs and taxes). EBITDA break-even occurs earlier; net income break-even is the more conservative measure shown.' },
+                      { label: 'Break-even Definition', note: 'First calendar month where NET INCOME > 0 (after all costs and taxes). Based on revised CAC trajectory this is Jul 2028 (Month 25 — under 2 years from launch). EBITDA break-even occurs slightly earlier in the same month.' },
                     ].map(a => (
                       <div key={a.label} className="bg-slate-50 rounded-lg p-3">
                         <p className="font-semibold text-slate-700 text-[11px] mb-0.5">{a.label}</p>
