@@ -942,20 +942,31 @@ export default function FinancialModel() {
                   const gpPerEvent   = revPerEvent - cogsPerEvent;
                   const gpPctEvent   = revPerEvent > 0 ? (gpPerEvent / revPerEvent) * 100 : 0;
 
-                  // ── Yearly wallet metrics (2030 maturity) ──
+                  // ── CAC: Total sales & marketing ÷ new customers acquired ──
                   const totalMktg        = model.reduce((s, r) => s + r.marketing, 0);
                   const cumW             = model[model.length - 1]?.cumWallets ?? 1;
-                  const blendedCac       = totalMktg / cumW;
-                  const annualRevPerWallet  = rev30 / cumW;                           // 2030 annual rev ÷ total wallets
-                  const annualGpPerWallet   = (gp30 / cumW);                          // 2030 annual GP ÷ total wallets
-                  const walletPaybackMonths = annualRevPerWallet > 0 ? (blendedCac / (annualRevPerWallet / 12)) : 999;
+                  const walletCac        = totalMktg / cumW;                          // blended wallet CAC
+                  const hedgerCac        = walletCac * 5;                             // B2B field sales ≈ 5× wallet CAC
 
-                  // ── Yearly active hedger economics ──
-                  // 1 event/mo per active hedger (conservative B2B assumption)
-                  const hedgerAnnualRev  = revPerEvent * 12;                          // 12 events/yr
-                  const hedgerAnnualGp   = gpPerEvent  * 12;
-                  const hedgerCac        = blendedCac * 5;                            // B2B field sales ~5× wallet CAC
-                  const hedgerPaybackMo  = hedgerAnnualRev > 0 ? (hedgerCac / (hedgerAnnualRev / 12)) : 999;
+                  // ── Annual revenue per customer type (2030 maturity year) ──
+                  const annualRevPerWallet  = rev30 / cumW;
+                  const hedgerAnnualRev     = revPerEvent * 12;                       // 1 event/mo × 12
+
+                  // ── Contribution margin per customer per year ──
+                  const annualGpPerWallet   = gp30 / cumW;
+                  const hedgerAnnualGp      = gpPerEvent * 12;
+
+                  // ── LTV: Annual revenue × average customer lifetime ──
+                  // Wallet: 2-year avg (mix of churned + retained)
+                  // Hedger: 3-year avg (B2B tools have higher retention)
+                  const walletLtv           = annualRevPerWallet * 2;
+                  const hedgerLtv           = hedgerAnnualRev    * 3;
+
+                  // ── LTV/CAC and Payback Period ──
+                  const walletLtvCac        = walletLtv  / (walletCac  || 1);
+                  const hedgerLtvCac        = hedgerLtv  / (hedgerCac  || 1);
+                  const walletPaybackMo     = annualRevPerWallet > 0 ? walletCac  / (annualRevPerWallet / 12) : 999;
+                  const hedgerPaybackMo     = hedgerAnnualRev    > 0 ? hedgerCac  / (hedgerAnnualRev    / 12) : 999;
 
                   const statBox = (label: string, value: string, sub: string, color = 'text-blue-600') => (
                     <div key={label} className="bg-slate-50 rounded-lg p-3 text-center">
@@ -967,43 +978,64 @@ export default function FinancialModel() {
 
                   return (
                     <>
-                      {/* Section A — Per-Event */}
+                      {/* Intro note */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-800 leading-relaxed">
+                        <strong>Unit economics</strong> measures the direct revenues and costs of a single customer to determine if the business model is profitable at the individual level before scaling. All figures computed from the 54-month model using 2030 maturity-year data.
+                      </div>
+
+                      {/* Section A — Contribution Margin per Unit */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">A · Per Hedge Event (2030 maturity)</p>
-                        <p className="text-xs text-slate-400 mb-3">Each hedge event is the fundamental revenue unit — a business buying or providing FX/commodity protection. These figures use 2030 data when the platform is at operating scale.</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">A · Contribution Margin — Per Hedge Event (unit = 1 protection event)</p>
+                        <p className="text-xs text-slate-400 mb-3">The hedge event is the fundamental revenue unit — one business buying FX, commodity, or crypto protection. Contribution margin = revenue minus all variable costs directly tied to that event. Fixed costs (salaries, infra) are excluded here.</p>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {statBox('Revenue / Event',      `$${Math.round(revPerEvent)}`,   'Hedge fee + creation fee',     'text-blue-600')}
-                          {statBox('COGS / Event',         `$${Math.round(cogsPerEvent)}`,  'Loyalty + oracle + gas/KYC',   'text-slate-600')}
-                          {statBox('Gross Profit / Event', `$${Math.round(gpPerEvent)}`,    'Net per event at scale',       'text-emerald-600')}
-                          {statBox('Gross Margin / Event', `${gpPctEvent.toFixed(0)}%`,     'Protocol-level efficiency',    'text-emerald-600')}
+                          {statBox('Revenue / Unit',            `$${Math.round(revPerEvent)}`,          'Hedge fee + creation fee',        'text-blue-600')}
+                          {statBox('Variable Cost / Unit',      `$${Math.round(cogsPerEvent)}`,         'Creator loyalty + oracle + gas',  'text-slate-600')}
+                          {statBox('Contribution Margin',       `$${Math.round(gpPerEvent)}`,           'Revenue − variable costs',        'text-emerald-600')}
+                          {statBox('Contribution Margin %',     `${gpPctEvent.toFixed(0)}%`,            'Protocol-level efficiency',       'text-emerald-600')}
                         </div>
                       </div>
 
                       <hr className="border-slate-100" />
 
-                      {/* Section B — Active Hedger (Annual) */}
+                      {/* Section B — Active Hedger Full Unit Economics */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Hedger — Annual Economics</p>
-                        <p className="text-xs text-slate-400 mb-3">An active hedger is a business placing at least 1 protection event per month — e.g. an importer covering monthly FX exposure. Assumes 12 events per year (1/month), conservative for a B2B repeat-use product. B2B acquisition cost estimated at 5× wallet CAC to reflect field sales and partnerships.</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {statBox('Annual Rev / Hedger',   `$${Math.round(hedgerAnnualRev).toLocaleString()}`, '12 events/yr × rev/event',     'text-blue-600')}
-                          {statBox('Annual GP / Hedger',    `$${Math.round(hedgerAnnualGp).toLocaleString()}`,  '12 × gross profit/event',       'text-emerald-600')}
-                          {statBox('B2B Hedger CAC',        `$${Math.round(hedgerCac)}`,                       '5× wallet CAC (field sales)',   'text-amber-600')}
-                          {statBox('CAC Payback',           `${hedgerPaybackMo.toFixed(1)} mo`,                'Months to recoup CAC',          hedgerPaybackMo <= 12 ? 'text-emerald-600' : 'text-amber-600')}
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Hedger Customer (unit = 1 business hedging monthly)</p>
+                        <p className="text-xs text-slate-400 mb-3">
+                          <strong>CAC</strong> = total B2B sales & marketing cost to acquire one hedging business (estimated at 5× wallet CAC to reflect field sales, demos, and partnerships). &nbsp;
+                          <strong>LTV</strong> = annual revenue per hedger × 3-year average B2B retention. &nbsp;
+                          <strong>LTV/CAC &gt; 3×</strong> is the investor benchmark for a sustainable model.
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                          {statBox('CAC',              `$${Math.round(hedgerCac)}`,                        'Sales & mktg per hedger',         'text-amber-600')}
+                          {statBox('Annual Revenue',   `$${Math.round(hedgerAnnualRev).toLocaleString()}`, '12 events/yr × $130/event',       'text-blue-600')}
+                          {statBox('Annual GP',        `$${Math.round(hedgerAnnualGp).toLocaleString()}`,  '12 × contribution margin',        'text-emerald-600')}
+                          {statBox('LTV (3 yr)',        `$${Math.round(hedgerLtv).toLocaleString()}`,       'Annual rev × 3-yr B2B tenure',    'text-blue-600')}
+                          {statBox('LTV / CAC',        `${hedgerLtvCac.toFixed(1)}×`,                      hedgerLtvCac >= 3 ? '✓ Above 3× benchmark' : '✗ Below 3× benchmark', hedgerLtvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 gap-3">
+                          {statBox('CAC Payback Period', `${hedgerPaybackMo.toFixed(1)} months`, 'Time to recoup acquisition cost from revenue — shorter is better', hedgerPaybackMo <= 12 ? 'text-emerald-600' : 'text-amber-600')}
                         </div>
                       </div>
 
                       <hr className="border-slate-100" />
 
-                      {/* Section C — Platform Wallet (Annual) */}
+                      {/* Section C — Wallet Customer Full Unit Economics */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet — Annual Economics (blended, conservative)</p>
-                        <p className="text-xs text-slate-400 mb-3">Blended across all registered wallets including passive users. Uses 2030 annual platform revenue ÷ total wallets acquired — the most conservative view. CAC payback answers: "how many months until we earn back what we spent to acquire this wallet?"</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {statBox('Annual Rev / Wallet',  `$${Math.round(annualRevPerWallet)}`,  '2030 revenue ÷ all wallets',    'text-blue-600')}
-                          {statBox('Annual GP / Wallet',   `$${Math.round(annualGpPerWallet)}`,   '2030 gross profit ÷ all wallets','text-emerald-600')}
-                          {statBox('Blended CAC',          `$${Math.round(blendedCac)}`,          'Total mktg ÷ total wallets',    'text-amber-600')}
-                          {statBox('CAC Payback',          `${walletPaybackMonths.toFixed(1)} mo`, 'Months to recoup CAC',          walletPaybackMonths <= 12 ? 'text-emerald-600' : 'text-amber-600')}
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet Customer — Conservative Blended View</p>
+                        <p className="text-xs text-slate-400 mb-3">
+                          <strong>CAC</strong> = total marketing spend ÷ total wallets acquired (blended across all channels). &nbsp;
+                          <strong>LTV</strong> = 2030 annual revenue per wallet × 2-year average wallet retention. &nbsp;
+                          This is the most conservative view — it includes passive wallets that generate little revenue, making it a stress-test of the business model.
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                          {statBox('CAC',              `$${Math.round(walletCac)}`,             'Total mktg ÷ total wallets',      'text-amber-600')}
+                          {statBox('Annual Revenue',   `$${Math.round(annualRevPerWallet)}`,    '2030 rev ÷ cumulative wallets',   'text-blue-600')}
+                          {statBox('Annual GP',        `$${Math.round(annualGpPerWallet)}`,     '2030 GP ÷ cumulative wallets',    'text-emerald-600')}
+                          {statBox('LTV (2 yr)',        `$${Math.round(walletLtv)}`,             'Annual rev × 2-yr wallet tenure', 'text-blue-600')}
+                          {statBox('LTV / CAC',        `${walletLtvCac.toFixed(1)}×`,           walletLtvCac >= 3 ? '✓ Above 3× benchmark' : '✗ Below 3× benchmark', walletLtvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 gap-3">
+                          {statBox('CAC Payback Period', `${walletPaybackMo.toFixed(1)} months`, 'Time to recoup acquisition cost from revenue — shorter is better', walletPaybackMo <= 12 ? 'text-emerald-600' : 'text-amber-600')}
                         </div>
                       </div>
                     </>
