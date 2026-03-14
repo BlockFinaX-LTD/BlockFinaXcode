@@ -946,19 +946,19 @@ export default function FinancialModel() {
                   const totalMktg        = model.reduce((s, r) => s + r.marketing, 0);
                   const cumW             = model[model.length - 1]?.cumWallets ?? 1;
                   const walletCac        = totalMktg / cumW;                          // blended wallet CAC
-                  const hedgerCac        = walletCac * 5;                             // B2B field sales ≈ 5× wallet CAC
+                  const hedgerCac        = walletCac * 5;                             // Active users require more targeted acquisition (demos, trust, education)
 
                   // ── Annual revenue per customer type (2030 maturity year) ──
                   const annualRevPerWallet  = rev30 / cumW;
-                  const hedgerAnnualRev     = revPerEvent * 12;                       // 1 event/mo × 12
+                  const hedgerAnnualRev     = revPerEvent * 12;                       // 1 event/mo × 12 (conservative — speculators may transact more)
 
                   // ── Contribution margin per customer per year ──
                   const annualGpPerWallet   = gp30 / cumW;
                   const hedgerAnnualGp      = gpPerEvent * 12;
 
                   // ── LTV: Annual revenue × average customer lifetime ──
-                  // Wallet: 2-year avg (mix of churned + retained)
-                  // Hedger: 3-year avg (B2B tools have higher retention)
+                  // Wallet: 2-year avg (mix of casual, active, and churned users)
+                  // Active user: 3-year avg (engaged users — business or retail — tend to stay longer)
                   const walletLtv           = annualRevPerWallet * 2;
                   const hedgerLtv           = hedgerAnnualRev    * 3;
 
@@ -980,7 +980,7 @@ export default function FinancialModel() {
                     <>
                       {/* Intro note */}
                       <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-800 leading-relaxed">
-                        <strong>Unit economics</strong> measures the direct revenues and costs of a single customer to determine if the business model is profitable at the individual level before scaling. All figures computed from the 54-month model using 2030 maturity-year data.
+                        <strong>Unit economics</strong> measures the direct revenues and costs of a single customer to determine if the business model is profitable at the individual level before scaling. BlockFinaX serves <strong>everyone</strong> — African SMEs, individual traders, crypto holders, and speculators — not just businesses. All figures computed from the 54-month model using 2030 maturity-year data.
                       </div>
 
                       {/* Section A — Contribution Margin per Unit */}
@@ -997,19 +997,19 @@ export default function FinancialModel() {
 
                       <hr className="border-slate-100" />
 
-                      {/* Section B — Active Hedger Full Unit Economics */}
+                      {/* Section B — Active Protection Buyer Full Unit Economics */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Hedger Customer (unit = 1 business hedging monthly)</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Protection Buyer (unit = 1 user placing 1 event/month)</p>
                         <p className="text-xs text-slate-400 mb-3">
-                          <strong>CAC</strong> = total B2B sales & marketing cost to acquire one hedging business (estimated at 5× wallet CAC to reflect field sales, demos, and partnerships). &nbsp;
-                          <strong>LTV</strong> = annual revenue per hedger × 3-year average B2B retention. &nbsp;
-                          <strong>LTV/CAC &gt; 3×</strong> is the investor benchmark for a sustainable model.
+                          The platform is open to <strong>everyone</strong> — African SMEs managing FX exposure, individual traders protecting savings, and speculators taking directional positions on FX, commodities, or crypto. All generate the same per-event revenue. <strong>1 event/month is the conservative floor</strong> — speculators often transact far more frequently, which would push annual revenue and LTV higher. &nbsp;
+                          <strong>CAC</strong> = acquisition cost for an active user (demos, trust-building, education — ~5× the cost of a passive wallet sign-up). &nbsp;
+                          <strong>LTV/CAC &gt; 3×</strong> is the investor sustainability benchmark.
                         </p>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                          {statBox('CAC',              `$${Math.round(hedgerCac)}`,                        'Sales & mktg per hedger',         'text-amber-600')}
+                          {statBox('CAC',              `$${Math.round(hedgerCac)}`,                        'Acq. cost per active user',       'text-amber-600')}
                           {statBox('Annual Revenue',   `$${Math.round(hedgerAnnualRev).toLocaleString()}`, '12 events/yr × $130/event',       'text-blue-600')}
                           {statBox('Annual GP',        `$${Math.round(hedgerAnnualGp).toLocaleString()}`,  '12 × contribution margin',        'text-emerald-600')}
-                          {statBox('LTV (3 yr)',        `$${Math.round(hedgerLtv).toLocaleString()}`,       'Annual rev × 3-yr B2B tenure',    'text-blue-600')}
+                          {statBox('LTV (3 yr)',        `$${Math.round(hedgerLtv).toLocaleString()}`,       'Annual rev × 3-yr avg retention', 'text-blue-600')}
                           {statBox('LTV / CAC',        `${hedgerLtvCac.toFixed(1)}×`,                      hedgerLtvCac >= 3 ? '✓ Above 3× benchmark' : '✗ Below 3× benchmark', hedgerLtvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
                         </div>
                         <div className="mt-2 grid grid-cols-1 gap-3">
