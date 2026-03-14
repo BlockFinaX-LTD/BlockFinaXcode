@@ -212,8 +212,6 @@ const CATEGORIES = [
     id: "legal", label: "Legal & Compliance", icon: FileText,
     color: "border-slate-200 bg-slate-50", iconColor: "text-slate-600",
     documents: [
-      { id: "incorporation", title: "Incorporation", description: "Ghana incorporation (active) · Delaware C-Corp in progress — dual-entity structure for US investors", href: null, type: "modal" as const, badge: "Active", badgeColor: "bg-emerald-100 text-emerald-700", icon: Building2 },
-      { id: "agreements", title: "Agreements", description: "NDA templates, service agreements, consulting contracts, and investor term sheet status", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: FileText },
       { id: "compliance-proposals", title: "Compliance Proposals", description: "Proposals and recommendations from legal and compliance consultants — admin editable", href: null, type: "modal" as const, badge: "Internal", badgeColor: "bg-purple-100 text-purple-700", icon: BookOpen },
       { id: "bog-sandbox", title: "Bank of Ghana Sandbox", description: "Regulatory sandbox application status, compliance framework, and market entry roadmap", href: null, type: "modal" as const, badge: "In Progress", badgeColor: "bg-orange-100 text-orange-700", icon: ShieldCheck },
       { id: "token-legal", title: "Token Legal Opinion", description: "USDC-only model — no native token, no securities classification risk", href: null, type: "coming-soon" as const, badge: "Coming Soon", badgeColor: "bg-slate-100 text-slate-400", icon: FileText },
@@ -227,6 +225,8 @@ const CATEGORIES = [
     documents: [
       { id: "cap-table", title: "Cap Table", description: "Founder equity, option pool, investor allocations, and post-money ownership structure", href: null, type: "modal" as const, badge: "Confidential", badgeColor: "bg-indigo-100 text-indigo-700", icon: PieChart },
       { id: "team-info", title: "Team", description: "Founding team, advisors, and key hires — backgrounds, roles, and LinkedIn profiles", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Users },
+      { id: "incorporation", title: "Incorporation & Ownership", description: "Ghana incorporation (active) · Delaware C-Corp in progress — dual-entity structure for US investors", href: null, type: "modal" as const, badge: "Active", badgeColor: "bg-emerald-100 text-emerald-700", icon: Building2 },
+      { id: "agreements", title: "IP & Agreements", description: "NDA templates, IP assignment agreements, service contracts, consulting agreements, and investor term sheet status", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: FileText },
     ],
   },
 ];
