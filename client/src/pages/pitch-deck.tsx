@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight, CheckCircle2, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, AlertTriangle, HandCoins, Users, Megaphone, Building2, Gift, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -7,6 +7,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import logoPath from "@/assets/logo.png";
+import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
 
 const slides = [
   { id: 1, type: "cover" },
@@ -26,6 +27,35 @@ export default function PitchDeck() {
   const [direction, setDirection] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
+
+  // Live financial figures — pulled directly from the same model the financial model page uses
+  const fm = useMemo(() => {
+    const a = DEFAULT_ANNUALS; // [0]=2026H2, [1]=2027, [2]=2028, [3]=2029, [4]=2030
+    const cumWallets26 = a[0].totalNewWallets;
+    const cumWallets27 = cumWallets26 + a[1].totalNewWallets;
+    const cumWallets28 = cumWallets27 + a[2].totalNewWallets;
+    const cumWallets29 = cumWallets28 + a[3].totalNewWallets;
+    const cumWallets30 = cumWallets29 + a[4].totalNewWallets;
+    const fmtWallets = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${Math.round(n / 1_000)}K` : `${n}`;
+    const fmtNum = (n: number) => n >= 1_000_000_000 ? `${(n / 1_000_000_000).toFixed(1)}B` : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(0)}M` : n >= 1_000 ? `${Math.round(n / 1_000)}K` : `${n}`;
+    const volGrowth = a[3].notionalHedged > 0 && a[1].notionalHedged > 0
+      ? `${Math.round(a[3].notionalHedged / a[1].notionalHedged)}x`
+      : 'n/a';
+    return {
+      // Y1 = 2027, Y2 = 2028, Y3 = 2029
+      y1: a[1], y2: a[2], y3: a[3],
+      cumWallets: { y1: fmtWallets(cumWallets27), y2: fmtWallets(cumWallets28), y3: fmtWallets(cumWallets29), y4: fmtWallets(cumWallets30) },
+      notional: { y1: `$${fmtNum(a[1].notionalHedged)}`, y2: `$${fmtNum(a[2].notionalHedged)}`, y3: `$${fmtNum(a[3].notionalHedged)}` },
+      hedgeFees: { y1: fmtUSD(a[1].hedgeFees), y2: fmtUSD(a[2].hedgeFees), y3: fmtUSD(a[3].hedgeFees) },
+      eventFees: { y1: fmtUSD(a[1].eventCreationFees), y2: fmtUSD(a[2].eventCreationFees), y3: fmtUSD(a[3].eventCreationFees) },
+      walletFees: { y1: fmtUSD(a[1].walletFees), y2: fmtUSD(a[2].walletFees), y3: fmtUSD(a[3].walletFees) },
+      revenue: { y1: fmtUSD(a[1].totalRevenue), y2: fmtUSD(a[2].totalRevenue), y3: fmtUSD(a[3].totalRevenue) },
+      costs: { y1: fmtUSD(a[1].totalCosts), y2: fmtUSD(a[2].totalCosts), y3: fmtUSD(a[3].totalCosts) },
+      ebitda: { y1: fmtUSD(a[1].ebitda), y2: fmtUSD(a[2].ebitda), y3: fmtUSD(a[3].ebitda) },
+      volGrowth,
+      somRevenue: fmtUSD(a[2].totalRevenue), // Y2 (2028) revenue for SOM slide
+    };
+  }, []);
 
   const nextSlide = () => {
     setDirection(1);
@@ -249,7 +279,7 @@ export default function PitchDeck() {
                     <p className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-2">SOM</p>
                     <p className="text-4xl font-bold text-white mb-2">$2B</p>
                     <p className="text-lg font-semibold text-slate-200 mb-2">Serviceable Obtainable Market</p>
-                    <p className="text-sm text-slate-300">Achievable by Year 2 (2028) — generating $32M+ in platform revenue at 0.7% blended take rate plus $25/event creation fee</p>
+                    <p className="text-sm text-slate-300">Achievable by Year 2 (2028) — generating {fm.somRevenue}+ in platform revenue at 0.7% blended take rate plus $25/event creation fee</p>
                   </motion.div>
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="grid grid-cols-3 gap-4">
@@ -379,14 +409,14 @@ export default function PitchDeck() {
                     </thead>
                     <tbody>
                       {[
-                        { metric: "Hedge Notional Volume", y1: "$583M", y2: "$3.3B", y3: "$11B" },
-                        { metric: "New Wallets (Cumulative)", y1: "55,000", y2: "296,000", y3: "790,000" },
-                        { metric: "Hedge Protocol Fees (0.7% net)", y1: "$4.1M", y2: "$23M", y3: "$77M" },
-                        { metric: "Event Creation Fees ($25/event)", y1: "$900K", y2: "$4.4M", y3: "$12.2M" },
-                        { metric: "Wallet Transfer Fees (0.3%)", y1: "$493K", y2: "$4.8M", y3: "$18.6M" },
-                        { metric: "Total Revenue", y1: "$5.5M", y2: "$32M", y3: "$108M", highlight: true },
-                        { metric: "Total Operating Costs", y1: "$2.5M", y2: "$12M", y3: "$35M" },
-                        { metric: "EBITDA", y1: "$1.9M", y2: "$14M", y3: "$60M", highlight: true },
+                        { metric: "Hedge Notional Volume", y1: fm.notional.y1, y2: fm.notional.y2, y3: fm.notional.y3 },
+                        { metric: "New Wallets (Cumulative)", y1: fm.cumWallets.y1, y2: fm.cumWallets.y2, y3: fm.cumWallets.y3 },
+                        { metric: "Hedge Protocol Fees (0.7% net)", y1: fm.hedgeFees.y1, y2: fm.hedgeFees.y2, y3: fm.hedgeFees.y3 },
+                        { metric: "Event Creation Fees ($25/event)", y1: fm.eventFees.y1, y2: fm.eventFees.y2, y3: fm.eventFees.y3 },
+                        { metric: "Wallet Transfer Fees (0.3%)", y1: fm.walletFees.y1, y2: fm.walletFees.y2, y3: fm.walletFees.y3 },
+                        { metric: "Total Revenue", y1: fm.revenue.y1, y2: fm.revenue.y2, y3: fm.revenue.y3, highlight: true },
+                        { metric: "Total Operating Costs", y1: fm.costs.y1, y2: fm.costs.y2, y3: fm.costs.y3 },
+                        { metric: "EBITDA", y1: fm.ebitda.y1, y2: fm.ebitda.y2, y3: fm.ebitda.y3, highlight: true },
                       ].map((row, idx) => (
                         <tr key={idx} className={`border-t border-white/[0.04] ${row.highlight ? 'bg-white/[0.03]' : ''}`}>
                           <td className={`p-4 font-medium ${row.highlight ? 'text-white' : 'text-slate-200'}`}>{row.metric}</td>
@@ -408,7 +438,7 @@ export default function PitchDeck() {
                     <p className="text-sm text-slate-300">Positive from H2 of Year 1</p>
                   </div>
                   <div className="bg-purple-500/[0.08] border border-purple-500/25 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-purple-400">19x</p>
+                    <p className="text-3xl font-bold text-purple-400">{fm.volGrowth}</p>
                     <p className="text-sm text-slate-300">Volume growth (Y1 → Y3)</p>
                   </div>
                 </motion.div>
