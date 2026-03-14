@@ -942,21 +942,20 @@ export default function FinancialModel() {
                   const gpPerEvent   = revPerEvent - cogsPerEvent;
                   const gpPctEvent   = revPerEvent > 0 ? (gpPerEvent / revPerEvent) * 100 : 0;
 
-                  // ── Wallet LTV/CAC (honest, annualised from 2030 maturity) ──
-                  // Use 2030 annual revenue ÷ cumulative wallets → annualised per-wallet value × 2-yr tenure
-                  const totalMktg  = model.reduce((s, r) => s + r.marketing, 0);
-                  const cumW       = model[model.length - 1]?.cumWallets ?? 1;
-                  const blendedCac = totalMktg / cumW;
-                  const annualRevPerWallet = rev30 / cumW;           // 2030 annual rev ÷ total wallets
-                  const ltv        = annualRevPerWallet * 2;          // 24-month average wallet tenure
-                  const ltvCac     = ltv / (blendedCac || 1);
+                  // ── Yearly wallet metrics (2030 maturity) ──
+                  const totalMktg        = model.reduce((s, r) => s + r.marketing, 0);
+                  const cumW             = model[model.length - 1]?.cumWallets ?? 1;
+                  const blendedCac       = totalMktg / cumW;
+                  const annualRevPerWallet  = rev30 / cumW;                           // 2030 annual rev ÷ total wallets
+                  const annualGpPerWallet   = (gp30 / cumW);                          // 2030 annual GP ÷ total wallets
+                  const walletPaybackMonths = annualRevPerWallet > 0 ? (blendedCac / (annualRevPerWallet / 12)) : 999;
 
-                  // ── Active hedger economics ──
-                  // Conservative assumption: 1 event/active hedger/month; 24-month tenure
-                  const hedgerMonthlyRev = revPerEvent;               // 1 event/mo per active hedger
-                  const hedgerLtv        = hedgerMonthlyRev * 24;
-                  const hedgerCac        = blendedCac * 5;            // B2B field sales ~5× wallet CAC
-                  const hedgerLtvCac     = hedgerLtv / (hedgerCac || 1);
+                  // ── Yearly active hedger economics ──
+                  // 1 event/mo per active hedger (conservative B2B assumption)
+                  const hedgerAnnualRev  = revPerEvent * 12;                          // 12 events/yr
+                  const hedgerAnnualGp   = gpPerEvent  * 12;
+                  const hedgerCac        = blendedCac * 5;                            // B2B field sales ~5× wallet CAC
+                  const hedgerPaybackMo  = hedgerAnnualRev > 0 ? (hedgerCac / (hedgerAnnualRev / 12)) : 999;
 
                   const statBox = (label: string, value: string, sub: string, color = 'text-blue-600') => (
                     <div key={label} className="bg-slate-50 rounded-lg p-3 text-center">
@@ -982,29 +981,29 @@ export default function FinancialModel() {
 
                       <hr className="border-slate-100" />
 
-                      {/* Section B — Active Hedger LTV */}
+                      {/* Section B — Active Hedger (Annual) */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Hedger LTV (the high-value customer)</p>
-                        <p className="text-xs text-slate-400 mb-3">An active hedger is a business placing at least 1 protection event per month — e.g. an importer hedging monthly FX exposure. These are repeat B2B customers with predictable revenue. Assumes 1 event/month, 24-month average retention, B2B acquisition cost ≈ 5× wallet CAC.</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Hedger — Annual Economics</p>
+                        <p className="text-xs text-slate-400 mb-3">An active hedger is a business placing at least 1 protection event per month — e.g. an importer covering monthly FX exposure. Assumes 12 events per year (1/month), conservative for a B2B repeat-use product. B2B acquisition cost estimated at 5× wallet CAC to reflect field sales and partnerships.</p>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {statBox('Monthly Rev / Hedger', `$${Math.round(hedgerMonthlyRev)}`, '1 event/mo × rev/event',       'text-blue-600')}
-                          {statBox('Hedger LTV (24 mo)',   `$${Math.round(hedgerLtv).toLocaleString()}`, 'Avg 24-month tenure',          'text-blue-600')}
-                          {statBox('B2B Hedger CAC',       `$${Math.round(hedgerCac)}`,       '5× wallet CAC (field sales)',  'text-amber-600')}
-                          {statBox('Hedger LTV:CAC',       `${hedgerLtvCac.toFixed(1)}×`,     'Benchmark > 3×',               hedgerLtvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
+                          {statBox('Annual Rev / Hedger',   `$${Math.round(hedgerAnnualRev).toLocaleString()}`, '12 events/yr × rev/event',     'text-blue-600')}
+                          {statBox('Annual GP / Hedger',    `$${Math.round(hedgerAnnualGp).toLocaleString()}`,  '12 × gross profit/event',       'text-emerald-600')}
+                          {statBox('B2B Hedger CAC',        `$${Math.round(hedgerCac)}`,                       '5× wallet CAC (field sales)',   'text-amber-600')}
+                          {statBox('CAC Payback',           `${hedgerPaybackMo.toFixed(1)} mo`,                'Months to recoup CAC',          hedgerPaybackMo <= 12 ? 'text-emerald-600' : 'text-amber-600')}
                         </div>
                       </div>
 
                       <hr className="border-slate-100" />
 
-                      {/* Section C — Platform Wallet Metrics */}
+                      {/* Section C — Platform Wallet (Annual) */}
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet Metrics (blended across all registered wallets)</p>
-                        <p className="text-xs text-slate-400 mb-3">Blended figures across all wallets including passive users. LTV uses 2030 annualised revenue per wallet × 24-month tenure. CAC is total marketing spend ÷ total wallets acquired. These are conservative — excludes the full lifetime of early high-value wallets.</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet — Annual Economics (blended, conservative)</p>
+                        <p className="text-xs text-slate-400 mb-3">Blended across all registered wallets including passive users. Uses 2030 annual platform revenue ÷ total wallets acquired — the most conservative view. CAC payback answers: "how many months until we earn back what we spent to acquire this wallet?"</p>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {statBox('Annual Rev/Wallet (\'30)', `$${Math.round(annualRevPerWallet)}`, '2030 revenue ÷ all wallets',   'text-blue-600')}
-                          {statBox('Wallet LTV (24 mo)',   `$${Math.round(ltv)}`,              '2-year avg tenure assumption',  'text-blue-600')}
-                          {statBox('Blended CAC',          `$${Math.round(blendedCac)}`,       'Total mktg ÷ total wallets',   'text-amber-600')}
-                          {statBox('Wallet LTV:CAC',       `${ltvCac.toFixed(1)}×`,            'Benchmark > 3×',               ltvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
+                          {statBox('Annual Rev / Wallet',  `$${Math.round(annualRevPerWallet)}`,  '2030 revenue ÷ all wallets',    'text-blue-600')}
+                          {statBox('Annual GP / Wallet',   `$${Math.round(annualGpPerWallet)}`,   '2030 gross profit ÷ all wallets','text-emerald-600')}
+                          {statBox('Blended CAC',          `$${Math.round(blendedCac)}`,          'Total mktg ÷ total wallets',    'text-amber-600')}
+                          {statBox('CAC Payback',          `${walletPaybackMonths.toFixed(1)} mo`, 'Months to recoup CAC',          walletPaybackMonths <= 12 ? 'text-emerald-600' : 'text-amber-600')}
                         </div>
                       </div>
                     </>
