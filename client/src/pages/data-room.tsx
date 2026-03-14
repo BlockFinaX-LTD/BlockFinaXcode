@@ -1814,7 +1814,7 @@ const CAP_TABLE_D = {
     { name: "Anthony Kumako",    role: "CEO & Co-Founder", type: "founder", shares: "315000", vesting: "4-year, 1-year cliff" },
     { name: "[Co-Founder 2]",   role: "[Role]",            type: "founder", shares: "75000",  vesting: "4-year, 1-year cliff" },
     { name: "Employee Option Pool", role: "Option Pool",   type: "pool",    shares: "55000",  vesting: "4-year, 1-year cliff per grant" },
-    { name: "AYAHQ",            role: "Incubation",        type: "service", shares: "4500",   vesting: "2-year, 6-month cliff" },
+    { name: "AYAHQ",            role: "Incubation",        type: "service", shares: "10000",  vesting: "2-year, 6-month cliff" },
   ],
   rounds: [
     { name: "Pre-Seed", investor: "[Pre-Seed Investor]", preMoney: "5000000",  raise: "500000",   vesting: "None" },
