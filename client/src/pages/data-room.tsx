@@ -1809,21 +1809,21 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
 // Share structure tied to $5M pre-money valuation at Pre-Seed ($0.067/share)
 // Dilution waterfall: Pre-Seed 9.1% → Seed 13% → Series A 24% → Series B 25%
 const CAP_TABLE_D = {
-  notes: "Share price at Pre-Seed: $11.12/share ($5M pre-money ÷ 449,500 founding shares). All founder and option pool shares subject to vesting. Investor allocations subject to final term sheet. AYAHQ shares issued for incubation services.",
+  notes: "Authorized shares: 1,000,000. Share price at Pre-Seed: $11.12/share ($5M pre-money ÷ 449,500 founding shares). All founder and option pool shares subject to vesting. Investor allocations subject to final term sheet.",
   total_authorized: "1000000",
   founders: [
-    { name: "Anthony Kumako", role: "CEO & Co-Founder", shares: "315000", vesting: "4-year, 1-year cliff" },
-    { name: "[Co-Founder 2]", role: "[Role]",            shares: "75000",  vesting: "4-year, 1-year cliff" },
+    { name: "Anthony Kumako", role: "CEO & Co-Founder", pct: "31.5", vesting: "4-year, 1-year cliff" },
+    { name: "[Co-Founder 2]", role: "[Role]",            pct: "7.5",  vesting: "4-year, 1-year cliff" },
   ],
   option_pool: [
-    { name: "Employee Option Pool", shares: "55000", vesting: "4-year, 1-year cliff per grant" },
+    { name: "Employee Option Pool", pct: "5.5", vesting: "4-year, 1-year cliff per grant" },
   ],
   investors: [
-    { name: "AYAHQ",               round: "Incubation", amount: "Services", shares: "4500",  vesting: "2-year, 6-month cliff" },
-    { name: "[Pre-Seed Investor]", round: "Pre-Seed",   amount: "$500K",    shares: "45000", vesting: "None" },
-    { name: "[Seed Investor]",     round: "Seed",       amount: "$1.5M",    shares: "74000", vesting: "None" },
-    { name: "[Series A Investor]", round: "Series A",   amount: "$8M",      shares: "182000", vesting: "None" },
-    { name: "[Series B Investor]", round: "Series B",   amount: "$20M",     shares: "249500", vesting: "None" },
+    { name: "AYAHQ",               round: "Incubation", amount: "Services", pct: "0.45", vesting: "2-year, 6-month cliff" },
+    { name: "[Pre-Seed Investor]", round: "Pre-Seed",   amount: "$500K",    pct: "4.5",  vesting: "None" },
+    { name: "[Seed Investor]",     round: "Seed",       amount: "$1.5M",    pct: "7.4",  vesting: "None" },
+    { name: "[Series A Investor]", round: "Series A",   amount: "$8M",      pct: "18.2", vesting: "None" },
+    { name: "[Series B Investor]", round: "Series B",   amount: "$20M",     pct: "24.95",vesting: "None" },
   ],
 };
 type CapTableData = typeof CAP_TABLE_D;
@@ -1837,12 +1837,12 @@ const DILUTION_ROUNDS = [
   { round: "Series B",  preMoney: "$60M", raise: "$20M",  newShares: 249_500, totalShares: 1_000_000, pricePerShare: "$80.16"  },
 ];
 
-const parseShares = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
-const fmtN = (n: number) => n.toLocaleString();
-const calcTotal = (d: CapTableData) =>
-  [...d.founders, ...d.option_pool, ...d.investors].reduce((s, r) => s + parseShares(r.shares), 0);
-const toPct = (shares: string, total: number) =>
-  total === 0 ? "—" : (parseShares(shares) / total * 100).toFixed(2) + "%";
+const parsePct  = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
+const fmtN      = (n: number) => n.toLocaleString();
+const pctToShares = (pct: string, authorized: string) =>
+  Math.round(parsePct(pct) / 100 * parsePct(authorized));
+const calcTotalPct = (d: CapTableData) =>
+  [...d.founders, ...d.option_pool, ...d.investors].reduce((s, r) => s + parsePct(r.pct), 0);
 
 function CapTableDoc({ token }: { token: string }) {
   const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField } =
@@ -1862,15 +1862,18 @@ function CapTableDoc({ token }: { token: string }) {
   const hStyle: React.CSSProperties = { ...rowStyle, background: "#f8fafc", fontWeight: 600, fontSize: "12px", color: "#64748b" };
   const numInput: React.CSSProperties = { ...EI, fontFamily: "monospace" };
 
-  const draftTotal = calcTotal(draft);
-  const viewTotal  = calcTotal(data);
+  const draftTotalPct = calcTotalPct(draft);
+  const viewTotalPct  = calcTotalPct(data);
+  const auth = draft.total_authorized;
+  const authView = data.total_authorized;
+  const pctWarn = (pct: number) => pct > 100.05 ? "#ef4444" : pct < 99.5 ? "#f59e0b" : "#059669";
 
   if (editing) return (
     <div>
       <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
 
       <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", color: "#0369a1" }}>
-        Enter shares as plain numbers (e.g. 45000000). Percentages and totals calculate automatically.
+        Enter ownership % for each holder. Shares and total allocations calculate automatically. Percentages must sum to 100%.
       </div>
 
       <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" as const }}>
@@ -1879,8 +1882,12 @@ function CapTableDoc({ token }: { token: string }) {
           <input type="number" value={draft.total_authorized} onChange={e => setField("total_authorized", e.target.value)} style={numInput} />
         </div>
         <div style={{ flex: 1, minWidth: "160px", background: "#f8fafc", borderRadius: "6px", padding: "8px 12px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Issued (auto)</p>
-          <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: "#0f172a" }}>{fmtN(draftTotal)}</p>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total % Allocated</p>
+          <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: pctWarn(draftTotalPct) }}>{draftTotalPct.toFixed(2)}%</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "160px", background: "#f8fafc", borderRadius: "6px", padding: "8px 12px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Shares Issued (auto)</p>
+          <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: "#0f172a" }}>{fmtN(Math.round(draftTotalPct / 100 * parsePct(auth)))}</p>
         </div>
       </div>
 
@@ -1890,36 +1897,42 @@ function CapTableDoc({ token }: { token: string }) {
           <div style={{ flex: "2 1 140px" }}><TxtF label="name" value={r.name} onChange={v => setRow("founders", i, "name", v)} rows={1} /></div>
           <div style={{ flex: "2 1 140px" }}><TxtF label="role" value={r.role} onChange={v => setRow("founders", i, "role", v)} rows={1} /></div>
           <div style={{ flex: "2 1 160px" }}><TxtF label="vesting" value={r.vesting} onChange={v => setRow("founders", i, "vesting", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 120px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Shares</label>
-            <input type="number" value={r.shares} onChange={e => setRow("founders", i, "shares", e.target.value)} style={numInput} />
+          <div style={{ flex: "0 0 90px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Ownership %</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <input type="number" step="0.01" value={r.pct} onChange={e => setRow("founders", i, "pct", e.target.value)} style={{ ...numInput, width: "64px" }} />
+              <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
+            </div>
           </div>
-          <div style={{ flex: "0 0 70px", paddingBottom: "2px" }}>
-            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>% (auto)</p>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb", margin: 0 }}>{toPct(r.shares, draftTotal)}</p>
+          <div style={{ flex: "0 0 90px", paddingBottom: "2px" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>Shares (auto)</p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb", margin: 0 }}>{fmtN(pctToShares(r.pct, auth))}</p>
           </div>
           <button onClick={() => removeRow("founders", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
         </div>
       ))}
-      <button onClick={() => addRow("founders", { name: "", role: "", shares: "0", vesting: "4-year, 1-year cliff" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Founder</button>
+      <button onClick={() => addRow("founders", { name: "", role: "", pct: "0", vesting: "4-year, 1-year cliff" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Founder</button>
 
       <h3 style={S.h3}>Option Pool</h3>
       {draft.option_pool.map((r, i) => (
         <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px", marginBottom: "8px", display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "flex-end" }}>
           <div style={{ flex: "2 1 180px" }}><TxtF label="name" value={r.name} onChange={v => setRow("option_pool", i, "name", v)} rows={1} /></div>
           <div style={{ flex: "2 1 200px" }}><TxtF label="vesting" value={r.vesting} onChange={v => setRow("option_pool", i, "vesting", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 120px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Shares</label>
-            <input type="number" value={r.shares} onChange={e => setRow("option_pool", i, "shares", e.target.value)} style={numInput} />
+          <div style={{ flex: "0 0 90px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Ownership %</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <input type="number" step="0.01" value={r.pct} onChange={e => setRow("option_pool", i, "pct", e.target.value)} style={{ ...numInput, width: "64px" }} />
+              <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
+            </div>
           </div>
-          <div style={{ flex: "0 0 70px", paddingBottom: "2px" }}>
-            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>% (auto)</p>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#7c3aed", margin: 0 }}>{toPct(r.shares, draftTotal)}</p>
+          <div style={{ flex: "0 0 90px", paddingBottom: "2px" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>Shares (auto)</p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#7c3aed", margin: 0 }}>{fmtN(pctToShares(r.pct, auth))}</p>
           </div>
           <button onClick={() => removeRow("option_pool", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
         </div>
       ))}
-      <button onClick={() => addRow("option_pool", { name: "", shares: "0", vesting: "4-year, 1-year cliff per grant" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Pool</button>
+      <button onClick={() => addRow("option_pool", { name: "", pct: "0", vesting: "4-year, 1-year cliff per grant" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Pool</button>
 
       <h3 style={S.h3}>Investors</h3>
       {draft.investors.map((r, i) => (
@@ -1927,18 +1940,21 @@ function CapTableDoc({ token }: { token: string }) {
           <div style={{ flex: "2 1 140px" }}><TxtF label="name" value={r.name} onChange={v => setRow("investors", i, "name", v)} rows={1} /></div>
           <div style={{ flex: "1 1 90px" }}><TxtF label="round" value={r.round} onChange={v => setRow("investors", i, "round", v)} rows={1} /></div>
           <div style={{ flex: "1 1 80px" }}><TxtF label="amount" value={r.amount} onChange={v => setRow("investors", i, "amount", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 120px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Shares</label>
-            <input type="number" value={r.shares} onChange={e => setRow("investors", i, "shares", e.target.value)} style={numInput} />
+          <div style={{ flex: "0 0 90px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Ownership %</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <input type="number" step="0.01" value={r.pct} onChange={e => setRow("investors", i, "pct", e.target.value)} style={{ ...numInput, width: "64px" }} />
+              <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
+            </div>
           </div>
-          <div style={{ flex: "0 0 70px", paddingBottom: "2px" }}>
-            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>% (auto)</p>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#059669", margin: 0 }}>{toPct(r.shares, draftTotal)}</p>
+          <div style={{ flex: "0 0 90px", paddingBottom: "2px" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>Shares (auto)</p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#059669", margin: 0 }}>{fmtN(pctToShares(r.pct, auth))}</p>
           </div>
           <button onClick={() => removeRow("investors", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
         </div>
       ))}
-      <button onClick={() => addRow("investors", { name: "", round: "", amount: "", shares: "0", vesting: "None" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Investor</button>
+      <button onClick={() => addRow("investors", { name: "", round: "", amount: "", pct: "0", vesting: "None" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Investor</button>
 
       <h3 style={S.h3}>Notes</h3>
       <TxtF label="notes" value={draft.notes} onChange={v => setField("notes", v)} rows={3} />
@@ -1953,19 +1969,19 @@ function CapTableDoc({ token }: { token: string }) {
       <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
         <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
           <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Authorized Shares</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(parseShares(data.total_authorized))}</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(parsePct(data.total_authorized))}</p>
         </div>
         <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Issued</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(viewTotal)}</p>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Issued (auto)</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(Math.round(viewTotalPct / 100 * parsePct(authView)))}</p>
         </div>
         <div style={{ flex: 1, background: "#f0fdf4", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Remaining Unissued</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#059669" }}>{fmtN(Math.max(0, parseShares(data.total_authorized) - viewTotal))}</p>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total % Allocated</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: pctWarn(viewTotalPct) }}>{viewTotalPct.toFixed(2)}%</p>
         </div>
         <div style={{ flex: 1, background: "#eff6ff", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
           <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Pre-Seed Price/Share</p>
-          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#2563eb" }}>$0.067</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#2563eb" }}>$11.12</p>
         </div>
       </div>
 
@@ -1974,15 +1990,15 @@ function CapTableDoc({ token }: { token: string }) {
       <table style={S.table}>
         <thead><tr>
           <th style={hStyle}>Name</th><th style={hStyle}>Role</th>
-          <th style={hStyle}>Shares</th><th style={hStyle}>Ownership %</th>
+          <th style={hStyle}>Ownership %</th><th style={hStyle}>Shares (auto)</th>
           <th style={hStyle}>Vesting</th>
         </tr></thead>
         <tbody>{data.founders.map((r, i) => (
           <tr key={i}>
             <td style={rowStyle}>{r.name}</td>
             <td style={rowStyle}>{r.role}</td>
-            <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(parseShares(r.shares))}</td>
-            <td style={{ ...rowStyle, fontWeight: 600, color: "#2563eb" }}>{toPct(r.shares, viewTotal)}</td>
+            <td style={{ ...rowStyle, fontWeight: 700, color: "#2563eb" }}>{parsePct(r.pct).toFixed(2)}%</td>
+            <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(pctToShares(r.pct, authView))}</td>
             <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{r.vesting}</td>
           </tr>
         ))}</tbody>
@@ -1992,14 +2008,15 @@ function CapTableDoc({ token }: { token: string }) {
       <h3 style={S.h3}>Option Pool</h3>
       <table style={S.table}>
         <thead><tr>
-          <th style={hStyle}>Pool</th><th style={hStyle}>Shares</th>
-          <th style={hStyle}>% of Total</th><th style={hStyle}>Vesting</th>
+          <th style={hStyle}>Pool</th>
+          <th style={hStyle}>Ownership %</th><th style={hStyle}>Shares (auto)</th>
+          <th style={hStyle}>Vesting</th>
         </tr></thead>
         <tbody>{data.option_pool.map((r, i) => (
           <tr key={i}>
             <td style={rowStyle}>{r.name}</td>
-            <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(parseShares(r.shares))}</td>
-            <td style={{ ...rowStyle, fontWeight: 600, color: "#7c3aed" }}>{toPct(r.shares, viewTotal)}</td>
+            <td style={{ ...rowStyle, fontWeight: 700, color: "#7c3aed" }}>{parsePct(r.pct).toFixed(2)}%</td>
+            <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(pctToShares(r.pct, authView))}</td>
             <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{r.vesting}</td>
           </tr>
         ))}</tbody>
@@ -2010,23 +2027,25 @@ function CapTableDoc({ token }: { token: string }) {
       <table style={S.table}>
         <thead><tr>
           <th style={hStyle}>Investor</th><th style={hStyle}>Round</th>
-          <th style={hStyle}>Amount</th><th style={hStyle}>Shares</th>
-          <th style={hStyle}>Ownership %</th><th style={hStyle}>Vesting</th>
+          <th style={hStyle}>Amount</th>
+          <th style={hStyle}>Ownership %</th><th style={hStyle}>Shares (auto)</th>
+          <th style={hStyle}>Vesting</th>
         </tr></thead>
         <tbody>{data.investors.map((r, i) => (
           <tr key={i}>
             <td style={rowStyle}>{r.name}</td>
             <td style={rowStyle}>{r.round}</td>
             <td style={rowStyle}>{r.amount}</td>
-            <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(parseShares(r.shares))}</td>
-            <td style={{ ...rowStyle, fontWeight: 600, color: "#059669" }}>{toPct(r.shares, viewTotal)}</td>
+            <td style={{ ...rowStyle, fontWeight: 700, color: "#059669" }}>{parsePct(r.pct).toFixed(2)}%</td>
+            <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(pctToShares(r.pct, authView))}</td>
             <td style={{ ...rowStyle, fontSize: "12px", color: r.vesting === "None" ? "#94a3b8" : "#7c3aed" }}>{r.vesting}</td>
           </tr>
         ))}</tbody>
       </table>
 
-      <div style={{ marginTop: "12px", padding: "10px 14px", background: "#f8fafc", borderRadius: "6px", display: "flex", justifyContent: "flex-end" }}>
-        <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Total allocated: {toPct(String(viewTotal), viewTotal === 0 ? 1 : viewTotal)}</span>
+      <div style={{ marginTop: "12px", padding: "10px 14px", background: "#f8fafc", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: "12px", color: "#64748b" }}>Shares calculated as: ownership % × {fmtN(parsePct(authView))} authorized</span>
+        <span style={{ fontSize: "13px", fontWeight: 700, color: pctWarn(viewTotalPct) }}>Total: {viewTotalPct.toFixed(2)}%</span>
       </div>
 
       {/* Dilution Waterfall */}
