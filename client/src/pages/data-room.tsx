@@ -1806,22 +1806,36 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
 }
 
 /* ─── CAP TABLE ─── */
+// Share structure tied to $5M pre-money valuation at Pre-Seed ($0.067/share)
+// Dilution waterfall: Pre-Seed 9.1% → Seed 13% → Series A 24% → Series B 25%
 const CAP_TABLE_D = {
-  notes: "All figures are pre-money. Option pool reserved for engineering and business development hires (2026–2027). Investor allocations subject to final term sheet.",
-  total_authorized: "100000000",
+  notes: "Share price at Pre-Seed: $0.067 ($5M pre-money ÷ 75M founding shares). All founder and option pool shares subject to vesting. Investor allocations subject to final term sheet. AYAHQ shares issued for incubation services.",
+  total_authorized: "200000000",
   founders: [
-    { name: "Anthony Kumako", role: "CEO & Co-Founder", shares: "45000000" },
-    { name: "[Co-Founder 2]", role: "[Role]",            shares: "15000000" },
+    { name: "Anthony Kumako", role: "CEO & Co-Founder", shares: "52500000", vesting: "4-year, 1-year cliff" },
+    { name: "[Co-Founder 2]", role: "[Role]",            shares: "12500000", vesting: "4-year, 1-year cliff" },
   ],
   option_pool: [
-    { name: "Employee Option Pool", shares: "10000000" },
+    { name: "Employee Option Pool", shares: "9250000", vesting: "4-year, 1-year cliff per grant" },
   ],
   investors: [
-    { name: "AYAHQ",               round: "Incubation", amount: "Services", shares: "750000" },
-    { name: "[Pre-Seed Investor]", round: "Pre-Seed",   amount: "$500K",    shares: "4250000" },
+    { name: "AYAHQ",               round: "Incubation", amount: "Services", shares: "750000",  vesting: "2-year, 6-month cliff" },
+    { name: "[Pre-Seed Investor]", round: "Pre-Seed",   amount: "$500K",    shares: "7500000",  vesting: "None" },
+    { name: "[Seed Investor]",     round: "Seed",       amount: "$1.5M",    shares: "12375000", vesting: "None" },
+    { name: "[Series A Investor]", round: "Series A",   amount: "$8M",      shares: "30300000", vesting: "None" },
+    { name: "[Series B Investor]", round: "Series B",   amount: "$20M",     shares: "41736000", vesting: "None" },
   ],
 };
 type CapTableData = typeof CAP_TABLE_D;
+
+// Dilution waterfall: cumulative shares issued at each round
+const DILUTION_ROUNDS = [
+  { round: "Founding",  preMoney: "—",    raise: "—",    newShares: 75_000_000,  totalShares: 75_000_000,  pricePerShare: "—"      },
+  { round: "Pre-Seed",  preMoney: "$5M",  raise: "$500K", newShares: 7_500_000,  totalShares: 82_500_000,  pricePerShare: "$0.067" },
+  { round: "Seed",      preMoney: "$10M", raise: "$1.5M", newShares: 12_375_000, totalShares: 94_875_000,  pricePerShare: "$0.121" },
+  { round: "Series A",  preMoney: "$25M", raise: "$8M",   newShares: 30_300_000, totalShares: 125_175_000, pricePerShare: "$0.264" },
+  { round: "Series B",  preMoney: "$60M", raise: "$20M",  newShares: 41_736_000, totalShares: 166_911_000, pricePerShare: "$0.479" },
+];
 
 const parseShares = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
 const fmtN = (n: number) => n.toLocaleString();
@@ -1873,56 +1887,58 @@ function CapTableDoc({ token }: { token: string }) {
       <h3 style={S.h3}>Founders</h3>
       {draft.founders.map((r, i) => (
         <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px", marginBottom: "8px", display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "flex-end" }}>
-          <div style={{ flex: "2 1 160px" }}><TxtF label="name" value={r.name} onChange={v => setRow("founders", i, "name", v)} rows={1} /></div>
-          <div style={{ flex: "2 1 160px" }}><TxtF label="role" value={r.role} onChange={v => setRow("founders", i, "role", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 130px" }}>
+          <div style={{ flex: "2 1 140px" }}><TxtF label="name" value={r.name} onChange={v => setRow("founders", i, "name", v)} rows={1} /></div>
+          <div style={{ flex: "2 1 140px" }}><TxtF label="role" value={r.role} onChange={v => setRow("founders", i, "role", v)} rows={1} /></div>
+          <div style={{ flex: "2 1 160px" }}><TxtF label="vesting" value={r.vesting} onChange={v => setRow("founders", i, "vesting", v)} rows={1} /></div>
+          <div style={{ flex: "1 1 120px" }}>
             <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Shares</label>
             <input type="number" value={r.shares} onChange={e => setRow("founders", i, "shares", e.target.value)} style={numInput} />
           </div>
-          <div style={{ flex: "0 0 80px", paddingBottom: "2px" }}>
+          <div style={{ flex: "0 0 70px", paddingBottom: "2px" }}>
             <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>% (auto)</p>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb", margin: 0 }}>{toPct(r.shares, draftTotal)}</p>
           </div>
           <button onClick={() => removeRow("founders", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
         </div>
       ))}
-      <button onClick={() => addRow("founders", { name: "", role: "", shares: "0" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Founder</button>
+      <button onClick={() => addRow("founders", { name: "", role: "", shares: "0", vesting: "4-year, 1-year cliff" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Founder</button>
 
       <h3 style={S.h3}>Option Pool</h3>
       {draft.option_pool.map((r, i) => (
         <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px", marginBottom: "8px", display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "flex-end" }}>
-          <div style={{ flex: "3 1 200px" }}><TxtF label="name" value={r.name} onChange={v => setRow("option_pool", i, "name", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 130px" }}>
+          <div style={{ flex: "2 1 180px" }}><TxtF label="name" value={r.name} onChange={v => setRow("option_pool", i, "name", v)} rows={1} /></div>
+          <div style={{ flex: "2 1 200px" }}><TxtF label="vesting" value={r.vesting} onChange={v => setRow("option_pool", i, "vesting", v)} rows={1} /></div>
+          <div style={{ flex: "1 1 120px" }}>
             <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Shares</label>
             <input type="number" value={r.shares} onChange={e => setRow("option_pool", i, "shares", e.target.value)} style={numInput} />
           </div>
-          <div style={{ flex: "0 0 80px", paddingBottom: "2px" }}>
+          <div style={{ flex: "0 0 70px", paddingBottom: "2px" }}>
             <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>% (auto)</p>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#7c3aed", margin: 0 }}>{toPct(r.shares, draftTotal)}</p>
           </div>
           <button onClick={() => removeRow("option_pool", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
         </div>
       ))}
-      <button onClick={() => addRow("option_pool", { name: "", shares: "0" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Pool</button>
+      <button onClick={() => addRow("option_pool", { name: "", shares: "0", vesting: "4-year, 1-year cliff per grant" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Pool</button>
 
       <h3 style={S.h3}>Investors</h3>
       {draft.investors.map((r, i) => (
         <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px", marginBottom: "8px", display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "flex-end" }}>
-          <div style={{ flex: "2 1 150px" }}><TxtF label="name" value={r.name} onChange={v => setRow("investors", i, "name", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 100px" }}><TxtF label="round" value={r.round} onChange={v => setRow("investors", i, "round", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 100px" }}><TxtF label="amount" value={r.amount} onChange={v => setRow("investors", i, "amount", v)} rows={1} /></div>
-          <div style={{ flex: "1 1 130px" }}>
+          <div style={{ flex: "2 1 140px" }}><TxtF label="name" value={r.name} onChange={v => setRow("investors", i, "name", v)} rows={1} /></div>
+          <div style={{ flex: "1 1 90px" }}><TxtF label="round" value={r.round} onChange={v => setRow("investors", i, "round", v)} rows={1} /></div>
+          <div style={{ flex: "1 1 80px" }}><TxtF label="amount" value={r.amount} onChange={v => setRow("investors", i, "amount", v)} rows={1} /></div>
+          <div style={{ flex: "1 1 120px" }}>
             <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Shares</label>
             <input type="number" value={r.shares} onChange={e => setRow("investors", i, "shares", e.target.value)} style={numInput} />
           </div>
-          <div style={{ flex: "0 0 80px", paddingBottom: "2px" }}>
+          <div style={{ flex: "0 0 70px", paddingBottom: "2px" }}>
             <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>% (auto)</p>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#059669", margin: 0 }}>{toPct(r.shares, draftTotal)}</p>
           </div>
           <button onClick={() => removeRow("investors", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
         </div>
       ))}
-      <button onClick={() => addRow("investors", { name: "", round: "", amount: "", shares: "0" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Investor</button>
+      <button onClick={() => addRow("investors", { name: "", round: "", amount: "", shares: "0", vesting: "None" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "16px" }}>+ Add Investor</button>
 
       <h3 style={S.h3}>Notes</h3>
       <TxtF label="notes" value={draft.notes} onChange={v => setField("notes", v)} rows={3} />
@@ -1932,6 +1948,8 @@ function CapTableDoc({ token }: { token: string }) {
   return (
     <div>
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
+
+      {/* Summary stats */}
       <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
         <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
           <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Authorized Shares</p>
@@ -1945,36 +1963,56 @@ function CapTableDoc({ token }: { token: string }) {
           <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Remaining Unissued</p>
           <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#059669" }}>{fmtN(Math.max(0, parseShares(data.total_authorized) - viewTotal))}</p>
         </div>
+        <div style={{ flex: 1, background: "#eff6ff", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Pre-Seed Price/Share</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#2563eb" }}>$0.067</p>
+        </div>
       </div>
 
+      {/* Founders */}
       <h3 style={S.h3}>Founders</h3>
       <table style={S.table}>
-        <thead><tr><th style={hStyle}>Name</th><th style={hStyle}>Role</th><th style={hStyle}>Shares</th><th style={hStyle}>Ownership %</th></tr></thead>
+        <thead><tr>
+          <th style={hStyle}>Name</th><th style={hStyle}>Role</th>
+          <th style={hStyle}>Shares</th><th style={hStyle}>Ownership %</th>
+          <th style={hStyle}>Vesting</th>
+        </tr></thead>
         <tbody>{data.founders.map((r, i) => (
           <tr key={i}>
             <td style={rowStyle}>{r.name}</td>
             <td style={rowStyle}>{r.role}</td>
             <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(parseShares(r.shares))}</td>
             <td style={{ ...rowStyle, fontWeight: 600, color: "#2563eb" }}>{toPct(r.shares, viewTotal)}</td>
+            <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{r.vesting}</td>
           </tr>
         ))}</tbody>
       </table>
 
+      {/* Option Pool */}
       <h3 style={S.h3}>Option Pool</h3>
       <table style={S.table}>
-        <thead><tr><th style={hStyle}>Pool</th><th style={hStyle}>Shares</th><th style={hStyle}>% of Total</th></tr></thead>
+        <thead><tr>
+          <th style={hStyle}>Pool</th><th style={hStyle}>Shares</th>
+          <th style={hStyle}>% of Total</th><th style={hStyle}>Vesting</th>
+        </tr></thead>
         <tbody>{data.option_pool.map((r, i) => (
           <tr key={i}>
             <td style={rowStyle}>{r.name}</td>
             <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(parseShares(r.shares))}</td>
             <td style={{ ...rowStyle, fontWeight: 600, color: "#7c3aed" }}>{toPct(r.shares, viewTotal)}</td>
+            <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{r.vesting}</td>
           </tr>
         ))}</tbody>
       </table>
 
+      {/* Investors */}
       <h3 style={S.h3}>Investors</h3>
       <table style={S.table}>
-        <thead><tr><th style={hStyle}>Investor</th><th style={hStyle}>Round</th><th style={hStyle}>Amount</th><th style={hStyle}>Shares</th><th style={hStyle}>Ownership %</th></tr></thead>
+        <thead><tr>
+          <th style={hStyle}>Investor</th><th style={hStyle}>Round</th>
+          <th style={hStyle}>Amount</th><th style={hStyle}>Shares</th>
+          <th style={hStyle}>Ownership %</th><th style={hStyle}>Vesting</th>
+        </tr></thead>
         <tbody>{data.investors.map((r, i) => (
           <tr key={i}>
             <td style={rowStyle}>{r.name}</td>
@@ -1982,6 +2020,7 @@ function CapTableDoc({ token }: { token: string }) {
             <td style={rowStyle}>{r.amount}</td>
             <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(parseShares(r.shares))}</td>
             <td style={{ ...rowStyle, fontWeight: 600, color: "#059669" }}>{toPct(r.shares, viewTotal)}</td>
+            <td style={{ ...rowStyle, fontSize: "12px", color: r.vesting === "None" ? "#94a3b8" : "#7c3aed" }}>{r.vesting}</td>
           </tr>
         ))}</tbody>
       </table>
@@ -1989,6 +2028,64 @@ function CapTableDoc({ token }: { token: string }) {
       <div style={{ marginTop: "12px", padding: "10px 14px", background: "#f8fafc", borderRadius: "6px", display: "flex", justifyContent: "flex-end" }}>
         <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Total allocated: {toPct(String(viewTotal), viewTotal === 0 ? 1 : viewTotal)}</span>
       </div>
+
+      {/* Dilution Waterfall */}
+      <h3 style={{ ...S.h3, marginTop: "24px" }}>Round-by-Round Dilution Waterfall</h3>
+      <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "6px", padding: "8px 12px", marginBottom: "10px", fontSize: "12px", color: "#0369a1" }}>
+        Founder ownership (Anthony Kumako) after each round. All figures assume no option pool top-ups between rounds.
+      </div>
+      <table style={S.table}>
+        <thead><tr>
+          <th style={hStyle}>Round</th>
+          <th style={hStyle}>Pre-Money</th>
+          <th style={hStyle}>Raise</th>
+          <th style={hStyle}>Price/Share</th>
+          <th style={hStyle}>New Shares</th>
+          <th style={hStyle}>Total Shares</th>
+          <th style={hStyle}>CEO Ownership</th>
+        </tr></thead>
+        <tbody>{DILUTION_ROUNDS.map((r, i) => {
+          const ceoPct = (52_500_000 / r.totalShares * 100).toFixed(1) + "%";
+          const isHighlight = i === 1;
+          return (
+            <tr key={i} style={{ background: isHighlight ? "#eff6ff" : undefined }}>
+              <td style={{ ...rowStyle, fontWeight: 600 }}>{r.round}</td>
+              <td style={rowStyle}>{r.preMoney}</td>
+              <td style={rowStyle}>{r.raise}</td>
+              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{r.pricePerShare}</td>
+              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{r.newShares.toLocaleString()}</td>
+              <td style={{ ...rowStyle, fontFamily: "monospace" }}>{r.totalShares.toLocaleString()}</td>
+              <td style={{ ...rowStyle, fontWeight: 700, color: "#2563eb" }}>{ceoPct}</td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+
+      {/* Vesting Summary */}
+      <h3 style={{ ...S.h3, marginTop: "24px" }}>Vesting Schedule Summary</h3>
+      <table style={S.table}>
+        <thead><tr>
+          <th style={hStyle}>Stakeholder</th>
+          <th style={hStyle}>Schedule</th>
+          <th style={hStyle}>Cliff</th>
+          <th style={hStyle}>Notes</th>
+        </tr></thead>
+        <tbody>
+          {[
+            { who: "Founders", schedule: "4-year vesting", cliff: "1-year cliff", note: "25% vests at Month 12, then monthly thereafter" },
+            { who: "Employee Option Pool", schedule: "4-year vesting", cliff: "1-year cliff", note: "Per grant — standard Silicon Valley / African tech structure" },
+            { who: "AYAHQ (Incubation)", schedule: "2-year vesting", cliff: "6-month cliff", note: "Service-based grant; vesting tied to incubation milestones" },
+            { who: "Investors (Pre-Seed → Series B)", schedule: "No vesting", cliff: "—", note: "Shares fully issued upon closing; standard equity investor terms" },
+          ].map((r, i) => (
+            <tr key={i}>
+              <td style={{ ...rowStyle, fontWeight: 600 }}>{r.who}</td>
+              <td style={rowStyle}>{r.schedule}</td>
+              <td style={rowStyle}>{r.cliff}</td>
+              <td style={{ ...rowStyle, fontSize: "12px", color: "#64748b" }}>{r.note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <p style={{ ...S.p, fontStyle: "italic", color: "#94a3b8", marginTop: "16px", fontSize: "12px" }}>{data.notes}</p>
     </div>
