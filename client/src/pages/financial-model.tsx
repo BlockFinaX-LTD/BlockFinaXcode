@@ -25,6 +25,24 @@ function Tip({ text }: { text: string }) {
   );
 }
 
+// ── IRR solver (Newton-Raphson on annual cash flows) ───────────────────────
+function solveIRR(annualCFs: number[]): number | null {
+  let r = 0.5;
+  for (let iter = 0; iter < 300; iter++) {
+    let npv = 0, dnpv = 0;
+    for (let t = 0; t < annualCFs.length; t++) {
+      const d = Math.pow(1 + r, t);
+      npv  += annualCFs[t] / d;
+      dnpv -= t * annualCFs[t] / (d * (1 + r));
+    }
+    if (Math.abs(dnpv) < 1e-10) return null;
+    const r2 = r - npv / dnpv;
+    if (Math.abs(r2 - r) < 1e-8) return isFinite(r2) ? r2 : null;
+    r = r2;
+  }
+  return null;
+}
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,12 +217,14 @@ function downloadExcel(
     }),
     [''],
     ['RETURN METRICS'],
-    ['Total Raise ($12.5M target)', '', '$12,500,000'],
-    ['Terminal Revenue 2030 (model)', '', Math.round(annualSummary[4]?.revenue ?? 0)],
-    ['Revenue Multiple', '', '12×', '', 'Conservative fintech/SaaS comp'],
-    ['Terminal Value (est.)', '', Math.round((annualSummary[4]?.revenue ?? 0) * 12)],
-    ['Blended IRR (pre-dilution)', '', '~120%', '', '5-year hold period'],
-    ['Post-dilution IRR (target)', '', '45–65%', '', 'Series A investor return'],
+    ['Total Raise Target', '', funding.reduce((s,f)=>s+f.amount,0)],
+    ['2030 Revenue (model)', '', Math.round(annualSummary[4]?.revenue ?? 0)],
+    ['2030 EBITDA (model)', '', Math.round(annualSummary[4]?.ebitda ?? 0)],
+    ['2030 EBITDA Margin', '', `${(annualSummary[4]?.ebitdaPct ?? 0).toFixed(1)}%`],
+    ['EBITDA Multiple', '', '12×', '', 'Conservative African fintech comp (public comps 15–20×)'],
+    ['Terminal Value (12× EBITDA)', '', Math.round(Math.max(0, annualSummary[4]?.ebitda ?? 0) * 12)],
+    ['Enterprise MOIC (undiluted)', '', `${(Math.max(0,annualSummary[4]?.ebitda??0)*12/Math.max(1,funding.reduce((s,f)=>s+f.amount,0))).toFixed(1)}×`, '', 'Terminal value ÷ total raised. Actual investor MOIC depends on dilution.'],
+    ['Break-even Month', '', (model.find(r => r.netIncome > 0)?.label ?? 'Beyond model'), '', 'First month of positive net income'],
     [''],
     ['UNIT ECONOMICS (54-MONTH)'],
     ['Metric', 'Value', 'Notes'],
@@ -451,6 +471,7 @@ export default function FinancialModel() {
             <TabsTrigger value="annual"   className="text-xs">Annual Summary</TabsTrigger>
             <TabsTrigger value="costs"    className="text-xs">Cost Breakdown</TabsTrigger>
             <TabsTrigger value="uniteco"  className="text-xs">IRR & Unit Economics</TabsTrigger>
+            <TabsTrigger value="notes"    className="text-xs">Model Notes</TabsTrigger>
             <TabsTrigger value="inputs"   className="text-xs font-semibold text-blue-700">✏ Edit Inputs</TabsTrigger>
           </TabsList>
 
@@ -494,9 +515,9 @@ export default function FinancialModel() {
                     {[
                       { label: 'Hedge Events',       tip: 'Number of P2P protection contracts written this month. Each event = one hedger buying downside protection from the LP pool. Revenue = Events × Notional × 0.7%.', vals: slice.map(r => num(r.events)),      neutral: true },
                       { label: 'Avg Notional ($)',    tip: 'Average contract size in USD. Hedge fees = Events × Avg Notional × 0.7%. Larger notional = higher fees collected per event.', vals: slice.map(r => fmt(r.avgNotional)), neutral: true },
-                      { label: 'New Wallets',        tip: 'New users onboarding this month. Gasless UX — platform sponsors $15 ETH per wallet. Wallet transfer fees are driven by the active wallet base.', vals: slice.map(r => num(r.newWallets)),   neutral: true },
+                      { label: 'New Wallets',        tip: 'New users onboarding this month. Gasless UX — platform sponsors $3 in gas per wallet on Lisk L2. Wallet transfer fees scale with the cumulative wallet base, not just new wallets.', vals: slice.map(r => num(r.newWallets)),   neutral: true },
                       { label: 'Cumulative Wallets', tip: 'Total registered wallets since Jul 2026 launch. Used to compute LTV and platform network effects.', vals: slice.map(r => num(r.cumWallets)),   neutral: true },
-                      { label: 'Headcount',          tip: 'Full-time equivalents. Lean Africa-based team at $3,500/FTE early-stage, scaling to $8,500/FTE by 2030 as the team internationalises.', vals: slice.map(r => num(r.headcount)),    neutral: true },
+                      { label: 'Headcount',          tip: 'Full-time equivalents. Lean Africa-based team. Salary/FTE is editable per month in the Inputs tab — starting ~$4,500/FTE in H2 2026, rising to ~$6,800/FTE by Dec 2030. Blended average reflects seniority mix.', vals: slice.map(r => num(r.headcount)),    neutral: true },
                     ].map(row => (
                       <tr key={row.label} className="border-b border-slate-100 hover:bg-slate-50/50">
                         <td className="text-xs px-3 py-2 text-slate-600 sticky left-0 bg-white border-r border-slate-100">
@@ -509,7 +530,7 @@ export default function FinancialModel() {
                     <tr><td colSpan={slice.length + 1} className={secCls}>Revenue</td></tr>
                     {[
                       { label: 'Hedge Protocol Fees',   tip: 'Primary revenue stream. Formula: Events × Avg Notional × 0.7%. The 0.7% blends the 0.5% hedger premium fee and the ~0.2% LP payout fee (1% applied to LP deposits ≈ 20% of notional).', vals: slice.map(r => r.hedgeFees), cellTips: undefined as string[] | undefined },
-                      { label: 'Event Creation Fees',   tip: 'Flat $25 charged to the event creator every time a new hedge event is published on-chain. Collected at creation alongside the initial LP deposit. Small per-event but grows significantly with volume — at 174K events/month (Dec 2030) this alone contributes $4.35M/month.', vals: slice.map(r => r.eventCreationFees), cellTips: undefined as string[] | undefined },
+                      { label: 'Event Creation Fees',   tip: 'Flat $25 charged to the event creator every time a new hedge event is published on-chain. Collected at creation alongside the initial LP deposit. At ~74,300 events/month (Dec 2030) this contributes ~$1.86M/month.', vals: slice.map(r => r.eventCreationFees), cellTips: undefined as string[] | undefined },
                       { label: 'Wallet Transfer Fees',  tip: '0.3% fee on USDC cross-border transfers. Revenue = cumulative wallets × active wallet % × avg monthly transfer × 0.3%. Scales directly with the growing wallet base — more wallets means more transfer volume and more fee revenue.', vals: slice.map(r => r.walletFees), cellTips: undefined as string[] | undefined },
                       { label: 'Total Revenue',         tip: 'Hedge protocol fees + event creation fees + wallet transfer fees. Hover each cell to see the split for that month.', vals: slice.map(r => r.totalRevenue), bold: true, cellTips: slice.map(r => r.totalRevenue > 0 ? `Hedge: ${fmt(r.hedgeFees)} (${Math.round((r.hedgeFees/r.totalRevenue)*100)}%) · Creation: ${fmt(r.eventCreationFees)} (${Math.round((r.eventCreationFees/r.totalRevenue)*100)}%) · Wallet: ${fmt(r.walletFees)} (${Math.round((r.walletFees/r.totalRevenue)*100)}%)` : 'No revenue') },
                     ].map(row => (
@@ -572,14 +593,14 @@ export default function FinancialModel() {
 
                     <tr><td colSpan={slice.length + 1} className={secCls}>P&L</td></tr>
                     {[
-                      { label: 'EBITDA',          tip: 'Gross Profit minus Total OpEx. The primary operating performance metric. Targets 60%+ margin by 2030 — typical for high-margin protocol/SaaS businesses.', vals: slice.map(r => r.ebitda),          bold: true, colored: true },
-                      { label: 'EBITDA Margin %', tip: 'EBITDA ÷ Revenue. Negative early (investment phase), turning positive post breakeven. 60%+ margin at scale reflects the asset-light protocol model.', vals: slice.map(r => r.ebitdaMarginPct), pctFmt: true },
+                      { label: 'EBITDA',          tip: 'Gross Profit minus Total OpEx. The primary operating performance metric. Excludes D&A and tax. See the Return Metrics tab for 2030 EBITDA margin from the live model.', vals: slice.map(r => r.ebitda),          bold: true, colored: true },
+                      { label: 'EBITDA Margin %', tip: 'EBITDA ÷ Revenue. Negative during the investment phase, turns positive after EBITDA break-even. The live model\'s 2030 EBITDA margin is driven primarily by marketing costs as a % of revenue.', vals: slice.map(r => r.ebitdaMarginPct), pctFmt: true },
                       { label: 'D&A (non-cash)',  tip: '$4,000/month non-cash amortisation of platform development costs (smart contracts, audits, infrastructure setup). No cash impact.', vals: slice.map(r => r.da) },
                       { label: 'EBIT',            tip: 'Earnings Before Interest and Tax. EBITDA minus D&A. Represents true operating profit inclusive of asset costs.', vals: slice.map(r => r.ebit),            colored: true },
                       { label: 'EBT',             tip: 'Earnings Before Tax. EBIT minus any interest expense on debt. Currently zero interest expense (equity-financed model).', vals: slice.map(r => r.ebt),             colored: true },
                       { label: 'Tax Expense',     tip: '25% corporate tax applied only when EBT is positive. No tax is charged on losses — losses carry forward to offset future taxable income.', vals: slice.map(r => r.taxExpense) },
                       { label: 'Net Income',      tip: 'Bottom line after all costs and taxes. EBT minus tax expense. Represents value accruing to shareholders.', vals: slice.map(r => r.netIncome),       bold: true, colored: true },
-                      { label: 'Net Margin %',    tip: 'Net Income ÷ Revenue. Shows overall profitability efficiency. Targets 50%+ at scale, consistent with top-quartile fintech protocols.', vals: slice.map(r => r.netMarginPct),  pctFmt: true },
+                      { label: 'Net Margin %',    tip: 'Net Income ÷ Revenue. Shows overall after-tax profitability. See the Annual Summary tab for the model-computed 2030 net income margin.', vals: slice.map(r => r.netMarginPct),  pctFmt: true },
                     ].map(row => (
                       <tr key={row.label} className={`border-b border-slate-100 ${row.bold ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}>
                         <td className={`text-xs px-3 py-2 sticky left-0 border-r border-slate-100 ${row.bold ? 'font-semibold bg-slate-50 text-slate-700' : 'text-slate-600 bg-white'}`}>
@@ -630,10 +651,16 @@ export default function FinancialModel() {
                   </thead>
                   <tbody>
                     {annualSummary.map((r, i) => {
-                      const stage = i === 0 ? { label:'Invest', cls:'bg-amber-100 text-amber-800' }
-                                  : i === 1 ? { label:'Scale',  cls:'bg-blue-100 text-blue-800' }
-                                  : i === 2 ? { label:'Profit', cls:'bg-emerald-100 text-emerald-800' }
-                                  :           { label:'Growth', cls:'bg-purple-100 text-purple-800' };
+                      // Stage derived from actual computed values, not position
+                      const stage = r.ebitda < 0 && i <= 1
+                                  ? { label:'Invest',     cls:'bg-amber-100 text-amber-800' }
+                                  : r.ebitda < 0
+                                  ? { label:'Build',      cls:'bg-blue-100 text-blue-800' }
+                                  : r.netIncome < 0
+                                  ? { label:'Near BE',    cls:'bg-cyan-100 text-cyan-800' }
+                                  : r.netIncome >= 0 && i === 3
+                                  ? { label:'Profitable', cls:'bg-emerald-100 text-emerald-800' }
+                                  : { label:'Growth',     cls:'bg-purple-100 text-purple-800' };
                       return (
                         <tr key={r.period} className={`border-b border-slate-100 ${i % 2 === 0 ? '' : 'bg-slate-50/50'}`}>
                           <td className="text-xs px-3 py-2.5 font-semibold text-slate-800 whitespace-nowrap">
@@ -690,7 +717,7 @@ export default function FinancialModel() {
                     {/* COGS section */}
                     <tr><td colSpan={annualCosts.length + 1} className="text-[10px] px-3 py-1.5 bg-orange-50 text-orange-700 font-bold uppercase tracking-wider border-y border-orange-200">Cost of Goods Sold (COGS)</td></tr>
                     {[
-                      { key: 'gas'            as const, label: 'Gas Sponsorship',      tip: 'Platform sponsors $15 ETH gas per new wallet onboarded — enabling friction-free signup.' },
+                      { key: 'gas'            as const, label: 'Gas Costs',           tip: 'Gas costs on Lisk L2 (OP Stack): $3 per new wallet (6 onboarding txns × ~$0.50 each on L2) plus $0.05 per hedge event (6 settlement txns × ~$0.008 each). Enables friction-free UX.' },
                       { key: 'oracle'         as const, label: 'Oracle / RPC',         tip: 'On-chain price feed & settlement infrastructure costs (FX, commodity, crypto every 5 min).' },
                       { key: 'creatorLoyalty' as const, label: 'Creator Loyalty (5%)', tip: '5% of hedge fees distributed to event creators as a protocol loyalty incentive.' },
                       { key: 'kyc'            as const, label: 'KYC / AML',            tip: '$1.50/wallet AML identity verification required for African market regulatory compliance.' },
@@ -764,7 +791,7 @@ export default function FinancialModel() {
                     { color: 'bg-amber-400',   label: 'Legal'           },
                     { color: 'bg-cyan-500',    label: 'Infra / Cloud'   },
                     { color: 'bg-slate-400',   label: 'G&A'             },
-                    { color: 'bg-orange-500',  label: 'Gas Sponsorship' },
+                    { color: 'bg-orange-500',  label: 'Gas Costs'      },
                     { color: 'bg-indigo-500',  label: 'Oracle / RPC'    },
                     { color: 'bg-pink-500',    label: 'Creator Loyalty' },
                     { color: 'bg-red-400',     label: 'KYC / AML'      },
@@ -878,18 +905,25 @@ export default function FinancialModel() {
                       {(() => {
                         let cumulative = 0;
                         return ANNUAL_GROUPS.map((g, i) => {
-                          const ms = model.slice(g.range[0], g.range[1]);
+                          const ms      = model.slice(g.range[0], g.range[1]);
                           const invested = ms.reduce((s, r) => s + r.fundingReceived, 0);
-                          const ncf = ms.reduce((s, r) => s + r.netIncome, 0);
+                          const ncf     = ms.reduce((s, r) => s + r.netIncome, 0);
+                          const ebitda  = ms.reduce((s, r) => s + r.ebitda, 0);
                           cumulative += (-invested + ncf);
-                          const stages = ['Pre-revenue','Series A phase','Breakeven','Cash positive','Exit ready'];
+                          // Stage derived from actual computed values
+                          const stageLabel = ebitda < 0 && i <= 1 ? 'Investing'
+                                           : ebitda < 0           ? 'Building'
+                                           : ncf < 0              ? 'Near breakeven'
+                                           : cumulative < 0       ? 'Cash positive, cumul. negative'
+                                           :                        'Cumulative positive';
+                          const stageColor = cumulative >= 0 ? 'text-emerald-600' : ncf >= 0 ? 'text-cyan-600' : 'text-slate-400';
                           return (
                             <tr key={g.label} className="border-b border-slate-50">
                               <td className="py-1.5 font-medium text-slate-800">{g.label}</td>
                               <td className="py-1.5 text-right font-mono text-red-500">{invested > 0 ? `($${(invested/1e6).toFixed(1)}M)` : '—'}</td>
                               <td className={`py-1.5 text-right font-mono font-semibold ${ncf >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(Math.round(ncf), true)}</td>
-                              <td className={`py-1.5 text-right font-mono ${cumulative >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(Math.round(cumulative), true)}</td>
-                              <td className="py-1.5 text-right text-slate-500">{stages[i]}</td>
+                              <td className={`py-1.5 text-right font-mono font-semibold ${cumulative >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(Math.round(cumulative), true)}</td>
+                              <td className={`py-1.5 text-right text-[10px] ${stageColor}`}>{stageLabel}</td>
                             </tr>
                           );
                         });
@@ -902,23 +936,42 @@ export default function FinancialModel() {
               {/* Return Metrics */}
               <Card className="border-slate-200">
                 <CardHeader className="pb-2 pt-4">
-                  <CardTitle className="text-sm font-semibold text-slate-700">Return Metrics</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-slate-700">Return Metrics (computed from model)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {[
-                    { label: 'Total Raise Target',              value: '$12,500,000' },
-                    { label: '2030 Revenue (model)',            value: fmt(Math.round(annualSummary[4]?.revenue ?? 0), true) },
-                    { label: 'Terminal Value (12× revenue)',    value: fmt(Math.round((annualSummary[4]?.revenue ?? 0) * 12), true) },
-                    { label: 'Blended IRR (pre-dilution)',      value: '~120%' },
-                    { label: 'Series A Target IRR',             value: '45–65%' },
-                    { label: '2030 EBITDA Margin',              value: pct(annualSummary[4]?.ebitdaPct ?? 0) },
-                    { label: '2030 Gross Margin',               value: pct(annualSummary[4]?.grossMarginPct ?? 0) },
-                  ].map(item => (
-                    <div key={item.label} className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                      <span className="text-xs text-slate-600">{item.label}</span>
-                      <span className="text-xs font-semibold font-mono text-slate-800">{item.value}</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const ebitda2030 = annualSummary[4]?.ebitda ?? 0;
+                    const rev2030    = annualSummary[4]?.revenue ?? 0;
+                    const raised     = funding.reduce((s, f) => s + f.amount, 0);
+                    const tv         = Math.max(0, ebitda2030) * 12;
+                    const moic       = raised > 0 ? tv / raised : 0;
+                    // Company-level IRR: annual CFs = (netIncome − investment) per year, + terminal in year 4
+                    const irrCFs = ANNUAL_GROUPS.map((g, i) => {
+                      const inv = funding.filter(f => f.monthIndex >= g.range[0] && f.monthIndex < g.range[1])
+                                         .reduce((s, f) => s + f.amount, 0);
+                      const ni  = model.slice(g.range[0], g.range[1]).reduce((s, r) => s + r.netIncome, 0);
+                      return -inv + ni + (i === 4 ? tv : 0);
+                    });
+                    const irrVal = solveIRR(irrCFs);
+                    const irrStr = irrVal !== null && irrVal > 0 && irrVal < 100
+                      ? `${(irrVal * 100).toFixed(0)}%` : 'n/a (see note)';
+                    return [
+                      { label: 'Total Raise Target',           value: fmt(raised, true),                 tip: 'Sum of Pre-Seed + Series A + Series B as configured in the funding schedule.' },
+                      { label: '2030 Annual Revenue',          value: fmt(Math.round(rev2030), true),    tip: 'Full-year 2030 revenue from the model: hedge fees + event creation fees + wallet transfer fees.', positive: true },
+                      { label: '2030 EBITDA',                  value: fmt(Math.round(ebitda2030), true), tip: 'Gross Profit minus total OpEx. Primary operating profitability measure. Excludes D&A, tax, and interest.', positive: ebitda2030 >= 0 },
+                      { label: '2030 EBITDA Margin',           value: pct(annualSummary[4]?.ebitdaPct ?? 0), tip: 'EBITDA ÷ Revenue. Reflects operating leverage as the platform scales. Marketing spend is the primary cost at scale.', positive: (annualSummary[4]?.ebitdaPct ?? 0) >= 0 },
+                      { label: '2030 Gross Margin',            value: pct(annualSummary[4]?.grossMarginPct ?? 0), tip: 'Gross Profit ÷ Revenue. High gross margins reflect the asset-light protocol model — COGS is mostly gas and KYC.', positive: true },
+                      { label: 'Terminal Value (12× EBITDA)',  value: fmt(Math.round(tv), true),         tip: '12× EBITDA is a conservative exit multiple for African fintech (public comps trade at 15–20×). Only applies when EBITDA is positive.', positive: tv > 0 },
+                      { label: 'Enterprise MOIC (undiluted)',  value: `${moic.toFixed(1)}×`,             tip: 'Terminal value ÷ total capital raised. Undiluted — assumes 100% ownership at exit. Actual investor MOIC depends on entry valuation and dilution from each round.', positive: moic >= 1 },
+                      { label: 'Company IRR (undiluted)',      value: irrStr,                            tip: 'Solved from annual net income minus investments, plus terminal value in year 5. Undiluted — actual investor IRR is lower, depending on equity stake at entry. A result of "n/a" means the IRR is implausibly high (>10,000%) or negative — check funding vs EBITDA assumptions.', positive: irrVal !== null && irrVal > 0 },
+                      { label: 'Break-even Month',             value: breakevenMo?.label ?? 'Beyond model', tip: 'First calendar month where net income turns positive. Based on live model — changes automatically when you edit inputs.', positive: !!breakevenMo },
+                    ].map(item => (
+                      <div key={item.label} className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                        <span className="text-xs text-slate-600 flex items-center gap-1">{item.label}<Tip text={item.tip} /></span>
+                        <span className={`text-xs font-semibold font-mono ${item.positive ? 'text-emerald-700' : 'text-red-500'}`}>{item.value}</span>
+                      </div>
+                    ));
+                  })()}
                 </CardContent>
               </Card>
             </div>
@@ -1041,6 +1094,155 @@ export default function FinancialModel() {
                     </>
                   );
                 })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ════════════════ MODEL NOTES ════════════════ */}
+          <TabsContent value="notes" className="mt-4 space-y-4">
+            <Card className="border-slate-200">
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-semibold text-slate-700">Model Methodology — Formula Reference</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 text-xs text-slate-700 leading-relaxed pb-6">
+
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-blue-800">
+                  All figures are computed live from the monthly input table. Edit any input cell in the <strong>Edit Inputs</strong> tab and every number across all tabs updates instantly. This document explains every formula used so anyone can verify the model independently.
+                </div>
+
+                {/* Revenue */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">A · Revenue (three streams)</p>
+                  <div className="space-y-3">
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="font-semibold text-blue-700 mb-1">1. Hedge Protocol Fees (dominant, ~75–80% of revenue at scale)</p>
+                      <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">
+                        Hedge Fees = Events × Avg Notional × Hedge Yield (0.7%)
+                      </code>
+                      <p className="mt-2 text-slate-500">
+                        The 0.7% (70 bps) blends: 0.5% hedger entry premium + ~0.2% LP payout fee (1% payout fee × ~20% of notional paid out on average). This is conservative — the full blended yield including conditional settlement fees is closer to 1.1%.
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="font-semibold text-blue-700 mb-1">2. Event Creation Fees (~15–20% of revenue)</p>
+                      <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">
+                        Event Creation Fees = Events × $25
+                      </code>
+                      <p className="mt-2 text-slate-500">Flat fee charged to the event creator on each new on-chain protection contract. Collected at event creation alongside the initial LP deposit.</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="font-semibold text-blue-700 mb-1">3. Wallet Transfer Fees (~5–10% of revenue at scale)</p>
+                      <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">
+                        Wallet Fees = Cumulative Wallets × Active Wallet % × Avg Monthly Transfer ($500) × 0.3%
+                      </code>
+                      <p className="mt-2 text-slate-500">0.3% fee on USDC cross-border payments. Scales with the growing wallet base regardless of hedge activity — a passive revenue floor. Active wallet % and avg transfer are adjustable constants.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* COGS */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">B · Cost of Goods Sold (COGS) — variable costs directly tied to volume</p>
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Gas Costs',             formula: '(New Wallets × $3.00) + (Events × $0.05)', note: 'Wallet onboarding: 6 txns × ~$0.50 on Lisk L2 = $3.00. Hedge settlement: 6 txns × ~$0.008 = $0.05. Lisk is an OP Stack L2 — gas is ~50× cheaper than Ethereum mainnet.' },
+                      { label: 'Oracle / RPC',          formula: 'Monthly oracle cost (manual input per month)', note: 'On-chain FX/commodity/crypto price feeds polled every 5 minutes. Costs scale with RPC call volume. Budget starts at $5K/month and rises with transaction throughput.' },
+                      { label: 'Creator Loyalty (5%)',  formula: 'Hedge Fees × 5%', note: '5% of hedge protocol fees distributed back to event creators as a protocol loyalty incentive. Encourages liquidity depth and event quality.' },
+                      { label: 'KYC / AML',             formula: 'New Wallets × $1.50', note: '$1.50 per wallet for identity verification. Regulatory requirement for African market operations. Covers basic AML screening required by BoG sandbox.' },
+                    ].map(r => (
+                      <div key={r.label} className="bg-slate-50 rounded-lg p-3">
+                        <p className="font-semibold text-orange-700 mb-1">{r.label}</p>
+                        <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">{r.formula}</code>
+                        <p className="mt-2 text-slate-500">{r.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* OpEx */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">C · Operating Expenses (OpEx) — period costs, editable per month</p>
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Personnel',       formula: 'Headcount × Salary per FTE per month', note: 'All salaries, contractor fees, and benefits. Headcount and salary/FTE are editable in the monthly input table — rows update the model instantly.' },
+                      { label: 'Marketing / CAC', formula: 'New Wallets × CAC per wallet (this month)', note: 'Acquisition cost per wallet. Includes paid campaigns, partnerships, community, and referral programs. CAC is per new wallet — the active-user CAC is approximately 5× higher due to demos, education, and trust-building.' },
+                      { label: 'Legal',           formula: 'Monthly legal budget (manual input)', note: 'Legal counsel, BoG sandbox regulatory filing fees, IP protection, contract review, and compliance advisory. Peaks during regulatory applications; lower in later years.' },
+                      { label: 'Infra / Cloud',   formula: 'Monthly infra budget (manual input)', note: 'Cloud hosting (Vercel/Railway/AWS), managed Postgres (Neon), RPC node access, CDN, monitoring (Sentry), CI/CD, and database scaling.' },
+                      { label: 'G&A',             formula: 'Monthly G&A budget (manual input)', note: 'General & administrative: office, finance, accounting, insurance, HR overhead, software licences, and travel.' },
+                    ].map(r => (
+                      <div key={r.label} className="bg-slate-50 rounded-lg p-3">
+                        <p className="font-semibold text-purple-700 mb-1">{r.label}</p>
+                        <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">{r.formula}</code>
+                        <p className="mt-2 text-slate-500">{r.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* P&L waterfall */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">D · P&L Waterfall</p>
+                  <div className="bg-slate-50 rounded-lg p-3 space-y-1">
+                    {[
+                      ['Hedge Fees + Event Creation Fees + Wallet Transfer Fees', '= Total Revenue'],
+                      ['Total Revenue − (Gas + Oracle + Creator Loyalty + KYC)',  '= Gross Profit'],
+                      ['Gross Profit − (Personnel + Marketing + Legal + Infra + G&A)', '= EBITDA'],
+                      ['EBITDA − D&A ($4,000/month non-cash)',                    '= EBIT'],
+                      ['EBIT − Interest Expense (currently $0)',                  '= EBT'],
+                      ['EBT − Tax (25% when EBT > 0, else $0)',                  '= Net Income'],
+                    ].map(([left, right]) => (
+                      <div key={right} className="flex justify-between items-start gap-4 py-1 border-b border-slate-200 last:border-0">
+                        <span className="text-slate-600 font-mono text-[10px] flex-1">{left}</span>
+                        <span className="text-blue-700 font-semibold font-mono text-[10px] whitespace-nowrap">{right}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Valuation */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">E · Valuation & Return Metrics</p>
+                  <div className="space-y-2">
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="font-semibold text-emerald-700 mb-1">Terminal Value</p>
+                      <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">Terminal Value = 2030 EBITDA × 12</code>
+                      <p className="mt-2 text-slate-500">12× EBITDA is the exit multiple assumption. African fintech public comparables trade at 15–20× EBITDA; 12× is intentionally conservative. Terminal value is $0 if EBITDA is negative. EBITDA multiple (not revenue) is used because it reflects true operating cash generation and is the standard for fintech M&A.</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="font-semibold text-emerald-700 mb-1">Enterprise MOIC (undiluted)</p>
+                      <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">MOIC = Terminal Value ÷ Total Capital Raised</code>
+                      <p className="mt-2 text-slate-500">Assumes investors collectively own 100% of the company at exit. In practice, founders and employees hold equity — actual investor MOIC depends on entry valuation, dilution across rounds, and exit structure.</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="font-semibold text-emerald-700 mb-1">Company IRR (undiluted)</p>
+                      <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">Annual CFs = [−Investment + Net Income] per year; CF[4] += Terminal Value<br/>IRR = Newton-Raphson solve for rate where NPV = 0</code>
+                      <p className="mt-2 text-slate-500">This is the enterprise-level IRR assuming a single investor provides all capital and receives 100% of the terminal value at exit in year 5. It overstates individual investor returns — actual investor IRR is lower based on their specific equity stake and entry price.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Key assumptions */}
+                <div>
+                  <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">F · Key Assumptions & Known Conservatisms</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      { label: 'Hedge Yield (0.7%)', note: 'Blends 0.5% hedger premium + ~0.2% LP payout fee. The full blended yield if all settlement fees are counted is ~1.1%. Model uses 0.7% — conservative.' },
+                      { label: 'LP Ratio Not Modelled', note: 'The model assumes every hedge event is fully funded by LPs. LP shortfall risk is not modelled. Protocol design ensures LP deposits precede hedger buys.' },
+                      { label: 'Gas Costs (Lisk L2)', note: 'Lisk is an OP Stack L2. Gas costs are ~50× lower than Ethereum mainnet. $3/wallet and $0.05/event are based on current L2 gas at ~$0.008/txn.' },
+                      { label: 'Avg Monthly Transfer $500', note: 'Conservative estimate for active wallet transfer volume. Many African SMEs move $1,000–$5,000/month for trade settlement. Adjustable in constants.' },
+                      { label: 'Tax Rate 25%', note: 'Approximate corporate tax rate for a Ghana-domiciled entity. No loss carryforward modelled — tax applies to all positive EBT months individually.' },
+                      { label: 'D&A $4,000/month', note: 'Non-cash amortisation of capitalised platform development costs (smart contract audits, initial infrastructure). Has no cash impact — only affects EBIT and below.' },
+                      { label: '12× EBITDA Exit Multiple', note: 'Conservative. African fintech comparables trade at 15–20× EBITDA. Using 12× to present a floor-case valuation to investors.' },
+                      { label: 'Break-even Definition', note: 'First calendar month where NET INCOME > 0 (after all costs and taxes). EBITDA break-even occurs earlier; net income break-even is the more conservative measure shown.' },
+                    ].map(a => (
+                      <div key={a.label} className="bg-slate-50 rounded-lg p-3">
+                        <p className="font-semibold text-slate-700 text-[11px] mb-0.5">{a.label}</p>
+                        <p className="text-slate-500">{a.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </CardContent>
             </Card>
           </TabsContent>
