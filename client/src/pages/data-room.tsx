@@ -242,8 +242,9 @@ const EXEC_D = {
   mainnet: "July 7, 2026 — Mainnet launch on Lisk L2, following third-party security audit and Bank of Ghana sandbox approval.",
   ask: [
     { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
-    { round: "Series A", amount: "$5M",   timing: "H2 2027",        use: "Market expansion, BD, multi-signer oracle, institutional LP onboarding", color: "green" },
-    { round: "Series B", amount: "$7M",   timing: "H2 2028",        use: "New markets (Kenya, Nigeria), enterprise integrations, liquidity depth", color: "amber" },
+    { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
+    { round: "Series A", amount: "$8M",   timing: "Jan 2028",       use: "Multi-country expansion, BD, institutional LP onboarding, near break-even", color: "green" },
+    { round: "Series B", amount: "$20M",  timing: "Jul 2029",       use: "Deep market scale, Kenya/Nigeria enterprise integrations, liquidity depth", color: "amber" },
   ],
 };
 

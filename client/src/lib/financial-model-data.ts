@@ -94,12 +94,18 @@ export const INITIAL_CONSTANTS: Constants = {
 };
 
 // ── Default funding schedule ──────────────────────────────────────────────────
+// Industry-standard cadence for African fintech/blockchain startup:
+//   Pre-Seed $500K  — Jul 2026 (launch): team, product, 12-month runway
+//   Seed     $1.5M  — Jan 2027 (Month 7): 6 months of live traction, bridge to Series A
+//   Series A $8M    — Jan 2028 (Month 19): proven PMF, near break-even, multi-country expansion
+//   Series B $20M   — Jul 2029 (Month 37): pure growth capital, deep market scale
+//   Total raised: $30M
 export const INITIAL_FUNDING: FundingEntry[] = [
-  { monthIndex: 0,  amount:   500_000, label: 'Pre-Seed' },
-  { monthIndex: 12, amount: 5_000_000, label: 'Series A' },
-  { monthIndex: 24, amount: 7_000_000, label: 'Series B' },
-  { monthIndex: 36, amount: 0,         label: 'Series C (optional)' },
-  { monthIndex: 48, amount: 0,         label: 'Tranche 5 (optional)' },
+  { monthIndex:  0, amount:    500_000, label: 'Pre-Seed' },
+  { monthIndex:  6, amount:  1_500_000, label: 'Seed' },
+  { monthIndex: 18, amount:  8_000_000, label: 'Series A' },
+  { monthIndex: 36, amount: 20_000_000, label: 'Series B' },
+  { monthIndex: 48, amount: 0,          label: 'Series C (optional)' },
 ];
 
 // ── 54-month input data (v3 — Revised CAC trajectory) ────────────────────────
