@@ -927,29 +927,87 @@ export default function FinancialModel() {
               <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-sm font-semibold text-slate-700">Unit Economics (computed from 54-month model)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-5">
                 {(() => {
+                  // ── Per-event economics (2030 maturity year — most representative) ──
+                  const yr30 = model.slice(42, 54);
+                  const ev30    = yr30.reduce((s, r) => s + r.events, 0);
+                  const hf30    = yr30.reduce((s, r) => s + r.hedgeFees, 0);
+                  const ef30    = yr30.reduce((s, r) => s + r.eventCreationFees, 0);
+                  const cogs30  = yr30.reduce((s, r) => s + r.totalCOGS, 0);
+                  const rev30   = yr30.reduce((s, r) => s + r.totalRevenue, 0);
+                  const gp30    = yr30.reduce((s, r) => s + r.grossProfit, 0);
+                  const revPerEvent  = ev30 > 0 ? (hf30 + ef30) / ev30 : 0;   // wallet fees excluded — separate stream
+                  const cogsPerEvent = ev30 > 0 ? cogs30 / ev30 : 0;
+                  const gpPerEvent   = revPerEvent - cogsPerEvent;
+                  const gpPctEvent   = revPerEvent > 0 ? (gpPerEvent / revPerEvent) * 100 : 0;
+
+                  // ── Wallet LTV/CAC (honest, annualised from 2030 maturity) ──
+                  // Use 2030 annual revenue ÷ cumulative wallets → annualised per-wallet value × 2-yr tenure
                   const totalMktg  = model.reduce((s, r) => s + r.marketing, 0);
-                  const totalW     = model[model.length - 1]?.cumWallets ?? 1;
-                  const blendedCac = totalMktg / totalW;
-                  const totalRev2  = model.reduce((s, r) => s + r.totalRevenue, 0);
-                  const revPerWalletMonth = (totalRev2 / totalW) / 54;
-                  const ltv = revPerWalletMonth * 18;
-                  return (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {[
-                        { label: 'LTV (est.)',        value: `$${Math.round(ltv).toLocaleString()}`,   sub: '18-month avg tenure' },
-                        { label: 'CAC (blended)',     value: `$${Math.round(blendedCac)}`,             sub: 'Total mktg ÷ total wallets' },
-                        { label: 'LTV:CAC',           value: `${(ltv / (blendedCac || 1)).toFixed(1)}×`, sub: 'Benchmark > 3×' },
-                        { label: '2030 Gross Margin', value: pct(annualSummary[4]?.grossMarginPct ?? 0), sub: 'At scale' },
-                      ].map(item => (
-                        <div key={item.label} className="bg-slate-50 rounded-lg p-4 text-center">
-                          <p className="text-xs text-slate-500">{item.label}</p>
-                          <p className="text-2xl font-bold text-blue-600 mt-1">{item.value}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{item.sub}</p>
-                        </div>
-                      ))}
+                  const cumW       = model[model.length - 1]?.cumWallets ?? 1;
+                  const blendedCac = totalMktg / cumW;
+                  const annualRevPerWallet = rev30 / cumW;           // 2030 annual rev ÷ total wallets
+                  const ltv        = annualRevPerWallet * 2;          // 24-month average wallet tenure
+                  const ltvCac     = ltv / (blendedCac || 1);
+
+                  // ── Active hedger economics ──
+                  // Conservative assumption: 1 event/active hedger/month; 24-month tenure
+                  const hedgerMonthlyRev = revPerEvent;               // 1 event/mo per active hedger
+                  const hedgerLtv        = hedgerMonthlyRev * 24;
+                  const hedgerCac        = blendedCac * 5;            // B2B field sales ~5× wallet CAC
+                  const hedgerLtvCac     = hedgerLtv / (hedgerCac || 1);
+
+                  const statBox = (label: string, value: string, sub: string, color = 'text-blue-600') => (
+                    <div key={label} className="bg-slate-50 rounded-lg p-3 text-center">
+                      <p className="text-xs text-slate-500">{label}</p>
+                      <p className={`text-xl font-bold ${color} mt-1`}>{value}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
                     </div>
+                  );
+
+                  return (
+                    <>
+                      {/* Section A — Per-Event */}
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">A · Per Hedge Event (2030 maturity)</p>
+                        <p className="text-xs text-slate-400 mb-3">Each hedge event is the fundamental revenue unit — a business buying or providing FX/commodity protection. These figures use 2030 data when the platform is at operating scale.</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {statBox('Revenue / Event',      `$${Math.round(revPerEvent)}`,   'Hedge fee + creation fee',     'text-blue-600')}
+                          {statBox('COGS / Event',         `$${Math.round(cogsPerEvent)}`,  'Loyalty + oracle + gas/KYC',   'text-slate-600')}
+                          {statBox('Gross Profit / Event', `$${Math.round(gpPerEvent)}`,    'Net per event at scale',       'text-emerald-600')}
+                          {statBox('Gross Margin / Event', `${gpPctEvent.toFixed(0)}%`,     'Protocol-level efficiency',    'text-emerald-600')}
+                        </div>
+                      </div>
+
+                      <hr className="border-slate-100" />
+
+                      {/* Section B — Active Hedger LTV */}
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">B · Active Hedger LTV (the high-value customer)</p>
+                        <p className="text-xs text-slate-400 mb-3">An active hedger is a business placing at least 1 protection event per month — e.g. an importer hedging monthly FX exposure. These are repeat B2B customers with predictable revenue. Assumes 1 event/month, 24-month average retention, B2B acquisition cost ≈ 5× wallet CAC.</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {statBox('Monthly Rev / Hedger', `$${Math.round(hedgerMonthlyRev)}`, '1 event/mo × rev/event',       'text-blue-600')}
+                          {statBox('Hedger LTV (24 mo)',   `$${Math.round(hedgerLtv).toLocaleString()}`, 'Avg 24-month tenure',          'text-blue-600')}
+                          {statBox('B2B Hedger CAC',       `$${Math.round(hedgerCac)}`,       '5× wallet CAC (field sales)',  'text-amber-600')}
+                          {statBox('Hedger LTV:CAC',       `${hedgerLtvCac.toFixed(1)}×`,     'Benchmark > 3×',               hedgerLtvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
+                        </div>
+                      </div>
+
+                      <hr className="border-slate-100" />
+
+                      {/* Section C — Platform Wallet Metrics */}
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">C · Platform Wallet Metrics (blended across all registered wallets)</p>
+                        <p className="text-xs text-slate-400 mb-3">Blended figures across all wallets including passive users. LTV uses 2030 annualised revenue per wallet × 24-month tenure. CAC is total marketing spend ÷ total wallets acquired. These are conservative — excludes the full lifetime of early high-value wallets.</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {statBox('Annual Rev/Wallet (\'30)', `$${Math.round(annualRevPerWallet)}`, '2030 revenue ÷ all wallets',   'text-blue-600')}
+                          {statBox('Wallet LTV (24 mo)',   `$${Math.round(ltv)}`,              '2-year avg tenure assumption',  'text-blue-600')}
+                          {statBox('Blended CAC',          `$${Math.round(blendedCac)}`,       'Total mktg ÷ total wallets',   'text-amber-600')}
+                          {statBox('Wallet LTV:CAC',       `${ltvCac.toFixed(1)}×`,            'Benchmark > 3×',               ltvCac >= 3 ? 'text-emerald-600' : 'text-red-500')}
+                        </div>
+                      </div>
+                    </>
                   );
                 })()}
               </CardContent>
