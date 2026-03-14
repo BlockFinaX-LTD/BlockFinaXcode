@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock, LogOut, ExternalLink, FileText, BarChart2, Globe,
   PlayCircle, Beaker, ShieldCheck, BookOpen, ChevronRight,
-  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3, Calendar
+  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3, Calendar,
+  Users, PieChart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,6 +218,14 @@ const CATEGORIES = [
       { id: "token-legal", title: "Token Legal Opinion", description: "USDC-only model — no native token, no securities classification risk", href: null, type: "coming-soon" as const, badge: "Coming Soon", badgeColor: "bg-slate-100 text-slate-400", icon: FileText },
       { id: "book-call", title: "Book a Discovery Call", description: "Schedule a 30-minute call with the founder — ask anything, explore the opportunity", href: "https://calendly.com/anthonykumako8/30min", type: "external" as const, badge: "Calendly", badgeColor: "bg-blue-100 text-blue-700", icon: Calendar },
       { id: "nda-request", title: "Request NDA / Term Sheet", description: "Contact us to request a non-disclosure agreement or investment term sheet", href: "mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20NDA%20Request", type: "external" as const, badge: "Email", badgeColor: "bg-slate-100 text-slate-600", icon: ExternalLink },
+    ],
+  },
+  {
+    id: "company", label: "Company", icon: Users,
+    color: "border-indigo-200 bg-indigo-50", iconColor: "text-indigo-600",
+    documents: [
+      { id: "cap-table", title: "Cap Table", description: "Founder equity, option pool, investor allocations, and post-money ownership structure", href: null, type: "modal" as const, badge: "Confidential", badgeColor: "bg-indigo-100 text-indigo-700", icon: PieChart },
+      { id: "team-info", title: "Team", description: "Founding team, advisors, and key hires — backgrounds, roles, and LinkedIn profiles", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Users },
     ],
   },
 ];
@@ -1795,6 +1804,249 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
   );
 }
 
+/* ─── CAP TABLE ─── */
+const CAP_TABLE_D = {
+  notes: "All figures are pre-money. Option pool reserved for engineering and business development hires (2026–2027). Investor allocations subject to final term sheet.",
+  total_authorized: "100,000,000",
+  total_issued: "75,000,000",
+  founders: [
+    { name: "Anthony Kumako", role: "CEO & Co-Founder", shares: "45,000,000", pct: "60.0%" },
+    { name: "[Co-Founder 2]", role: "[Role]",            shares: "15,000,000", pct: "20.0%" },
+  ],
+  option_pool: [
+    { name: "Employee Option Pool", shares: "10,000,000", pct: "13.3%" },
+  ],
+  investors: [
+    { name: "[Pre-Seed Investor]", round: "Pre-Seed", amount: "$500K", shares: "5,000,000", pct: "6.7%" },
+  ],
+};
+type CapTableData = typeof CAP_TABLE_D;
+
+function CapTableDoc({ token }: { token: string }) {
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField } =
+    useEditableDoc<CapTableData>("cap-table", token, CAP_TABLE_D);
+
+  const setRow = (key: keyof CapTableData, i: number, k: string, v: string) => {
+    const arr = [...(draft[key] as any[])];
+    arr[i] = { ...arr[i], [k]: v };
+    setField(key, arr);
+  };
+  const addRow = (key: keyof CapTableData, template: object) =>
+    setField(key, [...(draft[key] as any[]), { ...template }]);
+  const removeRow = (key: keyof CapTableData, i: number) =>
+    setField(key, (draft[key] as any[]).filter((_: any, j: number) => j !== i));
+
+  const rowStyle: React.CSSProperties = { padding: "8px 10px", borderBottom: "1px solid #f1f5f9", fontSize: "13px" };
+  const hStyle: React.CSSProperties = { ...rowStyle, background: "#f8fafc", fontWeight: 600, fontSize: "12px", color: "#64748b" };
+
+  if (editing) return (
+    <div>
+      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
+      <h3 style={S.h3}>General Notes</h3>
+      <TxtF label="notes" value={draft.notes} onChange={v => setField("notes", v)} rows={3} />
+      <div style={{ display: "flex", gap: "12px", marginBottom: "8px" }}>
+        <div style={{ flex: 1 }}><TxtF label="total_authorized_shares" value={draft.total_authorized} onChange={v => setField("total_authorized", v)} rows={1} /></div>
+        <div style={{ flex: 1 }}><TxtF label="total_issued_shares" value={draft.total_issued} onChange={v => setField("total_issued", v)} rows={1} /></div>
+      </div>
+      <h3 style={S.h3}>Founders</h3>
+      {draft.founders.map((r, i) => (
+        <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+            {(["name","role","shares","pct"] as const).map(f => (
+              <div key={f} style={{ flex: "1 1 140px" }}>
+                <TxtF label={f} value={r[f]} onChange={v => setRow("founders", i, f, v)} rows={1} />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => removeRow("founders", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Remove</button>
+        </div>
+      ))}
+      <button onClick={() => addRow("founders", { name: "", role: "", shares: "", pct: "" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px" }}>+ Add Founder</button>
+      <h3 style={S.h3}>Option Pool</h3>
+      {draft.option_pool.map((r, i) => (
+        <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+            {(["name","shares","pct"] as const).map(f => (
+              <div key={f} style={{ flex: "1 1 140px" }}>
+                <TxtF label={f} value={r[f]} onChange={v => setRow("option_pool", i, f, v)} rows={1} />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => removeRow("option_pool", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Remove</button>
+        </div>
+      ))}
+      <button onClick={() => addRow("option_pool", { name: "", shares: "", pct: "" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px" }}>+ Add Pool</button>
+      <h3 style={S.h3}>Investors</h3>
+      {draft.investors.map((r, i) => (
+        <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+            {(["name","round","amount","shares","pct"] as const).map(f => (
+              <div key={f} style={{ flex: "1 1 120px" }}>
+                <TxtF label={f} value={r[f]} onChange={v => setRow("investors", i, f, v)} rows={1} />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => removeRow("investors", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Remove</button>
+        </div>
+      ))}
+      <button onClick={() => addRow("investors", { name: "", round: "", amount: "", shares: "", pct: "" })} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px" }}>+ Add Investor</button>
+    </div>
+  );
+
+  return (
+    <div>
+      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
+      <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
+        <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Authorized Shares</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{data.total_authorized}</p>
+        </div>
+        <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "140px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Issued Shares</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{data.total_issued}</p>
+        </div>
+      </div>
+      <h3 style={S.h3}>Founders</h3>
+      <table style={S.table}>
+        <thead><tr><th style={hStyle}>Name</th><th style={hStyle}>Role</th><th style={hStyle}>Shares</th><th style={hStyle}>Ownership %</th></tr></thead>
+        <tbody>{data.founders.map((r, i) => (
+          <tr key={i}><td style={rowStyle}>{r.name}</td><td style={rowStyle}>{r.role}</td><td style={rowStyle}>{r.shares}</td><td style={{ ...rowStyle, fontWeight: 600, color: "#2563eb" }}>{r.pct}</td></tr>
+        ))}</tbody>
+      </table>
+      <h3 style={S.h3}>Option Pool</h3>
+      <table style={S.table}>
+        <thead><tr><th style={hStyle}>Pool</th><th style={hStyle}>Shares</th><th style={hStyle}>% of Total</th></tr></thead>
+        <tbody>{data.option_pool.map((r, i) => (
+          <tr key={i}><td style={rowStyle}>{r.name}</td><td style={rowStyle}>{r.shares}</td><td style={{ ...rowStyle, fontWeight: 600, color: "#7c3aed" }}>{r.pct}</td></tr>
+        ))}</tbody>
+      </table>
+      <h3 style={S.h3}>Investors</h3>
+      <table style={S.table}>
+        <thead><tr><th style={hStyle}>Investor</th><th style={hStyle}>Round</th><th style={hStyle}>Amount</th><th style={hStyle}>Shares</th><th style={hStyle}>Ownership %</th></tr></thead>
+        <tbody>{data.investors.map((r, i) => (
+          <tr key={i}><td style={rowStyle}>{r.name}</td><td style={rowStyle}>{r.round}</td><td style={rowStyle}>{r.amount}</td><td style={rowStyle}>{r.shares}</td><td style={{ ...rowStyle, fontWeight: 600, color: "#059669" }}>{r.pct}</td></tr>
+        ))}</tbody>
+      </table>
+      <p style={{ ...S.p, fontStyle: "italic", color: "#94a3b8", marginTop: "16px", fontSize: "12px" }}>{data.notes}</p>
+    </div>
+  );
+}
+
+/* ─── TEAM INFO ─── */
+const TEAM_D = {
+  intro: "BlockFinaX is built by a lean, execution-focused founding team with backgrounds in software engineering, financial markets, and African fintech.",
+  members: [
+    { name: "Anthony Kumako", role: "CEO & Co-Founder", bio: "Founder and lead engineer. Background in blockchain development, DeFi protocol design, and African cross-border payments. Responsible for product strategy, smart contract architecture, and investor relations.", linkedin: "https://linkedin.com/in/" },
+    { name: "[Co-Founder 2]", role: "[Role & Co-Founder]", bio: "Add background here.", linkedin: "" },
+  ],
+  advisors: [
+    { name: "[Advisor Name]", role: "[Domain] Advisor", bio: "Add advisor background and relevance here.", linkedin: "" },
+  ],
+  hiring: "Actively hiring: Senior Solidity Engineer, Business Development Lead (Ghana/Nigeria), and Compliance Officer. Reach out at anthonykumako8@gmail.com.",
+};
+type TeamData = typeof TEAM_D;
+
+function TeamInfoDoc({ token }: { token: string }) {
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField } =
+    useEditableDoc<TeamData>("team-info", token, TEAM_D);
+
+  const setMember = (key: "members" | "advisors", i: number, k: string, v: string) => {
+    const arr = [...(draft[key] as any[])];
+    arr[i] = { ...arr[i], [k]: v };
+    setField(key, arr);
+  };
+  const addMember = (key: "members" | "advisors") =>
+    setField(key, [...(draft[key] as any[]), { name: "", role: "", bio: "", linkedin: "" }]);
+  const removeMember = (key: "members" | "advisors", i: number) =>
+    setField(key, (draft[key] as any[]).filter((_: any, j: number) => j !== i));
+
+  const cardStyle: React.CSSProperties = { border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px", marginBottom: "12px" };
+
+  if (editing) return (
+    <div>
+      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
+      <TxtF label="intro" value={draft.intro} onChange={v => setField("intro", v)} rows={2} />
+      <h3 style={S.h3}>Team Members</h3>
+      {draft.members.map((r, i) => (
+        <div key={i} style={{ ...cardStyle, background: "#fafafa" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+            {(["name","role","bio","linkedin"] as const).map(f => (
+              <div key={f} style={{ flex: f === "bio" ? "1 1 100%" : "1 1 200px" }}>
+                <TxtF label={f} value={r[f]} onChange={v => setMember("members", i, f, v)} rows={f === "bio" ? 3 : 1} />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => removeMember("members", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Remove</button>
+        </div>
+      ))}
+      <button onClick={() => addMember("members")} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px" }}>+ Add Team Member</button>
+      <h3 style={S.h3}>Advisors</h3>
+      {draft.advisors.map((r, i) => (
+        <div key={i} style={{ ...cardStyle, background: "#fafafa" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+            {(["name","role","bio","linkedin"] as const).map(f => (
+              <div key={f} style={{ flex: f === "bio" ? "1 1 100%" : "1 1 200px" }}>
+                <TxtF label={f} value={r[f]} onChange={v => setMember("advisors", i, f, v)} rows={f === "bio" ? 3 : 1} />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => removeMember("advisors", i)} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Remove</button>
+        </div>
+      ))}
+      <button onClick={() => addMember("advisors")} style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: "5px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px" }}>+ Add Advisor</button>
+      <h3 style={S.h3}>Open Roles</h3>
+      <TxtF label="hiring" value={draft.hiring} onChange={v => setField("hiring", v)} rows={2} />
+    </div>
+  );
+
+  return (
+    <div>
+      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
+      <p style={S.p}>{data.intro}</p>
+      <h3 style={S.h3}>Founding Team</h3>
+      {data.members.map((m, i) => (
+        <div key={i} style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" as const, gap: "4px" }}>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", color: "#0f172a" }}>{m.name}</p>
+              <p style={{ margin: "2px 0 8px", fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>{m.role}</p>
+            </div>
+            {m.linkedin && (
+              <a href={m.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563eb", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}>
+                LinkedIn →
+              </a>
+            )}
+          </div>
+          <p style={{ ...S.p, margin: 0 }}>{m.bio}</p>
+        </div>
+      ))}
+      {data.advisors.length > 0 && (
+        <>
+          <h3 style={S.h3}>Advisors</h3>
+          {data.advisors.map((m, i) => (
+            <div key={i} style={{ ...cardStyle, background: "#fafafe" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" as const, gap: "4px" }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>{m.name}</p>
+                  <p style={{ margin: "2px 0 8px", fontSize: "12px", color: "#7c3aed", fontWeight: 600 }}>{m.role}</p>
+                </div>
+                {m.linkedin && (
+                  <a href={m.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563eb", textDecoration: "none" }}>
+                    LinkedIn →
+                  </a>
+                )}
+              </div>
+              <p style={{ ...S.p, margin: 0 }}>{m.bio}</p>
+            </div>
+          ))}
+        </>
+      )}
+      <h3 style={S.h3}>Open Roles</h3>
+      <p style={S.p}>{data.hiring}</p>
+    </div>
+  );
+}
+
 /* ─── ADMIN NOTES SECTION ─── */
 function AdminNotesSection({ docId, token }: { docId: string; token: string }) {
   const { editUnlocked } = useEditAuth();
@@ -1887,6 +2139,8 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
     "agreements":            { title: "Agreements",            subtitle: "NDAs, service contracts, IP ownership, and investor docs" },
     "compliance-proposals":  { title: "Compliance Proposals",  subtitle: "Consultant proposals — admin editable" },
     "bog-sandbox": { title: "Bank of Ghana Sandbox", subtitle: "Application status, compliance framework, and timeline" },
+    "cap-table":  { title: "Cap Table",  subtitle: "Founder equity, option pool, and investor allocations" },
+    "team-info":  { title: "Team",       subtitle: "Founding team, advisors, and open roles" },
   };
 
   const m = meta[docId];
@@ -1911,6 +2165,8 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       {docId === "agreements"             && <AgreementsDoc token={token} />}
       {docId === "compliance-proposals"   && <ComplianceProposalsDoc token={token} />}
       {docId === "bog-sandbox"            && <BoGSandboxDoc token={token} />}
+      {docId === "cap-table"              && <CapTableDoc token={token} />}
+      {docId === "team-info"              && <TeamInfoDoc token={token} />}
       {docId !== "revenue-breakdown" && docId !== "cost-breakdown" && (
         <AdminNotesSection docId={docId} token={token} />
       )}
