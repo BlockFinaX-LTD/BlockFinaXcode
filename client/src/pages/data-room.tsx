@@ -1806,127 +1806,152 @@ function ComplianceProposalsDoc({ token }: { token: string }) {
 }
 
 /* ─── CAP TABLE ─── */
-// 1,000,000 total authorized shares. Each member holds a % of the total.
-// When a new member joins at X%, all existing holders dilute proportionally.
+const TOTAL_AUTHORIZED = 1_000_000;
+const parseNum = (s: string | undefined) => { const n = parseFloat(String(s ?? "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
+const fmtN     = (n: number) => Math.round(n).toLocaleString();
+const fmtMoney = (n: number) => n >= 1e9 ? `$${(n/1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${fmtN(n)}`;
+
 const CAP_TABLE_D = {
-  notes: "All shares subject to vesting as noted. Total authorized: 1,000,000. Investor rounds will be added as they close.",
-  valuation: "5000000",
-  members: [
-    { name: "Anthony Kumako", role: "CEO & Co-Founder", type: "founder", pct: "31.5", vesting: "4-year, 1-year cliff" },
-    { name: "[Co-Founder 2]", role: "[Role]",            type: "founder", pct: "7.5",  vesting: "4-year, 1-year cliff" },
-    { name: "Option Pool",    role: "Employee Equity",   type: "pool",    pct: "5.5",  vesting: "4-year, 1-year cliff per grant" },
-    { name: "AYAHQ",          role: "Incubation",        type: "service", pct: "1.0",  vesting: "2-year, 6-month cliff" },
+  notes: "All shares subject to vesting as noted. Total authorized: 1,000,000. Investor round allocations are indicative until term sheets are signed.",
+  founders: [
+    { name: "Anthony Kumako",  role: "CEO & Co-Founder",  type: "founder",  pct: "31.5", vesting: "4-year, 1-year cliff" },
+    { name: "[Co-Founder 2]",  role: "[Role]",             type: "founder",  pct: "7.5",  vesting: "4-year, 1-year cliff" },
+    { name: "Option Pool",     role: "Employee Equity",    type: "pool",     pct: "5.5",  vesting: "4-year, 1-year cliff per grant" },
+    { name: "AYAHQ",           role: "Incubation",         type: "service",  pct: "1.0",  vesting: "2-year, 6-month cliff" },
+  ],
+  rounds: [
+    { name: "Pre-Seed Round",  investment: "500000",   preMoney: "4500000",  status: "planned" },
+    { name: "Seed Round",      investment: "1500000",  preMoney: "",         status: "planned" },
+    { name: "Series A",        investment: "8000000",  preMoney: "",         status: "planned" },
+    { name: "Series B",        investment: "20000000", preMoney: "",         status: "planned" },
   ],
 };
 type CapTableData = typeof CAP_TABLE_D;
-
-const TOTAL_AUTHORIZED = 1_000_000;
-const parseNum = (s: string) => { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : n; };
-const fmtN     = (n: number) => Math.round(n).toLocaleString();
 
 function CapTableDoc({ token }: { token: string }) {
   const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField } =
     useEditableDoc<CapTableData>("cap-table", token, CAP_TABLE_D);
 
-  const [newPct, setNewPct] = useState("");
+  /* ── shared cell styles ── */
+  const row: React.CSSProperties = { padding: "8px 10px", borderBottom: "1px solid #f1f5f9", fontSize: "13px" };
+  const th: React.CSSProperties  = { ...row, background: "#f8fafc", fontWeight: 600, fontSize: "11px", color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.04em" };
+  const typeColor: Record<string,string> = { founder:"#2563eb", pool:"#7c3aed", service:"#0891b2", investor:"#059669" };
+  const typeLabel: Record<string,string> = { founder:"Founder", pool:"Option Pool", service:"Service Grant", investor:"Investor" };
 
-  const setMember = (i: number, k: string, v: string) => {
-    const arr = [...draft.members]; arr[i] = { ...arr[i], [k]: v }; setField("members", arr);
+  /* ── round % calculator ── */
+  const roundPct = (r: { investment: string; preMoney: string }) => {
+    const inv = parseNum(r.investment); const pre = parseNum(r.preMoney);
+    return (inv > 0 && pre > 0) ? (inv / (inv + pre)) * 100 : null;
   };
 
-  const totalPct = (members: typeof draft.members) =>
-    members.reduce((s, m) => s + parseNum(m.pct), 0);
-
-  const addMemberDiluted = () => {
-    const pct = parseNum(newPct);
-    if (pct <= 0 || pct >= 100) return;
-    const factor = 1 - pct / 100;
-    const diluted = draft.members.map(m => ({ ...m, pct: (parseNum(m.pct) * factor).toFixed(4) }));
-    setField("members", [...diluted, { name: "", role: "", type: "founder", pct: pct.toFixed(4), vesting: "4-year, 1-year cliff" }]);
-    setNewPct("");
-  };
-
-  const rowStyle: React.CSSProperties = { padding: "8px 10px", borderBottom: "1px solid #f1f5f9", fontSize: "13px" };
-  const hStyle: React.CSSProperties = { ...rowStyle, background: "#f8fafc", fontWeight: 600, fontSize: "12px", color: "#64748b" };
-  const typeColor: Record<string, string> = { founder: "#2563eb", pool: "#7c3aed", service: "#0891b2", investor: "#059669", round: "#d97706" };
-  const typeLabel: Record<string, string> = { founder: "Founder", pool: "Option Pool", service: "Service Grant", investor: "Investor", round: "Planned Round" };
-
+  /* ─────────────── EDIT MODE ─────────────── */
   if (editing) {
-    const dTotal = totalPct(draft.members);
-    const available = 100 - dTotal;
+    const setFounder = (i: number, k: string, v: string) => {
+      const arr = [...draft.founders]; arr[i] = { ...arr[i], [k]: v }; setField("founders", arr);
+    };
+    const setRound = (i: number, k: string, v: string) => {
+      const arr = [...draft.rounds]; arr[i] = { ...arr[i], [k]: v }; setField("rounds", arr);
+    };
+    const founderTotal = draft.founders.reduce((s, f) => s + parseNum(f.pct), 0);
+    const roundTotal   = draft.rounds.reduce((s, r) => { const p = roundPct(r); return p ? s + p : s; }, 0);
+    const grandTotal   = founderTotal + roundTotal;
+    const totalOk      = Math.abs(grandTotal - 100) < 0.1;
+
     return (
       <div>
         <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
 
-        {/* Stats bar */}
-        <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" as const }}>
-          <div style={{ flex: 1, background: "#f8fafc", borderRadius: "6px", padding: "8px 12px", minWidth: "120px" }}>
-            <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Authorized</p>
-            <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0" }}>{fmtN(TOTAL_AUTHORIZED)}</p>
+        {/* Total indicator */}
+        <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" as const }}>
+          <div style={{ flex: 1, background: "#f8fafc", borderRadius: "6px", padding: "8px 14px", minWidth: "110px" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Founding Team</p>
+            <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: "#2563eb" }}>{founderTotal.toFixed(2)}%</p>
           </div>
-          <div style={{ flex: 1, background: "#f8fafc", borderRadius: "6px", padding: "8px 12px", minWidth: "120px" }}>
-            <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Allocated</p>
-            <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: dTotal > 100 ? "#ef4444" : "#0f172a" }}>{dTotal.toFixed(2)}%</p>
+          <div style={{ flex: 1, background: "#f8fafc", borderRadius: "6px", padding: "8px 14px", minWidth: "110px" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Investor Rounds</p>
+            <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: "#059669" }}>{roundTotal.toFixed(2)}%</p>
           </div>
-          <div style={{ flex: 1, background: available < 0 ? "#fef2f2" : "#f0fdf4", borderRadius: "6px", padding: "8px 12px", minWidth: "120px" }}>
-            <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Available Pool</p>
-            <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: available < 0 ? "#ef4444" : "#059669" }}>{available.toFixed(2)}% · {fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))} shares</p>
-          </div>
-          <div style={{ flex: 1, minWidth: "140px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Company Valuation ($)</label>
-            <input type="number" value={draft.valuation} onChange={e => setField("valuation", e.target.value)} style={{ ...EI, fontFamily: "monospace" }} placeholder="e.g. 5000000" />
+          <div style={{ flex: 1, background: totalOk ? "#f0fdf4" : "#fef2f2", borderRadius: "6px", padding: "8px 14px", minWidth: "110px", border: `1px solid ${totalOk ? "#bbf7d0" : "#fecaca"}` }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Grand Total</p>
+            <p style={{ fontSize: "15px", fontWeight: 700, margin: "2px 0 0", color: totalOk ? "#059669" : "#ef4444" }}>{grandTotal.toFixed(2)}% {totalOk ? "✓" : "≠ 100%"}</p>
           </div>
         </div>
 
-        {/* Members */}
-        {draft.members.map((m, i) => (
+        {/* ── Founding Team Editor ── */}
+        <h3 style={{ ...S.h3, marginBottom: "10px" }}>Founding Team</h3>
+        {draft.founders.map((f, i) => (
           <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px", marginBottom: "8px", display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "flex-end" }}>
-            <div style={{ flex: "2 1 130px" }}><TxtF label="name"    value={m.name}    onChange={v => setMember(i, "name",    v)} rows={1} /></div>
-            <div style={{ flex: "2 1 120px" }}><TxtF label="role"    value={m.role}    onChange={v => setMember(i, "role",    v)} rows={1} /></div>
+            <div style={{ flex: "2 1 130px" }}><TxtF label="Name"    value={f.name}    onChange={v => setFounder(i,"name",v)}    rows={1} /></div>
+            <div style={{ flex: "2 1 120px" }}><TxtF label="Role"    value={f.role}    onChange={v => setFounder(i,"role",v)}    rows={1} /></div>
             <div style={{ flex: "1 1 90px" }}>
               <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Type</label>
-              <select value={m.type} onChange={e => setMember(i, "type", e.target.value)} style={{ ...EI, padding: "5px 8px" }}>
+              <select value={f.type} onChange={e => setFounder(i,"type",e.target.value)} style={{ ...EI, padding: "5px 8px" }}>
                 <option value="founder">Founder</option>
                 <option value="pool">Option Pool</option>
                 <option value="service">Service Grant</option>
-                <option value="investor">Investor</option>
               </select>
             </div>
             <div style={{ flex: "1 1 80px" }}>
               <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Ownership %</label>
               <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                <input type="number" step="0.01" value={m.pct} onChange={e => setMember(i, "pct", e.target.value)} style={{ ...EI, fontFamily: "monospace", width: "64px" }} />
+                <input type="number" step="0.01" value={f.pct} onChange={e => setFounder(i,"pct",e.target.value)} style={{ ...EI, fontFamily: "monospace", width: "64px" }} />
                 <span style={{ fontSize: "12px" }}>%</span>
               </div>
             </div>
-            <div style={{ flex: "0 0 80px", paddingBottom: "2px" }}>
+            <div style={{ flex: "0 0 76px", paddingBottom: "2px" }}>
               <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 2px" }}>Shares</p>
-              <p style={{ fontSize: "13px", fontWeight: 700, color: typeColor[m.type] || "#2563eb", margin: 0 }}>{fmtN(Math.round(parseNum(m.pct) / 100 * TOTAL_AUTHORIZED))}</p>
+              <p style={{ fontSize: "13px", fontWeight: 700, color: typeColor[f.type] || "#2563eb", margin: 0 }}>{fmtN(Math.round(parseNum(f.pct)/100*TOTAL_AUTHORIZED))}</p>
             </div>
-            <div style={{ flex: "2 1 160px" }}><TxtF label="vesting" value={m.vesting} onChange={v => setMember(i, "vesting", v)} rows={1} /></div>
-            <button onClick={() => setField("members", draft.members.filter((_, j) => j !== i))} style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", alignSelf: "flex-end" as const, paddingBottom: "4px" }}>✕</button>
+            <div style={{ flex: "2 1 160px" }}><TxtF label="Vesting" value={f.vesting} onChange={v => setFounder(i,"vesting",v)} rows={1} /></div>
+            <button onClick={() => setField("founders", draft.founders.filter((_,j) => j!==i))} style={{ fontSize:"11px", color:"#ef4444", background:"none", border:"none", cursor:"pointer", alignSelf:"flex-end" as const, paddingBottom:"4px" }}>✕</button>
           </div>
         ))}
+        <button onClick={() => setField("founders", [...draft.founders, { name:"", role:"", type:"founder", pct:"0", vesting:"4-year, 1-year cliff" }])}
+          style={{ fontSize:"12px", color:"#2563eb", background:"none", border:"1px dashed #bfdbfe", borderRadius:"5px", padding:"5px 12px", cursor:"pointer", marginBottom:"24px" }}>
+          + Add team member
+        </button>
 
-        {/* Add with dilution */}
-        <div style={{ border: "1px dashed #bfdbfe", borderRadius: "6px", padding: "10px 12px", marginBottom: "16px", background: "#f8fafc" }}>
-          <p style={{ fontSize: "12px", color: "#0369a1", margin: "0 0 8px", fontWeight: 600 }}>Add new member — existing holders dilute proportionally</p>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const }}>
-            <div>
-              <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "2px" }}>Give them %</label>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <input type="number" step="0.01" min="0.01" max="99" value={newPct} onChange={e => setNewPct(e.target.value)} placeholder="e.g. 20" style={{ ...EI, fontFamily: "monospace", width: "70px" }} />
-                <span style={{ fontSize: "12px" }}>%</span>
+        {/* ── Investor Rounds Editor ── */}
+        <h3 style={{ ...S.h3, marginBottom: "10px" }}>Investor Rounds</h3>
+        <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 12px" }}>Enter the investment amount and pre-money valuation — ownership % is calculated automatically.</p>
+        {draft.rounds.map((r, i) => {
+          const pct = roundPct(r);
+          const postMoney = parseNum(r.investment) + parseNum(r.preMoney);
+          return (
+            <div key={i} style={{ border: "1px solid #d1fae5", borderRadius: "6px", padding: "10px", marginBottom: "8px", background: "#f0fdf4", display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "flex-end" }}>
+              <div style={{ flex: "2 1 130px" }}><TxtF label="Round name" value={r.name} onChange={v => setRound(i,"name",v)} rows={1} /></div>
+              <div style={{ flex: "1 1 120px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Investment ($)</label>
+                <input type="number" value={r.investment} onChange={e => setRound(i,"investment",e.target.value)} style={{ ...EI, fontFamily: "monospace" }} placeholder="e.g. 500000" />
               </div>
+              <div style={{ flex: "1 1 130px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Pre-Money Valuation ($)</label>
+                <input type="number" value={r.preMoney} onChange={e => setRound(i,"preMoney",e.target.value)} style={{ ...EI, fontFamily: "monospace" }} placeholder="e.g. 4500000" />
+              </div>
+              <div style={{ flex: "0 0 auto", paddingBottom: "2px" }}>
+                <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 2px" }}>Post-Money</p>
+                <p style={{ fontSize: "13px", fontWeight: 700, color: "#059669", margin: 0 }}>{postMoney > 0 ? fmtMoney(postMoney) : "—"}</p>
+              </div>
+              <div style={{ flex: "0 0 auto", paddingBottom: "2px" }}>
+                <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 2px" }}>Ownership %</p>
+                <p style={{ fontSize: "13px", fontWeight: 700, color: "#059669", margin: 0 }}>{pct !== null ? `${pct.toFixed(2)}%` : "—"}</p>
+              </div>
+              <div style={{ flex: "1 1 90px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Status</label>
+                <select value={r.status} onChange={e => setRound(i,"status",e.target.value)} style={{ ...EI, padding: "5px 8px" }}>
+                  <option value="planned">Planned</option>
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <button onClick={() => setField("rounds", draft.rounds.filter((_,j) => j!==i))} style={{ fontSize:"11px", color:"#ef4444", background:"none", border:"none", cursor:"pointer", alignSelf:"flex-end" as const, paddingBottom:"4px" }}>✕</button>
             </div>
-            {parseNum(newPct) > 0 && (
-              <div style={{ fontSize: "12px", color: "#64748b", paddingTop: "14px" }}>
-                → Each existing holder shrinks by {parseNum(newPct).toFixed(1)}% · New member gets {fmtN(Math.round(parseNum(newPct) / 100 * TOTAL_AUTHORIZED))} shares
-              </div>
-            )}
-            <button onClick={addMemberDiluted} disabled={parseNum(newPct) <= 0} style={{ marginTop: "14px", fontSize: "12px", color: "#fff", background: "#2563eb", border: "none", borderRadius: "5px", padding: "5px 12px", cursor: "pointer", opacity: parseNum(newPct) <= 0 ? 0.4 : 1 }}>Add &amp; Dilute</button>
-          </div>
-        </div>
+          );
+        })}
+        <button onClick={() => setField("rounds", [...draft.rounds, { name:"", investment:"", preMoney:"", status:"planned" }])}
+          style={{ fontSize:"12px", color:"#059669", background:"none", border:"1px dashed #6ee7b7", borderRadius:"5px", padding:"5px 12px", cursor:"pointer", marginBottom:"24px" }}>
+          + Add investor round
+        </button>
 
         <h3 style={S.h3}>Notes</h3>
         <TxtF label="notes" value={draft.notes} onChange={v => setField("notes", v)} rows={3} />
@@ -1934,93 +1959,126 @@ function CapTableDoc({ token }: { token: string }) {
     );
   }
 
-  const vTotal = totalPct(data.members);
-  const available = 100 - vTotal;
+  /* ─────────────── VIEW MODE ─────────────── */
+  const founderTotal = data.founders.reduce((s, f) => s + parseNum(f.pct), 0);
+  const roundTotal   = data.rounds.reduce((s, r) => { const p = roundPct(r); return p ? s + p : s; }, 0);
+  const grandTotal   = founderTotal + roundTotal;
+
+  /* implied valuation = post-money of the last round with both values set */
+  const lastRoundWithVal = [...data.rounds].reverse().find(r => parseNum(r.preMoney) > 0 && parseNum(r.investment) > 0);
+  const impliedVal = lastRoundWithVal ? parseNum(lastRoundWithVal.preMoney) + parseNum(lastRoundWithVal.investment) : 0;
 
   return (
     <div>
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={startEdit} onSave={save} onCancel={cancelEdit} />
 
-      {/* Summary stats */}
-      {(() => {
-        const valuation = parseNum(data.valuation);
-        const fmtVal = (n: number) => n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${fmtN(n)}`;
-        return (
-          <>
-            <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" as const }}>
-              <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-                <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Authorized</p>
-                <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a" }}>{fmtN(TOTAL_AUTHORIZED)}</p>
-              </div>
-              <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-                <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Allocated</p>
-                <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0" }}>{vTotal.toFixed(2)}% · {fmtN(Math.round(vTotal / 100 * TOTAL_AUTHORIZED))} shares</p>
-              </div>
-              <div style={{ flex: 1, background: "#f0fdf4", borderRadius: "8px", padding: "12px 16px", minWidth: "130px" }}>
-                <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Available for Future Rounds</p>
-                <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#059669" }}>{available.toFixed(2)}% · {fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))} shares</p>
-              </div>
-              {valuation > 0 && (
-                <div style={{ flex: 1, background: "linear-gradient(135deg, #eff6ff, #dbeafe)", borderRadius: "8px", padding: "12px 16px", minWidth: "130px", border: "1px solid #bfdbfe" }}>
-                  <p style={{ fontSize: "11px", color: "#2563eb", margin: 0, fontWeight: 600 }}>Company Valuation</p>
-                  <p style={{ fontSize: "16px", fontWeight: 700, margin: "4px 0 0", color: "#1d4ed8" }}>{fmtVal(valuation)}</p>
-                </div>
-              )}
-            </div>
+      {/* ── Summary stats ── */}
+      <div style={{ display: "flex", gap: "14px", marginBottom: "20px", flexWrap: "wrap" as const }}>
+        <div style={{ flex: 1, background: "#eff6ff", borderRadius: "8px", padding: "12px 16px", minWidth: "120px", border: "1px solid #bfdbfe" }}>
+          <p style={{ fontSize: "11px", color: "#2563eb", margin: 0, fontWeight: 600 }}>Founding Team</p>
+          <p style={{ fontSize: "17px", fontWeight: 700, margin: "4px 0 0", color: "#1d4ed8" }}>{founderTotal.toFixed(2)}%</p>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 0" }}>{fmtN(Math.round(founderTotal/100*TOTAL_AUTHORIZED))} shares</p>
+        </div>
+        <div style={{ flex: 1, background: "#f0fdf4", borderRadius: "8px", padding: "12px 16px", minWidth: "120px", border: "1px solid #bbf7d0" }}>
+          <p style={{ fontSize: "11px", color: "#059669", margin: 0, fontWeight: 600 }}>Investor Rounds</p>
+          <p style={{ fontSize: "17px", fontWeight: 700, margin: "4px 0 0", color: "#047857" }}>{roundTotal.toFixed(2)}%</p>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 0" }}>{fmtN(Math.round(roundTotal/100*TOTAL_AUTHORIZED))} shares</p>
+        </div>
+        <div style={{ flex: 1, background: "#f8fafc", borderRadius: "8px", padding: "12px 16px", minWidth: "120px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>Total Authorized</p>
+          <p style={{ fontSize: "17px", fontWeight: 700, margin: "4px 0 0" }}>{fmtN(TOTAL_AUTHORIZED)}</p>
+          <p style={{ fontSize: "11px", color: Math.abs(grandTotal-100)<0.1?"#059669":"#ef4444", margin: "2px 0 0", fontWeight: 600 }}>{grandTotal.toFixed(2)}% allocated</p>
+        </div>
+        {impliedVal > 0 && (
+          <div style={{ flex: 1, background: "linear-gradient(135deg,#eff6ff,#dbeafe)", borderRadius: "8px", padding: "12px 16px", minWidth: "120px", border: "1px solid #bfdbfe" }}>
+            <p style={{ fontSize: "11px", color: "#2563eb", margin: 0, fontWeight: 600 }}>Implied Valuation</p>
+            <p style={{ fontSize: "17px", fontWeight: 700, margin: "4px 0 0", color: "#1d4ed8" }}>{fmtMoney(impliedVal)}</p>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 0" }}>post-money ({lastRoundWithVal!.name})</p>
+          </div>
+        )}
+      </div>
 
-            {/* Ownership table */}
-            <table style={S.table}>
-              <thead><tr>
-                <th style={hStyle}>Name</th>
-                <th style={hStyle}>Role</th>
-                <th style={hStyle}>Type</th>
-                <th style={hStyle}>Ownership %</th>
-                <th style={hStyle}>Shares</th>
-                {valuation > 0 && <th style={hStyle}>Stake Value</th>}
-                <th style={hStyle}>Vesting</th>
-              </tr></thead>
-              <tbody>
-                {data.members.map((m, i) => {
-                  const pct = parseNum(m.pct);
-                  const stakeVal = valuation > 0 ? pct / 100 * valuation : 0;
-                  const isRound = m.type === "round";
-                  const trStyle = isRound ? { background: "#fffbeb" } : {};
-                  return (
-                    <tr key={i} style={trStyle}>
-                      <td style={{ ...rowStyle, fontWeight: 600, fontStyle: isRound ? "italic" : "normal", color: isRound ? "#92400e" : undefined }}>{m.name}</td>
-                      <td style={{ ...rowStyle, color: isRound ? "#b45309" : undefined, fontSize: "13px" }}>{m.role}</td>
-                      <td style={{ ...rowStyle, fontSize: "12px", color: typeColor[m.type] || "#64748b" }}>{typeLabel[m.type] || m.type}</td>
-                      <td style={{ ...rowStyle, fontWeight: 700, color: typeColor[m.type] || "#2563eb" }}>{pct.toFixed(2)}%</td>
-                      <td style={{ ...rowStyle, fontFamily: "monospace", color: isRound ? "#92400e" : undefined }}>{fmtN(Math.round(pct / 100 * TOTAL_AUTHORIZED))}</td>
-                      {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", color: isRound ? "#b45309" : "#1d4ed8", fontWeight: 600, fontStyle: isRound ? "italic" : "normal" }}>{isRound ? `~${fmtVal(stakeVal)}` : fmtVal(stakeVal)}</td>}
-                      <td style={{ ...rowStyle, fontSize: "12px", color: isRound ? "#b45309" : "#7c3aed", fontStyle: isRound ? "italic" : "normal" }}>{isRound ? "Indicative — subject to term sheet" : m.vesting}</td>
-                    </tr>
-                  );
-                })}
-                {available > 0.01 && (
-                  <tr style={{ background: "#f0fdf4" }}>
-                    <td style={{ ...rowStyle, fontWeight: 600, color: "#059669" }}>Available Pool</td>
-                    <td style={{ ...rowStyle, color: "#94a3b8" }}>Future Rounds</td>
-                    <td style={{ ...rowStyle, color: "#94a3b8", fontSize: "12px" }}>Unissued</td>
-                    <td style={{ ...rowStyle, fontWeight: 700, color: "#059669" }}>{available.toFixed(2)}%</td>
-                    <td style={{ ...rowStyle, fontFamily: "monospace", color: "#059669" }}>{fmtN(Math.round(available / 100 * TOTAL_AUTHORIZED))}</td>
-                    {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", color: "#059669" }}>{fmtVal(available / 100 * valuation)}</td>}
-                    <td style={{ ...rowStyle, color: "#94a3b8", fontSize: "12px" }}>—</td>
-                  </tr>
-                )}
-                <tr style={{ background: "#f8fafc" }}>
-                  <td style={{ ...rowStyle, fontWeight: 700 }}>Total</td>
-                  <td colSpan={2} style={rowStyle}></td>
-                  <td style={{ ...rowStyle, fontWeight: 700 }}>100.00%</td>
-                  <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 700 }}>{fmtN(TOTAL_AUTHORIZED)}</td>
-                  {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", fontWeight: 700, color: "#1d4ed8" }}>{fmtVal(valuation)}</td>}
-                  <td style={rowStyle}></td>
-                </tr>
-              </tbody>
-            </table>
-          </>
-        );
-      })()}
+      {/* ── Founding Team Table ── */}
+      <h3 style={{ ...S.h3, marginBottom: "10px" }}>Founding Team</h3>
+      <table style={{ ...S.table, marginBottom: "28px" }}>
+        <thead><tr>
+          <th style={th}>Name</th>
+          <th style={th}>Role</th>
+          <th style={th}>Type</th>
+          <th style={th}>Ownership %</th>
+          <th style={th}>Shares</th>
+          {impliedVal > 0 && <th style={th}>Stake Value</th>}
+          <th style={th}>Vesting</th>
+        </tr></thead>
+        <tbody>
+          {data.founders.map((f, i) => {
+            const pct = parseNum(f.pct);
+            return (
+              <tr key={i}>
+                <td style={{ ...row, fontWeight: 600 }}>{f.name}</td>
+                <td style={row}>{f.role}</td>
+                <td style={{ ...row, fontSize: "12px", color: typeColor[f.type] || "#64748b" }}>{typeLabel[f.type] || f.type}</td>
+                <td style={{ ...row, fontWeight: 700, color: typeColor[f.type] || "#2563eb" }}>{pct.toFixed(2)}%</td>
+                <td style={{ ...row, fontFamily: "monospace" }}>{fmtN(Math.round(pct/100*TOTAL_AUTHORIZED))}</td>
+                {impliedVal > 0 && <td style={{ ...row, fontFamily: "monospace", color: "#1d4ed8", fontWeight: 600 }}>{fmtMoney(pct/100*impliedVal)}</td>}
+                <td style={{ ...row, fontSize: "12px", color: "#7c3aed" }}>{f.vesting}</td>
+              </tr>
+            );
+          })}
+          <tr style={{ background: "#f8fafc" }}>
+            <td style={{ ...row, fontWeight: 700 }}>Total</td>
+            <td colSpan={2} style={row}></td>
+            <td style={{ ...row, fontWeight: 700, color: "#2563eb" }}>{founderTotal.toFixed(2)}%</td>
+            <td style={{ ...row, fontFamily: "monospace", fontWeight: 700 }}>{fmtN(Math.round(founderTotal/100*TOTAL_AUTHORIZED))}</td>
+            {impliedVal > 0 && <td style={{ ...row, fontFamily: "monospace", fontWeight: 700, color: "#1d4ed8" }}>{fmtMoney(founderTotal/100*impliedVal)}</td>}
+            <td style={row}></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* ── Investor Rounds Table ── */}
+      <h3 style={{ ...S.h3, marginBottom: "10px" }}>Investor Rounds</h3>
+      <table style={S.table}>
+        <thead><tr>
+          <th style={th}>Round</th>
+          <th style={th}>Investment</th>
+          <th style={th}>Pre-Money Val.</th>
+          <th style={th}>Post-Money Val.</th>
+          <th style={th}>Ownership %</th>
+          <th style={th}>Shares</th>
+          {impliedVal > 0 && <th style={th}>Stake Value</th>}
+          <th style={th}>Status</th>
+        </tr></thead>
+        <tbody>
+          {data.rounds.map((r, i) => {
+            const pct  = roundPct(r);
+            const inv  = parseNum(r.investment);
+            const pre  = parseNum(r.preMoney);
+            const post = inv + pre;
+            const statusColor: Record<string,string> = { planned: "#d97706", open: "#2563eb", closed: "#059669" };
+            return (
+              <tr key={i} style={{ background: r.status === "closed" ? "#f0fdf4" : r.status === "open" ? "#eff6ff" : "white" }}>
+                <td style={{ ...row, fontWeight: 600 }}>{r.name || "—"}</td>
+                <td style={{ ...row, fontFamily: "monospace" }}>{inv > 0 ? fmtMoney(inv) : "—"}</td>
+                <td style={{ ...row, fontFamily: "monospace" }}>{pre > 0 ? fmtMoney(pre) : <span style={{ color: "#94a3b8", fontStyle: "italic" }}>not set</span>}</td>
+                <td style={{ ...row, fontFamily: "monospace", fontWeight: 600 }}>{post > 0 ? fmtMoney(post) : "—"}</td>
+                <td style={{ ...row, fontWeight: 700, color: "#059669" }}>{pct !== null ? `${pct.toFixed(2)}%` : <span style={{ color: "#94a3b8" }}>—</span>}</td>
+                <td style={{ ...row, fontFamily: "monospace" }}>{pct !== null ? fmtN(Math.round(pct/100*TOTAL_AUTHORIZED)) : "—"}</td>
+                {impliedVal > 0 && <td style={{ ...row, fontFamily: "monospace", color: "#059669", fontWeight: 600 }}>{pct !== null ? fmtMoney(pct/100*impliedVal) : "—"}</td>}
+                <td style={{ ...row, fontSize: "12px", fontWeight: 600, color: statusColor[r.status] || "#64748b", textTransform: "capitalize" as const }}>{r.status}</td>
+              </tr>
+            );
+          })}
+          <tr style={{ background: "#f0fdf4" }}>
+            <td style={{ ...row, fontWeight: 700 }}>Total</td>
+            <td colSpan={3} style={row}></td>
+            <td style={{ ...row, fontWeight: 700, color: "#047857" }}>{roundTotal.toFixed(2)}%</td>
+            <td style={{ ...row, fontFamily: "monospace", fontWeight: 700 }}>{fmtN(Math.round(roundTotal/100*TOTAL_AUTHORIZED))}</td>
+            {impliedVal > 0 && <td style={{ ...row, fontFamily: "monospace", fontWeight: 700, color: "#047857" }}>{fmtMoney(roundTotal/100*impliedVal)}</td>}
+            <td style={row}></td>
+          </tr>
+        </tbody>
+      </table>
 
       <p style={{ ...S.p, fontStyle: "italic", color: "#94a3b8", marginTop: "16px", fontSize: "12px" }}>{data.notes}</p>
     </div>
