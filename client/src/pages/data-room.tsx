@@ -1848,8 +1848,8 @@ function CapTableDoc({ token }: { token: string }) {
 
   const rowStyle: React.CSSProperties = { padding: "8px 10px", borderBottom: "1px solid #f1f5f9", fontSize: "13px" };
   const hStyle: React.CSSProperties = { ...rowStyle, background: "#f8fafc", fontWeight: 600, fontSize: "12px", color: "#64748b" };
-  const typeColor: Record<string, string> = { founder: "#2563eb", pool: "#7c3aed", service: "#0891b2", investor: "#059669" };
-  const typeLabel: Record<string, string> = { founder: "Founder", pool: "Option Pool", service: "Service Grant", investor: "Investor" };
+  const typeColor: Record<string, string> = { founder: "#2563eb", pool: "#7c3aed", service: "#0891b2", investor: "#059669", round: "#d97706" };
+  const typeLabel: Record<string, string> = { founder: "Founder", pool: "Option Pool", service: "Service Grant", investor: "Investor", round: "Planned Round" };
 
   if (editing) {
     const dTotal = totalPct(draft.members);
@@ -1983,15 +1983,17 @@ function CapTableDoc({ token }: { token: string }) {
                 {data.members.map((m, i) => {
                   const pct = parseNum(m.pct);
                   const stakeVal = valuation > 0 ? pct / 100 * valuation : 0;
+                  const isRound = m.type === "round";
+                  const trStyle = isRound ? { background: "#fffbeb" } : {};
                   return (
-                    <tr key={i}>
-                      <td style={{ ...rowStyle, fontWeight: 600 }}>{m.name}</td>
-                      <td style={rowStyle}>{m.role}</td>
+                    <tr key={i} style={trStyle}>
+                      <td style={{ ...rowStyle, fontWeight: 600, fontStyle: isRound ? "italic" : "normal", color: isRound ? "#92400e" : undefined }}>{m.name}</td>
+                      <td style={{ ...rowStyle, color: isRound ? "#b45309" : undefined, fontSize: "13px" }}>{m.role}</td>
                       <td style={{ ...rowStyle, fontSize: "12px", color: typeColor[m.type] || "#64748b" }}>{typeLabel[m.type] || m.type}</td>
                       <td style={{ ...rowStyle, fontWeight: 700, color: typeColor[m.type] || "#2563eb" }}>{pct.toFixed(2)}%</td>
-                      <td style={{ ...rowStyle, fontFamily: "monospace" }}>{fmtN(Math.round(pct / 100 * TOTAL_AUTHORIZED))}</td>
-                      {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", color: "#1d4ed8", fontWeight: 600 }}>{fmtVal(stakeVal)}</td>}
-                      <td style={{ ...rowStyle, fontSize: "12px", color: "#7c3aed" }}>{m.vesting}</td>
+                      <td style={{ ...rowStyle, fontFamily: "monospace", color: isRound ? "#92400e" : undefined }}>{fmtN(Math.round(pct / 100 * TOTAL_AUTHORIZED))}</td>
+                      {valuation > 0 && <td style={{ ...rowStyle, fontFamily: "monospace", color: isRound ? "#b45309" : "#1d4ed8", fontWeight: 600, fontStyle: isRound ? "italic" : "normal" }}>{isRound ? `~${fmtVal(stakeVal)}` : fmtVal(stakeVal)}</td>}
+                      <td style={{ ...rowStyle, fontSize: "12px", color: isRound ? "#b45309" : "#7c3aed", fontStyle: isRound ? "italic" : "normal" }}>{isRound ? "Indicative — subject to term sheet" : m.vesting}</td>
                     </tr>
                   );
                 })}
