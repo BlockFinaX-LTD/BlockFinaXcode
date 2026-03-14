@@ -509,7 +509,7 @@ export default function FinancialModel() {
                     {[
                       { label: 'Hedge Protocol Fees',   tip: 'Primary revenue stream. Formula: Events × Avg Notional × 0.7%. The 0.7% blends the 0.5% hedger premium fee and the ~0.2% LP payout fee (1% applied to LP deposits ≈ 20% of notional).', vals: slice.map(r => r.hedgeFees), cellTips: undefined as string[] | undefined },
                       { label: 'Event Creation Fees',   tip: 'Flat $25 charged to the event creator every time a new hedge event is published on-chain. Collected at creation alongside the initial LP deposit. Small per-event but grows significantly with volume — at 174K events/month (Dec 2030) this alone contributes $4.35M/month.', vals: slice.map(r => r.eventCreationFees), cellTips: undefined as string[] | undefined },
-                      { label: 'Wallet Transfer Fees',  tip: '0.3% per USDC cross-border transfer (min $0.50). Modelled as a % of hedge fees as a wallet-activity proxy — grows as the active wallet base deepens.', vals: slice.map(r => r.walletFees), cellTips: undefined as string[] | undefined },
+                      { label: 'Wallet Transfer Fees',  tip: '0.3% fee on USDC cross-border transfers. Revenue = cumulative wallets × active wallet % × avg monthly transfer × 0.3%. Scales directly with the growing wallet base — more wallets means more transfer volume and more fee revenue.', vals: slice.map(r => r.walletFees), cellTips: undefined as string[] | undefined },
                       { label: 'Total Revenue',         tip: 'Hedge protocol fees + event creation fees + wallet transfer fees. Hover each cell to see the split for that month.', vals: slice.map(r => r.totalRevenue), bold: true, cellTips: slice.map(r => r.totalRevenue > 0 ? `Hedge: ${fmt(r.hedgeFees)} (${Math.round((r.hedgeFees/r.totalRevenue)*100)}%) · Creation: ${fmt(r.eventCreationFees)} (${Math.round((r.eventCreationFees/r.totalRevenue)*100)}%) · Wallet: ${fmt(r.walletFees)} (${Math.round((r.walletFees/r.totalRevenue)*100)}%)` : 'No revenue') },
                     ].map(row => (
                       <tr key={row.label} className={`border-b border-slate-100 ${row.bold ? 'bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
@@ -1083,6 +1083,14 @@ export default function FinancialModel() {
                     <input type="number" step="0.25" min="0"
                       value={constants.kycPerWallet}
                       onChange={e => updateConstant('kycPerWallet', parseFloat(e.target.value) || 0)}
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-600 block mb-1">Avg Monthly Transfer / Active Wallet ($)</label>
+                    <input type="number" step="50" min="0"
+                      value={constants.avgMonthlyTransferUSD}
+                      onChange={e => updateConstant('avgMonthlyTransferUSD', parseFloat(e.target.value) || 0)}
                       className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>

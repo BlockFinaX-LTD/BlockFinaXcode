@@ -20,6 +20,7 @@ export type Constants = {
   eventCreationFee: number;
   gasPerWallet: number;
   kycPerWallet: number;
+  avgMonthlyTransferUSD: number; // avg monthly USDC transfer volume per active wallet
   daMonthly: number;
   taxRate: number;
 };
@@ -85,6 +86,7 @@ export const INITIAL_CONSTANTS: Constants = {
   eventCreationFee: 25,
   gasPerWallet: 3,
   kycPerWallet: 1.50,
+  avgMonthlyTransferUSD: 500, // $500/mo per active wallet (blended: SMEs $500–2K, retail $100–500)
   daMonthly: 4000,
   taxRate: 0.25,
 };
@@ -162,21 +164,20 @@ export const INITIAL_INPUTS: InputRow[] = [
   { events: 34000, avgNotional:15000, walletPct:12, newWallets:187_000, headcount:59, salaryPerFTE:6300, cac:14, legal:56000, infraCloud:33000, oracle:15500, ga:26000 },
   { events: 36500, avgNotional:15000, walletPct:12, newWallets:202_000, headcount:59, salaryPerFTE:6300, cac:13, legal:56000, infraCloud:34000, oracle:15500, ga:26000 },
   // H1 2030 — Maturity phase (months 43-48)
-  // At 2M+ cumulative wallets, organic/referral growth dominates; blended CAC ~$10
-  { events: 39100, avgNotional:15000, walletPct:12, newWallets:218_000, headcount:62, salaryPerFTE:6600, cac:12, legal:60000, infraCloud:40000, oracle:20000, ga:30000 },
-  { events: 41800, avgNotional:15000, walletPct:12, newWallets:235_000, headcount:62, salaryPerFTE:6600, cac:11, legal:60000, infraCloud:41000, oracle:20000, ga:30000 },
-  { events: 44600, avgNotional:15000, walletPct:12, newWallets:252_000, headcount:64, salaryPerFTE:6600, cac:11, legal:62000, infraCloud:42000, oracle:21000, ga:31000 },
-  { events: 47500, avgNotional:15000, walletPct:12, newWallets:270_000, headcount:64, salaryPerFTE:6600, cac:10, legal:62000, infraCloud:43000, oracle:21000, ga:31000 },
-  { events: 50500, avgNotional:15000, walletPct:12, newWallets:288_000, headcount:65, salaryPerFTE:6600, cac:10, legal:64000, infraCloud:44000, oracle:22000, ga:32000 },
-  { events: 53600, avgNotional:15000, walletPct:12, newWallets:307_000, headcount:65, salaryPerFTE:6600, cac: 9, legal:64000, infraCloud:45000, oracle:22000, ga:32000 },
+  // walletPct = % of cumulative wallets active as transferors each month (rising as platform matures)
+  { events: 39100, avgNotional:15000, walletPct:13, newWallets:218_000, headcount:62, salaryPerFTE:6600, cac:12, legal:60000, infraCloud:40000, oracle:20000, ga:30000 },
+  { events: 41800, avgNotional:15000, walletPct:13, newWallets:235_000, headcount:62, salaryPerFTE:6600, cac:11, legal:60000, infraCloud:41000, oracle:20000, ga:30000 },
+  { events: 44600, avgNotional:15000, walletPct:14, newWallets:252_000, headcount:64, salaryPerFTE:6600, cac:11, legal:62000, infraCloud:42000, oracle:21000, ga:31000 },
+  { events: 47500, avgNotional:15000, walletPct:14, newWallets:270_000, headcount:64, salaryPerFTE:6600, cac:10, legal:62000, infraCloud:43000, oracle:21000, ga:31000 },
+  { events: 50500, avgNotional:15000, walletPct:14, newWallets:288_000, headcount:65, salaryPerFTE:6600, cac:10, legal:64000, infraCloud:44000, oracle:22000, ga:32000 },
+  { events: 53600, avgNotional:15000, walletPct:15, newWallets:307_000, headcount:65, salaryPerFTE:6600, cac: 9, legal:64000, infraCloud:45000, oracle:22000, ga:32000 },
   // H2 2030 — Sustained growth (months 49-54)
-  // Blended CAC ~$8–9: ~60% organic/referral, ~40% paid; at this scale most growth is word-of-mouth
-  { events: 56800, avgNotional:15000, walletPct:12, newWallets:326_000, headcount:67, salaryPerFTE:6800, cac: 9, legal:66000, infraCloud:47000, oracle:23500, ga:33000 },
-  { events: 60100, avgNotional:15000, walletPct:12, newWallets:346_000, headcount:67, salaryPerFTE:6800, cac: 9, legal:66000, infraCloud:48000, oracle:23500, ga:33000 },
-  { events: 63500, avgNotional:15000, walletPct:12, newWallets:367_000, headcount:69, salaryPerFTE:6800, cac: 8, legal:68000, infraCloud:49000, oracle:24000, ga:34000 },
-  { events: 67000, avgNotional:15000, walletPct:12, newWallets:388_000, headcount:69, salaryPerFTE:6800, cac: 8, legal:68000, infraCloud:50000, oracle:24000, ga:34000 },
-  { events: 70600, avgNotional:15000, walletPct:12, newWallets:410_000, headcount:71, salaryPerFTE:6800, cac: 8, legal:70000, infraCloud:51000, oracle:24500, ga:35000 },
-  { events: 74300, avgNotional:15000, walletPct:12, newWallets:433_000, headcount:71, salaryPerFTE:6800, cac: 8, legal:70000, infraCloud:52000, oracle:24500, ga:35000 },
+  { events: 56800, avgNotional:15000, walletPct:15, newWallets:326_000, headcount:67, salaryPerFTE:6800, cac: 9, legal:66000, infraCloud:47000, oracle:23500, ga:33000 },
+  { events: 60100, avgNotional:15000, walletPct:15, newWallets:346_000, headcount:67, salaryPerFTE:6800, cac: 9, legal:66000, infraCloud:48000, oracle:23500, ga:33000 },
+  { events: 63500, avgNotional:15000, walletPct:16, newWallets:367_000, headcount:69, salaryPerFTE:6800, cac: 8, legal:68000, infraCloud:49000, oracle:24000, ga:34000 },
+  { events: 67000, avgNotional:15000, walletPct:16, newWallets:388_000, headcount:69, salaryPerFTE:6800, cac: 8, legal:68000, infraCloud:50000, oracle:24000, ga:34000 },
+  { events: 70600, avgNotional:15000, walletPct:16, newWallets:410_000, headcount:71, salaryPerFTE:6800, cac: 8, legal:70000, infraCloud:51000, oracle:24500, ga:35000 },
+  { events: 74300, avgNotional:15000, walletPct:17, newWallets:433_000, headcount:71, salaryPerFTE:6800, cac: 8, legal:70000, infraCloud:52000, oracle:24500, ga:35000 },
 ];
 
 // ── Core model computation ────────────────────────────────────────────────────
@@ -194,7 +195,10 @@ export function buildModel(inputs: InputRow[], c: Constants, funding: FundingEnt
 
     const hedgeFees         = Math.round(inp.events * inp.avgNotional * c.hedgeYield);
     const eventCreationFees = Math.round(inp.events * c.eventCreationFee);
-    const walletFees        = Math.round(hedgeFees * (inp.walletPct / 100));
+    // Wallet transfer fees scale with the cumulative wallet base:
+    // walletPct = % of cumulative wallets active as transferors each month
+    // Revenue = cumWallets × activeRate × avgMonthlyTransfer × 0.3% fee
+    const walletFees        = Math.round(cumWallets * (inp.walletPct / 100) * c.avgMonthlyTransferUSD * 0.003);
     const totalRevenue      = hedgeFees + eventCreationFees + walletFees;
 
     const gasCost        = inp.newWallets * c.gasPerWallet;
