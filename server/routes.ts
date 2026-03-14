@@ -135,6 +135,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  app.post("/api/verify-edit-code", (req, res) => {
+    const { password } = req.body;
+    if (!password || password !== EDIT_ACCESS_CODE) return res.status(403).json({ success: false });
+    res.json({ success: true });
+  });
+
   app.post("/api/investor/logout", (req, res) => {
     const token = req.headers["x-investor-token"] as string;
     if (token) { investorSessions.delete(token); investorEditSessions.delete(token); }

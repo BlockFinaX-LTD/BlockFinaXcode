@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TrendingUp, TrendingDown, DollarSign, Users, AlertCircle, CheckCircle, Download, RotateCcw, Info, Edit3, Eye, ArrowLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Users, AlertCircle, CheckCircle, Download, RotateCcw, Info, Edit3, Eye, ArrowLeft, Lock, Unlock } from 'lucide-react';
 
 function Tip({ text }: { text: string }) {
   return (
@@ -317,6 +317,11 @@ export default function FinancialModel() {
   const [funding,   setFunding]   = useState<FundingEntry[]>(INITIAL_FUNDING);
   const [activePeriod, setActivePeriod] = useState(0);
   const [activeTab, setActiveTab] = useState('monthly');
+  const [editUnlocked, setEditUnlocked] = useState(false);
+  const [showPwModal, setShowPwModal] = useState(false);
+  const [pwValue, setPwValue] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
 
   const model         = useMemo(() => buildModel(inputs, constants, funding), [inputs, constants, funding]);
   const annualSummary = useMemo(() => computeAnnualSummary(model), [model]);
@@ -340,6 +345,30 @@ export default function FinancialModel() {
     setFunding(INITIAL_FUNDING);
   }, []);
 
+  const verifyEditCode = async () => {
+    setPwLoading(true);
+    setPwError('');
+    try {
+      const res = await fetch('/api/verify-edit-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwValue }),
+      });
+      if (res.ok) {
+        setEditUnlocked(true);
+        setShowPwModal(false);
+        setPwValue('');
+        setActiveTab('inputs');
+      } else {
+        setPwError('Incorrect password.');
+      }
+    } catch {
+      setPwError('Network error. Try again.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
   // Summary KPIs
   const totalRev    = model.reduce((s, r) => s + r.totalRevenue, 0);
   const totalNet    = model.reduce((s, r) => s + r.netIncome, 0);
@@ -362,7 +391,7 @@ export default function FinancialModel() {
   // Compact number input for the inputs table
   const NumInput = ({ value, onChange, step = 1, min = 0 }: {
     value: number; onChange: (v: number) => void; step?: number; min?: number;
-  }) => (
+  }) => editUnlocked ? (
     <input
       type="number"
       step={step}
@@ -371,6 +400,8 @@ export default function FinancialModel() {
       onChange={e => onChange(parseFloat(e.target.value) || 0)}
       className="w-full text-right text-xs border border-slate-200 rounded px-1 py-0.5 bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
     />
+  ) : (
+    <span className="block w-full text-right text-xs text-slate-600 px-1 py-0.5 select-none">{value.toLocaleString()}</span>
   );
 
   return (
@@ -395,7 +426,7 @@ export default function FinancialModel() {
             <Badge variant="outline" className="text-xs">Base Case</Badge>
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">$12.5M Raise Target</Badge>
             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">Mainnet Jul 7, 2026</Badge>
-            {activeTab === 'inputs' ? (
+            {editUnlocked && activeTab === 'inputs' ? (
               <Button
                 size="sm" variant="outline"
                 onClick={() => setActiveTab('monthly')}
@@ -404,13 +435,22 @@ export default function FinancialModel() {
                 <Eye className="w-3.5 h-3.5" />
                 Done Editing
               </Button>
-            ) : (
+            ) : editUnlocked ? (
               <Button
                 size="sm"
                 onClick={() => setActiveTab('inputs')}
                 className="gap-1.5 ml-2 bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <Edit3 className="w-3.5 h-3.5" />
+                <Unlock className="w-3.5 h-3.5" />
+                Edit Model
+              </Button>
+            ) : (
+              <Button
+                size="sm" variant="outline"
+                onClick={() => { setPwValue(''); setPwError(''); setShowPwModal(true); }}
+                className="gap-1.5 ml-2 text-slate-600 border-slate-300"
+              >
+                <Lock className="w-3.5 h-3.5" />
                 Edit Model
               </Button>
             )}
@@ -1258,70 +1298,75 @@ export default function FinancialModel() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {(() => {
+                    const cls = `w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400 ${!editUnlocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`;
+                    return (<>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">Hedge Yield (decimal, e.g. 0.007 = 70 bps)</label>
-                    <input type="number" step="0.0001" min="0" max="0.1"
+                    <input type="number" step="0.0001" min="0" max="0.1" readOnly={!editUnlocked}
                       value={constants.hedgeYield}
-                      onChange={e => updateConstant('hedgeYield', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('hedgeYield', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">Event Creation Fee ($)</label>
-                    <input type="number" step="1" min="0"
+                    <input type="number" step="1" min="0" readOnly={!editUnlocked}
                       value={constants.eventCreationFee}
-                      onChange={e => updateConstant('eventCreationFee', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('eventCreationFee', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">Gas / Hedge Event ($)</label>
-                    <input type="number" step="0.25" min="0"
+                    <input type="number" step="0.25" min="0" readOnly={!editUnlocked}
                       value={constants.gasPerEvent}
-                      onChange={e => updateConstant('gasPerEvent', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('gasPerEvent', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">Gas Sponsor / Wallet ($)</label>
-                    <input type="number" step="1" min="0"
+                    <input type="number" step="1" min="0" readOnly={!editUnlocked}
                       value={constants.gasPerWallet}
-                      onChange={e => updateConstant('gasPerWallet', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('gasPerWallet', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">KYC / AML Cost / Wallet ($)</label>
-                    <input type="number" step="0.25" min="0"
+                    <input type="number" step="0.25" min="0" readOnly={!editUnlocked}
                       value={constants.kycPerWallet}
-                      onChange={e => updateConstant('kycPerWallet', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('kycPerWallet', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">Avg Monthly Transfer / Active Wallet ($)</label>
-                    <input type="number" step="50" min="0"
+                    <input type="number" step="50" min="0" readOnly={!editUnlocked}
                       value={constants.avgMonthlyTransferUSD}
-                      onChange={e => updateConstant('avgMonthlyTransferUSD', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('avgMonthlyTransferUSD', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">D&A per Month ($)</label>
-                    <input type="number" step="100" min="0"
+                    <input type="number" step="100" min="0" readOnly={!editUnlocked}
                       value={constants.daMonthly}
-                      onChange={e => updateConstant('daMonthly', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('daMonthly', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 block mb-1">Tax Rate (decimal, e.g. 0.25 = 25%)</label>
-                    <input type="number" step="0.01" min="0" max="1"
+                    <input type="number" step="0.01" min="0" max="1" readOnly={!editUnlocked}
                       value={constants.taxRate}
-                      onChange={e => updateConstant('taxRate', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      onChange={e => editUnlocked && updateConstant('taxRate', parseFloat(e.target.value) || 0)}
+                      className={cls}
                     />
                   </div>
+                    </>);
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -1337,17 +1382,17 @@ export default function FinancialModel() {
                     <div key={i} className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-700 block">{f.label}</label>
                       <div className="space-y-1">
-                        <input placeholder="Label" value={f.label}
-                          onChange={e => updateFunding(i, 'label', e.target.value)}
-                          className="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-amber-400"
+                        <input placeholder="Label" value={f.label} readOnly={!editUnlocked}
+                          onChange={e => editUnlocked && updateFunding(i, 'label', e.target.value)}
+                          className={`w-full border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-amber-400 ${!editUnlocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`}
                         />
-                        <input type="number" step="100000" min="0" placeholder="Amount ($)" value={f.amount}
-                          onChange={e => updateFunding(i, 'amount', parseFloat(e.target.value) || 0)}
-                          className="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-amber-400"
+                        <input type="number" step="100000" min="0" placeholder="Amount ($)" value={f.amount} readOnly={!editUnlocked}
+                          onChange={e => editUnlocked && updateFunding(i, 'amount', parseFloat(e.target.value) || 0)}
+                          className={`w-full border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-amber-400 ${!editUnlocked ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`}
                         />
-                        <select value={f.monthIndex}
-                          onChange={e => updateFunding(i, 'monthIndex', parseInt(e.target.value))}
-                          className="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-amber-400 bg-white"
+                        <select value={f.monthIndex} disabled={!editUnlocked}
+                          onChange={e => editUnlocked && updateFunding(i, 'monthIndex', parseInt(e.target.value))}
+                          className={`w-full border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-amber-400 bg-white ${!editUnlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           {MONTH_LABELS.map((lbl, mi) => (
                             <option key={mi} value={mi}>{lbl}</option>
@@ -1421,6 +1466,39 @@ export default function FinancialModel() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* ── Edit Password Modal ── */}
+      {showPwModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 text-base">Edit Access Required</h3>
+                <p className="text-xs text-slate-500">Enter the edit password to modify the model</p>
+              </div>
+            </div>
+            <input
+              type="password"
+              value={pwValue}
+              onChange={e => { setPwValue(e.target.value); setPwError(''); }}
+              onKeyDown={e => e.key === 'Enter' && verifyEditCode()}
+              placeholder="Edit password"
+              autoFocus
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-2"
+            />
+            {pwError && <p className="text-xs text-red-500 mb-2">{pwError}</p>}
+            <div className="flex gap-2 mt-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowPwModal(false)}>Cancel</Button>
+              <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={verifyEditCode} disabled={pwLoading || !pwValue}>
+                {pwLoading ? 'Checking…' : 'Unlock'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
