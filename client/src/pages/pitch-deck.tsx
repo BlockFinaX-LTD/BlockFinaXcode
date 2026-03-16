@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, CheckCircle2, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, AlertTriangle, HandCoins, Users, Megaphone, Building2, Gift, ArrowLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, HandCoins, Users, Megaphone, Building2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,6 +7,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import logoPath from "@/assets/logo.png";
+import problemImagePath from "@/assets/problem-story.png";
 import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
 
 const slides = [
@@ -164,94 +165,92 @@ export default function PitchDeck() {
           >
 
             {slide.type === "cover" && (
-              <div className="text-center space-y-8">
-                <motion.img src={logoPath} alt="BlockFinaX" className="w-24 h-24 mx-auto" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }} />
+              <div className="text-center space-y-6">
+                <motion.img src={logoPath} alt="BlockFinaX" className="w-20 h-20 mx-auto" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }} />
                 <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-8xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                   BlockFinaX
                 </motion.h1>
-                <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="text-3xl text-slate-200 max-w-3xl mx-auto leading-relaxed">
-                  One platform to move money across borders and protect it from currency swings
+                <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="text-2xl text-slate-300 max-w-2xl mx-auto">
+                  Cross-border payments + FX protection for African SMEs
                 </motion.p>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="flex items-center justify-center gap-8 mt-10">
-                  <div className="flex items-center gap-3 text-slate-300">
-                    <Wallet className="w-6 h-6 text-blue-400" />
-                    <span className="text-lg">Instant USDC payments</span>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="flex items-center justify-center gap-10 mt-6">
+                  <div className="flex items-center gap-3 text-slate-400">
+                    <Wallet className="w-5 h-5 text-blue-400" />
+                    <span>Instant USDC payments · 0.3%</span>
                   </div>
-                  <span className="text-slate-600 text-2xl">|</span>
-                  <div className="flex items-center gap-3 text-slate-300">
-                    <Shield className="w-6 h-6 text-emerald-400" />
-                    <span className="text-lg">Built-in FX protection</span>
+                  <span className="text-slate-700">|</span>
+                  <div className="flex items-center gap-3 text-slate-400">
+                    <Shield className="w-5 h-5 text-emerald-400" />
+                    <span>P2P FX protection · On-chain</span>
                   </div>
                 </motion.div>
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="text-base text-slate-600 mt-12">
-                  Use arrow keys to navigate
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="text-sm text-slate-700 pt-6">
+                  Use arrow keys or click dots to navigate
                 </motion.p>
               </div>
             )}
 
             {slide.type === "problem" && (
-              <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">The Problem</h2>
-                <div className="grid grid-cols-2 gap-6">
-                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-white/[0.04] rounded-2xl p-8 border border-red-500/20">
-                    <DollarSign className="w-10 h-10 text-red-400 mb-4" />
-                    <h3 className="text-5xl font-bold text-red-400 mb-2">6-9%</h3>
-                    <p className="text-xl font-semibold text-white mb-2">Cross-Border Transfer Fees</p>
-                    <p className="text-slate-300 text-base leading-relaxed">Sending money to/from Africa costs 6-9% through banks and remittance services. Takes 3-7 days.</p>
-                  </motion.div>
-                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="bg-white/[0.04] rounded-2xl p-8 border border-orange-500/20">
-                    <AlertTriangle className="w-10 h-10 text-orange-400 mb-4" />
-                    <h3 className="text-5xl font-bold text-orange-400 mb-2">7-10%</h3>
-                    <p className="text-xl font-semibold text-white mb-2">Lost to Currency Swings</p>
-                    <p className="text-slate-300 text-base leading-relaxed">Every 60 days, African currencies swing 7%+ up or down. Importers pay more for goods, exporters lose profit — with no affordable way to protect themselves.</p>
+              <div className="relative w-full" style={{ height: '72vh' }}>
+                {/* Full-bleed storytelling image */}
+                <motion.img
+                  src={problemImagePath}
+                  alt="African SME trader facing currency loss"
+                  className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+                  initial={{ opacity: 0, scale: 1.03 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.8 }}
+                />
+                {/* Dark gradient overlay */}
+                <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(to right, rgba(8,14,28,0.92) 35%, rgba(8,14,28,0.3) 100%)' }} />
+                {/* Text content over image */}
+                <div className="absolute inset-0 flex flex-col justify-center px-12">
+                  <motion.h2 initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-5xl font-bold text-white mb-6">
+                    The money leaves.<br />Before the goods arrive.
+                  </motion.h2>
+                  <motion.div initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="flex flex-col gap-4 max-w-sm">
+                    <div className="bg-black/40 backdrop-blur-sm rounded-xl px-5 py-4 border border-red-500/30">
+                      <p className="text-4xl font-bold text-red-400">6–9%</p>
+                      <p className="text-slate-300 text-sm mt-1">eaten by transfer fees · takes 3–7 days</p>
+                    </div>
+                    <div className="bg-black/40 backdrop-blur-sm rounded-xl px-5 py-4 border border-orange-500/30">
+                      <p className="text-4xl font-bold text-orange-400">7–10%</p>
+                      <p className="text-slate-300 text-sm mt-1">lost to currency swings · no affordable hedge</p>
+                    </div>
+                    <div className="bg-black/40 backdrop-blur-sm rounded-xl px-5 py-4 border border-white/10">
+                      <p className="text-4xl font-bold text-white">$35B+</p>
+                      <p className="text-slate-300 text-sm mt-1">destroyed every year · 7M+ African SMEs affected</p>
+                    </div>
                   </motion.div>
                 </div>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="grid grid-cols-4 gap-4">
-                  <div className="bg-white/[0.04] rounded-xl p-4 border border-white/[0.06] text-center">
-                    <p className="text-2xl font-bold text-white">7M+</p>
-                    <p className="text-sm text-slate-300">African SMEs in cross-border trade</p>
-                  </div>
-                  <div className="bg-white/[0.04] rounded-xl p-4 border border-white/[0.06] text-center">
-                    <p className="text-2xl font-bold text-white">$210B</p>
-                    <p className="text-sm text-slate-300">Annual import + export volume</p>
-                  </div>
-                  <div className="bg-white/[0.04] rounded-xl p-4 border border-white/[0.06] text-center">
-                    <p className="text-2xl font-bold text-white">15-18%</p>
-                    <p className="text-sm text-slate-300">Lost to fees + currency swings</p>
-                  </div>
-                  <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/20 text-center">
-                    <p className="text-2xl font-bold text-red-400">$35B+</p>
-                    <p className="text-sm text-slate-300">Value destroyed every year</p>
-                  </div>
-                </motion.div>
               </div>
             )}
 
             {slide.type === "solution" && (
-              <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">Our Solution</h2>
-                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto leading-relaxed">One platform where businesses send money across borders and protect it from currency loss — all in USDC</p>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-gradient-to-r from-blue-500/[0.06] via-white/[0.03] to-emerald-500/[0.06] rounded-2xl p-8 border border-white/[0.08]">
-                  <div className="grid grid-cols-3 gap-8">
-                    {[
-                      { icon: Wallet, color: "text-blue-400", title: "Send & Receive", desc: "Move USDC across borders instantly at 0.3% — no banks, no delays" },
-                      { icon: Shield, color: "text-emerald-400", title: "Protect", desc: "Lock in an FX rate and get paid automatically if the currency drops" },
-                      { icon: HandCoins, color: "text-purple-400", title: "Earn", desc: "Provide liquidity to back hedges and earn premiums from every position" },
-                    ].map((item, idx) => (
-                      <div key={idx} className="text-center">
-                        <div className="w-14 h-14 rounded-xl bg-white/[0.06] flex items-center justify-center mx-auto mb-4">
-                          <item.icon className={`w-7 h-7 ${item.color}`} />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
-                        <p className="text-base text-slate-300 leading-relaxed">{item.desc}</p>
+              <div className="space-y-10">
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">One platform. Two tools.</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-3 text-lg">Move money. Protect it. All in USDC.</motion.p>
+                </div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="grid grid-cols-3 gap-6">
+                  {[
+                    { icon: Wallet, color: "text-blue-400", border: "border-blue-500/20", bg: "from-blue-500/10", title: "Send & Receive", line: "Cross-border USDC at 0.3% flat" },
+                    { icon: Shield, color: "text-emerald-400", border: "border-emerald-500/20", bg: "from-emerald-500/10", title: "Protect", line: "Lock an FX rate. Auto-settle on-chain." },
+                    { icon: HandCoins, color: "text-purple-400", border: "border-purple-500/20", bg: "from-purple-500/10", title: "Earn", line: "Back hedge pools. Earn every premium." },
+                  ].map((item, idx) => (
+                    <div key={idx} className={`bg-gradient-to-b ${item.bg} to-transparent rounded-2xl p-8 border ${item.border} text-center`}>
+                      <div className="w-16 h-16 rounded-2xl bg-white/[0.06] flex items-center justify-center mx-auto mb-5">
+                        <item.icon className={`w-8 h-8 ${item.color}`} />
                       </div>
-                    ))}
-                  </div>
+                      <h3 className="text-2xl font-bold text-white mb-3">{item.title}</h3>
+                      <p className="text-slate-300">{item.line}</p>
+                    </div>
+                  ))}
                 </motion.div>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="grid grid-cols-4 gap-4">
-                  {["Zero gas cost for users", "40+ African FX pairs", "Automated settlement", "Auditable smart contracts"].map((item, idx) => (
-                    <div key={idx} className="bg-white/[0.04] rounded-lg p-3 border border-white/[0.06] text-center">
-                      <p className="text-sm text-slate-300">{item}</p>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="flex justify-center gap-6">
+                  {["Zero gas cost", "40+ FX pairs", "Auto-settlement", "On-chain & auditable"].map((item, idx) => (
+                    <div key={idx} className="bg-white/[0.04] rounded-full px-5 py-2 border border-white/[0.08]">
+                      <p className="text-sm text-slate-400">{item}</p>
                     </div>
                   ))}
                 </motion.div>
@@ -260,32 +259,28 @@ export default function PitchDeck() {
 
             {slide.type === "opportunity" && (
               <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">The Opportunity</h2>
-                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto">African SMEs lose $35B+ every year to transfer fees and currency swings. This is a solvable problem.</p>
-                <div className="grid grid-cols-3 gap-6">
-                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-gradient-to-b from-blue-500/10 to-blue-500/[0.03] rounded-2xl p-6 border border-blue-500/25 text-center">
-                    <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-2">TAM</p>
-                    <p className="text-4xl font-bold text-white mb-2">$210B</p>
-                    <p className="text-lg font-semibold text-slate-200 mb-2">Total Addressable Market</p>
-                    <p className="text-sm text-slate-300">Annual cross-border payment volume from 7M+ African SMEs doing imports and exports</p>
-                  </motion.div>
-                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="bg-gradient-to-b from-emerald-500/10 to-emerald-500/[0.03] rounded-2xl p-6 border border-emerald-500/25 text-center">
-                    <p className="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-2">SAM</p>
-                    <p className="text-4xl font-bold text-white mb-2">$35B</p>
-                    <p className="text-lg font-semibold text-slate-200 mb-2">Serviceable Addressable Market</p>
-                    <p className="text-sm text-slate-300">Value lost to fees (8.4%) and FX swings (7-10%) — the pain we directly solve</p>
-                  </motion.div>
-                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-b from-purple-500/10 to-purple-500/[0.03] rounded-2xl p-6 border border-purple-500/25 text-center">
-                    <p className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-2">SOM</p>
-                    <p className="text-4xl font-bold text-white mb-2">$2B</p>
-                    <p className="text-lg font-semibold text-slate-200 mb-2">Serviceable Obtainable Market</p>
-                    <p className="text-sm text-slate-300">Achievable by Year 2 (2028) — generating {fm.somRevenue}+ in platform revenue at 0.7% blended take rate plus $25/event creation fee</p>
-                  </motion.div>
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">$35B lost every year.</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2 text-lg">To fees and currency swings. With no affordable fix.</motion.p>
                 </div>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="grid grid-cols-3 gap-4">
-                  {["8.4% avg fees — highest globally", "0% SMEs have affordable FX hedging", "68% cite payments as #1 barrier"].map((item, idx) => (
-                    <div key={idx} className="bg-white/[0.04] rounded-lg p-3 border border-white/[0.06] text-center">
-                      <p className="text-sm text-slate-300">{item}</p>
+                <div className="grid grid-cols-3 gap-6">
+                  {[
+                    { label: "TAM", color: "text-blue-400", border: "border-blue-500/25", bg: "from-blue-500/10", val: "$210B", sub: "African cross-border volume" },
+                    { label: "SAM", color: "text-emerald-400", border: "border-emerald-500/25", bg: "from-emerald-500/10", val: "$35B", sub: "Value lost to fees + FX swings" },
+                    { label: "SOM", color: "text-purple-400", border: "border-purple-500/25", bg: "from-purple-500/10", val: "$2B", sub: `${fm.somRevenue}+ revenue by 2028` },
+                  ].map((item, idx) => (
+                    <motion.div key={idx} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 + idx * 0.1 }} className={`bg-gradient-to-b ${item.bg} to-transparent rounded-2xl p-8 border ${item.border} text-center`}>
+                      <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${item.color}`}>{item.label}</p>
+                      <p className="text-6xl font-bold text-white mb-3">{item.val}</p>
+                      <p className="text-slate-400 text-sm">{item.sub}</p>
+                    </motion.div>
+                  ))}
+                </div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="flex justify-center gap-8 text-center">
+                  {[["8.4%", "avg transfer fees"], ["7M+", "SMEs locked out"], ["0", "affordable hedging tools"]].map(([val, lbl], idx) => (
+                    <div key={idx}>
+                      <p className="text-2xl font-bold text-white">{val}</p>
+                      <p className="text-xs text-slate-500 mt-1">{lbl}</p>
                     </div>
                   ))}
                 </motion.div>
@@ -294,109 +289,113 @@ export default function PitchDeck() {
 
             {slide.type === "revenue" && (
               <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">Revenue Model</h2>
-                <div className="grid grid-cols-4 gap-5">
-                  {[
-                    { stream: "Transfer Fees", rate: "0.3%", desc: "Per payment (min $0.50)", projection: "$300K per $100M volume", color: "border-blue-500/25" },
-                    { stream: "Protection Fees", rate: "0.5%", desc: "On hedged notional (~35% of volume)", projection: "$175K per $100M volume", color: "border-emerald-500/25" },
-                    { stream: "Settlement Fees", rate: "1%", desc: "On payouts + LP claims", projection: "$100K per $100M volume", color: "border-purple-500/25" },
-                    { stream: "Event Creation Fee", rate: "$25", desc: "Flat fee per hedge event created", projection: "$500K at 20K events/yr", color: "border-amber-500/25" },
-                  ].map((item, idx) => (
-                    <motion.div key={idx} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 + idx * 0.1 }} className={`bg-white/[0.04] rounded-xl p-6 border ${item.color}`}>
-                      <p className="text-4xl font-bold text-white mb-2">{item.rate}</p>
-                      <p className="text-lg font-semibold text-slate-200 mb-1">{item.stream}</p>
-                      <p className="text-base text-slate-300 mb-4">{item.desc}</p>
-                      <p className="text-sm text-emerald-400 font-semibold">{item.projection}</p>
-                    </motion.div>
-                  ))}
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">4 fee streams. Live from day one.</motion.h2>
                 </div>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="bg-gradient-to-r from-blue-500/[0.08] to-emerald-500/[0.08] border border-white/[0.08] rounded-xl p-5 text-center">
-                  <p className="text-2xl font-bold text-white">~0.7% blended take rate + $25/event &rarr; $12M+ at $2B SOM</p>
-                  <p className="text-base text-slate-300 mt-1">All fees active from day one — revenue scales with volume</p>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-4 gap-5">
+                  {[
+                    { rate: "0.3%", label: "Transfer Fee", note: "Per payment", color: "text-blue-400", border: "border-blue-500/20" },
+                    { rate: "0.5%", label: "Hedge Entry", note: "On notional", color: "text-emerald-400", border: "border-emerald-500/20" },
+                    { rate: "1%", label: "Settlement", note: "On payouts + LP", color: "text-purple-400", border: "border-purple-500/20" },
+                    { rate: "$25", label: "Event Creation", note: "Flat per event", color: "text-amber-400", border: "border-amber-500/20" },
+                  ].map((item, idx) => (
+                    <div key={idx} className={`bg-white/[0.04] rounded-2xl p-7 border ${item.border} text-center`}>
+                      <p className={`text-5xl font-bold mb-3 ${item.color}`}>{item.rate}</p>
+                      <p className="text-white font-semibold">{item.label}</p>
+                      <p className="text-slate-500 text-sm mt-1">{item.note}</p>
+                    </div>
+                  ))}
+                </motion.div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-r from-blue-500/[0.07] to-emerald-500/[0.07] border border-white/[0.07] rounded-xl p-5 text-center">
+                  <p className="text-xl font-semibold text-white">~0.7% blended rate + $25/event → <span className="text-emerald-400">{fm.somRevenue} revenue by 2028</span></p>
                 </motion.div>
               </div>
             )}
 
             {slide.type === "competition" && (
-              <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">Why No One Else Does This</h2>
-                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto">FX hedging for African SMEs is a massive blind spot — we own it</p>
-                <div className="overflow-hidden rounded-xl border border-white/[0.08]">
-                  <table className="w-full text-base">
+              <div className="space-y-6">
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">A blind spot no one has fixed.</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2">FX hedging for African SMEs. We own it.</motion.p>
+                </div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="overflow-hidden rounded-xl border border-white/[0.08]">
+                  <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-white/[0.04]">
-                        <th className="text-left p-4 text-slate-300 font-medium">FX Hedging Feature</th>
-                        <th className="text-center p-4 text-emerald-400 font-bold">BlockFinaX</th>
-                        <th className="text-center p-4 text-slate-400 font-medium">Banks</th>
-                        <th className="text-center p-4 text-slate-400 font-medium">OTC Brokers</th>
-                        <th className="text-center p-4 text-slate-400 font-medium">DeFi</th>
-                        <th className="text-center p-4 text-slate-400 font-medium">Prediction Mkts</th>
+                        <th className="text-left p-3 text-slate-400 font-medium">Feature</th>
+                        <th className="text-center p-3 text-emerald-400 font-bold">BlockFinaX</th>
+                        <th className="text-center p-3 text-slate-500 font-medium">Banks</th>
+                        <th className="text-center p-3 text-slate-500 font-medium">OTC Brokers</th>
+                        <th className="text-center p-3 text-slate-500 font-medium">DeFi</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[
-                        { feature: "African FX pairs (40+)", us: true, banks: "5-10 majors", otc: "5-10 majors", defi: false, prediction: false },
-                        { feature: "No minimum / no credit check", us: true, banks: false, otc: false, defi: true, prediction: true },
-                        { feature: "SME accessible", us: true, banks: false, otc: false, defi: false, prediction: false },
-                        { feature: "On-chain / transparent", us: true, banks: false, otc: false, defi: true, prediction: true },
-                        { feature: "Predetermined payout", us: true, banks: "Varies", otc: "Varies", defi: false, prediction: "Binary only" },
-                        { feature: "P2P liquidity pools", us: true, banks: false, otc: false, defi: true, prediction: true },
-                        { feature: "Real FX risk coverage", us: true, banks: true, otc: true, defi: false, prediction: false },
+                        { feature: "40+ African FX pairs", us: true, banks: false, otc: false, defi: false },
+                        { feature: "No minimum ticket", us: true, banks: false, otc: false, defi: true },
+                        { feature: "SME accessible", us: true, banks: false, otc: false, defi: false },
+                        { feature: "Transparent & on-chain", us: true, banks: false, otc: false, defi: true },
+                        { feature: "Auto settlement", us: true, banks: false, otc: false, defi: false },
+                        { feature: "Real FX risk coverage", us: true, banks: true, otc: true, defi: false },
                       ].map((row, idx) => (
                         <tr key={idx} className="border-t border-white/[0.04]">
-                          <td className="p-4 text-slate-200 font-medium">{row.feature}</td>
-                          {[row.us, row.banks, row.otc, row.defi, row.prediction].map((val, ci) => (
-                            <td key={ci} className="p-4 text-center">
-                              {val === true ? <CheckCircle2 className={`w-5 h-5 mx-auto ${ci === 0 ? 'text-emerald-400' : 'text-slate-500'}`} /> : val === false ? <span className="text-slate-600 text-lg">&mdash;</span> : <span className="text-sm text-amber-400 font-medium">{val}</span>}
+                          <td className="p-3 text-slate-300">{row.feature}</td>
+                          {[row.us, row.banks, row.otc, row.defi].map((val, ci) => (
+                            <td key={ci} className="p-3 text-center">
+                              {val ? <CheckCircle2 className={`w-4 h-4 mx-auto ${ci === 0 ? 'text-emerald-400' : 'text-slate-600'}`} /> : <span className="text-slate-700">—</span>}
                             </td>
                           ))}
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl p-5 text-center">
-                  <p className="text-base font-semibold text-emerald-400">Banks need $100K+ minimums. OTC brokers require credit history. DeFi ignores African currencies. We serve the 7M SMEs everyone else locks out.</p>
+                </motion.div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-emerald-500/[0.07] border border-emerald-500/20 rounded-xl p-4 text-center">
+                  <p className="text-emerald-400 font-semibold">Banks want $100K+. OTC needs credit history. DeFi ignores Africa. We serve the 7M they lock out.</p>
                 </motion.div>
               </div>
             )}
 
             {slide.type === "go_to_market" && (
               <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">Go-to-Market Strategy</h2>
-                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto">Land with hedge, expand with payments — bottom-up adoption</p>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">Land with hedge. Expand with payments.</motion.h2>
+                </div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-4 gap-5">
                   {[
-                    { title: "Phase 1: Community-Led Growth", icon: Users, color: "text-blue-400 border-blue-500/25", items: ["Testnet incentives — daily tasks, referral points, leaderboards", "Crypto-native traders as early LPs and hedgers", "Twitter/X, Telegram, Discord community building", "Ambassador program in key African markets"] },
-                    { title: "Phase 2: SME Direct Sales", icon: Building2, color: "text-emerald-400 border-emerald-500/25", items: ["Target importers/exporters in Ghana, Nigeria, Kenya", "Partner with trade associations and chambers of commerce", "On-ground workshops: 'Protect your margins in 5 minutes'", "Case studies showing real FX savings vs bank alternatives"] },
-                    { title: "Phase 3: Channel Partnerships", icon: Megaphone, color: "text-purple-400 border-purple-500/25", items: ["Integrate with African fintech wallets (Flutterwave, Paystack)", "B2B API for platforms to offer hedge-as-a-service", "Accounting software plugins for automated FX protection", "White-label hedge pools for trade finance providers"] },
-                    { title: "Phase 4: Flywheel Effects", icon: Gift, color: "text-amber-400 border-amber-500/25", items: ["More LPs → better rates → more hedgers → more volume", "LP yield attracts DeFi capital globally", "Revenue share with channel partners drives distribution", "Network effects: each new FX pair unlocks new corridors"] },
-                  ].map((phase, idx) => (
-                    <motion.div key={idx} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 + idx * 0.1 }} className={`bg-white/[0.04] rounded-xl p-6 border ${phase.color.split(' ')[1]}`}>
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center">
-                          <phase.icon className={`w-5 h-5 ${phase.color.split(' ')[0]}`} />
-                        </div>
-                        <h3 className="font-bold text-lg text-white">{phase.title}</h3>
+                    { phase: "Phase 1", title: "Community", icon: Users, color: "text-blue-400", border: "border-blue-500/20", items: ["Testnet incentives + leaderboard", "Crypto traders as early LPs", "Ambassador program"] },
+                    { phase: "Phase 2", title: "SME Direct", icon: Building2, color: "text-emerald-400", border: "border-emerald-500/20", items: ["Ghana, Nigeria, Kenya importers", "Trade association partnerships", "On-ground workshops"] },
+                    { phase: "Phase 3", title: "Channels", icon: Megaphone, color: "text-purple-400", border: "border-purple-500/20", items: ["Flutterwave, Paystack APIs", "Hedge-as-a-service B2B", "White-label pools"] },
+                    { phase: "Phase 4", title: "Flywheel", icon: TrendingUp, color: "text-amber-400", border: "border-amber-500/20", items: ["More LPs → better rates", "LP yield attracts global DeFi", "Network effects per corridor"] },
+                  ].map((p, idx) => (
+                    <div key={idx} className={`bg-white/[0.04] rounded-xl p-5 border ${p.border}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <p className={`text-xs font-bold uppercase tracking-wider ${p.color}`}>{p.phase}</p>
+                      </div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <p.icon className={`w-5 h-5 ${p.color}`} />
+                        <h3 className="font-bold text-white">{p.title}</h3>
                       </div>
                       <ul className="space-y-2">
-                        {phase.items.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-slate-600" />
-                            <span className="text-sm text-slate-300">{item}</span>
+                        {p.items.map((item, i) => (
+                          <li key={i} className="text-sm text-slate-400 flex items-start gap-2">
+                            <span className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${p.color.replace('text-', 'bg-')}`} />
+                            {item}
                           </li>
                         ))}
                       </ul>
-                    </motion.div>
+                    </div>
                   ))}
-                </div>
+                </motion.div>
               </div>
             )}
 
             {slide.type === "financials" && (
-              <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">3-Year Financial Projections</h2>
-                <p className="text-center text-slate-300 text-xl max-w-3xl mx-auto">Mainnet Jul 2026 · Year 1 = 2027 · Year 2 = 2028 · Year 3 = 2029</p>
+              <div className="space-y-6">
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">3-Year Projections</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-500 mt-2 text-sm">Mainnet Jul 2026 · Y1 = 2027 · Y2 = 2028 · Y3 = 2029</motion.p>
+                </div>
                 <div className="overflow-hidden rounded-xl border border-white/[0.08]">
                   <table className="w-full text-base">
                     <thead>
@@ -447,54 +446,61 @@ export default function PitchDeck() {
 
             {slide.type === "traction" && (
               <div className="space-y-8">
-                <h2 className="text-5xl font-bold text-center text-white">Traction & Roadmap</h2>
-                <div className="grid grid-cols-4 gap-5">
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">Traction & Roadmap</motion.h2>
+                </div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-4 gap-5">
                   {[
-                    { label: "Now", items: ["Live on testnet", "Payments & FX protection working", "FX oracle (40+ pairs)", "Community + referrals"], highlight: true },
-                    { label: "Q2 2026", items: ["2 security audits", "Multi-sig controls", "Mobile optimization"], highlight: false },
-                    { label: "Q3 2026", items: ["Mainnet launch", "$5M+ LP liquidity", "100+ active users"], highlight: false },
-                    { label: "Q4 2026 – Q3 2027", items: ["$50M+ volume", "Mobile apps", "Series A raise (closes Q3 2027)"], highlight: false },
+                    { label: "Now", dot: "bg-emerald-400", border: "border-emerald-500/25", bg: "bg-emerald-500/[0.07]", text: "text-emerald-400", items: ["Testnet live", "Payments + FX hedge working", "40+ FX pairs on oracle", "Community + referrals"] },
+                    { label: "Q2 2026", dot: "bg-blue-400", border: "border-blue-500/20", bg: "bg-white/[0.03]", text: "text-blue-400", items: ["2 security audits", "Multi-sig controls", "Mobile optimisation"] },
+                    { label: "Q3 2026", dot: "bg-purple-400", border: "border-purple-500/20", bg: "bg-white/[0.03]", text: "text-purple-400", items: ["Mainnet launch", "$5M+ LP seeded", "100+ active users"] },
+                    { label: "Q4 2026 – Q3 2027", dot: "bg-amber-400", border: "border-amber-500/20", bg: "bg-white/[0.03]", text: "text-amber-400", items: ["$50M+ volume", "Mobile apps", "Series A raise"] },
                   ].map((q, idx) => (
-                    <motion.div key={idx} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 + idx * 0.1 }} className={`rounded-xl p-5 border ${q.highlight ? 'bg-emerald-500/[0.08] border-emerald-500/25' : 'bg-white/[0.04] border-white/[0.06]'}`}>
-                      <h3 className={`text-xl font-bold mb-4 ${q.highlight ? 'text-emerald-400' : 'text-slate-200'}`}>{q.label}</h3>
-                      <ul className="space-y-3">
+                    <div key={idx} className={`rounded-xl p-5 border ${q.border} ${q.bg}`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`w-2 h-2 rounded-full ${q.dot}`} />
+                        <h3 className={`font-bold ${q.text}`}>{q.label}</h3>
+                      </div>
+                      <ul className="space-y-2">
                         {q.items.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <CheckCircle2 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${q.highlight ? 'text-emerald-400' : 'text-slate-600'}`} />
-                            <span className="text-sm text-slate-300">{item}</span>
-                          </li>
+                          <li key={i} className="text-sm text-slate-400">{item}</li>
                         ))}
                       </ul>
-                    </motion.div>
+                    </div>
                   ))}
-                </div>
+                </motion.div>
               </div>
             )}
 
             {slide.type === "ask" && (
-              <div className="space-y-8 text-center">
-                <h2 className="text-5xl font-bold text-white">The Ask</h2>
-                <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-                  Affordable payments and FX protection for 7M+ African SMEs in cross-border trade.
-                </p>
-                <div className="grid grid-cols-2 gap-6 max-w-4xl mx-auto">
-                  {[
-                    { cat: "Seed Investment", desc: "Accelerate mainnet launch and user acquisition" },
-                    { cat: "Early LPs", desc: "Bootstrap hedge pool liquidity and earn premiums" },
-                    { cat: "Strategic Partners", desc: "FX data providers, stablecoin issuers, African fintechs" },
-                    { cat: "Pilot Users", desc: "SMEs and traders ready to test on testnet" },
-                  ].map((item, idx) => (
-                    <motion.div key={idx} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 + idx * 0.1 }} className="bg-white/[0.04] rounded-xl p-6 border border-white/[0.06] text-left">
-                      <h3 className="font-bold text-white text-lg mb-2">{item.cat}</h3>
-                      <p className="text-base text-slate-300">{item.desc}</p>
-                    </motion.div>
-                  ))}
+              <div className="space-y-8">
+                <div className="text-center">
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">Pre-Seed Round</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2">Runway to 10,000 users before Seed in Jan 2027</motion.p>
                 </div>
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}>
-                  <Button size="lg" className="bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white px-10 py-7 text-xl" data-testid="button-contact-cta">
-                    <Rocket className="w-6 h-6 mr-3" />
-                    Get in Touch
-                  </Button>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }} className="grid grid-cols-2 gap-5 max-w-3xl mx-auto">
+                  {[
+                    { cat: "Seed Investment", desc: "Mainnet launch + user acquisition", icon: DollarSign, color: "text-blue-400", border: "border-blue-500/20" },
+                    { cat: "Early LPs", desc: "Seed hedge pool liquidity", icon: HandCoins, color: "text-emerald-400", border: "border-emerald-500/20" },
+                    { cat: "Strategic Partners", desc: "Fintechs, stablecoin issuers, FX providers", icon: Globe, color: "text-purple-400", border: "border-purple-500/20" },
+                    { cat: "Pilot Users", desc: "SMEs ready to test on testnet today", icon: Users, color: "text-amber-400", border: "border-amber-500/20" },
+                  ].map((item, idx) => (
+                    <div key={idx} className={`bg-white/[0.04] rounded-xl p-5 border ${item.border} flex items-start gap-4`}>
+                      <item.icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${item.color}`} />
+                      <div>
+                        <h3 className="font-bold text-white mb-1">{item.cat}</h3>
+                        <p className="text-sm text-slate-400">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="text-center">
+                  <a href="https://calendly.com/anthonykumako8/30min" target="_blank" rel="noopener noreferrer">
+                    <Button size="lg" className="bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white px-10 py-6 text-lg" data-testid="button-contact-cta">
+                      <Rocket className="w-5 h-5 mr-3" />
+                      Book a Discovery Call
+                    </Button>
+                  </a>
                 </motion.div>
               </div>
             )}
