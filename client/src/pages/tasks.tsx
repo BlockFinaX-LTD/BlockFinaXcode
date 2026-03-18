@@ -217,7 +217,7 @@ export default function TasksPage() {
         }
       />
 
-      <main className="max-w-md mx-auto w-full px-4 py-4 space-y-4">
+      <main className="max-w-lg mx-auto w-full px-4 py-4 space-y-4">
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 overflow-hidden relative">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
