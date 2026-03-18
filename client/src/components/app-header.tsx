@@ -120,7 +120,7 @@ export function AppHeader({ title, onRefresh, refreshing, rightContent }: AppHea
   return (
     <>
       <header className="bg-card/80 backdrop-blur-sm border-b border-border/50 sticky top-0 z-50">
-        <div className="max-w-lg mx-auto px-4">
+        <div className="max-w-2xl mx-auto px-4">
           <div className="flex justify-between items-center h-14">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <img src={logoPath} alt="BlockFinaX Logo" className="w-7 h-7 object-contain shrink-0" />

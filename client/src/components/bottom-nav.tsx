@@ -20,7 +20,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border/50 z-50 safe-area-bottom">
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-2xl mx-auto">
         <div className="grid grid-cols-4 h-16">
           {tabs.map((tab) => {
             const isActive = location === tab.path || (tab.path === '/tasks' && location === '/rewards');
