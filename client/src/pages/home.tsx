@@ -216,7 +216,7 @@ export default function HomePage() {
       <AppHeader onRefresh={handleRefresh} refreshing={refreshing} />
 
       <main className="flex-1 pb-20">
-        <div className="w-full px-4 py-4 space-y-4">
+        <div className="max-w-md mx-auto px-4 py-4 space-y-4">
 
           {/* Portfolio Overview */}
           <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20">

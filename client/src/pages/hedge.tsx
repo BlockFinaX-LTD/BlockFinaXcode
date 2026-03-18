@@ -409,7 +409,7 @@ export default function Hedge() {
         }
       />
 
-      <div className="w-full px-4 py-4 space-y-4">
+      <div className="max-w-md mx-auto px-4 py-4 space-y-4">
         <Collapsible open={statsOpen} onOpenChange={setStatsOpen}>
           <CollapsibleTrigger asChild>
             <button className="w-full flex items-center justify-between px-4 py-3 bg-card rounded-xl border border-border hover:bg-accent/50 transition-colors">

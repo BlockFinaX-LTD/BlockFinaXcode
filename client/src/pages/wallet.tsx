@@ -65,7 +65,7 @@ export default function Wallet() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 w-full px-4 sm:px-6 py-6 pb-24">
+      <main className="flex-1 max-w-md mx-auto w-full px-4 py-6 pb-24">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
 
           <TabsContent value="overview" className="space-y-4">
