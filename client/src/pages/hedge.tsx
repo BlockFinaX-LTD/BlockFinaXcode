@@ -395,7 +395,7 @@ export default function Hedge() {
   const netPredeterminedPayout = predeterminedPayout > 0 ? predeterminedPayout * 0.99 : 0;
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/30 pb-20">
       <AppHeader
         title="P2P Trade Hedge"
         rightContent={
