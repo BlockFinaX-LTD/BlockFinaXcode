@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -2383,6 +2384,7 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
   const [activeCategory, setActiveCategory] = useState("overview");
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   /* edit-auth state */
   const [editUnlocked, setEditUnlocked] = useState(initialEditEnabled);
@@ -2425,35 +2427,56 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
 
       {/* Header */}
       <div style={{ background: "white", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <h1 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>BlockFinaX · Investor Data Room</h1>
-            <p style={{ fontSize: "12px", color: "#94a3b8" }}>Confidential — authorised access only</p>
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: isMobile ? "12px 16px" : "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: isMobile ? "14px" : "16px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>BlockFinaX · Investor Data Room</h1>
+            {!isMobile && <p style={{ fontSize: "12px", color: "#94a3b8" }}>Confidential — authorised access only</p>}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "999px", padding: "4px 10px" }}>
-              <ShieldCheck style={{ width: "12px", height: "12px" }} /> Secure session
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "999px", padding: "4px 10px" }}>
-              <Clock style={{ width: "12px", height: "12px" }} /> 24h session
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+            {!isMobile && (
+              <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "999px", padding: "4px 10px" }}>
+                <ShieldCheck style={{ width: "12px", height: "12px" }} /> Secure session
+              </span>
+            )}
+            {!isMobile && (
+              <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "999px", padding: "4px 10px" }}>
+                <Clock style={{ width: "12px", height: "12px" }} /> 24h session
+              </span>
+            )}
             <AnimatePresence>
               {editUnlocked && (
                 <motion.span initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }}
                   style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: "999px", padding: "4px 10px", fontWeight: 600 }}>
-                  <Edit3 style={{ width: "11px", height: "11px" }} /> Edit mode
+                  <Edit3 style={{ width: "11px", height: "11px" }} /> Edit
                 </motion.span>
               )}
             </AnimatePresence>
             <Button variant="outline" size="sm" onClick={handleLogout} style={{ color: "#64748b", fontSize: "13px" }}>
-              <LogOut style={{ width: "13px", height: "13px", marginRight: "5px" }} /> Sign out
+              <LogOut style={{ width: "13px", height: "13px", marginRight: isMobile ? "0" : "5px" }} />
+              {!isMobile && "Sign out"}
             </Button>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 24px", display: "flex", gap: "28px" }}>
-        {/* Sidebar */}
+      {/* Mobile category tabs */}
+      {isMobile && (
+        <div style={{ background: "white", borderBottom: "1px solid #e2e8f0", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ display: "flex", gap: "4px", padding: "10px 16px", minWidth: "max-content" }}>
+            {CATEGORIES.map(cat => (
+              <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setOpenDoc(null); }}
+                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "8px", fontSize: "12px", fontWeight: 500, border: "none", cursor: "pointer", whiteSpace: "nowrap", background: activeCategory === cat.id && !openDoc ? "#eff6ff" : "#f8fafc", color: activeCategory === cat.id && !openDoc ? "#1d4ed8" : "#475569", outline: activeCategory === cat.id && !openDoc ? "1px solid #bfdbfe" : "1px solid #e2e8f0" }}>
+                <cat.icon style={{ width: "13px", height: "13px", flexShrink: 0 }} />
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: isMobile ? "16px" : "32px 24px", display: "flex", gap: "28px" }}>
+        {/* Sidebar — desktop only */}
+        {!isMobile && (
         <aside style={{ width: "210px", flexShrink: 0 }}>
           <p style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", paddingLeft: "8px" }}>Categories</p>
           <nav style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
@@ -2479,6 +2502,7 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
             </div>
           </div>
         </aside>
+        )}
 
         {/* Main */}
         <main style={{ flex: 1, minWidth: 0 }}>
