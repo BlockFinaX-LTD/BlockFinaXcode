@@ -26,7 +26,7 @@ export default function Wallet() {
   useEffect(() => {
     if (!isLoading) {
       if (!walletExists()) {
-        setLocation('/');
+        setLocation('/create-wallet');
       } else if (!isUnlocked) {
         setLocation('/unlock-wallet');
       }

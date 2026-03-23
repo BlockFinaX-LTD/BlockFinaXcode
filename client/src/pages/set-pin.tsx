@@ -165,7 +165,10 @@ export default function SetPin() {
   };
 
   const handleFinish = () => {
-    setLocation('/home');
+    // New users won't have a wallet yet — send them to create one.
+    // Returning users who re-authenticated go straight to the app.
+    const hasWallet = !!localStorage.getItem('wallet_encrypted');
+    setLocation(hasWallet ? '/home' : '/create-wallet');
   };
 
   return (
