@@ -636,12 +636,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/wallets/:id", async (req, res) => {
+    // Require a valid session
+    const token = (req.headers['x-session-token'] as string) || null;
+    if (!token) return res.status(401).json({ message: 'Authentication required' });
     try {
+      const [session] = await db.select().from(authSessions)
+        .where(eq(authSessions.sessionToken, token));
+      if (!session || session.expiresAt < new Date()) {
+        return res.status(401).json({ message: 'Session expired' });
+      }
       const wallet = await storage.getWallet(parseInt(req.params.id));
       if (!wallet) {
         return res.status(404).json({ message: "Wallet not found" });
       }
-      res.json(wallet);
+      // Strip server-stored key material from the response — keys live on-device only
+      const { encryptedPrivateKey: _k, encryptedMnemonic: _m, ...safeWallet } = wallet as any;
+      res.json(safeWallet);
     } catch (error) {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to fetch wallet" 
@@ -796,7 +806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/networks", async (req, res) => {
+  app.post("/api/networks", requireAdmin, async (req, res) => {
     try {
       const network = await storage.createNetwork(req.body);
       res.status(201).json(network);
@@ -922,6 +932,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/fees/record", async (req, res) => {
+    // Require a valid session — prevents anyone from injecting fake fee records
+    const sessionToken = (req.headers['x-session-token'] as string) || null;
+    if (!sessionToken) return res.status(401).json({ message: 'Authentication required' });
+    const [sess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, sessionToken));
+    if (!sess || sess.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
+
     try {
       const { txHash, feeTxHash, fromWallet, toWallet, transferAmount, token, chainId } = req.body;
       if (!txHash || !fromWallet || !toWallet || !transferAmount) {
@@ -986,7 +1002,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/fx/auto-settle", async (req, res) => {
+  app.post("/api/fx/auto-settle", requireAdmin, async (req, res) => {
     try {
       const result = await checkAndSettleEvents();
       res.json(result);
@@ -1639,6 +1655,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!position) return res.status(404).json({ message: "Position not found" });
       if (position.claimed) return res.status(400).json({ message: "Already claimed" });
       if (position.status !== "settled_win") return res.status(400).json({ message: "Position not eligible for payout" });
+
+      // Ownership check — caller must prove they own the hedger wallet.
+      const { callerAddress } = req.body;
+      if (!callerAddress) {
+        return res.status(400).json({ message: "callerAddress is required" });
+      }
+      if (position.hedgerWallet.toLowerCase() !== callerAddress.toLowerCase()) {
+        return res.status(403).json({ message: "Unauthorized: this position does not belong to your wallet" });
+      }
 
       const grossPayout = parseFloat(position.payoutAmount || "0");
       const HEDGER_PAYOUT_FEE_RATE = 0.01;
