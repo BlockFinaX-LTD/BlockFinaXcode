@@ -69,6 +69,10 @@ export default function Auth() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
+      // Save poll token so the "check your email" page can detect cross-device login
+      if (data.pollToken) {
+        sessionStorage.setItem('bfx_poll_token', data.pollToken);
+      }
       // Dev mode: if no SMTP configured, server returns the verification URL directly
       if (data.devUrl) {
         toast({ title: 'Dev mode: magic link', description: 'Click the link in the console or use the URL returned by the API.' });

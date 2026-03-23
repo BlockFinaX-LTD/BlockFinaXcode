@@ -52,6 +52,11 @@ function checkMagicLinkRateLimit(email: string): boolean {
   return true;
 }
 
+// Cross-device: once a magic link is verified on any device, its session is
+// cached here so the original device can pick it up via polling.
+// Map: magic-link-token → { sessionToken, expiresAt }
+const verifiedMagicSessions = new Map<string, { sessionToken: string; expiresAt: number }>();
+
 // ── Cleanup expired magic link tokens ────────────────────────────────────────
 // Runs every 30 minutes to delete used/expired tokens from the DB
 function startTokenCleanup() {
@@ -257,7 +262,8 @@ export function registerAuthRoutes(app: Express) {
       // Dev mode: return the URL directly so dev can click it
       console.log(`[Auth] Magic link (no RESEND_API_KEY configured): ${magicUrl}`);
     }
-    res.json({ ok: true, sent, devUrl: sent ? undefined : magicUrl });
+    // Return pollToken so the waiting device can poll for cross-device login
+    res.json({ ok: true, sent, pollToken: token, devUrl: sent ? undefined : magicUrl });
   });
 
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
@@ -271,7 +277,32 @@ export function registerAuthRoutes(app: Express) {
     await db.update(magicLinks).set({ used: true }).where(eq(magicLinks.id, link.id));
     const user = await findOrCreateUser(link.email);
     const sessionToken = await createSession(user.id);
+
+    // Cache the verified session so other devices polling with the same token
+    // can pick up the login without needing to click the link themselves.
+    verifiedMagicSessions.set(token, {
+      sessionToken,
+      expiresAt: Date.now() + 5 * 60 * 1000, // keep for 5 min
+    });
+
     res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name } });
+  });
+
+  // ── GET /api/auth/magic-link/poll ──────────────────────────────────────────
+  // Polled by the device that initiated the magic link request. Returns the
+  // session token once the link has been verified on any device.
+  app.get('/api/auth/magic-link/poll', (req, res) => {
+    const token = req.query.token as string;
+    if (!token) return res.status(400).json({ ok: false });
+
+    const entry = verifiedMagicSessions.get(token);
+    if (!entry || Date.now() > entry.expiresAt) {
+      return res.json({ ok: false });
+    }
+
+    // One-time retrieval — delete so the same poll token can't be replayed
+    verifiedMagicSessions.delete(token);
+    res.json({ ok: true, sessionToken: entry.sessionToken });
   });
 
   // ── POST /api/auth/google ─────────────────────────────────────────────────
