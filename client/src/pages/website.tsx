@@ -8,9 +8,6 @@ import {
   Github,
   Menu,
   X,
-  Activity,
-  Users,
-  BarChart3,
   Clock,
   Shield,
   ChevronRight,
@@ -66,31 +63,6 @@ function LiveFxTicker() {
         .animate-scroll { animation: scroll 120s linear infinite; }
         .animate-scroll:hover { animation-play-state: paused; }
       `}</style>
-    </div>
-  );
-}
-
-function LivePlatformStats() {
-  const { data: stats } = useQuery<{ totalWallets: number; totalProfiles: number; activeHedgeEvents: number; totalHedgeEvents: number }>({
-    queryKey: ['/api/stats/platform'],
-    refetchInterval: 60000,
-  });
-
-  const items = [
-    { icon: Users, label: "Users", value: stats?.totalProfiles || 0 },
-    { icon: Activity, label: "Active Events", value: stats?.activeHedgeEvents || 0 },
-    { icon: BarChart3, label: "Total Events", value: stats?.totalHedgeEvents || 0 },
-  ];
-
-  return (
-    <div className="flex items-center gap-6">
-      {items.map((item, i) => (
-        <div key={i} className="flex items-center gap-2 text-sm">
-          <item.icon className="h-4 w-4 text-gray-400" />
-          <span className="font-mono font-bold text-gray-900">{item.value}</span>
-          <span className="text-gray-400 hidden sm:inline">{item.label}</span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -884,8 +856,6 @@ export default function Website() {
 
               <motion.div initial={{ opacity: 0.7 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.25 }}
                 className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 text-sm text-gray-400">
-                <LivePlatformStats />
-                <span className="hidden sm:inline text-gray-200">|</span>
                 <div className="flex items-center gap-2">
                   <span>Mainnet</span>
                   <div className="flex items-center gap-1 font-mono text-gray-600">
