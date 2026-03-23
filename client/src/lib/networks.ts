@@ -2,8 +2,9 @@
  * Networks - Blockchain network configurations
  *
  * Defines supported networks with RPC URLs and metadata.
- * Lisk Sepolia is the default testnet.
+ * Lisk Sepolia is the testnet. Lisk Mainnet (chainId 1135) is the production network.
  * Network mode controlled by VITE_NETWORK_MODE env var (default: "testnet").
+ * Set VITE_NETWORK_MODE=mainnet before building for production.
  * Exports: NETWORKS, TESTNET_NETWORKS, MAINNET_NETWORKS, NetworkConfig,
  *          getNetworkById, getNetworkByChainId, DEFAULT_NETWORK, isMainnet, getNetworkMode
  */
@@ -46,13 +47,13 @@ export const TESTNET_NETWORKS: NetworkConfig[] = [
 
 export const MAINNET_NETWORKS: NetworkConfig[] = [
   {
-    id: 2,
-    name: "Lisk Sepolia",
-    chainId: 4202,
-    rpcUrl: "https://rpc.sepolia-api.lisk.com",
+    id: 1,
+    name: "Lisk",
+    chainId: 1135,
+    rpcUrl: "https://rpc.api.lisk.com",
     symbol: "ETH",
-    blockExplorerUrl: "https://sepolia-blockscout.lisk.com",
-    isTestnet: true,
+    blockExplorerUrl: "https://blockscout.lisk.com",
+    isTestnet: false,
     color: "#4070F4",
     icon: "fas fa-cube"
   }
