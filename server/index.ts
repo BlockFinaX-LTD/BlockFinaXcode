@@ -56,6 +56,30 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ── Production environment guard ─────────────────────────────────────────
+  // Fail loudly at startup if critical secrets are missing — better to crash
+  // immediately than to silently serve a broken app to real users.
+  if (process.env.NODE_ENV === "production") {
+    const required = [
+      "DATABASE_URL",
+      "ADMIN_PASSWORD",
+      "DEPLOYER_PRIVATE_KEY",
+      "TREASURY_POOL_PRIVATE_KEY",
+      "RESEND_API_KEY",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+    ];
+    const missing = required.filter(k => !process.env[k]);
+    if (missing.length > 0) {
+      console.error(`[Startup] FATAL — missing required environment variables: ${missing.join(", ")}`);
+      process.exit(1);
+    }
+    // Warn if NETWORK_MODE is not explicitly set to mainnet in production
+    if (process.env.NETWORK_MODE !== "mainnet") {
+      console.warn("[Startup] WARNING — NETWORK_MODE is not 'mainnet'. Running in testnet mode in a production deployment.");
+    }
+  }
+
   // Initialize database with default networks
   try {
     await initializeDatabase();

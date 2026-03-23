@@ -99,10 +99,10 @@ class MainnetGuard {
       return { allowed: true };
     }
 
-    if (chainId !== 4202) {
+    if (chainId !== 1135) {
       return {
         allowed: false,
-        reason: `Invalid chain for mainnet. Expected Lisk Sepolia (4202), got chain ${chainId}. Testnet transactions are not allowed in mainnet mode.`
+        reason: `Invalid chain for mainnet. Expected Lisk Mainnet (1135), got chain ${chainId}. Only Lisk Mainnet transactions are allowed in mainnet mode.`
       };
     }
 

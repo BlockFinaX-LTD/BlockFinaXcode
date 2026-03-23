@@ -17,7 +17,7 @@ import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, user
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
-import { generalApiLimiter, financialMutationLimiter, walletLimiter } from "./middleware/rate-limiter";
+import { generalApiLimiter, financialMutationLimiter, walletLimiter, strictLimiter } from "./middleware/rate-limiter";
 import { registerAuthRoutes } from "./auth-routes";
 import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, invalidateChainCache } from "./hedge-reader";
 
@@ -268,10 +268,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const adminSessions = new Set<string>();
 
   function generateAdminToken(): string {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let token = "";
-    for (let i = 0; i < 48; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
-    return token;
+    // Use cryptographically secure random bytes — Math.random() is not safe for tokens
+    const { randomBytes } = require("crypto") as typeof import("crypto");
+    return randomBytes(32).toString("hex"); // 256 bits of entropy
   }
 
   function requireAdmin(req: any, res: any, next: any) {
@@ -851,7 +850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const gasSponsorCooldown = new Map<string, number>();
 
-  app.post("/api/gas/sponsor", async (req, res) => {
+  app.post("/api/gas/sponsor", strictLimiter, async (req, res) => {
     try {
       const { walletAddress } = req.body;
       if (!walletAddress) {
@@ -1091,6 +1090,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/hedge/events", async (req, res) => {
+    // Require a valid session — prevents unauthenticated event spam.
+    // In mainnet mode, the requireSignature middleware (applied globally to /api/hedge/)
+    // additionally verifies the EIP-191 wallet signature.
+    const evtToken = (req.headers['x-session-token'] as string) || null;
+    if (!evtToken) return res.status(401).json({ message: 'Authentication required' });
+    const [evtSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, evtToken));
+    if (!evtSess || evtSess.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
+
     try {
       const { name, description, underlying, strike, premiumRate, payoutRate, safetyFactor, expiryDate, createdBy, poolOpen, allowExternalLp, initialLiquidity } = req.body;
 
@@ -1590,7 +1597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Settle event (admin posts oracle price)
-  app.post("/api/hedge/events/:id/settle", async (req, res) => {
+  app.post("/api/hedge/events/:id/settle", requireAdmin, async (req, res) => {
     try {
       const { settlementPrice, settlerAddress } = req.body;
       if (!settlementPrice || !settlerAddress) {
