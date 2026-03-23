@@ -1014,7 +1014,7 @@ export default function Website() {
             <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} BlockFinaX. All rights reserved.</p>
             <div className="flex gap-4 text-xs text-gray-400">
               <span className="hover:text-gray-600 transition-colors cursor-pointer">Privacy</span>
-              <span className="hover:text-gray-600 transition-colors cursor-pointer">Terms</span>
+              <Link href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use</Link>
             </div>
           </div>
         </div>
