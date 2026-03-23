@@ -45,6 +45,8 @@ export default function Auth() {
   const [webauthnAvailable, setWebauthnAvailable] = useState(false);
   const [hasStoredPin, setHasStoredPin] = useState(false);
 
+  const googleConfigured = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
   // Check WebAuthn support and whether a passkey is already registered on this device
   useEffect(() => {
     getPasskeyLabel().then(setPasskeyLabel);
@@ -91,11 +93,6 @@ export default function Auth() {
   }, []);
 
   const handleGoogleClick = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      toast({ title: 'Google login not configured', description: 'Set VITE_GOOGLE_CLIENT_ID in your .env file.', variant: 'destructive' });
-      return;
-    }
     window.google?.accounts.id.prompt();
   };
 
@@ -182,16 +179,18 @@ export default function Auth() {
 
           {view === 'main' && (
             <div className="space-y-3">
-              {/* Google */}
-              <Button
-                variant="outline"
-                className="w-full h-12 text-sm font-medium"
-                onClick={handleGoogleClick}
-                disabled={isLoading}
-              >
-                <SiGoogle className="h-4 w-4 mr-3 text-[#4285F4]" />
-                Continue with Google
-              </Button>
+              {/* Google — only shown when VITE_GOOGLE_CLIENT_ID is set */}
+              {googleConfigured && (
+                <Button
+                  variant="outline"
+                  className="w-full h-12 text-sm font-medium"
+                  onClick={handleGoogleClick}
+                  disabled={isLoading}
+                >
+                  <SiGoogle className="h-4 w-4 mr-3 text-[#4285F4]" />
+                  Continue with Google
+                </Button>
+              )}
 
               {/* Email */}
               <Button
