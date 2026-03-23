@@ -1013,7 +1013,7 @@ export default function Website() {
           <div className="border-t border-gray-100 mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center gap-3">
             <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} BlockFinaX. All rights reserved.</p>
             <div className="flex gap-4 text-xs text-gray-400">
-              <span className="hover:text-gray-600 transition-colors cursor-pointer">Privacy</span>
+              <Link href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</Link>
               <Link href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use</Link>
             </div>
           </div>
