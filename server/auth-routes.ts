@@ -133,9 +133,18 @@ function retrievePendingChallenge(key: string): string | null {
 
 const RP_NAME = 'BlockFinaX';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET?.trim() || '';
 const googleClient = GOOGLE_CLIENT_ID
   ? new OAuth2Client(GOOGLE_CLIENT_ID)
   : null;
+
+// Short-lived OAuth state store (CSRF protection) — state → expiresAt
+const oauthStateStore = new Map<string, number>();
+// Clean up expired states every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, exp] of oauthStateStore) if (exp < now) oauthStateStore.delete(k);
+}, 10 * 60 * 1000);
 
 function getAppOrigin(req: any): string {
   if (process.env.APP_URL) return process.env.APP_URL;
@@ -289,53 +298,73 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // ── GET /api/auth/google/start ───────────────────────────────────────────
-  // Redirect-based OAuth flow — avoids JS-origin restrictions, no popup needed.
-  // Redirects user to Google, then Google redirects back to /auth/google/callback.
+  // ── GET /api/auth/google/start ────────────────────────────────────────────
+  // Begins the Authorization Code OAuth flow. Generates a CSRF state token,
+  // stores it in memory, then redirects the browser to Google's consent screen.
   app.get('/api/auth/google/start', (req, res) => {
-    if (!GOOGLE_CLIENT_ID) {
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       return res.redirect('/auth?error=google_not_configured');
     }
     const origin = getAppOrigin(req);
-    const redirectUri = `${origin}/auth/google/callback`;
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: 'token',
-      scope: 'openid email profile',
+    const redirectUri = `${origin}/api/auth/google/callback`;
+    const state = generateToken(24);
+    oauthStateStore.set(state, Date.now() + 10 * 60 * 1000); // 10-min expiry
+
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
+    const url = client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['openid', 'email', 'profile'],
+      state,
       prompt: 'select_account',
     });
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     console.log('[Auth] Google OAuth start → redirect URI:', redirectUri);
-    res.redirect(googleAuthUrl);
+    res.redirect(url);
   });
 
-  // ── POST /api/auth/google-token ───────────────────────────────────────────
-  // Verifies a Google access token via Google's tokeninfo + userinfo endpoints.
-  // Called from the client-side /auth/google/callback page after redirect.
-  // No client secret needed — token is validated directly with Google's APIs.
-  app.post('/api/auth/google-token', async (req, res) => {
-    const { accessToken } = req.body;
-    if (!accessToken) return res.status(400).json({ message: 'accessToken required' });
+  // ── GET /api/auth/google/callback ─────────────────────────────────────────
+  // Google redirects here with an authorization code. We exchange the code for
+  // tokens server-side (using the client secret), verify the ID token, create
+  // a session, then redirect the browser to the frontend completion page.
+  app.get('/api/auth/google/callback', async (req, res) => {
+    const { code, state, error } = req.query as Record<string, string>;
+    if (error === 'access_denied') return res.redirect('/auth');
+    if (error) return res.redirect(`/auth?error=${encodeURIComponent(error)}`);
+
+    // Validate CSRF state
+    const stateExpiry = oauthStateStore.get(state);
+    if (!stateExpiry || Date.now() > stateExpiry) {
+      return res.redirect('/auth?error=invalid_state');
+    }
+    oauthStateStore.delete(state);
+
+    if (!code) return res.redirect('/auth?error=no_code');
+
     try {
-      const [tokenInfo, userInfo] = await Promise.all([
-        fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${accessToken}`).then(r => r.json()),
-        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }).then(r => r.json()),
-      ]);
-      // Validate token was issued for our client
-      if (tokenInfo.error || tokenInfo.aud !== GOOGLE_CLIENT_ID) {
-        console.error('[Auth] Token validation failed:', tokenInfo);
-        return res.status(400).json({ message: 'Invalid or expired Google token' });
-      }
-      if (!userInfo.email) return res.status(400).json({ message: 'Google account has no email' });
-      const user = await findOrCreateUser(userInfo.email, userInfo.sub, userInfo.name, userInfo.picture);
+      const origin = getAppOrigin(req);
+      const redirectUri = `${origin}/api/auth/google/callback`;
+      const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
+
+      // Exchange code for tokens
+      const { tokens } = await client.getToken(code);
+      if (!tokens.id_token) throw new Error('No ID token returned');
+
+      // Verify the ID token
+      const ticket = await client.verifyIdToken({
+        idToken: tokens.id_token,
+        audience: GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+      if (!payload?.email) throw new Error('No email in Google token');
+
+      const user = await findOrCreateUser(payload.email, payload.sub, payload.name, payload.picture);
       const sessionToken = await createSession(user.id);
-      res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } });
+
+      // Redirect to frontend — session token goes in the URL fragment so it's
+      // never sent to any server (stays in the browser only).
+      res.redirect(`/auth/google/done#token=${sessionToken}`);
     } catch (err: any) {
-      console.error('[Auth] Google token verify error:', err.message);
-      res.status(400).json({ message: 'Google authentication failed' });
+      console.error('[Auth] Google callback error:', err.message);
+      res.redirect(`/auth?error=${encodeURIComponent(err.message)}`);
     }
   });
 
