@@ -1,0 +1,241 @@
+/**
+ * oracle-node.ts
+ *
+ * Core logic shared by all three oracle node processes.
+ * Each node is initialised with its own private key and data source fetcher.
+ *
+ * ISOLATION: This file is completely independent of the existing fx-oracle.ts.
+ *            It does not import from or modify any existing server files.
+ *            It interacts only with the OracleFacet.submitRate() on-chain.
+ */
+
+import { ethers } from "ethers";
+
+// ============================================================
+//                          TYPES
+// ============================================================
+
+export interface PriceMap {
+  [pair: string]: number;
+}
+
+export type PriceFetcher = () => Promise<PriceMap>;
+
+export interface OracleNodeConfig {
+  /** Oracle wallet private key (ORACLE_KEY_A / B / C) */
+  privateKey: string;
+
+  /** Label for this node in logs */
+  nodeLabel: string;
+
+  /** RPC endpoint */
+  rpcUrl: string;
+
+  /** Diamond contract address */
+  diamondAddress: string;
+
+  /** Function that returns current prices for all supported pairs */
+  fetchPrices: PriceFetcher;
+
+  /** Poll interval in milliseconds (default 5 min) */
+  pollIntervalMs?: number;
+
+  /**
+   * Maximum allowed deviation from the previous observed rate, as a fraction.
+   * Submissions deviating beyond this are skipped and logged. Default 0.07 (7%).
+   */
+  maxDeviationFraction?: number;
+}
+
+// ============================================================
+//                        ABIs
+// ============================================================
+
+const ORACLE_FACET_ABI = [
+  "function submitRate(uint256 eventId, uint256 price) external",
+  "function getOracleConfig() external view returns (uint256 requiredSigners, uint256 toleranceBps, uint256 oracleCount)",
+  "function isAuthorisedOracle(address oracle) external view returns (bool)",
+];
+
+const HEDGE_FACET_ABI = [
+  "function getTotalHedgeEvents() external view returns (uint256)",
+  "function getHedgeEventCore(uint256) external view returns (uint256 id, address creator, string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, uint8 status, bool poolOpen, bool allowExternalLp, uint256 initialRate, bool strikeAbove)",
+];
+
+// ============================================================
+//                      ORACLE NODE CLASS
+// ============================================================
+
+export class OracleNode {
+  private config: Required<OracleNodeConfig>;
+  private provider: ethers.JsonRpcProvider;
+  private signer: ethers.Wallet;
+  private writeContract: ethers.Contract;
+  private readContract: ethers.Contract;
+  private lastKnownRates: Map<string, number> = new Map();
+  private intervalId: ReturnType<typeof setInterval> | null = null;
+
+  constructor(config: OracleNodeConfig) {
+    this.config = {
+      pollIntervalMs: 5 * 60 * 1000,
+      maxDeviationFraction: 0.07,
+      ...config,
+    };
+
+    this.provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
+    this.signer = new ethers.Wallet(this.config.privateKey, this.provider);
+    this.writeContract = new ethers.Contract(
+      this.config.diamondAddress,
+      ORACLE_FACET_ABI,
+      this.signer
+    );
+    this.readContract = new ethers.Contract(
+      this.config.diamondAddress,
+      [...ORACLE_FACET_ABI, ...HEDGE_FACET_ABI],
+      this.provider
+    );
+  }
+
+  get label() {
+    return this.config.nodeLabel;
+  }
+
+  async start() {
+    this.log(`Starting — wallet: ${this.signer.address}`);
+
+    const isAuth = await this.readContract.isAuthorisedOracle(this.signer.address);
+    if (!isAuth) {
+      this.log(
+        "WARNING: This wallet is NOT registered as an authorised oracle. " +
+        "Run addOracle() on the Diamond first. Submissions will be rejected."
+      );
+    } else {
+      this.log("Wallet is authorised oracle — ready to submit.");
+    }
+
+    await this.runCycle();
+
+    this.intervalId = setInterval(async () => {
+      try {
+        await this.runCycle();
+      } catch (err) {
+        this.log(`Error in poll cycle: ${err instanceof Error ? err.message : err}`);
+      }
+    }, this.config.pollIntervalMs);
+  }
+
+  stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      this.log("Stopped.");
+    }
+  }
+
+  private async runCycle() {
+    this.log("Poll cycle starting...");
+
+    let prices: PriceMap;
+    try {
+      prices = await this.config.fetchPrices();
+      this.log(`Fetched prices for ${Object.keys(prices).length} pairs`);
+    } catch (err) {
+      this.log(`Price fetch failed: ${err instanceof Error ? err.message : err}`);
+      return;
+    }
+
+    let totalEvents: number;
+    try {
+      totalEvents = Number(await this.readContract.getTotalHedgeEvents());
+    } catch (err) {
+      this.log(`Failed to read total events: ${err instanceof Error ? err.message : err}`);
+      return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    let submitted = 0;
+    let skipped = 0;
+
+    for (let i = 1; i <= totalEvents; i++) {
+      try {
+        const core = await this.readContract.getHedgeEventCore(i);
+        const status = Number(core.status);
+        if (status !== 0) continue; // 0 = Open
+
+        const underlying: string = core.underlying;
+        const currentPrice = prices[underlying];
+
+        if (!currentPrice || currentPrice <= 0) {
+          this.log(`  Event #${i} (${underlying}): no price available — skip`);
+          skipped++;
+          continue;
+        }
+
+        const deviationCheck = this.checkDeviation(underlying, currentPrice);
+        if (!deviationCheck.ok) {
+          this.log(
+            `  Event #${i} (${underlying}): deviation guard — ${deviationCheck.reason} — skip`
+          );
+          skipped++;
+          continue;
+        }
+
+        const strike = Number(ethers.formatUnits(core.strike, 6));
+        const initialRate = Number(ethers.formatUnits(core.initialRate, 6));
+        const strikeAbove: boolean = core.strikeAbove;
+        const effectiveStrikeAbove = strikeAbove || (!strikeAbove && strike > initialRate);
+        const expiryDate = Number(core.expiryDate);
+        const isExpired = expiryDate <= now;
+        const isTouched = effectiveStrikeAbove
+          ? currentPrice >= strike
+          : currentPrice <= strike;
+
+        if (!isExpired && !isTouched) continue;
+
+        const priceWei = ethers.parseUnits(currentPrice.toFixed(6), 6);
+        this.log(
+          `  Event #${i} (${underlying}): submitting ${currentPrice} ` +
+          `[${isTouched ? "ONE-TOUCH" : "EXPIRY"}]`
+        );
+
+        const tx = await this.writeContract.submitRate(i, priceWei);
+        await tx.wait();
+
+        this.lastKnownRates.set(underlying, currentPrice);
+        submitted++;
+      } catch (err) {
+        this.log(
+          `  Event #${i}: submission error — ${err instanceof Error ? err.message : err}`
+        );
+      }
+    }
+
+    this.log(
+      `Poll cycle complete — submitted: ${submitted}, skipped: ${skipped}`
+    );
+  }
+
+  private checkDeviation(
+    pair: string,
+    currentPrice: number
+  ): { ok: boolean; reason?: string } {
+    const last = this.lastKnownRates.get(pair);
+    if (!last || last === 0) {
+      this.lastKnownRates.set(pair, currentPrice);
+      return { ok: true };
+    }
+    const deviation = Math.abs(currentPrice - last) / last;
+    if (deviation > this.config.maxDeviationFraction) {
+      return {
+        ok: false,
+        reason: `${(deviation * 100).toFixed(2)}% move vs last known ${last} (limit ${(this.config.maxDeviationFraction * 100).toFixed(0)}%)`,
+      };
+    }
+    this.lastKnownRates.set(pair, currentPrice);
+    return { ok: true };
+  }
+
+  private log(msg: string) {
+    console.log(`[${this.config.nodeLabel}] ${msg}`);
+  }
+}

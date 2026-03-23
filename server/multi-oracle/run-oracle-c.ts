@@ -1,0 +1,194 @@
+/**
+ * run-oracle-c.ts — Oracle Node C
+ *
+ * Data sources: Frankfurter API (ECB data, free, no key) for major FX pairs,
+ *               Binance public API for crypto (direct exchange price, no key),
+ *               Yahoo Finance for commodities.
+ *
+ * Note on FX coverage: Frankfurter only covers major currency pairs (EUR, USD,
+ * GBP, JPY etc.) from ECB data — it does NOT cover exotic African pairs like GHS,
+ * NGN, KES. Oracle C will only submit for pairs it has reliable data for.
+ * This is intentional — partial coverage is better than submitting bad data.
+ *
+ * Required env vars:
+ *   ORACLE_KEY_C       — Private key for Oracle C wallet
+ *   DIAMOND_ADDRESS    — Diamond contract address
+ *
+ * Optional:
+ *   ORACLE_RPC_URL     — RPC endpoint (default: Lisk Sepolia)
+ *   ORACLE_POLL_MS     — Poll interval in ms (default: 300000 = 5 min)
+ *
+ * Run:
+ *   npx tsx server/multi-oracle/run-oracle-c.ts
+ */
+
+import { OracleNode, PriceMap } from "./oracle-node";
+
+const RPC_URL =
+  process.env.ORACLE_RPC_URL || "https://rpc.sepolia-api.lisk.com";
+
+const DIAMOND_ADDRESS = process.env.DIAMOND_ADDRESS;
+const ORACLE_KEY_C = process.env.ORACLE_KEY_C;
+const POLL_MS = Number(process.env.ORACLE_POLL_MS) || 5 * 60 * 1000;
+
+if (!DIAMOND_ADDRESS) throw new Error("DIAMOND_ADDRESS env var required");
+if (!ORACLE_KEY_C) throw new Error("ORACLE_KEY_C env var required");
+
+// ============================================================
+//           FX — Frankfurter (ECB — major pairs only)
+// ============================================================
+
+// Only pairs that Frankfurter reliably covers via ECB data.
+// All USD/GHS, USD/NGN etc. are excluded here — Oracle A & B cover those.
+const FRANKFURTER_PAIRS: Record<string, { from: string; to: string }> = {
+  "EUR/USD": { from: "EUR", to: "USD" },
+  "GBP/USD": { from: "GBP", to: "USD" },
+  "USD/ZAR": { from: "USD", to: "ZAR" },
+  "EUR/ZAR": { from: "EUR", to: "ZAR" },
+  "GBP/ZAR": { from: "GBP", to: "ZAR" },
+  "USD/EGP": { from: "USD", to: "EGP" },
+  "EUR/EGP": { from: "EUR", to: "EGP" },
+  "USD/MAD": { from: "USD", to: "MAD" },
+  "EUR/MAD": { from: "EUR", to: "MAD" },
+  "USD/TND": { from: "USD", to: "TND" },
+  "EUR/TND": { from: "EUR", to: "TND" },
+};
+
+// Binance symbol format: BTCUSDT, ETHUSDT, etc.
+const BINANCE_SYMBOLS: Record<string, string> = {
+  "BTC/USD": "BTCUSDT",
+  "ETH/USD": "ETHUSDT",
+  "BNB/USD": "BNBUSDT",
+  "SOL/USD": "SOLUSDT",
+  "XRP/USD": "XRPUSDT",
+  "ADA/USD": "ADAUSDT",
+};
+
+const YAHOO_TICKERS: Record<string, string> = {
+  "XTI/USD": "CL=F",
+  "XBR/USD": "BZ=F",
+  "XNG/USD": "NG=F",
+  "XCO/USD": "CC=F",
+  "XCF/USD": "KC=F",
+  "XWH/USD": "ZW=F",
+};
+
+async function fetchFrankfurterRates(): Promise<Record<string, number>> {
+  try {
+    const bases = [...new Set(Object.values(FRANKFURTER_PAIRS).map((p) => p.from))];
+    const results: Record<string, number> = {};
+
+    await Promise.all(
+      bases.map(async (base) => {
+        try {
+          const res = await fetch(`https://api.frankfurter.app/latest?from=${base}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data.rates) return;
+
+          for (const [pair, { from, to }] of Object.entries(FRANKFURTER_PAIRS)) {
+            if (from === base && data.rates[to]) {
+              results[pair] = data.rates[to];
+            }
+          }
+        } catch {
+          // Partial failure acceptable — skip this base
+        }
+      })
+    );
+
+    return results;
+  } catch {
+    return {};
+  }
+}
+
+async function fetchBinancePrices(): Promise<Record<string, number>> {
+  try {
+    const symbols = Object.values(BINANCE_SYMBOLS);
+    const symbolsParam = JSON.stringify(symbols);
+    const res = await fetch(
+      `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolsParam)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const result: Record<string, number> = {};
+    const bySymbol: Record<string, number> = {};
+
+    if (Array.isArray(data)) {
+      for (const entry of data) {
+        if (entry.symbol && entry.price) {
+          bySymbol[entry.symbol] = parseFloat(entry.price);
+        }
+      }
+    }
+
+    for (const [pair, symbol] of Object.entries(BINANCE_SYMBOLS)) {
+      if (bySymbol[symbol] && bySymbol[symbol] > 0) {
+        result[pair] = bySymbol[symbol];
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+async function fetchYahooPrice(ticker: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`,
+      { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    return typeof price === "number" ? price : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPrices(): Promise<PriceMap> {
+  const prices: PriceMap = {};
+
+  const [fxRates, cryptoPrices, ...yahooResults] = await Promise.all([
+    fetchFrankfurterRates(),
+    fetchBinancePrices(),
+    ...Object.entries(YAHOO_TICKERS).map(([, ticker]) => fetchYahooPrice(ticker)),
+  ]);
+
+  Object.assign(prices, fxRates);
+  Object.assign(prices, cryptoPrices);
+
+  const yahooPairs = Object.keys(YAHOO_TICKERS);
+  yahooPairs.forEach((pair, i) => {
+    const p = yahooResults[i];
+    if (p !== null) prices[pair] = p;
+  });
+
+  return prices;
+}
+
+// ============================================================
+//                          START
+// ============================================================
+
+const node = new OracleNode({
+  privateKey: ORACLE_KEY_C,
+  nodeLabel: "Oracle-C",
+  rpcUrl: RPC_URL,
+  diamondAddress: DIAMOND_ADDRESS,
+  fetchPrices,
+  pollIntervalMs: POLL_MS,
+});
+
+process.on("SIGTERM", () => { node.stop(); process.exit(0); });
+process.on("SIGINT",  () => { node.stop(); process.exit(0); });
+
+node.start().catch((err) => {
+  console.error("[Oracle-C] Fatal:", err);
+  process.exit(1);
+});
