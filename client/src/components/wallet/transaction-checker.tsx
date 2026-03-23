@@ -17,7 +17,6 @@ import {
   AlertCircle, 
   CheckCircle, 
   Clock,
-  Gift,
   Zap,
   RefreshCw
 } from 'lucide-react';
@@ -105,29 +104,6 @@ export function TransactionChecker() {
       description: 'Address copied to clipboard',
     });
   };
-
-  const getTestnetFaucets = () => [
-    {
-      name: 'Ethereum Sepolia',
-      url: 'https://sepoliafaucet.com/',
-      description: 'Get free Sepolia ETH for testing'
-    },
-    {
-      name: 'Polygon Mumbai',
-      url: 'https://faucet.polygon.technology/',
-      description: 'Get free MATIC for Mumbai testnet'
-    },
-    {
-      name: 'BSC Testnet',
-      url: 'https://testnet.bnbchain.org/faucet-smart',
-      description: 'Get free BNB for BSC testnet'
-    },
-    {
-      name: 'Arbitrum Goerli',
-      url: 'https://faucet.triangleplatform.com/arbitrum/goerli',
-      description: 'Get free ETH for Arbitrum Goerli'
-    }
-  ];
 
   return (
     <div className="space-y-6">
@@ -342,46 +318,6 @@ export function TransactionChecker() {
         </CardContent>
       </Card>
 
-      {/* Testnet Faucets */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Gift className="h-5 w-5" />
-            <span>Get Free Testnet Tokens</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            Use these faucets to get free testnet tokens for development and testing:
-          </p>
-          
-          <div className="grid gap-3">
-            {getTestnetFaucets().map((faucet, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <p className="font-medium">{faucet.name}</p>
-                  <p className="text-sm text-muted-foreground">{faucet.description}</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(faucet.url, '_blank')}
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Visit Faucet
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <Alert className="mt-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Copy your wallet address above and paste it into the faucet websites to receive free testnet tokens.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
     </div>
   );
 }

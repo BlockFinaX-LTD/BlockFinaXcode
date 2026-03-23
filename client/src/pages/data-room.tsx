@@ -648,7 +648,6 @@ function DemoVideoDoc({ token }: { token: string }) {
       <h2 style={S.h2}>What the Demo Covers</h2>
       <ul style={{ fontSize: "13px", color: "#475569", paddingLeft: "18px", lineHeight: 2 }}>
         <li>Creating a non-custodial USDC wallet on Lisk Sepolia</li>
-        <li>Receiving Sepolia ETH via the gasless faucet mechanism</li>
         <li>Browsing open hedge events across FX, commodities, and crypto pairs</li>
         <li>Buying a downside hedge — setting strike, notional, and expiry</li>
         <li>Providing liquidity as an LP and earning premiums</li>

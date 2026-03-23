@@ -30,12 +30,10 @@ import {
   Menu,
   ListChecks,
   User,
-  Droplets,
   Copy,
   Users,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { isMainnet } from '@/lib/networks';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -256,17 +254,7 @@ export default function HomePage() {
           </Card>
 
           {/* Quick Actions */}
-          <div className={`grid gap-2 ${isMainnet() ? 'grid-cols-3' : 'grid-cols-4'}`}>
-            {!isMainnet() && (
-              <Button
-                variant="outline"
-                className="flex flex-col items-center gap-1.5 h-auto py-3 hover:bg-primary/5 hover:border-primary/30"
-                onClick={() => setLocation('/faucet')}
-              >
-                <Droplets className="h-5 w-5 text-cyan-500" />
-                <span className="text-[11px] font-medium">Faucet</span>
-              </Button>
-            )}
+          <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
               className="flex flex-col items-center gap-1.5 h-auto py-3 hover:bg-primary/5 hover:border-primary/30"

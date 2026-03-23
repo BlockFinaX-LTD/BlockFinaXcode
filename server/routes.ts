@@ -879,42 +879,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/faucet/request", async (req, res) => {
-    try {
-      const { walletAddress, amount } = req.body;
-      if (!walletAddress || !amount) {
-        return res.status(400).json({ message: "Wallet address and amount required" });
-      }
-      const requestedAmount = parseFloat(amount);
-      if (isNaN(requestedAmount) || requestedAmount <= 0 || requestedAmount > 500) {
-        return res.status(400).json({ message: "Amount must be between 1 and 500 USDC per day" });
-      }
-      const ethers = await import("ethers");
-      const provider = new ethers.JsonRpcProvider("https://rpc.sepolia-api.lisk.com");
-      const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
-      if (!deployerKey) {
-        return res.status(500).json({ message: "Faucet not configured" });
-      }
-      const deployer = new ethers.Wallet(deployerKey, provider);
-      const usdcAddress = "0xf52Ad63619Bf9cFeF510341ac6b4038554399562";
-      const usdc = new ethers.Contract(usdcAddress, [
-        "function transfer(address to, uint256 amount) returns (bool)",
-        "function balanceOf(address) view returns (uint256)"
-      ], deployer);
-      const balance = await usdc.balanceOf(deployer.address);
-      const amountWei = ethers.parseUnits(requestedAmount.toString(), 6);
-      if (balance < amountWei) {
-        return res.status(400).json({ message: "Faucet is empty, please try again later" });
-      }
-      const tx = await usdc.transfer(walletAddress, amountWei);
-      await tx.wait();
-      res.json({ success: true, txHash: tx.hash, amount: requestedAmount });
-    } catch (error: any) {
-      console.error("Faucet error:", error);
-      res.status(500).json({ message: error.message || "Faucet transfer failed" });
-    }
-  });
-
   const FEE_CONFIG = {
     walletTransferPercent: 0.3,
     minimumFeeCents: 50,
