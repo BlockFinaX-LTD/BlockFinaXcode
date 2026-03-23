@@ -6,6 +6,7 @@
  */
 
 import { Switch, Route } from "wouter";
+import { isMainnet } from "@/lib/networks";
 import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -60,7 +61,7 @@ function Router() {
       <Route path="/hedge" component={Hedge} />
       <Route path="/tasks" component={TasksPage} />
       <Route path="/profile" component={ProfilePage} />
-      <Route path="/faucet" component={Faucet} />
+      {!isMainnet() && <Route path="/faucet" component={Faucet} />}
 
       {/* Rewards & admin */}
       <Route path="/rewards" component={TasksPage} />

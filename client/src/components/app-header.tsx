@@ -6,6 +6,7 @@
  * Exports: AppHeader
  */
 import { useState } from 'react';
+import { isMainnet } from '@/lib/networks';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -161,10 +162,12 @@ export function AppHeader({ title, onRefresh, refreshing, rightContent }: AppHea
                     Profile
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem onClick={() => setLocation('/faucet')}>
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Test USDC Faucet
-                  </DropdownMenuItem>
+                  {!isMainnet() && (
+                    <DropdownMenuItem onClick={() => setLocation('/faucet')}>
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Test USDC Faucet
+                    </DropdownMenuItem>
+                  )}
 
                   <DropdownMenuItem onClick={() => setLocation('/notifications')} disabled>
                     <Bell className="h-4 w-4 mr-2" />
