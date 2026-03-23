@@ -289,28 +289,35 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // ── GET /api/auth/debug/google-id — temp diagnostic, remove after fix ────
-  app.get('/api/auth/debug/google-id', (_req, res) => {
-    const raw = process.env.GOOGLE_CLIENT_ID || '';
-    const trimmed = raw.trim();
-    res.json({
-      configured: !!trimmed,
-      rawLength: raw.length,
-      trimmedLength: trimmed.length,
-      hadLeadingSpace: raw !== trimmed,
-      preview: trimmed ? `${trimmed.slice(0, 8)}...${trimmed.slice(-30)}` : null,
-      endsCorrectly: trimmed.endsWith('.apps.googleusercontent.com'),
+  // ── GET /api/auth/google/start ───────────────────────────────────────────
+  // Redirect-based OAuth flow — avoids JS-origin restrictions, no popup needed.
+  // Redirects user to Google, then Google redirects back to /auth/google/callback.
+  app.get('/api/auth/google/start', (req, res) => {
+    if (!GOOGLE_CLIENT_ID) {
+      return res.redirect('/auth?error=google_not_configured');
+    }
+    const origin = getAppOrigin(req);
+    const redirectUri = `${origin}/auth/google/callback`;
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: 'token',
+      scope: 'openid email profile',
+      prompt: 'select_account',
     });
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    console.log('[Auth] Google OAuth start → redirect URI:', redirectUri);
+    res.redirect(googleAuthUrl);
   });
 
   // ── POST /api/auth/google-token ───────────────────────────────────────────
-  // New: OAuth access token flow — verifies with Google's tokeninfo endpoint.
-  // Works inside iframes / no FedCM restriction. No client secret required.
+  // Verifies a Google access token via Google's tokeninfo + userinfo endpoints.
+  // Called from the client-side /auth/google/callback page after redirect.
+  // No client secret needed — token is validated directly with Google's APIs.
   app.post('/api/auth/google-token', async (req, res) => {
     const { accessToken } = req.body;
     if (!accessToken) return res.status(400).json({ message: 'accessToken required' });
     try {
-      // Verify token with Google and get user info
       const [tokenInfo, userInfo] = await Promise.all([
         fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${accessToken}`).then(r => r.json()),
         fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -319,6 +326,7 @@ export function registerAuthRoutes(app: Express) {
       ]);
       // Validate token was issued for our client
       if (tokenInfo.error || tokenInfo.aud !== GOOGLE_CLIENT_ID) {
+        console.error('[Auth] Token validation failed:', tokenInfo);
         return res.status(400).json({ message: 'Invalid or expired Google token' });
       }
       if (!userInfo.email) return res.status(400).json({ message: 'Google account has no email' });

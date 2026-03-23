@@ -26,12 +26,6 @@ import { isWebAuthnSupported, authenticateWithPasskey, getPasskeyLabel } from '@
 import { decryptPinFromLocalStorage, hasLocalPin } from '@/lib/auth-crypto';
 import { SESSION_KEY } from '@/hooks/use-auth';
 
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
-
 type View = 'main' | 'email';
 
 export default function Auth() {
@@ -54,57 +48,10 @@ export default function Auth() {
     setHasStoredPin(hasLocalPin());
   }, []);
 
-  // Load Google GSI script for OAuth token flow (works in iframes, no FedCM required)
-  useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) return;
-    if (document.querySelector('script[src*="accounts.google.com/gsi"]')) return;
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-    return () => {
-      if (document.head.contains(script)) document.head.removeChild(script);
-    };
-  }, []);
-
+  // Redirect-based Google sign-in — server handles the OAuth redirect,
+  // so no popup and no JS-origins registration needed.
   const handleGoogleClick = useCallback(() => {
-    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
-    if (!clientId || !window.google) {
-      toast({ title: 'Google not ready', description: 'Please wait a moment and try again.' });
-      return;
-    }
-    setIsLoading(true);
-    // Use token client (popup) — works inside iframes, no FedCM restriction
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'openid email profile',
-      callback: async (tokenResponse: any) => {
-        if (tokenResponse.error) {
-          toast({ title: 'Google sign-in cancelled', variant: 'destructive' });
-          setIsLoading(false);
-          return;
-        }
-        try {
-          const res = await fetch('/api/auth/google-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken: tokenResponse.access_token }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message);
-          localStorage.setItem(SESSION_KEY, data.sessionToken);
-          setLocation(data.session?.walletAddress ? '/home' : '/set-pin');
-        } catch (err: any) {
-          toast({ title: 'Google sign-in failed', description: err.message, variant: 'destructive' });
-        } finally {
-          setIsLoading(false);
-        }
-      },
-      error_callback: () => { setIsLoading(false); },
-    });
-    tokenClient.requestAccessToken({ prompt: 'select_account' });
+    window.location.href = '/api/auth/google/start';
   }, []);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {

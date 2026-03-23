@@ -28,6 +28,7 @@ import UnlockWallet from "@/pages/unlock-wallet";
 import Auth from "@/pages/auth";
 import AuthEmailSent from "@/pages/auth-email-sent";
 import AuthVerify from "@/pages/auth-verify";
+import AuthGoogleCallback from "@/pages/auth-google-callback";
 import SetPin from "@/pages/set-pin";
 
 // Core features
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/auth" component={Auth} />
       <Route path="/auth/email-sent" component={AuthEmailSent} />
       <Route path="/auth/verify" component={AuthVerify} />
+      <Route path="/auth/google/callback" component={AuthGoogleCallback} />
       <Route path="/set-pin" component={SetPin} />
 
       {/* Core features */}
