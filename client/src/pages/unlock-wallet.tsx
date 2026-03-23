@@ -60,11 +60,12 @@ function PinKeypad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDele
 
 export default function UnlockWallet() {
   const [, setLocation] = useLocation();
-  const { unlockWallet, isLoading, deleteWallet } = useWallet();
+  const { unlockWallet, deleteWallet } = useWallet();
   const { toast } = useToast();
 
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
   const [faceIdLoading, setFaceIdLoading] = useState(false);
   const [webauthnAvailable, setWebauthnAvailable] = useState(false);
   const [passkeyLabel, setPasskeyLabel] = useState('Face ID');
@@ -78,20 +79,24 @@ export default function UnlockWallet() {
   }, []);
 
   const attemptUnlock = async (password: string) => {
+    setUnlocking(true);
     try {
       const wallet = await unlockWallet(password);
       if (wallet) {
         sessionStorage.setItem('bfx_pin_session', password);
         window.location.replace('/home');
-      } else {
-        setPinError(true);
-        setPin('');
-        setTimeout(() => setPinError(false), 1000);
+        return; // navigation pending, don't reset state
       }
+      // returned null (shouldn't normally happen — hook throws on failure)
+      setPinError(true);
+      setPin('');
+      setTimeout(() => setPinError(false), 1000);
     } catch {
       setPinError(true);
       setPin('');
       setTimeout(() => setPinError(false), 1000);
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -157,7 +162,7 @@ export default function UnlockWallet() {
                   variant="outline"
                   className="w-full h-12 font-medium"
                   onClick={handleFaceId}
-                  disabled={faceIdLoading || isLoading}
+                  disabled={faceIdLoading || unlocking}
                 >
                   {faceIdLoading
                     ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -180,8 +185,8 @@ export default function UnlockWallet() {
 
             <PinDots filled={pin.length} error={pinError} />
 
-            {isLoading
-              ? <div className="flex justify-center py-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            {unlocking
+              ? <div className="flex justify-center py-6"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               : <PinKeypad onDigit={addDigit} onDelete={deleteDigit} />
             }
           </div>

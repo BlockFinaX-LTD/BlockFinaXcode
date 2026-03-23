@@ -225,12 +225,15 @@ class WalletManager {
 
   // Unlock existing wallet
   async unlockWallet(password: string): Promise<StoredWallet | null> {
+    // Distinguish "wallet missing" from "wrong password" for clear error messages
+    const walletExists = !!localStorage.getItem('wallet_encrypted');
+
     try {
       secureStorage.setPassword(password);
       const storedWallet = secureStorage.loadWallet();
       
       if (!storedWallet) {
-        throw new Error('No wallet found');
+        throw new Error(walletExists ? 'Incorrect PIN' : 'No wallet found');
       }
 
       const privateKey = secureStorage.decrypt(storedWallet.encryptedPrivateKey);
