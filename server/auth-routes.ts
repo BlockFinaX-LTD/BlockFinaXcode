@@ -26,7 +26,7 @@ import { db } from './db';
 import {
   userAccounts, magicLinks, authSessions, webauthnCredentials,
 } from '@shared/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, lt } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import {
   generateRegistrationOptions,
@@ -36,6 +36,35 @@ import {
 } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
 import { Resend } from 'resend';
+
+// ── Rate limiting (in-memory) ─────────────────────────────────────────────────
+// Tracks magic link requests: email → list of timestamps
+const magicLinkRateMap = new Map<string, number[]>();
+const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_MAX_REQUESTS = 3;
+
+function checkMagicLinkRateLimit(email: string): boolean {
+  const now = Date.now();
+  const timestamps = (magicLinkRateMap.get(email) || []).filter(t => now - t < RATE_WINDOW_MS);
+  if (timestamps.length >= RATE_MAX_REQUESTS) return false;
+  timestamps.push(now);
+  magicLinkRateMap.set(email, timestamps);
+  return true;
+}
+
+// ── Cleanup expired magic link tokens ────────────────────────────────────────
+// Runs every 30 minutes to delete used/expired tokens from the DB
+function startTokenCleanup() {
+  const run = async () => {
+    try {
+      await db.delete(magicLinks).where(lt(magicLinks.expiresAt, new Date()));
+    } catch (err) {
+      console.error('[Auth] Token cleanup error:', err);
+    }
+  };
+  run();
+  setInterval(run, 30 * 60 * 1000);
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +184,7 @@ async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<bool
 // ── Route registration ────────────────────────────────────────────────────────
 
 export function registerAuthRoutes(app: Express) {
+  startTokenCleanup();
 
   // ── GET /api/auth/me ────────────────────────────────────────────────────────
   app.get('/api/auth/me', async (req, res) => {
@@ -198,6 +228,9 @@ export function registerAuthRoutes(app: Express) {
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: 'Valid email required' });
+    }
+    if (!checkMagicLinkRateLimit(email.toLowerCase())) {
+      return res.status(429).json({ message: 'Too many requests. Please wait 15 minutes before requesting another link.' });
     }
     const token = generateToken(32);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
