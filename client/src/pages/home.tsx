@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/bottom-nav';
+import { TermsGate } from '@/components/terms-gate';
 import { AppHeader } from '@/components/app-header';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -212,6 +213,7 @@ export default function HomePage() {
   const portfolioValue = totalValue + totalLpDeposited + totalClaimablePayout;
 
   return (
+    <TermsGate walletAddress={wallet?.address}>
     <div className="min-h-screen flex flex-col bg-background">
       <AppHeader onRefresh={handleRefresh} refreshing={refreshing} />
 
@@ -605,5 +607,6 @@ export default function HomePage() {
       {/* Bottom Navigation */}
       <BottomNav />
     </div>
+    </TermsGate>
   );
 }

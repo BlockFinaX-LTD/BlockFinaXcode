@@ -207,6 +207,17 @@ export const rateSnapshots = pgTable("rate_snapshots", {
 export type RateSnapshot = typeof rateSnapshots.$inferSelect;
 export type InsertRateSnapshot = typeof rateSnapshots.$inferInsert;
 
+export const termsAcceptances = pgTable("terms_acceptances", {
+  id: serial("id").primaryKey(),
+  walletAddress: text("wallet_address").notNull(),
+  version: text("version").notNull(),
+  acceptedAt: timestamp("accepted_at").defaultNow().notNull(),
+}, (t) => ({ uniq: unique().on(t.walletAddress, t.version) }));
+
+export type TermsAcceptance = typeof termsAcceptances.$inferSelect;
+export const insertTermsAcceptanceSchema = createInsertSchema(termsAcceptances).omit({ id: true, acceptedAt: true });
+export type InsertTermsAcceptance = z.infer<typeof insertTermsAcceptanceSchema>;
+
 export const dataRoomContent = pgTable("data_room_content", {
   id: serial("id").primaryKey(),
   docId: text("doc_id").notNull().unique(),

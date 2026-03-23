@@ -16,6 +16,7 @@ import Website from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import DataRoom from "@/pages/data-room";
+import TermsPage from "@/pages/terms";
 import NotFound from "@/pages/not-found";
 
 // Wallet & auth
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/pitch" component={PitchDeck} />
       <Route path="/whitepaper" component={Whitepaper} />
       <Route path="/data-room" component={DataRoom} />
+      <Route path="/terms" component={TermsPage} />
       {/* Wallet & auth */}
       <Route path="/wallet" component={Wallet} />
       <Route path="/create-wallet" component={CreateWallet} />

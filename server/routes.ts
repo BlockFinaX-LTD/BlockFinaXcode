@@ -13,7 +13,7 @@ import fs from "fs";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import type { Referral } from "../shared/referral-schema";
-import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees } from "../shared/schema";
+import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees, termsAcceptances } from "../shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
@@ -1877,6 +1877,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(refs);
     } catch (error) {
       res.status(500).json({ error: "Failed to get referrals" });
+    }
+  });
+
+  /* ── Terms & Conditions ── */
+  app.get("/api/terms/accepted/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const row = await db.select().from(termsAcceptances)
+        .where(and(eq(termsAcceptances.walletAddress, address.toLowerCase()), eq(termsAcceptances.version, "1.0")))
+        .limit(1);
+      res.json({ accepted: row.length > 0, acceptedAt: row[0]?.acceptedAt ?? null });
+    } catch {
+      res.status(500).json({ error: "Failed to check acceptance" });
+    }
+  });
+
+  app.post("/api/terms/accept", async (req, res) => {
+    try {
+      const { walletAddress, version } = req.body;
+      if (!walletAddress || !version) return res.status(400).json({ error: "Missing fields" });
+      await db.insert(termsAcceptances).values({ walletAddress: walletAddress.toLowerCase(), version }).onConflictDoNothing();
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: "Failed to record acceptance" });
     }
   });
 
