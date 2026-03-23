@@ -138,7 +138,13 @@ const googleClient = GOOGLE_CLIENT_ID
   : null;
 
 function getAppOrigin(req: any): string {
-  return process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+  if (process.env.APP_URL) return process.env.APP_URL;
+  // Replit (and most reverse proxies) forward the real protocol via this header.
+  // Fall back to req.protocol only for plain localhost dev without a proxy.
+  const proto =
+    req.headers['x-forwarded-proto']?.split(',')[0].trim() ||
+    req.protocol;
+  return `${proto}://${req.get('host')}`;
 }
 
 function getRpId(req: any): string {
