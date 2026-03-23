@@ -4,15 +4,15 @@
  * Loaded when the user clicks the magic link from their email.
  * URL: /auth/verify?token=<hex_token>
  *
- * On success: stores session token in localStorage → redirects to /set-pin or /home.
- * On failure: shows an error with a link back to /auth.
+ * On success: shows confirmation + "go back to original device" message.
+ * User can also choose to continue on this device (enter PIN here).
  */
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, ArrowRight, MonitorSmartphone } from 'lucide-react';
 import { FinanceAnimatedBackground } from '@/components/ui/finance-background';
 import logoPath from '@/assets/logo.png';
 import { SESSION_KEY } from '@/hooks/use-auth';
@@ -23,6 +23,7 @@ export default function AuthVerify() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState<Status>('verifying');
   const [errorMsg, setErrorMsg] = useState('');
+  const [hasLocalWallet, setHasLocalWallet] = useState(false);
 
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get('token');
@@ -37,20 +38,18 @@ export default function AuthVerify() {
       .then(data => {
         if (!data.ok) throw new Error(data.message || 'Verification failed');
         localStorage.setItem(SESSION_KEY, data.sessionToken);
+        setHasLocalWallet(!!localStorage.getItem('wallet_encrypted'));
         setStatus('success');
-        // Short delay so user sees the success state
-        setTimeout(() => {
-          // If this device already has an encrypted wallet, go to unlock screen.
-          // Otherwise send new users through PIN setup → wallet creation.
-          const hasWallet = !!localStorage.getItem('wallet_encrypted');
-          setLocation(hasWallet ? '/unlock-wallet' : '/set-pin');
-        }, 1200);
       })
       .catch((err: Error) => {
         setErrorMsg(err.message);
         setStatus('error');
       });
   }, []);
+
+  const continueHere = () => {
+    setLocation(hasLocalWallet ? '/unlock-wallet' : '/set-pin');
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4 relative overflow-hidden">
@@ -71,8 +70,25 @@ export default function AuthVerify() {
             <>
               <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
               <div>
-                <h2 className="text-lg font-semibold">Signed in!</h2>
-                <p className="text-sm text-muted-foreground mt-1">Redirecting you now…</p>
+                <h2 className="text-lg font-semibold">Link verified!</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your sign-in is confirmed.
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-muted/60 p-4 flex gap-3 items-start text-left">
+                <MonitorSmartphone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Switch back to your original browser or device — it should log you in automatically.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <p className="text-xs text-muted-foreground">Or continue on this device:</p>
+                <Button className="w-full" onClick={continueHere}>
+                  {hasLocalWallet ? 'Enter PIN to unlock' : 'Set up PIN here'}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
               </div>
             </>
           )}
