@@ -40,7 +40,10 @@ export default function AuthVerify() {
         setStatus('success');
         // Short delay so user sees the success state
         setTimeout(() => {
-          setLocation(data.session?.walletAddress ? '/home' : '/set-pin');
+          // If this device already has an encrypted wallet, go to unlock screen.
+          // Otherwise send new users through PIN setup → wallet creation.
+          const hasWallet = !!localStorage.getItem('wallet_encrypted');
+          setLocation(hasWallet ? '/unlock-wallet' : '/set-pin');
         }, 1200);
       })
       .catch((err: Error) => {
