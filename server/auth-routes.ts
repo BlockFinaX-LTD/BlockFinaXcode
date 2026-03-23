@@ -16,11 +16,8 @@
  * Required env vars:
  *   SESSION_SECRET        — Random 32+ byte hex string for signing (required)
  *   GOOGLE_CLIENT_ID      — Google OAuth client ID (optional; Google login disabled without it)
- *   SMTP_HOST             — SMTP server hostname (optional; email login disabled without it)
- *   SMTP_PORT             — SMTP server port (default: 587)
- *   SMTP_USER             — SMTP username
- *   SMTP_PASS             — SMTP password
- *   SMTP_FROM             — From address (default: noreply@blockfinax.com)
+ *   RESEND_API_KEY        — Resend API key (optional; email login disabled without it)
+ *   SMTP_FROM             — From address (default: onboarding@resend.dev for testing)
  *   APP_URL               — Public URL for magic link (e.g. https://app.blockfinax.com)
  */
 
@@ -38,7 +35,7 @@ import {
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -124,17 +121,14 @@ function getRpId(req: any): string {
 }
 
 async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<boolean> {
-  if (!process.env.SMTP_HOST) return false;
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) return false;
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_PORT === '465',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'noreply@blockfinax.com',
-      to: email,
+    const resend = new Resend(apiKey);
+    const from = process.env.SMTP_FROM?.trim() || 'BlockFinaX <onboarding@resend.dev>';
+    const { error } = await resend.emails.send({
+      from,
+      to: [email],
       subject: 'Your BlockFinaX sign-in link',
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
@@ -147,6 +141,10 @@ async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<bool
         </div>
       `,
     });
+    if (error) {
+      console.error('[Auth] Resend error:', error);
+      return false;
+    }
     return true;
   } catch (err) {
     console.error('[Auth] Email send failed:', err);
@@ -209,7 +207,7 @@ export function registerAuthRoutes(app: Express) {
     const sent = await sendMagicLinkEmail(email, magicUrl);
     if (!sent) {
       // Dev mode: return the URL directly so dev can click it
-      console.log(`[Auth] Magic link (no SMTP configured): ${magicUrl}`);
+      console.log(`[Auth] Magic link (no RESEND_API_KEY configured): ${magicUrl}`);
     }
     res.json({ ok: true, sent, devUrl: sent ? undefined : magicUrl });
   });
