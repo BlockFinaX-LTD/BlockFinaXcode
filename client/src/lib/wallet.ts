@@ -62,7 +62,7 @@ class WalletManager {
   async getSigner(networkId?: number): Promise<ethers.Wallet | null> {
     if (!this.wallet) {
       // Try to restore wallet first
-      if (this.storedPrivateKey || secureStorage.getSessionPrivateKey()) {
+      if (this.storedPrivateKey) {
         this.restoreWalletFromMemory();
       }
       if (!this.wallet) {
@@ -272,21 +272,13 @@ class WalletManager {
   restoreWalletFromMemory(): void {
     try {
       
-      // First try memory cache
+      // Memory cache only — no sessionStorage fallback (XSS risk)
       if (this.storedPrivateKey) {
         this.wallet = new ethers.Wallet(this.storedPrivateKey);
         return;
       }
       
-      // Then try session storage for private key
-      const sessionPrivateKey = secureStorage.getSessionPrivateKey();
-      if (sessionPrivateKey) {
-        this.storedPrivateKey = sessionPrivateKey;
-        this.wallet = new ethers.Wallet(sessionPrivateKey);
-        return;
-      }
-      
-      // Finally try to decrypt from storage
+      // Try to decrypt from storage (legacy v1 only)
       try {
         const storedWallet = secureStorage.loadWallet();
         if (storedWallet) {

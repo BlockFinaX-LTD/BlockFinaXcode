@@ -48,3 +48,10 @@ export const strictLimiter = createLimiter({
   max: 10,
   message: { error: "Rate limit exceeded for sensitive operations" },
 });
+
+// Magic link poll: allows up to 30 req/min per IP (one poll every ~2s is safe)
+export const pollLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many polling requests, please wait" },
+});

@@ -22,6 +22,7 @@
  */
 
 import type { Express } from 'express';
+import { strictLimiter, pollLimiter } from './middleware/rate-limiter';
 import { db } from './db';
 import {
   userAccounts, magicLinks, authSessions, webauthnCredentials,
@@ -286,8 +287,10 @@ export function registerAuthRoutes(app: Express) {
       // Dev mode: return the URL directly so dev can click it
       console.log(`[Auth] Magic link (no RESEND_API_KEY configured): ${magicUrl}`);
     }
-    // Return pollToken so the waiting device can poll for cross-device login
-    res.json({ ok: true, sent, pollToken: token, devUrl: sent ? undefined : magicUrl });
+    // Return pollToken so the waiting device can poll for cross-device login.
+    // devUrl is intentionally omitted from the response — it's already logged to
+    // the server console when RESEND_API_KEY is absent in dev mode.
+    res.json({ ok: true, sent, pollToken: token });
   });
 
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
@@ -315,7 +318,7 @@ export function registerAuthRoutes(app: Express) {
   // ── GET /api/auth/magic-link/poll ──────────────────────────────────────────
   // Polled by the device that initiated the magic link request. Returns the
   // session token once the link has been verified on any device.
-  app.get('/api/auth/magic-link/poll', (req, res) => {
+  app.get('/api/auth/magic-link/poll', pollLimiter, (req, res) => {
     const token = req.query.token as string;
     if (!token) return res.status(400).json({ ok: false });
 

@@ -1342,9 +1342,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hedge/treasury-withdraw", async (req, res) => {
     try {
-      const { amount, callerAddress } = req.body;
-      if (!amount || !callerAddress) {
-        return res.status(400).json({ message: "Missing required fields: amount, callerAddress" });
+      // Require the server-side admin token — do NOT trust callerAddress from the body.
+      const providedToken = req.headers['x-admin-token'] as string | undefined;
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (!providedToken || !adminPassword || providedToken !== adminPassword) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const { amount } = req.body;
+      if (!amount) {
+        return res.status(400).json({ message: "Missing required field: amount" });
       }
 
       const treasuryPrivateKey = process.env.TREASURY_POOL_PRIVATE_KEY;
@@ -1353,11 +1360,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const ethers = await import("ethers");
-      const deployerAddress = "0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d";
-      const caller = (callerAddress || "").toLowerCase();
-      if (caller !== deployerAddress.toLowerCase()) {
-        return res.status(403).json({ message: "Unauthorized: Only platform admin can withdraw from treasury" });
-      }
 
       const provider = new ethers.JsonRpcProvider("https://rpc.sepolia-api.lisk.com");
       const treasuryWallet = new ethers.Wallet(treasuryPrivateKey, provider);

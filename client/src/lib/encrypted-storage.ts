@@ -33,47 +33,34 @@ class SecureStorage {
   private readonly SESSION_PRIVATE_KEY = 'wallet_private_key_session';
 
   setPassword(password: string): void {
+    // Keep password only in memory — never write it to sessionStorage/localStorage.
     this.password = password;
-    // Store password in session storage for transaction signing
-    sessionStorage.setItem(this.SESSION_PASSWORD_KEY, password);
   }
 
   clearPassword(): void {
     this.password = null;
+    // Clean up any legacy sessionStorage entries from old builds
     sessionStorage.removeItem(this.SESSION_PASSWORD_KEY);
     sessionStorage.removeItem(this.SESSION_PRIVATE_KEY);
   }
 
-  // Store decrypted private key in session for transaction signing
-  setSessionPrivateKey(privateKey: string): void {
-    sessionStorage.setItem(this.SESSION_PRIVATE_KEY, privateKey);
+  // Kept for API compatibility — no longer writes to sessionStorage.
+  setSessionPrivateKey(_privateKey: string): void {
+    // Private key is held only in WalletManager's in-memory storedPrivateKey.
+    // Intentionally not stored in sessionStorage (accessible to XSS).
   }
 
-  // Get decrypted private key from session
+  // Always returns null — session key storage was removed.
   getSessionPrivateKey(): string | null {
-    return sessionStorage.getItem(this.SESSION_PRIVATE_KEY);
+    return null;
   }
 
   isUnlocked(): boolean {
-    if (this.password !== null) return true;
-    
-    // Try to restore password from session storage
-    const sessionPassword = sessionStorage.getItem(this.SESSION_PASSWORD_KEY);
-    if (sessionPassword) {
-      this.password = sessionPassword;
-      return true;
-    }
-    
-    return false;
+    return this.password !== null;
   }
 
   private ensurePassword(): void {
-    if (!this.password) {
-      const sessionPassword = sessionStorage.getItem(this.SESSION_PASSWORD_KEY);
-      if (sessionPassword) {
-        this.password = sessionPassword;
-      }
-    }
+    // Password is only in memory; nothing to restore from storage.
   }
 
   encrypt(data: string): string {
@@ -118,20 +105,7 @@ class SecureStorage {
       }
     }
     
-    // Try session private key as fallback
-    const sessionKey = this.getSessionPrivateKey();
-    if (sessionKey) {
-      try {
-        const bytes = CryptoJS.AES.decrypt(encryptedData, sessionKey);
-        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-        if (decrypted && decrypted.length > 0) {
-          return decrypted;
-        }
-      } catch (error) {
-      }
-    }
-    
-    throw new Error('Unable to decrypt data with available keys');
+    throw new Error('Invalid password');
   }
 
   saveWallet(wallet: StoredWallet): void {
