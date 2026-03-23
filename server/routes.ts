@@ -18,6 +18,7 @@ import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
 import { generalApiLimiter, financialMutationLimiter, walletLimiter } from "./middleware/rate-limiter";
+import { registerAuthRoutes } from "./auth-routes";
 import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, invalidateChainCache } from "./hedge-reader";
 
 /**
@@ -38,6 +39,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/", generalApiLimiter);
   app.use("/api/hedge/", financialMutationLimiter);
   app.use("/api/wallets/", walletLimiter);
+
+  // Auth routes (magic link, Google, Face ID / WebAuthn, sessions)
+  registerAuthRoutes(app);
 
   const signedRoutePrefixes = [
     "/api/hedge/",

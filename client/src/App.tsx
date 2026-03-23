@@ -25,6 +25,10 @@ import Wallet from "@/pages/wallet";
 import CreateWallet from "@/pages/create-wallet";
 import ImportWallet from "@/pages/import-wallet";
 import UnlockWallet from "@/pages/unlock-wallet";
+import Auth from "@/pages/auth";
+import AuthEmailSent from "@/pages/auth-email-sent";
+import AuthVerify from "@/pages/auth-verify";
+import SetPin from "@/pages/set-pin";
 
 // Core features
 import HomePage from "@/pages/home";
@@ -52,6 +56,10 @@ function Router() {
       <Route path="/create-wallet" component={CreateWallet} />
       <Route path="/import-wallet" component={ImportWallet} />
       <Route path="/unlock-wallet" component={UnlockWallet} />
+      <Route path="/auth" component={Auth} />
+      <Route path="/auth/email-sent" component={AuthEmailSent} />
+      <Route path="/auth/verify" component={AuthVerify} />
+      <Route path="/set-pin" component={SetPin} />
 
       {/* Core features */}
       <Route path="/home" component={HomePage} />

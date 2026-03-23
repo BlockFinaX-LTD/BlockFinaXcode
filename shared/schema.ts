@@ -13,6 +13,47 @@ import { z } from "zod";
 export * from "./profile-schema";
 export * from "./referral-schema";
 
+// ── Auth: user accounts ───────────────────────────────────────────────────────
+export const userAccounts = pgTable("user_accounts", {
+  id: serial("id").primaryKey(),
+  email: text("email").unique(),
+  googleId: text("google_id").unique(),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Auth: email magic links ───────────────────────────────────────────────────
+export const magicLinks = pgTable("magic_links", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Auth: server sessions ─────────────────────────────────────────────────────
+export const authSessions = pgTable("auth_sessions", {
+  id: serial("id").primaryKey(),
+  sessionToken: text("session_token").notNull().unique(),
+  userId: integer("user_id").references(() => userAccounts.id),
+  walletAddress: text("wallet_address"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Auth: WebAuthn / Face ID credentials ─────────────────────────────────────
+export const webauthnCredentials = pgTable("webauthn_credentials", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => userAccounts.id),
+  credentialId: text("credential_id").notNull().unique(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").default(0),
+  deviceUnlockKey: text("device_unlock_key"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Wallet management table - stores encrypted wallet data
 export const wallets = pgTable("wallets", {
   id: serial("id").primaryKey(),
@@ -21,6 +62,8 @@ export const wallets = pgTable("wallets", {
   encryptedPrivateKey: text("encrypted_private_key").notNull(),
   encryptedMnemonic: text("encrypted_mnemonic"),
   email: text("email"),
+  userId: integer("user_id").references(() => userAccounts.id),
+  pinSalt: text("pin_salt"),
   isImported: boolean("is_imported").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
