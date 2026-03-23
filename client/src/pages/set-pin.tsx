@@ -47,10 +47,10 @@ function PinKeypad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDele
     <div className="grid grid-cols-3 gap-3 max-w-[240px] mx-auto">
       {keys.map((key, i) =>
         key === '' ? (
-          <div key={i} />
+          <div key={`pad-empty-${i}`} />
         ) : (
           <button
-            key={key}
+            key={`pad-${i}`}
             type="button"
             className="h-14 w-full rounded-xl text-xl font-semibold bg-muted hover:bg-muted/80 active:scale-95 transition-all duration-100 flex items-center justify-center"
             onClick={() => (key === '⌫' ? onDelete() : onDigit(key))}
