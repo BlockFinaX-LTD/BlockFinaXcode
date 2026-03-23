@@ -228,6 +228,7 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // ── POST /api/auth/google ─────────────────────────────────────────────────
+  // Legacy: ID token flow (One Tap / FedCM) — kept for compatibility
   app.post('/api/auth/google', async (req, res) => {
     if (!googleClient) {
       return res.status(503).json({ message: 'Google login not configured. Set GOOGLE_CLIENT_ID.' });
@@ -246,6 +247,34 @@ export function registerAuthRoutes(app: Express) {
       res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } });
     } catch (err: any) {
       console.error('[Auth] Google verify error:', err.message);
+      res.status(400).json({ message: 'Google authentication failed' });
+    }
+  });
+
+  // ── POST /api/auth/google-token ───────────────────────────────────────────
+  // New: OAuth access token flow — verifies with Google's tokeninfo endpoint.
+  // Works inside iframes / no FedCM restriction. No client secret required.
+  app.post('/api/auth/google-token', async (req, res) => {
+    const { accessToken } = req.body;
+    if (!accessToken) return res.status(400).json({ message: 'accessToken required' });
+    try {
+      // Verify token with Google and get user info
+      const [tokenInfo, userInfo] = await Promise.all([
+        fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${accessToken}`).then(r => r.json()),
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }).then(r => r.json()),
+      ]);
+      // Validate token was issued for our client
+      if (tokenInfo.error || tokenInfo.aud !== process.env.GOOGLE_CLIENT_ID) {
+        return res.status(400).json({ message: 'Invalid or expired Google token' });
+      }
+      if (!userInfo.email) return res.status(400).json({ message: 'Google account has no email' });
+      const user = await findOrCreateUser(userInfo.email, userInfo.sub, userInfo.name, userInfo.picture);
+      const sessionToken = await createSession(user.id);
+      res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } });
+    } catch (err: any) {
+      console.error('[Auth] Google token verify error:', err.message);
       res.status(400).json({ message: 'Google authentication failed' });
     }
   });
