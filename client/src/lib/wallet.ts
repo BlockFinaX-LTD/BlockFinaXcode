@@ -5,7 +5,10 @@
  * Exports: walletManager, WalletManager class, WalletBalance, TransactionData
  */
 import { ethers } from 'ethers';
-import { secureStorage, type StoredWallet } from './encrypted-storage';
+import {
+  secureStorage, type StoredWallet,
+  saveWalletV2, loadWalletV2, hasWalletV2, deleteWalletV2,
+} from './encrypted-storage';
 import { NETWORKS, type NetworkConfig, getNetworkById, getNetworkByChainId } from './networks';
 import { fallbackProvider } from './rpc-provider';
 
@@ -35,6 +38,7 @@ class WalletManager {
   private wallet: ethers.Wallet | null = null;
   private providers: Map<number, ethers.JsonRpcProvider> = new Map();
   private storedPrivateKey: string | null = null;
+  private storedMnemonic: string | null = null; // cached after unlock for exportMnemonic()
   private signers: Map<number, ethers.Wallet> = new Map(); // Connected signers per network
 
   constructor() {
@@ -133,63 +137,46 @@ class WalletManager {
     }
   }
 
+  // ── Helpers shared by create / import ───────────────────────────────────────
+
+  private async _saveV2AndActivate(
+    address: string, name: string, privateKey: string,
+    mnemonic: string | null, isImported: boolean, pin: string
+  ): Promise<StoredWallet> {
+    const createdAt = new Date().toISOString();
+    await saveWalletV2({ address, name, privateKey, mnemonic, isImported, createdAt }, pin);
+    secureStorage.setPassword(pin);
+    secureStorage.setSessionPrivateKey(privateKey);
+    this.storedPrivateKey = privateKey;
+    this.storedMnemonic = mnemonic;
+    this.wallet = new ethers.Wallet(privateKey);
+    // Return a StoredWallet struct with v2 markers (no key material in the struct)
+    return { address, name, encryptedPrivateKey: 'v2', encryptedMnemonic: mnemonic ? 'v2' : undefined, isImported, createdAt };
+  }
+
   // Create and save wallet
   async createWallet(password: string, name: string = 'Main Account'): Promise<StoredWallet> {
     const { mnemonic, privateKey, address } = this.generateWallet();
-    
-    secureStorage.setPassword(password);
-    
-    const wallet: StoredWallet = {
-      address,
-      name,
-      encryptedPrivateKey: secureStorage.encrypt(privateKey),
-      encryptedMnemonic: secureStorage.encrypt(mnemonic),
-      isImported: false,
-      createdAt: new Date().toISOString()
-    };
-
-    secureStorage.saveWallet(wallet);
-    this.storedPrivateKey = privateKey;
-    this.wallet = new ethers.Wallet(privateKey);
-    secureStorage.setSessionPrivateKey(privateKey);
-    
-    return wallet;
+    return this._saveV2AndActivate(address, name, privateKey, mnemonic, false, password);
   }
 
   // Create and save wallet using a specific mnemonic (used after showing it to the user)
   async createWalletFromMnemonic(password: string, mnemonic: string, name: string = 'Main Account'): Promise<StoredWallet> {
     const cleaned = mnemonic.trim().replace(/\s+/g, ' ');
     const { privateKey, address } = this.importFromMnemonic(cleaned);
-
-    secureStorage.setPassword(password);
-
-    const wallet: StoredWallet = {
-      address,
-      name,
-      encryptedPrivateKey: secureStorage.encrypt(privateKey),
-      encryptedMnemonic: secureStorage.encrypt(cleaned),
-      isImported: false,
-      createdAt: new Date().toISOString()
-    };
-
-    secureStorage.saveWallet(wallet);
-    this.storedPrivateKey = privateKey;
-    this.wallet = new ethers.Wallet(privateKey);
-    secureStorage.setSessionPrivateKey(privateKey);
-
-    return wallet;
+    return this._saveV2AndActivate(address, name, privateKey, cleaned, false, password);
   }
 
   // Import and save wallet
   async importWallet(
-    password: string, 
-    input: string, 
+    password: string,
+    input: string,
     type: 'mnemonic' | 'private_key',
     name: string = 'Imported Account'
   ): Promise<StoredWallet> {
     let privateKey: string;
     let address: string;
-    let mnemonic: string | undefined;
+    let mnemonic: string | null = null;
 
     if (type === 'mnemonic') {
       const cleaned = input.trim().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -204,49 +191,61 @@ class WalletManager {
       address = imported.address;
     }
 
-    secureStorage.setPassword(password);
-    
-    const wallet: StoredWallet = {
-      address,
-      name,
-      encryptedPrivateKey: secureStorage.encrypt(privateKey),
-      encryptedMnemonic: mnemonic ? secureStorage.encrypt(mnemonic) : undefined,
-      isImported: true,
-      createdAt: new Date().toISOString()
-    };
-
-    secureStorage.saveWallet(wallet);
-    this.storedPrivateKey = privateKey;
-    this.wallet = new ethers.Wallet(privateKey);
-    secureStorage.setSessionPrivateKey(privateKey);
-    
-    return wallet;
+    return this._saveV2AndActivate(address, name, privateKey, mnemonic, true, password);
   }
 
-  // Unlock existing wallet
+  // Unlock existing wallet — tries v2 (PBKDF2) first, falls back to v1 (legacy
+  // CryptoJS) and auto-migrates v1 wallets to v2 on success.
   async unlockWallet(password: string): Promise<StoredWallet | null> {
-    // Distinguish "wallet missing" from "wrong password" for clear error messages
     const walletExists = !!localStorage.getItem('wallet_encrypted');
 
+    // ── V2 path (PBKDF2 + AES-GCM) ──
+    if (hasWalletV2()) {
+      try {
+        const data = await loadWalletV2(password);
+        if (!data) throw new Error('No v2 wallet data');
+        this.storedPrivateKey = data.privateKey;
+        this.storedMnemonic = data.mnemonic;
+        this.wallet = new ethers.Wallet(data.privateKey);
+        secureStorage.setPassword(password);
+        secureStorage.setSessionPrivateKey(data.privateKey);
+        return {
+          address: data.address, name: data.name,
+          encryptedPrivateKey: 'v2', encryptedMnemonic: data.mnemonic ? 'v2' : undefined,
+          isImported: data.isImported, createdAt: data.createdAt,
+        };
+      } catch (err: any) {
+        secureStorage.clearPassword();
+        this.storedPrivateKey = null;
+        this.storedMnemonic = null;
+        throw new Error(walletExists ? 'Incorrect PIN' : 'No wallet found');
+      }
+    }
+
+    // ── V1 legacy path (CryptoJS raw PIN) — migrate to v2 on success ──
     try {
       secureStorage.setPassword(password);
       const storedWallet = secureStorage.loadWallet();
-      
-      if (!storedWallet) {
-        throw new Error(walletExists ? 'Incorrect PIN' : 'No wallet found');
-      }
+      if (!storedWallet) throw new Error(walletExists ? 'Incorrect PIN' : 'No wallet found');
 
       const privateKey = secureStorage.decrypt(storedWallet.encryptedPrivateKey);
-      
-      // Store private key securely in memory and session for transaction signing
+      const mnemonic = storedWallet.encryptedMnemonic
+        ? (() => { try { return secureStorage.decrypt(storedWallet.encryptedMnemonic!); } catch { return null; } })()
+        : null;
+
+      // Migrate to v2 silently in the background
+      saveWalletV2({ address: storedWallet.address, name: storedWallet.name, privateKey, mnemonic, isImported: storedWallet.isImported, createdAt: storedWallet.createdAt }, password)
+        .catch(() => {}); // migration failure is non-fatal
+
       this.storedPrivateKey = privateKey;
+      this.storedMnemonic = mnemonic;
       this.wallet = new ethers.Wallet(privateKey);
       secureStorage.setSessionPrivateKey(privateKey);
-      
       return storedWallet;
     } catch (error) {
       secureStorage.clearPassword();
       this.storedPrivateKey = null;
+      this.storedMnemonic = null;
       throw error;
     }
   }
@@ -255,7 +254,8 @@ class WalletManager {
   lockWallet(): void {
     this.wallet = null;
     this.storedPrivateKey = null;
-    this.signers.clear(); // Clear all connected signers
+    this.storedMnemonic = null;
+    this.signers.clear();
     secureStorage.clearPassword();
   }
 
@@ -582,14 +582,16 @@ class WalletManager {
     return this.wallet.privateKey;
   }
 
-  // Export mnemonic
+  // Export mnemonic — uses the in-memory cache populated on unlock.
   exportMnemonic(): string | null {
+    // v2: returned from memory (populated during unlock / create)
+    if (this.storedMnemonic) return this.storedMnemonic;
+    // v1 legacy fallback
     const storedWallet = secureStorage.loadWallet();
     if (!storedWallet?.encryptedMnemonic) return null;
-    
     try {
       return secureStorage.decrypt(storedWallet.encryptedMnemonic);
-    } catch (error) {
+    } catch {
       return null;
     }
   }

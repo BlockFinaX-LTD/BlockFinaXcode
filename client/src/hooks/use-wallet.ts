@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { walletManager } from '@/lib/wallet';
-import { secureStorage, type StoredWallet, type WalletSettings } from '@/lib/encrypted-storage';
+import { secureStorage, deleteWalletV2, type StoredWallet, type WalletSettings } from '@/lib/encrypted-storage';
 import { useToast } from '@/hooks/use-toast';
 
 export interface WalletState {
@@ -60,14 +60,17 @@ export function useWallet() {
       const sessionToken = localStorage.getItem('bfx_session');
       const authHeader = sessionToken ? { 'x-session-token': sessionToken } : {};
 
+      // Only send non-sensitive metadata — private key material stays on device only.
+      // encryptedPrivateKey is a required DB column (legacy), so we send a safe
+      // placeholder that clearly contains no key data.
       const res = await fetch('/api/wallets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({
           address: wallet.address,
           name: wallet.name,
-          encryptedPrivateKey: wallet.encryptedPrivateKey,
-          encryptedMnemonic: wallet.encryptedMnemonic || null,
+          encryptedPrivateKey: `device_only:${wallet.address}`, // address is public — not sensitive
+          encryptedMnemonic: null, // never sent to server
           isImported: wallet.isImported || false,
         }),
       });
@@ -379,6 +382,7 @@ export function useWallet() {
 
   const deleteWallet = useCallback(() => {
     secureStorage.deleteWallet();
+    deleteWalletV2(); // also purge v2 PBKDF2 keys from localStorage
     secureStorage.clearWalletUnlocked();
     walletManager.lockWallet();
     setState({

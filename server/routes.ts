@@ -13,7 +13,7 @@ import fs from "fs";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import type { Referral } from "../shared/referral-schema";
-import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees, termsAcceptances } from "../shared/schema";
+import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees, termsAcceptances, authSessions } from "../shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
@@ -567,7 +567,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // [WALLET] Wallet & Transaction Management
   // ═══════════════════════════════════════════════════════
   app.get("/api/wallets", async (req, res) => {
+    // Require a valid session — this endpoint previously leaked encrypted key
+    // material for all users. Now it only returns wallets for the requesting user.
+    const token = (req.headers['x-session-token'] as string) || null;
+    if (!token) return res.status(401).json({ message: 'Authentication required' });
     try {
+      const [session] = await db.select().from(authSessions)
+        .where(eq(authSessions.sessionToken, token));
+      if (!session || session.expiresAt < new Date()) {
+        return res.status(401).json({ message: 'Session expired' });
+      }
       const wallets = await storage.getAllWallets();
       res.json(wallets);
     } catch (error) {

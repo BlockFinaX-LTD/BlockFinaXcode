@@ -249,3 +249,56 @@ class SecureStorage {
 }
 
 export const secureStorage = new SecureStorage();
+
+// ─── V2: PBKDF2 + AES-GCM wallet storage ─────────────────────────────────────
+// Replaces the raw-PIN CryptoJS approach. The private key and mnemonic are
+// stored ONLY in this encrypted blob — they are never sent to the server.
+
+const WALLET_V2_KEY = 'wallet_v2';
+
+export interface WalletV2Data {
+  address: string;
+  name: string;
+  privateKey: string;
+  mnemonic: string | null;
+  isImported: boolean;
+  createdAt: string;
+}
+
+/** Encrypt and save wallet locally using PBKDF2 + AES-GCM. */
+export async function saveWalletV2(data: WalletV2Data, pin: string): Promise<void> {
+  const { generateSalt, deriveKeyFromPin, encryptWithKey } = await import('./auth-crypto');
+  const salt = generateSalt();
+  const key = await deriveKeyFromPin(pin, salt);
+  const encrypted = await encryptWithKey(JSON.stringify(data), key);
+  localStorage.setItem(WALLET_V2_KEY, JSON.stringify({ v: 2, salt, encrypted }));
+  // Keep wallet_encrypted as a presence marker so existing code that checks
+  // localStorage.getItem('wallet_encrypted') continues to work.
+  localStorage.setItem('wallet_encrypted', 'bfx_v2');
+}
+
+/**
+ * Decrypt and return the wallet from v2 storage.
+ * Returns null if no v2 wallet exists, throws 'Incorrect PIN' if the PIN is wrong.
+ */
+export async function loadWalletV2(pin: string): Promise<WalletV2Data | null> {
+  const raw = localStorage.getItem(WALLET_V2_KEY);
+  if (!raw) return null;
+  const { deriveKeyFromPin, decryptWithKey } = await import('./auth-crypto');
+  const { salt, encrypted } = JSON.parse(raw);
+  try {
+    const key = await deriveKeyFromPin(pin, salt);
+    const plaintext = await decryptWithKey(encrypted, key);
+    return JSON.parse(plaintext);
+  } catch {
+    throw new Error('Incorrect PIN');
+  }
+}
+
+export function hasWalletV2(): boolean {
+  return !!localStorage.getItem(WALLET_V2_KEY);
+}
+
+export function deleteWalletV2(): void {
+  localStorage.removeItem(WALLET_V2_KEY);
+}
