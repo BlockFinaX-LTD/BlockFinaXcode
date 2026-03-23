@@ -38,6 +38,13 @@ import {
 import { OAuth2Client } from 'google-auth-library';
 import { Resend } from 'resend';
 
+// ── Token helpers ─────────────────────────────────────────────────────────────
+
+/** SHA-256 hash of a raw magic-link token — only the hash is ever stored in the DB. */
+function hashMagicToken(raw: string): string {
+  return createHash('sha256').update(raw).digest('hex');
+}
+
 // ── Rate limiting (in-memory) ─────────────────────────────────────────────────
 // Tracks magic link requests: email → list of timestamps
 const magicLinkRateMap = new Map<string, number[]>();
@@ -277,9 +284,10 @@ export function registerAuthRoutes(app: Express) {
     if (!checkMagicLinkRateLimit(email.toLowerCase())) {
       return res.status(429).json({ message: 'Too many requests. Please wait 15 minutes before requesting another link.' });
     }
-    const token = generateToken(32);
+    const token = generateToken(32); // raw token — sent in email, never persisted
+    const tokenHash = hashMagicToken(token); // only the hash is stored in DB
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-    await db.insert(magicLinks).values({ email, token, expiresAt });
+    await db.insert(magicLinks).values({ email, token: tokenHash, expiresAt });
     const appUrl = getAppOrigin(req);
     const magicUrl = `${appUrl}/auth/verify?token=${token}`;
     const sent = await sendMagicLinkEmail(email, magicUrl);
@@ -296,10 +304,11 @@ export function registerAuthRoutes(app: Express) {
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
   app.get('/api/auth/verify/:token', async (req, res) => {
     const { token } = req.params;
+    const tokenHash = hashMagicToken(token); // look up by hash — raw token is never in DB
     const [link] = await db
       .select()
       .from(magicLinks)
-      .where(and(eq(magicLinks.token, token), eq(magicLinks.used, false), gt(magicLinks.expiresAt, new Date())));
+      .where(and(eq(magicLinks.token, tokenHash), eq(magicLinks.used, false), gt(magicLinks.expiresAt, new Date())));
     if (!link) return res.status(400).json({ message: 'Link expired or already used' });
     await db.update(magicLinks).set({ used: true }).where(eq(magicLinks.id, link.id));
     const user = await findOrCreateUser(link.email);

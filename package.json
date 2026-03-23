@@ -66,6 +66,7 @@
     "express-session": "^1.18.1",
     "framer-motion": "^11.13.1",
     "google-auth-library": "^10.6.2",
+    "helmet": "^8.1.0",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
     "jspdf": "^3.0.3",

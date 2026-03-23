@@ -7,6 +7,7 @@
 
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { timingSafeEqual, randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -66,10 +67,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const EDIT_ACCESS_CODE = process.env.EDIT_ACCESS_CODE || "";
 
   function generateInvestorToken(): string {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let token = "";
-    for (let i = 0; i < 64; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
-    return token;
+    return randomBytes(32).toString("hex"); // 64-char cryptographically random hex token
+  }
+
+  /** Constant-time string comparison to prevent timing attacks. */
+  function safeEqual(a: string, b: string): boolean {
+    if (!a || !b) return false;
+    try {
+      const aBuf = Buffer.from(a, "utf8");
+      const bBuf = Buffer.from(b, "utf8");
+      if (aBuf.length !== bBuf.length) return false;
+      return timingSafeEqual(aBuf, bBuf);
+    } catch {
+      return false;
+    }
   }
 
   // Clean up expired investor sessions every hour
@@ -97,8 +108,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const { password } = req.body;
     const investorPassword = process.env.INVESTOR_PASSWORD || process.env.ADMIN_PASSWORD;
-    const isEditCode = password === EDIT_ACCESS_CODE;
-    const isInvestorCode = investorPassword && password === investorPassword;
+    const isEditCode = safeEqual(password, EDIT_ACCESS_CODE);
+    const isInvestorCode = investorPassword ? safeEqual(password, investorPassword) : false;
 
     if (!isEditCode && !isInvestorCode) {
       const current = investorLoginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60_000 };
@@ -134,14 +145,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const expiry = investorSessions.get(token);
     if (!expiry || Date.now() > expiry) return res.status(401).json({ success: false, message: "Session expired" });
     const { password } = req.body;
-    if (password !== EDIT_ACCESS_CODE) return res.status(403).json({ success: false, message: "Incorrect edit password" });
+    if (!safeEqual(password, EDIT_ACCESS_CODE)) return res.status(403).json({ success: false, message: "Incorrect edit password" });
     investorEditSessions.add(token);
     res.json({ success: true });
   });
 
   app.post("/api/verify-edit-code", (req, res) => {
     const { password } = req.body;
-    if (!password || password !== EDIT_ACCESS_CODE) return res.status(403).json({ success: false });
+    if (!safeEqual(password, EDIT_ACCESS_CODE)) return res.status(403).json({ success: false });
     res.json({ success: true });
   });
 
@@ -622,6 +633,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/wallets/email", async (req, res) => {
+    const emailToken = (req.headers['x-session-token'] as string) || null;
+    if (!emailToken) return res.status(401).json({ error: 'Authentication required' });
+    const [emailSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, emailToken));
+    if (!emailSess || emailSess.expiresAt < new Date()) return res.status(401).json({ error: 'Session expired' });
     try {
       const { walletAddress, email } = req.body;
       if (!walletAddress || !email) {
@@ -1312,9 +1327,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auto-seed liquidity from treasury pool wallet (admin-only: deployer or treasury wallet)
-  app.post("/api/hedge/treasury-seed", async (req, res) => {
+  app.post("/api/hedge/treasury-seed", requireAdmin, async (req, res) => {
     try {
-      const { eventId, amount, callerAddress } = req.body;
+      const { eventId, amount } = req.body;
       if (!eventId || !amount) {
         return res.status(400).json({ message: "Missing required fields: eventId, amount" });
       }
@@ -1327,12 +1342,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ethers = await import("ethers");
       const treasuryWallet = new ethers.Wallet(treasuryPrivateKey);
       const treasuryAddress = treasuryWallet.address;
-
-      const deployerAddress = "0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d";
-      const caller = (callerAddress || "").toLowerCase();
-      if (caller !== deployerAddress.toLowerCase() && caller !== treasuryAddress.toLowerCase()) {
-        return res.status(403).json({ message: "Unauthorized: Only platform admin can seed treasury liquidity" });
-      }
 
       const event = await storage.getHedgeEvent(parseInt(eventId));
       if (!event) return res.status(404).json({ message: "Event not found" });
@@ -1787,6 +1796,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/tasks/complete", async (req, res) => {
+    const taskToken = (req.headers['x-session-token'] as string) || null;
+    if (!taskToken) return res.status(401).json({ error: 'Authentication required' });
+    const [taskSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, taskToken));
+    if (!taskSess || taskSess.expiresAt < new Date()) return res.status(401).json({ error: 'Session expired' });
     try {
       const { walletAddress, taskId } = req.body;
       if (!walletAddress || !taskId) {
@@ -1905,6 +1918,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/terms/accept", async (req, res) => {
+    const termsToken = (req.headers['x-session-token'] as string) || null;
+    if (!termsToken) return res.status(401).json({ error: 'Authentication required' });
+    const [termsSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, termsToken));
+    if (!termsSess || termsSess.expiresAt < new Date()) return res.status(401).json({ error: 'Session expired' });
     try {
       const { walletAddress, version } = req.body;
       if (!walletAddress || !version) return res.status(400).json({ error: "Missing fields" });
