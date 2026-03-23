@@ -106,8 +106,9 @@ function retrievePendingChallenge(key: string): string | null {
 }
 
 const RP_NAME = 'BlockFinaX';
-const googleClient = process.env.GOOGLE_CLIENT_ID
-  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || '';
+const googleClient = GOOGLE_CLIENT_ID
+  ? new OAuth2Client(GOOGLE_CLIENT_ID)
   : null;
 
 function getAppOrigin(req: any): string {
@@ -251,6 +252,20 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
+  // ── GET /api/auth/debug/google-id — temp diagnostic, remove after fix ────
+  app.get('/api/auth/debug/google-id', (_req, res) => {
+    const raw = process.env.GOOGLE_CLIENT_ID || '';
+    const trimmed = raw.trim();
+    res.json({
+      configured: !!trimmed,
+      rawLength: raw.length,
+      trimmedLength: trimmed.length,
+      hadLeadingSpace: raw !== trimmed,
+      preview: trimmed ? `${trimmed.slice(0, 8)}...${trimmed.slice(-30)}` : null,
+      endsCorrectly: trimmed.endsWith('.apps.googleusercontent.com'),
+    });
+  });
+
   // ── POST /api/auth/google-token ───────────────────────────────────────────
   // New: OAuth access token flow — verifies with Google's tokeninfo endpoint.
   // Works inside iframes / no FedCM restriction. No client secret required.
@@ -266,7 +281,7 @@ export function registerAuthRoutes(app: Express) {
         }).then(r => r.json()),
       ]);
       // Validate token was issued for our client
-      if (tokenInfo.error || tokenInfo.aud !== process.env.GOOGLE_CLIENT_ID) {
+      if (tokenInfo.error || tokenInfo.aud !== GOOGLE_CLIENT_ID) {
         return res.status(400).json({ message: 'Invalid or expired Google token' });
       }
       if (!userInfo.email) return res.status(400).json({ message: 'Google account has no email' });

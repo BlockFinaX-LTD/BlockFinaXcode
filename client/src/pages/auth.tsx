@@ -45,7 +45,7 @@ export default function Auth() {
   const [webauthnAvailable, setWebauthnAvailable] = useState(false);
   const [hasStoredPin, setHasStoredPin] = useState(false);
 
-  const googleConfigured = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const googleConfigured = !!(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
 
   // Check WebAuthn support and whether a passkey is already registered on this device
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function Auth() {
   }, []);
 
   const handleGoogleClick = useCallback(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
     if (!clientId || !window.google) {
       toast({ title: 'Google not ready', description: 'Please wait a moment and try again.' });
       return;
