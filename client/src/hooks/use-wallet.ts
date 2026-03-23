@@ -57,9 +57,12 @@ export function useWallet() {
     if (!wallet.address || registeredAddresses.current.has(wallet.address.toLowerCase())) return;
     registeredAddresses.current.add(wallet.address.toLowerCase());
     try {
+      const sessionToken = localStorage.getItem('bfx_session');
+      const authHeader = sessionToken ? { 'x-session-token': sessionToken } : {};
+
       const res = await fetch('/api/wallets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({
           address: wallet.address,
           name: wallet.name,
@@ -70,6 +73,17 @@ export function useWallet() {
       });
       if (!res.ok) {
         registeredAddresses.current.delete(wallet.address.toLowerCase());
+        return;
+      }
+
+      // Link this wallet address to the current auth session so cross-device
+      // checks can detect it on future logins from other devices.
+      if (sessionToken) {
+        fetch('/api/auth/session/wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+          body: JSON.stringify({ walletAddress: wallet.address }),
+        }).catch(() => {});
       }
     } catch (err) {
       registeredAddresses.current.delete(wallet.address.toLowerCase());

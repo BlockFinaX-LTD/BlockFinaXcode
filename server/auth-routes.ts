@@ -214,6 +214,30 @@ export function registerAuthRoutes(app: Express) {
     res.json({ user: user || null, session: { walletAddress: session.walletAddress, expiresAt: session.expiresAt } });
   });
 
+  // ── GET /api/auth/me/wallets ────────────────────────────────────────────────
+  // Returns all wallet addresses this user has ever linked to any session.
+  // Used on new devices to detect an existing wallet before creating a new one.
+  app.get('/api/auth/me/wallets', async (req, res) => {
+    const session = await getSession(req);
+    if (!session) return res.status(401).json({ message: 'Not authenticated' });
+
+    // Gather wallet addresses from all sessions belonging to this user
+    const sessions = await db
+      .select({ walletAddress: authSessions.walletAddress })
+      .from(authSessions)
+      .where(eq(authSessions.userId, session.userId!));
+
+    const addresses = [
+      ...new Set(
+        sessions
+          .map(s => s.walletAddress)
+          .filter((a): a is string => !!a)
+      ),
+    ];
+
+    res.json({ wallets: addresses.map(address => ({ address })) });
+  });
+
   // ── POST /api/auth/logout ───────────────────────────────────────────────────
   app.post('/api/auth/logout', async (req, res) => {
     const token = getSessionToken(req);

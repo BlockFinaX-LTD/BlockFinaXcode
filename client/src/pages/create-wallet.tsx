@@ -1,28 +1,32 @@
 /**
  * create-wallet.tsx — Streamlined one-tap wallet creation
  *
- * Flow (post-auth):
- *   1. Generates wallet automatically using the user's PIN as the encryption key.
- *   2. Stores the seed phrase temporarily in sessionStorage so the home page can
- *      show a backup reminder popup.
- *   3. Redirects straight to /home — no multi-step wizard.
- *
- * For users with an existing wallet, an "Import wallet" link is provided.
+ * Flow (post-auth on a device with no local wallet):
+ *   1. Checks server for existing wallets registered to this account.
+ *      – If found: shows an "import your existing wallet" screen instead of
+ *        creating a new one. Prevents duplicate wallets across devices.
+ *      – If none: auto-creates a new wallet using the PIN from sessionStorage.
+ *   2. On creation: stores seed phrase temporarily in sessionStorage so the
+ *      home page can show a backup reminder popup.
+ *   3. Redirects straight to /home.
  */
 
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wallet, ArrowRight, Download } from 'lucide-react';
+import { Loader2, Wallet, ArrowRight, Download, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
 import { walletManager } from '@/lib/wallet';
 import { FinanceAnimatedBackground } from '@/components/ui/finance-background';
 import logoPath from '@/assets/logo.png';
+import { SESSION_KEY } from '@/hooks/use-auth';
 
 export const BACKUP_MNEMONIC_KEY = 'bfx_pending_backup';
 const PIN_SESSION_KEY = 'bfx_pin_session';
+
+type CheckState = 'checking' | 'existing' | 'new' | 'creating' | 'done' | 'error';
 
 export default function CreateWallet() {
   const [, setLocation] = useLocation();
@@ -31,27 +35,58 @@ export default function CreateWallet() {
   const createRef = useRef(createWalletFromMnemonic);
   createRef.current = createWalletFromMnemonic;
 
-  const [status, setStatus] = useState<'idle' | 'creating' | 'done' | 'error'>('idle');
+  const [checkState, setCheckState] = useState<CheckState>('checking');
+  const [existingAddresses, setExistingAddresses] = useState<string[]>([]);
   const [referralCode] = useState(() => new URLSearchParams(window.location.search).get('ref'));
 
   const pin = sessionStorage.getItem(PIN_SESSION_KEY);
 
+  // Step 1: check if this user already has wallets on the server
+  useEffect(() => {
+    const token = localStorage.getItem(SESSION_KEY);
+    if (!token) {
+      setCheckState('new');
+      return;
+    }
+    fetch('/api/auth/me/wallets', {
+      headers: { 'x-session-token': token },
+    })
+      .then(r => r.json())
+      .then(data => {
+        const list: { address: string }[] = data.wallets || [];
+        if (list.length > 0) {
+          setExistingAddresses(list.map(w => w.address));
+          setCheckState('existing');
+        } else {
+          setCheckState('new');
+        }
+      })
+      .catch(() => setCheckState('new')); // on network error, fall through to create
+  }, []);
+
+  // Step 2: auto-create once we know there's no existing wallet
+  const hasAutoCreated = useRef(false);
+  useEffect(() => {
+    if (checkState === 'new' && !hasAutoCreated.current) {
+      hasAutoCreated.current = true;
+      handleCreate();
+    }
+  }, [checkState]);
+
   const handleCreate = async () => {
     if (!pin) {
-      toast({ title: 'Session expired', description: 'Please sign in again to create your wallet.', variant: 'destructive' });
+      toast({ title: 'Session expired', description: 'Please sign in again.', variant: 'destructive' });
       setLocation('/auth');
       return;
     }
-    setStatus('creating');
+    setCheckState('creating');
     try {
-      // Capture the mnemonic before it gets encrypted, so we can show a backup reminder
       const { mnemonic } = walletManager.generateWallet();
       sessionStorage.setItem(BACKUP_MNEMONIC_KEY, mnemonic);
 
       const newWallet = await createRef.current(pin, mnemonic, 'My Wallet');
       if (!newWallet) throw new Error('Wallet creation failed');
 
-      // Apply referral bonus if the user came via a referral link
       if (referralCode && newWallet.address) {
         try {
           const res = await fetch(`/api/referrals/use/${referralCode}`, {
@@ -66,18 +101,13 @@ export default function CreateWallet() {
         } catch {}
       }
 
-      setStatus('done');
+      setCheckState('done');
       setTimeout(() => setLocation('/home'), 800);
     } catch (err: any) {
       toast({ title: 'Failed to create wallet', description: err.message, variant: 'destructive' });
-      setStatus('error');
+      setCheckState('error');
     }
   };
-
-  // Auto-start if PIN is available (coming straight from set-pin)
-  useEffect(() => {
-    if (pin && status === 'idle') handleCreate();
-  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4 relative overflow-hidden">
@@ -87,47 +117,66 @@ export default function CreateWallet() {
         <CardContent className="pt-10 pb-10 text-center space-y-6">
           <img src={logoPath} alt="BlockFinaX" className="h-10 w-10 object-contain mx-auto" />
 
-          {(status === 'idle' || status === 'creating') && (
+          {/* Checking server for existing wallets */}
+          {checkState === 'checking' && (
             <>
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                {status === 'creating'
-                  ? <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                  : <Wallet className="h-8 w-8 text-primary" />
-                }
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">
-                  {status === 'creating' ? 'Creating your wallet…' : 'Set up your wallet'}
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {status === 'creating'
-                    ? 'This only takes a second'
-                    : 'Your secure blockchain wallet will be created and protected by your PIN'
-                  }
-                </p>
-              </div>
-
-              {status === 'idle' && (
-                <>
-                  <Button className="w-full h-12" onClick={handleCreate}>
-                    <Wallet className="h-4 w-4 mr-2" />
-                    Create my wallet
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full text-sm"
-                    onClick={() => setLocation('/import-wallet')}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    I already have a wallet — import it
-                  </Button>
-                </>
-              )}
+              <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+              <p className="text-sm text-muted-foreground">Checking your account…</p>
             </>
           )}
 
-          {status === 'done' && (
+          {/* User already has a wallet — prompt to import */}
+          {checkState === 'existing' && (
+            <>
+              <div className="h-16 w-16 rounded-full bg-amber-50 dark:bg-amber-950 flex items-center justify-center mx-auto">
+                <AlertTriangle className="h-8 w-8 text-amber-500" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">You already have a wallet</h1>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  Your account already has{' '}
+                  {existingAddresses.length === 1 ? 'a wallet' : `${existingAddresses.length} wallets`}{' '}
+                  registered. To use the same wallet on this device, import it using your seed phrase.
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-muted/60 p-3 text-left space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Existing wallet address:</p>
+                {existingAddresses.map(addr => (
+                  <p key={addr} className="text-xs font-mono break-all text-foreground">
+                    {addr}
+                  </p>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Button className="w-full h-12" onClick={() => setLocation('/import-wallet')}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Import my existing wallet
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  You'll need the 12-word seed phrase from your original device.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Auto-creating new wallet */}
+          {(checkState === 'new' || checkState === 'creating') && (
+            <>
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">Creating your wallet…</h1>
+                <p className="text-sm text-muted-foreground mt-1">This only takes a second</p>
+              </div>
+            </>
+          )}
+
+          {/* Done */}
+          {checkState === 'done' && (
             <>
               <div className="h-16 w-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mx-auto">
                 <Wallet className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
@@ -139,7 +188,8 @@ export default function CreateWallet() {
             </>
           )}
 
-          {status === 'error' && (
+          {/* Error */}
+          {checkState === 'error' && (
             <>
               <p className="text-sm text-destructive">Something went wrong. Please try again.</p>
               <Button className="w-full" onClick={handleCreate}>Retry</Button>
