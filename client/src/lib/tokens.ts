@@ -31,7 +31,6 @@ export const ERC20_ABI = [
 
 export const NETWORK_TOKENS: NetworkTokens = {
   // Lisk Sepolia testnet (internal network ID 2)
-  // USDT has no official deployment on Lisk Sepolia — add the address here once available.
   2: [
     {
       symbol: 'USDC',
@@ -41,15 +40,14 @@ export const NETWORK_TOKENS: NetworkTokens = {
       icon: '💵',
       color: '#2775CA'
     },
-    // Testnet USDT — address TBC. Update this when an official Lisk Sepolia USDT is deployed.
-    // {
-    //   symbol: 'USDT',
-    //   name: 'Tether USD',
-    //   address: '0x<testnet-usdt-address>',
-    //   decimals: 6,
-    //   icon: '💲',
-    //   color: '#26A17B'
-    // }
+    {
+      symbol: 'USDT',
+      name: 'Tether USD',
+      address: '0x05D032ac25d322df992303dCa074EE7392C117b9',
+      decimals: 6,
+      icon: '💲',
+      color: '#26A17B'
+    }
   ],
   // Lisk Mainnet (internal network ID 1)
   // Update USDC/USDT addresses from https://bridge.lisk.com before going live.
