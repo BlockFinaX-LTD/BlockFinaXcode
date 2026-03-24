@@ -124,6 +124,19 @@ export function useWallet() {
         }
       } else if (isUnlocked) {
         wallet = secureStorage.loadWallet();
+        // V2 wallets: wallet_encrypted is a 'bfx_v2' marker string, not real encrypted data.
+        // loadWallet() returns null in that case. Build a synthetic StoredWallet from the
+        // address that walletManager already holds in memory.
+        if (!wallet && address) {
+          const unlockedData = secureStorage.getWalletUnlockedData();
+          wallet = {
+            address,
+            name: unlockedData?.name || 'My Wallet',
+            encryptedPrivateKey: 'v2',
+            isImported: false,
+            createdAt: new Date().toISOString()
+          };
+        }
       }
 
       setState({
