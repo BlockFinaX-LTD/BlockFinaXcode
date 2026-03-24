@@ -367,13 +367,17 @@ export function registerAuthRoutes(app: Express) {
   // ── GET /api/auth/google/start ────────────────────────────────────────────
   // Begins the Authorization Code OAuth flow. Generates a CSRF state token,
   // stores it in memory, then redirects the browser to Google's consent screen.
+  // Pass ?popup=1 to signal that the flow is running inside a popup window.
   app.get('/api/auth/google/start', (req, res) => {
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       return res.redirect('/auth?error=google_not_configured');
     }
     const origin = getAppOrigin(req);
     const redirectUri = `${origin}/api/auth/google/callback`;
-    const state = generateToken(24);
+    const isPopup = req.query.popup === '1';
+    // Encode popup flag into the state token so we can detect it in the callback
+    const stateToken = generateToken(24);
+    const state = isPopup ? `${stateToken}|popup` : stateToken;
     oauthStateStore.set(state, Date.now() + 10 * 60 * 1000); // 10-min expiry
 
     const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
@@ -383,7 +387,7 @@ export function registerAuthRoutes(app: Express) {
       state,
       prompt: 'select_account',
     });
-    console.log('[Auth] Google OAuth start → redirect URI:', redirectUri);
+    console.log('[Auth] Google OAuth start → redirect URI:', redirectUri, isPopup ? '(popup)' : '');
     res.redirect(url);
   });
 
@@ -393,17 +397,26 @@ export function registerAuthRoutes(app: Express) {
   // a session, then redirect the browser to the frontend completion page.
   app.get('/api/auth/google/callback', async (req, res) => {
     const { code, state, error } = req.query as Record<string, string>;
-    if (error === 'access_denied') return res.redirect('/auth');
-    if (error) return res.redirect(`/auth?error=${encodeURIComponent(error)}`);
 
-    // Validate CSRF state
+    // Detect popup mode from state suffix
+    const isPopup = typeof state === 'string' && state.endsWith('|popup');
+
+    const errorRedirect = (msg: string) =>
+      isPopup
+        ? res.redirect(`/auth/google/done?popup=1&error=${encodeURIComponent(msg)}`)
+        : res.redirect(`/auth?error=${encodeURIComponent(msg)}`);
+
+    if (error === 'access_denied') return isPopup ? res.redirect('/auth/google/done?popup=1&error=access_denied') : res.redirect('/auth');
+    if (error) return errorRedirect(error);
+
+    // Validate CSRF state (look up exact state string including |popup suffix)
     const stateExpiry = oauthStateStore.get(state);
     if (!stateExpiry || Date.now() > stateExpiry) {
-      return res.redirect('/auth?error=invalid_state');
+      return errorRedirect('invalid_state');
     }
     oauthStateStore.delete(state);
 
-    if (!code) return res.redirect('/auth?error=no_code');
+    if (!code) return errorRedirect('no_code');
 
     try {
       const origin = getAppOrigin(req);
@@ -427,10 +440,14 @@ export function registerAuthRoutes(app: Express) {
 
       // Redirect to frontend — session token goes in the URL fragment so it's
       // never sent to any server (stays in the browser only).
-      res.redirect(`/auth/google/done#token=${sessionToken}`);
+      // For popup mode, include ?popup=1 so the page can postMessage → parent.
+      const donePath = isPopup
+        ? `/auth/google/done?popup=1#token=${sessionToken}`
+        : `/auth/google/done#token=${sessionToken}`;
+      res.redirect(donePath);
     } catch (err: any) {
       console.error('[Auth] Google callback error:', err.message);
-      res.redirect(`/auth?error=${encodeURIComponent(err.message)}`);
+      errorRedirect(err.message);
     }
   });
 

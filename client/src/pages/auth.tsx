@@ -48,11 +48,55 @@ export default function Auth() {
     setHasStoredPin(hasLocalPin());
   }, []);
 
-  // Redirect-based Google sign-in — server handles the OAuth redirect,
-  // so no popup and no JS-origins registration needed.
+  // Popup-based Google sign-in — opens a small window for the OAuth flow,
+  // listens for the session token via postMessage, then navigates in-place.
   const handleGoogleClick = useCallback(() => {
-    window.location.href = '/api/auth/google/start';
-  }, []);
+    const width = 500;
+    const height = 620;
+    const left = Math.round(window.screenX + (window.outerWidth - width) / 2);
+    const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
+    const popup = window.open(
+      '/api/auth/google/start?popup=1',
+      'google-oauth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+    );
+    if (!popup) {
+      // Popup was blocked — fall back to redirect
+      window.location.href = '/api/auth/google/start';
+      return;
+    }
+    setIsLoading(true);
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!event.data || event.data.type !== 'google-auth') return;
+      window.removeEventListener('message', onMessage);
+      setIsLoading(false);
+
+      if (event.data.error) {
+        const msg = event.data.error === 'access_denied' ? 'Sign-in was cancelled.' : `Google sign-in failed: ${event.data.error}`;
+        toast({ title: 'Google sign-in failed', description: msg, variant: 'destructive' });
+        return;
+      }
+
+      if (event.data.token) {
+        localStorage.setItem(SESSION_KEY, event.data.token);
+        const hasLocalWallet = !!localStorage.getItem('wallet_encrypted');
+        setLocation(hasLocalWallet ? '/unlock-wallet' : '/set-pin');
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+
+    // Clean up if user closes the popup manually
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollClosed);
+        window.removeEventListener('message', onMessage);
+        setIsLoading(false);
+      }
+    }, 500);
+  }, [setLocation, toast]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

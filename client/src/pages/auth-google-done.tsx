@@ -2,10 +2,11 @@
  * auth-google-done.tsx — Post-Google-OAuth landing page
  *
  * The server redirects here after successfully exchanging the OAuth code:
- *   /auth/google/done#token=<sessionToken>
+ *   /auth/google/done#token=<sessionToken>          (normal redirect flow)
+ *   /auth/google/done?popup=1#token=<sessionToken>  (popup flow)
  *
- * We read the token from the URL hash (never sent to any server), store it
- * in localStorage, then navigate the user to the right next step.
+ * In popup mode: posts the token to the opener window and closes itself.
+ * In normal mode: stores the token and navigates the current window.
  */
 
 import { useEffect, useState } from 'react';
@@ -16,30 +17,46 @@ export default function AuthGoogleDone() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for error forwarded in query string from server
     const qParams = new URLSearchParams(window.location.search);
+    const isPopup = qParams.get('popup') === '1';
     const qError = qParams.get('error');
+
     if (qError) {
-      setError(`Google sign-in failed: ${qError}`);
+      const msg = `Google sign-in failed: ${qError}`;
+      if (isPopup && window.opener) {
+        window.opener.postMessage({ type: 'google-auth', error: qError }, window.location.origin);
+        window.close();
+      } else {
+        setError(msg);
+      }
       return;
     }
 
-    // Token arrives in the URL hash so it's never sent to any server
     const hash = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     const token = params.get('token');
 
     if (!token) {
-      setError('No session token received. Please try again.');
+      const msg = 'No session token received. Please try again.';
+      if (isPopup && window.opener) {
+        window.opener.postMessage({ type: 'google-auth', error: 'no_token' }, window.location.origin);
+        window.close();
+      } else {
+        setError(msg);
+      }
       return;
     }
 
-    // Store session and navigate
-    localStorage.setItem(SESSION_KEY, token);
-    // Clear the token from the URL immediately
-    window.history.replaceState(null, '', window.location.pathname);
+    if (isPopup && window.opener) {
+      // Send token to the parent window and close the popup
+      window.opener.postMessage({ type: 'google-auth', token }, window.location.origin);
+      window.close();
+      return;
+    }
 
-    // If wallet already exists on this device → unlock; otherwise set up PIN
+    // Normal (non-popup) redirect flow
+    localStorage.setItem(SESSION_KEY, token);
+    window.history.replaceState(null, '', window.location.pathname);
     const hasLocalWallet = !!localStorage.getItem('wallet_encrypted');
     window.location.replace(hasLocalWallet ? '/unlock-wallet' : '/set-pin');
   }, []);
