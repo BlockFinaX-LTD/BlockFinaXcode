@@ -61,8 +61,14 @@ function checkMagicLinkRateLimit(email: string): boolean {
 
 // Cross-device: once a magic link is verified on any device, its session is
 // cached here so the original device can pick it up via polling.
-// Map: magic-link-token → { sessionToken, expiresAt }
+// Map: pollToken → { sessionToken, expiresAt }
+// NOTE: pollToken is a SEPARATE token from the email verify token.
+// The verify token never appears in any API response — only in the email.
 const verifiedMagicSessions = new Map<string, { sessionToken: string; expiresAt: number }>();
+
+// Maps verifyTokenHash → pollToken so the verify handler can signal the poller
+// without ever seeing the raw verify token in the API layer.
+const verifyHashToPollToken = new Map<string, string>();
 
 // ── Cleanup expired magic link tokens ────────────────────────────────────────
 // Runs every 30 minutes to delete used/expired tokens from the DB
@@ -283,21 +289,31 @@ export function registerAuthRoutes(app: Express) {
     if (!checkMagicLinkRateLimit(email.toLowerCase())) {
       return res.status(429).json({ message: 'Too many requests. Please wait 15 minutes before requesting another link.' });
     }
-    const token = generateToken(32); // raw token — sent in email, never persisted
-    const tokenHash = hashMagicToken(token); // only the hash is stored in DB
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
+    // verifyToken goes ONLY into the email — never in any API response.
+    // pollToken is a completely separate token returned to the requester for
+    // cross-device polling. Separating them means an API response leak can't
+    // be used to consume the magic link.
+    const verifyToken = generateToken(32);
+    const pollToken   = generateToken(24); // different bytes, shorter is fine
+    const tokenHash   = hashMagicToken(verifyToken);
+    const expiresAt   = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
     await db.insert(magicLinks).values({ email, token: tokenHash, expiresAt });
-    const appUrl = getAppOrigin(req);
-    const magicUrl = `${appUrl}/auth/verify?token=${token}`;
-    const sent = await sendMagicLinkEmail(email, magicUrl);
+
+    // Register the mapping so the verify handler can signal the right poller
+    verifyHashToPollToken.set(tokenHash, pollToken);
+    // Auto-evict after 15 min to avoid leaking memory
+    setTimeout(() => verifyHashToPollToken.delete(tokenHash), 15 * 60 * 1000);
+
+    const appUrl   = getAppOrigin(req);
+    const magicUrl = `${appUrl}/auth/verify?token=${verifyToken}`;
+    const sent     = await sendMagicLinkEmail(email, magicUrl);
     if (!sent) {
-      // Dev mode: return the URL directly so dev can click it
       console.log(`[Auth] Magic link (no RESEND_API_KEY configured): ${magicUrl}`);
     }
-    // Return pollToken so the waiting device can poll for cross-device login.
-    // devUrl is intentionally omitted from the response — it's already logged to
-    // the server console when RESEND_API_KEY is absent in dev mode.
-    res.json({ ok: true, sent, pollToken: token });
+
+    res.json({ ok: true, sent, pollToken });
   });
 
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
@@ -313,12 +329,16 @@ export function registerAuthRoutes(app: Express) {
     const user = await findOrCreateUser(link.email);
     const sessionToken = await createSession(user.id);
 
-    // Cache the verified session so other devices polling with the same token
-    // can pick up the login without needing to click the link themselves.
-    verifiedMagicSessions.set(token, {
-      sessionToken,
-      expiresAt: Date.now() + 5 * 60 * 1000, // keep for 5 min
-    });
+    // Signal the waiting device via its pollToken (separate from the verifyToken).
+    // verifyHashToPollToken is populated at link-creation time.
+    const pollToken = verifyHashToPollToken.get(tokenHash);
+    if (pollToken) {
+      verifiedMagicSessions.set(pollToken, {
+        sessionToken,
+        expiresAt: Date.now() + 5 * 60 * 1000, // 5 min to collect
+      });
+      verifyHashToPollToken.delete(tokenHash); // no longer needed
+    }
 
     res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name } });
   });
