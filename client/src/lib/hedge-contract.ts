@@ -12,8 +12,7 @@ import { ethers } from 'ethers';
 
 export const DIAMOND_ADDRESS = '0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf';
 export const USDC_ADDRESS = '0xf52Ad63619Bf9cFeF510341ac6b4038554399562';
-/** No official USDT deployment on Lisk Sepolia testnet yet. Null until a testnet address is confirmed. */
-export const USDT_ADDRESS_SEPOLIA: string | null = null;
+export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
 export const LISK_SEPOLIA_CHAIN_ID = 4202;
 export const LISK_SEPOLIA_RPC = 'https://rpc.sepolia-api.lisk.com';
 export const LISK_BLOCKSCOUT = 'https://sepolia-blockscout.lisk.com/api';

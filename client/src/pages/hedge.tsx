@@ -1624,7 +1624,7 @@ export default function Hedge() {
                   <SelectItem value="USDT">
                     <div className="flex items-center gap-2">
                       <span className="text-green-400 font-semibold">USDT</span>
-                      <span className="text-muted-foreground text-xs">Tether — mainnet only</span>
+                      <span className="text-muted-foreground text-xs">Tether USD</span>
                     </div>
                   </SelectItem>
                 </SelectContent>
