@@ -14,7 +14,6 @@
  *   POST /api/auth/session/wallet        — Attach a wallet address to a session
  *
  * Required env vars:
- *   SESSION_SECRET        — Random 32+ byte hex string for signing (required)
  *   GOOGLE_CLIENT_ID      — Google OAuth client ID (optional; Google login disabled without it)
  *   RESEND_API_KEY        — Resend API key (optional; email login disabled without it)
  *   SMTP_FROM             — From address (default: onboarding@resend.dev for testing)

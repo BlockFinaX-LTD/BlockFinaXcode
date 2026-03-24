@@ -47,6 +47,7 @@ import {
 import { Link } from "wouter";
 import { hedgeContract, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
 import { walletManager } from "@/lib/wallet";
+import { mainnetGuard } from "@/lib/mainnet-guard";
 
 function CountdownTimer({ expiryDate, className }: { expiryDate: Date; className?: string }) {
   const calc = () => {
@@ -365,6 +366,50 @@ export default function Hedge() {
       toast({ title: "Error", description: error.message || "Failed to claim premiums", variant: "destructive" });
     }
   });
+
+  // ── Mainnet safety wrappers ───────────────────────────────────────────────
+  const guardedBuyProtection = () => {
+    if (!selectedEvent || !wallet) return;
+    const amount = parseFloat(notional) || 0;
+    const chainId = mainnetGuard.isMainnetMode() ? 1135 : 4202;
+    const chainCheck = mainnetGuard.validateChainId(chainId);
+    if (!chainCheck.allowed) {
+      toast({ title: "Network error", description: chainCheck.reason, variant: "destructive" });
+      return;
+    }
+    const txCheck = mainnetGuard.validateTransaction(amount, wallet.address);
+    if (!txCheck.allowed) {
+      toast({ title: "Transaction blocked", description: txCheck.reason, variant: "destructive" });
+      return;
+    }
+    if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
+      if (!window.confirm(txCheck.confirmationMessage)) return;
+    }
+    buyProtectionMutation.mutate();
+    mainnetGuard.recordTransaction(wallet.address, amount);
+  };
+
+  const guardedDeposit = () => {
+    if (!selectedEvent || !wallet) return;
+    const amount = parseFloat(depositAmount) || 0;
+    const chainId = mainnetGuard.isMainnetMode() ? 1135 : 4202;
+    const chainCheck = mainnetGuard.validateChainId(chainId);
+    if (!chainCheck.allowed) {
+      toast({ title: "Network error", description: chainCheck.reason, variant: "destructive" });
+      return;
+    }
+    const txCheck = mainnetGuard.validateTransaction(amount, wallet.address);
+    if (!txCheck.allowed) {
+      toast({ title: "Transaction blocked", description: txCheck.reason, variant: "destructive" });
+      return;
+    }
+    if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
+      if (!window.confirm(txCheck.confirmationMessage)) return;
+    }
+    depositMutation.mutate();
+    mainnetGuard.recordTransaction(wallet.address, amount);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (!wallet) {
     return (
@@ -1254,7 +1299,7 @@ export default function Hedge() {
           )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setBuyDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
-            <Button onClick={() => buyProtectionMutation.mutate()}
+            <Button onClick={guardedBuyProtection}
               disabled={!notional || parseFloat(notional) < 10 || buyProtectionMutation.isPending}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
               {buyProtectionMutation.isPending ? "Processing..." : `Pay $${totalCostCalc.toFixed(2)} & Buy Protection`}
@@ -1331,7 +1376,7 @@ export default function Hedge() {
           )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setDepositDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
-            <Button onClick={() => depositMutation.mutate()}
+            <Button onClick={guardedDeposit}
               disabled={!depositAmount || parseFloat(depositAmount) < 10 || depositMutation.isPending}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
               {depositMutation.isPending ? "Depositing..." : `Pay $${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} & Deposit`}

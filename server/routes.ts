@@ -22,6 +22,27 @@ import { generalApiLimiter, financialMutationLimiter, walletLimiter, strictLimit
 import { registerAuthRoutes } from "./auth-routes";
 import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, invalidateChainCache } from "./hedge-reader";
 
+// ── Integer financial math helpers ───────────────────────────────────────
+// Converts a decimal string/number to micro-units (× 1,000,000) as BigInt.
+// Eliminates IEEE 754 floating-point rounding in LP share and fee math.
+function toMicro(s: string | number): bigint {
+  const str = String(s).trim().replace(/[^0-9.-]/g, '') || '0';
+  const neg = str.startsWith('-');
+  const abs = neg ? str.slice(1) : str;
+  const dot = abs.indexOf('.');
+  if (dot === -1) return (neg ? -1n : 1n) * BigInt(abs || '0') * 1_000_000n;
+  const int = abs.slice(0, dot) || '0';
+  const frac = abs.slice(dot + 1).padEnd(6, '0').slice(0, 6);
+  return (neg ? -1n : 1n) * (BigInt(int) * 1_000_000n + BigInt(frac));
+}
+
+function fromMicro(n: bigint): string {
+  const neg = n < 0n;
+  const abs = neg ? -n : n;
+  return `${neg ? '-' : ''}${abs / 1_000_000n}.${String(abs % 1_000_000n).padStart(6, '0')}`;
+}
+// ─────────────────────────────────────────────────────────────────────────
+
 /**
  * Register all API routes and WebSocket handlers
  * Returns HTTP server instance with WebSocket support
@@ -1240,24 +1261,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Full premium goes to LPs — platform fee is separate
+      // Use integer micro-unit math to avoid float rounding errors in share distribution
       const activeDeposits = deposits.filter(d => !d.withdrawn);
       if (activeDeposits.length > 0) {
+        const totalLiqMicro = activeDeposits.reduce((sum, d) => sum + toMicro(d.amount), 0n);
+        const premiumMicro = toMicro(premiumPaid);
         for (const dep of activeDeposits) {
-          const share = parseFloat(dep.amount) / totalLiquidity;
-          const earned = premiumPaid * share;
+          const depMicro = toMicro(dep.amount);
+          const earnedMicro = totalLiqMicro > 0n ? (premiumMicro * depMicro) / totalLiqMicro : 0n;
+          const currentMicro = toMicro(dep.premiumsEarned || "0");
           await storage.updateHedgeLpDeposit(dep.id, {
-            premiumsEarned: (parseFloat(dep.premiumsEarned || "0") + earned).toString()
+            premiumsEarned: fromMicro(currentMicro + earnedMicro)
           });
         }
       }
 
       const CREATOR_LOYALTY_RATE = 0.05;
-      const creatorReward = hedgerPlatformFee * CREATOR_LOYALTY_RATE;
-      const currentCreatorEarnings = parseFloat(event.creatorEarnings || "0");
+      const creatorRewardMicro = toMicro(hedgerPlatformFee) * 5n / 100n;
+      const currentCreatorMicro = toMicro(event.creatorEarnings || "0");
       await storage.updateHedgeEvent(event.id, {
-        creatorEarnings: (currentCreatorEarnings + creatorReward).toString()
+        creatorEarnings: fromMicro(currentCreatorMicro + creatorRewardMicro)
       });
 
+      const creatorReward = Number(creatorRewardMicro) / 1_000_000;
       console.log(`[Hedge Fee] Notional: $${notionalNum} | MaxPayout: $${maxPayout.toFixed(2)} (${(payoutRate * 100).toFixed(0)}%) | Premium: $${premiumPaid.toFixed(4)} (100% to LPs) | Hedger platform fee (0.5%): $${hedgerPlatformFee.toFixed(4)} | Creator reward (5%): $${creatorReward.toFixed(4)} | Event: ${event.name}`);
 
       res.status(201).json({
@@ -1306,15 +1332,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (amountNum < 10) return res.status(400).json({ message: "Minimum deposit is $10" });
 
       const existingDeposits = await storage.getHedgeLpDepositsByEvent(event.id);
-      const totalLiquidity = existingDeposits.filter(d => !d.withdrawn).reduce((sum, d) => sum + parseFloat(d.amount), 0);
-      const totalShares = existingDeposits.filter(d => !d.withdrawn).reduce((sum, d) => sum + parseFloat(d.shares), 0);
-      const shares = totalLiquidity === 0 ? amountNum : (amountNum / totalLiquidity) * totalShares;
+      const activeExisting = existingDeposits.filter(d => !d.withdrawn);
+      const totalLiqMicro = activeExisting.reduce((sum, d) => sum + toMicro(d.amount), 0n);
+      const totalSharesMicro = activeExisting.reduce((sum, d) => sum + toMicro(d.shares), 0n);
+      const amtMicro = toMicro(amountNum);
+      const sharesMicro = totalLiqMicro === 0n ? amtMicro : (amtMicro * totalSharesMicro) / totalLiqMicro;
+      const shares = Number(sharesMicro) / 1_000_000;
 
       const deposit = await storage.createHedgeLpDeposit({
         eventId: event.id,
         lpWallet,
         amount: amountNum.toString(),
-        shares: shares.toString()
+        shares: fromMicro(sharesMicro)
       });
 
       res.status(201).json({
@@ -1351,15 +1380,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(amountNum) || !isFinite(amountNum) || amountNum < 10) return res.status(400).json({ message: "Minimum deposit is $10" });
 
       const existingDeposits = await storage.getHedgeLpDepositsByEvent(event.id);
-      const totalLiquidity = existingDeposits.filter(d => !d.withdrawn).reduce((sum, d) => sum + parseFloat(d.amount), 0);
-      const totalShares = existingDeposits.filter(d => !d.withdrawn).reduce((sum, d) => sum + parseFloat(d.shares), 0);
-      const shares = totalLiquidity === 0 ? amountNum : (amountNum / totalLiquidity) * totalShares;
+      const activeSeedDeposits = existingDeposits.filter(d => !d.withdrawn);
+      const totalLiqMicroSeed = activeSeedDeposits.reduce((sum, d) => sum + toMicro(d.amount), 0n);
+      const totalSharesMicroSeed = activeSeedDeposits.reduce((sum, d) => sum + toMicro(d.shares), 0n);
+      const amtMicroSeed = toMicro(amountNum);
+      const sharesMicroSeed = totalLiqMicroSeed === 0n ? amtMicroSeed : (amtMicroSeed * totalSharesMicroSeed) / totalLiqMicroSeed;
+      const shares = Number(sharesMicroSeed) / 1_000_000;
 
       const deposit = await storage.createHedgeLpDeposit({
         eventId: event.id,
         lpWallet: treasuryAddress,
         amount: amountNum.toString(),
-        shares: shares.toString()
+        shares: fromMicro(sharesMicroSeed)
       });
 
       res.status(201).json({
@@ -1617,9 +1649,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!event) return res.status(404).json({ message: "Event not found" });
       if (event.status !== "open") return res.status(400).json({ message: "Event already settled or expired" });
 
+      // Use integer math for settlement price comparisons and payout calculations
+      // FX rates have up to 8 decimal places; scale to micro-units × 1e8 to avoid float rounding
+      const RATE_SCALE = 100_000_000n;
+      function toRateBig(s: string | number): bigint {
+        const str = String(s).trim().replace(/[^0-9.]/g, '') || '0';
+        const dot = str.indexOf('.');
+        if (dot === -1) return BigInt(str) * RATE_SCALE;
+        const int = str.slice(0, dot) || '0';
+        const frac = str.slice(dot + 1).padEnd(8, '0').slice(0, 8);
+        return BigInt(int) * RATE_SCALE + BigInt(frac);
+      }
+
+      const priceBig = toRateBig(settlementPrice);
+      const strikeBig = toRateBig(event.strike);
+      const triggered = priceBig >= strikeBig;
       const price = parseFloat(settlementPrice);
       const strike = parseFloat(event.strike);
-      const triggered = price >= strike;
 
       // Update event
       await storage.updateHedgeEvent(event.id, {
@@ -1629,19 +1675,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         settledAt: new Date()
       });
 
-      // Settle all active positions with proportional payout based on rate gap
+      // Settle all active positions — payout = notional × (price − strike) / strike
+      // Computed fully in integers to avoid precision loss
       const positions = await storage.getHedgePositionsByEvent(event.id);
-      const strikePrice = parseFloat(event.strike);
       for (const pos of positions) {
         if (pos.status !== "active") continue;
 
-        if (triggered && strikePrice > 0) {
-          const rateGap = (price - strikePrice) / strikePrice;
-          const notionalVal = parseFloat(pos.notional);
-          const payout = notionalVal * rateGap;
+        if (triggered && strikeBig > 0n) {
+          // rateGapBig = (price - strike) / strike, scaled by RATE_SCALE
+          const rateGapBig = ((priceBig - strikeBig) * RATE_SCALE) / strikeBig;
+          // notionalMicro in 1e6; multiply by rateGapBig (1e8) then divide by RATE_SCALE → result in 1e6
+          const notionalMicro = toMicro(pos.notional);
+          const payoutMicro = (notionalMicro * rateGapBig) / RATE_SCALE;
+          const payoutCapped = payoutMicro > 0n ? payoutMicro : 0n;
           await storage.updateHedgePosition(pos.id, {
             status: "settled_win",
-            payoutAmount: Math.max(0, payout).toFixed(2)
+            payoutAmount: fromMicro(payoutCapped)
           });
         } else {
           await storage.updateHedgePosition(pos.id, {

@@ -23,6 +23,8 @@ import { NETWORKS, getNetworkById } from '@/lib/networks';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
+import { useWallet } from '@/hooks/use-wallet';
+import { mainnetGuard } from '@/lib/mainnet-guard';
 
 const sendSchema = z.object({
   to: z.string().min(1, 'Recipient address is required')
@@ -51,6 +53,7 @@ const TOKENS = {
 
 export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalProps) {
   const { toast } = useToast();
+  const { wallet } = useWallet();
   const [selectedNetworkId, setSelectedNetworkId] = useState(defaultNetworkId);
   const [selectedToken, setSelectedToken] = useState('native');
   const [feeInfo, setFeeInfo] = useState<{ feeAmount: number; feePercent: number; minimumFee: number; netAmount: number } | null>(null);
@@ -147,6 +150,29 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
       const tokenInfo = getSelectedTokenInfo();
       const isUSDC = tokenInfo.symbol === 'USDC' || tokenInfo.symbol === 'USDC.e';
       const treasuryAddress = treasuryData?.address;
+
+      // Mainnet safety checks — validate chain and transaction limits before signing
+      if (selectedNetwork) {
+        const chainCheck = mainnetGuard.validateChainId(selectedNetwork.chainId);
+        if (!chainCheck.allowed) {
+          toast({ title: 'Network error', description: chainCheck.reason, variant: 'destructive' });
+          return;
+        }
+      }
+      if (isUSDC) {
+        const senderAddress = wallet?.address || 'unknown';
+        const txCheck = mainnetGuard.validateTransaction(parseFloat(data.amount) || 0, senderAddress);
+        if (!txCheck.allowed) {
+          toast({ title: 'Transaction blocked', description: txCheck.reason, variant: 'destructive' });
+          return;
+        }
+        if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
+          if (!window.confirm(txCheck.confirmationMessage)) return;
+        }
+        if (wallet?.address) {
+          mainnetGuard.recordTransaction(wallet.address, parseFloat(data.amount) || 0);
+        }
+      }
 
       if (isUSDC && feeInfo && treasuryAddress) {
         await sendTransaction({
