@@ -113,10 +113,14 @@ export function useWallet() {
             wallet = secureStorage.loadWallet();
           } catch (error) {
             // If can't load wallet data, still show as unlocked with basic info
+          }
+          // loadWallet() returns null for V2 wallets (wallet_encrypted = 'bfx_v2' marker).
+          // Always fall back to synthetic wallet from persisted unlock data.
+          if (!wallet) {
             wallet = {
               address: unlockedData.address,
               name: unlockedData.name,
-              encryptedPrivateKey: '',
+              encryptedPrivateKey: 'v2',
               isImported: false,
               createdAt: new Date().toISOString()
             };
