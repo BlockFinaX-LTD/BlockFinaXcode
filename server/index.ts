@@ -26,32 +26,30 @@ const app = express();
 // Security headers — must be applied before any routes
 const isProd = process.env.NODE_ENV === 'production';
 app.use(helmet({
-  // CSP: off in dev (Vite HMR uses inline scripts and websockets that would violate any policy).
-  // In production the built assets are all same-origin so a real policy applies.
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'"],                          // no eval, no inline
-      styleSrc:       ["'self'", "'unsafe-inline'"],       // Tailwind uses inline class styles
-      imgSrc:         ["'self'", "data:", "https:"],       // avatars, logos, block-explorer images
+      scriptSrc:      ["'self'"],
+      styleSrc:       ["'self'", "'unsafe-inline'"],
+      imgSrc:         ["'self'", "data:", "https:"],
       fontSrc:        ["'self'"],
       connectSrc: [
         "'self'",
-        "https://rpc.sepolia-api.lisk.com",               // Lisk Sepolia RPC
-        "https://rpc.api.lisk.com",                       // Lisk Mainnet RPC
-        "https://blockscout.lisk.com",                    // block explorer API
+        "https://rpc.sepolia-api.lisk.com",
+        "https://rpc.api.lisk.com",
+        "https://blockscout.lisk.com",
         "https://sepolia-blockscout.lisk.com",
         "wss://rpc.sepolia-api.lisk.com",
         "wss://rpc.api.lisk.com",
       ],
-      frameSrc:       ["'none'"],                         // no iframes from outside
+      frameSrc:       ["'none'"],
       objectSrc:      ["'none'"],
       baseUri:        ["'self'"],
       formAction:     ["'self'"],
       upgradeInsecureRequests: [],
     },
   } : false,
-  crossOriginEmbedderPolicy: false, // Allow iframe embedding for wallet previews
+  crossOriginEmbedderPolicy: false,
 }));
 
 app.use(express.json({ limit: '1mb' }));

@@ -59,15 +59,7 @@ function checkMagicLinkRateLimit(email: string): boolean {
   return true;
 }
 
-// Cross-device: once a magic link is verified on any device, its session is
-// cached here so the original device can pick it up via polling.
-// Map: pollToken → { sessionToken, expiresAt }
-// NOTE: pollToken is a SEPARATE token from the email verify token.
-// The verify token never appears in any API response — only in the email.
 const verifiedMagicSessions = new Map<string, { sessionToken: string; expiresAt: number }>();
-
-// Maps verifyTokenHash → pollToken so the verify handler can signal the poller
-// without ever seeing the raw verify token in the API layer.
 const verifyHashToPollToken = new Map<string, string>();
 
 // ── Cleanup expired magic link tokens ────────────────────────────────────────
@@ -290,20 +282,14 @@ export function registerAuthRoutes(app: Express) {
       return res.status(429).json({ message: 'Too many requests. Please wait 15 minutes before requesting another link.' });
     }
 
-    // verifyToken goes ONLY into the email — never in any API response.
-    // pollToken is a completely separate token returned to the requester for
-    // cross-device polling. Separating them means an API response leak can't
-    // be used to consume the magic link.
     const verifyToken = generateToken(32);
-    const pollToken   = generateToken(24); // different bytes, shorter is fine
+    const pollToken   = generateToken(24);
     const tokenHash   = hashMagicToken(verifyToken);
-    const expiresAt   = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+    const expiresAt   = new Date(Date.now() + 15 * 60 * 1000);
 
     await db.insert(magicLinks).values({ email, token: tokenHash, expiresAt });
 
-    // Register the mapping so the verify handler can signal the right poller
     verifyHashToPollToken.set(tokenHash, pollToken);
-    // Auto-evict after 15 min to avoid leaking memory
     setTimeout(() => verifyHashToPollToken.delete(tokenHash), 15 * 60 * 1000);
 
     const appUrl   = getAppOrigin(req);
@@ -319,7 +305,7 @@ export function registerAuthRoutes(app: Express) {
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
   app.get('/api/auth/verify/:token', async (req, res) => {
     const { token } = req.params;
-    const tokenHash = hashMagicToken(token); // look up by hash — raw token is never in DB
+    const tokenHash = hashMagicToken(token);
     const [link] = await db
       .select()
       .from(magicLinks)
@@ -329,15 +315,13 @@ export function registerAuthRoutes(app: Express) {
     const user = await findOrCreateUser(link.email);
     const sessionToken = await createSession(user.id);
 
-    // Signal the waiting device via its pollToken (separate from the verifyToken).
-    // verifyHashToPollToken is populated at link-creation time.
     const pollToken = verifyHashToPollToken.get(tokenHash);
     if (pollToken) {
       verifiedMagicSessions.set(pollToken, {
         sessionToken,
-        expiresAt: Date.now() + 5 * 60 * 1000, // 5 min to collect
+        expiresAt: Date.now() + 5 * 60 * 1000,
       });
-      verifyHashToPollToken.delete(tokenHash); // no longer needed
+      verifyHashToPollToken.delete(tokenHash);
     }
 
     res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name } });
@@ -355,7 +339,6 @@ export function registerAuthRoutes(app: Express) {
       return res.json({ ok: false });
     }
 
-    // One-time retrieval — delete so the same poll token can't be replayed
     verifiedMagicSessions.delete(token);
     res.json({ ok: true, sessionToken: entry.sessionToken });
   });

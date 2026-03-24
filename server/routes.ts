@@ -297,12 +297,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ═══════════════════════════════════════════════════════
   // [ADMIN] Admin Dashboard
   // ═══════════════════════════════════════════════════════
-  // token → expiresAt timestamp (ms). Tokens expire after 8 hours.
   const adminSessions = new Map<string, number>();
-  const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+  const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
   const adminLoginAttempts = new Map<string, { count: number; resetAt: number }>();
 
-  // Clean up expired admin sessions every hour
   setInterval(() => {
     const now = Date.now();
     for (const [token, exp] of adminSessions) {
@@ -311,14 +309,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }, 3_600_000);
 
   function generateAdminToken(): string {
-    return randomBytes(32).toString("hex"); // 256 bits of entropy
+    return randomBytes(32).toString("hex");
   }
 
   function requireAdmin(req: any, res: any, next: any) {
     const token = req.headers["x-admin-token"] as string;
     const expiry = token ? adminSessions.get(token) : undefined;
     if (!expiry || Date.now() > expiry) {
-      if (token) adminSessions.delete(token); // purge expired token
+      if (token) adminSessions.delete(token);
       return res.status(401).json({ message: "Unauthorized" });
     }
     next();
