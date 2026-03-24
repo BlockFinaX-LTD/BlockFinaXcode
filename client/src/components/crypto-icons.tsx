@@ -1,3 +1,12 @@
+export function UsdtIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="16" fill="#26A17B"/>
+      <path d="M17.9 17.2v-.01c-.09.01-.58.04-1.88.04-1.28 0-1.76-.03-1.88-.04v.01c-3.75-.17-6.54-.82-6.54-1.59s2.8-1.43 6.54-1.6v2.55c.12.01.61.04 1.89.04 1.31 0 1.77-.03 1.88-.04v-2.55c3.73.17 6.52.83 6.52 1.6s-2.79 1.42-6.53 1.59ZM17.9 13.3V11h5.05V8H9.06v3H14.1v2.3C9.92 13.5 6.8 14.4 6.8 15.6s3.12 2.1 7.3 2.33V25h3.78v-7.07c4.17-.23 7.29-1.12 7.29-2.33 0-1.2-3.12-2.1-7.28-2.3Z" fill="white"/>
+    </svg>
+  );
+}
+
 export function EthIcon({ className = "w-6 h-6" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 320 512" fill="none" xmlns="http://www.w3.org/2000/svg">

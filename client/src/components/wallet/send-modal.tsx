@@ -20,6 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTransactions } from '@/hooks/use-transactions';
 import { NETWORKS, getNetworkById } from '@/lib/networks';
+import { getTokensForNetwork } from '@/lib/tokens';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Loader2, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -42,13 +43,6 @@ interface SendModalProps {
   onClose: () => void;
   defaultNetworkId?: number;
 }
-
-const TOKENS = {
-  2: [
-    { symbol: 'ETH', name: 'Ethereum', address: 'native', decimals: 18 },
-    { symbol: 'USDC', name: 'Test USDC', address: '0xf52Ad63619Bf9cFeF510341ac6b4038554399562', decimals: 6 },
-  ],
-};
 
 type Step = 'form' | 'confirm' | 'sending';
 
@@ -97,12 +91,20 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
   const watchedValues = watch();
   const selectedNetwork = getNetworkById(selectedNetworkId);
 
-  const getAvailableTokens = () => TOKENS[selectedNetworkId as keyof typeof TOKENS] || TOKENS[2];
+  // Build the token list: native ETH first, then any ERC-20s for this network
+  const getAvailableTokens = useCallback(() => {
+    const erc20s = getTokensForNetwork(selectedNetworkId).filter(t => t.address !== '0x'); // skip placeholder addresses
+    const nativeSymbol = selectedNetwork?.symbol ?? 'ETH';
+    return [
+      { symbol: nativeSymbol, name: 'Ethereum', address: 'native', decimals: 18 },
+      ...erc20s.map(t => ({ symbol: t.symbol, name: t.name, address: t.address, decimals: t.decimals })),
+    ];
+  }, [selectedNetworkId, selectedNetwork]);
 
   const getSelectedTokenInfo = useCallback(() => {
     const tokens = getAvailableTokens();
     return tokens.find(t => selectedToken === 'native' ? t.address === 'native' : t.address === selectedToken) || tokens[0];
-  }, [selectedNetworkId, selectedToken]);
+  }, [selectedNetworkId, selectedToken, getAvailableTokens]);
 
   useEffect(() => {
     if (watchedValues.to && watchedValues.amount && selectedNetworkId) {
@@ -119,9 +121,9 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
 
   useEffect(() => {
     const tokenInfo = getSelectedTokenInfo();
-    const isUSDC = tokenInfo.symbol === 'USDC';
+    const isStablecoin = tokenInfo.symbol === 'USDC' || tokenInfo.symbol === 'USDT';
     const amount = parseFloat(watchedValues.amount || '0');
-    if (isUSDC && amount > 0) {
+    if (isStablecoin && amount > 0) {
       fetch(`/api/fees/calculate?amount=${amount}`)
         .then(r => r.json())
         .then(data => setFeeInfo(data))
@@ -180,7 +182,8 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
       }
     }
     const tokenInfo = getSelectedTokenInfo();
-    if (tokenInfo.symbol === 'USDC') {
+    const isStablecoin = tokenInfo.symbol === 'USDC' || tokenInfo.symbol === 'USDT';
+    if (isStablecoin) {
       const txCheck = mainnetGuard.validateTransaction(parseFloat(data.amount) || 0, wallet?.address || '');
       if (!txCheck.allowed) {
         toast({ title: 'Transaction blocked', description: txCheck.reason, variant: 'destructive' });
@@ -196,14 +199,14 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
     setStep('sending');
     try {
       const tokenInfo = getSelectedTokenInfo();
-      const isUSDC = tokenInfo.symbol === 'USDC';
+      const isStablecoin = tokenInfo.symbol === 'USDC' || tokenInfo.symbol === 'USDT';
       const treasuryAddress = treasuryData?.address;
 
-      if (isUSDC && wallet?.address) {
+      if (isStablecoin && wallet?.address) {
         mainnetGuard.recordTransaction(wallet.address, parseFloat(pendingData.amount) || 0);
       }
 
-      if (isUSDC && feeInfo && treasuryAddress) {
+      if (isStablecoin && feeInfo && treasuryAddress) {
         await sendTransaction({
           to: pendingData.to,
           amount: pendingData.amount,

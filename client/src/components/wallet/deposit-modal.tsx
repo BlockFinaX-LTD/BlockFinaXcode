@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { EthIcon, UsdcIcon } from '@/components/crypto-icons';
+import { EthIcon, UsdcIcon, UsdtIcon } from '@/components/crypto-icons';
 import { Copy, QrCode, Check, ArrowLeft, Wallet, CreditCard, Clock } from 'lucide-react';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';
@@ -161,16 +161,19 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
                 Supported Networks (Testnet)
               </p>
               <p className="text-amber-600 dark:text-amber-400">
-                Send ETH or USDC on <strong>Lisk Sepolia</strong> to this address. Make sure you're on the correct network.
+                Send ETH, USDC, or USDT on <strong>Lisk Sepolia</strong> to this address. Make sure you're on the correct network.
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Badge variant="outline" className="text-xs flex items-center gap-1">
                 <EthIcon className="w-3.5 h-3.5" /> ETH
               </Badge>
               <Badge variant="outline" className="text-xs flex items-center gap-1">
                 <UsdcIcon className="w-3.5 h-3.5" /> USDC
+              </Badge>
+              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                <UsdtIcon className="w-3.5 h-3.5" /> USDT
               </Badge>
             </div>
           </div>
