@@ -298,6 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // [ADMIN] Admin Dashboard
   // ═══════════════════════════════════════════════════════
   const adminSessions = new Set<string>();
+  const adminLoginAttempts = new Map<string, { count: number; resetAt: number }>();
 
   function generateAdminToken(): string {
     // Use cryptographically secure random bytes — Math.random() is not safe for tokens
@@ -313,15 +314,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }
 
-  app.post("/api/admin/login", (req, res) => {
+  app.post("/api/admin/login", strictLimiter, (req, res) => {
+    const ip = req.ip || "unknown";
+    const now = Date.now();
+
+    // Brute-force protection: max 5 attempts per 15 minutes (mirrors investor auth)
+    const attempts = adminLoginAttempts.get(ip);
+    if (attempts) {
+      if (now < attempts.resetAt && attempts.count >= 5) {
+        return res.status(429).json({ message: "Too many attempts. Try again in 15 minutes." });
+      }
+      if (now >= attempts.resetAt) {
+        adminLoginAttempts.delete(ip);
+      }
+    }
+
     const { password } = req.body;
     const adminPassword = process.env.ADMIN_PASSWORD;
     if (!adminPassword) {
       return res.status(500).json({ message: "Admin password not configured" });
     }
-    if (password !== adminPassword) {
+
+    // Use constant-time comparison to prevent timing attacks
+    if (!safeEqual(password, adminPassword)) {
+      const current = adminLoginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60_000 };
+      adminLoginAttempts.set(ip, { count: current.count + 1, resetAt: current.resetAt });
       return res.status(401).json({ message: "Invalid password" });
     }
+
+    adminLoginAttempts.delete(ip);
     const token = generateAdminToken();
     adminSessions.add(token);
     res.json({ token });
@@ -598,8 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // [WALLET] Wallet & Transaction Management
   // ═══════════════════════════════════════════════════════
   app.get("/api/wallets", async (req, res) => {
-    // Require a valid session — this endpoint previously leaked encrypted key
-    // material for all users. Now it only returns wallets for the requesting user.
+    // Require a valid session and scope the response to that session's wallet only.
     const token = (req.headers['x-session-token'] as string) || null;
     if (!token) return res.status(401).json({ message: 'Authentication required' });
     try {
@@ -608,8 +628,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!session || session.expiresAt < new Date()) {
         return res.status(401).json({ message: 'Session expired' });
       }
-      const wallets = await storage.getAllWallets();
-      res.json(wallets);
+      // Return only the wallet belonging to this session — never the full list
+      const sessionWalletAddress = session.walletAddress;
+      if (!sessionWalletAddress) {
+        return res.json([]);
+      }
+      const wallet = await storage.getWalletByAddress(sessionWalletAddress);
+      if (!wallet) {
+        return res.json([]);
+      }
+      // Strip server-stored key material from the response
+      const { encryptedPrivateKey: _k, encryptedMnemonic: _m, ...safeWallet } = wallet as any;
+      res.json([safeWallet]);
     } catch (error) {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to fetch wallets" 

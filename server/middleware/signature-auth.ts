@@ -62,19 +62,19 @@ export function requireSignature(req: AuthenticatedRequest, res: Response, next:
 
     const message = `${req.method}:${req.path}:${timestamp}:${bodyHash}`;
 
+    if (!ethers.isAddress(walletAddress)) {
+      return res.status(401).json({
+        error: "Invalid wallet address",
+        details: "The provided wallet address is not a valid Ethereum address"
+      });
+    }
+
     const recoveredAddress = ethers.verifyMessage(message, signature);
 
     if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
       return res.status(401).json({
         error: "Invalid signature",
         details: "Signature does not match the provided wallet address"
-      });
-    }
-
-    if (!ethers.isAddress(walletAddress)) {
-      return res.status(401).json({
-        error: "Invalid wallet address",
-        details: "The provided wallet address is not a valid Ethereum address"
       });
     }
 
