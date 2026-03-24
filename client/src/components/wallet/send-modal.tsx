@@ -19,7 +19,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTransactions } from '@/hooks/use-transactions';
-import { NETWORKS, getNetworkById } from '@/lib/networks';
+import { NETWORKS, DEFAULT_NETWORK, getNetworkById } from '@/lib/networks';
 import { getTokensForNetwork } from '@/lib/tokens';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Loader2, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +46,7 @@ interface SendModalProps {
 
 type Step = 'form' | 'confirm' | 'sending';
 
-export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalProps) {
+export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.id }: SendModalProps) {
   const { toast } = useToast();
   const { wallet } = useWallet();
   const [step, setStep] = useState<Step>('form');
@@ -90,11 +90,12 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
 
   const watchedValues = watch();
   const selectedNetwork = getNetworkById(selectedNetworkId);
+  const resolvedNetwork = selectedNetwork ?? DEFAULT_NETWORK;
 
   // Build the token list: native ETH first, then any ERC-20s for this network
   const getAvailableTokens = useCallback(() => {
     const erc20s = getTokensForNetwork(selectedNetworkId).filter(t => t.address !== '0x'); // skip placeholder addresses
-    const nativeSymbol = selectedNetwork?.symbol ?? 'ETH';
+    const nativeSymbol = resolvedNetwork?.symbol ?? 'ETH';
     return [
       { symbol: nativeSymbol, name: 'Ethereum', address: 'native', decimals: 18 },
       ...erc20s.map(t => ({ symbol: t.symbol, name: t.name, address: t.address, decimals: t.decimals })),
@@ -174,12 +175,10 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
   }, [balance, tokenBalances, watchedValues.amount, gasEstimate, getSelectedTokenInfo]);
 
   const handleReview = (data: SendFormData) => {
-    if (selectedNetwork) {
-      const chainCheck = mainnetGuard.validateChainId(selectedNetwork.chainId);
-      if (!chainCheck.allowed) {
-        toast({ title: 'Network error', description: chainCheck.reason, variant: 'destructive' });
-        return;
-      }
+    const chainCheck = mainnetGuard.validateChainId(resolvedNetwork.chainId);
+    if (!chainCheck.allowed) {
+      toast({ title: 'Network error', description: chainCheck.reason, variant: 'destructive' });
+      return;
     }
     const tokenInfo = getSelectedTokenInfo();
     const isStablecoin = tokenInfo.symbol === 'USDC' || tokenInfo.symbol === 'USDT';
@@ -241,8 +240,6 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
     onClose();
   };
 
-  if (!selectedNetwork) return null;
-
   const tokenInfo = getSelectedTokenInfo();
   const tokenBalance = getTokenBalance();
   const amounts = calculateTotal();
@@ -268,8 +265,8 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
                 <SelectTrigger>
                   <SelectValue>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedNetwork.color }} />
-                      <span>{selectedNetwork.name}</span>
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: resolvedNetwork.color }} />
+                      <span>{resolvedNetwork.name}</span>
                     </div>
                   </SelectValue>
                 </SelectTrigger>
@@ -364,14 +361,14 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Network Fee</span>
                   <span className="font-medium">
-                    {isEstimatingGas ? <Loader2 className="h-4 w-4 animate-spin" /> : formatCrypto(gasEstimate || '0', selectedNetwork.symbol)}
+                    {isEstimatingGas ? <Loader2 className="h-4 w-4 animate-spin" /> : formatCrypto(gasEstimate || '0', resolvedNetwork.symbol)}
                   </span>
                 </div>
                 <hr className="border-border" />
                 <div className="flex justify-between font-medium">
                   <span>You Pay</span>
                   <span className={isInsufficientBalance() ? 'text-destructive' : ''}>
-                    {formatCrypto(amounts.tokenAmount.toString(), tokenInfo.address !== 'native' ? tokenInfo.symbol : selectedNetwork.symbol)}
+                    {formatCrypto(amounts.tokenAmount.toString(), tokenInfo.address !== 'native' ? tokenInfo.symbol : resolvedNetwork.symbol)}
                     {tokenInfo.address !== 'native' && amounts.gasAmount > 0 && (
                       <span className="text-xs text-muted-foreground ml-1">+ gas</span>
                     )}
@@ -411,8 +408,8 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Network</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: selectedNetwork.color }} />
-                  <span className="font-medium">{selectedNetwork.name}</span>
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: resolvedNetwork.color }} />
+                  <span className="font-medium">{resolvedNetwork.name}</span>
                 </div>
               </div>
 
@@ -441,13 +438,13 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = 1 }: SendModalPr
 
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Network Fee</span>
-                <span className="font-medium">{formatCrypto(gasEstimate || '0', selectedNetwork.symbol)}</span>
+                <span className="font-medium">{formatCrypto(gasEstimate || '0', resolvedNetwork.symbol)}</span>
               </div>
 
               <div className="flex justify-between py-3 bg-muted rounded-lg px-3">
                 <span className="font-semibold">Total You Pay</span>
                 <span className="font-bold text-base">
-                  {formatCrypto(amounts.tokenAmount.toString(), tokenInfo.address !== 'native' ? tokenInfo.symbol : selectedNetwork.symbol)}
+                  {formatCrypto(amounts.tokenAmount.toString(), tokenInfo.address !== 'native' ? tokenInfo.symbol : resolvedNetwork.symbol)}
                 </span>
               </div>
             </div>

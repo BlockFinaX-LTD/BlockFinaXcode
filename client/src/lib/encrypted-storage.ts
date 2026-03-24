@@ -154,9 +154,9 @@ class SecureStorage {
       return JSON.parse(stored);
     }
     
-    // Default settings
+    // Default settings — use the first available network for the current mode
     return {
-      selectedNetworkId: 1,
+      selectedNetworkId: 2,
       theme: 'light',
       currency: 'USD',
       autoLock: true,
