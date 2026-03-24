@@ -10,6 +10,7 @@ import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
+import { startAllOracleNodes } from "./multi-oracle/start-all";
 
 // Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
 const _originalExit = process.exit.bind(process);
@@ -117,6 +118,9 @@ app.use((req, res, next) => {
   } catch (error) {
     console.error("Database initialization failed:", error);
   }
+
+  // Start multi-oracle nodes (only if keys and DIAMOND_ADDRESS are configured)
+  startAllOracleNodes();
 
   const server = await registerRoutes(app);
 
