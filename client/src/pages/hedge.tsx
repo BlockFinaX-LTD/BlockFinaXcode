@@ -1217,6 +1217,11 @@ export default function Hedge() {
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
               Buy FX Protection
+              {selectedEvent && (
+                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                  {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} pool
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
               {selectedEvent?.name} — {selectedEvent?.underlying}
@@ -1249,7 +1254,7 @@ export default function Hedge() {
               </div>
 
               <div>
-                <Label className="text-muted-foreground">Coverage Amount (USD)</Label>
+                <Label className="text-muted-foreground">Coverage Amount ({selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"})</Label>
                 <Input
                   type="number" min="10" step="1" placeholder="e.g. 100"
                   value={notional} onChange={e => setNotional(e.target.value)}
@@ -1273,7 +1278,7 @@ export default function Hedge() {
                     <span className="text-sm font-medium text-amber-400">${hedgerFeeCalc.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-border pt-2 flex justify-between">
-                    <span className="text-xs font-semibold text-foreground">Total USDC Required</span>
+                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} Required</span>
                     <span className="text-sm font-bold text-primary">${totalCostCalc.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-border pt-2 space-y-1.5">
@@ -1322,6 +1327,11 @@ export default function Hedge() {
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
               Deposit Liquidity
+              {selectedEvent && (
+                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                  {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} pool
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
               {selectedEvent?.name} — Earn premiums from hedgers
@@ -1341,7 +1351,7 @@ export default function Hedge() {
               </div>
 
               <div>
-                <Label className="text-muted-foreground">Deposit Amount (USDC)</Label>
+                <Label className="text-muted-foreground">Deposit Amount ({selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"})</Label>
                 <Input
                   type="number" min="10" step="1" placeholder="e.g. 500"
                   value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
@@ -1361,7 +1371,7 @@ export default function Hedge() {
                     <span className="text-sm font-medium text-green-400">$0.00 (no fee)</span>
                   </div>
                   <div className="border-t border-border pt-2 flex justify-between">
-                    <span className="text-xs font-semibold text-foreground">Total USDC Required</span>
+                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} Required</span>
                     <span className="text-sm font-bold text-primary">${parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground/70">
