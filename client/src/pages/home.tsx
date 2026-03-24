@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/bottom-nav';
 import { TermsGate } from '@/components/terms-gate';
 import { AppHeader } from '@/components/app-header';
+import { BackupWarningBanner, BACKUP_SKIPPED_KEY } from '@/components/wallet/backup-warning-banner';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,7 +74,20 @@ export default function HomePage() {
     }
   }, []);
 
+  const handleSkipBackup = () => {
+    // User closed without saving — keep a flag so we can show the warning banner
+    if (wallet?.address) {
+      localStorage.setItem(BACKUP_SKIPPED_KEY(wallet.address), '1');
+    }
+    sessionStorage.removeItem(BACKUP_MNEMONIC_KEY);
+    setShowBackup(false);
+  };
+
   const handleDismissBackup = () => {
+    // User confirmed they saved it — clear the skipped flag permanently
+    if (wallet?.address) {
+      localStorage.removeItem(BACKUP_SKIPPED_KEY(wallet.address));
+    }
     sessionStorage.removeItem(BACKUP_MNEMONIC_KEY);
     setShowBackup(false);
   };
@@ -250,16 +264,16 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col bg-background">
       <AppHeader onRefresh={handleRefresh} refreshing={refreshing} />
 
-      {/* Seed phrase backup reminder — shown once after wallet creation */}
-      <Dialog open={showBackup} onOpenChange={(open) => { if (!open) handleDismissBackup(); }}>
+      {/* Seed phrase backup reminder — shown once right after wallet creation */}
+      <Dialog open={showBackup} onOpenChange={(open) => { if (!open) handleSkipBackup(); }}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
             <div className="h-12 w-12 rounded-full bg-amber-50 dark:bg-amber-950 flex items-center justify-center mx-auto mb-2">
               <Shield className="h-6 w-6 text-amber-500" />
             </div>
-            <DialogTitle className="text-center">Back up your seed phrase</DialogTitle>
+            <DialogTitle className="text-center">Back up your secret phrase</DialogTitle>
             <DialogDescription className="text-center">
-              Write these 12 words down and keep them somewhere safe. They're the only way to recover your wallet if you lose access.
+              Write these 12 words down in order and keep them somewhere safe. They are the only way to recover your wallet.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-2 my-4">
@@ -276,11 +290,17 @@ export default function HomePage() {
               {backupCopied ? 'Copied!' : 'Copy all words'}
             </Button>
             <Button className="w-full" onClick={handleDismissBackup}>
-              I've saved my seed phrase
+              I've saved my secret phrase
+            </Button>
+            <Button variant="ghost" className="w-full text-muted-foreground text-sm" onClick={handleSkipBackup}>
+              Skip for now
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Persistent backup warning for users who skipped saving their secret phrase */}
+      <BackupWarningBanner />
 
       <main className="flex-1 pb-20">
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">

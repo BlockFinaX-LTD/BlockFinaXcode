@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/bottom-nav';
 import { AppHeader } from '@/components/app-header';
+import { BackupWarningBanner } from '@/components/wallet/backup-warning-banner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EnhancedWalletOverview } from '@/components/wallet/wallet-dashboard';
 import { TransactionHistory } from '@/components/wallet/transaction-history';
@@ -63,6 +64,9 @@ export default function Wallet() {
           />
         }
       />
+
+      {/* Persistent backup warning for users who skipped saving their secret phrase */}
+      <BackupWarningBanner />
 
       {/* Main Content */}
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-24">
