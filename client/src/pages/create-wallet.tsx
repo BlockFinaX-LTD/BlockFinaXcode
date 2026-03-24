@@ -22,9 +22,9 @@ import { walletManager } from '@/lib/wallet';
 import { FinanceAnimatedBackground } from '@/components/ui/finance-background';
 import logoPath from '@/assets/logo.png';
 import { SESSION_KEY } from '@/hooks/use-auth';
+import { pinStore } from '@/lib/pin-store';
 
 export const BACKUP_MNEMONIC_KEY = 'bfx_pending_backup';
-const PIN_SESSION_KEY = 'bfx_pin_session';
 
 type CheckState = 'checking' | 'existing' | 'new' | 'creating' | 'done' | 'error';
 
@@ -39,7 +39,7 @@ export default function CreateWallet() {
   const [existingAddresses, setExistingAddresses] = useState<string[]>([]);
   const [referralCode] = useState(() => new URLSearchParams(window.location.search).get('ref'));
 
-  const pin = sessionStorage.getItem(PIN_SESSION_KEY);
+  const pin = pinStore.get();
 
   // Step 1: check if this user already has wallets on the server
   useEffect(() => {

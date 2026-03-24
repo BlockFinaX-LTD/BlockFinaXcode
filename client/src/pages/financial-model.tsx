@@ -4,6 +4,8 @@ import {
   INITIAL_INPUTS, INITIAL_CONSTANTS, INITIAL_FUNDING, MONTH_LABELS, buildModel,
 } from '@/lib/financial-model-data';
 import type { InputRow, Constants, MonthRow, FundingEntry } from '@/lib/financial-model-data';
+// xlsx is used WRITE-ONLY here (generating files for download).
+// CVE-2023-30533 and CVE-2024-22363 affect the PARSING path only — no user files are parsed.
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

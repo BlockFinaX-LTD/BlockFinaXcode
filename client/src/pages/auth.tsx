@@ -25,6 +25,7 @@ import logoPath from '@/assets/logo.png';
 import { isWebAuthnSupported, authenticateWithPasskey, getPasskeyLabel } from '@/lib/webauthn';
 import { decryptPinFromLocalStorage, hasLocalPin } from '@/lib/auth-crypto';
 import { SESSION_KEY } from '@/hooks/use-auth';
+import { pinStore } from '@/lib/pin-store';
 
 type View = 'main' | 'email';
 
@@ -154,7 +155,7 @@ export default function Auth() {
       if (data.deviceUnlockKey && hasLocalPin()) {
         const pin = await decryptPinFromLocalStorage(data.deviceUnlockKey);
         if (pin) {
-          sessionStorage.setItem('bfx_pin_session', pin);
+          pinStore.set(pin);
         }
       }
       setLocation('/home');

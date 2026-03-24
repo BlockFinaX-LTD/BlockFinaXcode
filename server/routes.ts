@@ -256,11 +256,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const expiry = investorSessions.get(token);
     if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
 
-    const filename = decodeURIComponent(req.params.filename);
-    const filepath = path.join(UPLOAD_DIR, path.basename(filename));
-    if (!filepath.startsWith(UPLOAD_DIR)) return res.status(400).json({ error: "Invalid path" });
+    const safeFilename = path.basename(decodeURIComponent(req.params.filename));
+    const filepath = path.resolve(UPLOAD_DIR, safeFilename);
+    if (!filepath.startsWith(UPLOAD_DIR + path.sep) && filepath !== UPLOAD_DIR) return res.status(400).json({ error: "Invalid path" });
     if (!fs.existsSync(filepath)) return res.status(404).json({ error: "File not found" });
-    res.download(filepath, filename.replace(/^\d+_/, ""));
+    res.download(filepath, safeFilename.replace(/^\d+_/, ""));
   });
 
   app.delete("/api/investor/files/:filename", (req, res) => {
@@ -269,9 +269,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
     if (!investorEditSessions.has(token)) return res.status(403).json({ error: "Edit access required" });
 
-    const filename = decodeURIComponent(req.params.filename);
-    const filepath = path.join(UPLOAD_DIR, path.basename(filename));
-    if (!filepath.startsWith(UPLOAD_DIR)) return res.status(400).json({ error: "Invalid path" });
+    const safeFilename = path.basename(decodeURIComponent(req.params.filename));
+    const filepath = path.resolve(UPLOAD_DIR, safeFilename);
+    if (!filepath.startsWith(UPLOAD_DIR + path.sep) && filepath !== UPLOAD_DIR) return res.status(400).json({ error: "Invalid path" });
     if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
     res.json({ ok: true });
   });

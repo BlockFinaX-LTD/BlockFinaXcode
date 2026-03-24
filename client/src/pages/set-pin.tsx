@@ -23,6 +23,7 @@ import logoPath from '@/assets/logo.png';
 import { isWebAuthnSupported, registerPasskey, getPasskeyLabel } from '@/lib/webauthn';
 import { generateSalt, encryptPinForLocalStorage } from '@/lib/auth-crypto';
 import { SESSION_KEY } from '@/hooks/use-auth';
+import { pinStore } from '@/lib/pin-store';
 
 type Step = 'enter' | 'confirm' | 'passkey' | 'done';
 
@@ -118,7 +119,7 @@ export default function SetPin() {
         headers: { 'Content-Type': 'application/json', 'x-session-token': token || '' },
         body: JSON.stringify({ pinSalt }),
       });
-      sessionStorage.setItem('bfx_pin_session', pin);
+      pinStore.set(pin);
       if (webauthnAvailable) {
         setStep('passkey');
       } else {

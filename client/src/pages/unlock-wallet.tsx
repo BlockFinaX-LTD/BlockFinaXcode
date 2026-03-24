@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { isWebAuthnSupported, authenticateWithPasskey, getPasskeyLabel } from '@/lib/webauthn';
 import { decryptPinFromLocalStorage, hasLocalPin } from '@/lib/auth-crypto';
 import { SESSION_KEY } from '@/hooks/use-auth';
+import { pinStore } from '@/lib/pin-store';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
@@ -164,7 +165,7 @@ export default function UnlockWallet() {
       const wallet = await unlockWallet(password);
       if (wallet) {
         clearAttempts();
-        sessionStorage.setItem('bfx_pin_session', password);
+        pinStore.set(password);
         window.location.replace('/home');
         return;
       }

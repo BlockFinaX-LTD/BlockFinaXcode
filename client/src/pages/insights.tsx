@@ -293,7 +293,7 @@ function renderSection(section: ArticleSection, index: number) {
         <div key={index} className="my-8 p-6 bg-gradient-to-r from-[#1a4480] to-[#2E5BBA] rounded-2xl text-white">
           <h4 className="text-lg font-bold mb-2">{section.title}</h4>
           <p className="text-sm text-blue-100 mb-4">{section.description}</p>
-          <Link href={section.link} className="no-underline inline-block">
+          <Link href={/^https?:\/\/|^\//.test(section.link) ? section.link : '#'} className="no-underline inline-block">
             <Button className="bg-white text-[#1a4480] hover:bg-blue-50 rounded-full px-6 font-medium">
               {section.linkText} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
