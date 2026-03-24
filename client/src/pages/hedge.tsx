@@ -45,7 +45,7 @@ import {
   LockKeyhole, Globe, Settings, Share2, ExternalLink
 } from "lucide-react";
 import { Link } from "wouter";
-import { hedgeContract, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
+import { hedgeContract, USDC_ADDRESS, USDT_ADDRESS_SEPOLIA, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
 import { walletManager } from "@/lib/wallet";
 import { mainnetGuard } from "@/lib/mainnet-guard";
 
@@ -112,7 +112,8 @@ export default function Hedge() {
     name: "", description: "", assetClass: "fx" as "fx" | "commodity" | "crypto",
     underlying: "USD/GHS", strike: "", premiumRate: "",
     expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true,
-    direction: "up" as "up" | "down"
+    direction: "up" as "up" | "down",
+    paymentCurrency: "USDC" as "USDC" | "USDT"
   });
 
   const [events, setEvents] = useState<HedgeEventData[]>([]);
@@ -266,6 +267,9 @@ export default function Hedge() {
         throw new Error("Strike must be above the current rate (" + currentFxRate.toFixed(4) + ") for an upward hedge.");
       if (!strikeAbove && strikePrice >= currentFxRate)
         throw new Error("Strike must be below the current rate (" + currentFxRate.toFixed(4) + ") for a downward hedge.");
+      const paymentTokenAddr = newEvent.paymentCurrency === 'USDT'
+        ? (USDT_ADDRESS_SEPOLIA || USDC_ADDRESS)
+        : USDC_ADDRESS;
       await hedgeContract.createEvent(signer, {
         name: newEvent.name,
         underlying: newEvent.underlying,
@@ -276,6 +280,7 @@ export default function Hedge() {
         initialLiquidity: newEvent.initialLiquidity || "0",
         initialRate: currentFxRate,
         strikeAbove,
+        paymentToken: paymentTokenAddr,
       });
 
       if (newEvent.poolOpen) {
@@ -293,7 +298,7 @@ export default function Hedge() {
       toast({ title: "Event Created", description: msg });
       setCreateEventDialogOpen(false);
       setActiveTab("my-events");
-      setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up" });
+      setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message || "Failed to create event", variant: "destructive" });
@@ -639,13 +644,16 @@ export default function Hedge() {
                       <p className="font-semibold text-foreground">{event.name}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{event.underlying} Protection</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       <Badge className={`text-[10px] border ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].bg} ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].color}`}>
                         {ASSET_CLASS_LABELS[getAssetClass(event.underlying)].label}
                       </Badge>
                       <Badge className={`text-[10px] border flex items-center gap-0.5 ${event.strikeAbove ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}>
                         {event.strikeAbove ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                         {event.strikeAbove ? "Upward" : "Downward"}
+                      </Badge>
+                      <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                        {event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"}
                       </Badge>
                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
                         onClick={(e) => { e.stopPropagation(); copyShareLink(event.id, "buy"); }}
@@ -1601,7 +1609,33 @@ export default function Hedge() {
             </p>
 
             <div>
-              <Label className="text-muted-foreground text-xs">Initial Liquidity (USDC) <span className="text-red-400">*</span></Label>
+              <Label className="text-muted-foreground text-xs">Payment Currency <span className="text-red-400">*</span></Label>
+              <Select value={newEvent.paymentCurrency} onValueChange={v => setNewEvent(p => ({ ...p, paymentCurrency: v as "USDC" | "USDT" }))}>
+                <SelectTrigger className="bg-muted border-border text-foreground mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USDC">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-400 font-semibold">USDC</span>
+                      <span className="text-muted-foreground text-xs">USD Coin — all networks</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="USDT">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-400 font-semibold">USDT</span>
+                      <span className="text-muted-foreground text-xs">Tether — mainnet only</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground/70 mt-1">
+                All liquidity, premiums, and payouts for this event use one currency. Hedgers deposit and receive the same token.
+              </p>
+            </div>
+
+            <div>
+              <Label className="text-muted-foreground text-xs">Initial Liquidity ({newEvent.paymentCurrency}) <span className="text-red-400">*</span></Label>
               <Input type="number" step="100" min="10" value={newEvent.initialLiquidity}
                 onChange={e => setNewEvent(p => ({ ...p, initialLiquidity: e.target.value }))}
                 placeholder="e.g. 5000" className="bg-muted border-border text-foreground mt-1" />
@@ -1679,7 +1713,7 @@ export default function Hedge() {
               <span className="text-sm font-medium text-amber-400">{feeConfig ? `$${feeConfig.creationFee.toFixed(2)}` : "Loading..."}</span>
             </div>
             <div className="border-t border-border pt-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground">Total USDC Required</span>
+              <span className="text-xs font-semibold text-foreground">Total {newEvent.paymentCurrency} Required</span>
               <span className="text-sm font-bold text-primary">
                 ${newEvent.initialLiquidity && feeConfig ? (parseFloat(newEvent.initialLiquidity) + feeConfig.creationFee).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : feeConfig ? feeConfig.creationFee.toFixed(2) : "Loading..."}
               </span>
@@ -1758,9 +1792,14 @@ export default function Hedge() {
                             <p className="text-sm font-medium text-foreground">{event.name}</p>
                             <p className="text-[11px] text-muted-foreground">{event.underlying} · Strike: {event.strike.toFixed(2)}</p>
                           </div>
-                          <Badge className={event.status === "open" ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px]" : "bg-muted/50 text-muted-foreground border-border text-[10px]"}>
-                            {event.status === "open" ? "Active" : event.status}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                              {event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"}
+                            </Badge>
+                            <Badge className={event.status === "open" ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px]" : "bg-muted/50 text-muted-foreground border-border text-[10px]"}>
+                              {event.status === "open" ? "Active" : event.status}
+                            </Badge>
+                          </div>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5 text-center">
                           <div className="bg-muted/30 rounded px-2 py-1">

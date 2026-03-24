@@ -12,6 +12,8 @@ import { ethers } from 'ethers';
 
 export const DIAMOND_ADDRESS = '0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf';
 export const USDC_ADDRESS = '0xf52Ad63619Bf9cFeF510341ac6b4038554399562';
+/** No official USDT deployment on Lisk Sepolia testnet yet. Null until a testnet address is confirmed. */
+export const USDT_ADDRESS_SEPOLIA: string | null = null;
 export const LISK_SEPOLIA_CHAIN_ID = 4202;
 export const LISK_SEPOLIA_RPC = 'https://rpc.sepolia-api.lisk.com';
 export const LISK_BLOCKSCOUT = 'https://sepolia-blockscout.lisk.com/api';
@@ -22,7 +24,7 @@ const LIQUIDITY_DEPOSITED_TOPIC = '0xbff736a88c4d6fc1bc430cb94a5d36706a0d4b369de
 const EVENT_CREATED_TOPIC = '0x971a52d02f8b95a7a75a0f42d1fb5ab027b59b71c15f1f6095e5323ddd308736';
 
 const HEDGE_ABI = [
-  'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove)) returns (uint256)',
+  'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken)) returns (uint256)',
   'function setPoolSettings(uint256 _eventId, bool _poolOpen, bool _allowExternalLp)',
   'function deposit(uint256 _eventId, uint256 _amount) returns (uint256)',
   'function buyProtection(uint256 _eventId, uint256 _notional) returns (uint256)',
@@ -47,6 +49,12 @@ const HEDGE_ABI = [
   'function getHedgePlatformFees() view returns (uint256)',
   'function getTotalHedgeEvents() view returns (uint256)',
   'function getPoolUtilization(uint256) view returns (uint256 totalLiquidity, uint256 totalExposure, uint256 availableCapacity, uint256 utilizationRate)',
+  // v3 multi-token functions
+  'function getEventPaymentToken(uint256) view returns (address)',
+  'function isAllowedPaymentToken(address) view returns (bool)',
+  'function setAllowedPaymentToken(address,bool)',
+  'function getPlatformFeesByToken(address) view returns (uint256)',
+  'function withdrawPlatformFeesByToken(address,uint256)',
 ];
 
 const USDC_ABI = [
@@ -96,6 +104,8 @@ export interface HedgeEventData {
   availableCapacity: number;
   utilization: number;
   payoutPercent: number;
+  /** ERC-20 token address used for all payments in this event (USDC or USDT). */
+  paymentToken: string;
 }
 
 export interface HedgePositionData {
@@ -236,16 +246,20 @@ class HedgeContractManager {
   }
 
   async approveUSDC(signer: ethers.Wallet, amount: string): Promise<void> {
+    return this.approveToken(signer, USDC_ADDRESS, amount);
+  }
+
+  /** Generic ERC-20 approve for the Diamond — works for USDC, USDT, or any whitelisted token. */
+  async approveToken(signer: ethers.Wallet, tokenAddress: string, _amount: string): Promise<void> {
     const connected = signer.connect(this.getProvider());
     await this.ensureGas(connected.address);
-    const usdc = this.getUsdcContract(signer);
-    const currentAllowance = await usdc.allowance(connected.address, DIAMOND_ADDRESS);
+    const token = new ethers.Contract(tokenAddress, USDC_ABI, connected);
+    const currentAllowance = await token.allowance(connected.address, DIAMOND_ADDRESS);
     const maxThreshold = ethers.parseUnits("1000000000", 6);
     if (currentAllowance >= maxThreshold) {
       return;
     }
-    const maxApproval = ethers.MaxUint256;
-    const tx = await usdc.approve(DIAMOND_ADDRESS, maxApproval);
+    const tx = await token.approve(DIAMOND_ADDRESS, ethers.MaxUint256);
     await tx.wait();
   }
 
@@ -277,7 +291,7 @@ class HedgeContractManager {
     return ethers.formatUnits(allowance, 6);
   }
 
-  private formatEvent(core: any, stats: any, createdAt?: Date | null): HedgeEventData {
+  private formatEvent(core: any, stats: any, createdAt?: Date | null, paymentToken?: string): HedgeEventData {
     const totalLiquidity = toNum(stats.totalLiquidity);
     const totalExposure = toNum(stats.totalExposure);
     const totalMaxPayout = toNum(stats.totalMaxPayout);
@@ -316,6 +330,7 @@ class HedgeContractManager {
       availableCapacity: totalLiquidity - totalMaxPayout,
       utilization: totalLiquidity > 0 ? totalMaxPayout / totalLiquidity : 0,
       payoutPercent,
+      paymentToken: paymentToken || USDC_ADDRESS,
     };
   }
 
@@ -329,11 +344,12 @@ class HedgeContractManager {
     const events: HedgeEventData[] = [];
     for (let i = 1; i <= count; i++) {
       try {
-        const [core, stats] = await Promise.all([
+        const [core, stats, paymentToken] = await Promise.all([
           contract.getHedgeEventCore(i),
           contract.getHedgeEventStats(i),
+          contract.getEventPaymentToken(i).catch(() => USDC_ADDRESS),
         ]);
-        events.push(this.formatEvent(core, stats, eventTimestamps.get(i)));
+        events.push(this.formatEvent(core, stats, eventTimestamps.get(i), paymentToken as string));
       } catch (err) {
         console.error(`[HedgeContract] Failed to load event #${i}:`, err);
         continue;
@@ -344,12 +360,13 @@ class HedgeContractManager {
 
   async getEvent(eventId: number): Promise<HedgeEventData> {
     const contract = this.getReadContract();
-    const [core, stats, eventTimestamps] = await Promise.all([
+    const [core, stats, eventTimestamps, paymentToken] = await Promise.all([
       contract.getHedgeEventCore(eventId),
       contract.getHedgeEventStats(eventId),
       this.getEventTimestamps(),
+      contract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS),
     ]);
-    return this.formatEvent(core, stats, eventTimestamps.get(eventId));
+    return this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
   }
 
   async getPositionsByWallet(address: string): Promise<HedgePositionData[]> {
@@ -420,11 +437,12 @@ class HedgeContractManager {
     const events: HedgeEventData[] = [];
     for (const id of ids as bigint[]) {
       try {
-        const [core, stats] = await Promise.all([
+        const [core, stats, paymentToken] = await Promise.all([
           contract.getHedgeEventCore(id),
           contract.getHedgeEventStats(id),
+          contract.getEventPaymentToken(id).catch(() => USDC_ADDRESS),
         ]);
-        events.push(this.formatEvent(core, stats, eventTimestamps.get(Number(id))));
+        events.push(this.formatEvent(core, stats, eventTimestamps.get(Number(id)), paymentToken as string));
       } catch {
         continue;
       }
@@ -455,23 +473,27 @@ class HedgeContractManager {
       initialLiquidity: string;
       initialRate: number;
       strikeAbove: boolean;
+      /** ERC-20 token address to use for this event. Defaults to USDC if not supplied. */
+      paymentToken?: string;
     }
   ): Promise<ethers.TransactionResponse> {
     const connected = signer.connect(this.getProvider());
     const feeConfig = await this.getFeeConfig();
+    const tokenAddress = params.paymentToken || USDC_ADDRESS;
     const initialLiquidityWei = ethers.parseUnits(params.initialLiquidity, 6);
     const creationFeeWei = ethers.parseUnits(feeConfig.creationFee.toString(), 6);
     const totalCost = initialLiquidityWei + creationFeeWei;
 
-    const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, this.getProvider());
-    const balance = await usdc.balanceOf(connected.address);
+    const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+    const balance = await tokenContract.balanceOf(connected.address);
     if (balance < totalCost) {
       const balanceFormatted = ethers.formatUnits(balance, 6);
       const costFormatted = ethers.formatUnits(totalCost, 6);
-      throw new Error(`Insufficient USDC balance. You have ${balanceFormatted} USDC but need ${costFormatted} USDC (${params.initialLiquidity} liquidity + $${feeConfig.creationFee} fee).`);
+      const symbol = tokenAddress === USDC_ADDRESS ? 'USDC' : 'USDT';
+      throw new Error(`Insufficient ${symbol} balance. You have ${balanceFormatted} but need ${costFormatted} (${params.initialLiquidity} liquidity + $${feeConfig.creationFee} fee).`);
     }
 
-    await this.approveUSDC(signer, ethers.formatUnits(totalCost, 6));
+    await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, 6));
     await this.ensureGas(connected.address);
 
     const contract = this.getWriteContract(signer);
@@ -491,13 +513,14 @@ class HedgeContractManager {
         initialLiquidityWei,
         initialRateWei,
         params.strikeAbove,
+        tokenAddress,
       ]);
       await tx.wait();
       return tx;
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
-        throw new Error(`Transaction failed: USDC transfer was rejected by the contract. Please ensure your USDC balance is sufficient and try again.`);
+        throw new Error(`Transaction failed: token transfer was rejected by the contract. Please ensure your balance is sufficient and try again.`);
       }
       throw new Error(`Create event failed: ${msg}`);
     }
@@ -522,7 +545,9 @@ class HedgeContractManager {
     eventId: number,
     amount: string
   ): Promise<ethers.TransactionResponse> {
-    await this.approveUSDC(signer, amount);
+    const readContract = this.getReadContract();
+    const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS) as string;
+    await this.approveToken(signer, tokenAddress, amount);
     const contract = this.getWriteContract(signer);
     const amountWei = ethers.parseUnits(amount, 6);
     const tx = await contract.deposit(eventId, amountWei);
@@ -536,9 +561,10 @@ class HedgeContractManager {
     notional: string
   ): Promise<ethers.TransactionResponse> {
     const readContract = this.getReadContract();
-    const [core, feeConfig] = await Promise.all([
+    const [core, feeConfig, tokenAddress] = await Promise.all([
       readContract.getHedgeEventCore(eventId),
       readContract.getHedgeFeeConfig(),
+      readContract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS),
     ]);
 
     const notionalWei = ethers.parseUnits(notional, 6);
@@ -549,7 +575,7 @@ class HedgeContractManager {
     const fee = (notionalWei * hedgerFeeRate) / BigInt(PRECISION);
     const totalCost = premium + fee;
 
-    await this.approveUSDC(signer, ethers.formatUnits(totalCost, 6));
+    await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, 6));
 
     const contract = this.getWriteContract(signer);
     const tx = await contract.buyProtection(eventId, notionalWei);
