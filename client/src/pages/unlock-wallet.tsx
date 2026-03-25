@@ -166,7 +166,7 @@ export default function UnlockWallet() {
       if (wallet) {
         clearAttempts();
         pinStore.set(password);
-        window.location.replace('/home');
+        setLocation('/home');
         return;
       }
       recordFailure();
