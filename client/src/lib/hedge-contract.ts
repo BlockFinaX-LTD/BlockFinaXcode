@@ -275,9 +275,14 @@ class HedgeContractManager {
   }
 
   private feeConfigCache: HedgeFeeConfig | null = null;
+  private feeConfigCachedAt: number = 0;
+  private static readonly FEE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   async getFeeConfig(): Promise<HedgeFeeConfig> {
-    if (this.feeConfigCache) return this.feeConfigCache;
+    const now = Date.now();
+    if (this.feeConfigCache && (now - this.feeConfigCachedAt) < HedgeContractManager.FEE_CACHE_TTL_MS) {
+      return this.feeConfigCache;
+    }
     const contract = this.getReadContract();
     const fees = await contract.getHedgeFeeConfig();
     this.feeConfigCache = {
@@ -287,6 +292,7 @@ class HedgeContractManager {
       lpProfitFeeRate: parseFloat(ethers.formatUnits(fees[3], 6)),
       creatorLoyaltyRate: parseFloat(ethers.formatUnits(fees[4], 6)),
     };
+    this.feeConfigCachedAt = now;
     return this.feeConfigCache;
   }
 
