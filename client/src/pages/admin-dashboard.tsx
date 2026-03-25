@@ -1,6 +1,7 @@
-import { useState, createContext, useContext } from "react";
+import { useState, createContext, useContext, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/api-client";
+import { hedgeContract, type HedgeFeeConfig, USDC_ADDRESS, USDT_ADDRESS_SEPOLIA } from "@/lib/hedge-contract";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,15 @@ function StatCard({ title, value, sub, icon: Icon, color = "text-gray-600" }: { 
 
 function shortenAddr(addr: string) {
   return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "";
+}
+
+function TokenBadge({ address }: { address?: string }) {
+  if (!address) return <Badge variant="outline" className="text-xs">USDC</Badge>;
+  const lower = address.toLowerCase();
+  if (lower === USDT_ADDRESS_SEPOLIA.toLowerCase()) {
+    return <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">USDT</Badge>;
+  }
+  return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">USDC</Badge>;
 }
 
 function DashboardSection() {
@@ -204,6 +214,7 @@ function HedgeSection() {
                     <th className="text-left p-3 font-medium">Pair</th>
                     <th className="text-left p-3 font-medium">Strike</th>
                     <th className="text-left p-3 font-medium">Premium</th>
+                    <th className="text-left p-3 font-medium">Token</th>
                     <th className="text-left p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium hidden md:table-cell">Expiry</th>
                     <th className="text-left p-3 font-medium hidden md:table-cell">Triggered</th>
@@ -216,6 +227,7 @@ function HedgeSection() {
                       <td className="p-3 font-semibold">{e.underlying}</td>
                       <td className="p-3 font-mono">{parseFloat(e.strike).toLocaleString()}</td>
                       <td className="p-3 font-mono text-green-600">{(parseFloat(e.premiumRate) * 100).toFixed(1)}%</td>
+                      <td className="p-3"><TokenBadge address={e.paymentToken} /></td>
                       <td className="p-3">
                         <Badge variant={e.status === "open" ? "default" : e.status === "settled" ? "secondary" : "outline"} className="text-xs capitalize">{e.status}</Badge>
                       </td>
@@ -223,7 +235,7 @@ function HedgeSection() {
                       <td className="p-3 hidden md:table-cell">{e.triggered ? <CheckCircle className="h-4 w-4 text-red-500" /> : <span className="text-gray-300">-</span>}</td>
                     </tr>
                   ))}
-                  {events.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-gray-400">No hedge events</td></tr>}
+                  {events.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-gray-400">No hedge events</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -307,6 +319,25 @@ function HedgeSection() {
 function RevenueSection() {
   const { token } = useAdminToken();
   const { data, isLoading, refetch: refetchRevenue, dataUpdatedAt: revenueUpdatedAt } = useQuery({ queryKey: ["/api/admin/revenue"], queryFn: () => adminFetch("/api/admin/revenue", token).then(r => r.json()), refetchInterval: 30000 });
+  const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
+  const [feeLoading, setFeeLoading] = useState(true);
+  const [feeError, setFeeError] = useState(false);
+
+  const loadFeeConfig = async () => {
+    setFeeLoading(true);
+    setFeeError(false);
+    try {
+      const config = await hedgeContract.getFeeConfig();
+      setFeeConfig(config);
+    } catch {
+      setFeeError(true);
+    } finally {
+      setFeeLoading(false);
+    }
+  };
+
+  useEffect(() => { loadFeeConfig(); }, []);
+
   if (isLoading) return <LoadingSkeleton />;
   const r = (data as any) || {};
 
@@ -317,10 +348,62 @@ function RevenueSection() {
           <h2 className="text-2xl font-bold">Revenue & Fees</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Live on-chain data · Last updated {revenueUpdatedAt ? new Date(revenueUpdatedAt).toLocaleTimeString() : '—'}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetchRevenue()} className="gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => { refetchRevenue(); loadFeeConfig(); }} className="gap-1.5">
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-base">On-Chain Fee Configuration</CardTitle>
+            <Badge variant="outline" className="text-xs ml-auto">Live from contract</Badge>
+          </div>
+          <CardDescription>Current fee rates set in the Diamond contract. Change these by running the admin script.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {feeLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 animate-pulse">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-100 rounded-lg" />)}
+            </div>
+          ) : feeError ? (
+            <div className="flex items-center gap-2 text-sm text-red-500 py-2">
+              <AlertTriangle className="h-4 w-4" />
+              Could not load fee config from chain. Check RPC connection.
+            </div>
+          ) : feeConfig ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="rounded-lg border bg-amber-50 border-amber-200 px-3 py-2 text-center">
+                <div className="text-xs text-amber-700 font-medium mb-0.5">Creation Fee</div>
+                <div className="text-xl font-bold text-amber-800">${feeConfig.creationFee.toFixed(2)}</div>
+                <div className="text-xs text-amber-600 mt-0.5">per event</div>
+              </div>
+              <div className="rounded-lg border bg-blue-50 border-blue-200 px-3 py-2 text-center">
+                <div className="text-xs text-blue-700 font-medium mb-0.5">Hedger Fee</div>
+                <div className="text-xl font-bold text-blue-800">{(feeConfig.hedgerFeeRate * 100).toFixed(2)}%</div>
+                <div className="text-xs text-blue-600 mt-0.5">on premium</div>
+              </div>
+              <div className="rounded-lg border bg-purple-50 border-purple-200 px-3 py-2 text-center">
+                <div className="text-xs text-purple-700 font-medium mb-0.5">Payout Fee</div>
+                <div className="text-xl font-bold text-purple-800">{(feeConfig.hedgerPayoutFeeRate * 100).toFixed(2)}%</div>
+                <div className="text-xs text-purple-600 mt-0.5">on payout</div>
+              </div>
+              <div className="rounded-lg border bg-green-50 border-green-200 px-3 py-2 text-center">
+                <div className="text-xs text-green-700 font-medium mb-0.5">LP Profit Fee</div>
+                <div className="text-xl font-bold text-green-800">{(feeConfig.lpProfitFeeRate * 100).toFixed(2)}%</div>
+                <div className="text-xs text-green-600 mt-0.5">on LP profit</div>
+              </div>
+              <div className="rounded-lg border bg-orange-50 border-orange-200 px-3 py-2 text-center">
+                <div className="text-xs text-orange-700 font-medium mb-0.5">Creator Loyalty</div>
+                <div className="text-xl font-bold text-orange-800">{(feeConfig.creatorLoyaltyRate * 100).toFixed(2)}%</div>
+                <div className="text-xs text-orange-600 mt-0.5">rebate to creator</div>
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Net Platform Revenue" value={`$${r.netPlatformRevenue || "0.00"}`} sub="All fee sources combined" icon={DollarSign} color="text-green-700" />
         <StatCard title="Transaction Fees (0.3%)" value={`$${r.totalTransactionFees || "0.00"}`} sub={`${r.transactionFeeCount || 0} transfers | Vol: $${r.totalTransferVolume || "0.00"}`} icon={DollarSign} color="text-purple-600" />
