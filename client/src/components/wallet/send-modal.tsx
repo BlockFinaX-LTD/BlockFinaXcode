@@ -195,6 +195,20 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
 
   const handleConfirm = async () => {
     if (!pendingData) return;
+
+    // Safety re-check: balance may have changed since the form step
+    if (isInsufficientBalance()) {
+      const tokenInfo = getSelectedTokenInfo();
+      const tokenBal = getTokenBalance();
+      toast({
+        title: 'Insufficient balance',
+        description: `You need more ${tokenInfo.symbol} to complete this transaction. Your balance: ${tokenBal ? formatCrypto(tokenBal.balance, tokenBal.symbol) : '0'}.`,
+        variant: 'destructive',
+      });
+      setStep('form');
+      return;
+    }
+
     setStep('sending');
     try {
       const tokenInfo = getSelectedTokenInfo();
@@ -226,8 +240,17 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
       }
 
       handleClose();
-    } catch {
+    } catch (err: any) {
       setStep('confirm');
+      const msg = err?.message || 'Transaction failed';
+      const isBalanceError = msg.toLowerCase().includes('insufficient') || msg.toLowerCase().includes('exceeds balance');
+      toast({
+        title: isBalanceError ? 'Insufficient balance' : 'Transaction failed',
+        description: isBalanceError
+          ? `You don't have enough funds to complete this transaction.`
+          : msg,
+        variant: 'destructive',
+      });
     }
   };
 

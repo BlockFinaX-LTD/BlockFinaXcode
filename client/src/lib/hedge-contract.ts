@@ -268,6 +268,12 @@ class HedgeContractManager {
     return ethers.formatUnits(balance, 6);
   }
 
+  async getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
+    const contract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+    const balance = await contract.balanceOf(walletAddress);
+    return ethers.formatUnits(balance, 6);
+  }
+
   private feeConfigCache: HedgeFeeConfig | null = null;
 
   async getFeeConfig(): Promise<HedgeFeeConfig> {
@@ -546,9 +552,22 @@ class HedgeContractManager {
   ): Promise<ethers.TransactionResponse> {
     const readContract = this.getReadContract();
     const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS) as string;
+    const connected = signer.connect(this.getProvider());
+    const amountWei = ethers.parseUnits(amount, 6);
+
+    // Pre-flight balance check
+    const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+    const balance = await tokenContract.balanceOf(connected.address);
+    if (balance < amountWei) {
+      const balanceFormatted = ethers.formatUnits(balance, 6);
+      const symbol = tokenAddress.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+      throw new Error(
+        `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(amount).toFixed(2)} ${symbol}.`
+      );
+    }
+
     await this.approveToken(signer, tokenAddress, amount);
     const contract = this.getWriteContract(signer);
-    const amountWei = ethers.parseUnits(amount, 6);
     const tx = await contract.deposit(eventId, amountWei);
     await tx.wait();
     return tx;
@@ -566,6 +585,7 @@ class HedgeContractManager {
       readContract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS),
     ]);
 
+    const connected = signer.connect(this.getProvider());
     const notionalWei = ethers.parseUnits(notional, 6);
     const premiumRate = core.premiumRate as bigint;
     const hedgerFeeRate = feeConfig[1] as bigint;
@@ -574,12 +594,32 @@ class HedgeContractManager {
     const fee = (notionalWei * hedgerFeeRate) / BigInt(PRECISION);
     const totalCost = premium + fee;
 
+    // Pre-flight balance check
+    const symbol = (tokenAddress as string).toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+    const tokenContract = new ethers.Contract(tokenAddress as string, USDC_ABI, this.getProvider());
+    const balance = await tokenContract.balanceOf(connected.address);
+    if (balance < totalCost) {
+      const balanceFormatted = ethers.formatUnits(balance, 6);
+      const costFormatted = ethers.formatUnits(totalCost, 6);
+      throw new Error(
+        `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(costFormatted).toFixed(2)} ${symbol} (premium + fee).`
+      );
+    }
+
     await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, 6));
 
     const contract = this.getWriteContract(signer);
-    const tx = await contract.buyProtection(eventId, notionalWei);
-    await tx.wait();
-    return tx;
+    try {
+      const tx = await contract.buyProtection(eventId, notionalWei);
+      await tx.wait();
+      return tx;
+    } catch (error: any) {
+      const msg = error?.reason || error?.message || 'Transaction failed';
+      if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
+        throw new Error(`Insufficient ${symbol} balance — the contract rejected the transfer. Please top up your ${symbol} and try again.`);
+      }
+      throw new Error(`Buy protection failed: ${msg}`);
+    }
   }
 
   async claimPayout(signer: ethers.Wallet, positionId: number): Promise<ethers.TransactionResponse> {

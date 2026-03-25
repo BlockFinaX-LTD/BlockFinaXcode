@@ -91,6 +91,19 @@ export default function Hedge() {
 
   const shortenAddress = (addr: string) => addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "";
 
+  // Live token balance for the selected event's payment token (shown in buy/deposit dialogs)
+  const { data: selectedEventTokenBalance } = useQuery<string>({
+    queryKey: ['/hedge/token-balance', selectedEvent?.paymentToken, wallet?.address],
+    queryFn: async () => {
+      if (!selectedEvent?.paymentToken || !wallet?.address) return '0';
+      return hedgeContract.getTokenBalance(selectedEvent.paymentToken, wallet.address);
+    },
+    enabled: !!(selectedEvent?.paymentToken && wallet?.address && (buyDialogOpen || depositDialogOpen)),
+    refetchInterval: 10_000,
+  });
+  const eventTokenSymbol = selectedEvent?.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+  const tokenBalanceNum = parseFloat(selectedEventTokenBalance ?? '0');
+
   const getCreatorStats = (creatorAddr: string) => {
     const creatorEvents = events.filter(e => e.creator.toLowerCase() === creatorAddr.toLowerCase());
     const totalPremiums = creatorEvents.reduce((sum, e) => sum + e.totalPremiums, 0);
@@ -1254,12 +1267,21 @@ export default function Hedge() {
               </div>
 
               <div>
-                <Label className="text-muted-foreground">Coverage Amount ({selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"})</Label>
+                <Label className="text-muted-foreground">Coverage Amount ({eventTokenSymbol})</Label>
                 <Input
                   type="number" min="10" step="1" placeholder="e.g. 100"
                   value={notional} onChange={e => setNotional(e.target.value)}
                   className="bg-muted border-border text-foreground mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your balance:{" "}
+                  <span className={tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? "text-destructive font-semibold" : "font-medium"}>
+                    {selectedEventTokenBalance !== undefined ? parseFloat(selectedEventTokenBalance).toFixed(2) : "…"} {eventTokenSymbol}
+                  </span>
+                  {tokenBalanceNum < totalCostCalc && totalCostCalc > 0 && (
+                    <span className="text-destructive ml-2">— insufficient</span>
+                  )}
+                </p>
               </div>
 
               {notional && parseFloat(notional) >= 10 && (
@@ -1313,9 +1335,9 @@ export default function Hedge() {
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setBuyDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
             <Button onClick={guardedBuyProtection}
-              disabled={!notional || parseFloat(notional) < 10 || buyProtectionMutation.isPending}
+              disabled={!notional || parseFloat(notional) < 10 || buyProtectionMutation.isPending || (selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0)}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {buyProtectionMutation.isPending ? "Processing..." : `Pay $${totalCostCalc.toFixed(2)} & Buy Protection`}
+              {buyProtectionMutation.isPending ? "Processing..." : selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? `Insufficient ${eventTokenSymbol}` : `Pay $${totalCostCalc.toFixed(2)} & Buy Protection`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1351,12 +1373,21 @@ export default function Hedge() {
               </div>
 
               <div>
-                <Label className="text-muted-foreground">Deposit Amount ({selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"})</Label>
+                <Label className="text-muted-foreground">Deposit Amount ({eventTokenSymbol})</Label>
                 <Input
                   type="number" min="10" step="1" placeholder="e.g. 500"
                   value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
                   className="bg-muted border-border text-foreground mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your balance:{" "}
+                  <span className={depositAmount && parseFloat(depositAmount) > tokenBalanceNum ? "text-destructive font-semibold" : "font-medium"}>
+                    {selectedEventTokenBalance !== undefined ? parseFloat(selectedEventTokenBalance).toFixed(2) : "…"} {eventTokenSymbol}
+                  </span>
+                  {depositAmount && parseFloat(depositAmount) > tokenBalanceNum && (
+                    <span className="text-destructive ml-2">— insufficient</span>
+                  )}
+                </p>
               </div>
 
               {depositAmount && parseFloat(depositAmount) >= 10 && (
@@ -1395,9 +1426,9 @@ export default function Hedge() {
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setDepositDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
             <Button onClick={guardedDeposit}
-              disabled={!depositAmount || parseFloat(depositAmount) < 10 || depositMutation.isPending}
+              disabled={!depositAmount || parseFloat(depositAmount) < 10 || depositMutation.isPending || (selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum)}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {depositMutation.isPending ? "Depositing..." : `Pay $${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} & Deposit`}
+              {depositMutation.isPending ? "Depositing..." : selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum ? `Insufficient ${eventTokenSymbol}` : `Pay $${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} & Deposit`}
             </Button>
           </DialogFooter>
         </DialogContent>
