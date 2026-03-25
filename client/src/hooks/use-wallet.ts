@@ -103,29 +103,11 @@ export function useWallet() {
 
       // If wallet manager says not unlocked, check persistent state
       if (!isUnlocked && secureStorage.isWalletUnlocked()) {
-        // Trust the persistent unlock state for UI purposes
-        const unlockedData = secureStorage.getWalletUnlockedData();
-        if (unlockedData) {
-          isUnlocked = true;
-          address = unlockedData.address;
-          // Load wallet data for display (non-sensitive operations only)
-          try {
-            wallet = secureStorage.loadWallet();
-          } catch (error) {
-            // If can't load wallet data, still show as unlocked with basic info
-          }
-          // loadWallet() returns null for V2 wallets (wallet_encrypted = 'bfx_v2' marker).
-          // Always fall back to synthetic wallet from persisted unlock data.
-          if (!wallet) {
-            wallet = {
-              address: unlockedData.address,
-              name: unlockedData.name,
-              encryptedPrivateKey: 'v2',
-              isImported: false,
-              createdAt: new Date().toISOString()
-            };
-          }
-        }
+        // The in-memory signing key is gone (page reload). Clear the stale
+        // localStorage flag so the router redirects to /unlock-wallet for PIN re-entry.
+        secureStorage.clearWalletUnlocked();
+        setState({ isUnlocked: false, wallet: null, address: null, isLoading: false, error: null });
+        return;
       } else if (isUnlocked) {
         wallet = secureStorage.loadWallet();
         // V2 wallets: wallet_encrypted is a 'bfx_v2' marker string, not real encrypted data.
