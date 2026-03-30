@@ -45,6 +45,7 @@ import AcceptOwnership from "@/pages/accept-ownership";
 import OracleSetup from "@/pages/oracle-setup";
 import InstallTimelock from "@/pages/install-timelock";
 import SafeTransfer from "@/pages/safe-transfer";
+import ProposeOwnershipFacet from "@/pages/propose-ownership-facet";
 
 function Router() {
   return (
@@ -80,6 +81,7 @@ function Router() {
       <Route path="/oracle-setup" component={OracleSetup} />
       <Route path="/install-timelock" component={InstallTimelock} />
       <Route path="/safe-transfer" component={SafeTransfer} />
+      <Route path="/propose-ownership-facet" component={ProposeOwnershipFacet} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
 
