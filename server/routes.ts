@@ -939,7 +939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const ethers = await import("ethers");
-      const provider = new ethers.JsonRpcProvider("https://rpc.sepolia-api.lisk.com");
+      const provider = new ethers.JsonRpcProvider("https://rpc.api.lisk.com");
       const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
       if (!deployerKey) {
         return res.status(500).json({ message: "Gas sponsor not configured" });
