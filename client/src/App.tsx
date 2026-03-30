@@ -43,6 +43,7 @@ import VideoPage from "@/pages/video";
 import FinancialModel from "@/pages/financial-model";
 import AcceptOwnership from "@/pages/accept-ownership";
 import OracleSetup from "@/pages/oracle-setup";
+import InstallTimelock from "@/pages/install-timelock";
 
 function Router() {
   return (
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/accept-ownership" component={AcceptOwnership} />
       <Route path="/oracle-setup" component={OracleSetup} />
+      <Route path="/install-timelock" component={InstallTimelock} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
 
