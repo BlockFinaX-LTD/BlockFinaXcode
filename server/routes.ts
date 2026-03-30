@@ -1045,16 +1045,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/fees/treasury-address", async (_req, res) => {
-    try {
-      const { getTreasuryAddress } = await import("./treasury-wallet");
-      const address = getTreasuryAddress();
-      res.json({ address });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to get treasury address" });
-    }
-  });
-
   app.get("/api/fx/rates", async (_req, res) => {
     try {
       const rates = await fetchAllRates();
