@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api-client";
 import logoPath from "@/assets/logo.png";
@@ -512,7 +512,7 @@ function EmailCapture() {
         <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.3 }}
           className="max-w-lg mx-auto text-center">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Stay updated</h3>
-          <p className="text-sm text-gray-500 mb-4">Get notified about mainnet launch and new features.</p>
+          <p className="text-sm text-gray-500 mb-4">Get the latest updates on new features and supported pairs.</p>
           {message ? (
             <div className="text-sm text-green-600 bg-green-50 rounded-full py-3 px-4">{message}</div>
           ) : (
@@ -561,8 +561,8 @@ function FAQ() {
       a: "Event creators set up a one-touch protection pool — specifying the pair, strike price, premium rate, and duration. Liquidity providers fund the pool and earn premiums. Hedgers buy protection by paying the premium. If the price touches the strike before expiry (one-touch settlement), hedgers receive their predetermined payout. If it never touches, LPs keep all premiums."
     },
     {
-      q: "When does mainnet launch?",
-      a: "BlockFinaX mainnet is scheduled for July 7, 2026. Until then, all features — Wallet, Hedge marketplace, and the full suite of 63 pairs — are live on Lisk Sepolia testnet for you to explore risk-free."
+      q: "Is BlockFinaX live?",
+      a: "Yes — BlockFinaX is live on Lisk Mainnet. The Wallet, Hedge marketplace, and the full suite of 63 pairs are fully operational. Connect your wallet and start trading."
     },
     {
       q: "Is this regulated?",
@@ -605,26 +605,6 @@ export default function Website() {
   const [mobileProductsOpen, setMobileProductsOpen] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [mobileExploreOpen, setMobileExploreOpen] = useState(false);
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  const mainnetLaunchDate = new Date('2026-07-07T00:00:00Z').getTime();
-
-  useEffect(() => {
-    const calc = () => {
-      const diff = mainnetLaunchDate - Date.now();
-      if (diff > 0) {
-        setTimeLeft({
-          days: Math.floor(diff / 86400000),
-          hours: Math.floor((diff % 86400000) / 3600000),
-          minutes: Math.floor((diff % 3600000) / 60000),
-          seconds: Math.floor((diff % 60000) / 1000)
-        });
-      }
-    };
-    calc();
-    const t = setInterval(calc, 1000);
-    return () => clearInterval(t);
-  }, []);
 
   return (
     <div className="min-h-screen text-gray-900 relative" style={{ background: 'linear-gradient(180deg, #f0f4ff 0%, #ffffff 30%, #f8faff 60%, #ffffff 100%)' }}>
@@ -855,16 +835,9 @@ export default function Website() {
               </motion.div>
 
               <motion.div initial={{ opacity: 0.7 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.25 }}
-                className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 text-sm text-gray-400">
-                <div className="flex items-center gap-2">
-                  <span>Mainnet</span>
-                  <div className="flex items-center gap-1 font-mono text-gray-600">
-                    <span>{String(timeLeft.days).padStart(2, '0')}d</span>
-                    <span>{String(timeLeft.hours).padStart(2, '0')}h</span>
-                    <span>{String(timeLeft.minutes).padStart(2, '0')}m</span>
-                    <span>{String(timeLeft.seconds).padStart(2, '0')}s</span>
-                  </div>
-                </div>
+                className="flex items-center justify-center md:justify-start gap-2 text-sm text-gray-500">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span>Live on Lisk Mainnet</span>
               </motion.div>
             </div>
 

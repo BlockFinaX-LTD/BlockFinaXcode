@@ -76,7 +76,6 @@ export default function Waitlist() {
       <footer className="border-t border-border py-6 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           <p>BlockFinaX Limited - Registered in Ghana</p>
-          <p className="mt-1">Mainnet Launch: July 7, 2026</p>
         </div>
       </footer>
     </div>
