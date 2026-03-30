@@ -47,6 +47,7 @@ import InstallTimelock from "@/pages/install-timelock";
 import SafeTransfer from "@/pages/safe-transfer";
 import ProposeOwnershipFacet from "@/pages/propose-ownership-facet";
 import SafeAddOwner from "@/pages/safe-add-owner";
+import ProposeV2Upgrades from "@/pages/propose-v2-upgrades";
 
 function Router() {
   return (
@@ -84,6 +85,7 @@ function Router() {
       <Route path="/safe-transfer" component={SafeTransfer} />
       <Route path="/propose-ownership-facet" component={ProposeOwnershipFacet} />
       <Route path="/safe-add-owner" component={SafeAddOwner} />
+      <Route path="/propose-v2-upgrades" component={ProposeV2Upgrades} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
 
