@@ -22,8 +22,8 @@ import { pinStore } from '@/lib/pin-store';
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
 const ATTEMPTS_KEY = 'wallet_pin_attempts';
-const BG = '#F5EFE6';
-const DARK = '#1a1a2e';
+const BG = '#ffffff';
+const DARK = '#1a4480';
 
 interface AttemptsRecord { count: number; resetAt: number; }
 
@@ -68,7 +68,7 @@ function PinKeypad({ onDigit, onDelete, disabled }: { onDigit: (d: string) => vo
             disabled={disabled}
             onClick={() => key === '⌫' ? onDelete() : onDigit(key)}
             className="h-14 w-full rounded-2xl text-2xl font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center"
-            style={{ background: '#ffffff', color: DARK, border: '1.5px solid #e0d8ce' }}
+            style={{ background: '#f8fafc', color: DARK, border: '1.5px solid #e2e8f0' }}
           >
             {key}
           </button>
@@ -247,7 +247,7 @@ export default function UnlockWallet() {
                 onClick={handleFaceId}
                 disabled={faceIdLoading || unlocking}
                 className="w-full py-4 rounded-2xl text-base font-semibold mb-6 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                style={{ background: '#ffffff', color: DARK, border: '1.5px solid #e0d8ce' }}
+                style={{ background: '#f8fafc', color: DARK, border: '1.5px solid #e2e8f0' }}
               >
                 {faceIdLoading
                   ? <Loader2 className="h-5 w-5 animate-spin" />
@@ -322,7 +322,7 @@ export default function UnlockWallet() {
       )}
 
       {/* Bottom accent */}
-      <div className="w-full h-1.5 bg-gradient-to-r from-orange-400 via-red-500 to-orange-600" />
+      <div className="w-full h-1.5" style={{ backgroundColor: '#1a4480' }} />
     </div>
   );
 }

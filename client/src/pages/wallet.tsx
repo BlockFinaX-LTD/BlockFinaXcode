@@ -14,42 +14,42 @@ import logoPath from "@/assets/logo-transparent.png";
 function WalletLanding() {
   const [, setLocation] = useLocation();
   return (
-    <div className="min-h-screen flex flex-col items-center" style={{ backgroundColor: '#F5EFE6' }}>
-      {/* Logo area — upper third */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-8 w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#ffffff' }}>
+      <div className="flex flex-col items-center px-6 w-full max-w-sm">
+        {/* Logo */}
         <img
           src={logoPath}
           alt="BlockFinaX"
           className="w-28 h-28 object-contain mb-6"
         />
-        <h1 className="text-4xl font-extrabold tracking-tight text-center leading-tight" style={{ color: '#1a1a2e' }}>
+        <h1 className="text-4xl font-extrabold tracking-tight text-center leading-tight" style={{ color: '#1a4480' }}>
           BlockFinaX
         </h1>
-        <p className="mt-3 text-sm text-center" style={{ color: '#6b6b80' }}>
+        <p className="mt-3 text-sm text-center" style={{ color: '#6b7280' }}>
           P2P FX Protection on Lisk Mainnet
         </p>
+
+        {/* Buttons */}
+        <div className="mt-10 w-full space-y-3">
+          <button
+            onClick={() => setLocation('/create-wallet')}
+            className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
+            style={{ backgroundColor: '#1a4480', color: '#ffffff' }}
+          >
+            Create a new wallet
+          </button>
+          <button
+            onClick={() => setLocation('/import-wallet')}
+            className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
+            style={{ backgroundColor: '#ffffff', color: '#1a4480', border: '1.5px solid #1a4480' }}
+          >
+            I have an existing wallet
+          </button>
+        </div>
       </div>
 
-      {/* Buttons — centered */}
-      <div className="w-full max-w-sm px-6 pb-16 space-y-3">
-        <button
-          onClick={() => setLocation('/create-wallet')}
-          className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
-          style={{ backgroundColor: '#ffffff', color: '#1a1a2e', border: '1.5px solid #e0d8ce' }}
-        >
-          Create a new wallet
-        </button>
-        <button
-          onClick={() => setLocation('/import-wallet')}
-          className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
-          style={{ backgroundColor: '#1a1a2e', color: '#ffffff' }}
-        >
-          I have an existing wallet
-        </button>
-      </div>
-
-      {/* Decorative bottom strip */}
-      <div className="w-full h-1.5 bg-gradient-to-r from-orange-400 via-red-500 to-orange-600 rounded-t-full" />
+      {/* Brand bottom strip */}
+      <div className="fixed bottom-0 left-0 right-0 h-1.5" style={{ backgroundColor: '#1a4480' }} />
     </div>
   );
 }
