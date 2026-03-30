@@ -197,7 +197,7 @@ const CATEGORIES = [
     color: "border-amber-200 bg-amber-50", iconColor: "text-amber-600",
     documents: [
       { id: "demo-video", title: "Product Demo Video", description: "Walkthrough of the Wallet and Hedge products on testnet — add your video link", href: null, type: "modal" as const, badge: "Video", badgeColor: "bg-amber-100 text-amber-700", icon: Video },
-      { id: "live-app", title: "Live Testnet App", description: "Fully functional deployment on Lisk Sepolia — create a wallet and explore hedge markets live", href: "/home", type: "navigate" as const, badge: "Live", badgeColor: "bg-emerald-100 text-emerald-700", icon: Beaker },
+      { id: "live-app", title: "Live Mainnet App", description: "Fully functional deployment on Lisk Mainnet — create a wallet and explore hedge markets with real USDC", href: "/home", type: "navigate" as const, badge: "Live", badgeColor: "bg-emerald-100 text-emerald-700", icon: Beaker },
     ],
   },
   {
@@ -237,9 +237,9 @@ const EXEC_D = {
   problem: "African SMEs conducting cross-border trade are structurally exposed to FX volatility, with swings of 8–25% common on pairs like GHS/USD, NGN/USD, and KES/USD. No accessible, transparent hedging product exists for sub-$1M trade flows. Banks ignore them. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs.",
   solution_hedge: "BlockFinaX Hedge — P2P one-touch parametric contracts. Hedgers buy downside protection against a specific FX strike level. LPs provide liquidity and earn premiums. No counterparty risk: payouts are reserved on-chain the moment a hedge is purchased. Settlement is automatic — triggered when the price touches the strike, or at expiry.",
   solution_wallet: "BlockFinaX Wallet — Non-custodial USDC wallet with AES-256 encrypted key storage, gasless transactions, and real-time cross-border transfers at 0.3% (min $0.50).",
-  traction: "Live on Lisk Sepolia testnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Bank of Ghana regulatory sandbox application filed Q1 2026.",
+  traction: "Live on Lisk Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
   technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Lisk L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
-  mainnet: "July 7, 2026 — Mainnet launch on Lisk L2, following third-party security audit and Bank of Ghana sandbox approval.",
+  mainnet: "Live — Deployed on Lisk Mainnet (March 2026). Diamond proxy at 0x3eDfA00a1E3C158A591097de2FA1756aCD66860D. All contracts verified on Blockscout.",
   ask: [
     { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
     { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
@@ -481,10 +481,10 @@ const AUDIT_D = {
   ],
   checklist: [
     { item: "Formal third-party audit (Certik / Trail of Bits)", timing: "Q2 2026",    status: "pending" },
-    { item: "Gnosis Safe multisig on oracle admin wallet",       timing: "Pre-launch",  status: "pending" },
-    { item: "Timelock on Diamond upgrades (48h delay)",          timing: "Pre-launch",  status: "pending" },
-    { item: "Emergency pause mechanism on HedgeFacet",          timing: "Pre-launch",  status: "pending" },
-    { item: "Multi-signer oracle relay (3-of-5)",                timing: "Pre-launch",  status: "pending" },
+    { item: "Gnosis Safe multisig ownership transfer",           timing: "Post-launch", status: "pending" },
+    { item: "Timelock on Diamond upgrades (48h delay)",          timing: "Post-launch", status: "pending" },
+    { item: "Emergency pause mechanism on HedgeFacet",           timing: "Mainnet",     status: "complete" },
+    { item: "Multi-signer oracle relay (3-of-5)",                timing: "Mainnet",     status: "complete" },
     { item: "ReentrancyGuard on all state-changing functions",   timing: "Done",        status: "done"    },
     { item: "SafeERC20 for all USDC transfers",                  timing: "Done",        status: "done"    },
     { item: "Contract verification on Blockscout",               timing: "Done",        status: "done"    },
@@ -551,12 +551,14 @@ function SecurityAuditDoc({ token }: { token: string }) {
           </div>
         ))}
       </div>
-      <h2 style={S.h2}>Contract Addresses (Lisk Sepolia)</h2>
+      <h2 style={S.h2}>Contract Addresses (Lisk Mainnet)</h2>
       <div style={{ fontFamily: "monospace", fontSize: "12px", color: "#475569", background: "#f8fafc", padding: "12px 16px", borderRadius: "8px", lineHeight: 2 }}>
-        <div>Diamond: <strong>0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf</strong></div>
-        <div>HedgeFacet: <strong>0x1B2aca3f871e9AF5D88C28862375601a2552bBb2</strong></div>
-        <div>DiamondCutFacet: <strong>0x289eE379b00e3B20c4BaD64a525B0b0D123a7d0c</strong></div>
-        <div>USDC: <strong>0xf52Ad63619Bf9cFeF510341ac6b4038554399562</strong></div>
+        <div>Diamond (proxy): <strong>0x3eDfA00a1E3C158A591097de2FA1756aCD66860D</strong></div>
+        <div>HedgeFacet v6: <strong>0xCd84f1493497Dbaf5C1933907bD2D253a54233Bf</strong></div>
+        <div>OracleFacet v3: <strong>0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73</strong></div>
+        <div>DiamondCutFacet: <strong>0x3581E16414286AD77601f9489F26a11eD96A9Be4</strong></div>
+        <div>DiamondLoupeFacet: <strong>0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6</strong></div>
+        <div>USDC (Lisk Mainnet): <strong>0xF242275d3a6527d877f2c927a82D9b057609cc71</strong></div>
       </div>
     </div>
   );

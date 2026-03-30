@@ -161,7 +161,7 @@ export default function Whitepaper() {
             <div className="flex items-center gap-2">
               <img src={logoPath} alt="BlockFinaX" className="h-5 w-5 object-contain" />
               <span className="text-sm font-semibold">BlockFinaX</span>
-              <span className="text-xs text-muted-foreground font-mono">Whitepaper v1.0</span>
+              <span className="text-xs text-muted-foreground font-mono">Whitepaper v1.1</span>
             </div>
           </div>
           <div className="text-xs text-muted-foreground hidden md:block">March 2026</div>
@@ -213,7 +213,7 @@ export default function Whitepaper() {
               dispersed traders who require accessible, structured, and auditable risk management tools.
             </p>
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {["Version 1.0", "March 2026", "EVM Blockchain", "Testnet Active", "Mainnet: July 7, 2026"].map(t => (
+              {["Version 1.1", "March 2026", "EVM Blockchain", "Mainnet Live", "Lisk Mainnet"].map(t => (
                 <span key={t} className="px-2.5 py-1 rounded-full bg-muted border border-border">{t}</span>
               ))}
             </div>
@@ -1174,8 +1174,8 @@ export default function Whitepaper() {
           <div className="space-y-5 mb-6">
             {[
               {
-                phase: "Phase 1", label: "Testnet & Foundation", timeline: "Q1–Q2 2026", status: "Active",
-                color: "border-primary/40 bg-primary/5",
+                phase: "Phase 1", label: "Testnet & Foundation", timeline: "Q1–Q2 2026", status: "Complete",
+                color: "border-green-500/40 bg-green-500/5",
                 items: [
                   "EVM testnet deployment — live and accessible",
                   "63 pairs across FX (42), Commodities (11), Crypto (6, plus 4 planned)",
@@ -1189,12 +1189,12 @@ export default function Whitepaper() {
                 ],
               },
               {
-                phase: "Phase 2", label: "Mainnet Launch", timeline: "July 7, 2026", status: "Planned",
-                color: "border-border bg-muted/20",
+                phase: "Phase 2", label: "Mainnet Launch", timeline: "March 2026", status: "Live",
+                color: "border-primary/40 bg-primary/5",
                 items: [
-                  "Production blockchain mainnet deployment",
-                  "Live settlement in USDC and additional supported stablecoins",
-                  "Independent smart contract security audit",
+                  "Production blockchain mainnet deployment — complete",
+                  "Live settlement in USDC and USDT",
+                  "Multi-round smart contract audit patches applied (v5 + v6)",
                   "Institutional LP onboarding programme",
                   "Decentralised oracle integration (Chainlink or equivalent)",
                   "Mobile-optimised progressive web application",
@@ -1264,7 +1264,7 @@ export default function Whitepaper() {
             {[
               {
                 risk: "Smart contract risk",
-                detail: "The protocol's smart contracts have not yet undergone a professional independent security audit. Smart contracts may contain bugs, vulnerabilities, or unintended behaviours. All current activity takes place on a testnet using tokens with no real monetary value. A professional audit is planned prior to mainnet deployment.",
+                detail: "The protocol's smart contracts have undergone multiple rounds of internal security review and audit patching (v5 and v6 fix sets applied pre-mainnet). Smart contracts are deployed on Lisk Mainnet and handle real value. A formal third-party audit is planned as a near-term priority. Smart contracts may still contain bugs or unintended behaviours and participants should size positions accordingly.",
               },
               {
                 risk: "Oracle and data source risk",
@@ -1340,8 +1340,8 @@ export default function Whitepaper() {
             financial innovation requires.
           </P>
           <P>
-            The testnet is live. Mainnet launches July 7, 2026. We invite businesses, traders,
-            liquidity providers, regulators, and builders to engage with the protocol, test its
+            BlockFinaX is live on Lisk Mainnet. We invite businesses, traders,
+            liquidity providers, regulators, and builders to engage with the protocol, explore its
             mechanics, and contribute to the development of parametric protection infrastructure
             that serves the full breadth of Africa's market participants.
           </P>
@@ -1401,7 +1401,7 @@ export default function Whitepaper() {
                 illustrative and do not represent guaranteed outcomes. Regulatory approvals referenced
                 as planned or in progress are subject to regulatory discretion and are not guaranteed.
               </p>
-              <p className="text-muted-foreground/50">© 2026 BlockFinaX. All rights reserved. Whitepaper v1.0 — March 2026.</p>
+              <p className="text-muted-foreground/50">© 2026 BlockFinaX. All rights reserved. Whitepaper v1.1 — March 2026.</p>
             </div>
           </div>
         </main>
