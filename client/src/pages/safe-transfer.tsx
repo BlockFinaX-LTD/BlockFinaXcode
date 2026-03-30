@@ -12,9 +12,16 @@ const LISK_CHAIN_ID  = 1135;
 const DIAMOND_ABI = [
   "function transferOwnership(address _newOwner) external",
   "function pendingOwner() view returns (address)",
-  "function owner() view returns (address)",
-  "function acceptOwnership() external",
 ];
+
+// contractOwner lives at DiamondStorage base slot + 4
+// base = keccak256("diamond.standard.diamond.storage")
+async function readDiamondOwner(provider: ethers.JsonRpcProvider): Promise<string> {
+  const base = BigInt(ethers.keccak256(ethers.toUtf8Bytes("diamond.standard.diamond.storage")));
+  const slot  = ethers.toBeHex(base + 4n, 32);
+  const raw   = await provider.getStorage(DIAMOND, slot);
+  return ethers.getAddress("0x" + raw.slice(-40));
+}
 
 const SAFE_ABI = [
   "function approveHash(bytes32 hashToApprove) external",
@@ -55,7 +62,7 @@ export default function SafeTransfer() {
       const safe     = new ethers.Contract(SAFE, SAFE_ABI, provider);
 
       const [diamondOwner, pendingOwner, safeNonce] = await Promise.all([
-        diamond.owner(),
+        readDiamondOwner(provider),
         diamond.pendingOwner(),
         safe.nonce(),
       ]);
