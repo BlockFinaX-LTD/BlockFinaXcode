@@ -36,6 +36,7 @@ import HomePage from "@/pages/home";
 import Hedge from "@/pages/hedge";
 import TasksPage from "@/pages/tasks";
 import ProfilePage from "@/pages/profile";
+import SettingsPage from "@/pages/settings";
 
 // Admin
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/hedge" component={Hedge} />
       <Route path="/tasks" component={TasksPage} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/settings" component={SettingsPage} />
 
       {/* Rewards & admin */}
       <Route path="/rewards" component={TasksPage} />

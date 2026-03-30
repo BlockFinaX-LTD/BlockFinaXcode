@@ -186,10 +186,9 @@ export function AppHeader({ title, onRefresh, refreshing, rightContent }: AppHea
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
 
-                  <DropdownMenuItem disabled>
+                  <DropdownMenuItem onClick={() => setLocation('/settings')}>
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5">Soon</Badge>
                   </DropdownMenuItem>
 
                   <DropdownMenuItem onClick={() => window.open('https://blockfinax.com/help', '_blank')} disabled>

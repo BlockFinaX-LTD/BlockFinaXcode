@@ -22,7 +22,7 @@ export interface StoredWallet {
 export interface WalletSettings {
   selectedNetworkId: number;
   theme: 'light' | 'dark';
-  currency: 'USD' | 'EUR' | 'GBP';
+  currency: 'USD' | 'EUR' | 'GBP' | 'NGN' | 'GHS' | 'KES' | 'ZAR';
   autoLock: boolean;
   autoLockTimeout: number; // minutes
 }
@@ -156,7 +156,7 @@ class SecureStorage {
     
     // Default settings — use the first available network for the current mode
     return {
-      selectedNetworkId: 2,
+      selectedNetworkId: 1,
       theme: 'light',
       currency: 'USD',
       autoLock: true,
