@@ -7,6 +7,11 @@
 import { ethers } from 'ethers';
 
 const RPC_FALLBACKS: Record<number, string[]> = {
+  1135: [
+    'https://rpc.api.lisk.com',
+    'https://lisk.drpc.org',
+    'https://lisk-mainnet.public.blastapi.io'
+  ],
   4202: [
     'https://rpc.sepolia-api.lisk.com',
     'https://lisk-sepolia.drpc.org',

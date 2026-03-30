@@ -9,6 +9,7 @@ import { getNetworkById, getNetworkByChainId } from "./networks";
 import { getTokensForNetwork } from "./tokens";
 
 function chainIdToNetworkId(chainId: number): number {
+  if (chainId === 1135) return 1;   // Lisk Mainnet
   if (chainId === 4202) return 2;   // Lisk Sepolia
   return chainId;
 }

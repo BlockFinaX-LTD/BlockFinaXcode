@@ -289,7 +289,7 @@ function ExecSummary({ token }: { token: string }) {
       <p style={S.p}>{data.traction}</p>
       <h2 style={S.h2}>Technology</h2>
       <p style={S.p}>{data.technology}</p>
-      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf · HedgeFacet: 0x1B2aca3f871e9AF5D88C28862375601a2552bBb2</p>
+      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x3eDfA00a1E3C158A591097de2FA1756aCD66860D · HedgeFacet: 0xCd84f1493497Dbaf5C1933907bD2D253a54233Bf</p>
       <h2 style={S.h2}>The Ask</h2>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead>
@@ -649,7 +649,7 @@ function DemoVideoDoc({ token }: { token: string }) {
 
       <h2 style={S.h2}>What the Demo Covers</h2>
       <ul style={{ fontSize: "13px", color: "#475569", paddingLeft: "18px", lineHeight: 2 }}>
-        <li>Creating a non-custodial USDC wallet on Lisk Sepolia</li>
+        <li>Creating a non-custodial USDC wallet on Lisk Mainnet</li>
         <li>Browsing open hedge events across FX, commodities, and crypto pairs</li>
         <li>Buying a downside hedge — setting strike, notional, and expiry</li>
         <li>Providing liquidity as an LP and earning premiums</li>
@@ -959,7 +959,7 @@ const BOG_D = {
   intro: "BlockFinaX has applied for admission to the Bank of Ghana's Regulatory Sandbox — a controlled environment for testing innovative fintech products under regulatory supervision. Admission would grant a time-limited licence to operate in Ghana while formal regulation is developed around on-chain parametric protection products.",
   applied_for: [
     "A sandbox licence to offer parametric FX protection contracts to Ghanaian SMEs",
-    "Permission to settle contracts in USDC on a public blockchain (Lisk Sepolia / Lisk Mainnet)",
+    "Permission to settle contracts in USDC on a public blockchain (Lisk Mainnet)",
     "Regulatory safe harbour during the sandbox period for on-chain settlement mechanisms",
     "Access to the Bank of Ghana's FinTech and Innovation Office for dialogue on licensing frameworks",
   ],

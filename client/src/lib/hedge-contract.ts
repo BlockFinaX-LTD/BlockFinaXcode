@@ -1,21 +1,21 @@
 /**
  * Hedge Contract Integration - Direct on-chain calls to the HedgeFacet
  *
- * All interaction with the BlockFinaX Diamond contract on Lisk Sepolia goes through this file.
+ * All interaction with the BlockFinaX Diamond contract on Lisk Mainnet goes through this file.
  * Covers: event creation, buying protection (hedger), providing liquidity (LP),
  * claiming payouts, withdrawing LP funds, fetching event and position data.
- * Contract address: 0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf (Diamond)
+ * Contract address: 0x3eDfA00a1E3C158A591097de2FA1756aCD66860D (Diamond — Lisk Mainnet)
  * Exports: DIAMOND_ADDRESS, USDC_ADDRESS, getHedgeFacetContract, createHedgeEvent,
  *          buyProtection, depositLiquidity, claimPayout, withdrawLiquidity, and more.
  */
 import { ethers } from 'ethers';
 
-export const DIAMOND_ADDRESS = '0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf';
-export const USDC_ADDRESS = '0xf52Ad63619Bf9cFeF510341ac6b4038554399562';
+export const DIAMOND_ADDRESS = '0x3eDfA00a1E3C158A591097de2FA1756aCD66860D';
+export const USDC_ADDRESS = '0xF242275d3a6527d877f2c927a82D9b057609cc71';
 export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
-export const LISK_SEPOLIA_CHAIN_ID = 4202;
-export const LISK_SEPOLIA_RPC = 'https://rpc.sepolia-api.lisk.com';
-export const LISK_BLOCKSCOUT = 'https://sepolia-blockscout.lisk.com/api';
+export const LISK_SEPOLIA_CHAIN_ID = 1135;
+export const LISK_SEPOLIA_RPC = 'https://rpc.api.lisk.com';
+export const LISK_BLOCKSCOUT = 'https://blockscout.lisk.com/api';
 export const PRECISION = 1e6;
 
 const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa26174543ad38431274eed5';
