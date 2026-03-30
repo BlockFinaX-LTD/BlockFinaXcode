@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, Link } from 'wouter';
 import { useWallet } from '@/hooks/use-wallet';
 import { Loader2, Fingerprint, AlertTriangle, ShieldAlert } from 'lucide-react';
-import logoPath from '@/assets/logo.png';
+import logoPath from '@/assets/logo-transparent.png';
 import { useToast } from '@/hooks/use-toast';
 import { isWebAuthnSupported, authenticateWithPasskey, getPasskeyLabel } from '@/lib/webauthn';
 import { decryptPinFromLocalStorage, hasLocalPin } from '@/lib/auth-crypto';
@@ -59,7 +59,7 @@ function PinDots({ filled, error }: { filled: number; error: boolean }) {
 function PinKeypad({ onDigit, onDelete, disabled }: { onDigit: (d: string) => void; onDelete: () => void; disabled?: boolean }) {
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
   return (
-    <div className="grid grid-cols-3 gap-3 max-w-[260px] mx-auto">
+    <div className="grid grid-cols-3 gap-3 w-full max-w-[280px] mx-auto">
       {keys.map((key, i) =>
         key === '' ? <div key={`pad-empty-${i}`} /> : (
           <button
@@ -67,7 +67,7 @@ function PinKeypad({ onDigit, onDelete, disabled }: { onDigit: (d: string) => vo
             type="button"
             disabled={disabled}
             onClick={() => key === '⌫' ? onDelete() : onDigit(key)}
-            className="h-16 w-full rounded-2xl text-xl font-semibold transition-all active:scale-95 disabled:opacity-40"
+            className="h-14 w-full rounded-2xl text-2xl font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center"
             style={{ background: '#ffffff', color: DARK, border: '1.5px solid #e0d8ce' }}
           >
             {key}
@@ -202,7 +202,7 @@ export default function UnlockWallet() {
 
       {/* Logo */}
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm px-6 pt-16 pb-4">
-        <img src={logoPath} alt="BlockFinaX" className="w-20 h-20 object-contain mb-5" style={{ mixBlendMode: 'multiply' }} />
+        <img src={logoPath} alt="BlockFinaX" className="w-20 h-20 object-contain mb-5" />
         <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: DARK }}>
           {isLockedOut ? 'Wallet locked' : 'Welcome back'}
         </h1>

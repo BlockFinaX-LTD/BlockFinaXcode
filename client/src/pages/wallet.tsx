@@ -9,7 +9,7 @@ import { TransactionHistory } from '@/components/wallet/transaction-history';
 import { NetworkSelector } from '@/components/wallet/network-selector';
 import ProfileSettings from '@/components/profile/profile-settings';
 import { useWallet } from '@/hooks/use-wallet';
-import logoPath from "@/assets/logo.png";
+import logoPath from "@/assets/logo-transparent.png";
 
 function WalletLanding() {
   const [, setLocation] = useLocation();
@@ -21,7 +21,6 @@ function WalletLanding() {
           src={logoPath}
           alt="BlockFinaX"
           className="w-28 h-28 object-contain mb-6"
-          style={{ mixBlendMode: 'multiply' }}
         />
         <h1 className="text-4xl font-extrabold tracking-tight text-center leading-tight" style={{ color: '#1a1a2e' }}>
           BlockFinaX
