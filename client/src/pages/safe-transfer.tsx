@@ -108,6 +108,22 @@ export default function SafeTransfer() {
     setNetwork(Number((await provider.getNetwork()).chainId) === LISK_CHAIN_ID);
   }
 
+  // Auto-detect when user switches accounts in MetaMask
+  useEffect(() => {
+    if (!window.ethereum) return;
+    const handleAccountChange = (accounts: string[]) => {
+      if (accounts.length > 0) {
+        setWallet(accounts[0]);
+        setError("");
+        setSuccess("");
+      } else {
+        setWallet("");
+      }
+    };
+    window.ethereum.on("accountsChanged", handleAccountChange);
+    return () => window.ethereum.removeListener("accountsChanged", handleAccountChange);
+  }, []);
+
   async function transferToSafe() {
     setBusy(true); setError(""); setSuccess("");
     try {
@@ -241,7 +257,10 @@ export default function SafeTransfer() {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-center text-gray-500">Connected: {shortAddr(wallet)}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">Connected: {shortAddr(wallet)}</p>
+              <button onClick={connectWallet} className="text-xs text-blue-500 underline">Switch wallet</button>
+            </div>
 
             {/* Step 1 */}
             {!safeIsPending && isOwner1 && (
