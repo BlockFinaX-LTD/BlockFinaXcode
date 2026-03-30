@@ -730,7 +730,7 @@ export default function Website() {
                   </div>
                 )}
               </div>
-              <Link href="/unlock-wallet">
+              <Link href="/wallet">
                 <Button size="sm" className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 text-sm font-medium">
                   Launch App
                 </Button>
@@ -762,7 +762,7 @@ export default function Website() {
                   )}
                 </div>
                 <div className="px-3 pt-2">
-                  <Link href="/unlock-wallet">
+                  <Link href="/wallet">
                     <Button className="w-full bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full font-medium" size="sm">Launch App</Button>
                   </Link>
                 </div>
@@ -803,7 +803,7 @@ export default function Website() {
 
               <motion.div initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}
                 className="flex flex-row justify-center md:justify-start items-center gap-3 mb-8">
-                <Link href="/unlock-wallet">
+                <Link href="/wallet">
                   <Button className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm font-medium">
                     Launch App <ArrowRight className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>
