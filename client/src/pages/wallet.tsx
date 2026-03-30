@@ -26,7 +26,7 @@ function WalletLanding() {
           BlockFinaX
         </h1>
         <p className="mt-3 text-sm text-center" style={{ color: '#6b7280' }}>
-          P2P FX Protection on Lisk Mainnet
+          P2P hedging against price volatility
         </p>
 
         {/* Buttons */}

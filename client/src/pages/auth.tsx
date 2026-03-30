@@ -181,7 +181,7 @@ export default function Auth() {
           <div className="text-center space-y-2">
             <img src={logoPath} alt="BlockFinaX" className="h-10 w-10 object-contain mx-auto" />
             <h1 className="text-2xl font-bold">Welcome to BlockFinaX</h1>
-            <p className="text-sm text-muted-foreground">FX protection for African markets</p>
+            <p className="text-sm text-muted-foreground">P2P hedging for African markets</p>
           </div>
 
           {view === 'main' && (

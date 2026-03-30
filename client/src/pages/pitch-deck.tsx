@@ -171,7 +171,7 @@ export default function PitchDeck() {
                   BlockFinaX
                 </motion.h1>
                 <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="text-2xl text-slate-300 max-w-2xl mx-auto">
-                  Cross-border payments + FX protection for African SMEs
+                  Cross-border payments + P2P hedging for African SMEs
                 </motion.p>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="flex items-center justify-center gap-10 mt-6">
                   <div className="flex items-center gap-3 text-slate-400">
@@ -181,7 +181,7 @@ export default function PitchDeck() {
                   <span className="text-slate-700">|</span>
                   <div className="flex items-center gap-3 text-slate-400">
                     <Shield className="w-5 h-5 text-emerald-400" />
-                    <span>P2P FX protection · On-chain</span>
+                    <span>P2P parametric hedging · On-chain</span>
                   </div>
                 </motion.div>
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="text-sm text-slate-700 pt-6">
