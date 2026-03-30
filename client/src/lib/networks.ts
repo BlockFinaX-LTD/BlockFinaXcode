@@ -23,7 +23,7 @@ export interface NetworkConfig {
 export type NetworkMode = "testnet" | "mainnet";
 
 export function getNetworkMode(): NetworkMode {
-  const mode = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_NETWORK_MODE) || "testnet";
+  const mode = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_NETWORK_MODE) || "mainnet";
   return mode === "mainnet" ? "mainnet" : "testnet";
 }
 

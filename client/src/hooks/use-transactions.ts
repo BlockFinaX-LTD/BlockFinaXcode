@@ -71,7 +71,7 @@ export function useTransactions(networkId: number) {
       try {
         // Convert internal network ID to chainId for the API
         const network = NETWORKS.find(n => n.id === networkId);
-        const chainId = network?.chainId || 4202;
+        const chainId = network?.chainId || 1135;
         const response = await fetch(`/api/wallet/${address}/transactions?networkId=${chainId}`);
         if (!response.ok) {
           return [];
@@ -120,7 +120,7 @@ export function useTransactions(networkId: number) {
               feeAmount,
               feePercent: "0.3",
               token: "USDC",
-              chainId: network?.chainId || 4202,
+              chainId: network?.chainId || 1135,
             }),
           });
         } catch {}

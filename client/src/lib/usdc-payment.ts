@@ -46,7 +46,7 @@ export async function sendUSDCPayment(
   privateKey: string,
   toAddress: string,
   amountUSDC: string,
-  chainId: number = 4202
+  chainId: number = 1135
 ): Promise<PaymentResult> {
   try {
     

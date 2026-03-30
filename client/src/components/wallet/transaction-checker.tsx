@@ -270,12 +270,12 @@ export function TransactionChecker() {
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     <div className="space-y-2">
-                      <p>Transaction not found on any testnet network.</p>
+                      <p>Transaction not found on Lisk mainnet.</p>
                       <p className="text-sm">This could mean:</p>
                       <ul className="text-sm list-disc list-inside space-y-1">
-                        <li>The transaction was sent on mainnet (real networks)</li>
                         <li>The transaction hash is incorrect</li>
                         <li>The transaction is still pending</li>
+                        <li>The transaction was sent on a different network</li>
                       </ul>
                     </div>
                   </AlertDescription>
@@ -312,7 +312,7 @@ export function TransactionChecker() {
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Make sure you sent testnet ETH to this address, not mainnet ETH. Mainnet and testnet are completely separate networks.
+              This wallet operates on Lisk mainnet. Make sure any ETH or USDC you send is on the Lisk mainnet network (chain ID 1135).
             </AlertDescription>
           </Alert>
         </CardContent>

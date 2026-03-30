@@ -31,7 +31,7 @@ function getUsdcConfig(chainId: number): { address: string; rpcUrl: string; deci
 }
 
 class USDCManager {
-  async getUSDCBalance(walletAddress: string, chainId: number = 4202): Promise<string> {
+  async getUSDCBalance(walletAddress: string, chainId: number = 1135): Promise<string> {
     try {
       const config = getUsdcConfig(chainId);
       if (!config) {
@@ -51,7 +51,7 @@ class USDCManager {
     }
   }
 
-  async transferUSDC(fromSigner: ethers.Wallet, toAddress: string, amount: string, chainId: number = 4202): Promise<string> {
+  async transferUSDC(fromSigner: ethers.Wallet, toAddress: string, amount: string, chainId: number = 1135): Promise<string> {
     try {
       const config = getUsdcConfig(chainId);
       if (!config) {
@@ -77,7 +77,7 @@ class USDCManager {
     }
   }
 
-  async ensureTestUSDC(walletAddress: string, chainId: number = 4202): Promise<boolean> {
+  async ensureTestUSDC(walletAddress: string, chainId: number = 1135): Promise<boolean> {
     try {
       const balance = await this.getUSDCBalance(walletAddress, chainId);
       const balanceNum = parseFloat(balance);
@@ -92,7 +92,7 @@ class USDCManager {
     }
   }
 
-  async getFormattedBalance(walletAddress: string, chainId: number = 4202): Promise<{ balance: string; needsTestTokens: boolean }> {
+  async getFormattedBalance(walletAddress: string, chainId: number = 1135): Promise<{ balance: string; needsTestTokens: boolean }> {
     const balance = await this.getUSDCBalance(walletAddress, chainId);
     const needsTestTokens = await this.ensureTestUSDC(walletAddress, chainId);
     

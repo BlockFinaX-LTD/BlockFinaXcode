@@ -50,12 +50,11 @@ export const NETWORK_TOKENS: NetworkTokens = {
     }
   ],
   // Lisk Mainnet (internal network ID 1)
-  // Update USDC/USDT addresses from https://bridge.lisk.com before going live.
   1: [
     {
       symbol: 'USDC',
       name: 'USD Coin',
-      address: '0x', // TODO: confirm mainnet USDC address from bridge.lisk.com
+      address: '0xF242275d3a6527d877f2c927a82D9b057609cc71',
       decimals: 6,
       icon: '💵',
       color: '#2775CA'
@@ -63,7 +62,7 @@ export const NETWORK_TOKENS: NetworkTokens = {
     {
       symbol: 'USDT',
       name: 'Tether USD',
-      address: '0x', // TODO: confirm mainnet USDT address from bridge.lisk.com
+      address: '0x05D032ac25d322df992303dCa074EE7392C117b9',
       decimals: 6,
       icon: '💲',
       color: '#26A17B'
@@ -150,7 +149,11 @@ export class TokenManager {
     try {
       let usdcContracts: string[] = [];
       
-      if (networkId === 2) {
+      if (networkId === 1) {
+        usdcContracts = [
+          '0xF242275d3a6527d877f2c927a82D9b057609cc71',
+        ];
+      } else if (networkId === 2) {
         usdcContracts = [
           '0xf52Ad63619Bf9cFeF510341ac6b4038554399562',
         ];
