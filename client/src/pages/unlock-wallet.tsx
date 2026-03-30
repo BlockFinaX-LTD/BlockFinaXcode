@@ -202,7 +202,7 @@ export default function UnlockWallet() {
 
       {/* Logo */}
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm px-6 pt-16 pb-4">
-        <img src={logoPath} alt="BlockFinaX" className="w-20 h-20 object-contain mb-5" />
+        <img src={logoPath} alt="BlockFinaX" className="w-20 h-20 object-contain mb-5" style={{ mixBlendMode: 'multiply' }} />
         <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: DARK }}>
           {isLockedOut ? 'Wallet locked' : 'Welcome back'}
         </h1>

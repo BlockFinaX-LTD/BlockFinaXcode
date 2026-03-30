@@ -20,7 +20,8 @@ function WalletLanding() {
         <img
           src={logoPath}
           alt="BlockFinaX"
-          className="w-28 h-28 object-contain mb-6 drop-shadow-sm"
+          className="w-28 h-28 object-contain mb-6"
+          style={{ mixBlendMode: 'multiply' }}
         />
         <h1 className="text-4xl font-extrabold tracking-tight text-center leading-tight" style={{ color: '#1a1a2e' }}>
           BlockFinaX
