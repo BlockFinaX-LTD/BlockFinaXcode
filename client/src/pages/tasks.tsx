@@ -90,7 +90,7 @@ export default function TasksPage() {
   useEffect(() => {
     if (!walletLoading) {
       if (!walletExists()) {
-        setLocation('/create-wallet');
+        setLocation('/wallet');
       } else if (!isUnlocked) {
         setLocation('/unlock-wallet');
       }

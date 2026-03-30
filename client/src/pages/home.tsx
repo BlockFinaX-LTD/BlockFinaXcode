@@ -157,7 +157,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!isLoading) {
       if (!walletExists()) {
-        setLocation('/create-wallet');
+        setLocation('/wallet');
       } else if (!isUnlocked) {
         setLocation('/unlock-wallet');
       }
