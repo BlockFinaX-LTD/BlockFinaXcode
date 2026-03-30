@@ -14,8 +14,12 @@ import logoPath from "@/assets/logo-transparent.png";
 function WalletLanding() {
   const [, setLocation] = useLocation();
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#ffffff' }}>
-      <div className="flex flex-col items-center px-6 w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
+      {/* Subtle blue glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(26,68,128,0.08) 0%, transparent 70%)' }} />
+
+      <div className="flex flex-col items-center px-6 w-full max-w-sm relative z-10">
         {/* Logo */}
         <img
           src={logoPath}
