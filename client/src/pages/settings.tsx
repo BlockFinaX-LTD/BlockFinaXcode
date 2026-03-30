@@ -141,10 +141,10 @@ export default function SettingsPage() {
     children?: React.ReactNode;
     danger?: boolean;
   }) => (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
-      disabled={!onClick && !children}
+    <div
+      onClick={children ? undefined : onClick}
+      role={!children && onClick ? 'button' : undefined}
+      className={`w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors ${!children && onClick ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <div className="flex items-center gap-3">
         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${danger ? 'bg-red-100 dark:bg-red-900/30' : 'bg-muted'}`}>
@@ -156,11 +156,11 @@ export default function SettingsPage() {
         </div>
       </div>
       {children ? (
-        <div onClick={e => e.stopPropagation()}>{children}</div>
+        <div>{children}</div>
       ) : onClick ? (
         <ChevronRight className="h-4 w-4 text-muted-foreground" />
       ) : null}
-    </button>
+    </div>
   );
 
   const SectionHeader = ({ title }: { title: string }) => (

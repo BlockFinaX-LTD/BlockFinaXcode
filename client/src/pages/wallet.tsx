@@ -3,14 +3,56 @@ import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/bottom-nav';
 import { AppHeader } from '@/components/app-header';
 import { BackupWarningBanner } from '@/components/wallet/backup-warning-banner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { EnhancedWalletOverview } from '@/components/wallet/wallet-dashboard';
 import { TransactionHistory } from '@/components/wallet/transaction-history';
 import { NetworkSelector } from '@/components/wallet/network-selector';
-import { TransactionChecker } from '@/components/wallet/transaction-checker';
 import ProfileSettings from '@/components/profile/profile-settings';
 import { useWallet } from '@/hooks/use-wallet';
 import logoPath from "@/assets/logo.png";
+
+function WalletLanding() {
+  const [, setLocation] = useLocation();
+  return (
+    <div className="min-h-screen flex flex-col items-center" style={{ backgroundColor: '#F5EFE6' }}>
+      {/* Logo area — upper third */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-8 w-full max-w-sm">
+        <img
+          src={logoPath}
+          alt="BlockFinaX"
+          className="w-28 h-28 object-contain mb-6 drop-shadow-sm"
+        />
+        <h1 className="text-4xl font-extrabold tracking-tight text-center leading-tight" style={{ color: '#1a1a2e' }}>
+          BlockFinaX
+        </h1>
+        <p className="mt-3 text-sm text-center" style={{ color: '#6b6b80' }}>
+          P2P FX Protection on Lisk Mainnet
+        </p>
+      </div>
+
+      {/* Buttons — centered */}
+      <div className="w-full max-w-sm px-6 pb-16 space-y-3">
+        <button
+          onClick={() => setLocation('/create-wallet')}
+          className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
+          style={{ backgroundColor: '#ffffff', color: '#1a1a2e', border: '1.5px solid #e0d8ce' }}
+        >
+          Create a new wallet
+        </button>
+        <button
+          onClick={() => setLocation('/import-wallet')}
+          className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
+          style={{ backgroundColor: '#1a1a2e', color: '#ffffff' }}
+        >
+          I have an existing wallet
+        </button>
+      </div>
+
+      {/* Decorative bottom strip */}
+      <div className="w-full h-1.5 bg-gradient-to-r from-orange-400 via-red-500 to-orange-600 rounded-t-full" />
+    </div>
+  );
+}
 
 export default function Wallet() {
   const [, setLocation] = useLocation();
@@ -25,31 +67,27 @@ export default function Wallet() {
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!walletExists()) {
-        setLocation('/create-wallet');
-      } else if (!isUnlocked) {
-        setLocation('/unlock-wallet');
-      }
+    if (!isLoading && walletExists() && !isUnlocked) {
+      setLocation('/unlock-wallet');
     }
   }, [isUnlocked, walletExists, isLoading, setLocation]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5EFE6' }}>
         <div className="text-center">
-          <img 
-            src={logoPath} 
-            alt="BlockFinaX Logo" 
-            className="w-24 h-16 object-contain mx-auto mb-4"
-          />
-          <div className="text-lg font-semibold mb-2">Loading BlockFinaX...</div>
+          <img src={logoPath} alt="BlockFinaX Logo" className="w-20 h-20 object-contain mx-auto mb-4" />
+          <div className="text-base font-semibold text-gray-600">Loading…</div>
         </div>
       </div>
     );
   }
 
-  if (!walletExists() || !isUnlocked) {
+  if (!walletExists()) {
+    return <WalletLanding />;
+  }
+
+  if (!isUnlocked) {
     return null;
   }
 
