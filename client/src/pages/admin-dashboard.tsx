@@ -115,19 +115,199 @@ function DashboardSection() {
   );
 }
 
+const KYC_STATUS_STYLES: Record<string, { label: string; className: string }> = {
+  not_started: { label: "Not Started", className: "bg-gray-100 text-gray-500" },
+  pending:     { label: "Pending",     className: "bg-amber-50 text-amber-700 border border-amber-200" },
+  approved:    { label: "Approved",    className: "bg-green-50 text-green-700 border border-green-200" },
+  rejected:    { label: "Rejected",    className: "bg-red-50 text-red-700 border border-red-200" },
+};
+
+function KycBadge({ status }: { status: string }) {
+  const s = KYC_STATUS_STYLES[status] || KYC_STATUS_STYLES.not_started;
+  return <span className={`text-xs font-medium px-2 py-0.5 rounded ${s.className}`}>{s.label}</span>;
+}
+
+function KycDetailDialog({ user, token, onClose, onUpdate }: { user: any; token: string; onClose: () => void; onUpdate: () => void }) {
+  const { toast } = useToast();
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ["/api/admin/kyc", user.address],
+    queryFn: () => adminFetch(`/api/admin/kyc/${user.address}`, token).then(r => r.ok ? r.json() : null),
+  });
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (profile?.reviewerNotes) setNotes(profile.reviewerNotes); }, [profile]);
+
+  const updateStatus = async (kycStatus: string) => {
+    setSaving(true);
+    try {
+      const res = await adminFetch(`/api/admin/kyc/${user.address}`, token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kycStatus, reviewerNotes: notes }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      toast({ title: `Status set to ${kycStatus}` });
+      onUpdate();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const saveNotes = async () => {
+    setSaving(true);
+    try {
+      await adminFetch(`/api/admin/kyc/${user.address}`, token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewerNotes: notes }),
+      });
+      toast({ title: "Notes saved" });
+    } catch { toast({ title: "Error saving notes", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  const Field = ({ label, value }: { label: string; value?: string | boolean | null }) => (
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-sm font-medium text-gray-900 mt-0.5">
+        {value === null || value === undefined || value === "" ? <span className="text-gray-400 italic">Not provided</span>
+          : typeof value === "boolean" ? (value ? "Yes" : "No")
+          : value}
+      </p>
+    </div>
+  );
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            KYC Profile
+            {profile && <KycBadge status={profile.kycStatus || "not_started"} />}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-8 text-center text-gray-400">Loading profile…</div>
+        ) : !profile ? (
+          <div className="py-8 text-center text-gray-400">No KYC data submitted yet for this user.</div>
+        ) : (
+          <div className="space-y-5">
+            {/* Tier 1 */}
+            <div>
+              <p className="text-xs font-semibold text-[#1a4480] uppercase tracking-wide mb-3">Tier 1 — Basic Identity</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Full Name" value={profile.firstName && profile.lastName ? `${profile.firstName} ${profile.lastName}` : profile.displayName} />
+                <Field label="Date of Birth" value={profile.dateOfBirth} />
+                <Field label="Nationality" value={profile.nationality} />
+                <Field label="Country of Residence" value={profile.country} />
+                <Field label="Phone Number" value={profile.phoneNumber} />
+                <Field label="Email" value={profile.email} />
+              </div>
+            </div>
+
+            {/* Tier 2 */}
+            <div className="border-t pt-4">
+              <p className="text-xs font-semibold text-[#1a4480] uppercase tracking-wide mb-3">Tier 2 — Identity Documents</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="ID Type" value={profile.idType} />
+                <Field label="ID Number" value={profile.idNumber} />
+                <Field label="Tax ID (TIN)" value={profile.taxId} />
+                <Field label="Address" value={profile.address} />
+                <Field label="City" value={profile.city} />
+                <Field label="Postal Code" value={profile.postalCode} />
+              </div>
+              {profile.kycDocuments && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {["id_front", "id_back", "selfie", "proof_of_address"].map(k => {
+                    const docs = typeof profile.kycDocuments === "string" ? JSON.parse(profile.kycDocuments) : profile.kycDocuments;
+                    const url = docs?.[k];
+                    return url ? (
+                      <a key={k} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#1a4480] hover:underline flex items-center gap-1">
+                        <ExternalLink className="h-3 w-3" />{k.replace(/_/g, " ")}
+                      </a>
+                    ) : (
+                      <div key={k}><p className="text-xs text-gray-400 italic">{k.replace(/_/g, " ")} — not uploaded</p></div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Tier 3 */}
+            <div className="border-t pt-4">
+              <p className="text-xs font-semibold text-[#1a4480] uppercase tracking-wide mb-3">Tier 3 — Enhanced Due Diligence</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Source of Funds" value={profile.sourceOfFunds} />
+                <Field label="Politically Exposed Person (PEP)" value={profile.isPep} />
+              </div>
+            </div>
+
+            {/* Timestamps */}
+            <div className="border-t pt-4 grid grid-cols-2 gap-3 text-xs text-gray-500">
+              <div><span className="font-medium">Submitted:</span> {profile.submittedAt ? new Date(profile.submittedAt).toLocaleString() : "—"}</div>
+              <div><span className="font-medium">Reviewed:</span> {profile.reviewedAt ? new Date(profile.reviewedAt).toLocaleString() : "—"}</div>
+            </div>
+
+            {/* Reviewer notes */}
+            <div className="border-t pt-4 space-y-2">
+              <Label className="text-xs font-semibold">Reviewer Notes</Label>
+              <Textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Internal notes (not visible to user)…" />
+              <Button variant="outline" size="sm" onClick={saveNotes} disabled={saving}>Save Notes</Button>
+            </div>
+
+            {/* Status actions */}
+            <div className="border-t pt-4 flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600 mr-1">Set status:</span>
+              {["pending", "approved", "rejected"].map(s => (
+                <Button key={s} size="sm" variant="outline"
+                  className={s === "approved" ? "border-green-300 text-green-700 hover:bg-green-50" : s === "rejected" ? "border-red-300 text-red-700 hover:bg-red-50" : ""}
+                  onClick={() => updateStatus(s)} disabled={saving || profile.kycStatus === s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function UsersSection() {
   const [search, setSearch] = useState("");
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const { toast } = useToast();
   const { token } = useAdminToken();
-  const { data: users, isLoading } = useQuery({ queryKey: ["/api/admin/users"], queryFn: () => adminFetch("/api/admin/users", token).then(r => r.json()), refetchInterval: 30000 });
+  const { data: users, isLoading, refetch } = useQuery({ queryKey: ["/api/admin/users"], queryFn: () => adminFetch("/api/admin/users", token).then(r => r.json()), refetchInterval: 30000 });
 
   const filtered = (users as any[] || []).filter((u: any) =>
     !search || u.address?.toLowerCase().includes(search.toLowerCase()) || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const kycCounts = (users as any[] || []).reduce((acc: any, u: any) => {
+    const s = u.kyc?.kycStatus || "not_started";
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">User Management</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">User Management</h2>
+      </div>
+
+      {/* KYC summary pills */}
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(KYC_STATUS_STYLES).map(([key, { label, className }]) => (
+          <div key={key} className={`text-xs px-3 py-1 rounded-full ${className}`}>
+            {label}: <strong>{kycCounts[key] || 0}</strong>
+          </div>
+        ))}
+      </div>
+
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input placeholder="Search by address, name, or email..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
@@ -143,22 +323,22 @@ function UsersSection() {
                     <th className="text-left p-3 font-medium hidden sm:table-cell">Name</th>
                     <th className="text-left p-3 font-medium hidden md:table-cell">Email</th>
                     <th className="text-left p-3 font-medium hidden md:table-cell">Joined</th>
-                    <th className="text-left p-3 font-medium">Type</th>
+                    <th className="text-left p-3 font-medium">KYC</th>
                     <th className="p-3"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((u: any) => (
-                    <tr key={u.id} className="border-b hover:bg-gray-50">
+                    <tr key={u.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedUser(u)}>
                       <td className="p-3 font-mono text-xs">{shortenAddr(u.address)}</td>
                       <td className="p-3 hidden sm:table-cell">{u.name || "-"}</td>
                       <td className="p-3 hidden md:table-cell text-gray-500">{u.email || "-"}</td>
                       <td className="p-3 hidden md:table-cell text-gray-500 text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}</td>
                       <td className="p-3">
-                        <Badge variant="outline" className="text-xs">{u.isImported ? "Imported" : "Created"}</Badge>
+                        <KycBadge status={u.kyc?.kycStatus || "not_started"} />
                       </td>
                       <td className="p-3">
-                        <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(u.address); toast({ title: "Copied", description: "Address copied" }); }}>
+                        <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(u.address); toast({ title: "Copied", description: "Address copied" }); }}>
                           <Copy className="h-3 w-3" />
                         </Button>
                       </td>
@@ -174,6 +354,15 @@ function UsersSection() {
         </Card>
       )}
       <p className="text-sm text-gray-400">{filtered.length} users total</p>
+
+      {selectedUser && (
+        <KycDetailDialog
+          user={selectedUser}
+          token={token}
+          onClose={() => setSelectedUser(null)}
+          onUpdate={() => { refetch(); setSelectedUser(null); }}
+        />
+      )}
     </div>
   );
 }

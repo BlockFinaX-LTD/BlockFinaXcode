@@ -15,6 +15,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import type { Referral } from "../shared/referral-schema";
 import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees, termsAcceptances, authSessions } from "../shared/schema";
+import { userProfiles } from "../shared/profile-schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
@@ -424,6 +425,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const search = (req.query.search as string || "").toLowerCase();
       const allWallets = await db.select().from(wallets).orderBy(desc(wallets.createdAt));
+      const allProfiles = await db.select({
+        walletAddress: userProfiles.walletAddress,
+        kycStatus: userProfiles.kycStatus,
+        kycTier: userProfiles.kycTier,
+        submittedAt: userProfiles.submittedAt,
+      }).from(userProfiles);
+      const profileMap = new Map(allProfiles.map(p => [p.walletAddress.toLowerCase(), p]));
       const result = allWallets
         .filter(w => !search || w.address.toLowerCase().includes(search) || (w.name && w.name.toLowerCase().includes(search)) || (w.email && w.email.toLowerCase().includes(search)))
         .map(w => ({
@@ -433,10 +441,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: w.email || null,
           isImported: w.isImported,
           createdAt: w.createdAt,
+          kyc: profileMap.get(w.address.toLowerCase()) || { kycStatus: "not_started", kycTier: 0, submittedAt: null },
         }));
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch users" });
+    }
+  });
+
+  // KYC profile management
+  app.get("/api/admin/kyc", async (_req, res) => {
+    try {
+      const profiles = await db.select().from(userProfiles).orderBy(desc(userProfiles.submittedAt));
+      res.json(profiles);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/admin/kyc/:address", async (req, res) => {
+    try {
+      const [profile] = await db.select().from(userProfiles)
+        .where(eq(userProfiles.walletAddress, req.params.address));
+      if (!profile) return res.status(404).json({ message: "No profile found" });
+      res.json(profile);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/admin/kyc/:address", async (req, res) => {
+    try {
+      const { kycStatus, kycTier, reviewerNotes } = req.body;
+      const updates: Record<string, any> = { lastUpdated: new Date() };
+      if (kycStatus !== undefined) updates.kycStatus = kycStatus;
+      if (kycTier !== undefined) updates.kycTier = kycTier;
+      if (reviewerNotes !== undefined) updates.reviewerNotes = reviewerNotes;
+      if (kycStatus === "approved" || kycStatus === "rejected") updates.reviewedAt = new Date();
+      await db.update(userProfiles).set(updates).where(eq(userProfiles.walletAddress, req.params.address));
+      const [updated] = await db.select().from(userProfiles).where(eq(userProfiles.walletAddress, req.params.address));
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
     }
   });
 
