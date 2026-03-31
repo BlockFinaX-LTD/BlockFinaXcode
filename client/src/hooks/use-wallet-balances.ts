@@ -17,19 +17,19 @@ export function useWalletBalances(selectedNetworkId?: number) {
   const [balances, setBalances] = useState<WalletBalance[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ethPrice, setEthPrice] = useState<number>(3200);
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
 
   // Fetch real-time prices on mount
   useEffect(() => {
     fetchCryptoPrices().then(prices => {
-      setEthPrice(prices.eth);
+      if (prices?.eth) setEthPrice(prices.eth);
     });
-    // Refresh prices every minute
+    // Refresh prices every 5 minutes (match server cache)
     const interval = setInterval(() => {
       fetchCryptoPrices().then(prices => {
-        setEthPrice(prices.eth);
+        if (prices?.eth) setEthPrice(prices.eth);
       });
-    }, 60000);
+    }, 5 * 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -188,7 +188,8 @@ export function useWalletBalances(selectedNetworkId?: number) {
   }, [address, isUnlocked, loadBalances]);
 
   // Format currency
-  const formatCurrency = useCallback((value: number, currency: string = 'USD') => {
+  const formatCurrency = useCallback((value: number | null | undefined, currency: string = 'USD') => {
+    if (value === null || value === undefined) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,

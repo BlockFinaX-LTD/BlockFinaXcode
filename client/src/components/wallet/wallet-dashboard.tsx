@@ -32,12 +32,12 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
   
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
-  const [ethPrice, setEthPrice] = useState<number>(3200);
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchCryptoPrices().then(prices => {
-      setEthPrice(prices.eth);
+      if (prices?.eth) setEthPrice(prices.eth);
     });
   }, []);
 

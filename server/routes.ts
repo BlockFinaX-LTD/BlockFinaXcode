@@ -1491,9 +1491,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Server-side price fetching — avoids browser rate limits on CoinGecko free tier
+  // Server-side price fetching — tries 3 sources in parallel, caches 5 min
   let cachedPrices: { eth: number; usdc: number; lastUpdated: number } | null = null;
-  const PRICE_CACHE_MS = 60_000;
+  const PRICE_CACHE_MS = 5 * 60_000; // 5 minutes — reduces rate-limit pressure
+
+  async function fetchEthPrice(): Promise<number | null> {
+    const sources = [
+      // Binance — highest rate limit, most reliable
+      async () => {
+        const r = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT", { signal: AbortSignal.timeout(4000) });
+        if (!r.ok) return null;
+        const d = await r.json() as any;
+        const p = parseFloat(d.price);
+        return isFinite(p) && p > 100 ? p : null;
+      },
+      // Kraken — independent exchange, no API key needed
+      async () => {
+        const r = await fetch("https://api.kraken.com/0/public/Ticker?pair=ETHUSD", { signal: AbortSignal.timeout(4000) });
+        if (!r.ok) return null;
+        const d = await r.json() as any;
+        const p = parseFloat(d.result?.XETHZUSD?.c?.[0]);
+        return isFinite(p) && p > 100 ? p : null;
+      },
+      // CoinGecko — last resort (rate-limited on free tier)
+      async () => {
+        const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd", { signal: AbortSignal.timeout(4000) });
+        if (!r.ok) return null;
+        const d = await r.json() as any;
+        const p = d.ethereum?.usd;
+        return isFinite(p) && p > 100 ? p : null;
+      },
+    ];
+
+    const results = await Promise.allSettled(sources.map(fn => fn()));
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value !== null) return r.value;
+    }
+    return null;
+  }
 
   app.get("/api/prices", async (_req, res) => {
     try {
@@ -1501,37 +1536,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(cachedPrices);
       }
 
-      // Try CoinGecko first
-      const cgRes = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd-coin&vs_currencies=usd",
-        { signal: AbortSignal.timeout(5000) }
-      );
-
-      if (cgRes.ok) {
-        const data = await cgRes.json() as any;
-        cachedPrices = {
-          eth: data.ethereum?.usd ?? 3200,
-          usdc: data["usd-coin"]?.usd ?? 1,
-          lastUpdated: Date.now(),
-        };
+      const eth = await fetchEthPrice();
+      if (eth !== null) {
+        cachedPrices = { eth, usdc: 1, lastUpdated: Date.now() };
         return res.json(cachedPrices);
       }
 
-      // Fallback: Binance public API (no key required)
-      const binRes = await fetch(
-        "https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT",
-        { signal: AbortSignal.timeout(5000) }
-      );
-      if (binRes.ok) {
-        const bin = await binRes.json() as any;
-        cachedPrices = { eth: parseFloat(bin.price), usdc: 1, lastUpdated: Date.now() };
-        return res.json(cachedPrices);
-      }
-
-      // Last resort: return last cached or hardcoded
-      return res.json(cachedPrices ?? { eth: 3200, usdc: 1, lastUpdated: Date.now() });
+      // All sources failed — return last cached value if available, no hardcoded fallback
+      if (cachedPrices) return res.json(cachedPrices);
+      return res.status(503).json({ error: "Price data temporarily unavailable" });
     } catch {
-      return res.json(cachedPrices ?? { eth: 3200, usdc: 1, lastUpdated: Date.now() });
+      if (cachedPrices) return res.json(cachedPrices);
+      return res.status(503).json({ error: "Price data temporarily unavailable" });
     }
   });
 

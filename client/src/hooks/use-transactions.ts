@@ -36,10 +36,12 @@ export function useTransactions(networkId: number) {
     };
   }, [walletBalances.selectedNetworkBalance]);
 
-  const [ethPrice, setEthPrice] = useState(getEthPrice());
+  const [ethPrice, setEthPrice] = useState<number | null>(getEthPrice());
   
   useEffect(() => {
-    fetchCryptoPrices().then(() => setEthPrice(getEthPrice()));
+    fetchCryptoPrices().then(prices => {
+      if (prices?.eth) setEthPrice(prices.eth);
+    });
   }, []);
   
   const allBalances = useMemo(() => {

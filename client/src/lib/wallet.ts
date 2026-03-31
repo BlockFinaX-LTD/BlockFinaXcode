@@ -16,7 +16,7 @@ import { fetchCryptoPrices } from './price-service';
 export interface WalletBalance {
   networkId: number;
   balance: string;
-  usdValue: number;
+  usdValue: number | null; // null when price data is unavailable
   symbol: string;
 }
 
@@ -327,8 +327,8 @@ class WalletManager {
         return null;
       }
 
-      // Lisk uses ETH as its native gas token
-      const usdValue = parseFloat(balanceEth) * (prices.eth || 0);
+      // Lisk uses ETH as its native gas token; usdValue is null if price unavailable
+      const usdValue = prices?.eth ? parseFloat(balanceEth) * prices.eth : null;
 
       return {
         networkId,
