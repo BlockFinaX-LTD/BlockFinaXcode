@@ -12,9 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Users, Activity, TrendingUp, Shield, Search, Eye, EyeOff, Copy, DollarSign,
+  Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
-  CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, Lock, LogOut,
+  CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
   FileText, Trash2, X, GripVertical, Save, RefreshCw
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -941,48 +941,88 @@ function LoadingSkeleton() {
 }
 
 function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<"idle" | "signing" | "verifying">("idle");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loading = step !== "idle";
+
+  const handleConnect = async () => {
     setError("");
-    setLoading(true);
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      setError("MetaMask not found. Please install MetaMask and try again.");
+      return;
+    }
+
     try {
-      const res = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message || "Login failed"); return; }
+      // 1. Request account
+      setStep("signing");
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      const address = accounts[0];
+      if (!address) { setError("No account selected."); setStep("idle"); return; }
+
+      // 2. Fetch signing challenge from backend
+      const challengeRes = await fetch("/api/admin/wallet-challenge", { method: "POST" });
+      const { nonce, message } = await challengeRes.json();
+
+      // 3. Ask MetaMask to sign the message
+      const signature = await eth.request({
+        method: "personal_sign",
+        params: [message, address],
+      });
+
+      // 4. Submit to backend
+      setStep("verifying");
+      const loginRes = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, signature, nonce }),
+      });
+      const data = await loginRes.json();
+      if (!loginRes.ok) { setError(data.message || "Access denied."); setStep("idle"); return; }
+
       sessionStorage.setItem("admin_token", data.token);
       onLogin(data.token);
-    } catch { setError("Connection error"); } finally { setLoading(false); }
+    } catch (err: any) {
+      if (err?.code === 4001) {
+        setError("Signature request cancelled.");
+      } else {
+        setError(err?.message || "Something went wrong.");
+      }
+      setStep("idle");
+    }
   };
+
+  const stepLabel = step === "signing" ? "Check MetaMask to sign…" : step === "verifying" ? "Verifying…" : "Connect Wallet";
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mx-auto w-12 h-12 rounded-xl bg-[#1a4480] flex items-center justify-center mb-2">
-            <Lock className="h-6 w-6 text-white" />
+            <Wallet className="h-6 w-6 text-white" />
           </div>
-          <CardTitle>Admin Login</CardTitle>
-          <CardDescription>Enter your admin password to continue</CardDescription>
+          <CardTitle>Admin Access</CardTitle>
+          <CardDescription>Connect your owner wallet to continue</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <Input type={showPassword ? "text" : "password"} placeholder="Admin password" value={password} onChange={e => setPassword(e.target.value)} autoFocus className="pr-10" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
+              {error}
             </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
-            <Button type="submit" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" disabled={loading || !password}>
-              {loading ? "Logging in..." : "Login"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center">
+          )}
+          <Button
+            onClick={handleConnect}
+            className="w-full bg-[#1a4480] hover:bg-[#153a6e]"
+            disabled={loading}
+          >
+            {loading && <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+            {stepLabel}
+          </Button>
+          <p className="text-center text-xs text-gray-400">
+            Only authorised owner addresses can access the admin panel.
+          </p>
+          <div className="text-center">
             <Link href="/">
               <span className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">Back to site</span>
             </Link>

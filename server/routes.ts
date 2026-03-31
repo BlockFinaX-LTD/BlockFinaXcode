@@ -295,21 +295,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ═══════════════════════════════════════════════════════
-  // [ADMIN] Admin Dashboard
+  // [ADMIN] Admin Dashboard — wallet-based auth
   // ═══════════════════════════════════════════════════════
   const adminSessions = new Map<string, number>();
   const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-  const adminLoginAttempts = new Map<string, { count: number; resetAt: number }>();
+  // nonce → expiry timestamp (short-lived, 5 min)
+  const adminChallenges = new Map<string, number>();
 
   setInterval(() => {
     const now = Date.now();
     for (const [token, exp] of adminSessions) {
       if (now > exp) adminSessions.delete(token);
     }
-  }, 3_600_000);
+    for (const [nonce, exp] of adminChallenges) {
+      if (now > exp) adminChallenges.delete(nonce);
+    }
+  }, 60_000);
 
   function generateAdminToken(): string {
     return randomBytes(32).toString("hex");
+  }
+
+  function getOwnerAddresses(): string[] {
+    const raw = process.env.ADMIN_WALLET_ADDRESSES || "";
+    return raw.split(",").map(a => a.trim().toLowerCase()).filter(Boolean);
   }
 
   function requireAdmin(req: any, res: any, next: any) {
@@ -322,38 +331,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }
 
-  app.post("/api/admin/login", strictLimiter, (req, res) => {
-    const ip = req.ip || "unknown";
-    const now = Date.now();
+  // Step 1: request a one-time signing challenge
+  app.post("/api/admin/wallet-challenge", strictLimiter, (req, res) => {
+    const nonce = randomBytes(16).toString("hex");
+    adminChallenges.set(nonce, Date.now() + 5 * 60_000); // 5-min TTL
+    const message =
+      `Sign this message to access BlockFinaX Admin.\n\nNonce: ${nonce}\nValid for 5 minutes.`;
+    res.json({ nonce, message });
+  });
 
-    // Brute-force protection: max 5 attempts per 15 minutes (mirrors investor auth)
-    const attempts = adminLoginAttempts.get(ip);
-    if (attempts) {
-      if (now < attempts.resetAt && attempts.count >= 5) {
-        return res.status(429).json({ message: "Too many attempts. Try again in 15 minutes." });
+  // Step 2: submit signed message — verify signer and issue session
+  app.post("/api/admin/login", strictLimiter, async (req, res) => {
+    try {
+      const { address, signature, nonce } = req.body;
+      if (!address || !signature || !nonce) {
+        return res.status(400).json({ message: "address, signature and nonce are required" });
       }
-      if (now >= attempts.resetAt) {
-        adminLoginAttempts.delete(ip);
+
+      // Validate nonce
+      const nonceExpiry = adminChallenges.get(nonce);
+      if (!nonceExpiry || Date.now() > nonceExpiry) {
+        return res.status(401).json({ message: "Challenge expired. Please try again." });
       }
-    }
+      adminChallenges.delete(nonce); // one-time use
 
-    const { password } = req.body;
-    const adminPassword = process.env.ADMIN_PASSWORD;
-    if (!adminPassword) {
-      return res.status(500).json({ message: "Admin password not configured" });
-    }
+      const owners = getOwnerAddresses();
+      if (owners.length === 0) {
+        return res.status(500).json({ message: "No admin wallet addresses configured." });
+      }
 
-    // Use constant-time comparison to prevent timing attacks
-    if (!safeEqual(password, adminPassword)) {
-      const current = adminLoginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60_000 };
-      adminLoginAttempts.set(ip, { count: current.count + 1, resetAt: current.resetAt });
-      return res.status(401).json({ message: "Invalid password" });
-    }
+      // Recover signer from signature
+      const { ethers } = await import("ethers");
+      const message =
+        `Sign this message to access BlockFinaX Admin.\n\nNonce: ${nonce}\nValid for 5 minutes.`;
+      const recovered = ethers.verifyMessage(message, signature).toLowerCase();
 
-    adminLoginAttempts.delete(ip);
-    const token = generateAdminToken();
-    adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
-    res.json({ token, expiresAt: Date.now() + ADMIN_SESSION_TTL_MS });
+      if (!owners.includes(recovered)) {
+        return res.status(403).json({ message: "Wallet not authorised." });
+      }
+
+      const token = generateAdminToken();
+      adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
+      res.json({ token, address: recovered, expiresAt: Date.now() + ADMIN_SESSION_TTL_MS });
+    } catch (err: any) {
+      console.error("[Admin login]", err);
+      res.status(500).json({ message: "Signature verification failed." });
+    }
   });
 
   app.post("/api/admin/logout", (req, res) => {
@@ -363,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.use("/api/admin", (req, res, next) => {
-    if (req.path === "/login" || req.path === "/logout") return next();
+    if (req.path === "/login" || req.path === "/logout" || req.path === "/wallet-challenge") return next();
     requireAdmin(req, res, next);
   });
 
