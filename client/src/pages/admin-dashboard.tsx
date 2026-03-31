@@ -15,7 +15,7 @@ import {
   Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
-  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink
+  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -1167,6 +1167,8 @@ interface ProtocolState {
 
 function ProtocolSection() {
   const { toast } = useToast();
+  const { token } = useAdminToken();
+  const [backupBusy, setBackupBusy] = useState(false);
   const [state, setState] = useState<ProtocolState>({
     usdcFees: "—", usdtFees: "—", usdcWithdrawn: 0, usdtWithdrawn: 0,
     feeConfig: null, usdcAllowed: true, usdtAllowed: false,
@@ -1288,6 +1290,55 @@ function ProtocolSection() {
           </Button>
         </div>
       </div>
+
+      {/* Database Backup */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Download className="h-4 w-4 text-[#1a4480]" />Database Backup
+          </CardTitle>
+          <CardDescription>Download a full snapshot of all platform data — users, positions, fees, articles, referrals. Private keys are never included.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Full data export</p>
+              <p className="text-xs text-gray-500 mt-0.5">13 tables · JSON format · timestamped filename</p>
+            </div>
+            <Button
+              size="sm"
+              disabled={backupBusy}
+              className="bg-[#1a4480] hover:bg-[#153a6e] text-white"
+              onClick={async () => {
+                setBackupBusy(true);
+                try {
+                  const res = await adminFetch("/api/admin/backup/export", token);
+                  if (!res.ok) { toast({ title: "Backup failed", variant: "destructive" }); return; }
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `blockfinax-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast({ title: "Backup downloaded" });
+                } catch {
+                  toast({ title: "Backup failed", variant: "destructive" });
+                } finally {
+                  setBackupBusy(false);
+                }
+              }}
+            >
+              <Download className={`h-3 w-3 mr-1 ${backupBusy ? "animate-bounce" : ""}`} />
+              {backupBusy ? "Exporting…" : "Download Backup"}
+            </Button>
+          </div>
+          <p className="text-xs text-amber-600 mt-3 flex items-start gap-1.5">
+            <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+            Also enable automatic backups in your Railway dashboard under the database service settings for daily scheduled snapshots.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Fee Balances & Withdraw */}
       <Card>

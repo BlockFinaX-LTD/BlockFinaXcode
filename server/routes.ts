@@ -14,8 +14,9 @@ import fs from "fs";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import type { Referral } from "../shared/referral-schema";
-import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees, termsAcceptances, authSessions } from "../shared/schema";
+import { wallets, hedgeEvents, hedgePositions, hedgeLpDeposits, dailyTasks, userTaskCompletions, platformFees, termsAcceptances, authSessions, articles } from "../shared/schema";
 import { userProfiles } from "../shared/profile-schema";
+import { referrals, referralCodes, userPoints, pointTransactions } from "../shared/referral-schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireSignature, optionalSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
@@ -925,6 +926,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(article);
     } catch (e) {
       res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
+  app.get("/api/admin/backup/export", async (_req, res) => {
+    try {
+      const [
+        allWallets, allProfiles, allHedgeEvents, allPositions,
+        allLpDeposits, allFees, allTaskCompletions, allPoints,
+        allPointTx, allTerms, allReferrals, allReferralCodes, allArticles,
+      ] = await Promise.all([
+        db.select({ id: wallets.id, address: wallets.address, name: wallets.name, email: wallets.email, userId: wallets.userId, createdAt: wallets.createdAt }).from(wallets),
+        db.select().from(userProfiles),
+        db.select().from(hedgeEvents),
+        db.select().from(hedgePositions),
+        db.select().from(hedgeLpDeposits),
+        db.select().from(platformFees),
+        db.select().from(userTaskCompletions),
+        db.select().from(userPoints),
+        db.select().from(pointTransactions),
+        db.select().from(termsAcceptances),
+        db.select().from(referrals),
+        db.select().from(referralCodes),
+        db.select().from(articles),
+      ]);
+
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        version: "1.0",
+        tables: {
+          wallets: allWallets,
+          userProfiles: allProfiles,
+          hedgeEvents: allHedgeEvents,
+          hedgePositions: allPositions,
+          hedgeLpDeposits: allLpDeposits,
+          platformFees: allFees,
+          userTaskCompletions: allTaskCompletions,
+          userPoints: allPoints,
+          pointTransactions: allPointTx,
+          termsAcceptances: allTerms,
+          referrals: allReferrals,
+          referralCodes: allReferralCodes,
+          articles: allArticles,
+        },
+        counts: {
+          wallets: allWallets.length,
+          userProfiles: allProfiles.length,
+          hedgeEvents: allHedgeEvents.length,
+          hedgePositions: allPositions.length,
+          hedgeLpDeposits: allLpDeposits.length,
+          platformFees: allFees.length,
+          userTaskCompletions: allTaskCompletions.length,
+          userPoints: allPoints.length,
+          pointTransactions: allPointTx.length,
+          termsAcceptances: allTerms.length,
+          referrals: allReferrals.length,
+          referralCodes: allReferralCodes.length,
+          articles: allArticles.length,
+        },
+      };
+
+      const filename = `blockfinax-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.json(backup);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Backup failed" });
     }
   });
 
