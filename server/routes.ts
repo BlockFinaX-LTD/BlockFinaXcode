@@ -1402,6 +1402,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Server-side price fetching — avoids browser rate limits on CoinGecko free tier
+  let cachedPrices: { eth: number; usdc: number; lastUpdated: number } | null = null;
+  const PRICE_CACHE_MS = 60_000;
+
+  app.get("/api/prices", async (_req, res) => {
+    try {
+      if (cachedPrices && Date.now() - cachedPrices.lastUpdated < PRICE_CACHE_MS) {
+        return res.json(cachedPrices);
+      }
+
+      // Try CoinGecko first
+      const cgRes = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd-coin&vs_currencies=usd",
+        { signal: AbortSignal.timeout(5000) }
+      );
+
+      if (cgRes.ok) {
+        const data = await cgRes.json() as any;
+        cachedPrices = {
+          eth: data.ethereum?.usd ?? 3200,
+          usdc: data["usd-coin"]?.usd ?? 1,
+          lastUpdated: Date.now(),
+        };
+        return res.json(cachedPrices);
+      }
+
+      // Fallback: Binance public API (no key required)
+      const binRes = await fetch(
+        "https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT",
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (binRes.ok) {
+        const bin = await binRes.json() as any;
+        cachedPrices = { eth: parseFloat(bin.price), usdc: 1, lastUpdated: Date.now() };
+        return res.json(cachedPrices);
+      }
+
+      // Last resort: return last cached or hardcoded
+      return res.json(cachedPrices ?? { eth: 3200, usdc: 1, lastUpdated: Date.now() });
+    } catch {
+      return res.json(cachedPrices ?? { eth: 3200, usdc: 1, lastUpdated: Date.now() });
+    }
+  });
+
   app.get("/api/fx/rates", async (_req, res) => {
     try {
       const rates = await fetchAllRates();
