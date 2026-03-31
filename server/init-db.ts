@@ -278,16 +278,29 @@ async function createTables() {
   `);
 }
 
-const defaultNetworks = [
-  {
-    name: "Lisk Sepolia",
-    chainId: 4202,
-    rpcUrl: "https://rpc.sepolia-api.lisk.com",
-    symbol: "ETH",
-    blockExplorerUrl: "https://sepolia-blockscout.lisk.com",
-    isTestnet: true,
-  },
-];
+const isProd = process.env.NODE_ENV === "production" || process.env.NETWORK_MODE === "mainnet";
+
+const defaultNetworks = isProd
+  ? [
+      {
+        name: "Lisk",
+        chainId: 1135,
+        rpcUrl: "https://rpc.api.lisk.com",
+        symbol: "ETH",
+        blockExplorerUrl: "https://blockscout.lisk.com",
+        isTestnet: false,
+      },
+    ]
+  : [
+      {
+        name: "Lisk Sepolia",
+        chainId: 4202,
+        rpcUrl: "https://rpc.sepolia-api.lisk.com",
+        symbol: "ETH",
+        blockExplorerUrl: "https://sepolia-blockscout.lisk.com",
+        isTestnet: true,
+      },
+    ];
 
 export async function initializeDatabase() {
   console.log("Initializing database...");
