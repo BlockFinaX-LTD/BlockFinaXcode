@@ -412,10 +412,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `);
 
       // Tables that may not exist — clear individually with IF EXISTS check
-      for (const t of ["referrals", "referral_codes", "user_points", "point_transactions"]) {
-        try {
-          await db.execute(sql.raw(`TRUNCATE TABLE ${t} RESTART IDENTITY CASCADE`));
-        } catch { /* table may not exist — skip */ }
+      for (const q of [
+        sql`TRUNCATE TABLE referrals RESTART IDENTITY CASCADE`,
+        sql`TRUNCATE TABLE referral_codes RESTART IDENTITY CASCADE`,
+        sql`TRUNCATE TABLE user_points RESTART IDENTITY CASCADE`,
+        sql`TRUNCATE TABLE point_transactions RESTART IDENTITY CASCADE`,
+      ]) {
+        try { await db.execute(q); } catch { /* table may not exist — skip */ }
       }
 
       console.log("[Admin] Testnet data cleared");
