@@ -40,6 +40,9 @@ import {
   type RateSnapshot,
   type InsertRateSnapshot,
   dataRoomContent,
+  articles,
+  type Article,
+  type InsertArticle,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, and, sql, lt, lte } from "drizzle-orm";
@@ -133,6 +136,14 @@ export interface IStorage {
   // Data Room Content operations
   getDataRoomContent(docId: string): Promise<Record<string, string>>;
   setDataRoomContent(docId: string, data: Record<string, string>): Promise<void>;
+
+  // Article CMS operations
+  getAllArticles(onlyPublished?: boolean): Promise<Article[]>;
+  getArticleBySlug(slug: string): Promise<Article | undefined>;
+  getArticleById(id: number): Promise<Article | undefined>;
+  createArticle(article: InsertArticle): Promise<Article>;
+  updateArticle(id: number, updates: Partial<InsertArticle>): Promise<Article | undefined>;
+  deleteArticle(id: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -792,6 +803,39 @@ export class DatabaseStorage implements IStorage {
   async setDataRoomContent(docId: string, data: Record<string, string>): Promise<void> {
     await db.insert(dataRoomContent).values({ docId, data })
       .onConflictDoUpdate({ target: dataRoomContent.docId, set: { data, updatedAt: new Date() } });
+  }
+
+  async getAllArticles(onlyPublished = false): Promise<Article[]> {
+    const query = db.select().from(articles).orderBy(desc(articles.publishedAt));
+    if (onlyPublished) {
+      return query.where(eq(articles.published, true));
+    }
+    return query;
+  }
+
+  async getArticleBySlug(slug: string): Promise<Article | undefined> {
+    const [row] = await db.select().from(articles).where(eq(articles.slug, slug)).limit(1);
+    return row;
+  }
+
+  async getArticleById(id: number): Promise<Article | undefined> {
+    const [row] = await db.select().from(articles).where(eq(articles.id, id)).limit(1);
+    return row;
+  }
+
+  async createArticle(article: InsertArticle): Promise<Article> {
+    const [row] = await db.insert(articles).values({ ...article, updatedAt: new Date() }).returning();
+    return row;
+  }
+
+  async updateArticle(id: number, updates: Partial<InsertArticle>): Promise<Article | undefined> {
+    const [row] = await db.update(articles).set({ ...updates, updatedAt: new Date() }).where(eq(articles.id, id)).returning();
+    return row;
+  }
+
+  async deleteArticle(id: number): Promise<boolean> {
+    const result = await db.delete(articles).where(eq(articles.id, id)).returning();
+    return result.length > 0;
   }
 }
 

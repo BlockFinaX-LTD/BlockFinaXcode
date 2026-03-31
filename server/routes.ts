@@ -582,6 +582,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Admin Article CMS routes ─────────────────────────────────────────────────
+  app.get("/api/admin/articles", requireAdmin, async (_req, res) => {
+    try {
+      const all = await storage.getAllArticles(false);
+      res.json(all);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch articles" });
+    }
+  });
+
+  app.post("/api/admin/articles", requireAdmin, async (req, res) => {
+    try {
+      const { title, subtitle, category, content, readTime, published, slug, publishedAt } = req.body;
+      if (!title || !slug) return res.status(400).json({ message: "title and slug are required" });
+      const article = await storage.createArticle({
+        title, subtitle: subtitle || "", category: category || "Hedging",
+        content: content || [], readTime: readTime || "5 min read",
+        published: published !== false, slug,
+        publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+      });
+      res.json(article);
+    } catch (e: any) {
+      if (e?.message?.includes("unique")) return res.status(409).json({ message: "A post with that slug already exists" });
+      res.status(500).json({ message: "Failed to create article" });
+    }
+  });
+
+  app.patch("/api/admin/articles/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateArticle(id, req.body);
+      if (!updated) return res.status(404).json({ message: "Article not found" });
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update article" });
+    }
+  });
+
+  app.delete("/api/admin/articles/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const ok = await storage.deleteArticle(id);
+      if (!ok) return res.status(404).json({ message: "Article not found" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete article" });
+    }
+  });
+
+  // ── Public articles routes ────────────────────────────────────────────────────
+  app.get("/api/articles", async (_req, res) => {
+    try {
+      const all = await storage.getAllArticles(true);
+      res.json(all);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch articles" });
+    }
+  });
+
+  app.get("/api/articles/:slug", async (req, res) => {
+    try {
+      const article = await storage.getArticleBySlug(req.params.slug);
+      if (!article || !article.published) return res.status(404).json({ message: "Article not found" });
+      res.json(article);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
   app.get("/api/admin/health", async (_req, res) => {
     try {
       const result = await db.execute(sql`select now()::text as server_time`);

@@ -33,7 +33,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "analytics";
+type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -42,6 +42,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "revenue", label: "Revenue & Fees", icon: DollarSign },
   { key: "tasks", label: "Tasks & Points", icon: ListChecks },
   { key: "analytics", label: "Analytics", icon: Activity },
+  { key: "content", label: "Content", icon: FileText },
 ];
 
 function StatCard({ title, value, sub, icon: Icon, color = "text-gray-600" }: { title: string; value: string | number; sub?: string; icon: any; color?: string }) {
@@ -717,6 +718,217 @@ function AnalyticsSection() {
   );
 }
 
+const CATEGORIES = ["Hedging", "Payments", "Education", "Earning"];
+
+const EMPTY_ARTICLE = { title: "", subtitle: "", slug: "", category: "Hedging", readTime: "5 min read", published: true, body: "" };
+
+function bodyToBlocks(body: string): Array<{ type: string; content?: string; items?: string[] }> {
+  const blocks: Array<{ type: string; content?: string; items?: string[] }> = [];
+  const lines = body.split("\n");
+  let listItems: string[] = [];
+  const flushList = () => { if (listItems.length) { blocks.push({ type: "list", items: [...listItems] }); listItems = []; } };
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) { flushList(); continue; }
+    if (t.startsWith("## ")) { flushList(); blocks.push({ type: "heading", content: t.slice(3) }); }
+    else if (t.startsWith("### ")) { flushList(); blocks.push({ type: "subheading", content: t.slice(4) }); }
+    else if (t.startsWith("> ")) { flushList(); blocks.push({ type: "callout", content: t.slice(2) }); }
+    else if (t.startsWith("- ")) { listItems.push(t.slice(2)); }
+    else { flushList(); blocks.push({ type: "text", content: t }); }
+  }
+  flushList();
+  return blocks;
+}
+
+function blocksToBody(blocks: Array<{ type: string; content?: string; items?: string[] }>): string {
+  return (blocks || []).map(b => {
+    if (b.type === "heading") return `## ${b.content}`;
+    if (b.type === "subheading") return `### ${b.content}`;
+    if (b.type === "callout") return `> ${b.content}`;
+    if (b.type === "list") return (b.items || []).map(i => `- ${i}`).join("\n");
+    return b.content || "";
+  }).join("\n\n");
+}
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function ContentSection() {
+  const { token } = useAdminToken();
+  const { toast } = useToast();
+  const { data: articles, isLoading, refetch } = useQuery({
+    queryKey: ["/api/admin/articles"],
+    queryFn: () => adminFetch("/api/admin/articles", token).then(r => r.json()),
+  });
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ ...EMPTY_ARTICLE });
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const openCreate = () => { setEditingId(null); setForm({ ...EMPTY_ARTICLE }); setDialogOpen(true); };
+  const openEdit = (a: any) => {
+    setEditingId(a.id);
+    setForm({ title: a.title, subtitle: a.subtitle || "", slug: a.slug, category: a.category, readTime: a.readTime || "5 min read", published: a.published, body: blocksToBody(a.content) });
+    setDialogOpen(true);
+  };
+
+  const saveArticle = useMutation({
+    mutationFn: async () => {
+      const payload = { ...form, content: bodyToBlocks(form.body), slug: form.slug || slugify(form.title) };
+      const url = editingId ? `/api/admin/articles/${editingId}` : "/api/admin/articles";
+      const method = editingId ? "PATCH" : "POST";
+      const res = await adminFetch(url, token, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || "Failed to save"); }
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/articles"] }); toast({ title: editingId ? "Article updated" : "Article published" }); setDialogOpen(false); refetch(); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteArticle = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await adminFetch(`/api/admin/articles/${id}`, token, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/articles"] }); toast({ title: "Article deleted" }); setDeleteId(null); refetch(); },
+    onError: () => toast({ title: "Error deleting article", variant: "destructive" }),
+  });
+
+  const togglePublished = useMutation({
+    mutationFn: async ({ id, published }: { id: number; published: boolean }) => {
+      const res = await adminFetch(`/api/admin/articles/${id}`, token, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ published }) });
+      if (!res.ok) throw new Error("Failed to update");
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/articles"] }); refetch(); },
+  });
+
+  if (isLoading) return <LoadingSkeleton />;
+  const list = (articles as any[] || []);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Content</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{list.length} article{list.length !== 1 ? "s" : ""} total</p>
+        </div>
+        <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> New Article</Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-left p-3 font-medium">Title</th>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">Category</th>
+                  <th className="text-left p-3 font-medium hidden md:table-cell">Read time</th>
+                  <th className="text-left p-3 font-medium">Status</th>
+                  <th className="p-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((a: any) => (
+                  <tr key={a.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3">
+                      <div className="font-medium">{a.title}</div>
+                      <div className="text-xs text-gray-400 mt-0.5 hidden sm:block font-mono">{a.slug}</div>
+                    </td>
+                    <td className="p-3 hidden sm:table-cell"><Badge variant="outline" className="text-xs">{a.category}</Badge></td>
+                    <td className="p-3 hidden md:table-cell text-gray-500 text-xs">{a.readTime}</td>
+                    <td className="p-3">
+                      <Switch checked={a.published} onCheckedChange={(v) => togglePublished.mutate({ id: a.id, published: v })} />
+                    </td>
+                    <td className="p-3 text-right flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(a)}><Pencil className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-600" onClick={() => setDeleteId(a.id)}><Trash2 className="h-3 w-3" /></Button>
+                    </td>
+                  </tr>
+                ))}
+                {list.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">No articles yet — create your first one</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Create / Edit dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Edit Article" : "New Article"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-xs mb-1 block">Title *</Label>
+                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value, slug: f.slug || slugify(e.target.value) }))} placeholder="Article title" />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs mb-1 block">Subtitle</Label>
+                <Input value={form.subtitle} onChange={e => setForm(f => ({ ...f, subtitle: e.target.value }))} placeholder="Short description shown on the card" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Slug (URL)</Label>
+                <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: slugify(e.target.value) }))} placeholder="url-friendly-slug" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Read time</Label>
+                <Input value={form.readTime} onChange={e => setForm(f => ({ ...f, readTime: e.target.value }))} placeholder="5 min read" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Category</Label>
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 pt-5">
+                <Switch checked={form.published} onCheckedChange={v => setForm(f => ({ ...f, published: v }))} />
+                <Label className="text-xs">Published</Label>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">
+                Body — use <code className="bg-gray-100 px-1 rounded">## Heading</code>, <code className="bg-gray-100 px-1 rounded">### Sub</code>, <code className="bg-gray-100 px-1 rounded">&gt; Callout</code>, <code className="bg-gray-100 px-1 rounded">- list item</code>
+              </Label>
+              <Textarea
+                value={form.body}
+                onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                placeholder={"## Introduction\n\nWrite your article here...\n\n> Key insight to highlight\n\n- Bullet point one\n- Bullet point two"}
+                className="min-h-[320px] font-mono text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button onClick={() => saveArticle.mutate()} disabled={saveArticle.isPending || !form.title}>
+                {saveArticle.isPending ? "Saving..." : editingId ? "Save changes" : "Publish"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete article?</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-500">This cannot be undone.</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteId && deleteArticle.mutate(deleteId)} disabled={deleteArticle.isPending}>
+              {deleteArticle.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
@@ -853,6 +1065,7 @@ export default function AdminDashboard() {
         {section === "revenue" && <RevenueSection />}
         {section === "tasks" && <TasksSection />}
         {section === "analytics" && <AnalyticsSection />}
+        {section === "content" && <ContentSection />}
       </main>
     </div>
     </AdminTokenContext.Provider>

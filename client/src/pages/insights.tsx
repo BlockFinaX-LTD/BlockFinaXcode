@@ -42,14 +42,17 @@ function useArticles() {
 }
 
 function mapRawArticle(raw: any): Article {
+  const dateStr = raw.date || (raw.publishedAt
+    ? new Date(raw.publishedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "");
   return {
     id: raw.slug,
     title: raw.title,
     subtitle: raw.subtitle,
     category: raw.category,
-    readTime: raw.readTime || raw.read_time,
-    date: raw.date,
-    content: raw.content,
+    readTime: raw.readTime || raw.read_time || "5 min read",
+    date: dateStr,
+    content: raw.content || [],
   };
 }
 

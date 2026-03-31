@@ -261,6 +261,25 @@ export type TermsAcceptance = typeof termsAcceptances.$inferSelect;
 export const insertTermsAcceptanceSchema = createInsertSchema(termsAcceptances).omit({ id: true, acceptedAt: true });
 export type InsertTermsAcceptance = z.infer<typeof insertTermsAcceptanceSchema>;
 
+// ── Articles / Blog CMS ───────────────────────────────────────────────────────
+export const articles = pgTable("articles", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle").default(""),
+  category: text("category").notNull().default("Hedging"),
+  content: jsonb("content").$type<Array<{ type: string; content?: string; items?: string[] }>>().notNull().default([]),
+  readTime: text("read_time").default("5 min read"),
+  published: boolean("published").default(true),
+  publishedAt: timestamp("published_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertArticleSchema = createInsertSchema(articles).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertArticle = z.infer<typeof insertArticleSchema>;
+export type Article = typeof articles.$inferSelect;
+
 export const dataRoomContent = pgTable("data_room_content", {
   id: serial("id").primaryKey(),
   docId: text("doc_id").notNull().unique(),
