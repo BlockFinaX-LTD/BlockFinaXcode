@@ -21,7 +21,7 @@ const NODES = [
 function spawnNode(label: string, file: string, key: string): ChildProcess {
   const scriptPath = path.join(__dirname, file);
 
-  const child = spawn("npx", ["tsx", scriptPath], {
+  const child = spawn("node", [scriptPath.replace('.ts', '.js')], {
     env: { ...process.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
