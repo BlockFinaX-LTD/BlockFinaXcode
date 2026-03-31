@@ -327,23 +327,14 @@ function ExampleSection() {
 
   const rows = [
     {
-      scenario: "A — Rate moves to 17.60+",
+      scenario: "Rate moves to 17.60+",
       color: "text-green-700",
       bg: "bg-green-50",
       premiumPaid: `-$${premium.toFixed(0)}`,
       payout: `+$${netPayout.toFixed(0)}`,
       net: `+$${netGain.toFixed(0)}`,
-      note: "Strike touched. Contract pays out."
+      note: "Strike touched — contract pays out automatically."
     },
-    {
-      scenario: "B — Rate stays below 17.60",
-      color: "text-red-700",
-      bg: "bg-red-50",
-      premiumPaid: `-$${premium.toFixed(0)}`,
-      payout: "$0",
-      net: `-$${premium.toFixed(0)}`,
-      note: "Strike never touched. Premium lost."
-    }
   ];
 
   return (
@@ -371,8 +362,8 @@ function ExampleSection() {
             ))}
           </div>
 
-          {/* Scenarios - cards on mobile, table on desktop */}
-          <div className="space-y-2 sm:hidden">
+          {/* Scenario - card on mobile */}
+          <div className="sm:hidden">
             <div className="rounded-xl bg-green-50 border border-green-100 p-4">
               <p className="font-semibold text-green-700 text-sm mb-2">✓ Rate hits 17.60 — Strike touched</p>
               <div className="flex justify-between text-xs text-gray-600">
@@ -382,19 +373,7 @@ function ExampleSection() {
                 <span>Payout received</span><span className="font-mono text-green-700">+${netPayout.toFixed(0)}</span>
               </div>
               <div className="flex justify-between text-xs font-bold text-green-700 border-t border-green-200 mt-2 pt-2">
-                <span>Net outcome</span><span className="font-mono">+${netGain.toFixed(0)}</span>
-              </div>
-            </div>
-            <div className="rounded-xl bg-red-50 border border-red-100 p-4">
-              <p className="font-semibold text-red-700 text-sm mb-2">✗ Rate stays below 17.60 — Expires</p>
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>Premium paid</span><span className="font-mono">-$400</span>
-              </div>
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>Payout received</span><span className="font-mono">$0</span>
-              </div>
-              <div className="flex justify-between text-xs font-bold text-red-700 border-t border-red-200 mt-2 pt-2">
-                <span>Net outcome</span><span className="font-mono">-$400</span>
+                <span>Net gain</span><span className="font-mono">+${netGain.toFixed(0)}</span>
               </div>
             </div>
           </div>
@@ -403,7 +382,7 @@ function ExampleSection() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Scenario</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">When the strike is touched</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Premium</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Payout</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Net</th>
@@ -422,7 +401,7 @@ function ExampleSection() {
             </table>
           </div>
 
-          <p className="text-xs text-gray-400 mt-3 text-center">Max loss = premium ($400). Payout fixed at purchase. Net deducts 1% settlement fee.</p>
+          <p className="text-xs text-gray-400 mt-3 text-center">Payout is fixed at purchase. Net gain deducts the 1% settlement fee.</p>
         </motion.div>
       </div>
     </section>
