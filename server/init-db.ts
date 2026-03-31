@@ -278,6 +278,61 @@ async function createTables() {
   `);
 }
 
+async function createIndexes() {
+  await db.execute(sql`
+    -- auth_sessions: wallet_address + expires_at (session cleanup & lookup)
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_wallet ON auth_sessions(wallet_address);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);
+
+    -- user_profiles: kyc_provider_ref (webhook lookups), kyc_status (admin filters)
+    CREATE INDEX IF NOT EXISTS idx_user_profiles_kyc_ref ON user_profiles(kyc_provider_ref);
+    CREATE INDEX IF NOT EXISTS idx_user_profiles_kyc_status ON user_profiles(kyc_status);
+
+    -- user_task_completions: wallet_address (progress lookups), composite (duplicate check)
+    CREATE INDEX IF NOT EXISTS idx_task_completions_wallet ON user_task_completions(wallet_address);
+    CREATE INDEX IF NOT EXISTS idx_task_completions_wallet_task ON user_task_completions(wallet_address, task_id);
+
+    -- user_points: total_points DESC (leaderboard ordering)
+    CREATE INDEX IF NOT EXISTS idx_user_points_leaderboard ON user_points(total_points DESC);
+
+    -- hedge_events: status (filter open events), underlying (pair lookups)
+    CREATE INDEX IF NOT EXISTS idx_hedge_events_status ON hedge_events(status);
+    CREATE INDEX IF NOT EXISTS idx_hedge_events_underlying ON hedge_events(underlying);
+
+    -- hedge_positions: hedger_wallet (user positions), event_id (event aggregation), status
+    CREATE INDEX IF NOT EXISTS idx_hedge_positions_wallet ON hedge_positions(hedger_wallet);
+    CREATE INDEX IF NOT EXISTS idx_hedge_positions_event ON hedge_positions(event_id);
+    CREATE INDEX IF NOT EXISTS idx_hedge_positions_status ON hedge_positions(status);
+
+    -- hedge_lp_deposits: lp_wallet (user deposits), event_id (event aggregation)
+    CREATE INDEX IF NOT EXISTS idx_lp_deposits_wallet ON hedge_lp_deposits(lp_wallet);
+    CREATE INDEX IF NOT EXISTS idx_lp_deposits_event ON hedge_lp_deposits(event_id);
+
+    -- rate_snapshots: pair (FX rate lookups), pair+recorded_at (time-series queries)
+    CREATE INDEX IF NOT EXISTS idx_rate_snapshots_pair ON rate_snapshots(pair);
+    CREATE INDEX IF NOT EXISTS idx_rate_snapshots_pair_time ON rate_snapshots(pair, recorded_at DESC);
+
+    -- platform_fees: from_wallet (user fee history)
+    CREATE INDEX IF NOT EXISTS idx_platform_fees_wallet ON platform_fees(from_wallet);
+
+    -- point_transactions: wallet_address (point history)
+    CREATE INDEX IF NOT EXISTS idx_point_transactions_wallet ON point_transactions(wallet_address);
+
+    -- referrals: referrer + referred wallet lookups
+    CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_wallet_address);
+    CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_wallet_address);
+
+    -- referral_codes: referrer wallet (user's own codes)
+    CREATE INDEX IF NOT EXISTS idx_referral_codes_referrer ON referral_codes(referrer_wallet_address);
+
+    -- magic_links: email (check before creating new link)
+    CREATE INDEX IF NOT EXISTS idx_magic_links_email ON magic_links(email);
+
+    -- wallets: user_id (join with user_accounts)
+    CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
+  `);
+}
+
 const isProd = process.env.NODE_ENV === "production" || process.env.NETWORK_MODE === "mainnet";
 
 const defaultNetworks = isProd
@@ -311,6 +366,14 @@ export async function initializeDatabase() {
   } catch (error) {
     console.error("Failed to create tables:", error);
     throw error;
+  }
+
+  try {
+    await createIndexes();
+    console.log("All indexes ready.");
+  } catch (error) {
+    console.error("Failed to create indexes:", error);
+    // Non-fatal — app can still run without indexes, just slower
   }
 
   for (const network of defaultNetworks) {
