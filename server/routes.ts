@@ -1079,15 +1079,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { address } = req.params;
       const { networkId } = req.query;
-      const chainId = networkId ? parseInt(networkId as string) : 4202;
+      const chainId = networkId ? parseInt(networkId as string) : 1135;
 
       const ethers = await import("ethers");
 
-      let rpcUrl = "https://rpc.sepolia-api.lisk.com";
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      // Use the correct RPC and USDC contract for the requested network
+      const NETWORK_CONFIG: Record<number, { rpcUrl: string; usdcAddress: string; name: string }> = {
+        1135: {
+          rpcUrl: "https://rpc.api.lisk.com",
+          usdcAddress: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
+          name: "USDC",
+        },
+        4202: {
+          rpcUrl: "https://rpc.sepolia-api.lisk.com",
+          usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
+          name: "USDC",
+        },
+      };
 
-      const usdcAddress = "0xf52Ad63619Bf9cFeF510341ac6b4038554399562";
-      const usdcContract = new ethers.Contract(usdcAddress, [
+      const config = NETWORK_CONFIG[chainId];
+      if (!config) return res.json({ balances: [] });
+
+      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+      const usdcContract = new ethers.Contract(config.usdcAddress, [
         "function balanceOf(address) view returns (uint256)",
         "function decimals() view returns (uint8)"
       ], provider);
@@ -1101,8 +1115,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         balances: [{
           token: {
             symbol: "USDC",
-            name: "Test USDC",
-            address: usdcAddress,
+            name: config.name,
+            address: config.usdcAddress,
             decimals: Number(decimals),
             icon: "💵",
             color: "#2775CA"
