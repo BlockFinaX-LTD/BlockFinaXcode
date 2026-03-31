@@ -15,7 +15,7 @@ import {
   Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
-  FileText, Trash2, X, GripVertical, Save, RefreshCw
+  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -33,7 +33,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content";
+type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -43,6 +43,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "tasks", label: "Tasks & Points", icon: ListChecks },
   { key: "analytics", label: "Analytics", icon: Activity },
   { key: "content", label: "Content", icon: FileText },
+  { key: "protocol", label: "Protocol", icon: Settings },
 ];
 
 function StatCard({ title, value, sub, icon: Icon, color = "text-gray-600" }: { title: string; value: string | number; sub?: string; icon: any; color?: string }) {
@@ -754,6 +755,390 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+// ─── Protocol / Owner Functions ─────────────────────────────────────────────
+
+const DIAMOND = "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D";
+const SAFE_ADDR = "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D";
+const USDC_MAINNET = "0xF242275d3a6527d877f2c927a82D9b057609cc71";
+const USDT_MAINNET = "0x05D032ac25d322df992303dCa074EE7392C117b9";
+const LISK_CHAIN_ID = 1135;
+const LISK_HEX = "0x46F";
+const LISK_RPC = "https://rpc.api.lisk.com";
+
+const OWNER_ABI = [
+  "function getHedgeFeeConfig() view returns (uint256,uint256,uint256,uint256,uint256)",
+  "function getHedgePlatformFees() view returns (uint256)",
+  "function getPlatformFeesByToken(address) view returns (uint256)",
+  "function isAllowedPaymentToken(address) view returns (bool)",
+  "function withdrawPlatformFees(uint256)",
+  "function withdrawPlatformFeesByToken(address,uint256)",
+  "function initializeHedgeFees(uint256,uint256,uint256,uint256,uint256)",
+  "function setOracleAdmin(address)",
+  "function setAllowedPaymentToken(address,bool)",
+];
+
+async function ensureLisk() {
+  const eth = (window as any).ethereum;
+  if (!eth) throw new Error("MetaMask not found.");
+  await eth.request({ method: "eth_requestAccounts" });
+  const chainId = parseInt(await eth.request({ method: "eth_chainId" }), 16);
+  if (chainId !== LISK_CHAIN_ID) {
+    try {
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: LISK_HEX }] });
+    } catch {
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [{ chainId: LISK_HEX, chainName: "Lisk", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: [LISK_RPC], blockExplorerUrls: ["https://blockscout.lisk.com"] }],
+      });
+    }
+  }
+  const { ethers } = await import("ethers");
+  const provider = new ethers.BrowserProvider(eth);
+  const signer = await provider.getSigner();
+  const contract = new ethers.Contract(DIAMOND, OWNER_ABI, signer);
+  return { ethers, signer, contract, provider };
+}
+
+async function readContract() {
+  const { ethers } = await import("ethers");
+  const provider = new ethers.JsonRpcProvider(LISK_RPC);
+  return new ethers.Contract(DIAMOND, OWNER_ABI, provider);
+}
+
+function fmtUSDC(raw: bigint) {
+  return (Number(raw) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function shortAddr(a: string) {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+interface ProtocolState {
+  usdcFees: string;
+  usdtFees: string;
+  feeConfig: { creationFee: string; hedgerFeeRate: string; hedgerPayoutFeeRate: string; lpProfitFeeRate: string; creatorLoyaltyRate: string } | null;
+  usdcAllowed: boolean;
+  usdtAllowed: boolean;
+  wallet: string;
+  loading: boolean;
+}
+
+function ProtocolSection() {
+  const { toast } = useToast();
+  const [state, setState] = useState<ProtocolState>({
+    usdcFees: "—", usdtFees: "—", feeConfig: null,
+    usdcAllowed: true, usdtAllowed: false,
+    wallet: "", loading: true,
+  });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [oracleInput, setOracleInput] = useState("");
+  const [feeForm, setFeeForm] = useState({ creationFee: "", hedgerFeeRate: "", hedgerPayoutFeeRate: "", lpProfitFeeRate: "", creatorLoyaltyRate: "" });
+  const [feeFormOpen, setFeeFormOpen] = useState(false);
+
+  const load = async () => {
+    setState(s => ({ ...s, loading: true }));
+    try {
+      const c = await readContract();
+      const { ethers } = await import("ethers");
+      const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed] = await Promise.all([
+        c.getHedgePlatformFees().catch(() => 0n),
+        c.getPlatformFeesByToken(USDT_MAINNET).catch(() => 0n),
+        c.getHedgeFeeConfig().catch(() => null),
+        c.isAllowedPaymentToken(USDC_MAINNET).catch(() => true),
+        c.isAllowedPaymentToken(USDT_MAINNET).catch(() => false),
+      ]);
+      const feeConfig = rawFees ? {
+        creationFee: (Number(rawFees[0]) / 1e6).toFixed(2),
+        hedgerFeeRate: (Number(ethers.formatUnits(rawFees[1], 6)) * 100).toFixed(4),
+        hedgerPayoutFeeRate: (Number(ethers.formatUnits(rawFees[2], 6)) * 100).toFixed(4),
+        lpProfitFeeRate: (Number(ethers.formatUnits(rawFees[3], 6)) * 100).toFixed(4),
+        creatorLoyaltyRate: (Number(ethers.formatUnits(rawFees[4], 6)) * 100).toFixed(4),
+      } : null;
+      if (feeConfig) setFeeForm({ creationFee: feeConfig.creationFee, hedgerFeeRate: feeConfig.hedgerFeeRate, hedgerPayoutFeeRate: feeConfig.hedgerPayoutFeeRate, lpProfitFeeRate: feeConfig.lpProfitFeeRate, creatorLoyaltyRate: feeConfig.creatorLoyaltyRate });
+
+      const eth = (window as any).ethereum;
+      let wallet = "";
+      if (eth) {
+        const accounts: string[] = await eth.request({ method: "eth_accounts" });
+        wallet = accounts[0] || "";
+      }
+      setState(s => ({ ...s, usdcFees: fmtUSDC(BigInt(rawUsdc)), usdtFees: fmtUSDC(BigInt(rawUsdt)), feeConfig, usdcAllowed, usdtAllowed, wallet, loading: false }));
+    } catch (e: any) {
+      setState(s => ({ ...s, loading: false }));
+      toast({ title: "Failed to load contract state", description: e.message, variant: "destructive" });
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const run = async (label: string, fn: () => Promise<void>) => {
+    setBusy(label);
+    try {
+      await fn();
+      toast({ title: `${label} — done` });
+      await load();
+    } catch (e: any) {
+      toast({ title: `${label} failed`, description: e.message || String(e), variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const withdrawUsdc = () => run("Withdraw USDC fees", async () => {
+    const { ethers, contract } = await ensureLisk();
+    const raw = await contract.getHedgePlatformFees();
+    if (BigInt(raw) === 0n) throw new Error("No USDC fees to withdraw.");
+    const tx = await contract.withdrawPlatformFees(raw);
+    await tx.wait();
+  });
+
+  const withdrawUsdt = () => run("Withdraw USDT fees", async () => {
+    const { contract } = await ensureLisk();
+    const raw = await contract.getPlatformFeesByToken(USDT_MAINNET);
+    if (BigInt(raw) === 0n) throw new Error("No USDT fees to withdraw.");
+    const tx = await contract.withdrawPlatformFeesByToken(USDT_MAINNET, raw);
+    await tx.wait();
+  });
+
+  const updateFees = () => run("Update fee config", async () => {
+    const { ethers, contract } = await ensureLisk();
+    const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
+    const tx = await contract.initializeHedgeFees(
+      ethers.parseUnits(feeForm.creationFee, 6),
+      p(feeForm.hedgerFeeRate),
+      p(feeForm.hedgerPayoutFeeRate),
+      p(feeForm.lpProfitFeeRate),
+      p(feeForm.creatorLoyaltyRate),
+    );
+    await tx.wait();
+    setFeeFormOpen(false);
+  });
+
+  const setOracle = () => run("Set oracle admin", async () => {
+    if (!oracleInput.startsWith("0x") || oracleInput.length !== 42) throw new Error("Invalid address.");
+    const { contract } = await ensureLisk();
+    const tx = await contract.setOracleAdmin(oracleInput);
+    await tx.wait();
+    setOracleInput("");
+  });
+
+  const toggleToken = (token: string, enable: boolean, label: string) => run(`${enable ? "Enable" : "Disable"} ${label}`, async () => {
+    const { contract } = await ensureLisk();
+    const tx = await contract.setAllowedPaymentToken(token, enable);
+    await tx.wait();
+  });
+
+  const connectedLabel = state.wallet ? shortAddr(state.wallet) : "Not connected";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Protocol Controls</h2>
+          <p className="text-sm text-gray-500 mt-0.5">On-chain owner functions — each action sends a transaction via MetaMask</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{connectedLabel}</span>
+          <Button variant="outline" size="sm" onClick={load} disabled={state.loading}>
+            <RefreshCw className={`h-3 w-3 mr-1 ${state.loading ? "animate-spin" : ""}`} />Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Fee Balances & Withdraw */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-[#1a4480]" />Platform Fee Balances
+          </CardTitle>
+          <CardDescription>Accumulated fees held in the Diamond contract — withdraw to your connected wallet</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDC Fees</p>
+                  <p className="text-2xl font-bold text-gray-900">{state.usdcFees}</p>
+                </div>
+                <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded">USDC</span>
+              </div>
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdc} disabled={busy !== null || state.usdcFees === "0.00"}>
+                {busy === "Withdraw USDC fees" ? "Sending…" : "Withdraw USDC"}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDT Fees</p>
+                  <p className="text-2xl font-bold text-gray-900">{state.usdtFees}</p>
+                </div>
+                <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded">USDT</span>
+              </div>
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdt} disabled={busy !== null || state.usdtFees === "0.00"}>
+                {busy === "Withdraw USDT fees" ? "Sending…" : "Withdraw USDT"}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" />Fees are sent to your connected wallet ({connectedLabel}). Forward to Safe manually if needed.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Fee Parameters */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Settings className="h-4 w-4 text-[#1a4480]" />Fee Parameters
+              </CardTitle>
+              <CardDescription>Current on-chain fee rates — all values shown as percentages</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setFeeFormOpen(!feeFormOpen)}>
+              {feeFormOpen ? <X className="h-3 w-3 mr-1" /> : <Pencil className="h-3 w-3 mr-1" />}
+              {feeFormOpen ? "Cancel" : "Edit"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {state.feeConfig ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { label: "Event creation fee", value: `$${state.feeConfig.creationFee} USDC`, sub: "flat" },
+                  { label: "Hedger fee rate", value: `${state.feeConfig.hedgerFeeRate}%`, sub: "on premium" },
+                  { label: "Hedger payout fee", value: `${state.feeConfig.hedgerPayoutFeeRate}%`, sub: "on payout" },
+                  { label: "LP profit fee", value: `${state.feeConfig.lpProfitFeeRate}%`, sub: "on LP earnings" },
+                  { label: "Creator loyalty", value: `${state.feeConfig.creatorLoyaltyRate}%`, sub: "rebate" },
+                ].map(({ label, value, sub }) => (
+                  <div key={label} className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">{label}</p>
+                    <p className="font-semibold text-gray-900">{value}</p>
+                    <p className="text-xs text-gray-400">{sub}</p>
+                  </div>
+                ))}
+              </div>
+
+              {feeFormOpen && (
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">Update fee parameters</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Creation fee (USDC flat amount)</Label>
+                      <Input type="number" step="0.01" value={feeForm.creationFee} onChange={e => setFeeForm(f => ({ ...f, creationFee: e.target.value }))} placeholder="e.g. 5.00" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Hedger fee rate (%)</Label>
+                      <Input type="number" step="0.001" value={feeForm.hedgerFeeRate} onChange={e => setFeeForm(f => ({ ...f, hedgerFeeRate: e.target.value }))} placeholder="e.g. 1.00" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Hedger payout fee (%)</Label>
+                      <Input type="number" step="0.001" value={feeForm.hedgerPayoutFeeRate} onChange={e => setFeeForm(f => ({ ...f, hedgerPayoutFeeRate: e.target.value }))} placeholder="e.g. 0.5000" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">LP profit fee (%)</Label>
+                      <Input type="number" step="0.001" value={feeForm.lpProfitFeeRate} onChange={e => setFeeForm(f => ({ ...f, lpProfitFeeRate: e.target.value }))} placeholder="e.g. 2.00" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Creator loyalty rebate (%)</Label>
+                      <Input type="number" step="0.001" value={feeForm.creatorLoyaltyRate} onChange={e => setFeeForm(f => ({ ...f, creatorLoyaltyRate: e.target.value }))} placeholder="e.g. 0.5000" className="mt-1" />
+                    </div>
+                  </div>
+                  <Button className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={updateFees} disabled={busy !== null}>
+                    {busy === "Update fee config" ? "Sending tx…" : "Submit to chain"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">{state.loading ? "Loading…" : "Could not read fee config from contract."}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Oracle Admin */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4 text-[#1a4480]" />Oracle Admin
+          </CardTitle>
+          <CardDescription>Set the address authorised to submit oracle price settlements</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Input
+              placeholder="New oracle admin address (0x…)"
+              value={oracleInput}
+              onChange={e => setOracleInput(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <Button className="shrink-0 bg-[#1a4480] hover:bg-[#153a6e]" onClick={setOracle} disabled={busy !== null || !oracleInput}>
+              {busy === "Set oracle admin" ? "Sending…" : "Set"}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400">Only the contract owner can change the oracle admin. This action requires a MetaMask transaction.</p>
+        </CardContent>
+      </Card>
+
+      {/* Payment Tokens */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Layers className="h-4 w-4 text-[#1a4480]" />Allowed Payment Tokens
+          </CardTitle>
+          <CardDescription>Toggle which ERC-20 tokens users can use to buy protection and provide liquidity</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {[
+              { label: "USDC", address: USDC_MAINNET, allowed: state.usdcAllowed },
+              { label: "USDT", address: USDT_MAINNET, allowed: state.usdtAllowed },
+            ].map(({ label, address, allowed }) => (
+              <div key={address} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                <div>
+                  <p className="font-medium text-sm">{label}</p>
+                  <p className="text-xs text-gray-400 font-mono">{shortAddr(address)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${allowed ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                    {allowed ? "Enabled" : "Disabled"}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleToken(address, !allowed, label)}
+                    disabled={busy !== null}
+                  >
+                    {busy === `${!allowed ? "Enable" : "Disable"} ${label}` ? "Sending…" : allowed ? "Disable" : "Enable"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-lg bg-gray-50 p-3">
+            <p className="text-xs text-gray-500 font-medium mb-1">Contract &amp; Safe addresses</p>
+            <div className="space-y-1">
+              {[
+                ["Diamond", DIAMOND],
+                ["Safe (treasury)", SAFE_ADDR],
+              ].map(([label, addr]) => (
+                <div key={addr} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">{label}</span>
+                  <a href={`https://blockscout.lisk.com/address/${addr}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[#1a4480] hover:underline flex items-center gap-1">
+                    {shortAddr(addr)}<ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function ContentSection() {
   const { token } = useAdminToken();
   const { toast } = useToast();
@@ -1106,6 +1491,7 @@ export default function AdminDashboard() {
         {section === "tasks" && <TasksSection />}
         {section === "analytics" && <AnalyticsSection />}
         {section === "content" && <ContentSection />}
+        {section === "protocol" && <ProtocolSection />}
       </main>
     </div>
     </AdminTokenContext.Provider>
