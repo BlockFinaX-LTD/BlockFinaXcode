@@ -15,13 +15,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === "production";
 
 const NODES = [
-  { label: "Oracle-A", file: isProd ? "run-oracle-a.js" : "run-oracle-a.ts", key: "ORACLE_KEY_A" },
-  { label: "Oracle-B", file: isProd ? "run-oracle-b.js" : "run-oracle-b.ts", key: "ORACLE_KEY_B" },
-  { label: "Oracle-C", file: isProd ? "run-oracle-c.js" : "run-oracle-c.ts", key: "ORACLE_KEY_C" },
+  { label: "Oracle-A", file: isProd ? "multi-oracle/run-oracle-a.js" : "run-oracle-a.ts", key: "ORACLE_KEY_A" },
+  { label: "Oracle-B", file: isProd ? "multi-oracle/run-oracle-b.js" : "run-oracle-b.ts", key: "ORACLE_KEY_B" },
+  { label: "Oracle-C", file: isProd ? "multi-oracle/run-oracle-c.js" : "run-oracle-c.ts", key: "ORACLE_KEY_C" },
 ];
 
 function spawnNode(label: string, file: string, key: string): ChildProcess {
-  const scriptPath = path.join(__dirname, file);
+  const scriptPath = isProd
+    ? path.join(process.cwd(), "dist", file)
+    : path.join(__dirname, file);
 
   const child = isProd
     ? spawn("node", [scriptPath], { env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] })
