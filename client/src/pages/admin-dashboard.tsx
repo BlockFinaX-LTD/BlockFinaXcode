@@ -1169,6 +1169,15 @@ function ProtocolSection() {
   const { toast } = useToast();
   const { token } = useAdminToken();
   const [backupBusy, setBackupBusy] = useState(false);
+  const [oracleNodes, setOracleNodes] = useState<{ label: string; address: string | null; configured: boolean }[]>([]);
+
+  useEffect(() => {
+    adminFetch("/api/admin/oracle-addresses", token)
+      .then(r => r.json())
+      .then(setOracleNodes)
+      .catch(() => {});
+  }, [token]);
+
   const [state, setState] = useState<ProtocolState>({
     usdcFees: "—", usdtFees: "—", usdcWithdrawn: 0, usdtWithdrawn: 0,
     feeConfig: null, usdcAllowed: true, usdtAllowed: false,
@@ -1484,23 +1493,60 @@ function ProtocolSection() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Shield className="h-4 w-4 text-[#1a4480]" />Oracle Admin
+            <Shield className="h-4 w-4 text-[#1a4480]" />Oracle Node Registration
           </CardTitle>
-          <CardDescription>Set the address authorised to submit oracle price settlements</CardDescription>
+          <CardDescription>Register each oracle node wallet on the Diamond contract. Each requires a MetaMask transaction signed by the contract owner.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="New oracle admin address (0x…)"
-              value={oracleInput}
-              onChange={e => setOracleInput(e.target.value)}
-              className="font-mono text-sm"
-            />
-            <Button className="shrink-0 bg-[#1a4480] hover:bg-[#153a6e]" onClick={setOracle} disabled={busy !== null || !oracleInput}>
-              {busy === "Set oracle admin" ? "Sending…" : "Set"}
-            </Button>
+        <CardContent className="space-y-4">
+          {/* Auto-detected node addresses */}
+          {oracleNodes.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Detected oracle node wallets</p>
+              {oracleNodes.map((node) => (
+                <div key={node.label} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-700">{node.label}</p>
+                    {node.configured && node.address ? (
+                      <p className="text-xs font-mono text-gray-500 truncate">{node.address}</p>
+                    ) : (
+                      <p className="text-xs text-amber-600">Key not configured in environment</p>
+                    )}
+                  </div>
+                  {node.configured && node.address && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 text-xs border-[#1a4480] text-[#1a4480] hover:bg-[#1a4480] hover:text-white"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setOracleInput(node.address!);
+                        setTimeout(() => setOracle(), 50);
+                      }}
+                    >
+                      Register
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Manual override */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Or enter address manually</p>
+            <div className="flex items-center gap-3">
+              <Input
+                placeholder="Oracle wallet address (0x…)"
+                value={oracleInput}
+                onChange={e => setOracleInput(e.target.value)}
+                className="font-mono text-sm"
+              />
+              <Button className="shrink-0 bg-[#1a4480] hover:bg-[#153a6e]" onClick={setOracle} disabled={busy !== null || !oracleInput}>
+                {busy === "Set oracle admin" ? "Sending…" : "Set"}
+              </Button>
+            </div>
           </div>
-          <p className="text-xs text-gray-400">Only the contract owner can change the oracle admin. This action requires a MetaMask transaction.</p>
+          <p className="text-xs text-gray-400">The contract currently supports one oracle admin slot. Register each node's address in sequence — the last one set will be the active submitter unless the contract supports multi-oracle slots.</p>
         </CardContent>
       </Card>
 

@@ -929,6 +929,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/oracle-addresses", async (_req, res) => {
+    try {
+      const { ethers } = await import("ethers");
+      const nodes = [
+        { label: "Oracle-A", key: process.env.ORACLE_KEY_A },
+        { label: "Oracle-B", key: process.env.ORACLE_KEY_B },
+        { label: "Oracle-C", key: process.env.ORACLE_KEY_C },
+      ];
+      const result = nodes.map(({ label, key }) => ({
+        label,
+        address: key ? new ethers.Wallet(key).address : null,
+        configured: !!key,
+      }));
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/admin/backup/export", async (_req, res) => {
     try {
       const [

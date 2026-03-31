@@ -54,7 +54,9 @@ export interface OracleNodeConfig {
 const ORACLE_FACET_ABI = [
   "function submitRate(uint256 eventId, uint256 price) external",
   "function getOracleConfig() external view returns (uint256 requiredSigners, uint256 toleranceBps, uint256 oracleCount)",
+  "function setOracleAdmin(address oracle) external",
   "function isAuthorisedOracle(address oracle) external view returns (bool)",
+  "function isAuthorizedOracle(address oracle) external view returns (bool)",
 ];
 
 const HEDGE_FACET_ABI = [
