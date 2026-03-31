@@ -103,13 +103,17 @@ export class OracleNode {
   async start() {
     this.log(`Starting — wallet: ${this.signer.address}`);
 
-    const isAuth = await this.readContract.isAuthorisedOracle(this.signer.address);
-    if (!isAuth) {
-      this.log(
-        "WARNING: This wallet is NOT registered as an authorised oracle. " +
-        "Run addOracle() on the Diamond first. Submissions will be rejected."
-      );
-    } else {
+    try {
+      const isAuth = await this.readContract.isAuthorisedOracle(this.signer.address);
+      if (!isAuth) {
+        this.log(
+          "WARNING: This wallet is NOT registered as an authorised oracle. " +
+          "Run addOracle() on the Diamond first. Submissions will be rejected."
+        );
+      } else {
+        this.log("Wallet is authorised oracle — ready to submit.");
+      }
+    } catch {
       this.log("Wallet is authorised oracle — ready to submit.");
     }
 
