@@ -53,7 +53,7 @@ function mapRawArticle(raw: any): Article {
   };
 }
 
-const categories = ["All", "FX Protection", "Payments", "Education", "Earning"];
+const categories = ["All", "Hedging", "Payments", "Education", "Earning"];
 
 function SiteNav({ insightsActive }: { insightsActive?: boolean }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -130,7 +130,7 @@ function SiteNav({ insightsActive }: { insightsActive?: boolean }) {
 
 function ArticleCard({ article }: { article: Article }) {
   const categoryColors: Record<string, string> = {
-    "FX Protection": "bg-blue-100 text-blue-700",
+    "Hedging": "bg-blue-100 text-blue-700",
     "Payments": "bg-green-100 text-green-700",
     "Education": "bg-amber-100 text-amber-700",
     "Earning": "bg-emerald-100 text-emerald-700",
@@ -339,7 +339,7 @@ function ArticleView({ slug }: { slug: string }) {
   }
 
   const categoryColors: Record<string, string> = {
-    "FX Protection": "bg-blue-100 text-blue-700",
+    "Hedging": "bg-blue-100 text-blue-700",
     "Payments": "bg-green-100 text-green-700",
     "Education": "bg-amber-100 text-amber-700",
     "Earning": "bg-emerald-100 text-emerald-700",

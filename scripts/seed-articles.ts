@@ -7,7 +7,7 @@ const articleData = [
     slug: "manage-currency-risk-african-cross-border-trade",
     title: "How to Manage Currency Risk in African Cross-Border Trade",
     subtitle: "A comprehensive guide to hedging strategies for businesses trading across African borders, from traditional bank instruments to accessible on-chain alternatives.",
-    category: "FX Protection",
+    category: "Hedging",
     readTime: "8 min read",
     date: "February 15, 2026",
     content: [
@@ -51,7 +51,7 @@ const articleData = [
     slug: "5-ways-african-importers-lose-money-fx-volatility",
     title: "5 Ways African Importers Lose Money to FX Volatility — And How to Stop It",
     subtitle: "From timing delays to margin erosion, here are the most common ways currency swings drain profits from African import businesses — and practical solutions.",
-    category: "FX Protection",
+    category: "Hedging",
     readTime: "6 min read",
     date: "February 10, 2026",
     content: [
@@ -90,7 +90,7 @@ const articleData = [
     slug: "naira-drops-20-percent-overnight-fx-protection-guide",
     title: "What Happens When the Naira Drops 20% Overnight? A Guide to FX Protection",
     subtitle: "A real-world scenario showing the devastating impact of sudden currency devaluation on Nigerian importers — and the accessible protection tools that could prevent it.",
-    category: "FX Protection",
+    category: "Hedging",
     readTime: "7 min read",
     date: "February 5, 2026",
     content: [

@@ -669,7 +669,7 @@ function AnalyticsSection() {
         <Card>
           <CardHeader>
             <CardTitle>Hedge Events by Pair</CardTitle>
-            <CardDescription>Distribution across currency pairs</CardDescription>
+            <CardDescription>Distribution across asset pairs</CardDescription>
           </CardHeader>
           <CardContent>
             {hedgesByPair.length > 0 ? (
