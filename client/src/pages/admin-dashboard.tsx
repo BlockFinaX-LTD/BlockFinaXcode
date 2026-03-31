@@ -245,10 +245,44 @@ function KycDetailDialog({ user, token, onClose, onUpdate }: { user: any; token:
               </div>
             </div>
 
-            {/* Timestamps */}
-            <div className="border-t pt-4 grid grid-cols-2 gap-3 text-xs text-gray-500">
-              <div><span className="font-medium">Submitted:</span> {profile.submittedAt ? new Date(profile.submittedAt).toLocaleString() : "—"}</div>
-              <div><span className="font-medium">Reviewed:</span> {profile.reviewedAt ? new Date(profile.reviewedAt).toLocaleString() : "—"}</div>
+            {/* Provider info */}
+            <div className="border-t pt-4">
+              <p className="text-xs font-semibold text-[#1a4480] uppercase tracking-wide mb-3">Provider</p>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-gray-500">Provider</p>
+                  <p className="font-medium capitalize mt-0.5">{profile.kycProvider || "manual"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Reference ID</p>
+                  <p className="font-mono mt-0.5 break-all">{profile.kycProviderRef || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Submitted</p>
+                  <p className="font-medium mt-0.5">{profile.submittedAt ? new Date(profile.submittedAt).toLocaleString() : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Reviewed</p>
+                  <p className="font-medium mt-0.5">{profile.reviewedAt ? new Date(profile.reviewedAt).toLocaleString() : "—"}</p>
+                </div>
+              </div>
+              {profile.kycProvider && profile.kycProvider !== "manual" && profile.kycProviderRef && (
+                <Button variant="outline" size="sm" className="mt-3 text-xs"
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      const r = await adminFetch(`/api/admin/kyc/${user.address}/sync`, token, { method: "POST" });
+                      const data = await r.json();
+                      if (!r.ok) throw new Error(data.message);
+                      toast({ title: `Synced — status: ${data.kycStatus}` });
+                      onUpdate();
+                    } catch (e: any) { toast({ title: "Sync failed", description: e.message, variant: "destructive" }); }
+                    finally { setSaving(false); }
+                  }} disabled={saving}>
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Sync status from {profile.kycProvider}
+                </Button>
+              )}
             </div>
 
             {/* Reviewer notes */}
@@ -258,9 +292,11 @@ function KycDetailDialog({ user, token, onClose, onUpdate }: { user: any; token:
               <Button variant="outline" size="sm" onClick={saveNotes} disabled={saving}>Save Notes</Button>
             </div>
 
-            {/* Status actions */}
+            {/* Status actions — manual override always available */}
             <div className="border-t pt-4 flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-gray-600 mr-1">Set status:</span>
+              <span className="text-sm text-gray-600 mr-1">
+                {profile.kycProvider && profile.kycProvider !== "manual" ? "Override status:" : "Set status:"}
+              </span>
               {["pending", "approved", "rejected"].map(s => (
                 <Button key={s} size="sm" variant="outline"
                   className={s === "approved" ? "border-green-300 text-green-700 hover:bg-green-50" : s === "rejected" ? "border-red-300 text-red-700 hover:bg-red-50" : ""}
