@@ -119,6 +119,14 @@ app.use((req, res, next) => {
     console.error("Database initialization failed:", error);
   }
 
+  // Register oracle node wallets on the Diamond (using deployer key, idempotent)
+  try {
+    const { registerOracleNodes } = await import("./oracle-registration");
+    await registerOracleNodes();
+  } catch (e: any) {
+    console.error("[OracleReg] Unexpected error:", e.message);
+  }
+
   // Start multi-oracle nodes (only if keys and DIAMOND_ADDRESS are configured)
   startAllOracleNodes();
 
