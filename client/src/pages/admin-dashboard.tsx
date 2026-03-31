@@ -1096,6 +1096,8 @@ const OWNER_ABI = [
   "function withdrawPlatformFees(uint256)",
   "function withdrawPlatformFeesByToken(address,uint256)",
   "function initializeHedgeFees(uint256,uint256,uint256,uint256,uint256)",
+  "function addOracle(address)",
+  "function removeOracle(address)",
   "function setOracleAdmin(address)",
   "function setAllowedPaymentToken(address,bool)",
 ];
@@ -1269,10 +1271,10 @@ function ProtocolSection() {
     setFeeFormOpen(false);
   });
 
-  const setOracle = () => run("Set oracle admin", async () => {
+  const setOracle = () => run("Add oracle", async () => {
     if (!oracleInput.startsWith("0x") || oracleInput.length !== 42) throw new Error("Invalid address.");
     const { contract } = await ensureLisk();
-    const tx = await contract.setOracleAdmin(oracleInput);
+    const tx = await contract.addOracle(oracleInput);
     await tx.wait();
     setOracleInput("");
   });
@@ -1542,11 +1544,11 @@ function ProtocolSection() {
                 className="font-mono text-sm"
               />
               <Button className="shrink-0 bg-[#1a4480] hover:bg-[#153a6e]" onClick={setOracle} disabled={busy !== null || !oracleInput}>
-                {busy === "Set oracle admin" ? "Sending…" : "Set"}
+                {busy === "Add oracle" ? "Sending…" : "Add Oracle"}
               </Button>
             </div>
           </div>
-          <p className="text-xs text-gray-400">The contract currently supports one oracle admin slot. Register each node's address in sequence — the last one set will be the active submitter unless the contract supports multi-oracle slots.</p>
+          <p className="text-xs text-gray-400">Uses addOracle() — supports multiple oracle nodes. Already-registered nodes are skipped automatically on startup.</p>
         </CardContent>
       </Card>
 
