@@ -813,9 +813,28 @@ function shortAddr(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
+const BLOCKSCOUT_API = "https://blockscout.lisk.com/api";
+
+async function fetchTotalWithdrawn(tokenAddress: string): Promise<number> {
+  try {
+    const url = `${BLOCKSCOUT_API}?module=account&action=tokentx&address=${DIAMOND}&contractaddress=${tokenAddress}&sort=asc`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.result || !Array.isArray(data.result)) return 0;
+    // Sum transfers where Diamond is the sender (outflows = withdrawals)
+    return data.result
+      .filter((tx: any) => tx.from?.toLowerCase() === DIAMOND.toLowerCase())
+      .reduce((sum: number, tx: any) => sum + Number(tx.value) / 1e6, 0);
+  } catch {
+    return 0;
+  }
+}
+
 interface ProtocolState {
   usdcFees: string;
   usdtFees: string;
+  usdcWithdrawn: number;
+  usdtWithdrawn: number;
   feeConfig: { creationFee: string; hedgerFeeRate: string; hedgerPayoutFeeRate: string; lpProfitFeeRate: string; creatorLoyaltyRate: string } | null;
   usdcAllowed: boolean;
   usdtAllowed: boolean;
@@ -826,8 +845,8 @@ interface ProtocolState {
 function ProtocolSection() {
   const { toast } = useToast();
   const [state, setState] = useState<ProtocolState>({
-    usdcFees: "—", usdtFees: "—", feeConfig: null,
-    usdcAllowed: true, usdtAllowed: false,
+    usdcFees: "—", usdtFees: "—", usdcWithdrawn: 0, usdtWithdrawn: 0,
+    feeConfig: null, usdcAllowed: true, usdtAllowed: false,
     wallet: "", loading: true,
   });
   const [busy, setBusy] = useState<string | null>(null);
@@ -840,12 +859,14 @@ function ProtocolSection() {
     try {
       const c = await readContract();
       const { ethers } = await import("ethers");
-      const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed] = await Promise.all([
+      const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed, usdcWithdrawn, usdtWithdrawn] = await Promise.all([
         c.getHedgePlatformFees().catch(() => 0n),
         c.getPlatformFeesByToken(USDT_MAINNET).catch(() => 0n),
         c.getHedgeFeeConfig().catch(() => null),
         c.isAllowedPaymentToken(USDC_MAINNET).catch(() => true),
         c.isAllowedPaymentToken(USDT_MAINNET).catch(() => false),
+        fetchTotalWithdrawn(USDC_MAINNET),
+        fetchTotalWithdrawn(USDT_MAINNET),
       ]);
       const feeConfig = rawFees ? {
         creationFee: (Number(rawFees[0]) / 1e6).toFixed(2),
@@ -862,7 +883,7 @@ function ProtocolSection() {
         const accounts: string[] = await eth.request({ method: "eth_accounts" });
         wallet = accounts[0] || "";
       }
-      setState(s => ({ ...s, usdcFees: fmtUSDC(BigInt(rawUsdc)), usdtFees: fmtUSDC(BigInt(rawUsdt)), feeConfig, usdcAllowed, usdtAllowed, wallet, loading: false }));
+      setState(s => ({ ...s, usdcFees: fmtUSDC(BigInt(rawUsdc)), usdtFees: fmtUSDC(BigInt(rawUsdt)), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, loading: false }));
     } catch (e: any) {
       setState(s => ({ ...s, loading: false }));
       toast({ title: "Failed to load contract state", description: e.message, variant: "destructive" });
@@ -951,37 +972,64 @@ function ProtocolSection() {
           <CardTitle className="text-base flex items-center gap-2">
             <DollarSign className="h-4 w-4 text-[#1a4480]" />Platform Fee Balances
           </CardTitle>
-          <CardDescription>Accumulated fees held in the Diamond contract — withdraw to your connected wallet</CardDescription>
+          <CardDescription>On-chain fee balances and all-time withdrawal history from the Diamond contract</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Summary bar */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total Earned (USDC)", value: `$${(state.usdcWithdrawn + parseFloat(state.usdcFees === "—" ? "0" : state.usdcFees)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#1a4480]" },
+              { label: "Total Withdrawn (USDC)", value: `$${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-green-700" },
+              { label: "Pending in Contract", value: `$${state.usdcFees === "—" ? "—" : state.usdcFees}`, color: "text-orange-600" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-lg bg-gray-50 p-3 text-center">
+                <p className="text-xs text-gray-500 mb-1">{label}</p>
+                <p className={`text-lg font-bold ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Token cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* USDC */}
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDC Fees</p>
-                  <p className="text-2xl font-bold text-gray-900">{state.usdcFees}</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDC — Pending</p>
+                  <p className="text-2xl font-bold text-gray-900">{state.usdcFees === "—" ? "—" : `$${state.usdcFees}`}</p>
                 </div>
                 <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded">USDC</span>
               </div>
-              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdc} disabled={busy !== null || state.usdcFees === "0.00"}>
-                {busy === "Withdraw USDC fees" ? "Sending…" : "Withdraw USDC"}
+              <div className="flex items-center justify-between text-xs text-gray-500 border-t pt-2">
+                <span>All-time withdrawn</span>
+                <span className="font-semibold text-green-700">${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdc} disabled={busy !== null || state.usdcFees === "0.00" || state.usdcFees === "—"}>
+                {busy === "Withdraw USDC fees" ? "Sending…" : "Withdraw USDC to wallet"}
               </Button>
             </div>
+
+            {/* USDT */}
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDT Fees</p>
-                  <p className="text-2xl font-bold text-gray-900">{state.usdtFees}</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDT — Pending</p>
+                  <p className="text-2xl font-bold text-gray-900">{state.usdtFees === "—" ? "—" : `$${state.usdtFees}`}</p>
                 </div>
                 <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded">USDT</span>
               </div>
-              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdt} disabled={busy !== null || state.usdtFees === "0.00"}>
-                {busy === "Withdraw USDT fees" ? "Sending…" : "Withdraw USDT"}
+              <div className="flex items-center justify-between text-xs text-gray-500 border-t pt-2">
+                <span>All-time withdrawn</span>
+                <span className="font-semibold text-green-700">${state.usdtWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdt} disabled={busy !== null || state.usdtFees === "0.00" || state.usdtFees === "—"}>
+                {busy === "Withdraw USDT fees" ? "Sending…" : "Withdraw USDT to wallet"}
               </Button>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />Fees are sent to your connected wallet ({connectedLabel}). Forward to Safe manually if needed.
+
+          <p className="text-xs text-gray-400 flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" />Funds go to your connected wallet ({connectedLabel}). "All-time withdrawn" is sourced from on-chain token transfer history.
           </p>
         </CardContent>
       </Card>
