@@ -74,6 +74,93 @@ function TokenBadge({ address }: { address?: string }) {
   return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">USDC</Badge>;
 }
 
+function ResetTestnetDialog({ token, onReset }: { token: string; onReset: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const TABLES_CLEARED = [
+    "wallets", "user_profiles", "user_accounts", "auth_sessions",
+    "magic_links", "webauthn_credentials", "hedge_events", "hedge_positions",
+    "hedge_lp_deposits", "user_task_completions", "platform_fees",
+    "rate_snapshots", "terms_acceptances", "referrals", "user_points",
+  ];
+  const TABLES_KEPT = ["networks", "daily_tasks", "articles", "data_room_content"];
+
+  const handleReset = async () => {
+    setLoading(true);
+    try {
+      const res = await adminFetch("/api/admin/reset-testnet", token, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      toast({ title: "Testnet data cleared", description: "All user and transaction data has been removed." });
+      setOpen(false);
+      setConfirm("");
+      onReset();
+    } catch (e: any) {
+      toast({ title: "Reset failed", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <>
+      <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50"
+        onClick={() => { setConfirm(""); setOpen(true); }}>
+        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Clear Testnet Data
+      </Button>
+
+      <Dialog open={open} onOpenChange={o => { if (!loading) { setOpen(o); setConfirm(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" /> Clear Testnet Data
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <p className="text-gray-700">This permanently deletes all user and transaction data. Use this to start clean before going live on mainnet.</p>
+
+            <div className="space-y-2">
+              <p className="font-medium text-red-600">Will be deleted:</p>
+              <div className="bg-red-50 rounded p-3 text-xs text-red-700 font-mono leading-relaxed">
+                {TABLES_CLEARED.join(" · ")}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-medium text-green-700">Will be kept:</p>
+              <div className="bg-green-50 rounded p-3 text-xs text-green-700 font-mono leading-relaxed">
+                {TABLES_KEPT.join(" · ")}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Type <strong>RESET</strong> to confirm</Label>
+              <Input
+                value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                placeholder="RESET"
+                className="font-mono"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={loading}>Cancel</Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={confirm !== "RESET" || loading}
+                onClick={handleReset}>
+                {loading ? "Clearing…" : "Clear all testnet data"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function DashboardSection() {
   const { token } = useAdminToken();
   const { data, isLoading, refetch, dataUpdatedAt } = useQuery({ queryKey: ["/api/admin/overview"], queryFn: () => adminFetch("/api/admin/overview", token).then(r => r.json()), refetchInterval: 30000 });
@@ -110,6 +197,17 @@ function DashboardSection() {
         <StatCard title="LP Deposits" value={s.totalLpDeposits || 0} sub={`Liquidity: $${parseFloat(s.totalLiquidity || 0).toFixed(2)}`} icon={Layers} />
         <StatCard title="Active Events" value={s.activeHedgeEvents || 0} sub="Currently open" icon={Clock} />
         <StatCard title="Platform Revenue" value={`$${s.hedgeFeeRevenue || "0.00"}`} sub="All hedge fees collected" icon={DollarSign} color="text-green-600" />
+      </div>
+
+      {/* Danger zone */}
+      <div className="border border-red-200 rounded-lg p-4 bg-red-50/30">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-red-700">Danger Zone</p>
+            <p className="text-xs text-red-500 mt-0.5">Permanently removes all testnet user and transaction data. Articles, tasks, and network config are preserved.</p>
+          </div>
+          <ResetTestnetDialog token={token} onReset={() => refetch()} />
+        </div>
       </div>
     </div>
   );

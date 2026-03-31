@@ -391,6 +391,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireAdmin(req, res, next);
   });
 
+  app.post("/api/admin/reset-testnet", async (_req, res) => {
+    try {
+      await db.execute(sql`
+        TRUNCATE TABLE
+          wallets,
+          user_profiles,
+          user_accounts,
+          auth_sessions,
+          magic_links,
+          webauthn_credentials,
+          hedge_events,
+          hedge_positions,
+          hedge_lp_deposits,
+          user_task_completions,
+          platform_fees,
+          rate_snapshots,
+          terms_acceptances
+        RESTART IDENTITY CASCADE
+      `);
+
+      // Tables that may not exist — clear individually with IF EXISTS check
+      for (const t of ["referrals", "referral_codes", "user_points", "point_transactions"]) {
+        try {
+          await db.execute(sql.raw(`TRUNCATE TABLE ${t} RESTART IDENTITY CASCADE`));
+        } catch { /* table may not exist — skip */ }
+      }
+
+      console.log("[Admin] Testnet data cleared");
+      res.json({ success: true, message: "Testnet data cleared. Configuration and content preserved." });
+    } catch (e: any) {
+      console.error("[Admin] Reset failed:", e.message);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get("/api/admin/overview", async (_req, res) => {
     try {
       const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(wallets);
