@@ -11,6 +11,7 @@ import {
 } from './encrypted-storage';
 import { NETWORKS, type NetworkConfig, getNetworkById, getNetworkByChainId } from './networks';
 import { fallbackProvider } from './rpc-provider';
+import { fetchCryptoPrices } from './price-service';
 
 export interface WalletBalance {
   networkId: number;
@@ -317,20 +318,17 @@ class WalletManager {
     if (!network) return null;
 
     try {
-      const balanceEth = await fallbackProvider.getBalance(this.wallet.address, network.chainId);
-      
+      const [balanceEth, prices] = await Promise.all([
+        fallbackProvider.getBalance(this.wallet.address, network.chainId),
+        fetchCryptoPrices(),
+      ]);
+
       if (balanceEth === null) {
         return null;
       }
-      
-      // Real USD conversion would use price API
-      const mockPrices: { [key: string]: number } = {
-        'ETH': 2400,
-        'MATIC': 0.8,
-        'BNB': 320
-      };
-      
-      const usdValue = parseFloat(balanceEth) * (mockPrices[network.symbol] || 0);
+
+      // Lisk uses ETH as its native gas token
+      const usdValue = parseFloat(balanceEth) * (prices.eth || 0);
 
       return {
         networkId,
