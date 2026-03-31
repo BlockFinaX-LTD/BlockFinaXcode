@@ -5,6 +5,7 @@
  * Exports: secureStorage, SecureStorage class, StoredWallet, WalletSettings
  */
 import CryptoJS from 'crypto-js';
+import { NETWORKS, DEFAULT_NETWORK } from './networks';
 
 const STORAGE_KEY = 'cryptowallet_data';
 const WALLET_KEY = 'wallet_encrypted';
@@ -149,19 +150,28 @@ class SecureStorage {
   }
 
   loadSettings(): WalletSettings {
-    const stored = localStorage.getItem(SETTINGS_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-    
-    // Default settings — use the first available network for the current mode
-    return {
-      selectedNetworkId: 1,
+    const defaults: WalletSettings = {
+      selectedNetworkId: DEFAULT_NETWORK.id,
       theme: 'light',
       currency: 'USD',
       autoLock: true,
       autoLockTimeout: 15
     };
+
+    const stored = localStorage.getItem(SETTINGS_KEY);
+    if (!stored) return defaults;
+
+    const parsed = JSON.parse(stored) as WalletSettings;
+
+    // If the saved network no longer exists in the current network mode
+    // (e.g. testnet ID stored but app is now in mainnet mode), reset to default.
+    const networkExists = NETWORKS.some(n => n.id === parsed.selectedNetworkId);
+    if (!networkExists) {
+      parsed.selectedNetworkId = DEFAULT_NETWORK.id;
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+    }
+
+    return parsed;
   }
 
   // Session storage for temporary data
