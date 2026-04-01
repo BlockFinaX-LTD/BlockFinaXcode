@@ -386,19 +386,19 @@
     <tbody>
       <tr><td>C-01</td><td>DiamondCutFacet / TimelockCutFacet selector collision</td><td><span class="badge badge-critical">Critical</span></td><td>Open</td></tr>
       <tr><td>C-02</td><td><code>facetAddress()</code> may return corrupted address</td><td><span class="badge badge-critical">Critical</span></td><td>Open</td></tr>
-      <tr><td>H-01</td><td><code>withdrawCapital</code> does not block subsequent premium claims</td><td><span class="badge badge-high">High</span></td><td>Open</td></tr>
-      <tr><td>H-02</td><td><code>recoverExpiredPayouts</code> uses stale <code>totalLiquidity</code></td><td><span class="badge badge-high">High</span></td><td>Open</td></tr>
-      <tr><td>H-03</td><td>Oracle cooldown not reset after consensus clear</td><td><span class="badge badge-high">High</span></td><td>Open</td></tr>
-      <tr><td>M-01</td><td>Misleading comment on owner settle capability</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
-      <tr><td>M-02</td><td>User-supplied <code>initialRate</code> can inflate payouts</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
-      <tr><td>M-03</td><td>Zero-share deposit possible due to integer division</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
-      <tr><td>M-04</td><td>Timelock proposal ID collision in same block</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
+      <tr><td>H-01</td><td><code>withdrawCapital</code> does not block subsequent premium claims</td><td><span class="badge badge-high">High</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
+      <tr><td>H-02</td><td><code>recoverExpiredPayouts</code> uses stale <code>totalLiquidity</code></td><td><span class="badge badge-high">High</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
+      <tr><td>H-03</td><td>Oracle cooldown not reset after consensus clear</td><td><span class="badge badge-high">High</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
+      <tr><td>M-01</td><td>Misleading comment on owner settle capability</td><td><span class="badge badge-medium">Medium</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
+      <tr><td>M-02</td><td>User-supplied <code>initialRate</code> can inflate payouts</td><td><span class="badge badge-medium">Medium</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
+      <tr><td>M-03</td><td>Zero-share deposit possible due to integer division</td><td><span class="badge badge-medium">Medium</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
+      <tr><td>M-04</td><td>Timelock proposal ID collision in same block</td><td><span class="badge badge-medium">Medium</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
       <tr><td>M-05</td><td>LP withdrawal fairness asymmetry</td><td><span class="badge badge-medium">Medium</span></td><td>Acknowledged</td></tr>
       <tr><td>L-01</td><td>Pending cut IDs array grows unboundedly</td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
       <tr><td>L-02</td><td><code>facets()</code> O(n·m) read complexity</td><td><span class="badge badge-low">Low</span></td><td>Acknowledged</td></tr>
-      <tr><td>L-03</td><td><code>rescueETH</code> uncapped gas forwarding</td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
+      <tr><td>L-03</td><td><code>rescueETH</code> uncapped gas forwarding</td><td><span class="badge badge-low">Low</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
       <tr><td>L-04</td><td><code>PayoutClaimed</code> missing <code>eventId</code> index</td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
-      <tr><td>L-05</td><td><code>setPoolSettings</code> missing <code>nonReentrant</code></td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
+      <tr><td>L-05</td><td><code>setPoolSettings</code> missing <code>nonReentrant</code></td><td><span class="badge badge-low">Low</span></td><td style="color:#1a7a2e;font-weight:600">Fixed ✓</td></tr>
       <tr><td>I-01</td><td>Unused <code>totalHedgeEvents</code> storage slot</td><td><span class="badge badge-info">Info</span></td><td>Acknowledged</td></tr>
       <tr><td>I-02</td><td>Duplicated deposit logic</td><td><span class="badge badge-info">Info</span></td><td>Open</td></tr>
       <tr><td>I-03</td><td><code>recoverExpiredPayouts</code> high gas usage</td><td><span class="badge badge-info">Info</span></td><td>Acknowledged</td></tr>
