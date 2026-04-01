@@ -1096,6 +1096,13 @@ const LISK_CHAIN_ID = 1135;
 const LISK_HEX = "0x46F";
 const LISK_RPC = "https://rpc.api.lisk.com";
 
+const SAFE_ABI = [
+  "function nonce() view returns (uint256)",
+  "function getThreshold() view returns (uint256)",
+  "function getOwners() view returns (address[])",
+  "function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes memory signatures) payable returns (bool)",
+];
+
 const OWNER_ABI = [
   "function owner() view returns (address)",
   "function getHedgeFeeConfig() view returns (uint256,uint256,uint256,uint256,uint256)",
@@ -1200,6 +1207,7 @@ function ProtocolSection() {
   const [feeForm, setFeeForm] = useState({ creationFee: "", hedgerFeeRate: "", hedgerPayoutFeeRate: "", lpProfitFeeRate: "", creatorLoyaltyRate: "" });
   const [feeFormOpen, setFeeFormOpen] = useState(false);
   const [safeTxModal, setSafeTxModal] = useState<{ to: string; data: string; label: string } | null>(null);
+  const [safeExecuting, setSafeExecuting] = useState(false);
 
   const load = async () => {
     setState(s => ({ ...s, loading: true }));
@@ -1314,6 +1322,85 @@ function ProtocolSection() {
       setSafeTxModal({ to: DIAMOND, data: calldata, label: `Add Oracle ${shortAddr(address)}` });
     } catch (e: any) {
       toast({ title: "Failed to encode calldata", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const signAndExecSafe = async (to: string, data: string) => {
+    setSafeExecuting(true);
+    try {
+      await ensureLisk();
+      const { ethers } = await import("ethers");
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const signerAddr = (await signer.getAddress()).toLowerCase();
+
+      const safe = new ethers.Contract(SAFE_ADDR, SAFE_ABI, provider);
+      const [nonce, threshold, owners]: [bigint, bigint, string[]] = await Promise.all([
+        safe.nonce(),
+        safe.getThreshold(),
+        safe.getOwners(),
+      ]);
+
+      const ownerList: string[] = (owners as string[]).map((o: string) => o.toLowerCase());
+      if (!ownerList.includes(signerAddr)) {
+        throw new Error(`Connected wallet (${signerAddr}) is not a Safe owner. Safe owners: ${ownerList.join(", ")}`);
+      }
+
+      // EIP-712 sign the Safe transaction
+      const domain = { chainId: LISK_CHAIN_ID, verifyingContract: SAFE_ADDR };
+      const types = {
+        SafeTx: [
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+          { name: "operation", type: "uint8" },
+          { name: "safeTxGas", type: "uint256" },
+          { name: "baseGas", type: "uint256" },
+          { name: "gasPrice", type: "uint256" },
+          { name: "gasToken", type: "address" },
+          { name: "refundReceiver", type: "address" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+      const message = {
+        to,
+        value: BigInt(0),
+        data,
+        operation: 0,
+        safeTxGas: BigInt(0),
+        baseGas: BigInt(0),
+        gasPrice: BigInt(0),
+        gasToken: ethers.ZeroAddress,
+        refundReceiver: ethers.ZeroAddress,
+        nonce,
+      };
+
+      const signature = await signer.signTypedData(domain, types, message);
+
+      if (Number(threshold) > 1) {
+        toast({
+          title: `Signed — needs ${threshold} signatures total`,
+          description: `This Safe requires ${threshold} confirmations. Collect other owner signatures to execute.`,
+        });
+        setSafeExecuting(false);
+        return;
+      }
+
+      // Threshold = 1 — execute immediately
+      const safeWithSigner = new ethers.Contract(SAFE_ADDR, SAFE_ABI, signer);
+      const tx = await (safeWithSigner as any).execTransaction(
+        to, BigInt(0), data, 0, BigInt(0), BigInt(0), BigInt(0),
+        ethers.ZeroAddress, ethers.ZeroAddress,
+        signature,
+      );
+      await tx.wait();
+      toast({ title: "Transaction executed successfully via Safe" });
+      setSafeTxModal(null);
+      await load();
+    } catch (e: any) {
+      toast({ title: "Safe execution failed", description: e.message || String(e), variant: "destructive" });
+    } finally {
+      setSafeExecuting(false);
     }
   };
 
@@ -1705,52 +1792,56 @@ function ProtocolSection() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 text-sm">
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-blue-800 text-xs leading-relaxed">
-              <strong>How to submit this via Safe:</strong>
-              <ol className="list-decimal list-inside mt-1.5 space-y-1">
-                <li>Open <a href={`https://app.safe.global/home?safe=lisk:${SAFE_ADDR}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">your Safe on app.safe.global</a></li>
-                <li>Click <strong>New transaction → Transaction builder</strong></li>
-                <li>Paste the <strong>To address</strong> and <strong>Data</strong> below. Set Value to <strong>0</strong>.</li>
-                <li>Review, propose, and collect required signatures.</li>
-              </ol>
+            <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-green-900 text-xs leading-relaxed">
+              <strong>Sign &amp; execute directly — no Safe web UI needed.</strong>
+              <p className="mt-1 text-green-800">Connect the MetaMask wallet that is a Safe owner, then click <strong>Sign &amp; Execute</strong>. MetaMask will ask you to sign the transaction — no browser extension or Safe app required. If your Safe needs only 1 signature it executes immediately.</p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">To (contract address)</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Safe contract</p>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-lg border p-2.5">
+                  <code className="text-xs font-mono flex-1 text-gray-800">{SAFE_ADDR}</code>
+                  <a href={`https://blockscout.lisk.com/address/${SAFE_ADDR}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2"><ExternalLink className="h-3 w-3" /></Button>
+                  </a>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Target (Diamond)</p>
                 <div className="flex items-center gap-2 bg-gray-50 rounded-lg border p-2.5">
                   <code className="text-xs font-mono flex-1 break-all text-gray-800">{safeTxModal?.to}</code>
-                  <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" onClick={() => { navigator.clipboard.writeText(safeTxModal?.to || ""); toast({ title: "Address copied" }); }}>
-                    <Copy className="h-3 w-3 mr-1" />Copy
+                  <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" onClick={() => { navigator.clipboard.writeText(safeTxModal?.to || ""); toast({ title: "Copied" }); }}>
+                    <Copy className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Value</p>
-                <div className="bg-gray-50 rounded-lg border p-2.5">
-                  <code className="text-xs font-mono text-gray-800">0</code>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Data (calldata)</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Calldata</p>
                 <div className="flex items-start gap-2 bg-gray-50 rounded-lg border p-2.5">
-                  <code className="text-xs font-mono flex-1 break-all text-gray-800 leading-relaxed">{safeTxModal?.data}</code>
-                  <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs mt-0" onClick={() => { navigator.clipboard.writeText(safeTxModal?.data || ""); toast({ title: "Calldata copied" }); }}>
-                    <Copy className="h-3 w-3 mr-1" />Copy
+                  <code className="text-xs font-mono flex-1 break-all text-gray-500 leading-relaxed line-clamp-3">{safeTxModal?.data}</code>
+                  <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" onClick={() => { navigator.clipboard.writeText(safeTxModal?.data || ""); toast({ title: "Calldata copied" }); }}>
+                    <Copy className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t">
-              <Button variant="outline" onClick={() => setSafeTxModal(null)}>Close</Button>
-              <a href={`https://app.safe.global/home?safe=lisk:${SAFE_ADDR}`} target="_blank" rel="noopener noreferrer">
-                <Button className="bg-[#1a4480] hover:bg-[#153a6e]">
-                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Open Safe App
-                </Button>
-              </a>
+              <Button variant="outline" onClick={() => setSafeTxModal(null)} disabled={safeExecuting}>Cancel</Button>
+              <Button
+                className="bg-[#1a4480] hover:bg-[#153a6e]"
+                disabled={safeExecuting}
+                onClick={() => safeTxModal && signAndExecSafe(safeTxModal.to, safeTxModal.data)}
+              >
+                {safeExecuting ? (
+                  <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Signing…</>
+                ) : (
+                  <><Shield className="h-3.5 w-3.5 mr-1.5" />Sign &amp; Execute</>
+                )}
+              </Button>
             </div>
           </div>
         </DialogContent>
