@@ -297,7 +297,7 @@ export default function PitchDeck() {
                     { rate: "0.3%", label: "Transfer Fee", note: "Per payment", color: "text-blue-400", border: "border-blue-500/20" },
                     { rate: "0.5%", label: "Hedge Entry", note: "On notional", color: "text-emerald-400", border: "border-emerald-500/20" },
                     { rate: "1%", label: "Settlement", note: "On payouts + LP", color: "text-purple-400", border: "border-purple-500/20" },
-                    { rate: "$25", label: "Event Creation", note: "Flat per event", color: "text-amber-400", border: "border-amber-500/20" },
+                    { rate: "$2", label: "Event Creation", note: "Flat per event", color: "text-amber-400", border: "border-amber-500/20" },
                   ].map((item, idx) => (
                     <div key={idx} className={`bg-white/[0.04] rounded-2xl p-7 border ${item.border} text-center`}>
                       <p className={`text-5xl font-bold mb-3 ${item.color}`}>{item.rate}</p>
@@ -307,7 +307,7 @@ export default function PitchDeck() {
                   ))}
                 </motion.div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-r from-blue-500/[0.07] to-emerald-500/[0.07] border border-white/[0.07] rounded-xl p-5 text-center">
-                  <p className="text-xl font-semibold text-white">~0.7% blended rate + $25/event → <span className="text-emerald-400">{fm.somRevenue} revenue by 2028</span></p>
+                  <p className="text-xl font-semibold text-white">~0.7% blended rate + $2/event → <span className="text-emerald-400">{fm.somRevenue} revenue by 2028</span></p>
                 </motion.div>
               </div>
             )}
@@ -411,7 +411,7 @@ export default function PitchDeck() {
                         { metric: "Hedge Notional Volume", y1: fm.notional.y1, y2: fm.notional.y2, y3: fm.notional.y3 },
                         { metric: "New Wallets (Cumulative)", y1: fm.cumWallets.y1, y2: fm.cumWallets.y2, y3: fm.cumWallets.y3 },
                         { metric: "Hedge Protocol Fees (0.7% net)", y1: fm.hedgeFees.y1, y2: fm.hedgeFees.y2, y3: fm.hedgeFees.y3 },
-                        { metric: "Event Creation Fees ($25/event)", y1: fm.eventFees.y1, y2: fm.eventFees.y2, y3: fm.eventFees.y3 },
+                        { metric: "Event Creation Fees ($2/event)", y1: fm.eventFees.y1, y2: fm.eventFees.y2, y3: fm.eventFees.y3 },
                         { metric: "Wallet Transfer Fees (0.3%)", y1: fm.walletFees.y1, y2: fm.walletFees.y2, y3: fm.walletFees.y3 },
                         { metric: "Total Revenue", y1: fm.revenue.y1, y2: fm.revenue.y2, y3: fm.revenue.y3, highlight: true },
                         { metric: "Total Operating Costs", y1: fm.costs.y1, y2: fm.costs.y2, y3: fm.costs.y3 },

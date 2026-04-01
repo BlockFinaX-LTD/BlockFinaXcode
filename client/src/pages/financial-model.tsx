@@ -242,7 +242,7 @@ function downloadExcel(
     ['LP Payout Fee',       '1.0%',  '—',     'Treasury', 'Charged on LP payout event'],
     ['Creator Loyalty Fee', '5.0%',  '—',     'Creator',  'Paid to event creator wallet'],
     ['Wallet Transfer Fee', '0.3%',  '$0.50', 'Treasury', 'On every USDC wallet transfer'],
-    ['Event Creation Fee',  '$25',   'flat',  'Treasury', 'One-time on event creation'],
+    ['Event Creation Fee',  '$2',   'flat',  'Treasury', 'One-time on event creation'],
   ]);
   cw(wsIRR, [28, 20, 20, 16, 36]);
   XLSX.utils.book_append_sheet(wb, wsIRR, 'IRR & Unit Economics');
@@ -572,7 +572,7 @@ export default function FinancialModel() {
                     <tr><td colSpan={slice.length + 1} className={secCls}>Revenue</td></tr>
                     {[
                       { label: 'Hedge Protocol Fees',   tip: 'Primary revenue stream. Formula: Events × Avg Notional × 0.7%. The 0.7% blends the 0.5% hedger premium fee and the ~0.2% LP payout fee (1% applied to LP deposits ≈ 20% of notional).', vals: slice.map(r => r.hedgeFees), cellTips: undefined as string[] | undefined },
-                      { label: 'Event Creation Fees',   tip: 'Flat $25 charged to the event creator every time a new hedge event is published on-chain. Collected at creation alongside the initial LP deposit. At ~74,300 events/month (Dec 2030) this contributes ~$1.86M/month.', vals: slice.map(r => r.eventCreationFees), cellTips: undefined as string[] | undefined },
+                      { label: 'Event Creation Fees',   tip: 'Flat $2 charged to the event creator every time a new hedge event is published on-chain. Collected at creation alongside the initial LP deposit. At ~74,300 events/month (Dec 2030) this contributes ~$1.86M/month.', vals: slice.map(r => r.eventCreationFees), cellTips: undefined as string[] | undefined },
                       { label: 'Wallet Transfer Fees',  tip: '0.3% fee on USDC cross-border transfers. Revenue = cumulative wallets × active wallet % × avg monthly transfer × 0.3%. Scales directly with the growing wallet base — more wallets means more transfer volume and more fee revenue.', vals: slice.map(r => r.walletFees), cellTips: undefined as string[] | undefined },
                       { label: 'Total Revenue',         tip: 'Hedge protocol fees + event creation fees + wallet transfer fees. Hover each cell to see the split for that month.', vals: slice.map(r => r.totalRevenue), bold: true, cellTips: slice.map(r => r.totalRevenue > 0 ? `Hedge: ${fmt(r.hedgeFees)} (${Math.round((r.hedgeFees/r.totalRevenue)*100)}%) · Creation: ${fmt(r.eventCreationFees)} (${Math.round((r.eventCreationFees/r.totalRevenue)*100)}%) · Wallet: ${fmt(r.walletFees)} (${Math.round((r.walletFees/r.totalRevenue)*100)}%)` : 'No revenue') },
                     ].map(row => (
@@ -1168,7 +1168,7 @@ export default function FinancialModel() {
                     <div className="bg-slate-50 rounded-lg p-3">
                       <p className="font-semibold text-blue-700 mb-1">2. Event Creation Fees (~15–20% of revenue)</p>
                       <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">
-                        Event Creation Fees = Events × $25
+                        Event Creation Fees = Events × $2
                       </code>
                       <p className="mt-2 text-slate-500">Flat fee charged to the event creator on each new on-chain protection contract. Collected at event creation alongside the initial LP deposit.</p>
                     </div>

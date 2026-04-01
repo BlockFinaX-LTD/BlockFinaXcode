@@ -993,7 +993,7 @@ export default function Whitepaper() {
           <DataTable
             headers={["Fee", "Rate", "Charged to", "Distribution"]}
             rows={[
-              ["Event creation fee", "$25 USDC", "Pool creator at deployment", "100% to protocol treasury"],
+              ["Event creation fee", "$2 USDC", "Pool creator at deployment", "100% to protocol treasury"],
               ["Protection entry fee", "0.5% of notional", "Hedger at position entry", "95% treasury · 5% pool creator loyalty"],
               ["Payout claim fee", "1% of payout amount", "Hedger at payout claim", "95% treasury · 5% pool creator loyalty"],
               ["LP premium claim fee", "1% of premiums claimed", "LP at premium claim", "95% treasury · 5% pool creator loyalty"],
@@ -1014,7 +1014,7 @@ export default function Whitepaper() {
           <H3>9.2 Revenue Model</H3>
           <P>
             BlockFinaX generates revenue from three primary streams: hedge protocol fees (comprising
-            the entry, payout, and LP claim fees across all events), a flat $25 event creation fee
+            the entry, payout, and LP claim fees across all events), a flat $2 event creation fee
             charged per hedge event deployed, and wallet transfer fees.
             The protocol treasury accumulates all net fees after creator loyalty distributions.
           </P>
@@ -1030,7 +1030,7 @@ export default function Whitepaper() {
             ]}
           />
           <p className="text-[11px] text-muted-foreground/60 -mt-4 mb-6">
-            Revenue projections are illustrative estimates based on a blended fee rate of 0.7% across all transaction types, plus a flat $25 event creation fee per hedge event.
+            Revenue projections are illustrative estimates based on a blended fee rate of 0.7% across all transaction types, plus a flat $2 event creation fee per hedge event.
             Actual outcomes will depend on market conditions, regulatory developments, and adoption rates.
             These figures do not constitute a financial forecast or investment guarantee.
           </p>
