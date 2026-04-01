@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, ShieldCheck, AlertTriangle, Clock } from "lucide-react";
 
 // ── Addresses ────────────────────────────────────────────────────────────────
-const DIAMOND             = "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D";
+const DIAMOND             = "0x885E663645173a0791b82f0e6608921D31E3D700";
 const SAFE                = "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D";
 const TIMELOCK_V2         = "0x56e10850a90751c80c500C6aF10da36D95A85D86";
 const HEDGE_V7            = "0x3af3275eC30Ad5F3c1DBd47EfF69c6dF4196DEd5";

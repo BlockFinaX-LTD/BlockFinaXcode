@@ -145,7 +145,7 @@ async function fetchRatesFromBackupSource(base: string): Promise<Record<string, 
   }
 }
 
-const DIAMOND_ADDRESS = '0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf';
+const DIAMOND_ADDRESS = '0x885E663645173a0791b82f0e6608921D31E3D700';
 const LISK_SEPOLIA_RPC = 'https://rpc.sepolia-api.lisk.com';
 
 const HEDGE_ABI = [

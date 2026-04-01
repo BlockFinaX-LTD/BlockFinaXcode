@@ -239,7 +239,7 @@ const EXEC_D = {
   solution_wallet: "BlockFinaX Wallet — Non-custodial USDC wallet with AES-256 encrypted key storage, gasless transactions, and real-time cross-border transfers at 0.3% (min $0.50).",
   traction: "Live on Lisk Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
   technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Lisk L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
-  mainnet: "Live — Deployed on Lisk Mainnet (March 2026). Diamond proxy at 0x3eDfA00a1E3C158A591097de2FA1756aCD66860D. All contracts verified on Blockscout.",
+  mainnet: "Live — Deployed on Lisk Mainnet (March 2026). Diamond proxy at 0x885E663645173a0791b82f0e6608921D31E3D700. All contracts verified on Blockscout.",
   ask: [
     { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
     { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
@@ -289,7 +289,7 @@ function ExecSummary({ token }: { token: string }) {
       <p style={S.p}>{data.traction}</p>
       <h2 style={S.h2}>Technology</h2>
       <p style={S.p}>{data.technology}</p>
-      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x3eDfA00a1E3C158A591097de2FA1756aCD66860D · HedgeFacet: 0xCd84f1493497Dbaf5C1933907bD2D253a54233Bf</p>
+      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x885E663645173a0791b82f0e6608921D31E3D700 · HedgeFacet: 0x96aCAD2039F1796929Eba578C81fe12E8f23C989</p>
       <h2 style={S.h2}>The Ask</h2>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead>
@@ -553,8 +553,8 @@ function SecurityAuditDoc({ token }: { token: string }) {
       </div>
       <h2 style={S.h2}>Contract Addresses (Lisk Mainnet)</h2>
       <div style={{ fontFamily: "monospace", fontSize: "12px", color: "#475569", background: "#f8fafc", padding: "12px 16px", borderRadius: "8px", lineHeight: 2 }}>
-        <div>Diamond (proxy): <strong>0x3eDfA00a1E3C158A591097de2FA1756aCD66860D</strong></div>
-        <div>HedgeFacet v6: <strong>0xCd84f1493497Dbaf5C1933907bD2D253a54233Bf</strong></div>
+        <div>Diamond (proxy): <strong>0x885E663645173a0791b82f0e6608921D31E3D700</strong></div>
+        <div>HedgeFacet v6: <strong>0x96aCAD2039F1796929Eba578C81fe12E8f23C989</strong></div>
         <div>OracleFacet v3: <strong>0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73</strong></div>
         <div>DiamondCutFacet: <strong>0x3581E16414286AD77601f9489F26a11eD96A9Be4</strong></div>
         <div>DiamondLoupeFacet: <strong>0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6</strong></div>

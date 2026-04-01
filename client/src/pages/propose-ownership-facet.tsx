@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, ShieldCheck, AlertTriangle, Clock } from "lucide-react";
 
-const DIAMOND           = "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D";
+const DIAMOND           = "0x885E663645173a0791b82f0e6608921D31E3D700";
 const OWNERSHIP_FACET   = "0xBf3229c324A18Ab71743eE469c3dbD2214c0DA2E";
 const OWNER             = "0xc69352C36562ce2D4C57B38baf47cE7D1eF6b891";
 const LISK_CHAIN_ID     = 1135;

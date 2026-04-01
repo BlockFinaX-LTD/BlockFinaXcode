@@ -1088,7 +1088,7 @@ function slugify(s: string) {
 
 // ─── Protocol / Owner Functions ─────────────────────────────────────────────
 
-const DIAMOND = "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D";
+const DIAMOND = "0x885E663645173a0791b82f0e6608921D31E3D700";
 const SAFE_ADDR = "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D";
 const USDC_MAINNET = "0xF242275d3a6527d877f2c927a82D9b057609cc71";
 const USDT_MAINNET = "0x05D032ac25d322df992303dCa074EE7392C117b9";

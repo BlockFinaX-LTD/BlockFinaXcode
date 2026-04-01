@@ -4,13 +4,13 @@
  * All interaction with the BlockFinaX Diamond contract on Lisk Mainnet goes through this file.
  * Covers: event creation, buying protection (hedger), providing liquidity (LP),
  * claiming payouts, withdrawing LP funds, fetching event and position data.
- * Contract address: 0x3eDfA00a1E3C158A591097de2FA1756aCD66860D (Diamond — Lisk Mainnet)
+ * Contract address: 0x885E663645173a0791b82f0e6608921D31E3D700 (Diamond — Lisk Mainnet)
  * Exports: DIAMOND_ADDRESS, USDC_ADDRESS, getHedgeFacetContract, createHedgeEvent,
  *          buyProtection, depositLiquidity, claimPayout, withdrawLiquidity, and more.
  */
 import { ethers } from 'ethers';
 
-export const DIAMOND_ADDRESS = '0x3eDfA00a1E3C158A591097de2FA1756aCD66860D';
+export const DIAMOND_ADDRESS = '0x885E663645173a0791b82f0e6608921D31E3D700';
 export const USDC_ADDRESS = '0xF242275d3a6527d877f2c927a82D9b057609cc71';
 export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
 export const LISK_SEPOLIA_CHAIN_ID = 1135;
