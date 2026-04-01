@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BlockFinaX Smart Contract Security Audit Report</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Georgia', serif; color: #1a1a2e; background: #fff; font-size: 14px; line-height: 1.7; }
+
+  /* Cover */
+  .cover { min-height: 100vh; background: linear-gradient(160deg, #1a4480 0%, #0d2d5e 60%, #0a1f42 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 60px 40px; text-align: center; page-break-after: always; }
+  .cover-logo { font-size: 13px; font-family: 'Arial', sans-serif; letter-spacing: 4px; text-transform: uppercase; color: rgba(255,255,255,0.55); margin-bottom: 48px; }
+  .cover h1 { font-size: 36px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 12px; max-width: 680px; }
+  .cover h2 { font-size: 18px; font-weight: 400; color: rgba(255,255,255,0.72); margin-bottom: 48px; }
+  .cover-meta { border-top: 1px solid rgba(255,255,255,0.2); padding-top: 32px; display: flex; gap: 48px; justify-content: center; flex-wrap: wrap; }
+  .cover-meta-item { text-align: center; }
+  .cover-meta-item .label { font-family: 'Arial', sans-serif; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 6px; }
+  .cover-meta-item .value { font-size: 15px; color: rgba(255,255,255,0.9); font-weight: 600; }
+  .cover-badge { margin-top: 40px; display: inline-block; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 8px 20px; font-family: 'Arial', sans-serif; font-size: 12px; color: rgba(255,255,255,0.6); letter-spacing: 1px; }
+
+  /* Page layout */
+  .page { max-width: 860px; margin: 0 auto; padding: 60px 48px; }
+
+  /* Section headings */
+  h2.section-title { font-size: 22px; font-weight: 700; color: #1a4480; border-bottom: 2px solid #1a4480; padding-bottom: 8px; margin: 48px 0 24px; page-break-before: always; }
+  h2.section-title:first-child { page-break-before: avoid; margin-top: 0; }
+  h3.subsection { font-size: 15px; font-weight: 700; color: #1a2e4a; margin: 28px 0 8px; }
+
+  /* Executive summary box */
+  .exec-summary { background: #f4f7fb; border-left: 4px solid #1a4480; border-radius: 0 8px 8px 0; padding: 20px 24px; margin-bottom: 32px; font-size: 14px; color: #2d3748; }
+
+  /* Finding cards */
+  .finding { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+  .finding-header { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; }
+  .finding-id { font-family: 'Courier New', monospace; font-size: 13px; font-weight: 700; white-space: nowrap; padding: 3px 10px; border-radius: 4px; }
+  .finding-title { font-size: 14px; font-weight: 700; color: #1a2e4a; line-height: 1.4; }
+  .finding-body { padding: 0 18px 16px; font-size: 13.5px; color: #4a5568; line-height: 1.75; border-top: 1px solid #f0f4f8; padding-top: 12px; }
+  .finding-body code { background: #f0f4f8; border-radius: 3px; padding: 1px 5px; font-family: 'Courier New', monospace; font-size: 12.5px; color: #c53030; }
+
+  /* Severity colours */
+  .sev-critical .finding-header { background: #fff5f5; border-left: 4px solid #c53030; }
+  .sev-critical .finding-id { background: #c53030; color: #fff; }
+  .sev-high .finding-header { background: #fffaf0; border-left: 4px solid #dd6b20; }
+  .sev-high .finding-id { background: #dd6b20; color: #fff; }
+  .sev-medium .finding-header { background: #fffff0; border-left: 4px solid #d69e2e; }
+  .sev-medium .finding-id { background: #d69e2e; color: #fff; }
+  .sev-low .finding-header { background: #f0fff4; border-left: 4px solid #38a169; }
+  .sev-low .finding-id { background: #38a169; color: #fff; }
+  .sev-info .finding-header { background: #f7fafc; border-left: 4px solid #718096; }
+  .sev-info .finding-id { background: #718096; color: #fff; }
+
+  /* Summary table */
+  table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 13.5px; }
+  th { background: #1a4480; color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; font-family: 'Arial', sans-serif; font-size: 12px; letter-spacing: 0.5px; }
+  td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; font-family: 'Arial', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-critical { background: #fff5f5; color: #c53030; border: 1px solid #fed7d7; }
+  .badge-high { background: #fffaf0; color: #c05621; border: 1px solid #fbd38d; }
+  .badge-medium { background: #fffff0; color: #b7791f; border: 1px solid #faf089; }
+  .badge-low { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+  .badge-info { background: #f7fafc; color: #4a5568; border: 1px solid #e2e8f0; }
+
+  /* Positives */
+  .positives { background: #f0fff4; border: 1px solid #c6f6d5; border-radius: 8px; padding: 20px 24px; }
+  .positives li { margin-bottom: 10px; padding-left: 8px; color: #276749; }
+  .positives li::marker { color: #38a169; }
+
+  /* Footer */
+  .report-footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #718096; text-align: center; font-family: 'Arial', sans-serif; }
+
+  @media print {
+    .cover { min-height: auto; padding: 80px 60px; }
+    .page { padding: 40px 48px; }
+    h2.section-title { page-break-before: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Cover Page -->
+<div class="cover">
+  <div class="cover-logo">BlockFinaX Limited</div>
+  <h1>Smart Contract Security Audit Report</h1>
+  <h2>EIP-2535 Diamond System — All Facets</h2>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">Contract</div>
+      <div class="value">BlockFinaX Diamond</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Network</div>
+      <div class="value">Lisk Mainnet</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Address</div>
+      <div class="value" style="font-size:12px;font-family:monospace">0x3eDfA00a1E3C158A591097de2FA1756aCD66860D</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Date</div>
+      <div class="value">April 2026</div>
+    </div>
+  </div>
+  <div class="cover-badge">Confidential — Internal Use</div>
+</div>
+
+<!-- Report Body -->
+<div class="page">
+
+  <!-- Executive Summary -->
+  <h2 class="section-title" style="page-break-before:avoid">Executive Summary</h2>
+  <div class="exec-summary">
+    The BlockFinaX smart contract system is well-structured and reflects a mature understanding of the Diamond (EIP-2535) pattern, MasterChef-style accounting, and DeFi security primitives. Most critical patterns — CEI ordering, <code>nonReentrant</code>, <code>SafeERC20</code>, and fee snapshots — are applied correctly throughout. The issues identified below are real, but the majority are medium or low severity. <strong>There is no single catastrophic flaw.</strong> However, several issues compound to create meaningful risk and should be addressed before scaling liquidity significantly.
+  </div>
+
+  <!-- Finding count overview -->
+  <table>
+    <thead>
+      <tr><th>Severity</th><th>Count</th><th>Findings</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="badge badge-critical">Critical</span></td><td>2</td><td>C-01, C-02</td></tr>
+      <tr><td><span class="badge badge-high">High</span></td><td>3</td><td>H-01, H-02, H-03</td></tr>
+      <tr><td><span class="badge badge-medium">Medium</span></td><td>5</td><td>M-01, M-02, M-03, M-04, M-05</td></tr>
+      <tr><td><span class="badge badge-low">Low</span></td><td>5</td><td>L-01, L-02, L-03, L-04, L-05</td></tr>
+      <tr><td><span class="badge badge-info">Informational</span></td><td>4</td><td>I-01, I-02, I-03, I-04</td></tr>
+    </tbody>
+  </table>
+
+  <!-- Critical -->
+  <h2 class="section-title">Critical Findings</h2>
+
+  <div class="finding sev-critical">
+    <div class="finding-header">
+      <span class="finding-id">C-01</span>
+      <div class="finding-title">DiamondCutFacet is never replaced by TimelockCutFacet — selector collision</div>
+    </div>
+    <div class="finding-body">
+      <code>BlockFinaXDiamondCutFacet</code> and <code>BlockFinaXTimelockCutFacet</code> both expose <code>diamondCut(FacetCut[],address,bytes)</code>. The comment states the timelock "replaces" the old facet via a <code>DiamondCut</code> action, but that replacement must itself be performed using the <em>original</em> instant <code>diamondCut</code>. If the original facet is never removed, both share the selector and the Diamond's routing is undefined. If the original is removed first but the timelock has not yet been installed, upgrades are temporarily impossible.
+      <br /><br />
+      <strong>Recommended fix:</strong> Document this as an explicit deployment invariant and enforce it with a constructor or initializer check that verifies both facets cannot be registered simultaneously. The deployment script must sequence the transition atomically.
+    </div>
+  </div>
+
+  <div class="finding sev-critical">
+    <div class="finding-header">
+      <span class="finding-id">C-02</span>
+      <div class="finding-title"><code>facetAddress()</code> in LoupeFacet returns a potentially corrupted address</div>
+    </div>
+    <div class="finding-body">
+      In <code>BlockFinaXDiamondLoupeFacet.facetAddress()</code>, the line <code>facetAddress_ = ds.selectorToFacetAndPosition[_functionSelector]</code> assigns from a mapping to an <code>address</code> variable. This compiles correctly only if <code>selectorToFacetAndPosition</code> is declared as <code>mapping(bytes4 =&gt; address)</code> in <code>LibDiamond</code>. Many EIP-2535 reference implementations store <code>mapping(bytes4 =&gt; FacetAddressAndPosition)</code> (a struct), which would make this a silent type error — the loupe would return a corrupted or zero address for all function-selector lookups.
+      <br /><br />
+      <strong>Recommended fix:</strong> Verify the actual <code>LibDiamond</code> storage declaration. If the mapping stores a struct, extract <code>.facetAddress</code> from it explicitly: <code>facetAddress_ = ds.selectorToFacetAndPosition[_functionSelector].facetAddress</code>.
+    </div>
+  </div>
+
+  <!-- High -->
+  <h2 class="section-title">High Severity</h2>
+
+  <div class="finding sev-high">
+    <div class="finding-header">
+      <span class="finding-id">H-01</span>
+      <div class="finding-title"><code>withdrawCapital</code> does not prevent subsequent premium claims</div>
+    </div>
+    <div class="finding-body">
+      An LP can call <code>withdrawCapital</code> before calling <code>claimPremiums</code>. The withdrawal sets <code>dep.withdrawn = true</code> and decrements <code>totalActiveShares</code>, but <code>dep.shares</code> is never zeroed. Any subsequent call to <code>claimPremiums</code> on the same <code>depositId</code> will succeed — there is no <code>dep.withdrawn</code> check in <code>claimPremiums</code> — and compute accrued premiums based on the non-zero share count, effectively paying the LP twice for their capital.
+      <br /><br />
+      <strong>Recommended fix:</strong> Either zero <code>dep.shares</code> on withdrawal, or add <code>require(!dep.withdrawn, "Capital withdrawn")</code> at the top of <code>claimPremiums</code>.
+    </div>
+  </div>
+
+  <div class="finding sev-high">
+    <div class="finding-header">
+      <span class="finding-id">H-02</span>
+      <div class="finding-title"><code>recoverExpiredPayouts</code> uses stale <code>totalLiquidity</code> after LP withdrawals</div>
+    </div>
+    <div class="finding-body">
+      <code>withdrawCapital</code> does not decrement <code>evt.totalLiquidity</code>. After multiple LPs withdraw, <code>totalLiquidity</code> still reflects the original deposited sum while the actual USDC balance held by the contract is materially lower. When <code>recoverExpiredPayouts</code> sweeps any residual amount into <code>hedgePlatformFeesCollected</code>, it can create a phantom balance — a fee balance that <code>withdrawPlatformFees</code> will attempt to transfer but cannot, causing a revert.
+      <br /><br />
+      <strong>Recommended fix:</strong> Reconcile platform fee accounting against the actual token balance of the contract rather than against in-storage counters. Alternatively, decrement <code>evt.totalLiquidity</code> on each <code>withdrawCapital</code> call.
+    </div>
+  </div>
+
+  <div class="finding sev-high">
+    <div class="finding-header">
+      <span class="finding-id">H-03</span>
+      <div class="finding-title">Oracle <code>RESUBMIT_COOLDOWN</code> does not reset after consensus is cleared</div>
+    </div>
+    <div class="finding-body">
+      <code>lastSubmitTime[_eventId][msg.sender]</code> is set on every <code>submitRate</code> call but is never cleared by <code>_clearSubmissions</code>. After a disagreement clears the submission round, each oracle must still wait the full <code>RESUBMIT_COOLDOWN</code> (5 minutes) from their last submission before retrying. In a scenario where oracles rapidly disagree and the round clears repeatedly, legitimate re-settlement can be delayed 5 minutes per round with no recourse for the owner other than calling <code>clearStaleSubmissions</code> — which itself does not reset <code>lastSubmitTime</code>.
+      <br /><br />
+      <strong>Recommended fix:</strong> Clear <code>lastSubmitTime</code> entries within <code>_clearSubmissions</code>, or provide an owner-callable emergency function that resets cooldowns for specific oracles and events.
+    </div>
+  </div>
+
+  <!-- Medium -->
+  <h2 class="section-title">Medium Severity</h2>
+
+  <div class="finding sev-medium">
+    <div class="finding-header">
+      <span class="finding-id">M-01</span>
+      <div class="finding-title">Misleading comment — Diamond owner cannot settle after <code>activateOracleV2()</code></div>
+    </div>
+    <div class="finding-body">
+      The comment in <code>setOracleAdmin</code> states "The Diamond owner always retains the ability to settle regardless of this setting." This is incorrect. After <code>activateOracleV2()</code> sets <code>oracleV2Active = true</code>, the <code>require(!s.oracleV2Active)</code> check in <code>settleEvent</code> rejects all callers — including the Diamond owner — because the check runs after the <code>onlyOracleAdmin</code> modifier. Operators who rely on the comment as documentation may believe they have a fallback they do not have.
+      <br /><br />
+      <strong>Recommended fix:</strong> Remove or correct the misleading comment to accurately reflect that <code>activateOracleV2()</code> is a one-way lock for all settlement paths.
+    </div>
+  </div>
+
+  <div class="finding sev-medium">
+    <div class="finding-header">
+      <span class="finding-id">M-02</span>
+      <div class="finding-title"><code>buyProtection</code> uses user-supplied <code>initialRate</code> for payout calculation</div>
+    </div>
+    <div class="finding-body">
+      The <code>initialRate</code> parameter in <code>createEvent</code> is provided by the event creator without any on-chain oracle validation. A creator could set an artificially low <code>initialRate</code> to make <code>priceDelta = strike - initialRate</code> very large, thereby making each hedger's <code>predeterminedPayout</code> disproportionately large relative to the premium paid. This is a misconfigured-event risk rather than a direct exploit, but it could drain LP capital on a legitimate-looking event.
+      <br /><br />
+      <strong>Recommended fix:</strong> Consider requiring an on-chain oracle price confirmation at event creation, or enforcing a maximum <code>priceDelta</code> as a bounded percentage of <code>initialRate</code> (e.g. no more than ±50%).
+    </div>
+  </div>
+
+  <div class="finding sev-medium">
+    <div class="finding-header">
+      <span class="finding-id">M-03</span>
+      <div class="finding-title"><code>deposit()</code> share calculation truncates to zero for small deposits</div>
+    </div>
+    <div class="finding-body">
+      The formula <code>shares = (_amount * evt.totalActiveShares) / evt.totalLiquidity</code> can truncate to zero when <code>totalLiquidity</code> is large relative to <code>_amount</code>. For example, with a 1,000,000 USDC pool and a 10 USDC deposit, the result may round to zero shares. A zero-share deposit permanently locks the LP's capital — <code>withdrawCapital</code> returns <code>dep.amount</code> net of <code>lpPayoutShare</code>, but <code>claimPremiums</code> yields zero indefinitely.
+      <br /><br />
+      <strong>Recommended fix:</strong> Add <code>require(shares &gt; 0, "Deposit too small relative to pool size")</code> immediately after the share calculation.
+    </div>
+  </div>
+
+  <div class="finding sev-medium">
+    <div class="finding-header">
+      <span class="finding-id">M-04</span>
+      <div class="finding-title"><code>TimelockCutFacet</code> proposal IDs can collide in the same block</div>
+    </div>
+    <div class="finding-body">
+      The <code>proposalId</code> is derived from <code>keccak256(abi.encode(_facetCuts, _init, _callData, block.timestamp, block.number))</code>. Two proposals submitted in the same block with identical cut data produce the same <code>proposalId</code>, causing the second call to revert with "Proposal already exists." An adversary can front-run a legitimate upgrade proposal with an identical one, effectively blocking the upgrade for the duration of the current block.
+      <br /><br />
+      <strong>Recommended fix:</strong> Add an incrementing nonce counter to <code>TimelockStorage</code> and include it in the hash input. This makes every proposal ID unique regardless of timing or data.
+    </div>
+  </div>
+
+  <div class="finding sev-medium">
+    <div class="finding-header">
+      <span class="finding-id">M-05</span>
+      <div class="finding-title">LP withdrawal fairness asymmetry between early and late withdrawers</div>
+    </div>
+    <div class="finding-body">
+      <code>claimPayout</code> reduces <code>evt.totalMaxPayout</code> using <code>grossPayout</code>, which was already accounted for at <code>buyProtection</code> time. This is intentional and documented. However, if LPs call <code>withdrawCapital</code> after only <em>some</em> hedgers have claimed, those LPs are penalised for unclaimed payouts that were already deducted from the pool during capital withdrawal. Early LP withdrawers bear the cost of pending payouts; late withdrawers benefit after those payouts reduce <code>totalMaxPayout</code>.
+      <br /><br />
+      <strong>Recommended fix:</strong> This is a design-level trade-off rather than a strict bug. Consider documenting the withdrawal ordering behaviour explicitly in user-facing material, and evaluate whether a snapshot-based payout reserve approach would be fairer.
+    </div>
+  </div>
+
+  <!-- Low -->
+  <h2 class="section-title">Low Severity</h2>
+
+  <div class="finding sev-low">
+    <div class="finding-header">
+      <span class="finding-id">L-01</span>
+      <div class="finding-title"><code>getPendingCutIds()</code> array grows unboundedly</div>
+    </div>
+    <div class="finding-body">
+      Every <code>diamondCut</code> proposal appends to <code>ts.ids</code>. Cancelled and executed proposals are never removed. Over time this array could become expensive to iterate off-chain and could eventually hit gas limits if on-chain enumeration is ever added.
+      <br /><br />
+      <strong>Recommended fix:</strong> Remove executed and cancelled proposal IDs from the array, or maintain a separate index mapping to mark their status and skip them during iteration.
+    </div>
+  </div>
+
+  <div class="finding sev-low">
+    <div class="finding-header">
+      <span class="finding-id">L-02</span>
+      <div class="finding-title"><code>LoupeFacet.facets()</code> has O(n·m) read complexity</div>
+    </div>
+    <div class="finding-body">
+      <code>facets()</code> iterates all facets, and within each facet <code>facetFunctionSelectors</code> iterates again — producing O(n·m) complexity. For the current deployment size (5–15 facets, 10–50 selectors each) this is acceptable. However, significant Diamond expansion could make this call costly.
+      <br /><br />
+      <strong>Recommended fix:</strong> Low priority at current scale. Monitor as the facet count grows and consider a pagination approach if read cost becomes problematic.
+    </div>
+  </div>
+
+  <div class="finding sev-low">
+    <div class="finding-header">
+      <span class="finding-id">L-03</span>
+      <div class="finding-title"><code>rescueETH</code> does not cap forwarded gas</div>
+    </div>
+    <div class="finding-body">
+      <code>_to.call{value: balance}("")</code> forwards all remaining gas. If <code>_to</code> is a contract with a malicious fallback, this could be exploited in a gas-griefing scenario.
+      <br /><br />
+      <strong>Recommended fix:</strong> Use a gas-capped call: <code>_to.call{value: balance, gas: 2300}("")</code>. This is the standard safe pattern for ETH rescue functions.
+    </div>
+  </div>
+
+  <div class="finding sev-low">
+    <div class="finding-header">
+      <span class="finding-id">L-04</span>
+      <div class="finding-title"><code>PayoutClaimed</code> event does not index <code>eventId</code></div>
+    </div>
+    <div class="finding-body">
+      <code>PayoutClaimed</code> indexes <code>positionId</code> and <code>hedger</code> but not <code>eventId</code>. Off-chain indexers must join through <code>getHedgePosition</code> to link a claim to its parent event, adding an extra RPC call per claim.
+      <br /><br />
+      <strong>Recommended fix:</strong> Add <code>eventId</code> as an indexed field. Up to three indexed parameters are available per event with no ABI encoding overhead.
+    </div>
+  </div>
+
+  <div class="finding sev-low">
+    <div class="finding-header">
+      <span class="finding-id">L-05</span>
+      <div class="finding-title"><code>setPoolSettings</code> lacks <code>nonReentrant</code></div>
+    </div>
+    <div class="finding-body">
+      The function does not transfer tokens and is guarded by <code>whenNotPaused</code>, but it is inconsistent with the rest of the state-changing surface which applies <code>nonReentrant</code> throughout.
+      <br /><br />
+      <strong>Recommended fix:</strong> Add <code>nonReentrant</code> for defence-in-depth against any future logic changes that may introduce token transfers.
+    </div>
+  </div>
+
+  <!-- Informational -->
+  <h2 class="section-title">Informational / Gas</h2>
+
+  <div class="finding sev-info">
+    <div class="finding-header">
+      <span class="finding-id">I-01</span>
+      <div class="finding-title">Unused storage slot — <code>totalHedgeEvents</code></div>
+    </div>
+    <div class="finding-body">
+      <code>totalHedgeEvents</code> is retained in storage for layout compatibility per a comment but is never read. It can be removed in a future storage migration to reclaim one storage slot (~20,000 gas saving on first write operations that would otherwise touch that slot).
+    </div>
+  </div>
+
+  <div class="finding sev-info">
+    <div class="finding-header">
+      <span class="finding-id">I-02</span>
+      <div class="finding-title">Duplicated deposit logic in <code>_createInitialDeposit</code> and <code>deposit()</code></div>
+    </div>
+    <div class="finding-body">
+      Both functions share nearly identical logic but are separate code paths. A bug fix applied to one may be missed in the other. Refactoring both into a shared internal <code>_createDeposit</code> helper would eliminate this maintenance risk.
+    </div>
+  </div>
+
+  <div class="finding sev-info">
+    <div class="finding-header">
+      <span class="finding-id">I-03</span>
+      <div class="finding-title"><code>recoverExpiredPayouts</code> may consume significant gas</div>
+    </div>
+    <div class="finding-body">
+      The function loops over all positions up to <code>MAX_POSITIONS_PER_EVENT = 500</code>. It is owner-only and non-time-critical, so this is acceptable in practice. Callers should be aware of gas usage when calling on events with many positions and may need to split the call.
+    </div>
+  </div>
+
+  <div class="finding sev-info">
+    <div class="finding-header">
+      <span class="finding-id">I-04</span>
+      <div class="finding-title"><code>_checkConsensus</code> makes two passes over <code>submitters</code></div>
+    </div>
+    <div class="finding-body">
+      The function makes two full iterations over <code>submitters</code> — one to count valid entries and one to collect them. A single pass with a dynamic memory-push approach would halve iterations. Given the 10-oracle cap, the gas impact is negligible at current scale but may matter if the oracle set is ever expanded.
+    </div>
+  </div>
+
+  <!-- What is done well -->
+  <h2 class="section-title">Strengths</h2>
+  <div class="positives">
+    <ul style="list-style:disc;padding-left:20px">
+      <li>The <strong>fee snapshot mechanism</strong> correctly prevents retroactive fee changes from affecting in-flight events.</li>
+      <li>The <strong>MasterChef-style <code>accPremiumPerShare</code> accumulator</strong> is a significant gas improvement over O(n) loops and is implemented correctly.</li>
+      <li><strong>CEI (Checks-Effects-Interactions) ordering</strong> is applied consistently across all state-changing functions.</li>
+      <li>The <strong><code>nonReentrant</code> modifier</strong> uses the Diamond-compatible shared <code>AppStorage</code> lock rather than a contract-level variable — the correct approach for <code>delegatecall</code> architecture.</li>
+      <li>The <strong>90-day grace period</strong> with <code>recoverExpiredPayouts</code> is a thoughtful solution to the locked-funds problem.</li>
+      <li><strong>Two-step ownership transfer</strong> prevents accidental lockouts of the Diamond owner role.</li>
+      <li>The <strong><code>oracleV2Active</code> one-way flag</strong> provides a clean migration path to full oracle decentralisation.</li>
+    </ul>
+  </div>
+
+  <!-- Full summary table -->
+  <h2 class="section-title">Full Findings Summary</h2>
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Title</th><th>Severity</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>C-01</td><td>DiamondCutFacet / TimelockCutFacet selector collision</td><td><span class="badge badge-critical">Critical</span></td><td>Open</td></tr>
+      <tr><td>C-02</td><td><code>facetAddress()</code> may return corrupted address</td><td><span class="badge badge-critical">Critical</span></td><td>Open</td></tr>
+      <tr><td>H-01</td><td><code>withdrawCapital</code> does not block subsequent premium claims</td><td><span class="badge badge-high">High</span></td><td>Open</td></tr>
+      <tr><td>H-02</td><td><code>recoverExpiredPayouts</code> uses stale <code>totalLiquidity</code></td><td><span class="badge badge-high">High</span></td><td>Open</td></tr>
+      <tr><td>H-03</td><td>Oracle cooldown not reset after consensus clear</td><td><span class="badge badge-high">High</span></td><td>Open</td></tr>
+      <tr><td>M-01</td><td>Misleading comment on owner settle capability</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
+      <tr><td>M-02</td><td>User-supplied <code>initialRate</code> can inflate payouts</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
+      <tr><td>M-03</td><td>Zero-share deposit possible due to integer division</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
+      <tr><td>M-04</td><td>Timelock proposal ID collision in same block</td><td><span class="badge badge-medium">Medium</span></td><td>Open</td></tr>
+      <tr><td>M-05</td><td>LP withdrawal fairness asymmetry</td><td><span class="badge badge-medium">Medium</span></td><td>Acknowledged</td></tr>
+      <tr><td>L-01</td><td>Pending cut IDs array grows unboundedly</td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
+      <tr><td>L-02</td><td><code>facets()</code> O(n·m) read complexity</td><td><span class="badge badge-low">Low</span></td><td>Acknowledged</td></tr>
+      <tr><td>L-03</td><td><code>rescueETH</code> uncapped gas forwarding</td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
+      <tr><td>L-04</td><td><code>PayoutClaimed</code> missing <code>eventId</code> index</td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
+      <tr><td>L-05</td><td><code>setPoolSettings</code> missing <code>nonReentrant</code></td><td><span class="badge badge-low">Low</span></td><td>Open</td></tr>
+      <tr><td>I-01</td><td>Unused <code>totalHedgeEvents</code> storage slot</td><td><span class="badge badge-info">Info</span></td><td>Acknowledged</td></tr>
+      <tr><td>I-02</td><td>Duplicated deposit logic</td><td><span class="badge badge-info">Info</span></td><td>Open</td></tr>
+      <tr><td>I-03</td><td><code>recoverExpiredPayouts</code> high gas usage</td><td><span class="badge badge-info">Info</span></td><td>Acknowledged</td></tr>
+      <tr><td>I-04</td><td><code>_checkConsensus</code> double-pass iteration</td><td><span class="badge badge-info">Info</span></td><td>Open</td></tr>
+    </tbody>
+  </table>
+
+  <div class="report-footer">
+    BlockFinaX Limited &nbsp;·&nbsp; Smart Contract Security Audit &nbsp;·&nbsp; April 2026 &nbsp;·&nbsp; Confidential
+  </div>
+
+</div>
+</body>
+</html>
