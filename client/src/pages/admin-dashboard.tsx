@@ -1118,6 +1118,13 @@ const OWNER_ABI = [
   "function setAllowedPaymentToken(address,bool)",
 ];
 
+const TIMELOCK_ABI = [
+  "function getPendingCutIds() view returns (bytes32[])",
+  "function getProposal(bytes32) view returns (uint8 status, uint256 executeAfter, address initAddress, bytes initCalldata)",
+  "function executeCut(bytes32 proposalId)",
+  "function cancelCut(bytes32 proposalId)",
+];
+
 async function ensureLisk() {
   const eth = (window as any).ethereum;
   if (!eth) throw new Error("MetaMask not found.");
@@ -1208,6 +1215,43 @@ function ProtocolSection() {
   const [feeFormOpen, setFeeFormOpen] = useState(false);
   const [safeTxModal, setSafeTxModal] = useState<{ to: string; data: string; label: string } | null>(null);
   const [safeExecuting, setSafeExecuting] = useState(false);
+
+  type TimelockProposal = {
+    id: string;
+    status: number;
+    executeAfter: number;
+    initAddress: string;
+    ready: boolean;
+    secondsLeft: number;
+  };
+  const [proposals, setProposals] = useState<TimelockProposal[]>([]);
+  const [proposalsLoading, setProposalsLoading] = useState(false);
+
+  const loadProposals = async () => {
+    setProposalsLoading(true);
+    try {
+      const { ethers } = await import("ethers");
+      const provider = new ethers.JsonRpcProvider(LISK_RPC);
+      const tl = new ethers.Contract(DIAMOND, TIMELOCK_ABI, provider);
+      const ids: string[] = await tl.getPendingCutIds().catch(() => []);
+      const now = Math.floor(Date.now() / 1000);
+      const details: TimelockProposal[] = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const p = await tl.getProposal(id);
+            const executeAfter = Number(p.executeAfter);
+            return { id, status: Number(p.status), executeAfter, initAddress: p.initAddress, ready: now >= executeAfter, secondsLeft: Math.max(0, executeAfter - now) };
+          } catch {
+            return { id, status: 0, executeAfter: 0, initAddress: "", ready: false, secondsLeft: 0 };
+          }
+        })
+      );
+      setProposals(details.filter(p => p.status === 0));
+    } catch { /* silent */ }
+    finally { setProposalsLoading(false); }
+  };
+
+  useEffect(() => { loadProposals(); }, []);
 
   const load = async () => {
     setState(s => ({ ...s, loading: true }));
@@ -1779,6 +1823,103 @@ function ProtocolSection() {
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Pending Upgrade Proposals */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="h-4 w-4 text-[#1a4480]" />Pending Upgrade Proposals
+              </CardTitle>
+              <CardDescription>Diamond upgrade proposals queued via the timelock. Once the waiting period has passed, click Execute to confirm.</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={loadProposals} disabled={proposalsLoading}>
+              <RefreshCw className={`h-3 w-3 mr-1 ${proposalsLoading ? "animate-spin" : ""}`} />Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {proposalsLoading ? (
+            <div className="text-sm text-gray-400 py-4 text-center">Loading proposals from Lisk Mainnet…</div>
+          ) : proposals.length === 0 ? (
+            <div className="rounded-lg bg-gray-50 border border-dashed border-gray-200 p-6 text-center">
+              <Clock className="h-6 w-6 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No pending upgrade proposals</p>
+              <p className="text-xs text-gray-400 mt-1">When a Diamond upgrade is proposed, it will appear here after the timelock delay has passed.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {proposals.map((p) => {
+                const hoursLeft = Math.floor(p.secondsLeft / 3600);
+                const minsLeft = Math.floor((p.secondsLeft % 3600) / 60);
+                const timeStr = p.ready ? "Ready to execute" : hoursLeft > 0 ? `${hoursLeft}h ${minsLeft}m remaining` : `${minsLeft}m remaining`;
+                const execDate = p.executeAfter ? new Date(p.executeAfter * 1000).toLocaleString() : "—";
+                return (
+                  <div key={p.id} className={`rounded-lg border p-4 ${p.ready ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.ready ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                            {p.ready ? "✓ Ready" : "⏳ Waiting"}
+                          </span>
+                          <span className="text-xs text-gray-500">{timeStr}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Proposal ID: <code className="font-mono text-gray-700 break-all">{p.id.slice(0, 18)}…</code></p>
+                        <p className="text-xs text-gray-500">Executable from: <span className="font-medium text-gray-700">{execDate}</span></p>
+                        {p.initAddress && p.initAddress !== "0x0000000000000000000000000000000000000000" && (
+                          <p className="text-xs text-gray-500">Init contract: <code className="font-mono text-gray-700">{shortAddr(p.initAddress)}</code></p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2 shrink-0">
+                        {p.ready ? (
+                          <Button
+                            size="sm"
+                            className="bg-[#1a4480] hover:bg-[#153a6e] text-white"
+                            onClick={async () => {
+                              try {
+                                const { ethers } = await import("ethers");
+                                const iface = new ethers.Interface(TIMELOCK_ABI);
+                                const calldata = iface.encodeFunctionData("executeCut", [p.id]);
+                                setSafeTxModal({ to: DIAMOND, data: calldata, label: `Execute Upgrade (${p.id.slice(0, 10)}…)` });
+                              } catch (e: any) {
+                                toast({ title: "Failed to encode transaction", description: e.message, variant: "destructive" });
+                              }
+                            }}
+                          >
+                            <Shield className="h-3.5 w-3.5 mr-1.5" />Execute via Safe
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" disabled>
+                            <Clock className="h-3.5 w-3.5 mr-1.5" />Waiting…
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                          onClick={async () => {
+                            try {
+                              const { ethers } = await import("ethers");
+                              const iface = new ethers.Interface(TIMELOCK_ABI);
+                              const calldata = iface.encodeFunctionData("cancelCut", [p.id]);
+                              setSafeTxModal({ to: DIAMOND, data: calldata, label: `Cancel Proposal (${p.id.slice(0, 10)}…)` });
+                            } catch (e: any) {
+                              toast({ title: "Failed to encode cancel", description: e.message, variant: "destructive" });
+                            }
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
