@@ -48,7 +48,7 @@ export function useWalletBalances(selectedNetworkId?: number) {
       
       // Use live market prices for different native tokens
       if (network?.symbol === 'ETH') {
-        nativeUsdPrice = ethPrice; // Live ETH price from CoinGecko
+        nativeUsdPrice = ethPrice ?? 0; // Live ETH price; 0 if not yet loaded
       } else if (network?.symbol === 'MATIC') {
         nativeUsdPrice = 0.8; // MATIC price
       } else if (network?.symbol === 'BNB') {

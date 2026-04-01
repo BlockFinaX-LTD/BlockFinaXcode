@@ -158,7 +158,7 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
                 <div className="text-right">
                   <div className="font-medium">{formatCurrency(selectedBalance.usdValue)}</div>
                   <div className="text-xs text-muted-foreground">
-                    ${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    {ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
                   </div>
                 </div>
               </div>

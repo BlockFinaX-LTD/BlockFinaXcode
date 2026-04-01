@@ -15,7 +15,7 @@ import {
   Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
-  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download
+  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -520,6 +520,10 @@ function HedgeSection() {
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
       </div>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
+        <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+        <span>All hedge events and positions are stored on <strong>Lisk Mainnet</strong> — they are permanent on-chain records. Resetting the platform database does not affect this data.</span>
+      </div>
       <div className="flex gap-2">
         {(["events", "positions", "deposits"] as const).map(t => (
           <Button key={t} variant={tab === t ? "default" : "outline"} size="sm" onClick={() => setTab(t)} className="capitalize">
@@ -676,6 +680,10 @@ function RevenueSection() {
         <Button variant="outline" size="sm" onClick={() => { refetchRevenue(); loadFeeConfig(); }} className="gap-1.5">
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
+      </div>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
+        <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+        <span>Revenue figures are read directly from the <strong>Lisk Mainnet</strong> Diamond contract — these are permanent on-chain records. Resetting the platform database does not affect this data.</span>
       </div>
 
       <Card>
@@ -1089,6 +1097,7 @@ const LISK_HEX = "0x46F";
 const LISK_RPC = "https://rpc.api.lisk.com";
 
 const OWNER_ABI = [
+  "function owner() view returns (address)",
   "function getHedgeFeeConfig() view returns (uint256,uint256,uint256,uint256,uint256)",
   "function getHedgePlatformFees() view returns (uint256)",
   "function getPlatformFeesByToken(address) view returns (uint256)",
@@ -1164,6 +1173,7 @@ interface ProtocolState {
   usdcAllowed: boolean;
   usdtAllowed: boolean;
   wallet: string;
+  diamondOwner: string;
   loading: boolean;
 }
 
@@ -1183,7 +1193,7 @@ function ProtocolSection() {
   const [state, setState] = useState<ProtocolState>({
     usdcFees: "—", usdtFees: "—", usdcWithdrawn: 0, usdtWithdrawn: 0,
     feeConfig: null, usdcAllowed: true, usdtAllowed: false,
-    wallet: "", loading: true,
+    wallet: "", diamondOwner: "", loading: true,
   });
   const [busy, setBusy] = useState<string | null>(null);
   const [oracleInput, setOracleInput] = useState("");
@@ -1195,7 +1205,7 @@ function ProtocolSection() {
     try {
       const c = await readContract();
       const { ethers } = await import("ethers");
-      const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed, usdcWithdrawn, usdtWithdrawn] = await Promise.all([
+      const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed, usdcWithdrawn, usdtWithdrawn, diamondOwner] = await Promise.all([
         c.getHedgePlatformFees().catch(() => 0n),
         c.getPlatformFeesByToken(USDT_MAINNET).catch(() => 0n),
         c.getHedgeFeeConfig().catch(() => null),
@@ -1203,6 +1213,7 @@ function ProtocolSection() {
         c.isAllowedPaymentToken(USDT_MAINNET).catch(() => false),
         fetchTotalWithdrawn(USDC_MAINNET),
         fetchTotalWithdrawn(USDT_MAINNET),
+        c.owner().catch(() => ""),
       ]);
       const feeConfig = rawFees ? {
         creationFee: (Number(rawFees[0]) / 1e6).toFixed(2),
@@ -1219,7 +1230,7 @@ function ProtocolSection() {
         const accounts: string[] = await eth.request({ method: "eth_accounts" });
         wallet = accounts[0] || "";
       }
-      setState(s => ({ ...s, usdcFees: fmtUSDC(BigInt(rawUsdc)), usdtFees: fmtUSDC(BigInt(rawUsdt)), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, loading: false }));
+      setState(s => ({ ...s, usdcFees: fmtUSDC(BigInt(rawUsdc)), usdtFees: fmtUSDC(BigInt(rawUsdt)), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, diamondOwner: (diamondOwner as string).toLowerCase(), loading: false }));
     } catch (e: any) {
       setState(s => ({ ...s, loading: false }));
       toast({ title: "Failed to load contract state", description: e.message, variant: "destructive" });
@@ -1258,7 +1269,12 @@ function ProtocolSection() {
   });
 
   const updateFees = () => run("Update fee config", async () => {
-    const { ethers, contract } = await ensureLisk();
+    const { ethers, contract, signer } = await ensureLisk();
+    const signerAddr = (await signer.getAddress()).toLowerCase();
+    const onChainOwner = (await contract.owner().catch(() => "")).toLowerCase();
+    if (onChainOwner && signerAddr !== onChainOwner) {
+      throw new Error(`Wrong wallet. Diamond owner is ${onChainOwner} but MetaMask is using ${signerAddr}. Switch to the owner account and try again.`);
+    }
     const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
     const tx = await contract.initializeHedgeFees(
       ethers.parseUnits(feeForm.creationFee, 6),
@@ -1286,6 +1302,10 @@ function ProtocolSection() {
   });
 
   const connectedLabel = state.wallet ? shortAddr(state.wallet) : "Not connected";
+  const ownerLabel = state.diamondOwner ? shortAddr(state.diamondOwner) : "—";
+  const walletIsOwner = state.wallet && state.diamondOwner
+    ? state.wallet.toLowerCase() === state.diamondOwner.toLowerCase()
+    : null;
 
   return (
     <div className="space-y-6">
@@ -1295,10 +1315,29 @@ function ProtocolSection() {
           <p className="text-sm text-gray-500 mt-0.5">On-chain owner functions — each action sends a transaction via MetaMask</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{connectedLabel}</span>
           <Button variant="outline" size="sm" onClick={load} disabled={state.loading}>
             <RefreshCw className={`h-3 w-3 mr-1 ${state.loading ? "animate-spin" : ""}`} />Refresh
           </Button>
+        </div>
+      </div>
+
+      {/* Owner wallet check */}
+      <div className={`rounded-lg border p-3 text-sm flex items-start gap-3 ${walletIsOwner === false ? "border-red-200 bg-red-50" : walletIsOwner === true ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-gray-500">Diamond owner: <span className="font-mono font-medium text-gray-800">{state.diamondOwner || "loading…"}</span></span>
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-500">Your wallet: <span className="font-mono font-medium text-gray-800">{state.wallet || "not connected"}</span></span>
+          </div>
+          {walletIsOwner === false && (
+            <p className="text-red-700 font-medium flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              Wrong wallet — MetaMask is connected to <span className="font-mono">{connectedLabel}</span> but the Diamond owner is <span className="font-mono">{ownerLabel}</span>. Switch MetaMask to the owner wallet before sending any transaction.
+            </p>
+          )}
+          {walletIsOwner === true && (
+            <p className="text-green-700 font-medium">Wallet matches contract owner — ready to sign transactions.</p>
+          )}
         </div>
       </div>
 

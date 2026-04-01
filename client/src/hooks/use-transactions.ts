@@ -48,7 +48,7 @@ export function useTransactions(networkId: number) {
     return walletBalances.balances.map(balance => {
       const network = NETWORKS.find(n => n.id === balance.networkId);
       const balanceValue = parseFloat(balance.nativeBalance);
-      const usdValue = balanceValue * ethPrice;
+      const usdValue = ethPrice != null ? balanceValue * ethPrice : null;
       
       return {
         networkId: balance.networkId,
