@@ -1199,6 +1199,7 @@ function ProtocolSection() {
   const [oracleInput, setOracleInput] = useState("");
   const [feeForm, setFeeForm] = useState({ creationFee: "", hedgerFeeRate: "", hedgerPayoutFeeRate: "", lpProfitFeeRate: "", creatorLoyaltyRate: "" });
   const [feeFormOpen, setFeeFormOpen] = useState(false);
+  const [safeTxModal, setSafeTxModal] = useState<{ to: string; data: string; label: string } | null>(null);
 
   const load = async () => {
     setState(s => ({ ...s, loading: true }));
@@ -1268,12 +1269,12 @@ function ProtocolSection() {
     await tx.wait();
   });
 
-  const updateFees = () => run("Update fee config", async () => {
+  const updateFees = () => run("Update fee config (direct EOA)", async () => {
     const { ethers, contract, signer } = await ensureLisk();
     const signerAddr = (await signer.getAddress()).toLowerCase();
     const onChainOwner = (await contract.owner().catch(() => "")).toLowerCase();
     if (onChainOwner && signerAddr !== onChainOwner) {
-      throw new Error(`Wrong wallet. Diamond owner is ${onChainOwner} but MetaMask is using ${signerAddr}. Switch to the owner account and try again.`);
+      throw new Error(`Wrong wallet — Diamond owner is ${onChainOwner} but MetaMask is using ${signerAddr}. Use "Send via Safe" instead.`);
     }
     const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
     const tx = await contract.initializeHedgeFees(
@@ -1286,6 +1287,35 @@ function ProtocolSection() {
     await tx.wait();
     setFeeFormOpen(false);
   });
+
+  const genSafeFeeTx = async () => {
+    try {
+      const { ethers } = await import("ethers");
+      const iface = new ethers.Interface(OWNER_ABI);
+      const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
+      const calldata = iface.encodeFunctionData("initializeHedgeFees", [
+        ethers.parseUnits(feeForm.creationFee || "0", 6),
+        p(feeForm.hedgerFeeRate || "0"),
+        p(feeForm.hedgerPayoutFeeRate || "0"),
+        p(feeForm.lpProfitFeeRate || "0"),
+        p(feeForm.creatorLoyaltyRate || "0"),
+      ]);
+      setSafeTxModal({ to: DIAMOND, data: calldata, label: "Update Fee Parameters" });
+    } catch (e: any) {
+      toast({ title: "Failed to encode calldata", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const genSafeOracleTx = async (address: string) => {
+    try {
+      const { ethers } = await import("ethers");
+      const iface = new ethers.Interface(OWNER_ABI);
+      const calldata = iface.encodeFunctionData("addOracle", [address]);
+      setSafeTxModal({ to: DIAMOND, data: calldata, label: `Add Oracle ${shortAddr(address)}` });
+    } catch (e: any) {
+      toast({ title: "Failed to encode calldata", description: e.message, variant: "destructive" });
+    }
+  };
 
   const setOracle = () => run("Add oracle", async () => {
     if (!oracleInput.startsWith("0x") || oracleInput.length !== 42) throw new Error("Invalid address.");
@@ -1518,9 +1548,20 @@ function ProtocolSection() {
                       <Input type="number" step="0.001" value={feeForm.creatorLoyaltyRate} onChange={e => setFeeForm(f => ({ ...f, creatorLoyaltyRate: e.target.value }))} placeholder="e.g. 0.5000" className="mt-1" />
                     </div>
                   </div>
-                  <Button className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={updateFees} disabled={busy !== null}>
-                    {busy === "Update fee config" ? "Sending tx…" : "Submit to chain"}
-                  </Button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={genSafeFeeTx}>
+                      Send via Safe
+                    </Button>
+                    <Button variant="outline" onClick={updateFees} disabled={busy !== null || walletIsOwner !== true} title={walletIsOwner !== true ? "Only works when your EOA is the Diamond owner" : ""}>
+                      {busy === "Update fee config (direct EOA)" ? "Sending tx…" : "Send direct (EOA only)"}
+                    </Button>
+                  </div>
+                  {walletIsOwner !== true && (
+                    <p className="text-xs text-amber-700 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Diamond owner is a Safe — use "Send via Safe" to generate the transaction.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -1554,18 +1595,27 @@ function ProtocolSection() {
                     )}
                   </div>
                   {node.configured && node.address && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 text-xs border-[#1a4480] text-[#1a4480] hover:bg-[#1a4480] hover:text-white"
-                      disabled={busy !== null}
-                      onClick={() => {
-                        setOracleInput(node.address!);
-                        setTimeout(() => setOracle(), 50);
-                      }}
-                    >
-                      Register
-                    </Button>
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        className="shrink-0 text-xs bg-[#1a4480] hover:bg-[#153a6e] text-white"
+                        onClick={() => genSafeOracleTx(node.address!)}
+                      >
+                        Via Safe
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 text-xs"
+                        disabled={busy !== null || walletIsOwner !== true}
+                        onClick={() => {
+                          setOracleInput(node.address!);
+                          setTimeout(() => setOracle(), 50);
+                        }}
+                      >
+                        Direct
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -1644,6 +1694,67 @@ function ProtocolSection() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Safe Transaction Modal */}
+      <Dialog open={safeTxModal !== null} onOpenChange={() => setSafeTxModal(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-[#1a4480]" />
+              Safe Transaction — {safeTxModal?.label}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-blue-800 text-xs leading-relaxed">
+              <strong>How to submit this via Safe:</strong>
+              <ol className="list-decimal list-inside mt-1.5 space-y-1">
+                <li>Open <a href={`https://app.safe.global/home?safe=lisk:${SAFE_ADDR}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">your Safe on app.safe.global</a></li>
+                <li>Click <strong>New transaction → Transaction builder</strong></li>
+                <li>Paste the <strong>To address</strong> and <strong>Data</strong> below. Set Value to <strong>0</strong>.</li>
+                <li>Review, propose, and collect required signatures.</li>
+              </ol>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">To (contract address)</p>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-lg border p-2.5">
+                  <code className="text-xs font-mono flex-1 break-all text-gray-800">{safeTxModal?.to}</code>
+                  <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" onClick={() => { navigator.clipboard.writeText(safeTxModal?.to || ""); toast({ title: "Address copied" }); }}>
+                    <Copy className="h-3 w-3 mr-1" />Copy
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Value</p>
+                <div className="bg-gray-50 rounded-lg border p-2.5">
+                  <code className="text-xs font-mono text-gray-800">0</code>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Data (calldata)</p>
+                <div className="flex items-start gap-2 bg-gray-50 rounded-lg border p-2.5">
+                  <code className="text-xs font-mono flex-1 break-all text-gray-800 leading-relaxed">{safeTxModal?.data}</code>
+                  <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs mt-0" onClick={() => { navigator.clipboard.writeText(safeTxModal?.data || ""); toast({ title: "Calldata copied" }); }}>
+                    <Copy className="h-3 w-3 mr-1" />Copy
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <Button variant="outline" onClick={() => setSafeTxModal(null)}>Close</Button>
+              <a href={`https://app.safe.global/home?safe=lisk:${SAFE_ADDR}`} target="_blank" rel="noopener noreferrer">
+                <Button className="bg-[#1a4480] hover:bg-[#153a6e]">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Open Safe App
+                </Button>
+              </a>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
