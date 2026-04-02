@@ -18,6 +18,24 @@ export const LISK_SEPOLIA_RPC = 'https://rpc.api.lisk.com';
 export const LISK_BLOCKSCOUT = 'https://blockscout.lisk.com/api';
 export const PRECISION = 1e6;
 
+export const CHAIN_RPC_MAP: Record<number, string> = {
+  1135: 'https://rpc.api.lisk.com',
+  8453: 'https://mainnet.base.org',
+  56:   'https://bsc-dataseed.binance.org',
+};
+
+export const CHAIN_EXPLORER_API_MAP: Record<number, string> = {
+  1135: 'https://blockscout.lisk.com/api',
+  8453: 'https://base.blockscout.com/api',
+  56:   'https://api.bscscan.com/api',
+};
+
+export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = {
+  1135: 6,
+  8453: 6,
+  56:   18,
+};
+
 export const CHAIN_DIAMOND_MAP: Record<number, string> = {
   1135: '0x885E663645173a0791b82f0e6608921D31E3D700',
   8453: '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
@@ -200,26 +218,52 @@ function fromTimestampOrNull(ts: bigint): Date | null {
 class HedgeContractManager {
   private provider: ethers.JsonRpcProvider | null = null;
   private timestampCache: Map<string, Date> = new Map();
+  private _chainId: number = 1135;
+
+  /** Switch the active chain. Call this whenever the user changes network. */
+  setChain(chainId: number): void {
+    if (this._chainId === chainId) return;
+    this._chainId = chainId;
+    this.provider = null;        // reset provider so next call uses new RPC
+    this.feeConfigCache = null;  // fee params may differ per chain
+    this.feeConfigCachedAt = 0;
+    this.timestampCache.clear();
+  }
+
+  get chainId(): number { return this._chainId; }
+
+  get activeDiamond(): string {
+    return CHAIN_DIAMOND_MAP[this._chainId] || DIAMOND_ADDRESS;
+  }
+
+  get activeExplorerApi(): string {
+    return CHAIN_EXPLORER_API_MAP[this._chainId] || LISK_BLOCKSCOUT;
+  }
+
+  get tokenDecimals(): number {
+    return CHAIN_TOKEN_DECIMALS_MAP[this._chainId] ?? 6;
+  }
 
   getProvider(): ethers.JsonRpcProvider {
     if (!this.provider) {
-      this.provider = new ethers.JsonRpcProvider(LISK_SEPOLIA_RPC);
+      const rpc = CHAIN_RPC_MAP[this._chainId] || LISK_SEPOLIA_RPC;
+      this.provider = new ethers.JsonRpcProvider(rpc);
     }
     return this.provider;
   }
 
   getReadContract(): ethers.Contract {
-    return new ethers.Contract(DIAMOND_ADDRESS, HEDGE_ABI, this.getProvider());
+    return new ethers.Contract(this.activeDiamond, HEDGE_ABI, this.getProvider());
   }
 
   getWriteContract(signer: ethers.Wallet): ethers.Contract {
     const connected = signer.connect(this.getProvider());
-    return new ethers.Contract(DIAMOND_ADDRESS, HEDGE_ABI, connected);
+    return new ethers.Contract(this.activeDiamond, HEDGE_ABI, connected);
   }
 
   getUsdcContract(signer: ethers.Wallet): ethers.Contract {
     const connected = signer.connect(this.getProvider());
-    return new ethers.Contract(USDC_ADDRESS, USDC_ABI, connected);
+    return new ethers.Contract(CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS, USDC_ABI, connected);
   }
 
   async ensureGas(walletAddress: string): Promise<void> {
@@ -252,7 +296,7 @@ class HedgeContractManager {
   private async fetchEventLogTimestamps(topic0: string, idTopicIndex: number = 2): Promise<Map<number, Date>> {
     const map = new Map<number, Date>();
     try {
-      const url = `${LISK_BLOCKSCOUT}?module=logs&action=getLogs&address=${DIAMOND_ADDRESS}&fromBlock=0&toBlock=latest&topic0=${topic0}`;
+      const url = `${this.activeExplorerApi}?module=logs&action=getLogs&address=${this.activeDiamond}&fromBlock=0&toBlock=latest&topic0=${topic0}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.result && Array.isArray(data.result)) {
@@ -285,7 +329,7 @@ class HedgeContractManager {
   }
 
   async approveUSDC(signer: ethers.Wallet, amount: string): Promise<void> {
-    return this.approveToken(signer, USDC_ADDRESS, amount);
+    return this.approveToken(signer, CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS, amount);
   }
 
   /** Generic ERC-20 approve for the Diamond — works for USDC, USDT, or any whitelisted token. */
@@ -293,25 +337,34 @@ class HedgeContractManager {
     const connected = signer.connect(this.getProvider());
     await this.ensureGas(connected.address);
     const token = new ethers.Contract(tokenAddress, USDC_ABI, connected);
-    const currentAllowance = await token.allowance(connected.address, DIAMOND_ADDRESS);
+    const currentAllowance = await token.allowance(connected.address, this.activeDiamond);
     const maxThreshold = ethers.parseUnits("1000000000", 6);
     if (currentAllowance >= maxThreshold) {
       return;
     }
-    const tx = await token.approve(DIAMOND_ADDRESS, ethers.MaxUint256);
+    const tx = await token.approve(this.activeDiamond, ethers.MaxUint256);
     await tx.wait();
   }
 
   async getUSDCBalance(address: string): Promise<string> {
-    const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, this.getProvider());
+    const usdcAddr = CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS;
+    const dec = this.tokenDecimals;
+    const usdc = new ethers.Contract(usdcAddr, USDC_ABI, this.getProvider());
     const balance = await usdc.balanceOf(address);
-    return ethers.formatUnits(balance, 6);
+    return ethers.formatUnits(balance, dec);
   }
 
   async getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
-    const contract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-    const balance = await contract.balanceOf(walletAddress);
-    return ethers.formatUnits(balance, 6);
+    const tokenAbi = [
+      'function balanceOf(address) view returns (uint256)',
+      'function decimals() view returns (uint8)',
+    ];
+    const contract = new ethers.Contract(tokenAddress, tokenAbi, this.getProvider());
+    const [balance, decimals] = await Promise.all([
+      contract.balanceOf(walletAddress),
+      contract.decimals().catch(() => this.tokenDecimals),
+    ]);
+    return ethers.formatUnits(balance, decimals);
   }
 
   private feeConfigCache: HedgeFeeConfig | null = null;
@@ -337,9 +390,10 @@ class HedgeContractManager {
   }
 
   async getUSDCAllowance(owner: string, spender?: string): Promise<string> {
-    const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, this.getProvider());
-    const allowance = await usdc.allowance(owner, spender || DIAMOND_ADDRESS);
-    return ethers.formatUnits(allowance, 6);
+    const usdcAddr = CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS;
+    const usdc = new ethers.Contract(usdcAddr, USDC_ABI, this.getProvider());
+    const allowance = await usdc.allowance(owner, spender || this.activeDiamond);
+    return ethers.formatUnits(allowance, this.tokenDecimals);
   }
 
   private formatEvent(core: any, stats: any, createdAt?: Date | null, paymentToken?: string): HedgeEventData {
@@ -381,7 +435,7 @@ class HedgeContractManager {
       availableCapacity: totalLiquidity - totalMaxPayout,
       utilization: totalLiquidity > 0 ? totalMaxPayout / totalLiquidity : 0,
       payoutPercent,
-      paymentToken: paymentToken || USDC_ADDRESS,
+      paymentToken: paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
     };
   }
 
@@ -398,7 +452,7 @@ class HedgeContractManager {
         const [core, stats, paymentToken] = await Promise.all([
           contract.getHedgeEventCore(i),
           contract.getHedgeEventStats(i),
-          contract.getEventPaymentToken(i).catch(() => USDC_ADDRESS),
+          contract.getEventPaymentToken(i).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
         ]);
         events.push(this.formatEvent(core, stats, eventTimestamps.get(i), paymentToken as string));
       } catch (err) {
@@ -415,7 +469,7 @@ class HedgeContractManager {
       contract.getHedgeEventCore(eventId),
       contract.getHedgeEventStats(eventId),
       this.getEventTimestamps(),
-      contract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS),
+      contract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
     ]);
     return this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
   }
@@ -491,7 +545,7 @@ class HedgeContractManager {
         const [core, stats, paymentToken] = await Promise.all([
           contract.getHedgeEventCore(id),
           contract.getHedgeEventStats(id),
-          contract.getEventPaymentToken(id).catch(() => USDC_ADDRESS),
+          contract.getEventPaymentToken(id).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
         ]);
         events.push(this.formatEvent(core, stats, eventTimestamps.get(Number(id)), paymentToken as string));
       } catch {
@@ -530,21 +584,23 @@ class HedgeContractManager {
   ): Promise<ethers.TransactionResponse> {
     const connected = signer.connect(this.getProvider());
     const feeConfig = await this.getFeeConfig();
-    const tokenAddress = params.paymentToken || USDC_ADDRESS;
-    const initialLiquidityWei = ethers.parseUnits(params.initialLiquidity, 6);
-    const creationFeeWei = ethers.parseUnits(feeConfig.creationFee.toString(), 6);
+    const tokenAddress = params.paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
+    const dec = this.tokenDecimals;
+    const initialLiquidityWei = ethers.parseUnits(params.initialLiquidity, dec);
+    const creationFeeWei = ethers.parseUnits(feeConfig.creationFee.toString(), dec);
     const totalCost = initialLiquidityWei + creationFeeWei;
 
     const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
     const balance = await tokenContract.balanceOf(connected.address);
     if (balance < totalCost) {
-      const balanceFormatted = ethers.formatUnits(balance, 6);
-      const costFormatted = ethers.formatUnits(totalCost, 6);
-      const symbol = tokenAddress === USDC_ADDRESS ? 'USDC' : 'USDT';
+      const balanceFormatted = ethers.formatUnits(balance, dec);
+      const costFormatted = ethers.formatUnits(totalCost, dec);
+      const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
+      const symbol = tokenAddress.toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
       throw new Error(`Insufficient ${symbol} balance. You have ${balanceFormatted} but need ${costFormatted} (${params.initialLiquidity} liquidity + $${feeConfig.creationFee} fee).`);
     }
 
-    await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, 6));
+    await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, dec));
     await this.ensureGas(connected.address);
 
     const contract = this.getWriteContract(signer);
@@ -597,16 +653,18 @@ class HedgeContractManager {
     amount: string
   ): Promise<ethers.TransactionResponse> {
     const readContract = this.getReadContract();
-    const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS) as string;
+    const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS) as string;
     const connected = signer.connect(this.getProvider());
-    const amountWei = ethers.parseUnits(amount, 6);
+    const dec = this.tokenDecimals;
+    const amountWei = ethers.parseUnits(amount, dec);
 
     // Pre-flight balance check
     const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
     const balance = await tokenContract.balanceOf(connected.address);
     if (balance < amountWei) {
-      const balanceFormatted = ethers.formatUnits(balance, 6);
-      const symbol = tokenAddress.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+      const balanceFormatted = ethers.formatUnits(balance, dec);
+      const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
+      const symbol = tokenAddress.toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
       throw new Error(
         `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(amount).toFixed(2)} ${symbol}.`
       );
@@ -628,11 +686,12 @@ class HedgeContractManager {
     const [core, feeConfig, tokenAddress] = await Promise.all([
       readContract.getHedgeEventCore(eventId),
       readContract.getHedgeFeeConfig(),
-      readContract.getEventPaymentToken(eventId).catch(() => USDC_ADDRESS),
+      readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
     ]);
 
     const connected = signer.connect(this.getProvider());
-    const notionalWei = ethers.parseUnits(notional, 6);
+    const dec = this.tokenDecimals;
+    const notionalWei = ethers.parseUnits(notional, dec);
     const premiumRate = core.premiumRate as bigint;
     const hedgerFeeRate = feeConfig[1] as bigint;
 
@@ -641,18 +700,19 @@ class HedgeContractManager {
     const totalCost = premium + fee;
 
     // Pre-flight balance check
-    const symbol = (tokenAddress as string).toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+    const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
+    const symbol = (tokenAddress as string).toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
     const tokenContract = new ethers.Contract(tokenAddress as string, USDC_ABI, this.getProvider());
     const balance = await tokenContract.balanceOf(connected.address);
     if (balance < totalCost) {
-      const balanceFormatted = ethers.formatUnits(balance, 6);
-      const costFormatted = ethers.formatUnits(totalCost, 6);
+      const balanceFormatted = ethers.formatUnits(balance, dec);
+      const costFormatted = ethers.formatUnits(totalCost, dec);
       throw new Error(
         `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(costFormatted).toFixed(2)} ${symbol} (premium + fee).`
       );
     }
 
-    await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, 6));
+    await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, dec));
 
     const contract = this.getWriteContract(signer);
     try {

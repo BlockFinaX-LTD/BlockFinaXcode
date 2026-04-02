@@ -137,6 +137,8 @@ export default function Hedge() {
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
+  const [myPositions, setMyPositions] = useState<HedgePositionData[]>([]);
+  const [myDeposits, setMyDeposits] = useState<HedgeLpDepositData[]>([]);
 
   const loadEvents = async () => {
     try {
@@ -159,10 +161,6 @@ export default function Hedge() {
     }
   };
 
-  useEffect(() => { loadEvents(); loadFeeConfig(); }, []);
-
-  const [myPositions, setMyPositions] = useState<HedgePositionData[]>([]);
-
   const loadPositions = async () => {
     if (!wallet?.address) return;
     try {
@@ -172,10 +170,6 @@ export default function Hedge() {
       console.error('Failed to load positions:', error);
     }
   };
-
-  useEffect(() => { if (wallet?.address) loadPositions(); }, [wallet?.address]);
-
-  const [myDeposits, setMyDeposits] = useState<HedgeLpDepositData[]>([]);
 
   const loadDeposits = async () => {
     if (!wallet?.address) return;
@@ -187,6 +181,20 @@ export default function Hedge() {
     }
   };
 
+  useEffect(() => {
+    hedgeContract.setChain(activeChainId);
+    setEvents([]);
+    setMyPositions([]);
+    setMyDeposits([]);
+    loadEvents();
+    loadFeeConfig();
+    if (wallet?.address) {
+      loadPositions();
+      loadDeposits();
+    }
+  }, [activeChainId]);
+
+  useEffect(() => { if (wallet?.address) loadPositions(); }, [wallet?.address]);
   useEffect(() => { if (wallet?.address) loadDeposits(); }, [wallet?.address]);
 
   type FXRate = { pair: string; rate: number; source: string; timestamp: number; lastUpdated: string };
