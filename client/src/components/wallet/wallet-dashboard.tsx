@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useTransactions } from '@/hooks/use-transactions';
 import { useWallet } from '@/hooks/use-wallet';
 import { getNetworkById } from '@/lib/networks';
@@ -20,16 +19,9 @@ interface EnhancedWalletOverviewProps {
 
 export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTabChange }: EnhancedWalletOverviewProps) {
   const { address } = useWallet();
-  const { 
-    allBalances, 
-    tokenBalances,
-    totalValue, 
-    isLoadingBalance, 
-    formatCurrency, 
-    formatCrypto, 
-    refreshAll 
-  } = useTransactions(selectedNetworkId);
-  
+  const queryClient = useQueryClient();
+  const { totalValue, isLoadingBalance, formatCurrency, formatCrypto, refreshAll } = useTransactions(selectedNetworkId);
+
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [ethPrice, setEthPrice] = useState<number | null>(null);
@@ -43,6 +35,40 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
     });
   }, []);
 
+  const network = getNetworkById(selectedNetworkId);
+  const chainId = network?.chainId;
+
+  const nativeQuery = useQuery({
+    queryKey: ['/api/wallet', address, 'native-balance', chainId],
+    queryFn: async () => {
+      const res = await fetch(`/api/wallet/${address}/native-balance?networkId=${chainId}`);
+      if (!res.ok) return { balance: '0', symbol: network?.symbol || 'ETH' };
+      return res.json();
+    },
+    enabled: !!address && !!chainId,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+
+  const tokenQuery = useQuery({
+    queryKey: ['/api/wallet', address, 'token-balances', chainId],
+    queryFn: async () => {
+      const res = await fetch(`/api/wallet/${address}/token-balances?networkId=${chainId}`);
+      if (!res.ok) return { balances: [] };
+      return res.json();
+    },
+    enabled: !!address && !!chainId,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+
+  const nativeBalance: string = nativeQuery.data?.balance ?? '0';
+  const nativeSym: string = nativeQuery.data?.symbol ?? network?.symbol ?? 'ETH';
+  const tokenBalances: any[] = tokenQuery.data?.balances ?? [];
+
+  const nativePrice = nativeSym === 'BNB' ? (bnbPrice ?? 0) : (ethPrice ?? 0);
+  const nativeUsdValue = parseFloat(nativeBalance) * nativePrice;
+
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   const handleCopyAddress = () => {
@@ -53,7 +79,21 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
     }
   };
 
-  if (isLoadingBalance) {
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/wallet', address, 'native-balance', chainId] });
+    queryClient.invalidateQueries({ queryKey: ['/api/wallet', address, 'token-balances', chainId] });
+    refreshAll();
+  };
+
+  const isLoading = nativeQuery.isLoading || tokenQuery.isLoading;
+  const nativeTokenName = nativeSym === 'BNB' ? 'BNB' : 'Ethereum';
+  const priceDisplay = nativeSym === 'BNB'
+    ? (bnbPrice != null ? `$${bnbPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—')
+    : (ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—');
+
+  const assetCount = 1 + tokenBalances.length;
+
+  if (isLoading && !nativeQuery.data) {
     return (
       <div className={`space-y-4 ${className}`}>
         <div className="bg-card rounded-xl border p-6">
@@ -67,32 +107,32 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* Balance Card - Clean minimal design */}
+      {/* Balance Card */}
       <div className="bg-card rounded-xl border p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm text-muted-foreground font-medium">Total Balance</span>
           <Button
             variant="ghost"
             size="sm"
-            onClick={refreshAll}
+            onClick={handleRefresh}
             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-        
+
         <div className="mb-5">
           <div className="text-3xl sm:text-4xl font-semibold tracking-tight mb-1">
             {formatCurrency(totalValue)}
           </div>
           <div className="text-sm text-muted-foreground">
-            {getNetworkById(selectedNetworkId)?.name || 'Network'}
+            {network?.name || 'Network'}
           </div>
         </div>
 
         {/* Wallet Address */}
         {address && (
-          <div 
+          <div
             className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
             onClick={handleCopyAddress}
           >
@@ -110,72 +150,51 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
 
         {/* Actions */}
         <div className="grid grid-cols-2 gap-3 mt-5">
-          <Button
-            onClick={() => setSendModalOpen(true)}
-            className="h-11"
-          >
+          <Button onClick={() => setSendModalOpen(true)} className="h-11">
             <Send className="h-4 w-4 mr-2" />
             Send
           </Button>
-          
-          <Button
-            variant="outline"
-            onClick={() => setDepositModalOpen(true)}
-            className="h-11"
-          >
+          <Button variant="outline" onClick={() => setDepositModalOpen(true)} className="h-11">
             <ArrowDownLeft className="h-4 w-4 mr-2" />
             Receive
           </Button>
         </div>
       </div>
 
-      {/* Token Holdings - Clean list */}
+      {/* Assets */}
       <div className="bg-card rounded-xl border">
         <div className="flex items-center justify-between p-4 border-b">
           <span className="font-medium">Assets</span>
-          <span className="text-sm text-muted-foreground">
-            {(allBalances.find(b => b.networkId === selectedNetworkId) ? 1 : 0) + tokenBalances.length} assets
-          </span>
+          <span className="text-sm text-muted-foreground">{assetCount} assets</span>
         </div>
-        
+
         <div className="divide-y divide-border">
-          {/* Native Token Balance */}
-          {(() => {
-            const selectedBalance = allBalances.find(b => b.networkId === selectedNetworkId);
-            if (!selectedBalance) return null;
-            const sym = selectedBalance.symbol || 'ETH';
-            const tokenName = sym === 'BNB' ? 'BNB' : 'Ethereum';
-            const priceDisplay = sym === 'BNB'
-              ? (bnbPrice != null ? `$${bnbPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—')
-              : (ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—');
-            return (
-              <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                    {sym === 'BNB'
-                      ? <span className="text-lg font-bold text-yellow-500">B</span>
-                      : <EthIcon className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <div className="font-medium">{tokenName}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {formatCrypto(selectedBalance.balance, sym)}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-medium">{formatCurrency(selectedBalance.usdValue)}</div>
-                  <div className="text-xs text-muted-foreground">{priceDisplay}</div>
+          {/* Native token row */}
+          <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                {nativeSym === 'BNB'
+                  ? <span className="text-lg font-bold text-yellow-500">B</span>
+                  : <EthIcon className="w-5 h-5" />}
+              </div>
+              <div>
+                <div className="font-medium">{nativeTokenName}</div>
+                <div className="text-sm text-muted-foreground">
+                  {formatCrypto(nativeBalance, nativeSym)}
                 </div>
               </div>
-            );
-          })()}
-          
-          {/* Token Balances */}
+            </div>
+            <div className="text-right">
+              <div className="font-medium">{formatCurrency(nativeUsdValue)}</div>
+              <div className="text-xs text-muted-foreground">{priceDisplay}</div>
+            </div>
+          </div>
+
+          {/* Token rows */}
           {tokenBalances.map(({ token, balance, usdValue }: any) => (
             <div key={token.symbol} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
-                <div 
+                <div
                   className="w-10 h-10 rounded-full flex items-center justify-center"
                   style={{ backgroundColor: `${token.color}15` }}
                 >
@@ -198,6 +217,13 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
               </div>
             </div>
           ))}
+
+          {/* Empty state */}
+          {!nativeQuery.isLoading && tokenBalances.length === 0 && parseFloat(nativeBalance) === 0 && (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No assets found on {network?.name}
+            </div>
+          )}
         </div>
       </div>
 
@@ -207,12 +233,10 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
         onClose={() => setSendModalOpen(false)}
         defaultNetworkId={selectedNetworkId}
       />
-      
       <DepositModal
         isOpen={depositModalOpen}
         onClose={() => setDepositModalOpen(false)}
       />
-
     </div>
   );
 }
