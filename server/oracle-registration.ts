@@ -1,30 +1,52 @@
 /**
  * oracle-registration.ts
  *
- * Ensures oracle node wallets are registered on the Diamond contract at startup.
- * Uses DEPLOYER_PRIVATE_KEY (contract owner) to call addOracle() for each
- * configured oracle key (ORACLE_KEY_A / B / C).
+ * Ensures oracle node wallets are registered on all configured Diamond
+ * contracts at startup. Runs on Lisk, Base, and BSC in parallel when
+ * the respective diamond address env vars are set.
  *
- * Checks isAuthorisedOracle() first — skips any already-registered nodes.
- * Safe to run every startup — idempotent.
+ * Required (at least one):
+ *   DIAMOND_ADDRESS         — Lisk Mainnet Diamond
+ *   BASE_DIAMOND_ADDRESS    — Base Mainnet Diamond
+ *   BSC_DIAMOND_ADDRESS     — BNB Smart Chain Diamond
+ *
+ * Optional (defaults to public RPCs):
+ *   LISK_RPC_URL / BASE_RPC_URL / BSC_RPC_URL
+ *
+ * The same DEPLOYER_PRIVATE_KEY and ORACLE_KEY_A/B/C are used across
+ * all chains. Safe to run every startup — idempotent.
  */
 
 import { ethers } from "ethers";
 
 const ORACLE_ABI = [
   "function addOracle(address oracle) external",
-  "function removeOracle(address oracle) external",
   "function isAuthorisedOracle(address oracle) external view returns (bool)",
   "function isAuthorizedOracle(address oracle) external view returns (bool)",
 ];
 
-const isProd = process.env.NODE_ENV === "production";
+const CHAINS = [
+  {
+    label: "Lisk",
+    diamondAddress: process.env.DIAMOND_ADDRESS,
+    rpcUrl: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
+  },
+  {
+    label: "Base",
+    diamondAddress: process.env.BASE_DIAMOND_ADDRESS,
+    rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+  },
+  {
+    label: "BSC",
+    diamondAddress: process.env.BSC_DIAMOND_ADDRESS,
+    rpcUrl: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org",
+  },
+];
 
-const RPC_URL =
-  process.env.ORACLE_RPC_URL ||
-  (isProd ? "https://rpc.api.lisk.com" : "https://rpc.sepolia-api.lisk.com");
-
-async function isRegistered(readContract: ethers.Contract, address: string): Promise<boolean | null> {
+async function isRegistered(
+  readContract: ethers.Contract,
+  address: string
+): Promise<boolean | null> {
   for (const fn of ["isAuthorisedOracle", "isAuthorizedOracle"]) {
     try {
       return await (readContract as any)[fn](address);
@@ -32,15 +54,54 @@ async function isRegistered(readContract: ethers.Contract, address: string): Pro
       continue;
     }
   }
-  return null; // can't determine — assume not registered
+  return null;
+}
+
+async function registerOnChain(
+  chainLabel: string,
+  diamondAddress: string,
+  rpcUrl: string,
+  deployerKey: string,
+  oracleKeys: Array<{ label: string; key: string }>
+): Promise<void> {
+  const tag = `[OracleReg:${chainLabel}]`;
+  try {
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const owner = new ethers.Wallet(deployerKey, provider);
+    const writeContract = new ethers.Contract(diamondAddress, ORACLE_ABI, owner);
+    const readContract = new ethers.Contract(diamondAddress, ORACLE_ABI, provider);
+
+    console.log(`${tag} Checking ${oracleKeys.length} oracle node(s) on ${diamondAddress}...`);
+
+    for (const { label, key } of oracleKeys) {
+      try {
+        const address = new ethers.Wallet(key).address;
+        const alreadyRegistered = await isRegistered(readContract, address);
+
+        if (alreadyRegistered === true) {
+          console.log(`${tag} ${label} (${address}) already registered — skipping.`);
+          continue;
+        }
+
+        console.log(`${tag} ${label} → ${address} — calling addOracle...`);
+        const tx = await writeContract.addOracle(address);
+        const receipt = await tx.wait();
+        console.log(`${tag} ${label} registered ✓ (tx: ${receipt.hash})`);
+      } catch (err: any) {
+        console.error(`${tag} ${label} — ${err.message || err}`);
+      }
+    }
+
+    console.log(`${tag} Done.`);
+  } catch (err: any) {
+    console.error(`${tag} Chain setup failed — ${err.message || err}`);
+  }
 }
 
 export async function registerOracleNodes(): Promise<void> {
   const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
-  const diamondAddress = process.env.DIAMOND_ADDRESS;
-
-  if (!deployerKey || !diamondAddress) {
-    console.log("[OracleReg] Skipping — DEPLOYER_PRIVATE_KEY or DIAMOND_ADDRESS not set.");
+  if (!deployerKey) {
+    console.log("[OracleReg] Skipping — DEPLOYER_PRIVATE_KEY not set.");
     return;
   }
 
@@ -55,31 +116,17 @@ export async function registerOracleNodes(): Promise<void> {
     return;
   }
 
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const owner = new ethers.Wallet(deployerKey, provider);
-  const writeContract = new ethers.Contract(diamondAddress, ORACLE_ABI, owner);
-  const readContract = new ethers.Contract(diamondAddress, ORACLE_ABI, provider);
-
-  console.log(`[OracleReg] Checking ${oracleKeys.length} oracle node(s)...`);
-
-  for (const { label, key } of oracleKeys) {
-    try {
-      const address = new ethers.Wallet(key).address;
-
-      const alreadyRegistered = await isRegistered(readContract, address);
-      if (alreadyRegistered === true) {
-        console.log(`[OracleReg] ${label} (${address}) already registered — skipping.`);
-        continue;
-      }
-
-      console.log(`[OracleReg] ${label} → ${address} — calling addOracle...`);
-      const tx = await writeContract.addOracle(address);
-      const receipt = await tx.wait();
-      console.log(`[OracleReg] ${label} registered ✓ (tx: ${receipt.hash})`);
-    } catch (err: any) {
-      console.error(`[OracleReg] ${label} — ${err.message || err}`);
-    }
+  const activeChains = CHAINS.filter((c) => !!c.diamondAddress);
+  if (activeChains.length === 0) {
+    console.log("[OracleReg] No diamond addresses configured — skipping.");
+    return;
   }
 
-  console.log("[OracleReg] Done.");
+  console.log(`[OracleReg] Registering on ${activeChains.length} chain(s): ${activeChains.map((c) => c.label).join(", ")}`);
+
+  await Promise.all(
+    activeChains.map((chain) =>
+      registerOnChain(chain.label, chain.diamondAddress!, chain.rpcUrl, deployerKey, oracleKeys)
+    )
+  );
 }
