@@ -1,14 +1,14 @@
 /**
  * Price Service - Crypto price fetching via server endpoint
  *
- * Fetches ETH/USDC prices from the server, which tries Binance → Kraken → CoinGecko.
+ * Fetches ETH/BNB/USDC prices from the server, which tries Binance → CoinCap → CoinGecko.
  * Avoids browser-side rate limits. Cache matches server's 5-minute window.
- * Exports: fetchCryptoPrices, getCachedPrices, getEthPrice, getUsdcPrice
+ * Exports: fetchCryptoPrices, getCachedPrices, getEthPrice, getBnbPrice, getUsdcPrice
  */
 
 interface PriceData {
   eth: number;
-  bnb: number;
+  bnb: number | null;
   usdc: number;
   lastUpdated: number;
 }

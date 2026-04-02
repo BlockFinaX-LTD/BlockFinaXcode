@@ -35,16 +35,30 @@ const FEE_CONFIG = {
 const EVENT_CREATION_FEE = 2;
 
 // Server-side price cache
-let cachedPrices: { eth: number; bnb: number; usdc: number; lastUpdated: number } | null = null;
+let cachedPrices: { eth: number; bnb: number | null; usdc: number; lastUpdated: number } | null = null;
 const PRICE_CACHE_MS = 5 * 60_000;
 
 async function fetchEthPrice(): Promise<number | null> {
   const sources = [
     async () => {
-      const r = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT", { signal: AbortSignal.timeout(4000) });
+      const r = await fetch("https://www.okx.com/api/v5/market/ticker?instId=ETH-USDT", { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const d = await r.json() as any;
+      const p = parseFloat(d.data?.[0]?.last);
+      return isFinite(p) && p > 100 ? p : null;
+    },
+    async () => {
+      const r = await fetch("https://api.mexc.com/api/v3/ticker/price?symbol=ETHUSDT", { signal: AbortSignal.timeout(4000) });
       if (!r.ok) return null;
       const d = await r.json() as any;
       const p = parseFloat(d.price);
+      return isFinite(p) && p > 100 ? p : null;
+    },
+    async () => {
+      const r = await fetch("https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD", { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const d = await r.json() as any;
+      const p = d.USD;
       return isFinite(p) && p > 100 ? p : null;
     },
     async () => {
@@ -72,10 +86,24 @@ async function fetchEthPrice(): Promise<number | null> {
 async function fetchBnbPrice(): Promise<number | null> {
   const sources = [
     async () => {
-      const r = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BNBUSDT", { signal: AbortSignal.timeout(4000) });
+      const r = await fetch("https://www.okx.com/api/v5/market/ticker?instId=BNB-USDT", { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const d = await r.json() as any;
+      const p = parseFloat(d.data?.[0]?.last);
+      return isFinite(p) && p > 10 ? p : null;
+    },
+    async () => {
+      const r = await fetch("https://api.mexc.com/api/v3/ticker/price?symbol=BNBUSDT", { signal: AbortSignal.timeout(4000) });
       if (!r.ok) return null;
       const d = await r.json() as any;
       const p = parseFloat(d.price);
+      return isFinite(p) && p > 10 ? p : null;
+    },
+    async () => {
+      const r = await fetch("https://min-api.cryptocompare.com/data/price?fsym=BNB&tsyms=USD", { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const d = await r.json() as any;
+      const p = d.USD;
       return isFinite(p) && p > 10 ? p : null;
     },
     async () => {
@@ -185,7 +213,7 @@ export async function registerProtocolRoutes(app: Express) {
       if (cachedPrices && Date.now() - cachedPrices.lastUpdated < PRICE_CACHE_MS) return res.json(cachedPrices);
       const [eth, bnb] = await Promise.all([fetchEthPrice(), fetchBnbPrice()]);
       if (eth !== null) {
-        cachedPrices = { eth, bnb: bnb ?? cachedPrices?.bnb ?? 600, usdc: 1, lastUpdated: Date.now() };
+        cachedPrices = { eth, bnb: bnb ?? cachedPrices?.bnb ?? null, usdc: 1, lastUpdated: Date.now() };
         return res.json(cachedPrices);
       }
       if (cachedPrices) return res.json(cachedPrices);
