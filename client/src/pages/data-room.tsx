@@ -239,7 +239,7 @@ const EXEC_D = {
   solution_wallet: "BlockFinaX Wallet — Non-custodial USDC wallet with AES-256 encrypted key storage, gasless transactions, and real-time cross-border transfers at 0.3% (min $0.50).",
   traction: "Live on Lisk Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
   technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Lisk L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
-  mainnet: "Live — Deployed on Lisk Mainnet (March 2026). Diamond proxy at 0x885E663645173a0791b82f0e6608921D31E3D700. All contracts verified on Blockscout.",
+  mainnet: "Live — Deployed on Lisk Mainnet, Base Mainnet, and BNB Smart Chain (Q1 2026). EIP-2535 Diamond proxy on each chain. All contracts verified (Blockscout on Lisk, Basescan on Base, BscScan on BSC). Gnosis Safe 2-of-3 multisig governs upgrades on all chains.",
   ask: [
     { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
     { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
@@ -551,15 +551,51 @@ function SecurityAuditDoc({ token }: { token: string }) {
           </div>
         ))}
       </div>
-      <h2 style={S.h2}>Contract Addresses (Lisk Mainnet)</h2>
-      <div style={{ fontFamily: "monospace", fontSize: "12px", color: "#475569", background: "#f8fafc", padding: "12px 16px", borderRadius: "8px", lineHeight: 2 }}>
-        <div>Diamond (proxy): <strong>0x885E663645173a0791b82f0e6608921D31E3D700</strong></div>
-        <div>HedgeFacet v6: <strong>0x96aCAD2039F1796929Eba578C81fe12E8f23C989</strong></div>
-        <div>OracleFacet v3: <strong>0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73</strong></div>
-        <div>DiamondCutFacet: <strong>0x3581E16414286AD77601f9489F26a11eD96A9Be4</strong></div>
-        <div>DiamondLoupeFacet: <strong>0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6</strong></div>
-        <div>USDC (Lisk Mainnet): <strong>0xF242275d3a6527d877f2c927a82D9b057609cc71</strong></div>
-      </div>
+      <h2 style={S.h2}>Contract Addresses — Multi-Chain Deployment</h2>
+      {[
+        {
+          chain: "Lisk Mainnet", chainId: 1135, explorer: "https://blockscout.lisk.com",
+          diamond: "0x885E663645173a0791b82f0e6608921D31E3D700",
+          safe:    "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D",
+          usdc:    "0xF242275d3a6527d877f2c927a82D9b057609cc71",
+          cut:     "0x3581E16414286AD77601f9489F26a11eD96A9Be4",
+          hedge:   "0x96aCAD2039F1796929Eba578C81fe12E8f23C989",
+          oracle:  "0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73",
+        },
+        {
+          chain: "Base Mainnet", chainId: 8453, explorer: "https://basescan.org",
+          diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+          safe:    "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
+          usdc:    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          cut:     "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D",
+          hedge:   "0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73",
+          oracle:  "0x2132f2ADB40ce3c353e15ae1139b7447FF3D3BFf",
+        },
+        {
+          chain: "BNB Smart Chain", chainId: 56, explorer: "https://bscscan.com",
+          diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+          safe:    "0x2a0ab363E01b518B189218e39f79Bfc3AE310807",
+          usdc:    "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+          cut:     "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D",
+          hedge:   "0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73",
+          oracle:  "0x2132f2ADB40ce3c353e15ae1139b7447FF3D3BFf",
+        },
+      ].map(c => (
+        <div key={c.chainId} style={{ marginBottom: "16px" }}>
+          <div style={{ fontWeight: 600, fontSize: "13px", color: "#1e293b", marginBottom: "6px" }}>
+            {c.chain} (chainId {c.chainId}){" "}
+            <a href={`${c.explorer}/address/${c.diamond}`} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "#4070F4", textDecoration: "none" }}>↗ Explorer</a>
+          </div>
+          <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#475569", background: "#f8fafc", padding: "10px 14px", borderRadius: "6px", lineHeight: 2 }}>
+            <div>Diamond:    <strong>{c.diamond}</strong></div>
+            <div>Gnosis Safe: <strong>{c.safe}</strong></div>
+            <div>HedgeFacet: <strong>{c.hedge}</strong></div>
+            <div>OracleFacet: <strong>{c.oracle}</strong></div>
+            <div>CutFacet:   <strong>{c.cut}</strong></div>
+            <div>USDC:       <strong>{c.usdc}</strong></div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -18,6 +18,46 @@ export const LISK_SEPOLIA_RPC = 'https://rpc.api.lisk.com';
 export const LISK_BLOCKSCOUT = 'https://blockscout.lisk.com/api';
 export const PRECISION = 1e6;
 
+export const CHAIN_DIAMOND_MAP: Record<number, string> = {
+  1135: '0x885E663645173a0791b82f0e6608921D31E3D700',
+  8453: '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
+  56:   '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
+};
+
+export const CHAIN_USDC_MAP: Record<number, string> = {
+  1135: '0xF242275d3a6527d877f2c927a82D9b057609cc71',
+  8453: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  56:   '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+};
+
+export const CHAIN_SAFE_MAP: Record<number, string> = {
+  1135: '0xfce89FA90Ee1C78B15eE0f12f62B03153814699D',
+  8453: '0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb',
+  56:   '0x2a0ab363E01b518B189218e39f79Bfc3AE310807',
+};
+
+export const CHAIN_EXPLORER_MAP: Record<number, string> = {
+  1135: 'https://blockscout.lisk.com',
+  8453: 'https://basescan.org',
+  56:   'https://bscscan.com',
+};
+
+export function getDiamondAddress(chainId: number): string {
+  return CHAIN_DIAMOND_MAP[chainId] || DIAMOND_ADDRESS;
+}
+
+export function getUsdcAddress(chainId: number): string {
+  return CHAIN_USDC_MAP[chainId] || USDC_ADDRESS;
+}
+
+export function getSafeAddress(chainId: number): string {
+  return CHAIN_SAFE_MAP[chainId] || '';
+}
+
+export function getExplorerUrl(chainId: number): string {
+  return CHAIN_EXPLORER_MAP[chainId] || 'https://blockscout.lisk.com';
+}
+
 const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa26174543ad38431274eed5';
 const LIQUIDITY_DEPOSITED_TOPIC = '0xbff736a88c4d6fc1bc430cb94a5d36706a0d4b369de04ea80fc121296def3cb2';
 const EVENT_CREATED_TOPIC = '0x971a52d02f8b95a7a75a0f42d1fb5ab027b59b71c15f1f6095e5323ddd308736';

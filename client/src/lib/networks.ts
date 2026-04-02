@@ -2,8 +2,8 @@
  * Networks - Blockchain network configurations
  *
  * Defines supported networks with RPC URLs and metadata.
- * Lisk Sepolia is the testnet. Lisk Mainnet (chainId 1135) is the production network.
- * Network mode controlled by VITE_NETWORK_MODE env var (default: "testnet").
+ * Lisk Sepolia is the testnet. Mainnet supports Lisk (1135), Base (8453), and BSC (56).
+ * Network mode controlled by VITE_NETWORK_MODE env var (default: "mainnet").
  * Set VITE_NETWORK_MODE=mainnet before building for production.
  * Exports: NETWORKS, TESTNET_NETWORKS, MAINNET_NETWORKS, NetworkConfig,
  *          getNetworkById, getNetworkByChainId, DEFAULT_NETWORK, isMainnet, getNetworkMode
@@ -56,6 +56,28 @@ export const MAINNET_NETWORKS: NetworkConfig[] = [
     isTestnet: false,
     color: "#4070F4",
     icon: "fas fa-cube"
+  },
+  {
+    id: 3,
+    name: "Base",
+    chainId: 8453,
+    rpcUrl: "https://mainnet.base.org",
+    symbol: "ETH",
+    blockExplorerUrl: "https://basescan.org",
+    isTestnet: false,
+    color: "#0052FF",
+    icon: "fas fa-circle"
+  },
+  {
+    id: 4,
+    name: "BNB Smart Chain",
+    chainId: 56,
+    rpcUrl: "https://bsc-dataseed.binance.org",
+    symbol: "BNB",
+    blockExplorerUrl: "https://bscscan.com",
+    isTestnet: false,
+    color: "#F3BA2F",
+    icon: "fas fa-dot-circle"
   }
 ];
 

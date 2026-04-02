@@ -16,6 +16,18 @@ const RPC_FALLBACKS: Record<number, string[]> = {
     'https://rpc.sepolia-api.lisk.com',
     'https://lisk-sepolia.drpc.org',
     'https://rpc.lisk-sepolia-testnet.lisk.com'
+  ],
+  8453: [
+    'https://mainnet.base.org',
+    'https://base.llamarpc.com',
+    'https://base.drpc.org',
+    'https://base-mainnet.public.blastapi.io'
+  ],
+  56: [
+    'https://bsc-dataseed.binance.org',
+    'https://bsc-dataseed1.defibit.io',
+    'https://bsc-dataseed1.ninicoin.io',
+    'https://bsc.drpc.org'
   ]
 };
 
