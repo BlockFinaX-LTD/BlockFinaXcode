@@ -443,6 +443,26 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
     }
   });
 
+  app.get("/api/admin/total-withdrawn", requireAdmin, async (req, res) => {
+    try {
+      const { explorerApi, diamond, token: tokenAddr, decimals } = req.query as Record<string, string>;
+      if (!explorerApi || !diamond || !tokenAddr || !decimals) {
+        return res.json({ total: 0 });
+      }
+      const url = `${explorerApi}?module=account&action=tokentx&address=${diamond}&contractaddress=${tokenAddr}&sort=asc&limit=10000`;
+      const r = await fetch(url, { headers: { Accept: "application/json" } });
+      const data = await r.json();
+      if (!data.result || !Array.isArray(data.result)) return res.json({ total: 0 });
+      const dec = parseInt(decimals, 10) || 6;
+      const total = data.result
+        .filter((tx: any) => tx.from?.toLowerCase() === diamond.toLowerCase())
+        .reduce((sum: number, tx: any) => sum + Number(tx.value) / Math.pow(10, dec), 0);
+      res.json({ total });
+    } catch (e: any) {
+      res.json({ total: 0 });
+    }
+  });
+
   app.get("/api/admin/oracle-addresses", async (_req, res) => {
     try {
       const { ethers } = await import("ethers");

@@ -1111,7 +1111,7 @@ const ADMIN_CHAINS = {
     usdt: null as string | null,
     usdcDecimals: 6, usdtDecimals: 6,
     explorer: "https://basescan.org",
-    explorerApi: "https://api.basescan.org/api",
+    explorerApi: "https://base.blockscout.com/api",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: ["https://basescan.org"],
   },
@@ -1198,15 +1198,19 @@ function shortAddr(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-async function fetchTotalWithdrawn(cfg: AdminChainCfg, tokenAddress: string, decimals: number): Promise<number> {
+async function fetchTotalWithdrawn(cfg: AdminChainCfg, tokenAddress: string, decimals: number, token: string): Promise<number> {
   try {
-    const url = `${cfg.explorerApi}?module=account&action=tokentx&address=${cfg.diamond}&contractaddress=${tokenAddress}&sort=asc`;
-    const res = await fetch(url);
+    const params = new URLSearchParams({
+      explorerApi: cfg.explorerApi,
+      diamond: cfg.diamond,
+      token: tokenAddress,
+      decimals: String(decimals),
+    });
+    const res = await fetch(`/api/admin/total-withdrawn?${params}`, {
+      headers: { "x-admin-token": token },
+    });
     const data = await res.json();
-    if (!data.result || !Array.isArray(data.result)) return 0;
-    return data.result
-      .filter((tx: any) => tx.from?.toLowerCase() === cfg.diamond.toLowerCase())
-      .reduce((sum: number, tx: any) => sum + Number(tx.value) / Math.pow(10, decimals), 0);
+    return typeof data.total === "number" ? data.total : 0;
   } catch {
     return 0;
   }
@@ -1290,7 +1294,7 @@ function ProtocolSection() {
   useEffect(() => { loadProposals(); }, [selectedChainKey]);
 
   const load = async () => {
-    setState(s => ({ ...s, loading: true }));
+    setState({ usdcFees: "—", usdtFees: "—", usdcWithdrawn: 0, usdtWithdrawn: 0, feeConfig: null, usdcAllowed: true, usdtAllowed: false, wallet: "", diamondOwner: "", loading: true });
     try {
       const c = await readChainContract(cfg);
       const { ethers } = await import("ethers");
@@ -1301,8 +1305,8 @@ function ProtocolSection() {
         c.getHedgeFeeConfig().catch(() => null),
         c.isAllowedPaymentToken(cfg.usdc).catch(() => true),
         usdtAddr ? c.isAllowedPaymentToken(usdtAddr).catch(() => false) : Promise.resolve(false),
-        fetchTotalWithdrawn(cfg, cfg.usdc, cfg.usdcDecimals),
-        usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals) : Promise.resolve(0),
+        fetchTotalWithdrawn(cfg, cfg.usdc, cfg.usdcDecimals, token),
+        usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals, token) : Promise.resolve(0),
         c.owner().catch(() => ""),
       ]);
       const feeConfig = rawFees ? {
