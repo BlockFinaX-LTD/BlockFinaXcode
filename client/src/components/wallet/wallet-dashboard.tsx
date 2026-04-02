@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTransactions } from '@/hooks/use-transactions';
 import { useWallet } from '@/hooks/use-wallet';
 import { getNetworkById } from '@/lib/networks';
-import { fetchCryptoPrices } from '@/lib/price-service';
+import { fetchCryptoPrices, getBnbPrice } from '@/lib/price-service';
 import { SendModal } from './send-modal';
 import { DepositModal } from './deposit-modal';
 import { RefreshCw, Send, ArrowDownLeft, Copy, Check } from 'lucide-react';
@@ -33,11 +33,13 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [bnbPrice, setBnbPrice] = useState<number | null>(getBnbPrice());
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchCryptoPrices().then(prices => {
       if (prices?.eth) setEthPrice(prices.eth);
+      if (prices?.bnb) setBnbPrice(prices.bnb);
     });
   }, []);
 
@@ -144,8 +146,8 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
             const sym = selectedBalance.symbol || 'ETH';
             const tokenName = sym === 'BNB' ? 'BNB' : 'Ethereum';
             const priceDisplay = sym === 'BNB'
-              ? '~$300'
-              : ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—';
+              ? (bnbPrice != null ? `$${bnbPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—')
+              : (ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—');
             return (
               <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">

@@ -8,6 +8,7 @@
 
 interface PriceData {
   eth: number;
+  bnb: number;
   usdc: number;
   lastUpdated: number;
 }
@@ -38,6 +39,10 @@ export function getCachedPrices(): PriceData | null {
 
 export function getEthPrice(): number | null {
   return cachedPrices?.eth ?? null;
+}
+
+export function getBnbPrice(): number | null {
+  return cachedPrices?.bnb ?? null;
 }
 
 export function getUsdcPrice(): number {

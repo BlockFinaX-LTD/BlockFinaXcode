@@ -35,7 +35,7 @@ const FEE_CONFIG = {
 const EVENT_CREATION_FEE = 2;
 
 // Server-side price cache
-let cachedPrices: { eth: number; usdc: number; lastUpdated: number } | null = null;
+let cachedPrices: { eth: number; bnb: number; usdc: number; lastUpdated: number } | null = null;
 const PRICE_CACHE_MS = 5 * 60_000;
 
 async function fetchEthPrice(): Promise<number | null> {
@@ -60,6 +60,30 @@ async function fetchEthPrice(): Promise<number | null> {
       const d = await r.json() as any;
       const p = d.ethereum?.usd;
       return isFinite(p) && p > 100 ? p : null;
+    },
+  ];
+  const results = await Promise.allSettled(sources.map(fn => fn()));
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value !== null) return r.value;
+  }
+  return null;
+}
+
+async function fetchBnbPrice(): Promise<number | null> {
+  const sources = [
+    async () => {
+      const r = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BNBUSDT", { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const d = await r.json() as any;
+      const p = parseFloat(d.price);
+      return isFinite(p) && p > 10 ? p : null;
+    },
+    async () => {
+      const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd", { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const d = await r.json() as any;
+      const p = d.binancecoin?.usd;
+      return isFinite(p) && p > 10 ? p : null;
     },
   ];
   const results = await Promise.allSettled(sources.map(fn => fn()));
@@ -159,9 +183,9 @@ export async function registerProtocolRoutes(app: Express) {
   app.get("/api/prices", async (_req, res) => {
     try {
       if (cachedPrices && Date.now() - cachedPrices.lastUpdated < PRICE_CACHE_MS) return res.json(cachedPrices);
-      const eth = await fetchEthPrice();
+      const [eth, bnb] = await Promise.all([fetchEthPrice(), fetchBnbPrice()]);
       if (eth !== null) {
-        cachedPrices = { eth, usdc: 1, lastUpdated: Date.now() };
+        cachedPrices = { eth, bnb: bnb ?? cachedPrices?.bnb ?? 600, usdc: 1, lastUpdated: Date.now() };
         return res.json(cachedPrices);
       }
       if (cachedPrices) return res.json(cachedPrices);

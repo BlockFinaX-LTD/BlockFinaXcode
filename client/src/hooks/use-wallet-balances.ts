@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWallet } from './use-wallet';
 import { balanceManager, type WalletBalance, type BalanceUpdate } from '@/lib/balance-manager';
 import { NETWORKS } from '@/lib/networks';
-import { fetchCryptoPrices, getEthPrice } from '@/lib/price-service';
+import { fetchCryptoPrices, getEthPrice, getBnbPrice } from '@/lib/price-service';
 
 export function useWalletBalances(selectedNetworkId?: number) {
   const { address, isUnlocked } = useWallet();
@@ -18,18 +18,17 @@ export function useWalletBalances(selectedNetworkId?: number) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [bnbPrice, setBnbPrice] = useState<number | null>(getBnbPrice());
 
   // Fetch real-time prices on mount
   useEffect(() => {
-    fetchCryptoPrices().then(prices => {
+    const load = () => fetchCryptoPrices().then(prices => {
       if (prices?.eth) setEthPrice(prices.eth);
+      if (prices?.bnb) setBnbPrice(prices.bnb);
     });
+    load();
     // Refresh prices every 5 minutes (match server cache)
-    const interval = setInterval(() => {
-      fetchCryptoPrices().then(prices => {
-        if (prices?.eth) setEthPrice(prices.eth);
-      });
-    }, 5 * 60_000);
+    const interval = setInterval(load, 5 * 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -48,11 +47,9 @@ export function useWalletBalances(selectedNetworkId?: number) {
       
       // Use live market prices for different native tokens
       if (network?.symbol === 'ETH') {
-        nativeUsdPrice = ethPrice ?? 0; // Live ETH price; 0 if not yet loaded
-      } else if (network?.symbol === 'MATIC') {
-        nativeUsdPrice = 0.8; // MATIC price
+        nativeUsdPrice = ethPrice ?? 0;
       } else if (network?.symbol === 'BNB') {
-        nativeUsdPrice = 300; // BNB price
+        nativeUsdPrice = bnbPrice ?? 0;
       }
       
       const nativeValue = parseFloat(balance.nativeBalance) * nativeUsdPrice;
@@ -62,7 +59,7 @@ export function useWalletBalances(selectedNetworkId?: number) {
       
       return total + nativeValue + tokenValue;
     }, 0);
-  }, [balances, ethPrice]);
+  }, [balances, ethPrice, bnbPrice]);
 
   // Get all token balances across networks
   const allTokenBalances = useMemo(() => {

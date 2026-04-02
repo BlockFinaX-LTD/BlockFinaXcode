@@ -15,7 +15,7 @@ import { NETWORKS } from '@/lib/networks';
 import { useWallet } from './use-wallet';
 import { useWalletBalances } from './use-wallet-balances';
 import { useToast } from '@/hooks/use-toast';
-import { getEthPrice, fetchCryptoPrices } from '@/lib/price-service';
+import { getEthPrice, getBnbPrice, fetchCryptoPrices } from '@/lib/price-service';
 
 export function useTransactions(networkId: number) {
   const queryClient = useQueryClient();
@@ -44,10 +44,10 @@ export function useTransactions(networkId: number) {
     });
   }, []);
   
-  const [bnbPrice, setBnbPrice] = useState<number>(300);
+  const [bnbPrice, setBnbPrice] = useState<number | null>(getBnbPrice());
   useEffect(() => {
     fetchCryptoPrices().then(prices => {
-      if ((prices as any)?.bnb) setBnbPrice((prices as any).bnb);
+      if (prices?.bnb) setBnbPrice(prices.bnb);
     });
   }, []);
 
@@ -56,7 +56,7 @@ export function useTransactions(networkId: number) {
       const network = NETWORKS.find(n => n.id === balance.networkId);
       const balanceValue = parseFloat(balance.nativeBalance);
       const symbol = balance.nativeSymbol;
-      const pricePerToken = symbol === 'BNB' ? bnbPrice : (ethPrice ?? 0);
+      const pricePerToken = symbol === 'BNB' ? (bnbPrice ?? 0) : (ethPrice ?? 0);
       const usdValue = balanceValue * pricePerToken;
 
       return {
