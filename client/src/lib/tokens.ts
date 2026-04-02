@@ -77,6 +77,14 @@ export const NETWORK_TOKENS: NetworkTokens = {
       decimals: 6,
       icon: '💵',
       color: '#2775CA'
+    },
+    {
+      symbol: 'USDT',
+      name: 'Tether USD',
+      address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+      decimals: 6,
+      icon: '💲',
+      color: '#26A17B'
     }
   ],
   // BNB Smart Chain Mainnet (internal network ID 4)

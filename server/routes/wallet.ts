@@ -93,32 +93,66 @@ export function registerWalletRoutes(app: Express) {
 
       const ethers = await import("ethers");
 
-      const NETWORK_CONFIG: Record<number, { rpcUrl: string; usdcAddress: string; name: string }> = {
-        1135: { rpcUrl: "https://rpc.api.lisk.com", usdcAddress: "0xF242275d3a6527d877f2c927a82D9b057609cc71", name: "USDC" },
-        4202: { rpcUrl: "https://rpc.sepolia-api.lisk.com", usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562", name: "USDC" },
+      type TokenDef = { symbol: string; name: string; address: string; decimals: number; icon: string; color: string };
+      const NETWORK_CONFIG: Record<number, { rpcUrl: string; tokens: TokenDef[] }> = {
+        1135: {
+          rpcUrl: "https://rpc.api.lisk.com",
+          tokens: [
+            { symbol: "USDC", name: "USD Coin", address: "0xF242275d3a6527d877f2c927a82D9b057609cc71", decimals: 6, icon: "💵", color: "#2775CA" },
+            { symbol: "USDT", name: "Tether USD", address: "0x05D032ac25d322df992303dCa074EE7392C117b9", decimals: 6, icon: "💲", color: "#26A17B" },
+          ],
+        },
+        4202: {
+          rpcUrl: "https://rpc.sepolia-api.lisk.com",
+          tokens: [
+            { symbol: "USDC", name: "Test USDC", address: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562", decimals: 6, icon: "💵", color: "#2775CA" },
+            { symbol: "USDT", name: "Tether USD", address: "0x05D032ac25d322df992303dCa074EE7392C117b9", decimals: 6, icon: "💲", color: "#26A17B" },
+          ],
+        },
+        8453: {
+          rpcUrl: "https://mainnet.base.org",
+          tokens: [
+            { symbol: "USDC", name: "USD Coin", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6, icon: "💵", color: "#2775CA" },
+            { symbol: "USDT", name: "Tether USD", address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", decimals: 6, icon: "💲", color: "#26A17B" },
+          ],
+        },
+        56: {
+          rpcUrl: "https://bsc-dataseed.binance.org",
+          tokens: [
+            { symbol: "USDC", name: "USD Coin (BSC)", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18, icon: "💵", color: "#2775CA" },
+            { symbol: "USDT", name: "Tether USD", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18, icon: "💲", color: "#26A17B" },
+          ],
+        },
       };
 
       const config = NETWORK_CONFIG[chainId];
       if (!config) return res.json({ balances: [] });
 
       const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-      const usdcContract = new ethers.Contract(config.usdcAddress, [
+      const tokenAbi = [
         "function balanceOf(address) view returns (uint256)",
         "function decimals() view returns (uint8)"
-      ], provider);
+      ];
 
-      const rawBalance = await usdcContract.balanceOf(address);
-      const decimals = await usdcContract.decimals();
-      const balance = ethers.formatUnits(rawBalance, Number(decimals));
-      const usdValue = parseFloat(balance) * 1.0;
+      const results = await Promise.all(
+        config.tokens.map(async (token) => {
+          try {
+            const contract = new ethers.Contract(token.address, tokenAbi, provider);
+            const [rawBalance, onchainDecimals] = await Promise.all([
+              contract.balanceOf(address),
+              contract.decimals().catch(() => token.decimals),
+            ]);
+            const dec = Number(onchainDecimals);
+            const balance = ethers.formatUnits(rawBalance, dec);
+            const usdValue = parseFloat(balance) * 1.0;
+            return { token: { ...token, decimals: dec }, balance, usdValue };
+          } catch {
+            return { token, balance: "0", usdValue: 0 };
+          }
+        })
+      );
 
-      res.json({
-        balances: [{
-          token: { symbol: "USDC", name: config.name, address: config.usdcAddress, decimals: Number(decimals), icon: "💵", color: "#2775CA" },
-          balance,
-          usdValue
-        }]
-      });
+      res.json({ balances: results });
     } catch (error: any) {
       res.json({ balances: [] });
     }
