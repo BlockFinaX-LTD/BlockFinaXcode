@@ -79,6 +79,9 @@ export default function Hedge() {
   const activeUsdcAddress = getUsdcAddress(activeChainId);
   const activeUsdtAddress = getUsdtAddress(activeChainId);
 
+  // Sync chain immediately during render so every query below uses the correct RPC
+  hedgeContract.setChain(activeChainId);
+
   // ── Persistent wallet balances for the active chain ──────────────────────
   const { data: nativeBalance } = useQuery<string>({
     queryKey: ['/hedge/native-balance', wallet?.address, activeChainId],
