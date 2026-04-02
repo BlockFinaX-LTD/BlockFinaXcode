@@ -45,9 +45,10 @@ import {
   LockKeyhole, Globe, Settings, Share2, ExternalLink
 } from "lucide-react";
 import { Link } from "wouter";
-import { hedgeContract, USDC_ADDRESS, USDT_ADDRESS_SEPOLIA, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
+import { hedgeContract, USDT_ADDRESS_SEPOLIA, getUsdcAddress, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
 import { walletManager } from "@/lib/wallet";
 import { mainnetGuard } from "@/lib/mainnet-guard";
+import { getNetworkById, DEFAULT_NETWORK } from "@/lib/networks";
 
 function CountdownTimer({ expiryDate, className }: { expiryDate: Date; className?: string }) {
   const calc = () => {
@@ -70,8 +71,12 @@ function CountdownTimer({ expiryDate, className }: { expiryDate: Date; className
 }
 
 export default function Hedge() {
-  const { wallet } = useWallet();
+  const { wallet, settings } = useWallet();
   const { toast } = useToast();
+  const selectedNetworkId = settings?.selectedNetworkId ?? DEFAULT_NETWORK.id;
+  const selectedNetwork = getNetworkById(selectedNetworkId) ?? DEFAULT_NETWORK;
+  const activeChainId = selectedNetwork.chainId;
+  const activeUsdcAddress = getUsdcAddress(activeChainId);
   const [activeTab, setActiveTab] = useState("hedger");
   const [assetClassFilter, setAssetClassFilter] = useState<AssetClass>('all');
   const [selectedEvent, setSelectedEvent] = useState<HedgeEventData | null>(null);
@@ -101,7 +106,7 @@ export default function Hedge() {
     enabled: !!(selectedEvent?.paymentToken && wallet?.address && (buyDialogOpen || depositDialogOpen)),
     refetchInterval: 10_000,
   });
-  const eventTokenSymbol = selectedEvent?.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+  const eventTokenSymbol = selectedEvent?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT';
   const tokenBalanceNum = parseFloat(selectedEventTokenBalance ?? '0');
 
   const getCreatorStats = (creatorAddr: string) => {
@@ -229,7 +234,7 @@ export default function Hedge() {
   const buyProtectionMutation = useMutation({
     mutationFn: async () => {
       if (!selectedEvent) throw new Error("No event selected");
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
       await hedgeContract.buyProtection(signer, selectedEvent.id, notional);
     },
@@ -249,7 +254,7 @@ export default function Hedge() {
   const depositMutation = useMutation({
     mutationFn: async () => {
       if (!selectedEvent) throw new Error("No event selected");
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
       await hedgeContract.deposit(signer, selectedEvent.id, depositAmount);
     },
@@ -268,7 +273,7 @@ export default function Hedge() {
 
   const createEventMutation = useMutation({
     mutationFn: async () => {
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
       const expiryDate = new Date();
       expiryDate.setTime(expiryDate.getTime() + Math.max(1, parseInt(newEvent.expiryHours)) * 60 * 60 * 1000);
@@ -281,8 +286,8 @@ export default function Hedge() {
       if (!strikeAbove && strikePrice >= currentFxRate)
         throw new Error("Strike must be below the current rate (" + currentFxRate.toFixed(4) + ") for a downward hedge.");
       const paymentTokenAddr = newEvent.paymentCurrency === 'USDT'
-        ? (USDT_ADDRESS_SEPOLIA || USDC_ADDRESS)
-        : USDC_ADDRESS;
+        ? (USDT_ADDRESS_SEPOLIA || activeUsdcAddress)
+        : activeUsdcAddress;
       await hedgeContract.createEvent(signer, {
         name: newEvent.name,
         underlying: newEvent.underlying,
@@ -320,7 +325,7 @@ export default function Hedge() {
 
   const togglePoolMutation = useMutation({
     mutationFn: async ({ eventId, poolOpen, allowExternalLp }: { eventId: number; poolOpen?: boolean; allowExternalLp?: boolean }) => {
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
       const event = events.find(e => e.id === eventId);
       await hedgeContract.setPoolSettings(
@@ -341,7 +346,7 @@ export default function Hedge() {
 
   const claimMutation = useMutation({
     mutationFn: async (positionId: number) => {
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
       await hedgeContract.claimPayout(signer, positionId);
     },
@@ -356,7 +361,7 @@ export default function Hedge() {
 
   const withdrawMutation = useMutation({
     mutationFn: async (depositId: number) => {
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
       await hedgeContract.withdrawCapital(signer, depositId);
     },
@@ -372,7 +377,7 @@ export default function Hedge() {
 
   const claimPremiumsMutation = useMutation({
     mutationFn: async (depositId: number) => {
-      const signer = await walletManager.getSigner(2);
+      const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
       await hedgeContract.claimPremiums(signer, depositId);
     },
@@ -389,8 +394,7 @@ export default function Hedge() {
   const guardedBuyProtection = () => {
     if (!selectedEvent || !wallet) return;
     const amount = parseFloat(notional) || 0;
-    const chainId = mainnetGuard.isMainnetMode() ? 1135 : 4202;
-    const chainCheck = mainnetGuard.validateChainId(chainId);
+    const chainCheck = mainnetGuard.validateChainId(activeChainId);
     if (!chainCheck.allowed) {
       toast({ title: "Network error", description: chainCheck.reason, variant: "destructive" });
       return;
@@ -410,8 +414,7 @@ export default function Hedge() {
   const guardedDeposit = () => {
     if (!selectedEvent || !wallet) return;
     const amount = parseFloat(depositAmount) || 0;
-    const chainId = mainnetGuard.isMainnetMode() ? 1135 : 4202;
-    const chainCheck = mainnetGuard.validateChainId(chainId);
+    const chainCheck = mainnetGuard.validateChainId(activeChainId);
     if (!chainCheck.allowed) {
       toast({ title: "Network error", description: chainCheck.reason, variant: "destructive" });
       return;
@@ -665,8 +668,8 @@ export default function Hedge() {
                         {event.strikeAbove ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                         {event.strikeAbove ? "Upward" : "Downward"}
                       </Badge>
-                      <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                        {event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"}
+                      <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                        {event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"}
                       </Badge>
                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
                         onClick={(e) => { e.stopPropagation(); copyShareLink(event.id, "buy"); }}
@@ -1231,8 +1234,8 @@ export default function Hedge() {
               <Shield className="h-5 w-5 text-primary" />
               Buy FX Protection
               {selectedEvent && (
-                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                  {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} pool
+                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                  {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} pool
                 </Badge>
               )}
             </DialogTitle>
@@ -1300,7 +1303,7 @@ export default function Hedge() {
                     <span className="text-sm font-medium text-amber-400">${hedgerFeeCalc.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-border pt-2 flex justify-between">
-                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} Required</span>
+                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} Required</span>
                     <span className="text-sm font-bold text-primary">${totalCostCalc.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-border pt-2 space-y-1.5">
@@ -1350,8 +1353,8 @@ export default function Hedge() {
               <DollarSign className="h-5 w-5 text-primary" />
               Deposit Liquidity
               {selectedEvent && (
-                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                  {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} pool
+                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                  {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} pool
                 </Badge>
               )}
             </DialogTitle>
@@ -1402,7 +1405,7 @@ export default function Hedge() {
                     <span className="text-sm font-medium text-green-400">$0.00 (no fee)</span>
                   </div>
                   <div className="border-t border-border pt-2 flex justify-between">
-                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"} Required</span>
+                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} Required</span>
                     <span className="text-sm font-bold text-primary">${parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground/70">
@@ -1834,8 +1837,8 @@ export default function Hedge() {
                             <p className="text-[11px] text-muted-foreground">{event.underlying} · Strike: {event.strike.toFixed(2)}</p>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                              {event.paymentToken?.toLowerCase() === USDC_ADDRESS.toLowerCase() ? "USDC" : "USDT"}
+                            <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
+                              {event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"}
                             </Badge>
                             <Badge className={event.status === "open" ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px]" : "bg-muted/50 text-muted-foreground border-border text-[10px]"}>
                               {event.status === "open" ? "Active" : event.status}

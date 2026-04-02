@@ -67,6 +67,36 @@ export const NETWORK_TOKENS: NetworkTokens = {
       icon: '💲',
       color: '#26A17B'
     }
+  ],
+  // Base Mainnet (internal network ID 3)
+  3: [
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+      decimals: 6,
+      icon: '💵',
+      color: '#2775CA'
+    }
+  ],
+  // BNB Smart Chain Mainnet (internal network ID 4)
+  4: [
+    {
+      symbol: 'USDC',
+      name: 'USD Coin (BSC)',
+      address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      decimals: 18,
+      icon: '💵',
+      color: '#2775CA'
+    },
+    {
+      symbol: 'USDT',
+      name: 'Tether USD',
+      address: '0x55d398326f99059fF775485246999027B3197955',
+      decimals: 18,
+      icon: '💲',
+      color: '#26A17B'
+    }
   ]
 };
 
@@ -150,13 +180,13 @@ export class TokenManager {
       let usdcContracts: string[] = [];
       
       if (networkId === 1) {
-        usdcContracts = [
-          '0xF242275d3a6527d877f2c927a82D9b057609cc71',
-        ];
+        usdcContracts = ['0xF242275d3a6527d877f2c927a82D9b057609cc71'];
       } else if (networkId === 2) {
-        usdcContracts = [
-          '0xf52Ad63619Bf9cFeF510341ac6b4038554399562',
-        ];
+        usdcContracts = ['0xf52Ad63619Bf9cFeF510341ac6b4038554399562'];
+      } else if (networkId === 3) {
+        usdcContracts = ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'];
+      } else if (networkId === 4) {
+        usdcContracts = ['0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d'];
       }
       
       for (const usdcAddress of usdcContracts) {
