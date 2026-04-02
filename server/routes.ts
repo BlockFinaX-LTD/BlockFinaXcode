@@ -24,6 +24,7 @@ import { registerKycRoutes } from "./routes/kyc";
 import { registerWalletRoutes } from "./routes/wallet";
 import { registerProtocolRoutes } from "./routes/protocol";
 import { registerCommunityRoutes } from "./routes/community";
+import { registerMercuryoRoutes } from "./routes/mercuryo";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ── Rate limiters ──────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerKycRoutes(app);
   registerWalletRoutes(app);
   registerCommunityRoutes(app);
+  registerMercuryoRoutes(app);
   await registerProtocolRoutes(app);
 
   // ── WebSocket server (wallet-scoped pub/sub) ───────────────────────────────
