@@ -52,8 +52,8 @@ export function AppHeader({ title, onRefresh, refreshing, rightContent }: AppHea
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <img src={logoPath} alt="BlockFinaX Logo" className="w-7 h-7 object-contain shrink-0" />
               <span className="text-base font-semibold tracking-tight">{title || 'BlockFinaX'}</span>
-              <Badge variant="outline" className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hidden xs:inline-flex sm:inline-flex shrink-0">
-                TESTNET
+              <Badge variant="outline" className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hidden xs:inline-flex sm:inline-flex shrink-0">
+                MAINNET
               </Badge>
             </div>
 

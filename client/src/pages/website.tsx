@@ -762,7 +762,7 @@ export default function Website() {
               <motion.div initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-4">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Live on Testnet
+                  Live on Mainnet
                 </span>
               </motion.div>
 
