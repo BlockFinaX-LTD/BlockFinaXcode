@@ -20,7 +20,7 @@ interface EnhancedWalletOverviewProps {
 export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTabChange }: EnhancedWalletOverviewProps) {
   const { address } = useWallet();
   const queryClient = useQueryClient();
-  const { totalValue, isLoadingBalance, formatCurrency, formatCrypto, refreshAll } = useTransactions(selectedNetworkId);
+  const { formatCurrency, formatCrypto, refreshAll } = useTransactions(selectedNetworkId);
 
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
@@ -68,6 +68,9 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
 
   const nativePrice = nativeSym === 'BNB' ? (bnbPrice ?? 0) : (ethPrice ?? 0);
   const nativeUsdValue = parseFloat(nativeBalance) * nativePrice;
+
+  // Derive total from the same backend data used by the asset rows (not from useTransactions)
+  const localTotalValue = nativeUsdValue + tokenBalances.reduce((sum: number, { usdValue }: any) => sum + (usdValue || 0), 0);
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
@@ -123,7 +126,7 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
 
         <div className="mb-5">
           <div className="text-3xl sm:text-4xl font-semibold tracking-tight mb-1">
-            {formatCurrency(totalValue)}
+            {formatCurrency(localTotalValue)}
           </div>
           <div className="text-sm text-muted-foreground">
             {network?.name || 'Network'}
