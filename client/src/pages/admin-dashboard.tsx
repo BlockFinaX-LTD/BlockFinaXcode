@@ -522,7 +522,7 @@ function HedgeSection() {
       </div>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
         <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-        <span>All hedge events and positions are stored on <strong>Lisk Mainnet</strong> — they are permanent on-chain records. Resetting the platform database does not affect this data.</span>
+        <span>Hedge events and positions are permanent on-chain records on <strong>Lisk, Base, and BSC Mainnets</strong>. Resetting the platform database does not affect on-chain data.</span>
       </div>
       <div className="flex gap-2">
         {(["events", "positions", "deposits"] as const).map(t => (
@@ -683,7 +683,7 @@ function RevenueSection() {
       </div>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
         <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-        <span>Revenue figures are read directly from the <strong>Lisk Mainnet</strong> Diamond contract — these are permanent on-chain records. Resetting the platform database does not affect this data.</span>
+        <span>Revenue figures are read directly from the selected chain's Diamond contract — permanent on-chain records. Use the chain selector in the Protocol section to view fees across Lisk, Base, and BSC.</span>
       </div>
 
       <Card>
@@ -1088,13 +1088,50 @@ function slugify(s: string) {
 
 // ─── Protocol / Owner Functions ─────────────────────────────────────────────
 
-const DIAMOND = "0x885E663645173a0791b82f0e6608921D31E3D700";
-const SAFE_ADDR = "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D";
-const USDC_MAINNET = "0xF242275d3a6527d877f2c927a82D9b057609cc71";
-const USDT_MAINNET = "0x05D032ac25d322df992303dCa074EE7392C117b9";
-const LISK_CHAIN_ID = 1135;
-const LISK_HEX = "0x46F";
-const LISK_RPC = "https://rpc.api.lisk.com";
+const ADMIN_CHAINS = {
+  lisk: {
+    label: "Lisk",
+    chainId: 1135, hex: "0x46F", rpc: "https://rpc.api.lisk.com",
+    diamond: "0x885E663645173a0791b82f0e6608921D31E3D700",
+    safe: "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D",
+    usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
+    usdt: "0x05D032ac25d322df992303dCa074EE7392C117b9",
+    usdcDecimals: 6, usdtDecimals: 6,
+    explorer: "https://blockscout.lisk.com",
+    explorerApi: "https://blockscout.lisk.com/api",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://blockscout.lisk.com"],
+  },
+  base: {
+    label: "Base",
+    chainId: 8453, hex: "0x2105", rpc: "https://mainnet.base.org",
+    diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+    safe: "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    usdt: null as string | null,
+    usdcDecimals: 6, usdtDecimals: 6,
+    explorer: "https://basescan.org",
+    explorerApi: "https://api.basescan.org/api",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://basescan.org"],
+  },
+  bsc: {
+    label: "BSC",
+    chainId: 56, hex: "0x38", rpc: "https://bsc-dataseed.binance.org",
+    diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+    safe: "0x2a0ab363E01b518B189218e39f79Bfc3AE310807",
+    usdc: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+    usdt: "0x55d398326f99059fF775485246999027B3197955",
+    usdcDecimals: 18, usdtDecimals: 18,
+    explorer: "https://bscscan.com",
+    explorerApi: "https://api.bscscan.com/api",
+    nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+    blockExplorerUrls: ["https://bscscan.com"],
+  },
+} as const;
+
+type AdminChainKey = keyof typeof ADMIN_CHAINS;
+type AdminChainCfg = typeof ADMIN_CHAINS[AdminChainKey];
 
 const SAFE_ABI = [
   "function nonce() view returns (uint256)",
@@ -1125,54 +1162,51 @@ const TIMELOCK_ABI = [
   "function cancelCut(bytes32 proposalId)",
 ];
 
-async function ensureLisk() {
+async function ensureChain(cfg: AdminChainCfg) {
   const eth = (window as any).ethereum;
   if (!eth) throw new Error("MetaMask not found.");
   await eth.request({ method: "eth_requestAccounts" });
   const chainId = parseInt(await eth.request({ method: "eth_chainId" }), 16);
-  if (chainId !== LISK_CHAIN_ID) {
+  if (chainId !== cfg.chainId) {
     try {
-      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: LISK_HEX }] });
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: cfg.hex }] });
     } catch {
       await eth.request({
         method: "wallet_addEthereumChain",
-        params: [{ chainId: LISK_HEX, chainName: "Lisk", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: [LISK_RPC], blockExplorerUrls: ["https://blockscout.lisk.com"] }],
+        params: [{ chainId: cfg.hex, chainName: cfg.label, nativeCurrency: cfg.nativeCurrency, rpcUrls: [cfg.rpc], blockExplorerUrls: cfg.blockExplorerUrls }],
       });
     }
   }
   const { ethers } = await import("ethers");
   const provider = new ethers.BrowserProvider(eth);
   const signer = await provider.getSigner();
-  const contract = new ethers.Contract(DIAMOND, OWNER_ABI, signer);
+  const contract = new ethers.Contract(cfg.diamond, OWNER_ABI, signer);
   return { ethers, signer, contract, provider };
 }
 
-async function readContract() {
+async function readChainContract(cfg: AdminChainCfg) {
   const { ethers } = await import("ethers");
-  const provider = new ethers.JsonRpcProvider(LISK_RPC);
-  return new ethers.Contract(DIAMOND, OWNER_ABI, provider);
+  const provider = new ethers.JsonRpcProvider(cfg.rpc);
+  return new ethers.Contract(cfg.diamond, OWNER_ABI, provider);
 }
 
-function fmtUSDC(raw: bigint) {
-  return (Number(raw) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtToken(raw: bigint, decimals: number) {
+  return (Number(raw) / Math.pow(10, decimals)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function shortAddr(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-const BLOCKSCOUT_API = "https://blockscout.lisk.com/api";
-
-async function fetchTotalWithdrawn(tokenAddress: string): Promise<number> {
+async function fetchTotalWithdrawn(cfg: AdminChainCfg, tokenAddress: string, decimals: number): Promise<number> {
   try {
-    const url = `${BLOCKSCOUT_API}?module=account&action=tokentx&address=${DIAMOND}&contractaddress=${tokenAddress}&sort=asc`;
+    const url = `${cfg.explorerApi}?module=account&action=tokentx&address=${cfg.diamond}&contractaddress=${tokenAddress}&sort=asc`;
     const res = await fetch(url);
     const data = await res.json();
     if (!data.result || !Array.isArray(data.result)) return 0;
-    // Sum transfers where Diamond is the sender (outflows = withdrawals)
     return data.result
-      .filter((tx: any) => tx.from?.toLowerCase() === DIAMOND.toLowerCase())
-      .reduce((sum: number, tx: any) => sum + Number(tx.value) / 1e6, 0);
+      .filter((tx: any) => tx.from?.toLowerCase() === cfg.diamond.toLowerCase())
+      .reduce((sum: number, tx: any) => sum + Number(tx.value) / Math.pow(10, decimals), 0);
   } catch {
     return 0;
   }
@@ -1194,6 +1228,8 @@ interface ProtocolState {
 function ProtocolSection() {
   const { toast } = useToast();
   const { token } = useAdminToken();
+  const [selectedChainKey, setSelectedChainKey] = useState<AdminChainKey>("lisk");
+  const cfg = ADMIN_CHAINS[selectedChainKey];
   const [backupBusy, setBackupBusy] = useState(false);
   const [oracleNodes, setOracleNodes] = useState<{ label: string; address: string | null; configured: boolean }[]>([]);
 
@@ -1231,8 +1267,8 @@ function ProtocolSection() {
     setProposalsLoading(true);
     try {
       const { ethers } = await import("ethers");
-      const provider = new ethers.JsonRpcProvider(LISK_RPC);
-      const tl = new ethers.Contract(DIAMOND, TIMELOCK_ABI, provider);
+      const provider = new ethers.JsonRpcProvider(cfg.rpc);
+      const tl = new ethers.Contract(cfg.diamond, TIMELOCK_ABI, provider);
       const ids: string[] = await tl.getPendingCutIds().catch(() => []);
       const now = Math.floor(Date.now() / 1000);
       const details: TimelockProposal[] = await Promise.all(
@@ -1251,21 +1287,22 @@ function ProtocolSection() {
     finally { setProposalsLoading(false); }
   };
 
-  useEffect(() => { loadProposals(); }, []);
+  useEffect(() => { loadProposals(); }, [selectedChainKey]);
 
   const load = async () => {
     setState(s => ({ ...s, loading: true }));
     try {
-      const c = await readContract();
+      const c = await readChainContract(cfg);
       const { ethers } = await import("ethers");
+      const usdtAddr = cfg.usdt;
       const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed, usdcWithdrawn, usdtWithdrawn, diamondOwner] = await Promise.all([
         c.getHedgePlatformFees().catch(() => 0n),
-        c.getPlatformFeesByToken(USDT_MAINNET).catch(() => 0n),
+        usdtAddr ? c.getPlatformFeesByToken(usdtAddr).catch(() => 0n) : Promise.resolve(0n),
         c.getHedgeFeeConfig().catch(() => null),
-        c.isAllowedPaymentToken(USDC_MAINNET).catch(() => true),
-        c.isAllowedPaymentToken(USDT_MAINNET).catch(() => false),
-        fetchTotalWithdrawn(USDC_MAINNET),
-        fetchTotalWithdrawn(USDT_MAINNET),
+        c.isAllowedPaymentToken(cfg.usdc).catch(() => true),
+        usdtAddr ? c.isAllowedPaymentToken(usdtAddr).catch(() => false) : Promise.resolve(false),
+        fetchTotalWithdrawn(cfg, cfg.usdc, cfg.usdcDecimals),
+        usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals) : Promise.resolve(0),
         c.owner().catch(() => ""),
       ]);
       const feeConfig = rawFees ? {
@@ -1283,14 +1320,14 @@ function ProtocolSection() {
         const accounts: string[] = await eth.request({ method: "eth_accounts" });
         wallet = accounts[0] || "";
       }
-      setState(s => ({ ...s, usdcFees: fmtUSDC(BigInt(rawUsdc)), usdtFees: fmtUSDC(BigInt(rawUsdt)), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, diamondOwner: (diamondOwner as string).toLowerCase(), loading: false }));
+      setState(s => ({ ...s, usdcFees: fmtToken(BigInt(rawUsdc), cfg.usdcDecimals), usdtFees: fmtToken(BigInt(rawUsdt), cfg.usdtDecimals), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, diamondOwner: (diamondOwner as string).toLowerCase(), loading: false }));
     } catch (e: any) {
       setState(s => ({ ...s, loading: false }));
       toast({ title: "Failed to load contract state", description: e.message, variant: "destructive" });
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [selectedChainKey]);
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -1306,7 +1343,7 @@ function ProtocolSection() {
   };
 
   const withdrawUsdc = () => run("Withdraw USDC fees", async () => {
-    const { ethers, contract } = await ensureLisk();
+    const { contract } = await ensureChain(cfg);
     const raw = await contract.getHedgePlatformFees();
     if (BigInt(raw) === 0n) throw new Error("No USDC fees to withdraw.");
     const tx = await contract.withdrawPlatformFees(raw);
@@ -1314,15 +1351,16 @@ function ProtocolSection() {
   });
 
   const withdrawUsdt = () => run("Withdraw USDT fees", async () => {
-    const { contract } = await ensureLisk();
-    const raw = await contract.getPlatformFeesByToken(USDT_MAINNET);
+    if (!cfg.usdt) throw new Error("No USDT on this chain.");
+    const { contract } = await ensureChain(cfg);
+    const raw = await contract.getPlatformFeesByToken(cfg.usdt);
     if (BigInt(raw) === 0n) throw new Error("No USDT fees to withdraw.");
-    const tx = await contract.withdrawPlatformFeesByToken(USDT_MAINNET, raw);
+    const tx = await contract.withdrawPlatformFeesByToken(cfg.usdt, raw);
     await tx.wait();
   });
 
   const updateFees = () => run("Update fee config (direct EOA)", async () => {
-    const { ethers, contract, signer } = await ensureLisk();
+    const { ethers, contract, signer } = await ensureChain(cfg);
     const signerAddr = (await signer.getAddress()).toLowerCase();
     const onChainOwner = (await contract.owner().catch(() => "")).toLowerCase();
     if (onChainOwner && signerAddr !== onChainOwner) {
@@ -1352,7 +1390,7 @@ function ProtocolSection() {
         p(feeForm.lpProfitFeeRate || "0"),
         p(feeForm.creatorLoyaltyRate || "0"),
       ]);
-      setSafeTxModal({ to: DIAMOND, data: calldata, label: "Update Fee Parameters" });
+      setSafeTxModal({ to: cfg.diamond, data: calldata, label: "Update Fee Parameters" });
     } catch (e: any) {
       toast({ title: "Failed to encode calldata", description: e.message, variant: "destructive" });
     }
@@ -1363,7 +1401,7 @@ function ProtocolSection() {
       const { ethers } = await import("ethers");
       const iface = new ethers.Interface(OWNER_ABI);
       const calldata = iface.encodeFunctionData("addOracle", [address]);
-      setSafeTxModal({ to: DIAMOND, data: calldata, label: `Add Oracle ${shortAddr(address)}` });
+      setSafeTxModal({ to: cfg.diamond, data: calldata, label: `Add Oracle ${shortAddr(address)}` });
     } catch (e: any) {
       toast({ title: "Failed to encode calldata", description: e.message, variant: "destructive" });
     }
@@ -1372,13 +1410,13 @@ function ProtocolSection() {
   const signAndExecSafe = async (to: string, data: string) => {
     setSafeExecuting(true);
     try {
-      await ensureLisk();
+      await ensureChain(cfg);
       const { ethers } = await import("ethers");
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
       const signerAddr = (await signer.getAddress()).toLowerCase();
 
-      const safe = new ethers.Contract(SAFE_ADDR, SAFE_ABI, provider);
+      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
       const [nonce, threshold, owners]: [bigint, bigint, string[]] = await Promise.all([
         safe.nonce(),
         safe.getThreshold(),
@@ -1391,7 +1429,7 @@ function ProtocolSection() {
       }
 
       // EIP-712 sign the Safe transaction
-      const domain = { chainId: LISK_CHAIN_ID, verifyingContract: SAFE_ADDR };
+      const domain = { chainId: cfg.chainId, verifyingContract: cfg.safe };
       const types = {
         SafeTx: [
           { name: "to", type: "address" },
@@ -1431,7 +1469,7 @@ function ProtocolSection() {
       }
 
       // Threshold = 1 — execute immediately
-      const safeWithSigner = new ethers.Contract(SAFE_ADDR, SAFE_ABI, signer);
+      const safeWithSigner = new ethers.Contract(cfg.safe, SAFE_ABI, signer);
       const tx = await (safeWithSigner as any).execTransaction(
         to, BigInt(0), data, 0, BigInt(0), BigInt(0), BigInt(0),
         ethers.ZeroAddress, ethers.ZeroAddress,
@@ -1450,15 +1488,15 @@ function ProtocolSection() {
 
   const setOracle = () => run("Add oracle", async () => {
     if (!oracleInput.startsWith("0x") || oracleInput.length !== 42) throw new Error("Invalid address.");
-    const { contract } = await ensureLisk();
+    const { contract } = await ensureChain(cfg);
     const tx = await contract.addOracle(oracleInput);
     await tx.wait();
     setOracleInput("");
   });
 
-  const toggleToken = (token: string, enable: boolean, label: string) => run(`${enable ? "Enable" : "Disable"} ${label}`, async () => {
-    const { contract } = await ensureLisk();
-    const tx = await contract.setAllowedPaymentToken(token, enable);
+  const toggleToken = (tokenAddr: string, enable: boolean, label: string) => run(`${enable ? "Enable" : "Disable"} ${label}`, async () => {
+    const { contract } = await ensureChain(cfg);
+    const tx = await contract.setAllowedPaymentToken(tokenAddr, enable);
     await tx.wait();
   });
 
@@ -1470,12 +1508,22 @@ function ProtocolSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Protocol Controls</h2>
           <p className="text-sm text-gray-500 mt-0.5">On-chain owner functions — each action sends a transaction via MetaMask</p>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={selectedChainKey} onValueChange={(v) => setSelectedChainKey(v as AdminChainKey)}>
+            <SelectTrigger className="w-36 h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(ADMIN_CHAINS) as AdminChainKey[]).map(k => (
+                <SelectItem key={k} value={k}>{ADMIN_CHAINS[k].label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={load} disabled={state.loading}>
             <RefreshCw className={`h-3 w-3 mr-1 ${state.loading ? "animate-spin" : ""}`} />Refresh
           </Button>
@@ -1563,7 +1611,7 @@ function ProtocolSection() {
           {/* Summary bar */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Total Earned (USDC)", value: `$${(state.usdcWithdrawn + parseFloat(state.usdcFees === "—" ? "0" : state.usdcFees)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#1a4480]" },
+              { label: `Total Earned (USDC · ${cfg.label})`, value: `$${(state.usdcWithdrawn + parseFloat(state.usdcFees === "—" ? "0" : state.usdcFees)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#1a4480]" },
               { label: "Total Withdrawn (USDC)", value: `$${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-green-700" },
               { label: "Pending in Contract", value: `$${state.usdcFees === "—" ? "—" : state.usdcFees}`, color: "text-orange-600" },
             ].map(({ label, value, color }) => (
@@ -1783,8 +1831,8 @@ function ProtocolSection() {
         <CardContent>
           <div className="space-y-3">
             {[
-              { label: "USDC", address: USDC_MAINNET, allowed: state.usdcAllowed },
-              { label: "USDT", address: USDT_MAINNET, allowed: state.usdtAllowed },
+              { label: "USDC", address: cfg.usdc, allowed: state.usdcAllowed },
+              ...(cfg.usdt ? [{ label: "USDT", address: cfg.usdt, allowed: state.usdtAllowed }] : []),
             ].map(({ label, address, allowed }) => (
               <div key={address} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
                 <div>
@@ -1811,12 +1859,12 @@ function ProtocolSection() {
             <p className="text-xs text-gray-500 font-medium mb-1">Contract &amp; Safe addresses</p>
             <div className="space-y-1">
               {[
-                ["Diamond", DIAMOND],
-                ["Safe (treasury)", SAFE_ADDR],
+                ["Diamond", cfg.diamond],
+                ["Safe (treasury)", cfg.safe],
               ].map(([label, addr]) => (
                 <div key={addr} className="flex items-center justify-between text-xs">
                   <span className="text-gray-500">{label}</span>
-                  <a href={`https://blockscout.lisk.com/address/${addr}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[#1a4480] hover:underline flex items-center gap-1">
+                  <a href={`${cfg.explorer}/address/${addr}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[#1a4480] hover:underline flex items-center gap-1">
                     {shortAddr(addr)}<ExternalLink className="h-2.5 w-2.5" />
                   </a>
                 </div>
@@ -1843,7 +1891,7 @@ function ProtocolSection() {
         </CardHeader>
         <CardContent>
           {proposalsLoading ? (
-            <div className="text-sm text-gray-400 py-4 text-center">Loading proposals from Lisk Mainnet…</div>
+            <div className="text-sm text-gray-400 py-4 text-center">Loading proposals from {cfg.label}…</div>
           ) : proposals.length === 0 ? (
             <div className="rounded-lg bg-gray-50 border border-dashed border-gray-200 p-6 text-center">
               <Clock className="h-6 w-6 text-gray-300 mx-auto mb-2" />
@@ -1883,7 +1931,7 @@ function ProtocolSection() {
                                 const { ethers } = await import("ethers");
                                 const iface = new ethers.Interface(TIMELOCK_ABI);
                                 const calldata = iface.encodeFunctionData("executeCut", [p.id]);
-                                setSafeTxModal({ to: DIAMOND, data: calldata, label: `Execute Upgrade (${p.id.slice(0, 10)}…)` });
+                                setSafeTxModal({ to: cfg.diamond, data: calldata, label: `Execute Upgrade (${p.id.slice(0, 10)}…)` });
                               } catch (e: any) {
                                 toast({ title: "Failed to encode transaction", description: e.message, variant: "destructive" });
                               }
@@ -1905,7 +1953,7 @@ function ProtocolSection() {
                               const { ethers } = await import("ethers");
                               const iface = new ethers.Interface(TIMELOCK_ABI);
                               const calldata = iface.encodeFunctionData("cancelCut", [p.id]);
-                              setSafeTxModal({ to: DIAMOND, data: calldata, label: `Cancel Proposal (${p.id.slice(0, 10)}…)` });
+                              setSafeTxModal({ to: cfg.diamond, data: calldata, label: `Cancel Proposal (${p.id.slice(0, 10)}…)` });
                             } catch (e: any) {
                               toast({ title: "Failed to encode cancel", description: e.message, variant: "destructive" });
                             }
@@ -1942,8 +1990,8 @@ function ProtocolSection() {
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Safe contract</p>
                 <div className="flex items-center gap-2 bg-gray-50 rounded-lg border p-2.5">
-                  <code className="text-xs font-mono flex-1 text-gray-800">{SAFE_ADDR}</code>
-                  <a href={`https://blockscout.lisk.com/address/${SAFE_ADDR}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                  <code className="text-xs font-mono flex-1 text-gray-800">{cfg.safe}</code>
+                  <a href={`${cfg.explorer}/address/${cfg.safe}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
                     <Button size="sm" variant="ghost" className="h-7 text-xs px-2"><ExternalLink className="h-3 w-3" /></Button>
                   </a>
                 </div>
