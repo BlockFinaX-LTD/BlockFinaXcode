@@ -8,7 +8,7 @@ import { fetchCryptoPrices, getBnbPrice } from '@/lib/price-service';
 import { SendModal } from './send-modal';
 import { DepositModal } from './deposit-modal';
 import { RefreshCw, Send, ArrowDownLeft, Copy, Check } from 'lucide-react';
-import { EthIcon, UsdcIcon } from '@/components/crypto-icons';
+import { EthIcon, UsdcIcon, UsdtIcon, BnbIcon } from '@/components/crypto-icons';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface EnhancedWalletOverviewProps {
@@ -172,9 +172,9 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
           {/* Native token row */}
           <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${nativeSym === 'BNB' ? '' : 'bg-slate-100 dark:bg-slate-800'}`}>
                 {nativeSym === 'BNB'
-                  ? <span className="text-lg font-bold text-yellow-500">B</span>
+                  ? <BnbIcon className="w-10 h-10" />
                   : <EthIcon className="w-5 h-5" />}
               </div>
               <div>
@@ -200,6 +200,8 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
                 >
                   {token.symbol === 'USDC' || token.symbol === 'USDC.e' ? (
                     <UsdcIcon className="w-6 h-6" />
+                  ) : token.symbol === 'USDT' ? (
+                    <UsdtIcon className="w-6 h-6" />
                   ) : (
                     <span className="text-lg">{token.icon}</span>
                   )}
