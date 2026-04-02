@@ -85,6 +85,34 @@ export function registerWalletRoutes(app: Express) {
     }
   });
 
+  app.get("/api/wallet/:address/native-balance", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const { networkId } = req.query;
+      const chainId = networkId ? parseInt(networkId as string) : 1135;
+
+      const ethers = await import("ethers");
+
+      const NATIVE_CONFIG: Record<number, { rpcUrl: string; symbol: string; name: string }> = {
+        1135: { rpcUrl: "https://rpc.api.lisk.com",           symbol: "ETH", name: "Ethereum" },
+        4202: { rpcUrl: "https://rpc.sepolia-api.lisk.com",   symbol: "ETH", name: "Ethereum" },
+        8453: { rpcUrl: "https://mainnet.base.org",           symbol: "ETH", name: "Ethereum" },
+        56:   { rpcUrl: "https://bsc-dataseed.binance.org",   symbol: "BNB", name: "BNB" },
+      };
+
+      const config = NATIVE_CONFIG[chainId];
+      if (!config) return res.json({ balance: "0", symbol: "ETH" });
+
+      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+      const balanceWei = await provider.getBalance(address);
+      const balance = ethers.formatEther(balanceWei);
+
+      res.json({ balance, symbol: config.symbol, name: config.name });
+    } catch (error: any) {
+      res.json({ balance: "0", symbol: "ETH" });
+    }
+  });
+
   app.get("/api/wallet/:address/token-balances", async (req, res) => {
     try {
       const { address } = req.params;

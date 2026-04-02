@@ -44,21 +44,30 @@ export function useTransactions(networkId: number) {
     });
   }, []);
   
+  const [bnbPrice, setBnbPrice] = useState<number>(300);
+  useEffect(() => {
+    fetchCryptoPrices().then(prices => {
+      if ((prices as any)?.bnb) setBnbPrice((prices as any).bnb);
+    });
+  }, []);
+
   const allBalances = useMemo(() => {
     return walletBalances.balances.map(balance => {
       const network = NETWORKS.find(n => n.id === balance.networkId);
       const balanceValue = parseFloat(balance.nativeBalance);
-      const usdValue = ethPrice != null ? balanceValue * ethPrice : null;
-      
+      const symbol = balance.nativeSymbol;
+      const pricePerToken = symbol === 'BNB' ? bnbPrice : (ethPrice ?? 0);
+      const usdValue = balanceValue * pricePerToken;
+
       return {
         networkId: balance.networkId,
         balance: balance.nativeBalance,
-        symbol: balance.nativeSymbol,
+        symbol,
         usdValue,
         network
       };
-    }).filter(b => parseFloat(b.balance) > 0);
-  }, [walletBalances.balances, ethPrice]);
+    });
+  }, [walletBalances.balances, ethPrice, bnbPrice]);
 
   const tokenBalances = useMemo(() => {
     if (!walletBalances.selectedNetworkBalance) return [];

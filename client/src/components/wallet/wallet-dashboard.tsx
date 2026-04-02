@@ -132,34 +132,38 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
         <div className="flex items-center justify-between p-4 border-b">
           <span className="font-medium">Assets</span>
           <span className="text-sm text-muted-foreground">
-            {(allBalances.length > 0 ? 1 : 0) + tokenBalances.length} tokens
+            {(allBalances.find(b => b.networkId === selectedNetworkId) ? 1 : 0) + tokenBalances.length} assets
           </span>
         </div>
         
         <div className="divide-y divide-border">
-          {/* ETH Balance */}
+          {/* Native Token Balance */}
           {(() => {
             const selectedBalance = allBalances.find(b => b.networkId === selectedNetworkId);
             if (!selectedBalance) return null;
-            
+            const sym = selectedBalance.symbol || 'ETH';
+            const tokenName = sym === 'BNB' ? 'BNB' : 'Ethereum';
+            const priceDisplay = sym === 'BNB'
+              ? '~$300'
+              : ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—';
             return (
               <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                    <EthIcon className="w-5 h-5" />
+                    {sym === 'BNB'
+                      ? <span className="text-lg font-bold text-yellow-500">B</span>
+                      : <EthIcon className="w-5 h-5" />}
                   </div>
                   <div>
-                    <div className="font-medium">Ethereum</div>
+                    <div className="font-medium">{tokenName}</div>
                     <div className="text-sm text-muted-foreground">
-                      {formatCrypto(selectedBalance.balance, 'ETH')}
+                      {formatCrypto(selectedBalance.balance, sym)}
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="font-medium">{formatCurrency(selectedBalance.usdValue)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {ethPrice != null ? `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
-                  </div>
+                  <div className="text-xs text-muted-foreground">{priceDisplay}</div>
                 </div>
               </div>
             );

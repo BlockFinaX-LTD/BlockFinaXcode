@@ -97,9 +97,24 @@ class BalanceManager {
       throw new Error(`No working provider for network ${network.name}`);
     }
 
-    // Fetch native balance
-    const nativeBalanceWei = await provider.getBalance(address);
-    const nativeBalance = ethers.formatEther(nativeBalanceWei);
+    // Fetch native balance — try client-side RPC first, fall back to server proxy
+    let nativeBalance = '0';
+    try {
+      const nativeBalanceWei = await provider.getBalance(address);
+      nativeBalance = ethers.formatEther(nativeBalanceWei);
+    } catch {
+      nativeBalance = '0';
+    }
+    if (parseFloat(nativeBalance) === 0) {
+      try {
+        const nr = await fetch(`/api/wallet/${address}/native-balance?networkId=${network.chainId}`);
+        if (nr.ok) {
+          const nd = await nr.json();
+          if (nd.balance && parseFloat(nd.balance) > 0) nativeBalance = nd.balance;
+        }
+      } catch {
+      }
+    }
 
     let tokenBalances = await tokenManager.getAllTokenBalances(networkId, address, provider);
 
