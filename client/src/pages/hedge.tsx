@@ -45,7 +45,7 @@ import {
   LockKeyhole, Globe, Settings, Share2, ExternalLink
 } from "lucide-react";
 import { Link } from "wouter";
-import { hedgeContract, USDT_ADDRESS_SEPOLIA, getUsdcAddress, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
+import { hedgeContract, USDT_ADDRESS_SEPOLIA, getUsdcAddress, getUsdtAddress, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
 import { walletManager } from "@/lib/wallet";
 import { mainnetGuard } from "@/lib/mainnet-guard";
 import { getNetworkById, DEFAULT_NETWORK } from "@/lib/networks";
@@ -77,6 +77,32 @@ export default function Hedge() {
   const selectedNetwork = getNetworkById(selectedNetworkId) ?? DEFAULT_NETWORK;
   const activeChainId = selectedNetwork.chainId;
   const activeUsdcAddress = getUsdcAddress(activeChainId);
+  const activeUsdtAddress = getUsdtAddress(activeChainId);
+
+  // ── Persistent wallet balances for the active chain ──────────────────────
+  const { data: nativeBalance } = useQuery<string>({
+    queryKey: ['/hedge/native-balance', wallet?.address, activeChainId],
+    queryFn: () => hedgeContract.getNativeBalance(wallet!.address),
+    enabled: !!wallet?.address,
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+  const { data: usdcBalance } = useQuery<string>({
+    queryKey: ['/hedge/usdc-balance', wallet?.address, activeChainId],
+    queryFn: () => hedgeContract.getTokenBalance(activeUsdcAddress, wallet!.address),
+    enabled: !!wallet?.address,
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+  const { data: usdtBalance } = useQuery<string>({
+    queryKey: ['/hedge/usdt-balance', wallet?.address, activeChainId],
+    queryFn: () => hedgeContract.getTokenBalance(activeUsdtAddress, wallet!.address),
+    enabled: !!wallet?.address && !!activeUsdtAddress,
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [activeTab, setActiveTab] = useState("hedger");
   const [assetClassFilter, setAssetClassFilter] = useState<AssetClass>('all');
   const [selectedEvent, setSelectedEvent] = useState<HedgeEventData | null>(null);
@@ -482,6 +508,58 @@ export default function Hedge() {
           </Button>
         }
       />
+
+      {/* ── Wallet Balance Strip ─────────────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto px-4 pt-3 pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
+          {/* Chain badge */}
+          <div
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border"
+            style={{ borderColor: selectedNetwork.color + '66', backgroundColor: selectedNetwork.color + '1A', color: selectedNetwork.color }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: selectedNetwork.color }} />
+            {selectedNetwork.name}
+          </div>
+
+          {/* Native balance */}
+          <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs">
+            <span className="text-muted-foreground">{selectedNetwork.symbol}</span>
+            <span className="font-mono font-semibold text-foreground">
+              {nativeBalance !== undefined
+                ? parseFloat(nativeBalance).toFixed(4)
+                : <span className="text-muted-foreground animate-pulse">···</span>}
+            </span>
+          </div>
+
+          {/* USDC balance */}
+          <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs">
+            <span className="text-muted-foreground">USDC</span>
+            <span className="font-mono font-semibold text-foreground">
+              {usdcBalance !== undefined
+                ? parseFloat(usdcBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : <span className="text-muted-foreground animate-pulse">···</span>}
+            </span>
+          </div>
+
+          {/* USDT balance (only on Base & BSC) */}
+          {activeUsdtAddress && (
+            <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs">
+              <span className="text-muted-foreground">USDT</span>
+              <span className="font-mono font-semibold text-foreground">
+                {usdtBalance !== undefined
+                  ? parseFloat(usdtBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  : <span className="text-muted-foreground animate-pulse">···</span>}
+              </span>
+            </div>
+          )}
+
+          {/* Address pill */}
+          <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/60 text-xs text-muted-foreground ml-auto">
+            {wallet?.address ? `${wallet.address.slice(0,6)}…${wallet.address.slice(-4)}` : '—'}
+          </div>
+        </div>
+      </div>
+      {/* ─────────────────────────────────────────────────────────────────── */}
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         <Collapsible open={statsOpen} onOpenChange={setStatsOpen}>

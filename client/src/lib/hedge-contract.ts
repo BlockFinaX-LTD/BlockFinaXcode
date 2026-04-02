@@ -48,6 +48,16 @@ export const CHAIN_USDC_MAP: Record<number, string> = {
   56:   '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
 };
 
+export const CHAIN_USDT_MAP: Record<number, string> = {
+  1135: '',
+  8453: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+  56:   '0x55d398326f99059fF775485246999027B3197955',
+};
+
+export function getUsdtAddress(chainId: number): string {
+  return CHAIN_USDT_MAP[chainId] || '';
+}
+
 export const CHAIN_SAFE_MAP: Record<number, string> = {
   1135: '0xfce89FA90Ee1C78B15eE0f12f62B03153814699D',
   8453: '0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb',
@@ -352,6 +362,11 @@ class HedgeContractManager {
     const usdc = new ethers.Contract(usdcAddr, USDC_ABI, this.getProvider());
     const balance = await usdc.balanceOf(address);
     return ethers.formatUnits(balance, dec);
+  }
+
+  async getNativeBalance(walletAddress: string): Promise<string> {
+    const balance = await this.getProvider().getBalance(walletAddress);
+    return ethers.formatEther(balance);
   }
 
   async getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
