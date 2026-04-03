@@ -3,11 +3,29 @@ import {
   ArrowLeft, ChevronRight, Shield, Globe, Zap, Lock,
   BarChart3, BookOpen, Layers, CircleDollarSign, AlertTriangle,
   CheckCircle2, ArrowUpRight, ArrowDownRight, Cpu, FileText, Scale,
-  Landmark, Coins, Wheat, RefreshCw, Activity, Info
+  Landmark, Coins, Wheat, RefreshCw, Activity, Info, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import logoPath from "@/assets/logo.png";
+
+const PRINT_STYLES = `
+@media print {
+  @page { margin: 18mm 16mm; size: A4; }
+  body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .no-print { display: none !important; }
+  .print-break-before { break-before: page; }
+  nav, aside, header .no-print { display: none !important; }
+  #wp-sidebar { display: none !important; }
+  #wp-topbar { position: static !important; box-shadow: none !important; border-bottom: 1px solid #e5e7eb; }
+  .sticky { position: static !important; }
+  a[href]:after { content: none !important; }
+  main { max-width: 100% !important; padding: 0 !important; }
+  h2 { page-break-after: avoid; }
+  table { page-break-inside: avoid; }
+  .rounded-xl, .rounded-lg { border-radius: 4px !important; }
+}
+`;
 
 const sections = [
   { id: "abstract",     label: "Abstract" },
@@ -132,6 +150,14 @@ export default function Whitepaper() {
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    const style = document.createElement("style");
+    style.id = "wp-print-styles";
+    style.textContent = PRINT_STYLES;
+    document.head.appendChild(style);
+    return () => document.getElementById("wp-print-styles")?.remove();
+  }, []);
+
+  useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => { if (e.isIntersecting) setActiveSection(e.target.id); });
@@ -144,6 +170,13 @@ export default function Whitepaper() {
     });
     return () => observer.disconnect();
   }, []);
+
+  function handleDownloadPdf() {
+    const title = document.title;
+    document.title = "BlockFinaX_Whitepaper_v1.1_April2026";
+    window.print();
+    setTimeout(() => { document.title = title; }, 2000);
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -164,13 +197,24 @@ export default function Whitepaper() {
               <span className="text-xs text-muted-foreground font-mono">Whitepaper v1.1</span>
             </div>
           </div>
-          <div className="text-xs text-muted-foreground hidden md:block">March 2026</div>
+          <div className="flex items-center gap-3 no-print">
+            <span className="text-xs text-muted-foreground hidden md:block">March 2026</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownloadPdf}
+              className="gap-1.5 text-xs h-8"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download PDF
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8 flex gap-10">
         {/* Sidebar TOC */}
-        <aside className="hidden lg:block w-52 shrink-0">
+        <aside id="wp-sidebar" className="hidden lg:block w-52 shrink-0">
           <div className="sticky top-20">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contents</p>
             <nav className="space-y-0.5">
@@ -507,8 +551,8 @@ export default function Whitepaper() {
           <H3>3.3 Go-to-Market Strategy</H3>
           <BulletList items={[
             {
-              title: "Community-first testnet growth",
-              body: "A daily tasks and rewards system incentivises early adopter participation during the testnet phase. Participants earn points for on-chain actions (buying protection, providing liquidity), social engagement, and referrals — building a protocol-native community before mainnet launch.",
+              title: "Community-first mainnet growth",
+              body: "A daily tasks and rewards system incentivises early adopter participation on mainnet. Participants earn points for on-chain actions (buying protection, providing liquidity), social engagement, and referrals — building a protocol-native community from day one.",
             },
             {
               title: "B2B API for African fintechs",
@@ -1154,7 +1198,7 @@ export default function Whitepaper() {
             environment:
           </P>
           <BulletList items={[
-            { title: "Phase 1 (Testnet)", body: "Open participation on testnet using test tokens with no real monetary value. Data collection on usage patterns and user demographics to inform regulatory submissions." },
+            { title: "Phase 1 (Mainnet Foundation)", body: "Live protocol on Lisk, Base, and BSC Mainnet using real stablecoins (USDC and USDT). Data collection on usage patterns and user demographics to inform regulatory submissions. Smart contract audits (v5 + v6 patches) applied." },
             { title: "Phase 2 (Mainnet launch, 2026)", body: "Launch with voluntary KYC/AML verification available for institutional LPs. Geofencing of high-risk jurisdictions where legal advice indicates regulatory prohibitions. Engagement with Bank of Ghana sandbox formally initiated." },
             { title: "Phase 3 (Regulated operations, 2027)", body: "Full KYC/AML integration for all participants above defined thresholds, in jurisdictions requiring it. Formal licensing applications in Ghana and secondary markets as determined by regulatory engagement." },
             { title: "Phase 4 (Pan-African regulatory framework)", body: "Work with AfCFTA financial services protocol development to advocate for a harmonised regulatory framework for parametric protection products across member states." },
@@ -1169,15 +1213,15 @@ export default function Whitepaper() {
           </Callout>
 
           {/* Section 13 — Roadmap */}
-          <SectionTitle id="roadmap" number="Section 13" title="Roadmap" subtitle="Phased development from testnet to regional financial infrastructure" />
+          <SectionTitle id="roadmap" number="Section 13" title="Roadmap" subtitle="Phased development from mainnet launch to regional financial infrastructure" />
 
           <div className="space-y-5 mb-6">
             {[
               {
-                phase: "Phase 1", label: "Testnet & Foundation", timeline: "Q1–Q2 2026", status: "Complete",
+                phase: "Phase 1", label: "Mainnet Foundation", timeline: "Q1–Q2 2026", status: "Complete",
                 color: "border-green-500/40 bg-green-500/5",
                 items: [
-                  "EVM testnet deployment — live and accessible",
+                  "EVM mainnet deployment — live on Lisk, Base, and BSC",
                   "63 pairs across FX (42), Commodities (11), Crypto (6, plus 4 planned)",
                   "Bidirectional (upward + downward) parametric protection",
                   "LP deposit, premium claim, and payout claim functionality",
