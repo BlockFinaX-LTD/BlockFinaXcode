@@ -4,9 +4,7 @@ import {
   INITIAL_INPUTS, INITIAL_CONSTANTS, INITIAL_FUNDING, MONTH_LABELS, buildModel,
 } from '@/lib/financial-model-data';
 import type { InputRow, Constants, MonthRow, FundingEntry } from '@/lib/financial-model-data';
-// xlsx is used WRITE-ONLY here (generating files for download).
-// CVE-2023-30533 and CVE-2024-22363 affect the PARSING path only — no user files are parsed.
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -93,24 +91,32 @@ const ANNUAL_GROUPS = [
 // ─────────────────────────────────────────────────────────────────────────────
 // EXCEL EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
-function downloadExcel(
+async function downloadExcel(
   model: MonthRow[],
   inputs: InputRow[],
   constants: Constants,
   funding: FundingEntry[],
   annualSummary: ReturnType<typeof computeAnnualSummary>
 ) {
-  const wb = XLSX.utils.book_new();
-  const cw = (ws: XLSX.WorkSheet, ws_arr: number[]) => { ws['!cols'] = ws_arr.map(w => ({ wch: w })); };
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'BlockFinaX';
+  wb.created = new Date();
+
+  function addSheet(name: string, rows: (string | number | null)[][], widths: number[]) {
+    const ws = wb.addWorksheet(name);
+    ws.addRows(rows);
+    widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  }
+
   const months = model.map(r => r.label);
 
   // Sheet 1: Assumptions
-  const aoa1: (string | number)[][] = [
+  addSheet('Assumptions', [
     ['BlockFinaX Financial Model — Assumptions & Inputs', ...Array(11).fill('')],
     [''],
     ['CONSTANTS', '', 'Value', 'Description'],
     ['Hedge Yield (net)', '', constants.hedgeYield, '= events × notional × yield → hedge fees'],
-    ['Gas / Hedge Event ($)', '', constants.gasPerEvent,  'Lisk L2 (OP Stack) — ~6 txns × ~$0.008 each = ~$0.05'],
+    ['Gas / Hedge Event ($)', '', constants.gasPerEvent, 'Lisk L2 (OP Stack) — ~6 txns × ~$0.008 each = ~$0.05'],
     ['Gas Cost / Wallet ($)', '', constants.gasPerWallet, 'One-time wallet creation gas, sponsored by platform'],
     ['D&A / Month ($)', '', constants.daMonthly, 'Audit + infra setup amortised over 24 months'],
     ['Tax Rate', '', constants.taxRate, 'Applied only on profitable months (EBT > 0)'],
@@ -121,92 +127,82 @@ function downloadExcel(
     ['MONTHLY INPUT DATA (54 months)', ...Array(10).fill('')],
     ['Month', 'Events', 'Avg Notional ($)', 'Wallet Fee %', 'New Wallets', 'Headcount', 'Salary/FTE ($)', 'CAC ($)', 'Legal ($)', 'Infra/Cloud ($)', 'Oracle ($)', 'G&A ($)'],
     ...inputs.map((d, i) => [MONTH_LABELS[i], d.events, d.avgNotional, d.walletPct, d.newWallets, d.headcount, d.salaryPerFTE, d.cac, d.legal, d.infraCloud, d.oracle, d.ga]),
-  ];
-  const wsA = XLSX.utils.aoa_to_sheet(aoa1);
-  cw(wsA, [22, 2, 16, 14, 14, 14, 14, 10, 12, 14, 10, 12]);
-  XLSX.utils.book_append_sheet(wb, wsA, 'Assumptions');
+  ], [22, 2, 16, 14, 14, 14, 14, 10, 12, 14, 10, 12]);
 
   // Sheet 2: Monthly P&L
-  const plRows: (string | number)[][] = [
+  addSheet('Monthly P&L', [
     ['BlockFinaX — Monthly P&L  (Jul 2026 – Dec 2030)', ...months.map(() => '')],
     [''],
     ['OPERATING METRICS', ...months],
-    ['Hedge Events',           ...model.map(r => r.events)],
-    ['Avg Notional ($)',        ...model.map(r => r.avgNotional)],
-    ['New Wallets',             ...model.map(r => r.newWallets)],
-    ['Cumulative Wallets',      ...model.map(r => r.cumWallets)],
-    ['Headcount',               ...model.map(r => r.headcount)],
+    ['Hedge Events',          ...model.map(r => r.events)],
+    ['Avg Notional ($)',       ...model.map(r => r.avgNotional)],
+    ['New Wallets',            ...model.map(r => r.newWallets)],
+    ['Cumulative Wallets',     ...model.map(r => r.cumWallets)],
+    ['Headcount',              ...model.map(r => r.headcount)],
     [''],
-    ['REVENUE ($)',             ...months.map(() => '')],
-    ['Hedge Protocol Fees',     ...model.map(r => r.hedgeFees)],
-    ['Event Creation Fees',     ...model.map(r => r.eventCreationFees)],
-    ['Wallet Transfer Fees',    ...model.map(r => r.walletFees)],
-    ['Total Revenue',           ...model.map(r => r.totalRevenue)],
+    ['REVENUE ($)',            ...months.map(() => '')],
+    ['Hedge Protocol Fees',    ...model.map(r => r.hedgeFees)],
+    ['Event Creation Fees',    ...model.map(r => r.eventCreationFees)],
+    ['Wallet Transfer Fees',   ...model.map(r => r.walletFees)],
+    ['Total Revenue',          ...model.map(r => r.totalRevenue)],
     [''],
-    ['COST OF GOODS SOLD ($)',  ...months.map(() => '')],
-    ['Gas Sponsorship',         ...model.map(r => r.gasCost)],
-    ['Oracle / RPC',            ...model.map(r => r.oracleCost)],
-    ['Total COGS',              ...model.map(r => r.totalCOGS)],
+    ['COST OF GOODS SOLD ($)', ...months.map(() => '')],
+    ['Gas Sponsorship',        ...model.map(r => r.gasCost)],
+    ['Oracle / RPC',           ...model.map(r => r.oracleCost)],
+    ['Total COGS',             ...model.map(r => r.totalCOGS)],
     [''],
-    ['GROSS PROFIT',            ...months.map(() => '')],
-    ['Gross Profit ($)',         ...model.map(r => r.grossProfit)],
-    ['Gross Margin %',           ...model.map(r => parseFloat(r.grossMarginPct.toFixed(1)))],
+    ['GROSS PROFIT',           ...months.map(() => '')],
+    ['Gross Profit ($)',        ...model.map(r => r.grossProfit)],
+    ['Gross Margin %',          ...model.map(r => parseFloat(r.grossMarginPct.toFixed(1)))],
     [''],
-    ['OPERATING EXPENSES ($)',  ...months.map(() => '')],
-    ['Personnel',               ...model.map(r => r.personnel)],
-    ['Sales & Marketing',       ...model.map(r => r.marketing)],
-    ['Legal & Compliance',      ...model.map(r => r.legal)],
-    ['Infra & Cloud',           ...model.map(r => r.infraCloud)],
-    ['G&A',                     ...model.map(r => r.ga)],
-    ['Total OpEx',              ...model.map(r => r.totalOpEx)],
+    ['OPERATING EXPENSES ($)', ...months.map(() => '')],
+    ['Personnel',              ...model.map(r => r.personnel)],
+    ['Sales & Marketing',      ...model.map(r => r.marketing)],
+    ['Legal & Compliance',     ...model.map(r => r.legal)],
+    ['Infra & Cloud',          ...model.map(r => r.infraCloud)],
+    ['G&A',                    ...model.map(r => r.ga)],
+    ['Total OpEx',             ...model.map(r => r.totalOpEx)],
     [''],
-    ['P&L ($)',                 ...months.map(() => '')],
-    ['EBITDA',                  ...model.map(r => r.ebitda)],
-    ['EBITDA Margin %',         ...model.map(r => parseFloat(r.ebitdaMarginPct.toFixed(1)))],
-    ['D&A (non-cash)',           ...model.map(r => r.da)],
-    ['EBIT',                    ...model.map(r => r.ebit)],
-    ['Interest Expense',        ...model.map(r => r.interestExpense)],
-    ['EBT',                     ...model.map(r => r.ebt)],
-    ['Tax Expense',             ...model.map(r => r.taxExpense)],
-    ['Net Income',              ...model.map(r => r.netIncome)],
-    ['Net Margin %',            ...model.map(r => parseFloat(r.netMarginPct.toFixed(1)))],
+    ['P&L ($)',                ...months.map(() => '')],
+    ['EBITDA',                 ...model.map(r => r.ebitda)],
+    ['EBITDA Margin %',        ...model.map(r => parseFloat(r.ebitdaMarginPct.toFixed(1)))],
+    ['D&A (non-cash)',          ...model.map(r => r.da)],
+    ['EBIT',                   ...model.map(r => r.ebit)],
+    ['Interest Expense',       ...model.map(r => r.interestExpense)],
+    ['EBT',                    ...model.map(r => r.ebt)],
+    ['Tax Expense',            ...model.map(r => r.taxExpense)],
+    ['Net Income',             ...model.map(r => r.netIncome)],
+    ['Net Margin %',           ...model.map(r => parseFloat(r.netMarginPct.toFixed(1)))],
     [''],
-    ['CASH FLOW ($)',           ...months.map(() => '')],
-    ['Funding Received',        ...model.map(r => r.fundingReceived)],
-    ['Operating Cash Flow',     ...model.map(r => r.cashFlow)],
-    ['Cumulative Cash',         ...model.map(r => r.cumulativeCash)],
-    ['Burn Rate',               ...model.map(r => r.burnRate)],
-    ['Runway (months)',         ...model.map(r => r.runway === 999 ? 'N/A' : r.runway)],
-  ];
-  const wsPL = XLSX.utils.aoa_to_sheet(plRows);
-  cw(wsPL, [22, ...months.map(() => 13)]);
-  XLSX.utils.book_append_sheet(wb, wsPL, 'Monthly P&L');
+    ['CASH FLOW ($)',          ...months.map(() => '')],
+    ['Funding Received',       ...model.map(r => r.fundingReceived)],
+    ['Operating Cash Flow',    ...model.map(r => r.cashFlow)],
+    ['Cumulative Cash',        ...model.map(r => r.cumulativeCash)],
+    ['Burn Rate',              ...model.map(r => r.burnRate)],
+    ['Runway (months)',        ...model.map(r => r.runway === 999 ? 'N/A' : r.runway)],
+  ], [22, ...months.map(() => 13)]);
 
   // Sheet 3: Annual Summary
-  const annHeaders = ['Period', 'Events', 'Notional Volume', 'Revenue ($)', 'COGS ($)', 'Gross Profit ($)', 'Gross Margin %', 'OpEx ($)', 'EBITDA ($)', 'EBITDA %', 'Net Income ($)', 'Headcount (peak)', 'New Wallets', 'Blended CAC ($)'];
-  const wsAnn = XLSX.utils.aoa_to_sheet([
+  addSheet('Annual Summary', [
     ['BlockFinaX — Annual Summary (2026–2030)'],
     [''],
-    annHeaders,
+    ['Period', 'Events', 'Notional Volume', 'Revenue ($)', 'COGS ($)', 'Gross Profit ($)', 'Gross Margin %', 'OpEx ($)', 'EBITDA ($)', 'EBITDA %', 'Net Income ($)', 'Headcount (peak)', 'New Wallets', 'Blended CAC ($)'],
     ...annualSummary.map(r => [
       r.period, r.events, Math.round(r.notional), Math.round(r.revenue), Math.round(r.cogs),
       Math.round(r.grossProfit), parseFloat(r.grossMarginPct.toFixed(1)),
       Math.round(r.opex), Math.round(r.ebitda), parseFloat(r.ebitdaPct.toFixed(1)),
       Math.round(r.netIncome), r.headcount, r.newWallets, Math.round(r.blendedCac),
     ]),
-  ]);
-  cw(wsAnn, [18, 12, 18, 14, 12, 16, 14, 14, 14, 10, 14, 16, 14, 14]);
-  XLSX.utils.book_append_sheet(wb, wsAnn, 'Annual Summary');
+  ], [18, 12, 18, 14, 12, 16, 14, 14, 14, 10, 14, 16, 14, 14]);
 
   // Sheet 4: IRR & Unit Economics
-  const totalMktg   = model.reduce((s, r) => s + r.marketing, 0);
+  const totalMktg = model.reduce((s, r) => s + r.marketing, 0);
   const totalWallets = model[model.length - 1].cumWallets;
-  const blendedCac  = totalMktg / totalWallets;
-  const totalRev    = model.reduce((s, r) => s + r.totalRevenue, 0);
-  const revenuePerWalletMonth = (totalRev / totalWallets) / 54;
-  const ltv = revenuePerWalletMonth * 18;
+  const blendedCac = totalMktg / totalWallets;
+  const totalRev = model.reduce((s, r) => s + r.totalRevenue, 0);
+  const ltv = (totalRev / totalWallets / 54) * 18;
 
-  const wsIRR = XLSX.utils.aoa_to_sheet([
+  addSheet('IRR & Unit Economics', [
     ['BlockFinaX — IRR & Unit Economics'],
     [''],
     ['INVESTOR CASH FLOW (54-MONTH MODEL)'],
@@ -219,35 +215,40 @@ function downloadExcel(
     }),
     [''],
     ['RETURN METRICS'],
-    ['Total Raise Target', '', funding.reduce((s,f)=>s+f.amount,0)],
+    ['Total Raise Target', '', funding.reduce((s, f) => s + f.amount, 0)],
     ['2030 Revenue (model)', '', Math.round(annualSummary[4]?.revenue ?? 0)],
     ['2030 EBITDA (model)', '', Math.round(annualSummary[4]?.ebitda ?? 0)],
     ['2030 EBITDA Margin', '', `${(annualSummary[4]?.ebitdaPct ?? 0).toFixed(1)}%`],
     ['EBITDA Multiple', '', '12×', '', 'Conservative African fintech comp (public comps 15–20×)'],
     ['Terminal Value (12× EBITDA)', '', Math.round(Math.max(0, annualSummary[4]?.ebitda ?? 0) * 12)],
-    ['Enterprise MOIC (undiluted)', '', `${(Math.max(0,annualSummary[4]?.ebitda??0)*12/Math.max(1,funding.reduce((s,f)=>s+f.amount,0))).toFixed(1)}×`, '', 'Terminal value ÷ total raised. Actual investor MOIC depends on dilution.'],
+    ['Enterprise MOIC (undiluted)', '', `${(Math.max(0, annualSummary[4]?.ebitda ?? 0) * 12 / Math.max(1, funding.reduce((s, f) => s + f.amount, 0))).toFixed(1)}×`, '', 'Terminal value ÷ total raised. Actual investor MOIC depends on dilution.'],
     ['Break-even Month', '', (model.find(r => r.netIncome > 0)?.label ?? 'Beyond model'), '', 'First month of positive net income'],
     [''],
     ['UNIT ECONOMICS (54-MONTH)'],
     ['Metric', 'Value', 'Notes'],
-    ['LTV (est.)', `$${Math.round(ltv).toLocaleString()}`, '18-month avg tenure × monthly revenue per wallet'],
-    ['CAC (blended)', `$${Math.round(blendedCac)}`, 'Total marketing spend ÷ total wallets'],
-    ['LTV:CAC', `${(ltv / blendedCac).toFixed(1)}×`, 'Healthy benchmark is > 3×'],
-    ['Gross Margin (peak)', `${pct(annualSummary[4]?.grossMarginPct ?? 0)}`, '2030 gross margin'],
-    ['Peak Headcount', model[model.length - 1].headcount.toString(), 'Dec 2030'],
+    [`$${Math.round(ltv).toLocaleString()}`, 'LTV (est.)', '18-month avg tenure × monthly revenue per wallet'],
+    [`$${Math.round(blendedCac)}`, 'CAC (blended)', 'Total marketing spend ÷ total wallets'],
+    [`${(ltv / blendedCac).toFixed(1)}×`, 'LTV:CAC', 'Healthy benchmark is > 3×'],
+    [pct(annualSummary[4]?.grossMarginPct ?? 0), 'Gross Margin (peak)', '2030 gross margin'],
+    [model[model.length - 1].headcount.toString(), 'Peak Headcount', 'Dec 2030'],
     [''],
     ['FEE ARCHITECTURE'],
     ['Fee Type', 'Rate', 'Minimum', 'Recipient', 'Notes'],
-    ['Hedger Premium Fee',  '0.5%',  '—',     'Treasury', 'Charged at position purchase'],
-    ['LP Payout Fee',       '1.0%',  '—',     'Treasury', 'Charged on LP payout event'],
-    ['Creator Loyalty Fee', '5.0%',  '—',     'Creator',  'Paid to event creator wallet'],
-    ['Wallet Transfer Fee', '0.3%',  '$0.50', 'Treasury', 'On every USDC wallet transfer'],
-    ['Event Creation Fee',  '$2',   'flat',  'Treasury', 'One-time on event creation'],
-  ]);
-  cw(wsIRR, [28, 20, 20, 16, 36]);
-  XLSX.utils.book_append_sheet(wb, wsIRR, 'IRR & Unit Economics');
+    ['Hedger Premium Fee', '0.5%', '—', 'Treasury', 'Charged at position purchase'],
+    ['LP Payout Fee', '1.0%', '—', 'Treasury', 'Charged on LP payout event'],
+    ['Creator Loyalty Fee', '5.0%', '—', 'Creator', 'Paid to event creator wallet'],
+    ['Wallet Transfer Fee', '0.3%', '$0.50', 'Treasury', 'On every USDC wallet transfer'],
+    ['Event Creation Fee', '$2', 'flat', 'Treasury', 'One-time on event creation'],
+  ], [28, 20, 20, 16, 36]);
 
-  XLSX.writeFile(wb, 'BlockFinaX_Financial_Model.xlsx');
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'BlockFinaX_Financial_Model.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -466,7 +467,7 @@ export default function FinancialModel() {
             </Button>
             <Button
               size="sm"
-              onClick={() => downloadExcel(model, inputs, constants, funding, annualSummary)}
+              onClick={() => { downloadExcel(model, inputs, constants, funding, annualSummary).catch(console.error); }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
