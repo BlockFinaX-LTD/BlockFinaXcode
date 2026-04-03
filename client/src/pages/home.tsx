@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWallet } from '@/hooks/use-wallet';
 import { useTransactions } from '@/hooks/use-transactions';
+import { getNetworkById } from '@/lib/networks';
+import { fetchCryptoPrices, getBnbPrice } from '@/lib/price-service';
 import { hedgeContract, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData } from '@/lib/hedge-contract';
 import logoPath from "@/assets/logo.png";
 import {
@@ -58,8 +60,60 @@ type FXRate = { pair: string; rate: number; source: string; timestamp: number; l
 export default function HomePage() {
   const [, setLocation] = useLocation();
   const { isUnlocked, lockWallet, walletExists, isLoading, wallet, settings } = useWallet();
-  const { allBalances, totalValue, isLoadingBalance, formatCurrency } = useTransactions(settings.selectedNetworkId);
+  const { formatCurrency } = useTransactions(settings.selectedNetworkId);
   const { toast } = useToast();
+
+  // Resolve selected network so we can query the correct chain
+  const selectedNetwork = getNetworkById(settings.selectedNetworkId);
+  const selectedChainId = selectedNetwork?.chainId;
+  const walletAddress = wallet?.address;
+
+  // Live prices for native token valuation
+  const [ethPrice, setEthPrice] = useState<number>(0);
+  const [bnbPrice, setBnbPrice] = useState<number>(getBnbPrice() ?? 0);
+  useEffect(() => {
+    fetchCryptoPrices().then(prices => {
+      if (prices?.eth) setEthPrice(prices.eth);
+      if (prices?.bnb) setBnbPrice(prices.bnb);
+    });
+  }, []);
+
+  // Direct query for native balance of the selected network (matches wallet-dashboard approach)
+  const nativeBalanceQuery = useQuery({
+    queryKey: ['/api/wallet', walletAddress, 'native-balance', selectedChainId],
+    queryFn: async () => {
+      const res = await fetch(`/api/wallet/${walletAddress}/native-balance?networkId=${selectedChainId}`);
+      if (!res.ok) return { balance: '0', symbol: selectedNetwork?.symbol || 'ETH' };
+      return res.json() as Promise<{ balance: string; symbol: string }>;
+    },
+    enabled: !!walletAddress && !!selectedChainId,
+    staleTime: 15000,
+    refetchInterval: 30000,
+  });
+
+  // Direct query for token (USDC/USDT) balances of the selected network
+  const tokenBalanceQuery = useQuery({
+    queryKey: ['/api/wallet', walletAddress, 'token-balances', selectedChainId],
+    queryFn: async () => {
+      const res = await fetch(`/api/wallet/${walletAddress}/token-balances?networkId=${selectedChainId}`);
+      if (!res.ok) return { balances: [] as any[] };
+      return res.json() as Promise<{ balances: any[] }>;
+    },
+    enabled: !!walletAddress && !!selectedChainId,
+    staleTime: 15000,
+    refetchInterval: 30000,
+  });
+
+  // Compute wallet value for the selected network
+  const nativeSym = nativeBalanceQuery.data?.symbol ?? selectedNetwork?.symbol ?? 'ETH';
+  const nativeBalance = parseFloat(nativeBalanceQuery.data?.balance ?? '0');
+  const nativePrice = nativeSym === 'BNB' ? bnbPrice : ethPrice;
+  const nativeUsd = nativeBalance * nativePrice;
+  const tokenUsd = (tokenBalanceQuery.data?.balances ?? []).reduce(
+    (sum: number, t: any) => sum + (t.usdValue || 0), 0
+  );
+  const totalValue = nativeUsd + tokenUsd;
+  const isLoadingBalance = nativeBalanceQuery.isLoading || tokenBalanceQuery.isLoading;
 
   const [backupMnemonic, setBackupMnemonic] = useState<string | null>(null);
   const [showBackup, setShowBackup] = useState(false);

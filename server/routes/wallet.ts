@@ -104,7 +104,10 @@ export function registerWalletRoutes(app: Express) {
       if (!config) return res.json({ balance: "0", symbol: "ETH" });
 
       const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-      const balanceWei = await provider.getBalance(address);
+      const balanceWei = await Promise.race([
+        provider.getBalance(address),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+      ]);
       const balance = ethers.formatEther(balanceWei);
 
       res.json({ balance, symbol: config.symbol, name: config.name });
@@ -162,14 +165,17 @@ export function registerWalletRoutes(app: Express) {
         "function decimals() view returns (uint8)"
       ];
 
+      const timeout = <T>(ms: number, p: Promise<T>): Promise<T> =>
+        Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+
       const results = await Promise.all(
         config.tokens.map(async (token) => {
           try {
             const contract = new ethers.Contract(token.address, tokenAbi, provider);
-            const [rawBalance, onchainDecimals] = await Promise.all([
+            const [rawBalance, onchainDecimals] = await timeout(6000, Promise.all([
               contract.balanceOf(address),
               contract.decimals().catch(() => token.decimals),
-            ]);
+            ]));
             const dec = Number(onchainDecimals);
             const balance = ethers.formatUnits(rawBalance, dec);
             const usdValue = parseFloat(balance) * 1.0;

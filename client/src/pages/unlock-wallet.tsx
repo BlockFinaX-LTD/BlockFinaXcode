@@ -198,11 +198,11 @@ export default function UnlockWallet() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center" style={{ backgroundColor: BG }}>
+    <div className="min-h-screen flex flex-col items-center overflow-y-auto" style={{ backgroundColor: BG }}>
 
       {/* Logo */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm px-6 pt-16 pb-4">
-        <img src={logoPath} alt="BlockFinaX" className="w-20 h-20 object-contain mb-5" />
+      <div className="flex flex-col items-center w-full max-w-sm px-6 pt-10 pb-2">
+        <img src={logoPath} alt="BlockFinaX" className="w-16 h-16 object-contain mb-4" />
         <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: DARK }}>
           {isLockedOut ? 'Wallet locked' : 'Welcome back'}
         </h1>
@@ -216,7 +216,7 @@ export default function UnlockWallet() {
       </div>
 
       {/* Main content area */}
-      <div className="w-full max-w-sm px-6 pb-6 flex flex-col items-center">
+      <div className="w-full max-w-sm px-6 pb-4 flex flex-col items-center">
 
         {isLockedOut ? (
           /* Lockout screen */
@@ -276,7 +276,7 @@ export default function UnlockWallet() {
 
       {/* Footer links */}
       {!isLockedOut && (
-        <div className="w-full max-w-sm px-6 pb-10 pt-4 space-y-3 text-center">
+        <div className="w-full max-w-sm px-6 pb-8 pt-3 space-y-3 text-center">
           <p className="text-xs" style={{ color: '#6b6b80' }}>
             New device?{' '}
             <Link href="/import-wallet" className="underline font-medium" style={{ color: DARK }}>
