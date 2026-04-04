@@ -6,7 +6,7 @@
  */
 import { ethers } from 'ethers';
 
-const RPC_FALLBACKS: Record<number, string[]> = {
+export const RPC_FALLBACKS: Record<number, string[]> = {
   1135: [
     'https://rpc.api.lisk.com',
     'https://lisk.drpc.org',

@@ -10,7 +10,7 @@ import {
   saveWalletV2, loadWalletV2, hasWalletV2, deleteWalletV2,
 } from './encrypted-storage';
 import { NETWORKS, type NetworkConfig, getNetworkById, getNetworkByChainId } from './networks';
-import { fallbackProvider } from './rpc-provider';
+import { fallbackProvider, RPC_FALLBACKS } from './rpc-provider';
 import { fetchCryptoPrices } from './price-service';
 
 export interface WalletBalance {
@@ -92,7 +92,21 @@ class WalletManager {
       return null;
     }
 
-    const provider = await fallbackProvider.getWorkingProvider(network.chainId);
+    let provider = await fallbackProvider.getWorkingProvider(network.chainId);
+
+    // If health-checked provider unavailable, fall back to direct connection
+    if (!provider) {
+      const rpcUrls = RPC_FALLBACKS[network.chainId] || [];
+      for (const rpcUrl of rpcUrls) {
+        try {
+          provider = new ethers.JsonRpcProvider(rpcUrl);
+          break;
+        } catch {
+          continue;
+        }
+      }
+    }
+
     if (!provider) {
       return null;
     }

@@ -163,6 +163,13 @@ export default function Hedge() {
     paymentCurrency: "USDC" as "USDC" | "USDT"
   });
 
+  // Reset to USDC when switching to a network that doesn't support USDT (e.g. Lisk)
+  useEffect(() => {
+    if (!activeUsdtAddress && newEvent.paymentCurrency === 'USDT') {
+      setNewEvent(p => ({ ...p, paymentCurrency: 'USDC' }));
+    }
+  }, [activeUsdtAddress]);
+
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
@@ -322,8 +329,8 @@ export default function Hedge() {
         throw new Error("Strike must be above the current rate (" + currentFxRate.toFixed(4) + ") for an upward hedge.");
       if (!strikeAbove && strikePrice >= currentFxRate)
         throw new Error("Strike must be below the current rate (" + currentFxRate.toFixed(4) + ") for a downward hedge.");
-      const paymentTokenAddr = newEvent.paymentCurrency === 'USDT'
-        ? (USDT_ADDRESS_SEPOLIA || activeUsdcAddress)
+      const paymentTokenAddr = newEvent.paymentCurrency === 'USDT' && activeUsdtAddress
+        ? activeUsdtAddress
         : activeUsdcAddress;
       await hedgeContract.createEvent(signer, {
         name: newEvent.name,
@@ -1762,27 +1769,41 @@ export default function Hedge() {
 
             <div>
               <Label className="text-muted-foreground text-xs">Payment Currency <span className="text-red-400">*</span></Label>
-              <Select value={newEvent.paymentCurrency} onValueChange={v => setNewEvent(p => ({ ...p, paymentCurrency: v as "USDC" | "USDT" }))}>
+              <Select
+                value={newEvent.paymentCurrency}
+                onValueChange={v => setNewEvent(p => ({ ...p, paymentCurrency: v as "USDC" | "USDT" }))}
+              >
                 <SelectTrigger className="bg-muted border-border text-foreground mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder="Select currency" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="USDC" textValue="USDC">
                     <div className="flex items-center gap-2">
                       <span className="text-blue-400 font-semibold">USDC</span>
-                      <span className="text-muted-foreground text-xs">USD Coin — all networks</span>
+                      <span className="text-muted-foreground text-xs">
+                        USD Coin on {selectedNetwork.name}
+                      </span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="USDT" textValue="USDT">
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-400 font-semibold">USDT</span>
-                      <span className="text-muted-foreground text-xs">Tether USD</span>
-                    </div>
-                  </SelectItem>
+                  {activeUsdtAddress ? (
+                    <SelectItem value="USDT" textValue="USDT">
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-400 font-semibold">USDT</span>
+                        <span className="text-muted-foreground text-xs">
+                          Tether USD on {selectedNetwork.name}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ) : null}
                 </SelectContent>
               </Select>
+              {!activeUsdtAddress && (
+                <p className="text-[10px] text-amber-500/80 mt-1">
+                  USDT is not available on {selectedNetwork.name}. Only USDC can be used.
+                </p>
+              )}
               <p className="text-[10px] text-muted-foreground/70 mt-1">
-                All liquidity, premiums, and payouts for this event use one currency. Hedgers deposit and receive the same token.
+                All liquidity, premiums, and payouts for this event use one currency.
               </p>
             </div>
 
