@@ -434,7 +434,7 @@ export function registerWalletRoutes(app: Express) {
   // Returns { confirmed: true } once mined, { confirmed: false } while pending.
   app.post("/api/wallet/tx-receipt", async (req, res) => {
     try {
-      const { txHash, chainId } = req.body;
+      const { txHash, chainId, includeLogs } = req.body;
       if (!txHash || !chainId) {
         return res.status(400).json({ error: "Missing txHash or chainId" });
       }
@@ -456,7 +456,12 @@ export function registerWalletRoutes(app: Express) {
           const provider = new ethers.JsonRpcProvider(url);
           const receipt = await provider.getTransactionReceipt(txHash);
           if (receipt && receipt.blockNumber) {
-            return res.json({ confirmed: true, blockNumber: receipt.blockNumber, status: receipt.status });
+            const base = { confirmed: true, blockNumber: receipt.blockNumber, status: receipt.status };
+            if (includeLogs && receipt.logs?.length) {
+              const logs = receipt.logs.map(l => ({ topics: l.topics as string[], data: l.data }));
+              return res.json({ ...base, logs });
+            }
+            return res.json(base);
           }
           return res.json({ confirmed: false });
         } catch {

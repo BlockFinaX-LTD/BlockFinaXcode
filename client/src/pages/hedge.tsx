@@ -172,6 +172,7 @@ export default function Hedge() {
 
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [creationStep, setCreationStep] = useState('');
   const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
   const [myPositions, setMyPositions] = useState<HedgePositionData[]>([]);
   const [myDeposits, setMyDeposits] = useState<HedgeLpDepositData[]>([]);
@@ -346,7 +347,7 @@ export default function Hedge() {
       const paymentTokenAddr = newEvent.paymentCurrency === 'USDT' && activeUsdtAddress
         ? activeUsdtAddress
         : activeUsdcAddress;
-      await hedgeContract.createEvent(signer, {
+      const newEventId = await hedgeContract.createEvent(signer, {
         name: newEvent.name,
         underlying: newEvent.underlying,
         strike: strikePrice,
@@ -357,16 +358,15 @@ export default function Hedge() {
         initialRate: currentFxRate,
         strikeAbove,
         paymentToken: paymentTokenAddr,
-      });
+      }, setCreationStep);
 
-      if (newEvent.poolOpen) {
-        await loadEvents();
-        const total = await hedgeContract.getReadContract().getTotalHedgeEvents();
-        const newEventId = Number(total);
+      if (newEvent.poolOpen && newEventId) {
+        setCreationStep('Opening pool...');
         await hedgeContract.setPoolSettings(signer, newEventId, true, newEvent.allowExternalLp);
       }
     },
     onSuccess: async () => {
+      setCreationStep('');
       await loadEvents();
       const msg = newEvent.poolOpen
         ? "Event created and pool is open for hedgers!"
@@ -377,6 +377,7 @@ export default function Hedge() {
       setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC" });
     },
     onError: (error: any) => {
+      setCreationStep('');
       console.error('[createEvent] Failed:', error);
       const msg = error?.reason || error?.data?.message || error?.message || "Failed to create event";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -1913,7 +1914,9 @@ export default function Hedge() {
             <Button onClick={() => createEventMutation.mutate()}
               disabled={!newEvent.name || !newEvent.strike || !newEvent.premiumRate || !newEvent.initialLiquidity || parseFloat(newEvent.initialLiquidity || "0") < 10 || createEventMutation.isPending}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {createEventMutation.isPending ? "Creating..." : `Pay $${newEvent.initialLiquidity && feeConfig ? (parseFloat(newEvent.initialLiquidity) + feeConfig.creationFee).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : feeConfig ? feeConfig.creationFee.toFixed(2) : "Loading..."} & Create`}
+              {createEventMutation.isPending
+                ? (creationStep || "Preparing...")
+                : `Pay $${newEvent.initialLiquidity && feeConfig ? (parseFloat(newEvent.initialLiquidity) + feeConfig.creationFee).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : feeConfig ? feeConfig.creationFee.toFixed(2) : "Loading..."} & Create`}
             </Button>
           </DialogFooter>
         </DialogContent>

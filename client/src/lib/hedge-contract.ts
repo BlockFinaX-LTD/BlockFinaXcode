@@ -278,7 +278,8 @@ class HedgeContractManager {
 
   async ensureGas(walletAddress: string): Promise<void> {
     try {
-      const balance = await this.getProvider().getBalance(walletAddress);
+      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('gas check timeout')), 5000));
+      const balance = await Promise.race([this.getProvider().getBalance(walletAddress), timeout]);
       const minGas = ethers.parseEther("0.001");
       if (balance < minGas) {
         const res = await fetch("/api/gas/sponsor", {
@@ -349,21 +350,25 @@ class HedgeContractManager {
   /**
    * Wait for a transaction to be mined by polling the server-side receipt endpoint.
    * This avoids direct browser→RPC calls (CORS issues on Base/BSC).
-   * Polls every 3 s, times out after 120 s.
+   * Polls every 3 s, times out after 90 s.
+   * Returns the transaction logs when includeLogs=true and the tx is confirmed.
    */
-  private async waitForTx(txHash: string): Promise<void> {
+  private async waitForTx(
+    txHash: string,
+    opts: { includeLogs?: boolean } = {}
+  ): Promise<{ logs?: Array<{ topics: string[]; data: string }> }> {
     const chainId = this._chainId;
-    const deadline = Date.now() + 120_000;
+    const deadline = Date.now() + 90_000;
     while (Date.now() < deadline) {
       try {
         const res = await fetch('/api/wallet/tx-receipt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ txHash, chainId }),
+          body: JSON.stringify({ txHash, chainId, includeLogs: opts.includeLogs }),
         });
         if (res.ok) {
-          const { confirmed } = await res.json();
-          if (confirmed) return;
+          const body = await res.json();
+          if (body.confirmed) return { logs: body.logs };
         }
       } catch {
         // network hiccup — keep polling
@@ -371,7 +376,8 @@ class HedgeContractManager {
       await new Promise(r => setTimeout(r, 3_000));
     }
     // Timeout — not catastrophic, the tx may still mine
-    console.warn(`[waitForTx] timeout after 120 s for ${txHash}`);
+    console.warn(`[waitForTx] timeout after 90 s for ${txHash}`);
+    return {};
   }
 
   private parseHexOrDec(value: string): number {
@@ -561,13 +567,23 @@ class HedgeContractManager {
 
   async getAllEvents(): Promise<HedgeEventData[]> {
     const contract = this.getReadContract();
-    const [total, eventTimestamps] = await Promise.all([
-      contract.getTotalHedgeEvents(),
-      this.getEventTimestamps(),
-    ]);
-    const count = Number(total);
+    const MAX_SCAN = 500;
+    const [eventTimestamps] = await Promise.all([this.getEventTimestamps()]);
+
+    // Try fast path first; fall back to scanning if getTotalHedgeEvents() is unavailable
+    let count: number | null = null;
+    try {
+      const total = await Promise.race([
+        contract.getTotalHedgeEvents(),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+      ]);
+      count = Number(total);
+    } catch {
+      console.warn('[HedgeContract] getTotalHedgeEvents() unavailable — scanning upward');
+    }
+
     const events: HedgeEventData[] = [];
-    for (let i = 1; i <= count; i++) {
+    for (let i = 1; i <= (count ?? MAX_SCAN); i++) {
       try {
         const [core, stats, paymentToken] = await Promise.all([
           contract.getHedgeEventCore(i),
@@ -576,8 +592,8 @@ class HedgeContractManager {
         ]);
         events.push(this.formatEvent(core, stats, eventTimestamps.get(i), paymentToken as string));
       } catch (err) {
+        if (count === null) break; // scan mode: first revert = end of events
         console.error(`[HedgeContract] Failed to load event #${i}:`, err);
-        continue;
       }
     }
     return events;
@@ -686,6 +702,11 @@ class HedgeContractManager {
     };
   }
 
+  /**
+   * Creates a new hedge event on-chain.
+   * Returns the new on-chain event ID (parsed from the EventCreated log),
+   * or null if the log could not be parsed (caller should use scan/fallback).
+   */
   async createEvent(
     signer: ethers.Wallet,
     params: {
@@ -699,8 +720,9 @@ class HedgeContractManager {
       initialRate: number;
       strikeAbove: boolean;
       paymentToken?: string;
-    }
-  ): Promise<void> {
+    },
+    onStep?: (step: string) => void
+  ): Promise<number | null> {
     const feeConfig = await this.getFeeConfig();
     const tokenAddress = params.paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
     const dec = this.tokenDecimals;
@@ -724,6 +746,7 @@ class HedgeContractManager {
       console.warn('[createEvent] Pre-flight balance check failed, proceeding:', e?.message);
     }
 
+    onStep?.('Approving token...');
     await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, dec));
     await this.ensureGas(signer.address);
 
@@ -746,8 +769,17 @@ class HedgeContractManager {
         params.strikeAbove,
         tokenAddress,
       ]]);
+      onStep?.('Submitting to blockchain...');
       const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
-      await this.waitForTx(txHash);
+      onStep?.('Waiting for confirmation...');
+      const { logs } = await this.waitForTx(txHash, { includeLogs: true });
+
+      // Parse the new event ID from the EventCreated log (topic[1] = event ID)
+      const eventLog = logs?.find(l => l.topics?.[0] === EVENT_CREATED_TOPIC);
+      if (eventLog?.topics?.[1]) {
+        return parseInt(eventLog.topics[1], 16);
+      }
+      return null;
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
