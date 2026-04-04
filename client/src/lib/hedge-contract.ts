@@ -306,7 +306,8 @@ class HedgeContractManager {
     signer: ethers.Wallet,
     to: string,
     calldata: string,
-    value: bigint = 0n
+    value: bigint = 0n,
+    gasBumpPct = 0
   ): Promise<string> {
     const chainId = this._chainId;
 
@@ -319,6 +320,7 @@ class HedgeContractManager {
         to,
         data: calldata,
         value: value.toString(),
+        gasBumpPct,
       }),
     });
     if (!paramsRes.ok) {
@@ -340,7 +342,15 @@ class HedgeContractManager {
     });
     if (!broadcastRes.ok) {
       const err = await broadcastRes.json().catch(() => ({}));
-      throw new Error((err as any).error || `broadcast failed (${broadcastRes.status})`);
+      const errMsg: string = (err as any).error || `broadcast failed (${broadcastRes.status})`;
+
+      // "replacement fee too low" means a pending tx with this nonce exists.
+      // Auto-retry once with a 40% extra bump (total 60% above market = enough to replace).
+      if (errMsg.toLowerCase().includes('replacement fee too low') && gasBumpPct < 80) {
+        console.warn(`[sendContractTx] replacement fee too low — retrying with +${gasBumpPct + 40}% gas bump`);
+        return this.sendContractTx(signer, to, calldata, value, gasBumpPct + 40);
+      }
+      throw new Error(errMsg);
     }
     const { hash } = await broadcastRes.json();
     if (!hash) throw new Error('Broadcast returned no transaction hash');

@@ -353,6 +353,8 @@ export function registerWalletRoutes(app: Express) {
 
       const txValue = value ? BigInt(value) : 0n;
       const txData  = data  || "0x";
+      // gasBumpPct: optional caller-requested percentage bump on top of base fee (for replacement txs)
+      const gasBumpPct = Math.max(0, Math.min(200, Number(req.body.gasBumpPct ?? 0)));
 
       const [nonce, feeData, gasEstimate] = await Promise.all([
         provider.getTransactionCount(from, "pending"),
@@ -363,6 +365,10 @@ export function registerWalletRoutes(app: Express) {
       // BSC doesn't support EIP-1559 — use legacy gasPrice
       const isBsc = Number(chainId) === 56;
       const gasLimit = (BigInt(gasEstimate) * 130n) / 100n; // +30% buffer
+
+      // Apply a 20% baseline buffer so transactions naturally replace any stuck pending ones,
+      // plus any additional caller-requested bump (used on retry after "replacement fee too low").
+      const bumpFactor = 120n + BigInt(gasBumpPct);   // e.g. 120 = 20% above base
 
       const tx: any = {
         type:     isBsc ? 0 : 2,
@@ -375,10 +381,13 @@ export function registerWalletRoutes(app: Express) {
       };
 
       if (isBsc) {
-        tx.gasPrice = (feeData.gasPrice ?? 3_000_000_000n).toString();
+        const baseGasPrice = feeData.gasPrice ?? 3_000_000_000n;
+        tx.gasPrice = ((baseGasPrice * bumpFactor) / 100n).toString();
       } else {
-        tx.maxFeePerGas         = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 1_500_000_000n).toString();
-        tx.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas ?? 1_000_000_000n).toString();
+        const baseMaxFee      = feeData.maxFeePerGas         ?? feeData.gasPrice ?? 1_500_000_000n;
+        const basePriorityFee = feeData.maxPriorityFeePerGas ?? 1_000_000_000n;
+        tx.maxFeePerGas         = ((baseMaxFee      * bumpFactor) / 100n).toString();
+        tx.maxPriorityFeePerGas = ((basePriorityFee * bumpFactor) / 100n).toString();
       }
 
       res.json({ tx });
