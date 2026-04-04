@@ -362,7 +362,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <div className="relative bg-muted rounded-lg p-3">
                 <p className="font-mono text-xs break-all pr-8 select-all">
-                  {showKey ? revealedKey : '•'.repeat(64)}
+                  {showKey ? revealedKey : '•'.repeat(revealedKey?.length ?? 64)}
                 </p>
                 <button
                   onClick={() => setShowKey(!showKey)}
@@ -371,6 +371,9 @@ export default function SettingsPage() {
                   {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Raw hex format (64 characters) — paste directly into MetaMask "Import Account"
+              </p>
               <Button className="w-full" variant="outline" onClick={() => copyToClipboard(revealedKey)}>
                 <Copy className="h-4 w-4 mr-2" /> Copy Key
               </Button>

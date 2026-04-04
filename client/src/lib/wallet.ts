@@ -611,10 +611,12 @@ class WalletManager {
     }
   }
 
-  // Export private key
+  // Export private key — returns raw 64-char hex (no 0x prefix) for
+  // universal compatibility with MetaMask and other wallet importers.
   exportPrivateKey(): string {
     if (!this.wallet) throw new Error('Wallet not unlocked');
-    return this.wallet.privateKey;
+    const key = this.wallet.privateKey;
+    return key.startsWith('0x') ? key.slice(2) : key;
   }
 
   // Export mnemonic — uses the in-memory cache populated on unlock.
