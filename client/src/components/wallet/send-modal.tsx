@@ -67,6 +67,37 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
     isLoadingBalance,
   } = useTransactions(selectedNetworkId);
 
+  // Direct server-side token balance query — same reliable path as the wallet dashboard
+  // Derive chainId from selectedNetworkId here (resolvedNetwork not yet defined)
+  const networkChainId = getNetworkById(selectedNetworkId)?.chainId ?? DEFAULT_NETWORK.chainId;
+  const { data: serverTokenData, isLoading: isServerTokenLoading } = useQuery({
+    queryKey: ['/api/wallet', wallet?.address, 'token-balances', networkChainId],
+    queryFn: async () => {
+      if (!wallet?.address) return { balances: [] };
+      const res = await fetch(`/api/wallet/${wallet.address}/token-balances?networkId=${networkChainId}`);
+      if (!res.ok) return { balances: [] };
+      return res.json();
+    },
+    enabled: !!wallet?.address && !!networkChainId,
+    staleTime: 15000,
+  });
+  const serverTokenBalances: Array<{ token: { symbol: string; address: string; decimals: number }; balance: string }> =
+    serverTokenData?.balances ?? [];
+
+  // Direct server-side native balance query
+  const { data: serverNativeData, isLoading: isServerNativeLoading } = useQuery({
+    queryKey: ['/api/wallet', wallet?.address, 'native-balance', networkChainId],
+    queryFn: async () => {
+      if (!wallet?.address) return { balance: '0' };
+      const res = await fetch(`/api/wallet/${wallet.address}/native-balance?networkId=${networkChainId}`);
+      if (!res.ok) return { balance: '0' };
+      return res.json();
+    },
+    enabled: !!wallet?.address && !!networkChainId,
+    staleTime: 15000,
+  });
+  const isServerLoading = isServerTokenLoading || isServerNativeLoading;
+
   const { data: treasuryData } = useQuery({
     queryKey: ['/api/fees/treasury-address'],
     queryFn: async () => {
@@ -148,12 +179,22 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
 
   const getTokenBalance = useCallback(() => {
     const tokenInfo = getSelectedTokenInfo();
-    if (tokenInfo.address === 'native') return balance;
-    // If still loading, return null so callers know data isn't ready
+    if (tokenInfo.address === 'native') {
+      // Prefer server native data as it's more reliable cross-chain
+      const serverNativeBal = serverNativeData?.balance ?? balance?.balance ?? null;
+      if (serverNativeBal === null && isServerLoading) return null;
+      return serverNativeBal !== null ? { balance: serverNativeBal, symbol: resolvedNetwork.symbol } : balance;
+    }
+    // Still loading — don't block
+    if (isServerLoading && serverTokenBalances.length === 0) return null;
+    // Use server token balances as primary (most reliable cross-chain)
+    const serverTb = serverTokenBalances.find(t => t.token.address.toLowerCase() === tokenInfo.address.toLowerCase());
+    if (serverTb) return { balance: serverTb.balance, symbol: serverTb.token.symbol };
+    // Fall back to balance-manager data
     if (isLoadingBalance && tokenBalances.length === 0) return null;
     const tb = tokenBalances.find(t => t.token.address.toLowerCase() === tokenInfo.address.toLowerCase());
     return tb ? { balance: tb.balance, symbol: tb.token.symbol } : { balance: '0', symbol: tokenInfo.symbol };
-  }, [balance, tokenBalances, isLoadingBalance, getSelectedTokenInfo]);
+  }, [balance, tokenBalances, isLoadingBalance, serverTokenBalances, serverNativeData, isServerLoading, resolvedNetwork, getSelectedTokenInfo]);
 
   const calculateTotal = useCallback(() => {
     const amount = parseFloat(watchedValues.amount || '0');
@@ -173,11 +214,11 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
       // Gas is sponsored automatically when native balance is 0, so only check token balance
       return tokenAmount > parseFloat(tb.balance);
     }
-    // For native token (ETH/BNB): check total amount including gas
-    const nativeBalance = parseFloat(balance?.balance || '0');
+    // For native token: use server balance as primary source
+    const nativeBalance = parseFloat(serverNativeData?.balance ?? balance?.balance ?? '0');
     const gasAmount = parseFloat(gasEstimate || '0');
     return (tokenAmount + gasAmount) > nativeBalance;
-  }, [balance, tokenBalances, isLoadingBalance, watchedValues.amount, gasEstimate, getSelectedTokenInfo, getTokenBalance]);
+  }, [balance, tokenBalances, isLoadingBalance, serverTokenBalances, serverNativeData, isServerLoading, watchedValues.amount, gasEstimate, getSelectedTokenInfo, getTokenBalance]);
 
   const handleReview = (data: SendFormData) => {
     const chainCheck = mainnetGuard.validateChainId(resolvedNetwork.chainId);
@@ -361,7 +402,7 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
                 </div>
               </div>
               {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-              {isLoadingBalance && tokenBalances.length === 0 ? (
+              {isServerLoading ? (
                 <p className="text-sm text-muted-foreground animate-pulse">Loading balance...</p>
               ) : tokenBalance ? (
                 <p className="text-sm text-muted-foreground">
