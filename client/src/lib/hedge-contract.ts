@@ -296,6 +296,56 @@ class HedgeContractManager {
     }
   }
 
+  /**
+   * Send a contract write transaction via the server to avoid CORS errors on
+   * Base/BSC RPC nodes. The signer never connects to a live provider —
+   * signing is done offline. Only the signed hex leaves the browser.
+   */
+  private async sendContractTx(
+    signer: ethers.Wallet,
+    to: string,
+    calldata: string,
+    value: bigint = 0n
+  ): Promise<string> {
+    const chainId = this._chainId;
+
+    const paramsRes = await fetch('/api/wallet/tx-params', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chainId,
+        from: signer.address,
+        to,
+        data: calldata,
+        value: value.toString(),
+      }),
+    });
+    if (!paramsRes.ok) {
+      const err = await paramsRes.json().catch(() => ({}));
+      throw new Error((err as any).error || `tx-params failed (${paramsRes.status})`);
+    }
+    const { tx } = await paramsRes.json();
+
+    const signed = await signer.signTransaction(tx);
+
+    const broadcastRes = await fetch('/api/wallet/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signedTx: signed, chainId }),
+    });
+    if (!broadcastRes.ok) {
+      const err = await broadcastRes.json().catch(() => ({}));
+      throw new Error((err as any).error || `broadcast failed (${broadcastRes.status})`);
+    }
+    const { txHash } = await broadcastRes.json();
+    return txHash as string;
+  }
+
+  /** Wait for a txHash to be mined using the read provider (read-only — no CORS issue). */
+  private async waitForTx(txHash: string): Promise<void> {
+    await this.getProvider().waitForTransaction(txHash, 1, 120_000);
+  }
+
   private parseHexOrDec(value: string): number {
     if (value.startsWith('0x') || value.startsWith('0X')) {
       return parseInt(value, 16);
@@ -344,16 +394,17 @@ class HedgeContractManager {
 
   /** Generic ERC-20 approve for the Diamond — works for USDC, USDT, or any whitelisted token. */
   async approveToken(signer: ethers.Wallet, tokenAddress: string, _amount: string): Promise<void> {
-    const connected = signer.connect(this.getProvider());
-    await this.ensureGas(connected.address);
-    const token = new ethers.Contract(tokenAddress, USDC_ABI, connected);
-    const currentAllowance = await token.allowance(connected.address, this.activeDiamond);
+    await this.ensureGas(signer.address);
+    const token = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+    const currentAllowance = await token.allowance(signer.address, this.activeDiamond);
     const maxThreshold = ethers.parseUnits("1000000000", this.tokenDecimals);
     if (currentAllowance >= maxThreshold) {
       return;
     }
-    const tx = await token.approve(this.activeDiamond, ethers.MaxUint256);
-    await tx.wait();
+    const iface = new ethers.Interface(USDC_ABI);
+    const calldata = iface.encodeFunctionData('approve', [this.activeDiamond, ethers.MaxUint256]);
+    const txHash = await this.sendContractTx(signer, tokenAddress, calldata);
+    await this.waitForTx(txHash);
   }
 
   async getUSDCBalance(address: string): Promise<string> {
@@ -612,11 +663,9 @@ class HedgeContractManager {
       initialLiquidity: string;
       initialRate: number;
       strikeAbove: boolean;
-      /** ERC-20 token address to use for this event. Defaults to USDC if not supplied. */
       paymentToken?: string;
     }
-  ): Promise<ethers.TransactionResponse> {
-    const connected = signer.connect(this.getProvider());
+  ): Promise<void> {
     const feeConfig = await this.getFeeConfig();
     const tokenAddress = params.paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
     const dec = this.tokenDecimals;
@@ -625,7 +674,7 @@ class HedgeContractManager {
     const totalCost = initialLiquidityWei + creationFeeWei;
 
     const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-    const balance = await tokenContract.balanceOf(connected.address);
+    const balance = await tokenContract.balanceOf(signer.address);
     if (balance < totalCost) {
       const balanceFormatted = ethers.formatUnits(balance, dec);
       const costFormatted = ethers.formatUnits(totalCost, dec);
@@ -635,16 +684,16 @@ class HedgeContractManager {
     }
 
     await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, dec));
-    await this.ensureGas(connected.address);
+    await this.ensureGas(signer.address);
 
-    const contract = this.getWriteContract(signer);
+    const iface = new ethers.Interface(HEDGE_ABI);
     const strikeWei = ethers.parseUnits(params.strike.toString(), 6);
     const premiumRateWei = ethers.parseUnits(params.premiumRate.toString(), 6);
     const expiryTimestamp = toTimestamp(params.expiryDate);
     const initialRateWei = ethers.parseUnits(params.initialRate.toFixed(6), 6);
 
     try {
-      const tx = await contract.createEvent([
+      const calldata = iface.encodeFunctionData('createEvent', [[
         params.name,
         params.underlying,
         strikeWei,
@@ -655,9 +704,9 @@ class HedgeContractManager {
         initialRateWei,
         params.strikeAbove,
         tokenAddress,
-      ]);
-      await tx.wait();
-      return tx;
+      ]]);
+      const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+      await this.waitForTx(txHash);
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
@@ -672,29 +721,26 @@ class HedgeContractManager {
     eventId: number,
     poolOpen: boolean,
     allowExternalLp: boolean
-  ): Promise<ethers.TransactionResponse> {
-    const connected = signer.connect(this.getProvider());
-    await this.ensureGas(connected.address);
-    const contract = this.getWriteContract(signer);
-    const tx = await contract.setPoolSettings(eventId, poolOpen, allowExternalLp);
-    await tx.wait();
-    return tx;
+  ): Promise<void> {
+    await this.ensureGas(signer.address);
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('setPoolSettings', [eventId, poolOpen, allowExternalLp]);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+    await this.waitForTx(txHash);
   }
 
   async deposit(
     signer: ethers.Wallet,
     eventId: number,
     amount: string
-  ): Promise<ethers.TransactionResponse> {
+  ): Promise<void> {
     const readContract = this.getReadContract();
     const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS) as string;
-    const connected = signer.connect(this.getProvider());
     const dec = this.tokenDecimals;
     const amountWei = ethers.parseUnits(amount, dec);
 
-    // Pre-flight balance check
     const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-    const balance = await tokenContract.balanceOf(connected.address);
+    const balance = await tokenContract.balanceOf(signer.address);
     if (balance < amountWei) {
       const balanceFormatted = ethers.formatUnits(balance, dec);
       const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
@@ -705,17 +751,17 @@ class HedgeContractManager {
     }
 
     await this.approveToken(signer, tokenAddress, amount);
-    const contract = this.getWriteContract(signer);
-    const tx = await contract.deposit(eventId, amountWei);
-    await tx.wait();
-    return tx;
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('deposit', [eventId, amountWei]);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+    await this.waitForTx(txHash);
   }
 
   async buyProtection(
     signer: ethers.Wallet,
     eventId: number,
     notional: string
-  ): Promise<ethers.TransactionResponse> {
+  ): Promise<void> {
     const readContract = this.getReadContract();
     const [core, feeConfig, tokenAddress] = await Promise.all([
       readContract.getHedgeEventCore(eventId),
@@ -723,7 +769,6 @@ class HedgeContractManager {
       readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
     ]);
 
-    const connected = signer.connect(this.getProvider());
     const dec = this.tokenDecimals;
     const notionalWei = ethers.parseUnits(notional, dec);
     const premiumRate = core.premiumRate as bigint;
@@ -733,11 +778,10 @@ class HedgeContractManager {
     const fee = (notionalWei * hedgerFeeRate) / BigInt(PRECISION);
     const totalCost = premium + fee;
 
-    // Pre-flight balance check
     const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
     const symbol = (tokenAddress as string).toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
     const tokenContract = new ethers.Contract(tokenAddress as string, USDC_ABI, this.getProvider());
-    const balance = await tokenContract.balanceOf(connected.address);
+    const balance = await tokenContract.balanceOf(signer.address);
     if (balance < totalCost) {
       const balanceFormatted = ethers.formatUnits(balance, dec);
       const costFormatted = ethers.formatUnits(totalCost, dec);
@@ -748,11 +792,11 @@ class HedgeContractManager {
 
     await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, dec));
 
-    const contract = this.getWriteContract(signer);
+    const iface = new ethers.Interface(HEDGE_ABI);
     try {
-      const tx = await contract.buyProtection(eventId, notionalWei);
-      await tx.wait();
-      return tx;
+      const calldata = iface.encodeFunctionData('buyProtection', [eventId, notionalWei]);
+      const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+      await this.waitForTx(txHash);
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
@@ -762,40 +806,36 @@ class HedgeContractManager {
     }
   }
 
-  async claimPayout(signer: ethers.Wallet, positionId: number): Promise<ethers.TransactionResponse> {
-    const connected = signer.connect(this.getProvider());
-    await this.ensureGas(connected.address);
-    const contract = this.getWriteContract(signer);
-    const tx = await contract.claimPayout(positionId);
-    await tx.wait();
-    return tx;
+  async claimPayout(signer: ethers.Wallet, positionId: number): Promise<void> {
+    await this.ensureGas(signer.address);
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('claimPayout', [positionId]);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+    await this.waitForTx(txHash);
   }
 
-  async claimPremiums(signer: ethers.Wallet, depositId: number): Promise<ethers.TransactionResponse> {
-    const connected = signer.connect(this.getProvider());
-    await this.ensureGas(connected.address);
-    const contract = this.getWriteContract(signer);
-    const tx = await contract.claimPremiums(depositId);
-    await tx.wait();
-    return tx;
+  async claimPremiums(signer: ethers.Wallet, depositId: number): Promise<void> {
+    await this.ensureGas(signer.address);
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('claimPremiums', [depositId]);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+    await this.waitForTx(txHash);
   }
 
-  async withdrawCapital(signer: ethers.Wallet, depositId: number): Promise<ethers.TransactionResponse> {
-    const connected = signer.connect(this.getProvider());
-    await this.ensureGas(connected.address);
-    const contract = this.getWriteContract(signer);
-    const tx = await contract.withdrawCapital(depositId);
-    await tx.wait();
-    return tx;
+  async withdrawCapital(signer: ethers.Wallet, depositId: number): Promise<void> {
+    await this.ensureGas(signer.address);
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('withdrawCapital', [depositId]);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+    await this.waitForTx(txHash);
   }
 
-  async withdrawCreatorEarnings(signer: ethers.Wallet, eventId: number): Promise<ethers.TransactionResponse> {
-    const connected = signer.connect(this.getProvider());
-    await this.ensureGas(connected.address);
-    const contract = this.getWriteContract(signer);
-    const tx = await contract.withdrawCreatorEarnings(eventId);
-    await tx.wait();
-    return tx;
+  async withdrawCreatorEarnings(signer: ethers.Wallet, eventId: number): Promise<void> {
+    await this.ensureGas(signer.address);
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('withdrawCreatorEarnings', [eventId]);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata);
+    await this.waitForTx(txHash);
   }
 }
 
