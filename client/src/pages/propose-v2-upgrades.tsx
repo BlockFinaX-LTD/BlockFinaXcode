@@ -112,21 +112,31 @@ export default function ProposeV2Upgrades() {
     return { txHash, approvals, nonce: Number(nonce) };
   }, []);
 
-  useEffect(() => {
-    loadTimelockState();
-  }, [loadTimelockState]);
+  // Unified refresh — reloads timelock AND both Safe approval states
+  const refreshAll = useCallback(async () => {
+    await loadTimelockState();
+    loadSafeApproval(PROPOSE_DATA).then(setProposeApproval).catch(() => {});
+  }, [loadTimelockState, loadSafeApproval]);
 
   useEffect(() => {
-    if (phase === "propose" || phase === "waiting") {
-      loadSafeApproval(PROPOSE_DATA).then(setProposeApproval).catch(() => {});
-    }
-  }, [phase, loadSafeApproval]);
+    refreshAll();
+  }, [refreshAll]);
 
   useEffect(() => {
     if ((phase === "waiting" || phase === "execute") && proposalId) {
       const execData = EXEC_CUT_IFACE.encodeFunctionData("executePendingCut", [proposalId]);
       loadSafeApproval(execData).then(setExecApproval).catch(() => {});
     }
+  }, [phase, proposalId, loadSafeApproval]);
+
+  // Auto-poll exec approval every 15s while in execute phase so second signature shows up automatically
+  useEffect(() => {
+    if (phase !== "execute" || !proposalId) return;
+    const execData = EXEC_CUT_IFACE.encodeFunctionData("executePendingCut", [proposalId]);
+    const interval = setInterval(() => {
+      loadSafeApproval(execData).then(setExecApproval).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
   }, [phase, proposalId, loadSafeApproval]);
 
   useEffect(() => {
@@ -215,10 +225,13 @@ export default function ProposeV2Upgrades() {
       const safe     = new ethers.Contract(SAFE, SAFE_ABI, signer);
       const tx = await safe.approveHash(execApproval.txHash);
       await tx.wait();
-      setSuccess("Approved. Waiting for second signer.");
+      // Brief delay so Lisk RPC propagates the approval before we re-query
+      await new Promise(r => setTimeout(r, 2000));
       const execData = EXEC_CUT_IFACE.encodeFunctionData("executePendingCut", [proposalId]);
       const updated  = await loadSafeApproval(execData);
       setExecApproval(updated);
+      const count = updated.approvals.filter(Boolean).length;
+      setSuccess(count >= 2 ? "Both owners approved — ready to execute!" : "Approved. Waiting for second signer.");
     } catch (e: any) { setError(e.message); }
     setBusy(false);
   }
@@ -385,7 +398,7 @@ export default function ProposeV2Upgrades() {
         )}
         {success && <div className="mt-4 p-3 bg-green-50 rounded-lg text-xs text-green-700">{success}</div>}
 
-        <button onClick={() => { loadTimelockState(); }} className="mt-4 text-xs text-gray-400 underline w-full text-center">Refresh status</button>
+        <button onClick={() => { refreshAll(); }} className="mt-4 text-xs text-gray-400 underline w-full text-center">Refresh status</button>
       </div>
     </div>
   );
