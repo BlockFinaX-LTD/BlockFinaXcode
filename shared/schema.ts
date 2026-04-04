@@ -5,7 +5,7 @@
  * for the blockchain communication platform.
  */
 
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, unique, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, unique, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -115,7 +115,12 @@ export const hedgeEvents = pgTable("hedge_events", {
   createdBy: text("created_by").notNull(),
   creatorEarnings: decimal("creator_earnings", { precision: 18, scale: 6 }).default("0"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // Chain provenance — set when event is synced or created from a specific chain
+  chainId: integer("chain_id"),         // e.g. 8453 for Base
+  onChainEventId: integer("on_chain_event_id"), // the contract's event ID (uint256 counter)
+}, (table) => [
+  uniqueIndex("hedge_events_chain_id_on_chain_event_id_idx").on(table.chainId, table.onChainEventId),
+]);
 
 export const insertHedgeEventSchema = createInsertSchema(hedgeEvents).omit({
   id: true,

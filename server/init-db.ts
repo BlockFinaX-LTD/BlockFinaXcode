@@ -91,7 +91,9 @@ async function createTables() {
       allow_external_lp BOOLEAN NOT NULL DEFAULT TRUE,
       created_by TEXT NOT NULL,
       creator_earnings DECIMAL(18,6) DEFAULT 0,
-      created_at TIMESTAMP DEFAULT NOW()
+      created_at TIMESTAMP DEFAULT NOW(),
+      chain_id INTEGER,
+      on_chain_event_id INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS hedge_positions (
@@ -374,6 +376,19 @@ export async function initializeDatabase() {
   } catch (error) {
     console.error("Failed to create indexes:", error);
     // Non-fatal — app can still run without indexes, just slower
+  }
+
+  // Idempotent column migrations — safe to run on every startup
+  try {
+    await db.execute(sql`ALTER TABLE hedge_events ADD COLUMN IF NOT EXISTS chain_id INTEGER`);
+    await db.execute(sql`ALTER TABLE hedge_events ADD COLUMN IF NOT EXISTS on_chain_event_id INTEGER`);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS hedge_events_chain_id_on_chain_event_id_idx
+        ON hedge_events (chain_id, on_chain_event_id)
+        WHERE chain_id IS NOT NULL AND on_chain_event_id IS NOT NULL
+    `);
+  } catch (error) {
+    console.error("Failed to apply hedge_events column migration:", error);
   }
 
   for (const network of defaultNetworks) {

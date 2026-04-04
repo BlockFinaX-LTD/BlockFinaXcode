@@ -110,9 +110,11 @@ export interface IStorage {
   // Hedge Event operations
   createHedgeEvent(event: InsertHedgeEvent): Promise<HedgeEvent>;
   getHedgeEvent(id: number): Promise<HedgeEvent | undefined>;
+  getHedgeEventByChain(chainId: number, onChainEventId: number): Promise<HedgeEvent | undefined>;
   getAllHedgeEvents(): Promise<HedgeEvent[]>;
   getOpenHedgeEvents(): Promise<HedgeEvent[]>;
   updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined>;
+  upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }>;
 
   // Hedge Position operations
   createHedgePosition(position: InsertHedgePosition): Promise<HedgePosition>;
@@ -442,9 +444,11 @@ export class MemStorage implements IStorage {
   // Hedge operations (stubs)
   async createHedgeEvent(event: InsertHedgeEvent): Promise<HedgeEvent> { throw new Error("MemStorage: Hedge not implemented - use DatabaseStorage"); }
   async getHedgeEvent(id: number): Promise<HedgeEvent | undefined> { return undefined; }
+  async getHedgeEventByChain(chainId: number, onChainEventId: number): Promise<HedgeEvent | undefined> { return undefined; }
   async getAllHedgeEvents(): Promise<HedgeEvent[]> { return []; }
   async getOpenHedgeEvents(): Promise<HedgeEvent[]> { return []; }
   async updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined> { return undefined; }
+  async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> { throw new Error("MemStorage: not implemented"); }
   async createHedgePosition(position: InsertHedgePosition): Promise<HedgePosition> { throw new Error("MemStorage: Hedge not implemented - use DatabaseStorage"); }
   async getHedgePosition(id: number): Promise<HedgePosition | undefined> { return undefined; }
   async getHedgePositionsByEvent(eventId: number): Promise<HedgePosition[]> { return []; }
@@ -711,6 +715,27 @@ export class DatabaseStorage implements IStorage {
   async getHedgeEvent(id: number): Promise<HedgeEvent | undefined> {
     const [event] = await db.select().from(hedgeEvents).where(eq(hedgeEvents.id, id));
     return event;
+  }
+
+  async getHedgeEventByChain(chainId: number, onChainEventId: number): Promise<HedgeEvent | undefined> {
+    const [event] = await db.select().from(hedgeEvents)
+      .where(and(eq(hedgeEvents.chainId, chainId), eq(hedgeEvents.onChainEventId, onChainEventId)));
+    return event;
+  }
+
+  async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> {
+    const existing = await this.getHedgeEventByChain(chainId, onChainEventId);
+    if (existing) {
+      const [updated] = await db.update(hedgeEvents)
+        .set({ status: event.status, expiryDate: event.expiryDate, poolOpen: event.poolOpen })
+        .where(eq(hedgeEvents.id, existing.id))
+        .returning();
+      return { event: updated, created: false };
+    }
+    const [created] = await db.insert(hedgeEvents)
+      .values({ ...event, chainId, onChainEventId })
+      .returning();
+    return { event: created, created: true };
   }
 
   async getAllHedgeEvents(): Promise<HedgeEvent[]> {

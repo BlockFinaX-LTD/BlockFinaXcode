@@ -11,6 +11,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
 import { startAllOracleNodes } from "./multi-oracle/start-all";
+import { startupChainSync } from "./chain-sync";
 
 // Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
 const _originalExit = process.exit.bind(process);
@@ -129,6 +130,9 @@ app.use((req, res, next) => {
 
   // Start multi-oracle nodes (only if keys and DIAMOND_ADDRESS are configured)
   startAllOracleNodes();
+
+  // Sync on-chain hedge events into the DB (non-blocking — runs in background)
+  startupChainSync().catch((e) => console.error("[ChainSync] Startup sync error:", e?.message));
 
   const server = await registerRoutes(app);
 

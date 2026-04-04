@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { authSessions, platformFees } from "../../shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
+import { syncChainEvents } from "../chain-sync";
 
 // ── Integer financial math helpers ───────────────────────────────────────────
 function toMicro(s: string | number): bigint {
@@ -260,6 +261,17 @@ export async function registerProtocolRoutes(app: Express) {
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Failed to run auto-settle" });
+    }
+  });
+
+  // Sync on-chain hedge events into the DB (admin-only, idempotent)
+  app.post("/api/admin/sync-chain-events", requireAdmin, async (req, res) => {
+    try {
+      const chainId = req.body?.chainId ? Number(req.body.chainId) : undefined;
+      const results = await syncChainEvents(chainId);
+      res.json({ ok: true, results });
+    } catch (error: any) {
+      res.status(500).json({ message: error?.message || "Sync failed" });
     }
   });
 
