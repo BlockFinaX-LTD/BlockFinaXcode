@@ -151,21 +151,32 @@ export class OracleNode {
       return;
     }
 
-    let totalEvents: number;
+    // getTotalHedgeEvents() may be absent on older Diamond deployments (Base/BSC).
+    // If it fails, scan IDs upward from 1 and stop at the first revert — that's the end.
+    const MAX_SCAN = 10_000;
+    let knownTotal: number | null = null;
     try {
-      totalEvents = Number(await this.readContract.getTotalHedgeEvents());
-    } catch (err) {
-      this.log(`Failed to read total events: ${err instanceof Error ? err.message : err}`);
-      return;
+      knownTotal = Number(await this.readContract.getTotalHedgeEvents());
+      this.log(`Total on-chain events: ${knownTotal}`);
+    } catch {
+      this.log(`getTotalHedgeEvents() unavailable — scanning event IDs upward`);
     }
 
     const now = Math.floor(Date.now() / 1000);
     let submitted = 0;
     let skipped = 0;
 
-    for (let i = 1; i <= totalEvents; i++) {
+    for (let i = 1; i <= (knownTotal ?? MAX_SCAN); i++) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let core: any = null;
       try {
-        const core = await this.readContract.getHedgeEventCore(i);
+        core = await this.readContract.getHedgeEventCore(i);
+      } catch {
+        if (knownTotal === null) break; // scan mode: no more events
+        continue; // known-total mode: skip this ID
+      }
+      if (!core) continue;
+      try {
         const status = Number(core.status);
         if (status !== 0) continue; // 0 = Open
 

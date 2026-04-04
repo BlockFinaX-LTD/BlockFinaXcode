@@ -415,20 +415,28 @@ async function settleChain(
   const readContract = new ethers.Contract(chain.diamondAddress, HEDGE_ABI, provider);
   const writeContract = new ethers.Contract(chain.diamondAddress, HEDGE_ABI, signer);
 
-  let totalEvents: number;
+  // getTotalHedgeEvents() may be absent on older Diamond deployments (Base/BSC).
+  // If it fails, scan event IDs 1, 2, 3... and stop at first revert — no contract upgrade needed.
+  const MAX_SCAN = 10_000;
+  let knownTotal: number | null = null;
   try {
-    totalEvents = Number(await readContract.getTotalHedgeEvents());
-  } catch (error) {
-    // Non-fatal — Diamond may not have HedgeFacet on this chain yet
-    errors.push(`${tag} getTotalHedgeEvents failed: ${error instanceof Error ? error.message : error}`);
-    return { settled, oneTouchSettled, expirySettled, errors };
+    knownTotal = Number(await readContract.getTotalHedgeEvents());
+    console.log(`${tag} Total on-chain events: ${knownTotal}`);
+  } catch {
+    console.log(`${tag} getTotalHedgeEvents() unavailable — scanning event IDs upward`);
   }
 
-  console.log(`${tag} Checking ${totalEvents} event(s) for settlement...`);
-
-  for (let i = 1; i <= totalEvents; i++) {
+  for (let i = 1; i <= (knownTotal ?? MAX_SCAN); i++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let core: any = null;
     try {
-      const core = await readContract.getHedgeEventCore(i);
+      core = await readContract.getHedgeEventCore(i);
+    } catch {
+      if (knownTotal === null) break; // scan mode: no more events
+      continue; // known-total mode: skip bad ID
+    }
+    if (!core) continue;
+    try {
       const status = Number(core.status);
       if (status !== 0) continue; // 0 = Open, skip settled/cancelled
 
