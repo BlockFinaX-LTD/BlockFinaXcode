@@ -40,6 +40,9 @@ export interface OracleNodeConfig {
   /** Poll interval in milliseconds (default 5 min) */
   pollIntervalMs?: number;
 
+  /** Delay in ms before the first poll — use to stagger multiple node starts */
+  startDelayMs?: number;
+
   /**
    * Maximum allowed deviation from the previous observed rate, as a fraction.
    * Submissions deviating beyond this are skipped and logged. Default 0.07 (7%).
@@ -71,7 +74,7 @@ const HEDGE_FACET_ABI = [
 
 export class OracleNode {
   private config: Required<OracleNodeConfig>;
-  private provider: ethers.JsonRpcProvider;
+  private provider: ethers.JsonRpcProvider | ethers.FallbackProvider;
   private signer: ethers.Wallet;
   private writeContract: ethers.Contract;
   private readContract: ethers.Contract;
@@ -82,11 +85,24 @@ export class OracleNode {
     this.config = {
       pollIntervalMs: 5 * 60 * 1000,
       maxDeviationFraction: 0.07,
+      startDelayMs: 0,
       ...config,
     };
 
-    this.provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
-    this.signer = new ethers.Wallet(this.config.privateKey, this.provider);
+    // Support comma-separated RPC URLs for automatic failover
+    const rpcUrls = this.config.rpcUrl.split(',').map(u => u.trim()).filter(Boolean);
+    if (rpcUrls.length > 1) {
+      const providers = rpcUrls.map((url, i) => ({
+        provider: new ethers.JsonRpcProvider(url),
+        priority: i + 1,
+        stallTimeout: 3000,
+        weight: 1,
+      }));
+      this.provider = new ethers.FallbackProvider(providers, undefined, { quorum: 1 });
+    } else {
+      this.provider = new ethers.JsonRpcProvider(rpcUrls[0]);
+    }
+    this.signer = new ethers.Wallet(this.config.privateKey, this.provider as any);
     this.writeContract = new ethers.Contract(
       this.config.diamondAddress,
       ORACLE_FACET_ABI,
@@ -118,6 +134,12 @@ export class OracleNode {
       }
     } catch {
       this.log("Wallet is authorised oracle — ready to submit.");
+    }
+
+    const startDelay = this.config.startDelayMs ?? 0;
+    if (startDelay > 0) {
+      this.log(`Delaying first poll by ${Math.round(startDelay / 1000)}s to stagger startup`);
+      await new Promise((r) => setTimeout(r, startDelay));
     }
 
     await this.runCycle();
@@ -165,14 +187,30 @@ export class OracleNode {
     const now = Math.floor(Date.now() / 1000);
     let submitted = 0;
     let skipped = 0;
+    let consecutiveRpcErrors = 0;
+    const MAX_CONSECUTIVE_RPC_ERRORS = 3;
 
     for (let i = 1; i <= (knownTotal ?? MAX_SCAN); i++) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let core: any = null;
       try {
         core = await this.readContract.getHedgeEventCore(i);
-      } catch {
-        if (knownTotal === null) break; // scan mode: no more events
+        consecutiveRpcErrors = 0; // reset on success
+      } catch (err: any) {
+        if (knownTotal === null) {
+          // In scan mode, distinguish contract reverts (no event) from RPC errors.
+          const msg: string = (err?.message ?? "").toLowerCase();
+          const isRevert = msg.includes("revert") || msg.includes("invalid event") ||
+            msg.includes("call exception") || msg.includes("missing revert data");
+          if (isRevert) break; // clean end-of-events
+          consecutiveRpcErrors++;
+          if (consecutiveRpcErrors >= MAX_CONSECUTIVE_RPC_ERRORS) {
+            this.log(`  Scan aborted after ${MAX_CONSECUTIVE_RPC_ERRORS} consecutive RPC errors`);
+            break;
+          }
+          this.log(`  Event #${i}: RPC read error (continuing scan) — ${err?.message ?? err}`);
+          continue;
+        }
         continue; // known-total mode: skip this ID
       }
       if (!core) continue;

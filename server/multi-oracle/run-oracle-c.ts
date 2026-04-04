@@ -30,6 +30,7 @@ const RPC_URL =
 const DIAMOND_ADDRESS = process.env.DIAMOND_ADDRESS;
 const ORACLE_KEY_C = process.env.ORACLE_KEY_C;
 const POLL_MS = Number(process.env.ORACLE_POLL_MS) || 5 * 60 * 1000;
+const START_DELAY_MS = Number(process.env.ORACLE_START_DELAY_MS) || 0;
 
 if (!DIAMOND_ADDRESS) throw new Error("DIAMOND_ADDRESS env var required");
 if (!ORACLE_KEY_C) throw new Error("ORACLE_KEY_C env var required");
@@ -38,8 +39,21 @@ if (!ORACLE_KEY_C) throw new Error("ORACLE_KEY_C env var required");
 //           FX — Frankfurter (ECB — major pairs only)
 // ============================================================
 
+// African FX pairs fetched from ExchangeRate-API (open.er-api.com) as a tertiary source.
+// These supplement Oracle A & B's coverage of the same pairs.
+const ERAPI_PAIRS: Record<string, { base: string; quote: string }> = {
+  "USD/GHS": { base: "USD", quote: "GHS" },
+  "USD/NGN": { base: "USD", quote: "NGN" },
+  "USD/KES": { base: "USD", quote: "KES" },
+  "USD/ZAR": { base: "USD", quote: "ZAR" },
+  "USD/ETB": { base: "USD", quote: "ETB" },
+  "USD/UGX": { base: "USD", quote: "UGX" },
+  "USD/EGP": { base: "USD", quote: "EGP" },
+  "USD/MAD": { base: "USD", quote: "MAD" },
+  "USD/TND": { base: "USD", quote: "TND" },
+};
+
 // Only pairs that Frankfurter reliably covers via ECB data.
-// All USD/GHS, USD/NGN etc. are excluded here — Oracle A & B cover those.
 const FRANKFURTER_PAIRS: Record<string, { from: string; to: string }> = {
   "EUR/USD": { from: "EUR", to: "USD" },
   "GBP/USD": { from: "GBP", to: "USD" },
@@ -151,16 +165,41 @@ async function fetchYahooPrice(ticker: string): Promise<number | null> {
   }
 }
 
+async function fetchErApiRates(): Promise<Record<string, number>> {
+  try {
+    const bases = [...new Set(Object.values(ERAPI_PAIRS).map((p) => p.base))];
+    const results: Record<string, number> = {};
+    await Promise.all(
+      bases.map(async (base) => {
+        try {
+          const res = await fetch(`https://open.er-api.com/v6/latest/${base}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.result !== "success") return;
+          for (const [pair, { base: b, quote }] of Object.entries(ERAPI_PAIRS)) {
+            if (b === base && data.rates[quote]) results[pair] = data.rates[quote];
+          }
+        } catch { /* skip */ }
+      })
+    );
+    return results;
+  } catch {
+    return {};
+  }
+}
+
 async function fetchPrices(): Promise<PriceMap> {
   const prices: PriceMap = {};
 
-  const [fxRates, cryptoPrices, ...yahooResults] = await Promise.all([
+  const [fxRates, erApiRates, cryptoPrices, ...yahooResults] = await Promise.all([
     fetchFrankfurterRates(),
+    fetchErApiRates(),
     fetchBinancePrices(),
     ...Object.entries(YAHOO_TICKERS).map(([, ticker]) => fetchYahooPrice(ticker)),
   ]);
 
   Object.assign(prices, fxRates);
+  Object.assign(prices, erApiRates);
   Object.assign(prices, cryptoPrices);
 
   const yahooPairs = Object.keys(YAHOO_TICKERS);
@@ -183,6 +222,7 @@ const node = new OracleNode({
   diamondAddress: DIAMOND_ADDRESS,
   fetchPrices,
   pollIntervalMs: POLL_MS,
+  startDelayMs: START_DELAY_MS,
 });
 
 process.on("SIGTERM", () => { node.stop(); process.exit(0); });

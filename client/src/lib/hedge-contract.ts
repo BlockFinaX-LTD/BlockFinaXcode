@@ -632,12 +632,20 @@ class HedgeContractManager {
 
   async getPositionsByWallet(address: string): Promise<HedgePositionData[]> {
     const contract = this.getReadContract();
-    const [ids, timestamps] = await Promise.all([
-      contract.getHedgerPositionIds(address),
-      this.getPositionTimestamps(),
-    ]);
+    let ids: bigint[] = [];
+    let timestamps: Map<number, Date> = new Map();
+    try {
+      const result = await Promise.all([
+        contract.getHedgerPositionIds(address),
+        this.getPositionTimestamps(),
+      ]);
+      ids = result[0] as bigint[];
+      timestamps = result[1] as Map<number, Date>;
+    } catch {
+      return []; // function not deployed on this Diamond or call failed
+    }
     const positions: HedgePositionData[] = [];
-    for (const id of ids as bigint[]) {
+    for (const id of ids) {
       try {
         const p = await contract.getHedgePosition(id);
         const posId = Number(p.id);
@@ -662,12 +670,20 @@ class HedgeContractManager {
 
   async getDepositsByWallet(address: string): Promise<HedgeLpDepositData[]> {
     const contract = this.getReadContract();
-    const [ids, timestamps] = await Promise.all([
-      contract.getLpDepositIds(address),
-      this.getDepositTimestamps(),
-    ]);
+    let ids: bigint[] = [];
+    let timestamps: Map<number, Date> = new Map();
+    try {
+      const result = await Promise.all([
+        contract.getLpDepositIds(address),
+        this.getDepositTimestamps(),
+      ]);
+      ids = result[0] as bigint[];
+      timestamps = result[1] as Map<number, Date>;
+    } catch {
+      return []; // function not deployed on this Diamond or call failed
+    }
     const deposits: HedgeLpDepositData[] = [];
-    for (const id of ids as bigint[]) {
+    for (const id of ids) {
       try {
         const d = await contract.getHedgeLpDeposit(id);
         const depId = Number(d.id);

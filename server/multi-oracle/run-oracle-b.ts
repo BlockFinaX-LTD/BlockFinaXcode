@@ -25,6 +25,7 @@ const RPC_URL =
 const DIAMOND_ADDRESS = process.env.DIAMOND_ADDRESS;
 const ORACLE_KEY_B = process.env.ORACLE_KEY_B;
 const POLL_MS = Number(process.env.ORACLE_POLL_MS) || 5 * 60 * 1000;
+const START_DELAY_MS = Number(process.env.ORACLE_START_DELAY_MS) || 0;
 
 if (!DIAMOND_ADDRESS) throw new Error("DIAMOND_ADDRESS env var required");
 if (!ORACLE_KEY_B) throw new Error("ORACLE_KEY_B env var required");
@@ -178,6 +179,7 @@ const node = new OracleNode({
   diamondAddress: DIAMOND_ADDRESS,
   fetchPrices,
   pollIntervalMs: POLL_MS,
+  startDelayMs: START_DELAY_MS,
 });
 
 process.on("SIGTERM", () => { node.stop(); process.exit(0); });

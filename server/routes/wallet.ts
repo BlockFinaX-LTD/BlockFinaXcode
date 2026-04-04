@@ -326,7 +326,7 @@ export function registerWalletRoutes(app: Express) {
     const RPC_LIST: Record<number, string[]> = {
       1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
       4202: ["https://rpc.sepolia-api.lisk.com"],
-      8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+      8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
       56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
     };
     const urls = RPC_LIST[chainId];
@@ -341,6 +341,19 @@ export function registerWalletRoutes(app: Express) {
           body: JSON.stringify(req.body),
         });
         const data = await rpcRes.json();
+        // If this RPC returned a transient error (rate limit, server error), try the next one
+        if (data.error) {
+          const code = data.error?.code;
+          const msg: string = (data.error?.message ?? "").toLowerCase();
+          const isTransient =
+            code === -32016 || code === -32005 || code === -32029 ||
+            msg.includes("rate limit") || msg.includes("too many requests") ||
+            msg.includes("over limit") || msg.includes("exceeded");
+          if (isTransient) {
+            lastErr = `${url}: ${data.error.message}`;
+            continue;
+          }
+        }
         return res.json(data);
       } catch (e: any) {
         lastErr = e.message;
@@ -363,7 +376,7 @@ export function registerWalletRoutes(app: Express) {
       const RPC_URLS: Record<number, string[]> = {
         1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
         4202: ["https://rpc.sepolia-api.lisk.com"],
-        8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+        8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
         56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
       };
 
@@ -442,7 +455,7 @@ export function registerWalletRoutes(app: Express) {
       const RPC_URLS: Record<number, string[]> = {
         1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
         4202: ["https://rpc.sepolia-api.lisk.com"],
-        8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+        8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
         56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
       };
 
@@ -484,7 +497,7 @@ export function registerWalletRoutes(app: Express) {
       const RPC_URLS: Record<number, string[]> = {
         1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
         4202: ["https://rpc.sepolia-api.lisk.com"],
-        8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+        8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
         56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
       };
 

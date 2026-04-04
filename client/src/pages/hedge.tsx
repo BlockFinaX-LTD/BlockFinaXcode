@@ -271,9 +271,17 @@ export default function Hedge() {
   });
 
   const fetchEventDetails = async (id: number) => {
-    const data = await hedgeContract.getEvent(id);
-    setSelectedEvent(data);
-    return data;
+    // Immediately populate from local cached data so the dialog always opens
+    const local = events.find(e => e.id === id);
+    if (local) setSelectedEvent(local);
+    try {
+      const data = await hedgeContract.getEvent(id);
+      setSelectedEvent(data);
+      return data;
+    } catch (err) {
+      console.warn('[fetchEventDetails] chain read failed, using cached data:', err);
+      return local ?? null;
+    }
   };
 
   useEffect(() => {

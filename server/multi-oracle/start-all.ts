@@ -40,12 +40,12 @@ const CHAINS = [
   {
     label: "Base",
     diamondAddress: process.env.BASE_DIAMOND_ADDRESS,
-    rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+    rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org,https://base-rpc.publicnode.com,https://base.drpc.org",
   },
   {
     label: "BSC",
     diamondAddress: process.env.BSC_DIAMOND_ADDRESS,
-    rpcUrl: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org",
+    rpcUrl: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org,https://bsc-rpc.publicnode.com,https://bsc.drpc.org",
   },
 ];
 
@@ -111,15 +111,25 @@ export function startAllOracleNodes() {
 
   console.log(`[MultiOracle] Starting oracle nodes for ${activeChains.length} chain(s): ${activeChains.map((c) => c.label).join(", ")}`);
 
+  // Stagger oracle node starts by 8 seconds each to avoid all nodes hitting
+  // the same public RPCs simultaneously (which causes rate-limit cascades).
+  let delay = 0;
   for (const chain of activeChains) {
     for (const node of ORACLE_NODES) {
       const fullLabel = `Oracle-${node.label}-${chain.label}`;
       const extraEnv: Record<string, string> = {
         DIAMOND_ADDRESS: chain.diamondAddress!,
         ORACLE_RPC_URL: chain.rpcUrl,
+        ORACLE_START_DELAY_MS: String(delay),
       };
-      spawnNode(fullLabel, node.base, extraEnv);
+      // Always log immediately so the user knows all nodes are scheduled
       console.log(`[MultiOracle] ${fullLabel} spawned → ${chain.diamondAddress} @ ${chain.rpcUrl}`);
+      if (delay === 0) {
+        spawnNode(fullLabel, node.base, extraEnv);
+      } else {
+        setTimeout(() => spawnNode(fullLabel, node.base, extraEnv), delay);
+      }
+      delay += 8_000; // 8 seconds between each oracle node start
     }
   }
 }
