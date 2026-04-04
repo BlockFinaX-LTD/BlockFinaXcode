@@ -331,6 +331,9 @@ export default function Hedge() {
 
   const createEventMutation = useMutation({
     mutationFn: async () => {
+      if (activeChainId !== 1135) {
+        throw new Error("Event creation is only available on Lisk mainnet. Please switch your network to Lisk in settings.");
+      }
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
       const expiryDate = new Date();
@@ -1908,10 +1911,16 @@ export default function Hedge() {
               </span>
             </div>
           </div>
+          {activeChainId !== 1135 && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Event creation is only live on Lisk mainnet. Switch your network to Lisk in Settings to create events.
+            </div>
+          )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setCreateEventDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
             <Button onClick={() => createEventMutation.mutate()}
-              disabled={!newEvent.name || !newEvent.strike || !newEvent.premiumRate || !newEvent.initialLiquidity || parseFloat(newEvent.initialLiquidity || "0") < 10 || createEventMutation.isPending}
+              disabled={activeChainId !== 1135 || !newEvent.name || !newEvent.strike || !newEvent.premiumRate || !newEvent.initialLiquidity || parseFloat(newEvent.initialLiquidity || "0") < 10 || createEventMutation.isPending}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
               {createEventMutation.isPending ? "Creating..." : `Pay $${newEvent.initialLiquidity && feeConfig ? (parseFloat(newEvent.initialLiquidity) + feeConfig.creationFee).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : feeConfig ? feeConfig.creationFee.toFixed(2) : "Loading..."} & Create`}
             </Button>
