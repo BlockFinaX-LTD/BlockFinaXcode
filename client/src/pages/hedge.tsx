@@ -188,12 +188,26 @@ export default function Hedge() {
     }
   };
 
+  const DEFAULT_FEE_CONFIG = {
+    creationFee: 2,
+    hedgerFeeRate: 0.005,
+    hedgerPayoutFeeRate: 0.01,
+    lpProfitFeeRate: 0.01,
+    creatorLoyaltyRate: 0.005,
+  };
+
   const loadFeeConfig = async () => {
+    // Show defaults immediately so the dialog never blocks on "Loading..."
+    setFeeConfig(DEFAULT_FEE_CONFIG);
     try {
-      const config = await hedgeContract.getFeeConfig();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Fee config timeout')), 8000)
+      );
+      const config = await Promise.race([hedgeContract.getFeeConfig(), timeout]);
       setFeeConfig(config);
     } catch (error) {
-      console.error('Failed to load fee config:', error);
+      // Keep the default — it matches the on-chain values ($2 flat creation fee)
+      console.warn('Fee config RPC call timed out; using defaults:', error);
     }
   };
 
