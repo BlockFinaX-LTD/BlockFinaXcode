@@ -341,13 +341,37 @@ class HedgeContractManager {
       const err = await broadcastRes.json().catch(() => ({}));
       throw new Error((err as any).error || `broadcast failed (${broadcastRes.status})`);
     }
-    const { txHash } = await broadcastRes.json();
-    return txHash as string;
+    const { hash } = await broadcastRes.json();
+    if (!hash) throw new Error('Broadcast returned no transaction hash');
+    return hash as string;
   }
 
-  /** Wait for a txHash to be mined using the read provider (read-only — no CORS issue). */
+  /**
+   * Wait for a transaction to be mined by polling the server-side receipt endpoint.
+   * This avoids direct browser→RPC calls (CORS issues on Base/BSC).
+   * Polls every 3 s, times out after 120 s.
+   */
   private async waitForTx(txHash: string): Promise<void> {
-    await this.getProvider().waitForTransaction(txHash, 1, 120_000);
+    const chainId = this._chainId;
+    const deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch('/api/wallet/tx-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txHash, chainId }),
+        });
+        if (res.ok) {
+          const { confirmed } = await res.json();
+          if (confirmed) return;
+        }
+      } catch {
+        // network hiccup — keep polling
+      }
+      await new Promise(r => setTimeout(r, 3_000));
+    }
+    // Timeout — not catastrophic, the tx may still mine
+    console.warn(`[waitForTx] timeout after 120 s for ${txHash}`);
   }
 
   private parseHexOrDec(value: string): number {

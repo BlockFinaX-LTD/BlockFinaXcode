@@ -429,4 +429,45 @@ export function registerWalletRoutes(app: Express) {
       res.status(500).json({ error: error?.message || "Internal error" });
     }
   });
+
+  // Server-side tx receipt check — avoids browser polling RPC directly (CORS)
+  // Returns { confirmed: true } once mined, { confirmed: false } while pending.
+  app.post("/api/wallet/tx-receipt", async (req, res) => {
+    try {
+      const { txHash, chainId } = req.body;
+      if (!txHash || !chainId) {
+        return res.status(400).json({ error: "Missing txHash or chainId" });
+      }
+
+      const { ethers } = await import("ethers");
+
+      const RPC_URLS: Record<number, string[]> = {
+        1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
+        4202: ["https://rpc.sepolia-api.lisk.com"],
+        8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+        56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
+      };
+
+      const urls = RPC_URLS[Number(chainId)];
+      if (!urls) return res.status(400).json({ error: `Unsupported chainId: ${chainId}` });
+
+      for (const url of urls) {
+        try {
+          const provider = new ethers.JsonRpcProvider(url);
+          const receipt = await provider.getTransactionReceipt(txHash);
+          if (receipt && receipt.blockNumber) {
+            return res.json({ confirmed: true, blockNumber: receipt.blockNumber, status: receipt.status });
+          }
+          return res.json({ confirmed: false });
+        } catch {
+          continue;
+        }
+      }
+
+      res.json({ confirmed: false });
+    } catch (error: any) {
+      console.error("tx-receipt error:", error);
+      res.status(500).json({ error: error?.message || "Internal error" });
+    }
+  });
 }
