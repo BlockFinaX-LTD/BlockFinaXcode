@@ -394,27 +394,34 @@ class WalletManager {
     }
   }
 
-  // Send native ETH/BNB transaction via server broadcast to avoid CORS
-  async sendTransaction(
-    to: string,
-    amount: string,
-    networkId: number
-  ): Promise<{ hash: string; transaction: any }> {
-    const signer = await this.getSigner(networkId);
-    if (!signer) throw new Error('Wallet not unlocked - signer not available');
+  // ── Server-assisted signing helpers ──────────────────────────────────
+  // All RPC calls (nonce, gas, fee data) are made by the SERVER so the
+  // browser never needs to contact an RPC endpoint directly (avoids CORS).
 
-    const network = getNetworkById(networkId);
-    const chainId = network!.chainId;
-    const value = ethers.parseEther(amount);
-
-    const unsignedTx = await signer.populateTransaction({ to, value });
-    const signedTx = await signer.signTransaction(unsignedTx);
-    const hash = await this.broadcastViaServer(signedTx, chainId);
-
-    return { hash, transaction: { hash } };
+  // Step 1: ask the server to build the ready-to-sign tx object
+  private async getTxParams(chainId: number, from: string, to: string, data: string, value: bigint): Promise<any> {
+    const res = await fetch('/api/wallet/tx-params', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chainId, from, to, data, value: value.toString() }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Failed to fetch tx params');
+    return body.tx;
   }
 
-  // Broadcast a pre-signed transaction via the server (bypasses browser CORS on RPC writes)
+  // Step 2: sign offline (no provider needed — pure crypto)
+  private async signOffline(txParams: any): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not unlocked');
+    // Reconstruct bigint fields that were serialised as strings by the server
+    const tx: any = { ...txParams };
+    for (const field of ['value', 'gasLimit', 'gasPrice', 'maxFeePerGas', 'maxPriorityFeePerGas']) {
+      if (tx[field] !== undefined) tx[field] = BigInt(tx[field]);
+    }
+    return this.wallet.signTransaction(tx);
+  }
+
+  // Step 3: broadcast via server (avoids eth_sendRawTransaction CORS block)
   private async broadcastViaServer(signedTx: string, chainId: number): Promise<string> {
     const res = await fetch('/api/wallet/broadcast', {
       method: 'POST',
@@ -426,8 +433,26 @@ class WalletManager {
     return data.hash;
   }
 
-  // Send ERC-20 token transaction
-  // Signs client-side, broadcasts via server to avoid CORS issues on write RPCs
+  // Send native ETH/BNB — fully server-assisted (no browser RPC calls)
+  async sendTransaction(
+    to: string,
+    amount: string,
+    networkId: number
+  ): Promise<{ hash: string; transaction: any }> {
+    if (!this.wallet) throw new Error('Wallet not unlocked - signer not available');
+    const network = getNetworkById(networkId);
+    if (!network) throw new Error('Unknown network');
+    const chainId = network.chainId;
+    const from = this.wallet.address;
+    const value = ethers.parseEther(amount);
+
+    const txParams = await this.getTxParams(chainId, from, to, '0x', value);
+    const signedTx = await this.signOffline(txParams);
+    const hash    = await this.broadcastViaServer(signedTx, chainId);
+    return { hash, transaction: { hash } };
+  }
+
+  // Send ERC-20 token — fully server-assisted (no browser RPC calls)
   async sendTokenTransaction(
     to: string,
     amount: string,
@@ -435,27 +460,26 @@ class WalletManager {
     tokenAddress: string,
     tokenDecimals: number
   ): Promise<{ hash: string; transaction: any }> {
-    const signer = await this.getSigner(networkId);
-    if (!signer) throw new Error('Wallet not unlocked - signer not available');
-
-    await this.ensureGasForNetwork(await signer.getAddress(), networkId);
-
+    if (!this.wallet) throw new Error('Wallet not unlocked - signer not available');
     const network = getNetworkById(networkId);
-    const chainId = network!.chainId;
+    if (!network) throw new Error('Unknown network');
+    const chainId = network.chainId;
+    const from = this.wallet.address;
 
-    const erc20Abi = ["function transfer(address to, uint256 amount) returns (bool)"];
-    const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+    await this.ensureGasForNetwork(from, networkId);
+
+    // Encode calldata offline — no network needed
+    const iface = new ethers.Interface(["function transfer(address,uint256) returns (bool)"]);
     const tokenAmount = ethers.parseUnits(amount, tokenDecimals);
+    const data = iface.encodeFunctionData("transfer", [to, tokenAmount]);
 
-    // Populate → sign client-side, broadcast via server to avoid CORS
-    const callTx = await tokenContract.transfer.populateTransaction(to, tokenAmount);
-    const populatedTx = await signer.populateTransaction(callTx);
-    const signedTx = await signer.signTransaction(populatedTx);
-    const hash = await this.broadcastViaServer(signedTx, chainId);
-
+    const txParams = await this.getTxParams(chainId, from, tokenAddress, data, 0n);
+    const signedTx = await this.signOffline(txParams);
+    const hash    = await this.broadcastViaServer(signedTx, chainId);
     return { hash, transaction: { hash } };
   }
 
+  // Send ERC-20 with fee split — fully server-assisted
   async sendTokenTransactionWithFee(
     to: string,
     amount: string,
@@ -465,40 +489,33 @@ class WalletManager {
     feeAmount: string,
     treasuryAddress: string
   ): Promise<{ hash: string; feeTxHash: string | null; transaction: any }> {
-    const signer = await this.getSigner(networkId);
-    if (!signer) throw new Error('Wallet not unlocked - signer not available');
-
-    await this.ensureGasForNetwork(await signer.getAddress(), networkId);
-
+    if (!this.wallet) throw new Error('Wallet not unlocked - signer not available');
     const network = getNetworkById(networkId);
-    const chainId = network!.chainId;
+    if (!network) throw new Error('Unknown network');
+    const chainId = network.chainId;
+    const from = this.wallet.address;
 
-    const erc20Abi = ["function transfer(address to, uint256 amount) returns (bool)"];
-    const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+    await this.ensureGasForNetwork(from, networkId);
 
-    // Calculate amounts with enough decimal precision for the token
-    const decimalPlaces = tokenDecimals <= 6 ? 6 : tokenDecimals;
-    const netAmount = (parseFloat(amount) - parseFloat(feeAmount)).toFixed(decimalPlaces > 18 ? 18 : decimalPlaces);
+    const iface = new ethers.Interface(["function transfer(address,uint256) returns (bool)"]);
+    const decimalPlaces = Math.min(tokenDecimals, 18);
+    const netAmount = (parseFloat(amount) - parseFloat(feeAmount)).toFixed(decimalPlaces);
     const netTokenAmount = ethers.parseUnits(netAmount, tokenDecimals);
 
-    // Sign and broadcast main transfer via server
-    const callTx1 = await tokenContract.transfer.populateTransaction(to, netTokenAmount);
-    const populatedTx1 = await signer.populateTransaction(callTx1);
-    const signedTx1 = await signer.signTransaction(populatedTx1);
+    // Main transfer
+    const data1 = iface.encodeFunctionData("transfer", [to, netTokenAmount]);
+    const txParams1 = await this.getTxParams(chainId, from, tokenAddress, data1, 0n);
+    const signedTx1 = await this.signOffline(txParams1);
     const hash = await this.broadcastViaServer(signedTx1, chainId);
 
-    // Sign and broadcast fee transfer via server
+    // Fee transfer (nonce + 1 to avoid collision)
     let feeTxHash: string | null = null;
     try {
-      const feeDecimalStr = parseFloat(feeAmount).toFixed(decimalPlaces > 18 ? 18 : decimalPlaces);
-      const feeTokenAmount = ethers.parseUnits(feeDecimalStr, tokenDecimals);
-      // Bump nonce by 1 for the second tx (avoid race condition)
-      const callTx2 = await tokenContract.transfer.populateTransaction(treasuryAddress, feeTokenAmount);
-      const populatedTx2 = await signer.populateTransaction(callTx2);
-      if (populatedTx1.nonce !== undefined) {
-        populatedTx2.nonce = (populatedTx1.nonce as number) + 1;
-      }
-      const signedTx2 = await signer.signTransaction(populatedTx2);
+      const feeTokenAmount = ethers.parseUnits(parseFloat(feeAmount).toFixed(decimalPlaces), tokenDecimals);
+      const data2 = iface.encodeFunctionData("transfer", [treasuryAddress, feeTokenAmount]);
+      const txParams2 = await this.getTxParams(chainId, from, tokenAddress, data2, 0n);
+      txParams2.nonce = txParams1.nonce + 1; // ensure ordering
+      const signedTx2 = await this.signOffline(txParams2);
       feeTxHash = await this.broadcastViaServer(signedTx2, chainId);
     } catch {
       // Fee collection failure is non-fatal

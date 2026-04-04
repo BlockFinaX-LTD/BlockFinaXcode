@@ -318,6 +318,76 @@ export function registerWalletRoutes(app: Express) {
     }
   });
 
+  // Prepare transaction parameters server-side (nonce, gas, chainId) so the browser
+  // never needs to call the RPC directly (avoids CORS on read ops too).
+  app.post("/api/wallet/tx-params", async (req, res) => {
+    try {
+      const { chainId, from, to, data, value } = req.body;
+      if (!chainId || !from || !to) {
+        return res.status(400).json({ error: "Missing chainId, from, or to" });
+      }
+
+      const { ethers } = await import("ethers");
+
+      const RPC_URLS: Record<number, string[]> = {
+        1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
+        4202: ["https://rpc.sepolia-api.lisk.com"],
+        8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+        56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
+      };
+
+      const urls = RPC_URLS[Number(chainId)];
+      if (!urls) return res.status(400).json({ error: `Unsupported chainId: ${chainId}` });
+
+      let provider: any = null;
+      let lastErr = "";
+      for (const url of urls) {
+        try {
+          const p = new ethers.JsonRpcProvider(url);
+          await p.getBlockNumber(); // connectivity check
+          provider = p;
+          break;
+        } catch (e: any) { lastErr = e.message; }
+      }
+      if (!provider) return res.status(503).json({ error: `No reachable RPC: ${lastErr}` });
+
+      const txValue = value ? BigInt(value) : 0n;
+      const txData  = data  || "0x";
+
+      const [nonce, feeData, gasEstimate] = await Promise.all([
+        provider.getTransactionCount(from, "pending"),
+        provider.getFeeData(),
+        provider.estimateGas({ from, to, data: txData, value: txValue }).catch(() => 100_000n),
+      ]);
+
+      // BSC doesn't support EIP-1559 — use legacy gasPrice
+      const isBsc = Number(chainId) === 56;
+      const gasLimit = (BigInt(gasEstimate) * 130n) / 100n; // +30% buffer
+
+      const tx: any = {
+        type:     isBsc ? 0 : 2,
+        chainId:  Number(chainId),
+        nonce,
+        to,
+        value:    txValue.toString(),
+        data:     txData,
+        gasLimit: gasLimit.toString(),
+      };
+
+      if (isBsc) {
+        tx.gasPrice = (feeData.gasPrice ?? 3_000_000_000n).toString();
+      } else {
+        tx.maxFeePerGas         = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 1_500_000_000n).toString();
+        tx.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas ?? 1_000_000_000n).toString();
+      }
+
+      res.json({ tx });
+    } catch (error: any) {
+      console.error("tx-params error:", error);
+      res.status(500).json({ error: error?.message || "Internal error" });
+    }
+  });
+
   // Broadcast a pre-signed transaction via server to bypass browser CORS restrictions
   // The private key never leaves the client — only the signed raw tx is sent here
   app.post("/api/wallet/broadcast", async (req, res) => {
