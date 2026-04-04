@@ -64,6 +64,7 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
     balance,
     tokenBalances,
     formatCrypto,
+    isLoadingBalance,
   } = useTransactions(selectedNetworkId);
 
   const { data: treasuryData } = useQuery({
@@ -148,9 +149,11 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
   const getTokenBalance = useCallback(() => {
     const tokenInfo = getSelectedTokenInfo();
     if (tokenInfo.address === 'native') return balance;
+    // If still loading, return null so callers know data isn't ready
+    if (isLoadingBalance && tokenBalances.length === 0) return null;
     const tb = tokenBalances.find(t => t.token.address.toLowerCase() === tokenInfo.address.toLowerCase());
     return tb ? { balance: tb.balance, symbol: tb.token.symbol } : { balance: '0', symbol: tokenInfo.symbol };
-  }, [balance, tokenBalances, getSelectedTokenInfo]);
+  }, [balance, tokenBalances, isLoadingBalance, getSelectedTokenInfo]);
 
   const calculateTotal = useCallback(() => {
     const amount = parseFloat(watchedValues.amount || '0');
@@ -162,19 +165,19 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
 
   const isInsufficientBalance = useCallback(() => {
     const tokenInfo = getSelectedTokenInfo();
-    const amounts = calculateTotal();
     const tokenAmount = parseFloat(watchedValues.amount || '0');
-    const nativeBalance = parseFloat(balance?.balance || '0');
     if (tokenInfo.address !== 'native') {
-      // For ERC-20 tokens: only check the token balance — gas is sponsored automatically
-      // when native balance is 0, so don't block the send on gas
       const tb = getTokenBalance();
-      if (!tb || tokenAmount > parseFloat(tb.balance)) return true;
-      return false;
+      // tb === null means balance is still loading — don't block
+      if (tb === null) return false;
+      // Gas is sponsored automatically when native balance is 0, so only check token balance
+      return tokenAmount > parseFloat(tb.balance);
     }
     // For native token (ETH/BNB): check total amount including gas
-    return amounts.tokenAmount > nativeBalance;
-  }, [balance, tokenBalances, watchedValues.amount, gasEstimate, getSelectedTokenInfo]);
+    const nativeBalance = parseFloat(balance?.balance || '0');
+    const gasAmount = parseFloat(gasEstimate || '0');
+    return (tokenAmount + gasAmount) > nativeBalance;
+  }, [balance, tokenBalances, isLoadingBalance, watchedValues.amount, gasEstimate, getSelectedTokenInfo, getTokenBalance]);
 
   const handleReview = (data: SendFormData) => {
     const chainCheck = mainnetGuard.validateChainId(resolvedNetwork.chainId);
@@ -358,11 +361,13 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
                 </div>
               </div>
               {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-              {tokenBalance && (
+              {isLoadingBalance && tokenBalances.length === 0 ? (
+                <p className="text-sm text-muted-foreground animate-pulse">Loading balance...</p>
+              ) : tokenBalance ? (
                 <p className="text-sm text-muted-foreground">
                   Balance: {formatCrypto(tokenBalance.balance, tokenBalance.symbol)}
                 </p>
-              )}
+              ) : null}
             </div>
 
             {(watchedValues.amount || gasEstimate) && (
