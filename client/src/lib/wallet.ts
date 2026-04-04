@@ -394,68 +394,66 @@ class WalletManager {
     }
   }
 
-  // Send transaction
+  // Send native ETH/BNB transaction via server broadcast to avoid CORS
   async sendTransaction(
     to: string,
     amount: string,
     networkId: number
-  ): Promise<{ hash: string; transaction: ethers.TransactionResponse }> {
+  ): Promise<{ hash: string; transaction: any }> {
     const signer = await this.getSigner(networkId);
-    
-    if (!signer) {
-      throw new Error('Wallet not unlocked - signer not available');
-    }
-    
-    try {
-      await this.ensureGasForNetwork(await signer.getAddress(), networkId);
-      const value = ethers.parseEther(amount);
-      const transaction = await signer.sendTransaction({
-        to,
-        value
-      });
+    if (!signer) throw new Error('Wallet not unlocked - signer not available');
 
-      return {
-        hash: transaction.hash,
-        transaction
-      };
-    } catch (error) {
-      throw error;
-    }
+    const network = getNetworkById(networkId);
+    const chainId = network!.chainId;
+    const value = ethers.parseEther(amount);
+
+    const unsignedTx = await signer.populateTransaction({ to, value });
+    const signedTx = await signer.signTransaction(unsignedTx);
+    const hash = await this.broadcastViaServer(signedTx, chainId);
+
+    return { hash, transaction: { hash } };
+  }
+
+  // Broadcast a pre-signed transaction via the server (bypasses browser CORS on RPC writes)
+  private async broadcastViaServer(signedTx: string, chainId: number): Promise<string> {
+    const res = await fetch('/api/wallet/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signedTx, chainId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Broadcast failed');
+    return data.hash;
   }
 
   // Send ERC-20 token transaction
+  // Signs client-side, broadcasts via server to avoid CORS issues on write RPCs
   async sendTokenTransaction(
     to: string,
     amount: string,
     networkId: number,
     tokenAddress: string,
     tokenDecimals: number
-  ): Promise<{ hash: string; transaction: ethers.TransactionResponse }> {
+  ): Promise<{ hash: string; transaction: any }> {
     const signer = await this.getSigner(networkId);
-    
-    if (!signer) {
-      throw new Error('Wallet not unlocked - signer not available');
-    }
+    if (!signer) throw new Error('Wallet not unlocked - signer not available');
 
-    try {
-      await this.ensureGasForNetwork(await signer.getAddress(), networkId);
-      const erc20Abi = [
-        "function transfer(address to, uint256 amount) returns (bool)",
-        "function balanceOf(address owner) view returns (uint256)",
-        "function decimals() view returns (uint8)"
-      ];
+    await this.ensureGasForNetwork(await signer.getAddress(), networkId);
 
-      const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
-      const tokenAmount = ethers.parseUnits(amount, tokenDecimals);
-      const transaction = await tokenContract.transfer(to, tokenAmount);
+    const network = getNetworkById(networkId);
+    const chainId = network!.chainId;
 
-      return {
-        hash: transaction.hash,
-        transaction
-      };
-    } catch (error) {
-      throw error;
-    }
+    const erc20Abi = ["function transfer(address to, uint256 amount) returns (bool)"];
+    const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+    const tokenAmount = ethers.parseUnits(amount, tokenDecimals);
+
+    // Populate → sign client-side, broadcast via server to avoid CORS
+    const callTx = await tokenContract.transfer.populateTransaction(to, tokenAmount);
+    const populatedTx = await signer.populateTransaction(callTx);
+    const signedTx = await signer.signTransaction(populatedTx);
+    const hash = await this.broadcastViaServer(signedTx, chainId);
+
+    return { hash, transaction: { hash } };
   }
 
   async sendTokenTransactionWithFee(
@@ -466,31 +464,47 @@ class WalletManager {
     tokenDecimals: number,
     feeAmount: string,
     treasuryAddress: string
-  ): Promise<{ hash: string; feeTxHash: string | null; transaction: ethers.TransactionResponse }> {
+  ): Promise<{ hash: string; feeTxHash: string | null; transaction: any }> {
     const signer = await this.getSigner(networkId);
-    if (!signer) {
-      throw new Error('Wallet not unlocked - signer not available');
-    }
+    if (!signer) throw new Error('Wallet not unlocked - signer not available');
 
     await this.ensureGasForNetwork(await signer.getAddress(), networkId);
 
-    const erc20Abi = [
-      "function transfer(address to, uint256 amount) returns (bool)",
-      "function balanceOf(address owner) view returns (uint256)",
-    ];
+    const network = getNetworkById(networkId);
+    const chainId = network!.chainId;
+
+    const erc20Abi = ["function transfer(address to, uint256 amount) returns (bool)"];
     const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
-    const netAmount = (parseFloat(amount) - parseFloat(feeAmount)).toFixed(6);
+
+    // Calculate amounts with enough decimal precision for the token
+    const decimalPlaces = tokenDecimals <= 6 ? 6 : tokenDecimals;
+    const netAmount = (parseFloat(amount) - parseFloat(feeAmount)).toFixed(decimalPlaces > 18 ? 18 : decimalPlaces);
     const netTokenAmount = ethers.parseUnits(netAmount, tokenDecimals);
-    const transaction = await tokenContract.transfer(to, netTokenAmount);
-    await transaction.wait();
 
+    // Sign and broadcast main transfer via server
+    const callTx1 = await tokenContract.transfer.populateTransaction(to, netTokenAmount);
+    const populatedTx1 = await signer.populateTransaction(callTx1);
+    const signedTx1 = await signer.signTransaction(populatedTx1);
+    const hash = await this.broadcastViaServer(signedTx1, chainId);
+
+    // Sign and broadcast fee transfer via server
     let feeTxHash: string | null = null;
-    const feeTokenAmount = ethers.parseUnits(parseFloat(feeAmount).toFixed(6), tokenDecimals);
-    const feeTx = await tokenContract.transfer(treasuryAddress, feeTokenAmount);
-    await feeTx.wait();
-    feeTxHash = feeTx.hash;
+    try {
+      const feeDecimalStr = parseFloat(feeAmount).toFixed(decimalPlaces > 18 ? 18 : decimalPlaces);
+      const feeTokenAmount = ethers.parseUnits(feeDecimalStr, tokenDecimals);
+      // Bump nonce by 1 for the second tx (avoid race condition)
+      const callTx2 = await tokenContract.transfer.populateTransaction(treasuryAddress, feeTokenAmount);
+      const populatedTx2 = await signer.populateTransaction(callTx2);
+      if (populatedTx1.nonce !== undefined) {
+        populatedTx2.nonce = (populatedTx1.nonce as number) + 1;
+      }
+      const signedTx2 = await signer.signTransaction(populatedTx2);
+      feeTxHash = await this.broadcastViaServer(signedTx2, chainId);
+    } catch {
+      // Fee collection failure is non-fatal
+    }
 
-    return { hash: transaction.hash, feeTxHash, transaction };
+    return { hash, feeTxHash, transaction: { hash } };
   }
 
   // Estimate gas fee

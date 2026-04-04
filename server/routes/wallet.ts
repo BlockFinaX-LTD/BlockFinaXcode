@@ -317,4 +317,46 @@ export function registerWalletRoutes(app: Express) {
       res.json({ totalWallets: 0, totalProfiles: 0, activeHedgeEvents: 0, totalHedgeEvents: 0 });
     }
   });
+
+  // Broadcast a pre-signed transaction via server to bypass browser CORS restrictions
+  // The private key never leaves the client — only the signed raw tx is sent here
+  app.post("/api/wallet/broadcast", async (req, res) => {
+    try {
+      const { signedTx, chainId } = req.body;
+      if (!signedTx || !chainId) {
+        return res.status(400).json({ error: "Missing signedTx or chainId" });
+      }
+
+      const { ethers } = await import("ethers");
+
+      const RPC_URLS: Record<number, string[]> = {
+        1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
+        4202: ["https://rpc.sepolia-api.lisk.com"],
+        8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+        56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
+      };
+
+      const urls = RPC_URLS[Number(chainId)];
+      if (!urls || urls.length === 0) {
+        return res.status(400).json({ error: `Unsupported chainId: ${chainId}` });
+      }
+
+      let lastError: string = "Broadcast failed";
+      for (const url of urls) {
+        try {
+          const provider = new ethers.JsonRpcProvider(url);
+          const tx = await provider.broadcastTransaction(signedTx);
+          return res.json({ hash: tx.hash });
+        } catch (err: any) {
+          lastError = err?.message || "Broadcast failed";
+          continue;
+        }
+      }
+
+      res.status(400).json({ error: lastError });
+    } catch (error: any) {
+      console.error("Broadcast error:", error);
+      res.status(500).json({ error: error?.message || "Internal error" });
+    }
+  });
 }
