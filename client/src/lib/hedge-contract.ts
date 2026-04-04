@@ -348,7 +348,7 @@ class HedgeContractManager {
     await this.ensureGas(connected.address);
     const token = new ethers.Contract(tokenAddress, USDC_ABI, connected);
     const currentAllowance = await token.allowance(connected.address, this.activeDiamond);
-    const maxThreshold = ethers.parseUnits("1000000000", 6);
+    const maxThreshold = ethers.parseUnits("1000000000", this.tokenDecimals);
     if (currentAllowance >= maxThreshold) {
       return;
     }
@@ -386,22 +386,38 @@ class HedgeContractManager {
   private feeConfigCachedAt: number = 0;
   private static readonly FEE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+  private static readonly DEFAULT_FEE_CONFIG: HedgeFeeConfig = {
+    creationFee: 2,
+    hedgerFeeRate: 0.005,
+    hedgerPayoutFeeRate: 0.01,
+    lpProfitFeeRate: 0.01,
+    creatorLoyaltyRate: 0.005,
+  };
+
   async getFeeConfig(): Promise<HedgeFeeConfig> {
     const now = Date.now();
     if (this.feeConfigCache && (now - this.feeConfigCachedAt) < HedgeContractManager.FEE_CACHE_TTL_MS) {
       return this.feeConfigCache;
     }
-    const contract = this.getReadContract();
-    const fees = await contract.getHedgeFeeConfig();
-    this.feeConfigCache = {
-      creationFee: toNum(fees[0]),
-      hedgerFeeRate: parseFloat(ethers.formatUnits(fees[1], 6)),
-      hedgerPayoutFeeRate: parseFloat(ethers.formatUnits(fees[2], 6)),
-      lpProfitFeeRate: parseFloat(ethers.formatUnits(fees[3], 6)),
-      creatorLoyaltyRate: parseFloat(ethers.formatUnits(fees[4], 6)),
-    };
-    this.feeConfigCachedAt = now;
-    return this.feeConfigCache;
+    try {
+      const contract = this.getReadContract();
+      const rpcTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('getFeeConfig RPC timeout')), 8000)
+      );
+      const fees = await Promise.race([contract.getHedgeFeeConfig(), rpcTimeout]);
+      this.feeConfigCache = {
+        creationFee: toNum(fees[0]),
+        hedgerFeeRate: parseFloat(ethers.formatUnits(fees[1], 6)),
+        hedgerPayoutFeeRate: parseFloat(ethers.formatUnits(fees[2], 6)),
+        lpProfitFeeRate: parseFloat(ethers.formatUnits(fees[3], 6)),
+        creatorLoyaltyRate: parseFloat(ethers.formatUnits(fees[4], 6)),
+      };
+      this.feeConfigCachedAt = now;
+      return this.feeConfigCache;
+    } catch (e) {
+      console.warn('[getFeeConfig] RPC failed, using defaults:', e);
+      return HedgeContractManager.DEFAULT_FEE_CONFIG;
+    }
   }
 
   async getUSDCAllowance(owner: string, spender?: string): Promise<string> {

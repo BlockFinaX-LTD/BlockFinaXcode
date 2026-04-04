@@ -377,7 +377,9 @@ export default function Hedge() {
       setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC" });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to create event", variant: "destructive" });
+      console.error('[createEvent] Failed:', error);
+      const msg = error?.reason || error?.data?.message || error?.message || "Failed to create event";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   });
 
