@@ -172,7 +172,23 @@ export default function Hedge() {
 
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
-  const [creationStep, setCreationStep] = useState('');
+  const [txStep, setTxStep] = useState('');
+
+  // Translates raw blockchain errors into plain-language messages
+  const friendlyError = (error: any): string => {
+    const raw: string = error?.reason || error?.data?.message || error?.message || 'Transaction failed';
+    if (raw.includes('replacement fee too low')) return 'A previous transaction is still pending. Retrying automatically...';
+    if (raw.includes('insufficient funds')) return 'Not enough ETH (gas) in your wallet to pay network fees.';
+    if (raw.includes('user rejected') || raw.includes('User denied')) return 'Transaction was cancelled.';
+    if (raw.includes('nonce too low')) return 'Nonce conflict — please wait a moment and try again.';
+    if (raw.includes('execution reverted')) {
+      if (raw.includes('Pool closed')) return 'This event pool is currently closed to new hedgers.';
+      if (raw.includes('Insufficient liquidity')) return 'Not enough liquidity in this pool for that notional amount.';
+      if (raw.includes('Event expired')) return 'This event has already expired.';
+      return 'The contract rejected the transaction. Check your inputs and try again.';
+    }
+    return raw;
+  };
   const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
   const [myPositions, setMyPositions] = useState<HedgePositionData[]>([]);
   const [myDeposits, setMyDeposits] = useState<HedgeLpDepositData[]>([]);
@@ -295,9 +311,10 @@ export default function Hedge() {
       if (!selectedEvent) throw new Error("No event selected");
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
-      await hedgeContract.buyProtection(signer, selectedEvent.id, notional);
+      await hedgeContract.buyProtection(signer, selectedEvent.id, notional, setTxStep);
     },
     onSuccess: async () => {
+      setTxStep('');
       await loadEvents();
       await loadPositions();
       if (selectedEvent) await fetchEventDetails(selectedEvent.id);
@@ -306,7 +323,8 @@ export default function Hedge() {
       setNotional("");
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to buy protection", variant: "destructive" });
+      setTxStep('');
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -315,9 +333,10 @@ export default function Hedge() {
       if (!selectedEvent) throw new Error("No event selected");
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
-      await hedgeContract.deposit(signer, selectedEvent.id, depositAmount);
+      await hedgeContract.deposit(signer, selectedEvent.id, depositAmount, setTxStep);
     },
     onSuccess: async () => {
+      setTxStep('');
       await loadEvents();
       await loadDeposits();
       if (selectedEvent) await fetchEventDetails(selectedEvent.id);
@@ -326,7 +345,8 @@ export default function Hedge() {
       setDepositAmount("");
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to deposit", variant: "destructive" });
+      setTxStep('');
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -358,15 +378,15 @@ export default function Hedge() {
         initialRate: currentFxRate,
         strikeAbove,
         paymentToken: paymentTokenAddr,
-      }, setCreationStep);
+      }, setTxStep);
 
       if (newEvent.poolOpen && newEventId) {
-        setCreationStep('Opening pool...');
-        await hedgeContract.setPoolSettings(signer, newEventId, true, newEvent.allowExternalLp);
+        setTxStep('Opening pool...');
+        await hedgeContract.setPoolSettings(signer, newEventId, true, newEvent.allowExternalLp, setTxStep);
       }
     },
     onSuccess: async () => {
-      setCreationStep('');
+      setTxStep('');
       await loadEvents();
       const msg = newEvent.poolOpen
         ? "Event created and pool is open for hedgers!"
@@ -377,10 +397,9 @@ export default function Hedge() {
       setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC" });
     },
     onError: (error: any) => {
-      setCreationStep('');
+      setTxStep('');
       console.error('[createEvent] Failed:', error);
-      const msg = error?.reason || error?.data?.message || error?.message || "Failed to create event";
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -393,15 +412,18 @@ export default function Hedge() {
         signer,
         eventId,
         typeof poolOpen === "boolean" ? poolOpen : (event?.poolOpen ?? true),
-        typeof allowExternalLp === "boolean" ? allowExternalLp : (event?.allowExternalLp ?? true)
+        typeof allowExternalLp === "boolean" ? allowExternalLp : (event?.allowExternalLp ?? true),
+        setTxStep
       );
     },
     onSuccess: async () => {
+      setTxStep('');
       await loadEvents();
       toast({ title: "Updated", description: "Pool settings changed" });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to update", variant: "destructive" });
+      setTxStep('');
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -409,14 +431,16 @@ export default function Hedge() {
     mutationFn: async (positionId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.claimPayout(signer, positionId);
+      await hedgeContract.claimPayout(signer, positionId, setTxStep);
     },
     onSuccess: async () => {
+      setTxStep('');
       await loadPositions();
       toast({ title: "Payout Claimed", description: "Funds have been sent to your wallet" });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to claim", variant: "destructive" });
+      setTxStep('');
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -424,15 +448,17 @@ export default function Hedge() {
     mutationFn: async (depositId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.withdrawCapital(signer, depositId);
+      await hedgeContract.withdrawCapital(signer, depositId, setTxStep);
     },
     onSuccess: async () => {
+      setTxStep('');
       await loadDeposits();
       await loadEvents();
       toast({ title: "Liquidity Withdrawn", description: "Funds returned to your wallet" });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to withdraw", variant: "destructive" });
+      setTxStep('');
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -440,14 +466,16 @@ export default function Hedge() {
     mutationFn: async (depositId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.claimPremiums(signer, depositId);
+      await hedgeContract.claimPremiums(signer, depositId, setTxStep);
     },
     onSuccess: async () => {
+      setTxStep('');
       await loadDeposits();
       toast({ title: "Premiums Claimed", description: "Premiums sent to your wallet" });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to claim premiums", variant: "destructive" });
+      setTxStep('');
+      toast({ title: "Transaction Failed", description: friendlyError(error), variant: "destructive" });
     }
   });
 
@@ -1011,7 +1039,8 @@ export default function Hedge() {
                                 <Button size="sm" variant="outline" className="text-xs h-7"
                                   onClick={() => withdrawMutation.mutate(dep.id)}
                                   disabled={withdrawMutation.isPending}>
-                                  <Unlock className="h-3 w-3 mr-1" /> Withdraw
+                                  <Unlock className="h-3 w-3 mr-1" />
+                                  {withdrawMutation.isPending ? (txStep || 'Sending...') : 'Withdraw'}
                                 </Button>
                               )}
                             </div>
@@ -1030,7 +1059,7 @@ export default function Hedge() {
                                     <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
                                       onClick={() => claimPremiumsMutation.mutate(dep.id)}
                                       disabled={claimPremiumsMutation.isPending}>
-                                      {claimPremiumsMutation.isPending ? "..." : `Claim`}
+                                      {claimPremiumsMutation.isPending ? (txStep || 'Sending...') : 'Claim'}
                                     </Button>
                                   )}
                                 </div>
@@ -1279,7 +1308,7 @@ export default function Hedge() {
                                 onClick={() => claimMutation.mutate(pos.id)}
                                 disabled={claimMutation.isPending}>
                                 <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                Claim ${net.toFixed(2)}
+                                {claimMutation.isPending ? (txStep || 'Sending...') : `Claim $${net.toFixed(2)}`}
                               </Button>
                             </div>
                           );
@@ -1453,7 +1482,7 @@ export default function Hedge() {
             <Button onClick={guardedBuyProtection}
               disabled={!notional || parseFloat(notional) < 10 || buyProtectionMutation.isPending || (selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0)}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {buyProtectionMutation.isPending ? "Processing..." : selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? `Insufficient ${eventTokenSymbol}` : `Pay $${totalCostCalc.toFixed(2)} & Buy Protection`}
+              {buyProtectionMutation.isPending ? (txStep || 'Approving...') : selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? `Insufficient ${eventTokenSymbol}` : `Pay $${totalCostCalc.toFixed(2)} & Buy Protection`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1544,7 +1573,7 @@ export default function Hedge() {
             <Button onClick={guardedDeposit}
               disabled={!depositAmount || parseFloat(depositAmount) < 10 || depositMutation.isPending || (selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum)}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {depositMutation.isPending ? "Depositing..." : selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum ? `Insufficient ${eventTokenSymbol}` : `Pay $${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} & Deposit`}
+              {depositMutation.isPending ? (txStep || 'Approving...') : selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum ? `Insufficient ${eventTokenSymbol}` : `Pay $${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} & Deposit`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1915,7 +1944,7 @@ export default function Hedge() {
               disabled={!newEvent.name || !newEvent.strike || !newEvent.premiumRate || !newEvent.initialLiquidity || parseFloat(newEvent.initialLiquidity || "0") < 10 || createEventMutation.isPending}
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
               {createEventMutation.isPending
-                ? (creationStep || "Preparing...")
+                ? (txStep || "Preparing...")
                 : `Pay $${newEvent.initialLiquidity && feeConfig ? (parseFloat(newEvent.initialLiquidity) + feeConfig.creationFee).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : feeConfig ? feeConfig.creationFee.toFixed(2) : "Loading..."} & Create`}
             </Button>
           </DialogFooter>
