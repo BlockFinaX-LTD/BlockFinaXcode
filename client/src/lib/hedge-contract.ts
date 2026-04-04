@@ -326,7 +326,11 @@ class HedgeContractManager {
     }
     const { tx } = await paramsRes.json();
 
-    const signed = await signer.signTransaction(tx);
+    // Use a bare (provider-free) wallet for offline signing.
+    // This prevents ethers from making any RPC calls (e.g. eth_chainId)
+    // during signTransaction, which would be CORS-blocked on Base/BSC.
+    const bareWallet = new ethers.Wallet(signer.privateKey);
+    const signed = await bareWallet.signTransaction(tx);
 
     const broadcastRes = await fetch('/api/wallet/broadcast', {
       method: 'POST',
@@ -395,11 +399,18 @@ class HedgeContractManager {
   /** Generic ERC-20 approve for the Diamond — works for USDC, USDT, or any whitelisted token. */
   async approveToken(signer: ethers.Wallet, tokenAddress: string, _amount: string): Promise<void> {
     await this.ensureGas(signer.address);
-    const token = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-    const currentAllowance = await token.allowance(signer.address, this.activeDiamond);
-    const maxThreshold = ethers.parseUnits("1000000000", this.tokenDecimals);
-    if (currentAllowance >= maxThreshold) {
-      return;
+    // Check existing allowance — skip the approve tx if already unlimited.
+    // Wrapped in try/catch: if the read RPC call fails (e.g. network hiccup),
+    // we simply re-send the approve rather than crashing the whole flow.
+    try {
+      const token = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+      const currentAllowance = await token.allowance(signer.address, this.activeDiamond);
+      const maxThreshold = ethers.parseUnits("1000000000", this.tokenDecimals);
+      if (currentAllowance >= maxThreshold) {
+        return;
+      }
+    } catch (e) {
+      console.warn('[approveToken] allowance check failed, proceeding with approve:', e);
     }
     const iface = new ethers.Interface(USDC_ABI);
     const calldata = iface.encodeFunctionData('approve', [this.activeDiamond, ethers.MaxUint256]);
@@ -673,14 +684,20 @@ class HedgeContractManager {
     const creationFeeWei = ethers.parseUnits(feeConfig.creationFee.toString(), dec);
     const totalCost = initialLiquidityWei + creationFeeWei;
 
-    const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-    const balance = await tokenContract.balanceOf(signer.address);
-    if (balance < totalCost) {
-      const balanceFormatted = ethers.formatUnits(balance, dec);
-      const costFormatted = ethers.formatUnits(totalCost, dec);
-      const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
-      const symbol = tokenAddress.toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
-      throw new Error(`Insufficient ${symbol} balance. You have ${balanceFormatted} but need ${costFormatted} (${params.initialLiquidity} liquidity + $${feeConfig.creationFee} fee).`);
+    try {
+      const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+      const balance = await tokenContract.balanceOf(signer.address);
+      if (balance < totalCost) {
+        const balanceFormatted = ethers.formatUnits(balance, dec);
+        const costFormatted = ethers.formatUnits(totalCost, dec);
+        const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
+        const symbol = tokenAddress.toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
+        throw new Error(`Insufficient ${symbol} balance. You have ${balanceFormatted} but need ${costFormatted} (${params.initialLiquidity} liquidity + $${feeConfig.creationFee} fee).`);
+      }
+    } catch (e: any) {
+      // Only rethrow explicit insufficient balance errors; ignore read failures
+      if (e?.message?.startsWith('Insufficient')) throw e;
+      console.warn('[createEvent] Pre-flight balance check failed, proceeding:', e?.message);
     }
 
     await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, dec));
@@ -739,15 +756,20 @@ class HedgeContractManager {
     const dec = this.tokenDecimals;
     const amountWei = ethers.parseUnits(amount, dec);
 
-    const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-    const balance = await tokenContract.balanceOf(signer.address);
-    if (balance < amountWei) {
-      const balanceFormatted = ethers.formatUnits(balance, dec);
-      const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
-      const symbol = tokenAddress.toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
-      throw new Error(
-        `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(amount).toFixed(2)} ${symbol}.`
-      );
+    try {
+      const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
+      const balance = await tokenContract.balanceOf(signer.address);
+      if (balance < amountWei) {
+        const balanceFormatted = ethers.formatUnits(balance, dec);
+        const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
+        const symbol = tokenAddress.toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
+        throw new Error(
+          `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(amount).toFixed(2)} ${symbol}.`
+        );
+      }
+    } catch (e: any) {
+      if (e?.message?.startsWith('Insufficient')) throw e;
+      console.warn('[deposit] Pre-flight balance check failed, proceeding:', e?.message);
     }
 
     await this.approveToken(signer, tokenAddress, amount);
@@ -780,14 +802,19 @@ class HedgeContractManager {
 
     const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
     const symbol = (tokenAddress as string).toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
-    const tokenContract = new ethers.Contract(tokenAddress as string, USDC_ABI, this.getProvider());
-    const balance = await tokenContract.balanceOf(signer.address);
-    if (balance < totalCost) {
-      const balanceFormatted = ethers.formatUnits(balance, dec);
-      const costFormatted = ethers.formatUnits(totalCost, dec);
-      throw new Error(
-        `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(costFormatted).toFixed(2)} ${symbol} (premium + fee).`
-      );
+    try {
+      const tokenContract = new ethers.Contract(tokenAddress as string, USDC_ABI, this.getProvider());
+      const balance = await tokenContract.balanceOf(signer.address);
+      if (balance < totalCost) {
+        const balanceFormatted = ethers.formatUnits(balance, dec);
+        const costFormatted = ethers.formatUnits(totalCost, dec);
+        throw new Error(
+          `Insufficient ${symbol} balance. You have ${parseFloat(balanceFormatted).toFixed(2)} ${symbol} but need ${parseFloat(costFormatted).toFixed(2)} ${symbol} (premium + fee).`
+        );
+      }
+    } catch (e: any) {
+      if (e?.message?.startsWith('Insufficient')) throw e;
+      console.warn('[buyProtection] Pre-flight balance check failed, proceeding:', e?.message);
     }
 
     await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, dec));
