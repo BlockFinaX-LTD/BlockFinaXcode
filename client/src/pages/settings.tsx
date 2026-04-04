@@ -74,11 +74,28 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast({ title: 'Copied to clipboard' });
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for environments where clipboard API is unavailable
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: 'Copied to clipboard' });
+    } catch {
+      toast({ title: 'Copy failed — please select and copy manually', variant: 'destructive' });
+    }
   };
 
   const handleRevealKey = () => {
@@ -360,21 +377,25 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="relative bg-muted rounded-lg p-3">
-                <p className="font-mono text-xs break-all pr-8 select-all">
-                  {showKey ? revealedKey : '•'.repeat(revealedKey?.length ?? 64)}
-                </p>
+              <div className="relative">
+                <input
+                  readOnly
+                  type={showKey ? 'text' : 'password'}
+                  value={revealedKey ?? ''}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  className="w-full font-mono text-xs bg-muted rounded-lg px-3 py-3 pr-10 border-0 outline-none cursor-text select-all"
+                />
                 <button
                   onClick={() => setShowKey(!showKey)}
-                  className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+                  className="absolute top-1/2 -translate-y-1/2 right-3 text-muted-foreground hover:text-foreground"
                 >
                   {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               <p className="text-xs text-muted-foreground text-center">
-                Raw hex format (64 characters) — paste directly into MetaMask "Import Account"
+                64-character hex key — paste directly into MetaMask → Import Account → Private Key
               </p>
-              <Button className="w-full" variant="outline" onClick={() => copyToClipboard(revealedKey)}>
+              <Button className="w-full" variant="outline" onClick={() => copyToClipboard(revealedKey ?? '')}>
                 <Copy className="h-4 w-4 mr-2" /> Copy Key
               </Button>
               <Button className="w-full" onClick={handleCloseKeyDialog}>Done</Button>
