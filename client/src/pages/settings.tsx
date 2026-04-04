@@ -103,8 +103,8 @@ export default function SettingsPage() {
       const key = exportPrivateKey();
       setRevealedKey(key);
       setPinError('');
-    } catch {
-      setPinError('Failed to export key. Make sure your wallet is unlocked.');
+    } catch (err: any) {
+      setPinError(err?.message || 'Failed to export key. Make sure your wallet is unlocked.');
     }
   };
 
@@ -393,7 +393,7 @@ export default function SettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground text-center">
-                64-character hex key — paste directly into MetaMask → Import Account → Private Key
+                {revealedKey?.length ?? 0} characters
               </p>
               <Button className="w-full" variant="outline" onClick={() => copyToClipboard(revealedKey ?? '')}>
                 <Copy className="h-4 w-4 mr-2" /> Copy Key
