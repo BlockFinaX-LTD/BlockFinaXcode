@@ -332,6 +332,25 @@ export function registerWalletRoutes(app: Express) {
     const urls = RPC_LIST[chainId];
     if (!urls) return res.status(400).json({ error: `Unsupported chainId: ${chainId}` });
 
+    const isRateLimitErr = (errObj: any) => {
+      if (!errObj) return false;
+      const code = errObj?.code;
+      const msg: string = (errObj?.message ?? "").toLowerCase();
+      return (
+        code === -32016 || code === -32005 || code === -32029 ||
+        msg.includes("rate limit") || msg.includes("too many requests") ||
+        msg.includes("over limit") || msg.includes("exceeded")
+      );
+    };
+    const hasRateLimit = (data: any): boolean => {
+      if (Array.isArray(data)) return data.some((item: any) => isRateLimitErr(item?.error));
+      return isRateLimitErr(data?.error);
+    };
+    const firstErrMsg = (data: any): string => {
+      if (Array.isArray(data)) return data.find((item: any) => item?.error)?.error?.message ?? "batch error";
+      return data?.error?.message ?? "unknown error";
+    };
+
     let lastErr = "";
     for (const url of urls) {
       try {
@@ -341,18 +360,9 @@ export function registerWalletRoutes(app: Express) {
           body: JSON.stringify(req.body),
         });
         const data = await rpcRes.json();
-        // If this RPC returned a transient error (rate limit, server error), try the next one
-        if (data.error) {
-          const code = data.error?.code;
-          const msg: string = (data.error?.message ?? "").toLowerCase();
-          const isTransient =
-            code === -32016 || code === -32005 || code === -32029 ||
-            msg.includes("rate limit") || msg.includes("too many requests") ||
-            msg.includes("over limit") || msg.includes("exceeded");
-          if (isTransient) {
-            lastErr = `${url}: ${data.error.message}`;
-            continue;
-          }
+        if (hasRateLimit(data)) {
+          lastErr = `${url}: ${firstErrMsg(data)}`;
+          continue;
         }
         return res.json(data);
       } catch (e: any) {

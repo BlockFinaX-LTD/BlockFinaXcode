@@ -93,4 +93,4 @@ export const getNetworkByChainId = (chainId: number): NetworkConfig | undefined 
   return NETWORKS.find(network => network.chainId === chainId);
 };
 
-export const DEFAULT_NETWORK = NETWORKS[0];
+export const DEFAULT_NETWORK = NETWORKS.find(n => n.chainId === 8453) ?? NETWORKS[0];
