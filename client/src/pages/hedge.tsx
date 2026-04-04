@@ -198,6 +198,17 @@ export default function Hedge() {
     try {
       setEventsLoading(true);
       const data = await hedgeContract.getAllEvents();
+      // Merge descriptions from DB (not stored on-chain)
+      try {
+        const dbRes = await fetch('/api/hedge/events/open');
+        if (dbRes.ok) {
+          const dbEvents: Array<{ onChainEventId: number; chainId: number; description?: string }> = await dbRes.json();
+          const descMap = new Map(
+            dbEvents.filter(e => e.chainId === activeChainId && e.description).map(e => [e.onChainEventId, e.description])
+          );
+          data.forEach(e => { if (descMap.has(e.id)) e.description = descMap.get(e.id); });
+        }
+      } catch { /* description is optional — continue without it */ }
       setEvents(data);
     } catch (error) {
       console.error('Failed to load events:', error);
@@ -288,6 +299,8 @@ export default function Hedge() {
     if (local) setSelectedEvent(local);
     try {
       const data = await hedgeContract.getEvent(id);
+      // Preserve description from cached data (not available on-chain)
+      if (local?.description && !data.description) data.description = local.description;
       setSelectedEvent(data);
       return data;
     } catch (err) {
@@ -830,6 +843,9 @@ export default function Hedge() {
                     <div>
                       <p className="font-semibold text-foreground">{event.name}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{event.underlying} Protection</p>
+                      {event.description && (
+                        <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-2 max-w-[240px]">{event.description}</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       <Badge className={`text-[10px] border ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].bg} ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].color}`}>
@@ -1417,6 +1433,12 @@ export default function Hedge() {
           </DialogHeader>
           {selectedEvent && (
             <div className="space-y-4">
+              {selectedEvent.description && (
+                <div className="bg-muted/40 rounded-lg p-3 border border-border/50">
+                  <p className="text-xs text-muted-foreground/70 mb-1 font-medium uppercase tracking-wide">About this event</p>
+                  <p className="text-sm text-foreground/90">{selectedEvent.description}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground/70">Strike Price</p>

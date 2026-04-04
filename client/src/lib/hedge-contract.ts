@@ -173,6 +173,8 @@ export interface HedgeEventData {
   payoutPercent: number;
   /** ERC-20 token address used for all payments in this event (USDC or USDT). */
   paymentToken: string;
+  /** Optional description added by the event creator (stored in DB, not on-chain). */
+  description?: string;
 }
 
 export interface HedgePositionData {
