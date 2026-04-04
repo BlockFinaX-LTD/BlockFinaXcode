@@ -48,7 +48,7 @@ import { Link } from "wouter";
 import { hedgeContract, USDT_ADDRESS_SEPOLIA, getUsdcAddress, getUsdtAddress, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
 import { walletManager } from "@/lib/wallet";
 import { mainnetGuard } from "@/lib/mainnet-guard";
-import { getNetworkById, DEFAULT_NETWORK } from "@/lib/networks";
+import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from "@/lib/networks";
 
 function CountdownTimer({ expiryDate, className }: { expiryDate: Date; className?: string }) {
   const calc = () => {
@@ -71,7 +71,7 @@ function CountdownTimer({ expiryDate, className }: { expiryDate: Date; className
 }
 
 export default function Hedge() {
-  const { wallet, settings } = useWallet();
+  const { wallet, settings, updateSettings } = useWallet();
   const { toast } = useToast();
   const selectedNetworkId = settings?.selectedNetworkId ?? DEFAULT_NETWORK.id;
   const selectedNetwork = getNetworkById(selectedNetworkId) ?? DEFAULT_NETWORK;
@@ -227,7 +227,7 @@ export default function Hedge() {
   useEffect(() => { if (wallet?.address) loadDeposits(); }, [wallet?.address]);
 
   type FXRate = { pair: string; rate: number; source: string; timestamp: number; lastUpdated: string };
-  const { data: fxData } = useQuery<{ rates: Record<string, FXRate>; pairs: string[] }>({
+  const { data: fxData } = useQuery<{ rates: Record<string, FXRate>; pairs: string[]; pairsWithClass: Array<{ pair: string; assetClass: string }> }>({
     queryKey: ["/api/fx/rates"],
     refetchInterval: 5 * 60 * 1000,
   });
@@ -1538,6 +1538,25 @@ export default function Hedge() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Network selector */}
+            <div>
+              <Label className="text-muted-foreground text-xs">Deploy on Network</Label>
+              <div className="flex gap-1.5 mt-1">
+                {NETWORKS.map(net => (
+                  <button key={net.id} type="button"
+                    onClick={() => updateSettings({ selectedNetworkId: net.id })}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      selectedNetworkId === net.id
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'bg-muted text-muted-foreground border-border hover:bg-accent/50'
+                    }`}>
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: net.color }} />
+                    {net.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <Label className="text-muted-foreground text-xs">Asset Class</Label>
               <div className="flex gap-1.5 mt-1">
@@ -1748,13 +1767,13 @@ export default function Hedge() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="USDC">
+                  <SelectItem value="USDC" textValue="USDC">
                     <div className="flex items-center gap-2">
                       <span className="text-blue-400 font-semibold">USDC</span>
                       <span className="text-muted-foreground text-xs">USD Coin — all networks</span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="USDT">
+                  <SelectItem value="USDT" textValue="USDT">
                     <div className="flex items-center gap-2">
                       <span className="text-green-400 font-semibold">USDT</span>
                       <span className="text-muted-foreground text-xs">Tether USD</span>

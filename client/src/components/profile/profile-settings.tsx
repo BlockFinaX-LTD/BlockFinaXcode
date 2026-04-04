@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
+import { NETWORKS, getNetworkById, DEFAULT_NETWORK } from '@/lib/networks';
 
 const profileSchema = z.object({
   displayName: z.string().optional(),
@@ -72,7 +73,8 @@ interface UserProfile extends ProfileFormData {
 }
 
 export default function ProfileSettings() {
-  const { wallet } = useWallet();
+  const { wallet, settings, updateSettings } = useWallet();
+  const selectedNetwork = getNetworkById(settings?.selectedNetworkId ?? DEFAULT_NETWORK.id) ?? DEFAULT_NETWORK;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -640,6 +642,45 @@ export default function ProfileSettings() {
                 )}
               />
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Preferred Network */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Globe className="h-5 w-5 text-primary" />
+              Preferred Network
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              {NETWORKS.map(network => (
+                <button
+                  key={network.id}
+                  type="button"
+                  onClick={() => updateSettings({ selectedNetworkId: network.id })}
+                  className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                    selectedNetwork.id === network.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50 bg-card'
+                  }`}
+                >
+                  <div
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: network.color }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{network.name}</p>
+                    <p className="text-xs text-muted-foreground">Chain ID {network.chainId} · {network.symbol}</p>
+                  </div>
+                  {selectedNetwork.id === network.id && (
+                    <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              This network is used across the app for balances, hedge events, and transactions.
+            </p>
           </div>
 
           <Separator />
