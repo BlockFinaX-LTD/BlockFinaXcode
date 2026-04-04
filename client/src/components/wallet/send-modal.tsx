@@ -92,12 +92,13 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
   const selectedNetwork = getNetworkById(selectedNetworkId);
   const resolvedNetwork = selectedNetwork ?? DEFAULT_NETWORK;
 
-  // Build the token list: native ETH first, then any ERC-20s for this network
+  // Build the token list: native token first, then any ERC-20s for this network
   const getAvailableTokens = useCallback(() => {
     const erc20s = getTokensForNetwork(selectedNetworkId).filter(t => t.address !== '0x'); // skip placeholder addresses
     const nativeSymbol = resolvedNetwork?.symbol ?? 'ETH';
+    const nativeName = nativeSymbol === 'BNB' ? 'BNB' : nativeSymbol === 'ETH' ? 'Ethereum' : nativeSymbol;
     return [
-      { symbol: nativeSymbol, name: 'Ethereum', address: 'native', decimals: 18 },
+      { symbol: nativeSymbol, name: nativeName, address: 'native', decimals: 18 },
       ...erc20s.map(t => ({ symbol: t.symbol, name: t.name, address: t.address, decimals: t.decimals })),
     ];
   }, [selectedNetworkId, selectedNetwork]);
@@ -163,15 +164,16 @@ export function SendModal({ isOpen, onClose, defaultNetworkId = DEFAULT_NETWORK.
     const tokenInfo = getSelectedTokenInfo();
     const amounts = calculateTotal();
     const tokenAmount = parseFloat(watchedValues.amount || '0');
-    const gasAmount = parseFloat(gasEstimate || '0');
+    const nativeBalance = parseFloat(balance?.balance || '0');
     if (tokenInfo.address !== 'native') {
+      // For ERC-20 tokens: only check the token balance — gas is sponsored automatically
+      // when native balance is 0, so don't block the send on gas
       const tb = getTokenBalance();
       if (!tb || tokenAmount > parseFloat(tb.balance)) return true;
-      if (!balance || gasAmount > parseFloat(balance.balance)) return true;
       return false;
     }
-    if (!balance) return true;
-    return amounts.tokenAmount > parseFloat(balance.balance);
+    // For native token (ETH/BNB): check total amount including gas
+    return amounts.tokenAmount > nativeBalance;
   }, [balance, tokenBalances, watchedValues.amount, gasEstimate, getSelectedTokenInfo]);
 
   const handleReview = (data: SendFormData) => {

@@ -196,15 +196,30 @@ export function registerWalletRoutes(app: Express) {
     try {
       const { address } = req.params;
       const { networkId } = req.query;
-      const chainId = networkId ? parseInt(networkId as string) : 4202;
+      const chainId = networkId ? parseInt(networkId as string) : 1135;
 
-      let baseUrl = '';
-      if (chainId === 4202) baseUrl = 'https://sepolia-blockscout.lisk.com/api';
+      const EXPLORER_API: Record<number, string> = {
+        1135: 'https://blockscout.lisk.com/api',
+        4202: 'https://sepolia-blockscout.lisk.com/api',
+        8453: 'https://base.blockscout.com/api',
+        56:   'https://api.bscscan.com/api',
+      };
+      const baseUrl = EXPLORER_API[chainId];
       if (!baseUrl) return res.json({ transactions: [] });
 
+      // Known USDC/USDT token contracts per chain
       const usdcContracts = [
+        // Lisk testnet
         '0x0e82fddad51cc3ac12b69761c45bbcb9a2bf3c83',
         '0xf52ad63619bf9cfef510341ac6b4038554399562',
+        // Lisk mainnet
+        '0xf242275d3a6527d877f2c927a82d9b057609cc71',
+        // Base
+        '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+        '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+        // BSC
+        '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+        '0x55d398326f99059ff775485246999027b3197955',
       ];
 
       const txListUrl = `${baseUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
