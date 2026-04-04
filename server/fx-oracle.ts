@@ -145,8 +145,39 @@ async function fetchRatesFromBackupSource(base: string): Promise<Record<string, 
   }
 }
 
-const DIAMOND_ADDRESS = '0x885E663645173a0791b82f0e6608921D31E3D700';
-const LISK_SEPOLIA_RPC = 'https://rpc.sepolia-api.lisk.com';
+// Settlement chains — read from env vars so Railway configuration controls which chains are active.
+// Fallback to known mainnet addresses so Lisk always works even if env vars aren't set.
+const SETTLEMENT_CHAINS = [
+  {
+    label: 'Lisk',
+    chainId: 1135,
+    diamondAddress: process.env.DIAMOND_ADDRESS || '0x885E663645173a0791b82f0e6608921D31E3D700',
+    rpcUrls: [
+      process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com',
+      'https://lisk.drpc.org',
+    ],
+  },
+  {
+    label: 'Base',
+    chainId: 8453,
+    diamondAddress: process.env.BASE_DIAMOND_ADDRESS || '',
+    rpcUrls: [
+      process.env.BASE_RPC_URL || 'https://mainnet.base.org',
+      'https://base.llamarpc.com',
+      'https://base-rpc.publicnode.com',
+    ],
+  },
+  {
+    label: 'BSC',
+    chainId: 56,
+    diamondAddress: process.env.BSC_DIAMOND_ADDRESS || '',
+    rpcUrls: [
+      process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
+      'https://bsc-rpc.publicnode.com',
+      'https://bsc.drpc.org',
+    ],
+  },
+].filter(c => !!c.diamondAddress);
 
 const HEDGE_ABI = [
   'function settleEvent(uint256 _eventId, uint256 _settlementPrice)',
@@ -350,57 +381,68 @@ export function getSupportedPairs(): string[] {
   ];
 }
 
-function getOracleSigner(): ethers.Wallet | null {
-  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) return null;
-  const provider = new ethers.JsonRpcProvider(LISK_SEPOLIA_RPC);
-  return new ethers.Wallet(privateKey, provider);
+/** Try each RPC URL in order, returning the first reachable provider. */
+async function getWorkingProvider(rpcUrls: string[]): Promise<ethers.JsonRpcProvider | null> {
+  for (const url of rpcUrls) {
+    try {
+      const p = new ethers.JsonRpcProvider(url);
+      await p.getBlockNumber();
+      return p;
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
-export async function checkAndSettleEvents(): Promise<{ settled: number; oneTouchSettled: number; expirySettled: number; errors: string[] }> {
-  let settled = 0;
-  let oneTouchSettled = 0;
-  let expirySettled = 0;
+/** Settle all ready events on a single chain. Returns counts and errors. */
+async function settleChain(
+  chain: typeof SETTLEMENT_CHAINS[number],
+  deployerKey: string,
+  now: number,
+): Promise<{ settled: number; oneTouchSettled: number; expirySettled: number; errors: string[] }> {
+  let settled = 0, oneTouchSettled = 0, expirySettled = 0;
   const errors: string[] = [];
+  const tag = `[Settlement:${chain.label}]`;
 
-  const signer = getOracleSigner();
-  if (!signer) {
-    errors.push("DEPLOYER_PRIVATE_KEY not configured — cannot settle events on-chain");
+  const provider = await getWorkingProvider(chain.rpcUrls);
+  if (!provider) {
+    errors.push(`${tag} No reachable RPC`);
     return { settled, oneTouchSettled, expirySettled, errors };
   }
 
-  const provider = new ethers.JsonRpcProvider(LISK_SEPOLIA_RPC);
-  const readContract = new ethers.Contract(DIAMOND_ADDRESS, HEDGE_ABI, provider);
-  const writeContract = new ethers.Contract(DIAMOND_ADDRESS, HEDGE_ABI, signer);
+  const signer = new ethers.Wallet(deployerKey, provider);
+  const readContract = new ethers.Contract(chain.diamondAddress, HEDGE_ABI, provider);
+  const writeContract = new ethers.Contract(chain.diamondAddress, HEDGE_ABI, signer);
 
   let totalEvents: number;
   try {
     totalEvents = Number(await readContract.getTotalHedgeEvents());
   } catch (error) {
-    errors.push(`Failed to read total events: ${error instanceof Error ? error.message : "Unknown error"}`);
+    // Non-fatal — Diamond may not have HedgeFacet on this chain yet
+    errors.push(`${tag} getTotalHedgeEvents failed: ${error instanceof Error ? error.message : error}`);
     return { settled, oneTouchSettled, expirySettled, errors };
   }
 
-  const now = Math.floor(Date.now() / 1000);
+  console.log(`${tag} Checking ${totalEvents} event(s) for settlement...`);
 
   for (let i = 1; i <= totalEvents; i++) {
     try {
       const core = await readContract.getHedgeEventCore(i);
       const status = Number(core.status);
-      if (status !== 0) continue;
+      if (status !== 0) continue; // 0 = Open, skip settled/cancelled
 
       const underlying = core.underlying;
       const rate = await getRate(underlying);
       if (!rate) {
-        errors.push(`No rate available for ${underlying} (event #${i})`);
+        errors.push(`${tag} No rate for ${underlying} (event #${i})`);
         continue;
       }
 
       const strike = Number(ethers.formatUnits(core.strike, 6));
       const initialRate = Number(ethers.formatUnits(core.initialRate, 6));
       const strikeAbove = core.strikeAbove as boolean;
-      // Legacy events (created before bidirectional support) have strikeAbove=false
-      // but strike > initialRate — infer they are actually upward hedges
+      // Legacy events (strikeAbove=false but strike > initialRate) are upward hedges
       const effectiveStrikeAbove = strikeAbove || (!strikeAbove && strike > initialRate);
       const expiryDate = Number(core.expiryDate);
       const isExpired = expiryDate <= now;
@@ -415,13 +457,44 @@ export async function checkAndSettleEvents(): Promise<{ settled: number; oneTouc
 
       if (isTouched && !isExpired) {
         oneTouchSettled++;
-        console.log(`[Oracle] ONE-TOUCH: Event #${i} (${underlying}) settled early — rate ${rate.rate} touched strike ${strike}`);
+        console.log(`${tag} ONE-TOUCH: Event #${i} (${underlying}) settled — rate ${rate.rate} touched strike ${strike}`);
       } else {
         expirySettled++;
-        console.log(`[Oracle] EXPIRY: Event #${i} (${underlying}) settled at rate ${rate.rate} (strike: ${strike})`);
+        console.log(`${tag} EXPIRY: Event #${i} (${underlying}) settled — rate ${rate.rate} (strike: ${strike})`);
       }
     } catch (error) {
-      errors.push(`Failed to settle event #${i}: ${error instanceof Error ? error.message : "Unknown error"}`);
+      errors.push(`${tag} Event #${i} settlement failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  return { settled, oneTouchSettled, expirySettled, errors };
+}
+
+export async function checkAndSettleEvents(): Promise<{ settled: number; oneTouchSettled: number; expirySettled: number; errors: string[] }> {
+  let settled = 0, oneTouchSettled = 0, expirySettled = 0;
+  const errors: string[] = [];
+
+  const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
+  if (!deployerKey) {
+    errors.push("DEPLOYER_PRIVATE_KEY not configured — cannot settle events on-chain");
+    return { settled, oneTouchSettled, expirySettled, errors };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Run settlement for all configured chains in parallel
+  const results = await Promise.allSettled(
+    SETTLEMENT_CHAINS.map(chain => settleChain(chain, deployerKey, now))
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      settled        += result.value.settled;
+      oneTouchSettled+= result.value.oneTouchSettled;
+      expirySettled  += result.value.expirySettled;
+      errors.push(...result.value.errors);
+    } else {
+      errors.push(`Chain settlement threw: ${result.reason}`);
     }
   }
 

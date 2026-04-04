@@ -263,6 +263,78 @@ export async function registerProtocolRoutes(app: Express) {
     }
   });
 
+  // Oracle health status — shows what each chain's oracle can read and whether settlement is configured
+  app.get("/api/oracle/status", requireAdmin, async (_req, res) => {
+    try {
+      const { ethers } = await import("ethers");
+      const HEDGE_READ_ABI = [
+        'function getTotalHedgeEvents() view returns (uint256)',
+        'function isAuthorisedOracle(address) view returns (bool)',
+      ];
+      const CHAINS = [
+        { label: 'Lisk',   chainId: 1135, diamond: process.env.DIAMOND_ADDRESS     || '0x885E663645173a0791b82f0e6608921D31E3D700', rpc: process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com' },
+        { label: 'Base',   chainId: 8453, diamond: process.env.BASE_DIAMOND_ADDRESS || '', rpc: process.env.BASE_RPC_URL || 'https://mainnet.base.org' },
+        { label: 'BSC',    chainId: 56,   diamond: process.env.BSC_DIAMOND_ADDRESS  || '', rpc: process.env.BSC_RPC_URL  || 'https://bsc-dataseed.binance.org' },
+      ].filter(c => !!c.diamond);
+
+      const ORACLE_WALLETS = [
+        process.env.ORACLE_KEY_A,
+        process.env.ORACLE_KEY_B,
+        process.env.ORACLE_KEY_C,
+      ].filter(Boolean).map(k => new ethers.Wallet(k!).address);
+
+      const settlementConfigured = !!process.env.DEPLOYER_PRIVATE_KEY;
+
+      const chainStatuses = await Promise.all(CHAINS.map(async chain => {
+        try {
+          const provider = new ethers.JsonRpcProvider(chain.rpc);
+          const contract = new ethers.Contract(chain.diamond, HEDGE_READ_ABI, provider);
+          const [totalEvents, blockNumber] = await Promise.all([
+            contract.getTotalHedgeEvents().then(Number).catch(() => null),
+            provider.getBlockNumber().catch(() => null),
+          ]);
+          const oracleChecks = await Promise.all(
+            ORACLE_WALLETS.map(addr =>
+              contract.isAuthorisedOracle(addr).catch(() => null)
+            )
+          );
+          return {
+            chain: chain.label,
+            chainId: chain.chainId,
+            diamond: chain.diamond,
+            rpc: chain.rpc,
+            connected: blockNumber !== null,
+            blockNumber,
+            totalEvents,
+            hedgeFacetAvailable: totalEvents !== null,
+            oracleNodes: ORACLE_WALLETS.map((addr, i) => ({
+              address: addr,
+              registered: oracleChecks[i],
+            })),
+          };
+        } catch (e: any) {
+          return {
+            chain: chain.label,
+            chainId: chain.chainId,
+            diamond: chain.diamond,
+            rpc: chain.rpc,
+            connected: false,
+            error: e?.message,
+          };
+        }
+      }));
+
+      res.json({
+        settlementConfigured,
+        oracleWallets: ORACLE_WALLETS,
+        chains: chainStatuses,
+        settlementPollingIntervalMs: 5 * 60 * 1000,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error?.message || "Status check failed" });
+    }
+  });
+
   // ── Hedge events ─────────────────────────────────────────────────────────────
   app.get("/api/hedge/events", async (_req, res) => {
     try {
