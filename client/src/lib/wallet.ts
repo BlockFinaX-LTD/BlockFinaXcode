@@ -381,7 +381,7 @@ class WalletManager {
         const res = await fetch("/api/gas/sponsor", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletAddress }),
+          body: JSON.stringify({ walletAddress, chainId: network.chainId }),
         });
         if (res.ok) {
           const data = await res.json();

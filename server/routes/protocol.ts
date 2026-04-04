@@ -130,18 +130,27 @@ export async function registerProtocolRoutes(app: Express) {
   // ── Gas sponsorship ──────────────────────────────────────────────────────────
   app.post("/api/gas/sponsor", strictLimiter, async (req, res) => {
     try {
-      const { walletAddress } = req.body;
+      const { walletAddress, chainId } = req.body;
       if (!walletAddress) return res.status(400).json({ message: "Wallet address required" });
 
       const addr = walletAddress.toLowerCase();
       const now = Date.now();
-      const lastSponsored = gasSponsorCooldown.get(addr) || 0;
+      const cooldownKey = `${addr}:${chainId || 1135}`;
+      const lastSponsored = gasSponsorCooldown.get(cooldownKey) || 0;
       if (now - lastSponsored < 60000) return res.json({ success: true, sponsored: false, message: "Recently sponsored" });
 
       const ethers = await import("ethers");
-      const provider = new ethers.JsonRpcProvider("https://rpc.api.lisk.com");
       const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
       if (!deployerKey) return res.status(500).json({ message: "Gas sponsor not configured" });
+
+      // Select RPC based on chainId — default to Lisk
+      const RPC_BY_CHAIN: Record<number, string> = {
+        1135: "https://rpc.api.lisk.com",
+        8453: "https://mainnet.base.org",
+        56:   "https://bsc-dataseed.binance.org",
+      };
+      const rpc = RPC_BY_CHAIN[Number(chainId)] || "https://rpc.api.lisk.com";
+      const provider = new ethers.JsonRpcProvider(rpc);
 
       const userBalance = await provider.getBalance(walletAddress);
       const minGasBalance = ethers.parseEther("0.001");
@@ -150,11 +159,11 @@ export async function registerProtocolRoutes(app: Express) {
       const deployer = new ethers.Wallet(deployerKey, provider);
       const gasAmount = ethers.parseEther("0.005");
       const deployerBalance = await provider.getBalance(deployer.address);
-      if (deployerBalance < gasAmount) return res.status(400).json({ message: "Gas sponsor wallet low on ETH" });
+      if (deployerBalance < gasAmount) return res.status(400).json({ message: "Gas sponsor wallet low on funds" });
 
       const tx = await deployer.sendTransaction({ to: walletAddress, value: gasAmount });
       await tx.wait();
-      gasSponsorCooldown.set(addr, now);
+      gasSponsorCooldown.set(cooldownKey, now);
       res.json({ success: true, sponsored: true, txHash: tx.hash, amount: "0.005" });
     } catch (error: any) {
       console.error("Gas sponsor error:", error);

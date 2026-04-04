@@ -284,7 +284,7 @@ class HedgeContractManager {
         const res = await fetch("/api/gas/sponsor", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletAddress }),
+          body: JSON.stringify({ walletAddress, chainId: this._chainId }),
         });
         const data = await res.json();
         if (data.sponsored) {
