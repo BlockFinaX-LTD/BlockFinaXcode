@@ -108,6 +108,7 @@ export default function Hedge() {
 
   const [activeTab, setActiveTab] = useState("hedger");
   const [assetClassFilter, setAssetClassFilter] = useState<AssetClass>('all');
+  const [hasAutoSwitched, setHasAutoSwitched] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<HedgeEventData | null>(null);
   const [buyDialogOpen, setBuyDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
@@ -263,6 +264,17 @@ export default function Hedge() {
 
   useEffect(() => { if (wallet?.address) loadPositions(); }, [wallet?.address]);
   useEffect(() => { if (wallet?.address) loadDeposits(); }, [wallet?.address]);
+
+  // Auto-switch to Base if no events found on current chain (e.g. existing user saved on Lisk)
+  useEffect(() => {
+    if (!eventsLoading && events.length === 0 && !hasAutoSwitched && activeChainId !== 8453) {
+      const baseNetwork = NETWORKS.find(n => n.chainId === 8453);
+      if (baseNetwork) {
+        setHasAutoSwitched(true);
+        updateSettings({ selectedNetworkId: baseNetwork.id });
+      }
+    }
+  }, [eventsLoading, events.length, activeChainId]);
 
   type FXRate = { pair: string; rate: number; source: string; timestamp: number; lastUpdated: string };
   const { data: fxData } = useQuery<{ rates: Record<string, FXRate>; pairs: string[]; pairsWithClass: Array<{ pair: string; assetClass: string }> }>({
@@ -797,8 +809,18 @@ export default function Hedge() {
             ) : events.filter(e => e.status === "open" && e.creator.toLowerCase() !== (wallet?.address || "").toLowerCase() && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).length === 0 ? (
               <div className="text-center py-16">
                 <Shield className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-                <p className="text-muted-foreground font-medium">No active {assetClassFilter !== 'all' ? assetClassFilter : ''} protection events</p>
-                <p className="text-muted-foreground/70 text-sm mt-1">Create an event to get started</p>
+                <p className="text-muted-foreground font-medium">No active {assetClassFilter !== 'all' ? assetClassFilter : ''} protection events on {selectedNetwork.name}</p>
+                {activeChainId !== 8453 && NETWORKS.find(n => n.chainId === 8453) && (
+                  <button
+                    onClick={() => updateSettings({ selectedNetworkId: NETWORKS.find(n => n.chainId === 8453)!.id })}
+                    className="mt-3 text-sm text-primary hover:underline"
+                  >
+                    Switch to Base to see available events →
+                  </button>
+                )}
+                {activeChainId === 8453 && (
+                  <p className="text-muted-foreground/70 text-sm mt-1">Create an event to get started</p>
+                )}
               </div>
             ) : events.filter(e => e.status === "open" && e.creator.toLowerCase() !== (wallet?.address || "").toLowerCase() && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => (
               <Card key={event.id} className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer overflow-hidden"
