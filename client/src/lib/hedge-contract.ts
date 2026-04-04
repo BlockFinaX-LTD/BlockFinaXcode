@@ -405,8 +405,11 @@ class HedgeContractManager {
         setTimeout(() => reject(new Error('getFeeConfig RPC timeout')), 8000)
       );
       const fees = await Promise.race([contract.getHedgeFeeConfig(), rpcTimeout]);
+      // fees[0] is the raw on-chain creation fee in the token's smallest unit
+      // (e.g. 2000000 on Lisk = $2.00 USDC with 6 decimals). Format to human-readable.
+      const dec = this.tokenDecimals;
       this.feeConfigCache = {
-        creationFee: toNum(fees[0]),
+        creationFee: parseFloat(ethers.formatUnits(fees[0], dec)),
         hedgerFeeRate: parseFloat(ethers.formatUnits(fees[1], 6)),
         hedgerPayoutFeeRate: parseFloat(ethers.formatUnits(fees[2], 6)),
         lpProfitFeeRate: parseFloat(ethers.formatUnits(fees[3], 6)),
