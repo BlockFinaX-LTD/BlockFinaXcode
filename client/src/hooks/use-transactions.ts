@@ -8,14 +8,92 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ethers } from 'ethers';
 import { walletManager, type WalletBalance, type TransactionData } from '@/lib/wallet';
 import { fallbackProvider } from '@/lib/rpc-provider';
 import { tokenManager, getTokensForNetwork } from '@/lib/tokens';
-import { NETWORKS } from '@/lib/networks';
+import { NETWORKS, getNetworkById } from '@/lib/networks';
 import { useWallet } from './use-wallet';
 import { useWalletBalances } from './use-wallet-balances';
 import { useToast } from '@/hooks/use-toast';
 import { getEthPrice, getBnbPrice, fetchCryptoPrices } from '@/lib/price-service';
+
+// ── Server-assisted signing (zero browser RPC calls) ──────────────────────
+// Fetches tx params (nonce, gas, chainId) from the server so the browser
+// never needs to contact an RPC directly. Private key never leaves the device.
+
+async function fetchTxParams(chainId: number, from: string, to: string, data: string, value: bigint) {
+  const res = await fetch('/api/wallet/tx-params', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chainId, from, to, data, value: value.toString() }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Failed to prepare transaction');
+  return body.tx;
+}
+
+function rehydrateTx(txParams: any) {
+  const tx = { ...txParams };
+  for (const field of ['value', 'gasLimit', 'gasPrice', 'maxFeePerGas', 'maxPriorityFeePerGas']) {
+    if (tx[field] !== undefined) tx[field] = BigInt(tx[field]);
+  }
+  return tx;
+}
+
+async function broadcastTx(signedTx: string, chainId: number): Promise<string> {
+  const res = await fetch('/api/wallet/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ signedTx, chainId }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Broadcast failed');
+  return body.hash;
+}
+
+async function sendTokenViaServer(
+  wallet: ethers.Wallet,
+  chainId: number,
+  tokenAddress: string,
+  recipient: string,
+  amount: string,
+  tokenDecimals: number,
+): Promise<string> {
+  const iface = new ethers.Interface(['function transfer(address,uint256) returns (bool)']);
+  const tokenAmount = ethers.parseUnits(amount, tokenDecimals);
+  const data = iface.encodeFunctionData('transfer', [recipient, tokenAmount]);
+  const params = await fetchTxParams(chainId, wallet.address, tokenAddress, data, 0n);
+  const signedTx = await wallet.signTransaction(rehydrateTx(params));
+  return broadcastTx(signedTx, chainId);
+}
+
+async function sendNativeViaServer(
+  wallet: ethers.Wallet,
+  chainId: number,
+  recipient: string,
+  amount: string,
+): Promise<string> {
+  const value = ethers.parseEther(amount);
+  const params = await fetchTxParams(chainId, wallet.address, recipient, '0x', value);
+  const signedTx = await wallet.signTransaction(rehydrateTx(params));
+  return broadcastTx(signedTx, chainId);
+}
+
+async function ensureGas(walletAddress: string, chainId: number) {
+  try {
+    const res = await fetch('/api/gas/sponsor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress, chainId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      // Only wait if gas was actually sent — avoids unnecessary 2 s delay
+      if (data.sponsored) await new Promise(r => setTimeout(r, 2000));
+    }
+  } catch { /* non-fatal */ }
+}
 
 export function useTransactions(networkId: number) {
   const queryClient = useQueryClient();
@@ -98,63 +176,97 @@ export function useTransactions(networkId: number) {
   });
 
   const sendTransactionMutation = useMutation({
-    mutationFn: async ({ 
-      to, 
-      amount, 
-      networkId, 
-      tokenAddress, 
+    mutationFn: async ({
+      to,
+      amount,
+      networkId,
+      tokenAddress,
       tokenDecimals,
       feeAmount,
       treasuryAddress,
-    }: { 
-      to: string; 
-      amount: string; 
-      networkId: number; 
-      tokenAddress?: string; 
-      tokenDecimals?: number; 
+    }: {
+      to: string;
+      amount: string;
+      networkId: number;
+      tokenAddress?: string;
+      tokenDecimals?: number;
       feeAmount?: string;
       treasuryAddress?: string;
     }) => {
+      // Always get a fresh wallet reference — avoids stale singleton issue
+      const rawWallet = walletManager.getWallet();
+      if (!rawWallet) throw new Error('Wallet is locked — please unlock first');
+
+      const network = getNetworkById(networkId);
+      if (!network) throw new Error('Unknown network selected');
+      const chainId = network.chainId;
+
+      // Ensure gas is available (non-fatal if it fails)
+      await ensureGas(rawWallet.address, chainId);
+
       if (tokenAddress && tokenDecimals && feeAmount && treasuryAddress) {
-        const result = await walletManager.sendTokenTransactionWithFee(to, amount, networkId, tokenAddress, tokenDecimals, feeAmount, treasuryAddress);
+        // Stablecoin send WITH fee split
+        const decimalPlaces = Math.min(tokenDecimals, 18);
+        const netAmount = (parseFloat(amount) - parseFloat(feeAmount)).toFixed(decimalPlaces);
+
+        const hash = await sendTokenViaServer(rawWallet, chainId, tokenAddress, to, netAmount, tokenDecimals);
+
+        // Fee transfer with nonce + 1
+        let feeTxHash: string | null = null;
         try {
-          const network = NETWORKS.find(n => n.id === networkId);
-          await fetch("/api/fees/record", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+          const iface = new ethers.Interface(['function transfer(address,uint256) returns (bool)']);
+          const feeAmt = ethers.parseUnits(parseFloat(feeAmount).toFixed(decimalPlaces), tokenDecimals);
+          const feeData = iface.encodeFunctionData('transfer', [treasuryAddress, feeAmt]);
+          const feeParams = await fetchTxParams(chainId, rawWallet.address, tokenAddress, feeData, 0n);
+          feeParams.nonce += 1;
+          const signedFeeTx = await rawWallet.signTransaction(rehydrateTx(feeParams));
+          feeTxHash = await broadcastTx(signedFeeTx, chainId);
+        } catch { /* fee collection failure is non-fatal */ }
+
+        // Record fee server-side
+        try {
+          await fetch('/api/fees/record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              txHash: result.hash,
-              feeTxHash: result.feeTxHash,
-              fromWallet: address,
+              txHash: hash,
+              feeTxHash,
+              fromWallet: rawWallet.address,
               toWallet: to,
               transferAmount: amount,
               feeAmount,
-              feePercent: "0.3",
-              token: "USDC",
-              chainId: network?.chainId || 1135,
+              feePercent: '0.3',
+              token: 'USDC',
+              chainId,
             }),
           });
         } catch {}
-        return result;
+
+        return { hash, feeTxHash, transaction: { hash } };
+
       } else if (tokenAddress && tokenDecimals) {
-        return walletManager.sendTokenTransaction(to, amount, networkId, tokenAddress, tokenDecimals);
+        // ERC-20 send without fee
+        const hash = await sendTokenViaServer(rawWallet, chainId, tokenAddress, to, amount, tokenDecimals);
+        return { hash, transaction: { hash } };
+
       } else {
-        return walletManager.sendTransaction(to, amount, networkId);
+        // Native ETH/BNB send
+        const hash = await sendNativeViaServer(rawWallet, chainId, to, amount);
+        return { hash, transaction: { hash } };
       }
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data) => {
       toast({
-        title: "Transaction Sent",
+        title: 'Transaction Sent',
         description: `Transaction hash: ${data.hash.slice(0, 10)}...`,
       });
-
       walletBalances.refreshAll();
       queryClient.invalidateQueries({ queryKey: ['transactions', networkId] });
     },
     onError: (error) => {
       toast({
-        variant: "destructive",
-        title: "Transaction Failed",
+        variant: 'destructive',
+        title: 'Transaction Failed',
         description: error instanceof Error ? error.message : 'Unknown error',
       });
     },
@@ -205,8 +317,8 @@ export function useTransactions(networkId: number) {
     isLoadingTransactions: transactionsQuery.isLoading,
     transactionsError: transactionsQuery.error,
 
-    // Send transaction
-    sendTransaction: sendTransactionMutation.mutate,
+    // Send transaction — use mutateAsync so errors propagate to the caller's try/catch
+    sendTransaction: sendTransactionMutation.mutateAsync,
     isSendingTransaction: sendTransactionMutation.isPending,
     sendTransactionError: sendTransactionMutation.error,
 
