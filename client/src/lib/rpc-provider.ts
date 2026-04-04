@@ -40,31 +40,22 @@ export class FallbackProvider {
       return this.providers.get(chainId)!;
     }
 
-    const rpcUrls = RPC_FALLBACKS[chainId as keyof typeof RPC_FALLBACKS] || [];
-    
-    for (const rpcUrl of rpcUrls) {
-      try {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 5000)
-        );
-        
-        await Promise.race([
-          provider.getBlockNumber(),
-          timeoutPromise
-        ]);
-        
-        this.providers.set(chainId, provider);
-        this.workingRpcs.set(chainId, rpcUrl);
-        return provider;
-        
-      } catch (error) {
-        continue;
-      }
+    if (!RPC_FALLBACKS[chainId as keyof typeof RPC_FALLBACKS]) {
+      return null;
     }
-    
-    return null;
+
+    // Route all RPC calls through the server proxy to avoid browser-level rate
+    // limits on public nodes (critical for Railway / any production deployment).
+    const proxyUrl = `${window.location.origin}/api/rpc/${chainId}`;
+    const provider = new ethers.JsonRpcProvider(
+      proxyUrl,
+      chainId,
+      { staticNetwork: true }   // skip eth_chainId auto-detect round-trip
+    );
+
+    this.providers.set(chainId, provider);
+    this.workingRpcs.set(chainId, proxyUrl);
+    return provider;
   }
 
   async getBalance(address: string, chainId: number): Promise<string | null> {

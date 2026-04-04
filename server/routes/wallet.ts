@@ -318,6 +318,37 @@ export function registerWalletRoutes(app: Express) {
     }
   });
 
+  // JSON-RPC proxy — routes eth_call / eth_getBalance / etc. from the browser
+  // through the server to avoid rate-limits imposed on browser IPs by public nodes.
+  // POST { chainId, ...jsonRpcBody }  → forwards to an RPC and returns the JSON result.
+  app.post("/api/rpc/:chainId", async (req, res) => {
+    const chainId = parseInt(req.params.chainId, 10);
+    const RPC_LIST: Record<number, string[]> = {
+      1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
+      4202: ["https://rpc.sepolia-api.lisk.com"],
+      8453: ["https://mainnet.base.org", "https://base.llamarpc.com", "https://base-rpc.publicnode.com"],
+      56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
+    };
+    const urls = RPC_LIST[chainId];
+    if (!urls) return res.status(400).json({ error: `Unsupported chainId: ${chainId}` });
+
+    let lastErr = "";
+    for (const url of urls) {
+      try {
+        const rpcRes = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(req.body),
+        });
+        const data = await rpcRes.json();
+        return res.json(data);
+      } catch (e: any) {
+        lastErr = e.message;
+      }
+    }
+    res.status(503).json({ jsonrpc: "2.0", error: { code: -32603, message: `All RPCs failed: ${lastErr}` }, id: (req.body as any)?.id ?? null });
+  });
+
   // Prepare transaction parameters server-side (nonce, gas, chainId) so the browser
   // never needs to call the RPC directly (avoids CORS on read ops too).
   app.post("/api/wallet/tx-params", async (req, res) => {

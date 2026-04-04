@@ -256,8 +256,14 @@ class HedgeContractManager {
 
   getProvider(): ethers.JsonRpcProvider {
     if (!this.provider) {
-      const rpc = CHAIN_RPC_MAP[this._chainId] || LISK_SEPOLIA_RPC;
-      this.provider = new ethers.JsonRpcProvider(rpc);
+      // Route all RPC calls through the server proxy so the server's IP hits the
+      // public RPC nodes — avoids rate-limits imposed on browser IPs in production.
+      const proxyUrl = `${window.location.origin}/api/rpc/${this._chainId}`;
+      this.provider = new ethers.JsonRpcProvider(
+        proxyUrl,
+        this._chainId,
+        { staticNetwork: true }   // skip eth_chainId auto-detect round-trip
+      );
     }
     return this.provider;
   }

@@ -18,16 +18,17 @@
 
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
-import { fileURLToPath } from "url";
+import fs from "fs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const isProd = process.env.NODE_ENV === "production";
+// When bundled by esbuild into dist/index.js, import.meta.url points to the
+// bundle — not to the original source file — so __dirname = "dist/".
+// We use process.cwd() + known relative paths instead.
+const CWD = process.cwd();
 
 const ORACLE_NODES = [
-  { label: "A", file: isProd ? "multi-oracle/run-oracle-a.js" : "run-oracle-a.ts", key: "ORACLE_KEY_A" },
-  { label: "B", file: isProd ? "multi-oracle/run-oracle-b.js" : "run-oracle-b.ts", key: "ORACLE_KEY_B" },
-  { label: "C", file: isProd ? "multi-oracle/run-oracle-c.js" : "run-oracle-c.ts", key: "ORACLE_KEY_C" },
+  { label: "A", base: "run-oracle-a", key: "ORACLE_KEY_A" },
+  { label: "B", base: "run-oracle-b", key: "ORACLE_KEY_B" },
+  { label: "C", base: "run-oracle-c", key: "ORACLE_KEY_C" },
 ];
 
 const CHAINS = [
@@ -50,29 +51,46 @@ const CHAINS = [
 
 function spawnNode(
   fullLabel: string,
-  file: string,
+  base: string,
   extraEnv: Record<string, string>
 ): ChildProcess {
-  const scriptPath = isProd
-    ? path.join(process.cwd(), "dist", file)
-    : path.join(__dirname, file);
+  // Prefer the compiled .js file in dist/multi-oracle/ (exists when built with
+  // separate esbuild entries). Fall back to the TypeScript source with tsx,
+  // which works in any environment where the repo is checked out.
+  const compiledJs = path.join(CWD, "dist", "multi-oracle", `${base}.js`);
+  const sourceTs   = path.join(CWD, "server", "multi-oracle", `${base}.ts`);
 
-  const child = isProd
-    ? spawn("node", [scriptPath], {
-        env: { ...process.env, ...extraEnv },
-        stdio: ["ignore", "pipe", "pipe"],
-      })
-    : spawn("npx", ["tsx", scriptPath], {
-        env: { ...process.env, ...extraEnv },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+  let scriptPath: string;
+  let cmd: string;
+  let args: string[];
+
+  if (fs.existsSync(compiledJs)) {
+    scriptPath = compiledJs;
+    cmd = "node";
+    args = [scriptPath];
+  } else {
+    scriptPath = sourceTs;
+    cmd = "npx";
+    args = ["tsx", scriptPath];
+  }
+
+  const child = spawn(cmd, args, {
+    env: { ...process.env, ...extraEnv },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
   child.stdout?.on("data", (d) => process.stdout.write(`[${fullLabel}] ${d}`));
   child.stderr?.on("data", (d) => process.stderr.write(`[${fullLabel}] ${d}`));
 
+  // Handle spawn errors explicitly to prevent ErrorEvent from reaching
+  // the global uncaughtException handler (which crashes on read-only .message).
+  child.on("error", (err) => {
+    console.error(`[${fullLabel}] Spawn error: ${err?.message ?? String(err)}`);
+  });
+
   child.on("exit", (code, signal) => {
     console.log(`[${fullLabel}] exited (code=${code} signal=${signal}) — restarting in 30s`);
-    setTimeout(() => spawnNode(fullLabel, file, extraEnv), 30_000);
+    setTimeout(() => spawnNode(fullLabel, base, extraEnv), 30_000);
   });
 
   return child;
@@ -100,7 +118,7 @@ export function startAllOracleNodes() {
         DIAMOND_ADDRESS: chain.diamondAddress!,
         ORACLE_RPC_URL: chain.rpcUrl,
       };
-      spawnNode(fullLabel, node.file, extraEnv);
+      spawnNode(fullLabel, node.base, extraEnv);
       console.log(`[MultiOracle] ${fullLabel} spawned → ${chain.diamondAddress} @ ${chain.rpcUrl}`);
     }
   }
