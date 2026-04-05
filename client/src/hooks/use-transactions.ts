@@ -152,19 +152,14 @@ export function useTransactions(networkId: number) {
     return walletBalances.selectedNetworkBalance.tokenBalances;
   }, [walletBalances.selectedNetworkBalance]);
 
-  // Get transaction history from backend API
+  // Get transaction history from backend API — fetch all chains
   const transactionsQuery = useQuery({
-    queryKey: ['transactions', networkId, address],
+    queryKey: ['transactions', address],
     queryFn: async () => {
       if (!address) return [];
       try {
-        // Convert internal network ID to chainId for the API
-        const network = NETWORKS.find(n => n.id === networkId);
-        const chainId = network?.chainId || 1135;
-        const response = await fetch(`/api/wallet/${address}/transactions?networkId=${chainId}`);
-        if (!response.ok) {
-          return [];
-        }
+        const response = await fetch(`/api/wallet/${address}/transactions`);
+        if (!response.ok) return [];
         const data = await response.json();
         return data.transactions || [];
       } catch (error) {
@@ -172,7 +167,7 @@ export function useTransactions(networkId: number) {
       }
     },
     enabled: !!address,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
   const sendTransactionMutation = useMutation({

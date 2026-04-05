@@ -196,81 +196,84 @@ export function registerWalletRoutes(app: Express) {
     try {
       const { address } = req.params;
       const { networkId } = req.query;
-      const chainId = networkId ? parseInt(networkId as string) : 1135;
 
-      const EXPLORER_API: Record<number, string> = {
-        1135: 'https://blockscout.lisk.com/api',
-        4202: 'https://sepolia-blockscout.lisk.com/api',
-        8453: 'https://base.blockscout.com/api',
-        56:   'https://api.bscscan.com/api',
+      const EXPLORER_API: Record<number, { url: string; symbol: string; chain: string }> = {
+        1135: { url: 'https://blockscout.lisk.com/api',  symbol: 'LSK', chain: 'Lisk' },
+        8453: { url: 'https://base.blockscout.com/api',  symbol: 'ETH', chain: 'Base' },
+        56:   { url: 'https://api.bscscan.com/api',       symbol: 'BNB', chain: 'BSC'  },
       };
-      const baseUrl = EXPLORER_API[chainId];
-      if (!baseUrl) return res.json({ transactions: [] });
 
-      // Known USDC/USDT token contracts per chain
-      const usdcContracts = [
-        // Lisk testnet
-        '0x0e82fddad51cc3ac12b69761c45bbcb9a2bf3c83',
-        '0xf52ad63619bf9cfef510341ac6b4038554399562',
-        // Lisk mainnet
-        '0xf242275d3a6527d877f2c927a82d9b057609cc71',
-        // Base
-        '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-        '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
-        // BSC
-        '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
-        '0x55d398326f99059ff775485246999027b3197955',
-      ];
-
-      const txListUrl = `${baseUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
-      const tokenTxUrl = `${baseUrl}?module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
-
-      const [txResponse, tokenResponse] = await Promise.all([
-        fetch(txListUrl).then(r => r.json()).catch(() => ({ status: '0', result: [] })),
-        fetch(tokenTxUrl).then(r => r.json()).catch(() => ({ status: '0', result: [] })),
+      // Known USDC/USDT token contracts (lower-case)
+      const usdcContracts = new Set([
+        '0xf242275d3a6527d877f2c927a82d9b057609cc71', // Lisk USDC
+        '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // Base USDC
+        '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // Base USDT
+        '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', // BSC USDC
+        '0x55d398326f99059ff775485246999027b3197955', // BSC USDT
       ]);
 
-      const allTransactions: any[] = [];
-      const seenHashes = new Set<string>();
+      // Determine which chains to query — default to all production chains
+      const requestedChainId = networkId ? parseInt(networkId as string) : null;
+      const chainsToQuery = (requestedChainId && EXPLORER_API[requestedChainId])
+        ? [requestedChainId]
+        : [1135, 8453, 56];
 
-      if (tokenResponse.status === '1' && Array.isArray(tokenResponse.result)) {
-        for (const tx of tokenResponse.result) {
-          const contractAddr = tx.contractAddress?.toLowerCase() || '';
-          const isUsdc = usdcContracts.includes(contractAddr);
-          const decimals = parseInt(tx.tokenDecimal) || 6;
-          const rawAmount = BigInt(tx.value || '0');
-          const displayValue = (Number(rawAmount) / Math.pow(10, decimals)).toString();
-          const usdValue = isUsdc ? Number(rawAmount) / Math.pow(10, decimals) : 0;
+      async function fetchChain(chainId: number) {
+        const meta = EXPLORER_API[chainId];
+        const txListUrl  = `${meta.url}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=30&sort=desc`;
+        const tokenTxUrl = `${meta.url}?module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=30&sort=desc`;
 
-          allTransactions.push({
-            hash: tx.hash, from: tx.from, to: tx.to, value: displayValue,
-            type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
-            status: 'confirmed', timestamp: new Date(parseInt(tx.timeStamp) * 1000),
-            blockNumber: tx.blockNumber, gasUsed: tx.gasUsed || '0', gasPrice: tx.gasPrice || '0',
-            usdValue, tokenSymbol: isUsdc ? 'USDC' : (tx.tokenSymbol || 'TOKEN'), isTokenTransfer: true
-          });
-          seenHashes.add(tx.hash);
+        const [txResponse, tokenResponse] = await Promise.all([
+          fetch(txListUrl).then(r => r.json()).catch(() => ({ status: '0', result: [] })),
+          fetch(tokenTxUrl).then(r => r.json()).catch(() => ({ status: '0', result: [] })),
+        ]);
+
+        const result: any[] = [];
+        const seenHashes = new Set<string>();
+
+        if (tokenResponse.status === '1' && Array.isArray(tokenResponse.result)) {
+          for (const tx of tokenResponse.result) {
+            const contractAddr = tx.contractAddress?.toLowerCase() || '';
+            const isUsdc = usdcContracts.has(contractAddr);
+            const decimals = parseInt(tx.tokenDecimal) || 6;
+            const rawAmount = BigInt(tx.value || '0');
+            const displayValue = (Number(rawAmount) / Math.pow(10, decimals)).toString();
+            const usdValue = isUsdc ? Number(rawAmount) / Math.pow(10, decimals) : 0;
+            result.push({
+              hash: tx.hash, from: tx.from, to: tx.to, value: displayValue,
+              type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
+              status: 'confirmed', timestamp: new Date(parseInt(tx.timeStamp) * 1000),
+              blockNumber: tx.blockNumber, gasUsed: tx.gasUsed || '0', gasPrice: tx.gasPrice || '0',
+              usdValue, tokenSymbol: isUsdc ? 'USDC' : (tx.tokenSymbol || 'TOKEN'),
+              isTokenTransfer: true, chain: meta.chain, chainId,
+            });
+            seenHashes.add(tx.hash);
+          }
         }
+
+        if (txResponse.status === '1' && Array.isArray(txResponse.result)) {
+          for (const tx of txResponse.result) {
+            if (seenHashes.has(tx.hash)) continue;
+            const nativeValue = parseFloat(tx.value) / 1e18;
+            if (nativeValue === 0 && tx.input && tx.input !== '0x') continue;
+            result.push({
+              hash: tx.hash, from: tx.from, to: tx.to, value: nativeValue.toString(),
+              type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
+              status: tx.txreceipt_status === '1' ? 'confirmed' : 'failed',
+              timestamp: new Date(parseInt(tx.timeStamp) * 1000),
+              blockNumber: tx.blockNumber, gasUsed: tx.gasUsed, gasPrice: tx.gasPrice,
+              usdValue: 0, tokenSymbol: meta.symbol, isTokenTransfer: false,
+              chain: meta.chain, chainId,
+            });
+          }
+        }
+        return result;
       }
 
-      if (txResponse.status === '1' && Array.isArray(txResponse.result)) {
-        for (const tx of txResponse.result) {
-          if (seenHashes.has(tx.hash)) continue;
-          const ethValue = parseFloat(tx.value) / 1e18;
-          if (ethValue === 0 && tx.input && tx.input !== '0x') continue;
-          allTransactions.push({
-            hash: tx.hash, from: tx.from, to: tx.to, value: ethValue.toString(),
-            type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
-            status: tx.txreceipt_status === '1' ? 'confirmed' : 'failed',
-            timestamp: new Date(parseInt(tx.timeStamp) * 1000),
-            blockNumber: tx.blockNumber, gasUsed: tx.gasUsed, gasPrice: tx.gasPrice,
-            usdValue: ethValue * 3200, tokenSymbol: 'ETH', isTokenTransfer: false
-          });
-        }
-      }
-
+      const perChain = await Promise.all(chainsToQuery.map(fetchChain));
+      const allTransactions = perChain.flat();
       allTransactions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      res.json({ transactions: allTransactions.slice(0, 50) });
+      res.json({ transactions: allTransactions.slice(0, 60) });
     } catch (error) {
       res.json({ transactions: [] });
     }
