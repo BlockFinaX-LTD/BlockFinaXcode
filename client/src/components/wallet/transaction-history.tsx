@@ -121,7 +121,7 @@ export function TransactionHistory({ networkId, className = '' }: TransactionHis
                       </div>
                       <div>
                         <div className="font-medium text-sm flex items-center gap-1.5">
-                          {tx.type === 'received' ? 'Received' : 'Sent'}
+                          {tx.label || (tx.type === 'received' ? 'Received' : 'Sent')}
                           {tx.chain && (
                             <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-normal">
                               {tx.chain}

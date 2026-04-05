@@ -218,6 +218,37 @@ export function registerWalletRoutes(app: Express) {
         ? [requestedChainId]
         : [1135, 8453, 56];
 
+      // Map raw function signatures → friendly labels
+      const FUNCTION_LABELS: Record<string, string> = {
+        deposit:                 'LP Deposit',
+        buyProtection:           'Buy Protection',
+        createHedgeEvent:        'Create Event',
+        withdrawCapital:         'Withdraw LP Capital',
+        claimPayout:             'Claim Payout',
+        claimPremiums:           'Claim Premiums',
+        withdrawCreatorEarnings: 'Creator Earnings',
+        recoverExpiredPayouts:   'Recover Expired Funds',
+        settleEvent:             'Oracle Settlement',
+        setPoolSettings:         'Pool Settings Update',
+        setAllowedPaymentToken:  'Enable Payment Token',
+        initializeHedgeFees:     'Set Fee Config',
+        setOracleAdmin:          'Add Oracle',
+        withdrawPlatformFees:    'Withdraw Platform Fees',
+        withdrawPlatformFeesByToken: 'Withdraw Platform Fees',
+        diamondCut:              'Propose Upgrade',
+        executeCut:              'Execute Upgrade',
+        cancelCut:               'Cancel Upgrade',
+        transferOwnership:       'Transfer Ownership',
+        approve:                 'USDC Approval',
+        transfer:                'Token Transfer',
+      };
+
+      function friendlyLabel(functionName: string | undefined): string | undefined {
+        if (!functionName) return undefined;
+        const sig = functionName.split('(')[0].trim();
+        return FUNCTION_LABELS[sig];
+      }
+
       async function fetchChain(chainId: number) {
         const meta = EXPLORER_API[chainId];
         const txListUrl  = `${meta.url}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=30&sort=desc`;
@@ -227,6 +258,14 @@ export function registerWalletRoutes(app: Express) {
           fetch(txListUrl).then(r => r.json()).catch(() => ({ status: '0', result: [] })),
           fetch(tokenTxUrl).then(r => r.json()).catch(() => ({ status: '0', result: [] })),
         ]);
+
+        // Build hash → functionName map from txlist so we can label token transfers
+        const hashToFn = new Map<string, string>();
+        if (txResponse.status === '1' && Array.isArray(txResponse.result)) {
+          for (const tx of txResponse.result) {
+            if (tx.functionName) hashToFn.set(tx.hash.toLowerCase(), tx.functionName);
+          }
+        }
 
         const result: any[] = [];
         const seenHashes = new Set<string>();
@@ -239,13 +278,16 @@ export function registerWalletRoutes(app: Express) {
             const rawAmount = BigInt(tx.value || '0');
             const displayValue = (Number(rawAmount) / Math.pow(10, decimals)).toString();
             const usdValue = isUsdc ? Number(rawAmount) / Math.pow(10, decimals) : 0;
+            // Use outer contract's function name if available, else fall back to ERC-20 action
+            const outerFn = hashToFn.get(tx.hash.toLowerCase());
+            const label = friendlyLabel(outerFn) ?? (tx.from.toLowerCase() === address.toLowerCase() ? 'USDC Approval' : undefined);
             result.push({
               hash: tx.hash, from: tx.from, to: tx.to, value: displayValue,
               type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
               status: 'confirmed', timestamp: new Date(parseInt(tx.timeStamp) * 1000),
               blockNumber: tx.blockNumber, gasUsed: tx.gasUsed || '0', gasPrice: tx.gasPrice || '0',
               usdValue, tokenSymbol: isUsdc ? 'USDC' : (tx.tokenSymbol || 'TOKEN'),
-              isTokenTransfer: true, chain: meta.chain, chainId,
+              isTokenTransfer: true, chain: meta.chain, chainId, label,
             });
             seenHashes.add(tx.hash);
           }
@@ -256,6 +298,7 @@ export function registerWalletRoutes(app: Express) {
             if (seenHashes.has(tx.hash)) continue;
             const nativeValue = parseFloat(tx.value) / 1e18;
             if (nativeValue === 0 && tx.input && tx.input !== '0x') continue;
+            const label = friendlyLabel(tx.functionName);
             result.push({
               hash: tx.hash, from: tx.from, to: tx.to, value: nativeValue.toString(),
               type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
@@ -263,7 +306,7 @@ export function registerWalletRoutes(app: Express) {
               timestamp: new Date(parseInt(tx.timeStamp) * 1000),
               blockNumber: tx.blockNumber, gasUsed: tx.gasUsed, gasPrice: tx.gasPrice,
               usdValue: 0, tokenSymbol: meta.symbol, isTokenTransfer: false,
-              chain: meta.chain, chainId,
+              chain: meta.chain, chainId, label,
             });
           }
         }
