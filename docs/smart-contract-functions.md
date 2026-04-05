@@ -1,8 +1,12 @@
 # BlockFinaX Smart Contract Function Reference
 
-**Diamond Address:** `0x3582D8f5f88ef557ce10Af26834FAC8B8e1445bf` (Lisk Sepolia)
+> **Note:** Addresses below are from the Lisk Sepolia testnet era. Mainnet addresses are:
+> - **Lisk Diamond:** `0x885E663645173a0791b82f0e6608921D31E3D700`
+> - **Base Diamond:** `0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6`
+> - **BSC Diamond:** `0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6`
+> - **Base USDC:** `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913` · **Lisk USDC:** `0xf242275d3a6527d877f2c927a82d9b057609cc71`
+
 **Standard:** EIP-2535 Diamond — all functions are called on the Diamond proxy address.
-**Tokens:** USDC `0xf52Ad63619Bf9cFeF510341ac6b4038554399562` · USDT `0x05D032ac25d322df992303dCa074EE7392C117b9`
 
 ---
 
