@@ -100,6 +100,7 @@ const HEDGE_ABI = [
   'function claimPremiums(uint256 _depositId)',
   'function withdrawCapital(uint256 _depositId)',
   'function withdrawCreatorEarnings(uint256 _eventId)',
+  'function recoverExpiredPayouts(uint256 _eventId)',
   'function initializeHedgeFees(uint256,uint256,uint256,uint256,uint256)',
   'function setOracleAdmin(address)',
   'function withdrawPlatformFees(uint256)',
@@ -970,6 +971,16 @@ class HedgeContractManager {
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('withdrawCreatorEarnings', [eventId]);
     onStep?.('Submitting withdrawal...');
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
+    onStep?.('Waiting for confirmation...');
+    await this.waitForTx(txHash);
+  }
+
+  async recoverExpiredPayouts(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<void> {
+    await this.ensureGas(signer.address);
+    const iface = new ethers.Interface(HEDGE_ABI);
+    const calldata = iface.encodeFunctionData('recoverExpiredPayouts', [eventId]);
+    onStep?.('Recovering expired event...');
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);

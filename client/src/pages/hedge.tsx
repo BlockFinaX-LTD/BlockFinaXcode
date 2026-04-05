@@ -495,6 +495,24 @@ export default function Hedge() {
     }
   });
 
+  const recoverExpiredMutation = useMutation({
+    mutationFn: async (eventId: number) => {
+      const signer = await walletManager.getSigner(selectedNetworkId);
+      if (!signer) throw new Error("Wallet signer not available.");
+      await hedgeContract.recoverExpiredPayouts(signer, eventId, setTxStep);
+    },
+    onSuccess: async () => {
+      setTxStep('');
+      await loadEvents();
+      await loadDeposits();
+      toast({ title: "Event Recovered", description: "Event marked expired on-chain. You can now withdraw your liquidity." });
+    },
+    onError: (error: any) => {
+      setTxStep('');
+      toast({ title: "Recovery Failed", description: friendlyError(error), variant: "destructive" });
+    }
+  });
+
   const claimPremiumsMutation = useMutation({
     mutationFn: async (depositId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
@@ -927,7 +945,11 @@ export default function Hedge() {
                     </div>
                   )}
 
-                  {event.poolOpen ? (
+                  {new Date() > event.expiryDate ? (
+                    <Button className="w-full bg-muted text-muted-foreground font-semibold h-10" disabled>
+                      Expired
+                    </Button>
+                  ) : event.poolOpen ? (
                     <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10"
                       onClick={async (e) => { e.stopPropagation(); await fetchEventDetails(event.id); setBuyDialogOpen(true); }}>
                       Buy Protection
@@ -945,12 +967,12 @@ export default function Hedge() {
           <TabsContent value="provider" className="space-y-3">
             {eventsLoading ? (
               <div className="text-center py-16 text-muted-foreground">Loading events...</div>
-            ) : events.filter(e => e.status === "open" && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).length === 0 ? (
+            ) : events.filter(e => e.status === "open" && new Date() < e.expiryDate && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).length === 0 ? (
               <div className="text-center py-16">
                 <TrendingUp className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
                 <p className="text-muted-foreground font-medium">No pools available</p>
               </div>
-            ) : events.filter(e => e.status === "open" && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => (
+            ) : events.filter(e => e.status === "open" && new Date() < e.expiryDate && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => (
               <Card key={event.id} className={`bg-card border-border hover:border-primary/50 transition-colors cursor-pointer ${wallet?.address?.toLowerCase() === event.creator.toLowerCase() ? 'ring-1 ring-primary/30' : ''}`}
                 onClick={async () => {
                   const isCreator = wallet?.address?.toLowerCase() === event.creator.toLowerCase();
@@ -1064,7 +1086,7 @@ export default function Hedge() {
                       const claimed = dep.premiumsClaimed;
                       const claimable = earned - claimed;
                       const depEvent = events.find(e => e.id === dep.eventId);
-                      const isEventOpen = depEvent?.status === "open";
+                      const isStillActive = depEvent?.status === "open" && new Date() < depEvent.expiryDate;
                       return (
                         <Card key={dep.id} className="bg-card border-border">
                           <CardContent className="p-4 space-y-3">
@@ -1077,7 +1099,7 @@ export default function Hedge() {
                               </div>
                               {dep.withdrawn ? (
                                 <Badge variant="secondary" className="text-[10px]">Withdrawn</Badge>
-                              ) : isEventOpen ? (
+                              ) : isStillActive ? (
                                 <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 text-[10px]">
                                   <Lock className="h-2.5 w-2.5 mr-0.5" /> Locked
                                 </Badge>
@@ -1183,13 +1205,32 @@ export default function Hedge() {
                           <p className="text-xs font-bold text-green-400">${event.totalPremiums.toFixed(2)}</p>
                         </div>
                       </div>
-                      {event.status === "open" && (
+                      {event.status === "open" && new Date() < event.expiryDate && (
                         <div className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-1.5 border border-border/40">
                           <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Pool expires in</span>
                           <CountdownTimer expiryDate={event.expiryDate} className="text-[10px]" />
                         </div>
                       )}
-                      {event.status === "open" && (
+                      {event.status === "open" && new Date() >= event.expiryDate && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 space-y-2">
+                          <p className="text-[11px] text-amber-400 font-medium flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5" /> Event expired — funds locked on-chain
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {event.hedgerCount === 0
+                              ? "No one bought protection. Call Recover to release all LP funds."
+                              : "Settlement pending. Call Recover to close the event and release funds."}
+                          </p>
+                          <Button
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-8 text-xs"
+                            onClick={() => recoverExpiredMutation.mutate(event.id)}
+                            disabled={recoverExpiredMutation.isPending}
+                          >
+                            {recoverExpiredMutation.isPending ? (txStep || 'Recovering...') : 'Recover Expired Funds'}
+                          </Button>
+                        </div>
+                      )}
+                      {event.status === "open" && new Date() < event.expiryDate && (
                         <div className="space-y-2 bg-muted/20 rounded-lg p-2.5 border border-border/50">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -1211,7 +1252,7 @@ export default function Hedge() {
                           </div>
                         </div>
                       )}
-                      {event.status === "open" && (
+                      {event.status === "open" && new Date() < event.expiryDate && (
                         <Button
                           className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-semibold h-9 text-sm"
                           variant="outline"
