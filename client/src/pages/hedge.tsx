@@ -1218,7 +1218,7 @@ export default function Hedge() {
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             {event.hedgerCount === 0
-                              ? "No one bought protection. Call Recover to release all LP funds."
+                              ? "No one bought protection from your pool. Withdraw and claim your funds."
                               : "Settlement pending. Call Recover to close the event and release funds."}
                           </p>
                           <Button
@@ -1226,7 +1226,9 @@ export default function Hedge() {
                             onClick={() => recoverExpiredMutation.mutate(event.id)}
                             disabled={recoverExpiredMutation.isPending}
                           >
-                            {recoverExpiredMutation.isPending ? (txStep || 'Recovering...') : 'Recover Expired Funds'}
+                            {recoverExpiredMutation.isPending
+                              ? (txStep || 'Processing...')
+                              : event.hedgerCount === 0 ? 'Withdraw My Funds' : 'Recover Expired Funds'}
                           </Button>
                         </div>
                       )}
