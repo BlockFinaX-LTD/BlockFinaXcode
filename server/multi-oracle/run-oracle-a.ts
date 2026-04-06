@@ -2,7 +2,7 @@
  * run-oracle-a.ts — Oracle Node A
  *
  * Data sources: ExchangeRate-API (open.er-api.com) for FX,
- *               CoinGecko for crypto,
+ *               CoinGecko for crypto (Coinbase as fallback when rate-limited),
  *               Yahoo Finance for commodities.
  *
  * Required env vars:
@@ -73,6 +73,16 @@ const CRYPTO_IDS: Record<string, string> = {
   "ADA/USD": "cardano",
 };
 
+// Coinbase fallback — used when CoinGecko rate-limits or fails
+const COINBASE_PAIRS: Record<string, string> = {
+  "BTC/USD": "BTC-USD",
+  "ETH/USD": "ETH-USD",
+  "BNB/USD": "BNB-USD",
+  "SOL/USD": "SOL-USD",
+  "XRP/USD": "XRP-USD",
+  "ADA/USD": "ADA-USD",
+};
+
 const YAHOO_TICKERS: Record<string, string> = {
   "XTI/USD": "CL=F",
   "XBR/USD": "BZ=F",
@@ -94,7 +104,24 @@ async function fetchFxRates(base: string): Promise<Record<string, number>> {
   }
 }
 
+async function fetchCoinbasePrices(): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+  await Promise.all(
+    Object.entries(COINBASE_PAIRS).map(async ([pair, cbPair]) => {
+      try {
+        const res = await fetch(`https://api.coinbase.com/v2/prices/${cbPair}/spot`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const price = parseFloat(data?.data?.amount);
+        if (price > 0) result[pair] = price;
+      } catch { /* skip */ }
+    })
+  );
+  return result;
+}
+
 async function fetchCryptoPrices(): Promise<Record<string, number>> {
+  // Primary: CoinGecko
   try {
     const ids = Object.values(CRYPTO_IDS).join(",");
     const res = await fetch(
@@ -107,9 +134,14 @@ async function fetchCryptoPrices(): Promise<Record<string, number>> {
     for (const [pair, coinId] of Object.entries(CRYPTO_IDS)) {
       if (data[coinId]?.usd) result[pair] = data[coinId].usd;
     }
+    // Fall back to Coinbase if CoinGecko returned an empty or partial response
+    if (Object.keys(result).length < 3) {
+      return fetchCoinbasePrices();
+    }
     return result;
   } catch {
-    return {};
+    // CoinGecko unavailable — use Coinbase fallback
+    return fetchCoinbasePrices();
   }
 }
 
