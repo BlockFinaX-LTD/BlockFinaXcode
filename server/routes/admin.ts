@@ -62,6 +62,23 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
     res.json({ success: true });
   });
 
+  // Key-protected hedge-events clear — no wallet auth needed, uses SAFE_OWNER_KEY_1 as bearer
+  app.post("/api/admin/clear-hedge-events", async (req, res) => {
+    const secret = process.env.SAFE_OWNER_KEY_1;
+    const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+    if (!secret || bearer !== secret) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      await db.execute(sql`TRUNCATE TABLE hedge_events, hedge_positions, hedge_lp_deposits RESTART IDENTITY CASCADE`);
+      console.log("[Admin] Hedge events cleared via key-protected endpoint");
+      res.json({ success: true, message: "hedge_events, hedge_positions, hedge_lp_deposits cleared." });
+    } catch (e: any) {
+      console.error("[Admin] Clear hedge events failed:", e.message);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.use("/api/admin", (req, res, next) => {
     if (req.path === "/login" || req.path === "/logout" || req.path === "/wallet-challenge") return next();
     requireAdmin(req, res, next);
