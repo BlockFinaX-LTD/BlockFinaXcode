@@ -34,17 +34,17 @@ const ORACLE_NODES = [
 const CHAINS = [
   {
     label: "Lisk",
-    diamondAddress: process.env.DIAMOND_ADDRESS,
+    diamondAddress: process.env.DIAMOND_ADDRESS || "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
     rpcUrl: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
   },
   {
     label: "Base",
-    diamondAddress: process.env.BASE_DIAMOND_ADDRESS,
+    diamondAddress: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
     rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org,https://base-rpc.publicnode.com,https://base.drpc.org",
   },
   {
     label: "BSC",
-    diamondAddress: process.env.BSC_DIAMOND_ADDRESS,
+    diamondAddress: process.env.BSC_DIAMOND_ADDRESS || "0xaC939C0897981Abc0711ec4e37527F13106180fc",
     rpcUrl: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org,https://bsc-rpc.publicnode.com,https://bsc.drpc.org",
   },
 ];

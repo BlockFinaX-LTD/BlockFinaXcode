@@ -56,7 +56,8 @@ function getChains(): ChainConfig[] {
     {
       label: "Lisk",
       chainId: 1135,
-      diamond: process.env.DIAMOND_ADDRESS || "0x885E663645173a0791b82f0e6608921D31E3D700",
+      // New Diamond deployed 2025-04-06 (fresh EIP-2535, all 5 facets, 41-selector HedgeFacet)
+      diamond: process.env.DIAMOND_ADDRESS || "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
       rpc: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
       abi: HEDGE_READ_ABI_EXPANDED,
       statusMap: STATUS_MAP_LISK,
@@ -66,22 +67,24 @@ function getChains(): ChainConfig[] {
     {
       label: "Base",
       chainId: 8453,
-      diamond: process.env.BASE_DIAMOND_ADDRESS || "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+      // New Diamond deployed 2025-04-06 — now has full HedgeFacet with buyProtection
+      diamond: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
       rpc: process.env.BASE_RPC_URL || "https://mainnet.base.org",
-      abi: HEDGE_READ_ABI_COMPACT,
-      statusMap: STATUS_MAP_BASE,
-      supportsBuy: false,   // Base Diamond doesn't have buyProtection facet yet
-      underlyingField: "name", // compact ABI has no separate underlying field
+      abi: HEDGE_READ_ABI_EXPANDED,
+      statusMap: STATUS_MAP_LISK,   // new contract uses same status enum as Lisk
+      supportsBuy: true,
+      underlyingField: "underlying",
     },
     {
       label: "BSC",
       chainId: 56,
-      diamond: process.env.BSC_DIAMOND_ADDRESS || "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+      // New Diamond deployed 2025-04-06 — USDT (18 dec), full HedgeFacet
+      diamond: process.env.BSC_DIAMOND_ADDRESS || "0xaC939C0897981Abc0711ec4e37527F13106180fc",
       rpc: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org",
-      abi: HEDGE_READ_ABI_COMPACT,
-      statusMap: STATUS_MAP_BASE,
-      supportsBuy: true,    // BSC Diamond supports buyProtection
-      underlyingField: "name",
+      abi: HEDGE_READ_ABI_EXPANDED,
+      statusMap: STATUS_MAP_LISK,   // same status enum
+      supportsBuy: true,
+      underlyingField: "underlying",
     },
   ].filter(c => !!c.diamond);
 }

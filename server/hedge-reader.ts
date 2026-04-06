@@ -11,25 +11,25 @@ const CHAINS = [
   {
     id: 1135,
     name: 'Lisk',
-    diamond: '0x885E663645173a0791b82f0e6608921D31E3D700',
+    diamond: process.env.DIAMOND_ADDRESS || '0x69cB5BA093e44B345B617f72a148Ee43c4a18465',
     rpcs: ['https://rpc.api.lisk.com', 'https://lisk.drpc.org'],
     decimals: 6,
   },
   {
     id: 8453,
     name: 'Base',
-    diamond: '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
+    diamond: process.env.BASE_DIAMOND_ADDRESS || '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',
     rpcs: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://base.drpc.org'],
     decimals: 6,
   },
   {
     id: 56,
     name: 'BSC',
-    diamond: '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
+    diamond: process.env.BSC_DIAMOND_ADDRESS || '0xaC939C0897981Abc0711ec4e37527F13106180fc',
     rpcs: ['https://bsc-dataseed.binance.org', 'https://bsc-rpc.publicnode.com', 'https://bsc.drpc.org'],
     decimals: 18,
   },
-] as const;
+];
 
 const HEDGE_ABI = [
   'function getHedgeEventCore(uint256) view returns (uint256 id, address creator, string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, uint8 status, bool poolOpen, bool allowExternalLp, uint256 initialRate, bool strikeAbove)',

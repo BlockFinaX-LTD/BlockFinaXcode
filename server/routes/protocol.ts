@@ -284,9 +284,9 @@ export async function registerProtocolRoutes(app: Express) {
         'function isAuthorisedOracle(address) view returns (bool)',
       ];
       const CHAINS = [
-        { label: 'Lisk',   chainId: 1135, diamond: process.env.DIAMOND_ADDRESS     || '0x885E663645173a0791b82f0e6608921D31E3D700', rpc: process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com' },
-        { label: 'Base',   chainId: 8453, diamond: process.env.BASE_DIAMOND_ADDRESS || '', rpc: process.env.BASE_RPC_URL || 'https://mainnet.base.org' },
-        { label: 'BSC',    chainId: 56,   diamond: process.env.BSC_DIAMOND_ADDRESS  || '', rpc: process.env.BSC_RPC_URL  || 'https://bsc-dataseed.binance.org' },
+        { label: 'Lisk',   chainId: 1135, diamond: process.env.DIAMOND_ADDRESS     || '0x69cB5BA093e44B345B617f72a148Ee43c4a18465', rpc: process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com' },
+        { label: 'Base',   chainId: 8453, diamond: process.env.BASE_DIAMOND_ADDRESS || '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef', rpc: process.env.BASE_RPC_URL || 'https://mainnet.base.org' },
+        { label: 'BSC',    chainId: 56,   diamond: process.env.BSC_DIAMOND_ADDRESS  || '0xaC939C0897981Abc0711ec4e37527F13106180fc', rpc: process.env.BSC_RPC_URL  || 'https://bsc-dataseed.binance.org' },
       ].filter(c => !!c.diamond);
 
       const ORACLE_WALLETS = [

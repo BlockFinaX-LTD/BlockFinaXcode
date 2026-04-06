@@ -94,7 +94,7 @@ const HEDGE_ABI = [
   'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken)) returns (uint256)',
   'function setPoolSettings(uint256 _eventId, bool _poolOpen, bool _allowExternalLp)',
   'function deposit(uint256 _eventId, uint256 _amount) returns (uint256)',
-  'function buyProtection(uint256 _eventId, uint256 _notional) returns (uint256)',
+  'function buyProtection(uint256 _eventId, uint256 _notional, uint256 _maxCost, uint256 _deadline) returns (uint256)',
   'function settleEvent(uint256 _eventId, uint256 _settlementPrice)',
   'function claimPayout(uint256 _positionId)',
   'function claimPremiums(uint256 _depositId)',
@@ -939,7 +939,11 @@ class HedgeContractManager {
 
     const iface = new ethers.Interface(HEDGE_ABI);
     try {
-      const calldata = iface.encodeFunctionData('buyProtection', [eventId, notionalWei]);
+      // maxCost = totalCost + 10% slippage buffer so minor price moves don't block the tx
+      const maxCost = (totalCost * 110n) / 100n;
+      // deadline = 5 minutes from now (in unix seconds)
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+      const calldata = iface.encodeFunctionData('buyProtection', [eventId, notionalWei, maxCost, deadline]);
       onStep?.('Submitting to blockchain...');
       const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
       onStep?.('Waiting for confirmation...');

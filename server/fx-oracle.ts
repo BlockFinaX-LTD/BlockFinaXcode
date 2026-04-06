@@ -151,7 +151,7 @@ const SETTLEMENT_CHAINS = [
   {
     label: 'Lisk',
     chainId: 1135,
-    diamondAddress: process.env.DIAMOND_ADDRESS || '0x885E663645173a0791b82f0e6608921D31E3D700',
+    diamondAddress: process.env.DIAMOND_ADDRESS || '0x69cB5BA093e44B345B617f72a148Ee43c4a18465',
     rpcUrls: [
       process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com',
       'https://lisk.drpc.org',
@@ -160,7 +160,7 @@ const SETTLEMENT_CHAINS = [
   {
     label: 'Base',
     chainId: 8453,
-    diamondAddress: process.env.BASE_DIAMOND_ADDRESS || '',
+    diamondAddress: process.env.BASE_DIAMOND_ADDRESS || '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',
     rpcUrls: [
       process.env.BASE_RPC_URL || 'https://mainnet.base.org',
       'https://base.llamarpc.com',
@@ -170,7 +170,7 @@ const SETTLEMENT_CHAINS = [
   {
     label: 'BSC',
     chainId: 56,
-    diamondAddress: process.env.BSC_DIAMOND_ADDRESS || '',
+    diamondAddress: process.env.BSC_DIAMOND_ADDRESS || '0xaC939C0897981Abc0711ec4e37527F13106180fc',
     rpcUrls: [
       process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
       'https://bsc-rpc.publicnode.com',
