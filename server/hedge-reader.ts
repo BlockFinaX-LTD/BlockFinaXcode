@@ -264,19 +264,39 @@ export async function readChainDepositsByEvent(eventId: number, chainId?: number
   return all;
 }
 
-export async function readPlatformFees(): Promise<number> {
-  let total = 0;
-  await Promise.allSettled(
-    CHAINS.map(async (chain) => {
+export interface ChainFeeResult {
+  chainId: number;
+  chainName: string;
+  fees: number;
+  /** true = read directly from getHedgePlatformFees(); false = function absent on this Diamond */
+  onChain: boolean;
+}
+
+/**
+ * Reads accumulated platform fees per chain from the on-chain Diamond.
+ * Returns per-chain results so callers can apply fallbacks where the
+ * function is absent (e.g. Base Diamond has a different facet set).
+ */
+export async function readPlatformFeesPerChain(): Promise<ChainFeeResult[]> {
+  const results = await Promise.all(
+    CHAINS.map(async (chain): Promise<ChainFeeResult> => {
       try {
         const provider = await getProvider(chain.rpcs);
         const contract = new ethers.Contract(chain.diamond, HEDGE_ABI, provider);
         const fees = await contract.getHedgePlatformFees();
-        total += toNum(fees, chain.decimals);
-      } catch { /* skip silently */ }
+        return { chainId: chain.id, chainName: chain.name, fees: toNum(fees, chain.decimals), onChain: true };
+      } catch {
+        return { chainId: chain.id, chainName: chain.name, fees: 0, onChain: false };
+      }
     })
   );
-  return total;
+  return results;
+}
+
+/** Convenience wrapper: returns total across all chains (best-effort). */
+export async function readPlatformFees(): Promise<number> {
+  const perChain = await readPlatformFeesPerChain();
+  return perChain.reduce((s, c) => s + c.fees, 0);
 }
 
 export function invalidateChainCache() {
