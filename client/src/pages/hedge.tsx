@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -113,6 +114,9 @@ export default function Hedge() {
   const [buyDialogOpen, setBuyDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [notional, setNotional] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [statsOpen, setStatsOpen] = useState(false);
@@ -532,7 +536,11 @@ export default function Hedge() {
 
   // ── Mainnet safety wrappers ───────────────────────────────────────────────
   const guardedBuyProtection = () => {
-    if (!selectedEvent || !wallet) return;
+    if (!selectedEvent) return;
+    if (!wallet) {
+      toast({ title: "Wallet locked", description: "Please unlock your wallet to buy protection.", variant: "destructive" });
+      return;
+    }
     const amount = parseFloat(notional) || 0;
     const chainCheck = mainnetGuard.validateChainId(activeChainId);
     if (!chainCheck.allowed) {
@@ -545,14 +553,24 @@ export default function Hedge() {
       return;
     }
     if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
-      if (!window.confirm(txCheck.confirmationMessage)) return;
+      setConfirmMessage(txCheck.confirmationMessage);
+      setPendingAction(() => () => {
+        buyProtectionMutation.mutate();
+        mainnetGuard.recordTransaction(wallet.address, amount);
+      });
+      setConfirmDialogOpen(true);
+      return;
     }
     buyProtectionMutation.mutate();
     mainnetGuard.recordTransaction(wallet.address, amount);
   };
 
   const guardedDeposit = () => {
-    if (!selectedEvent || !wallet) return;
+    if (!selectedEvent) return;
+    if (!wallet) {
+      toast({ title: "Wallet locked", description: "Please unlock your wallet to deposit.", variant: "destructive" });
+      return;
+    }
     const amount = parseFloat(depositAmount) || 0;
     const chainCheck = mainnetGuard.validateChainId(activeChainId);
     if (!chainCheck.allowed) {
@@ -565,7 +583,13 @@ export default function Hedge() {
       return;
     }
     if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
-      if (!window.confirm(txCheck.confirmationMessage)) return;
+      setConfirmMessage(txCheck.confirmationMessage);
+      setPendingAction(() => () => {
+        depositMutation.mutate();
+        mainnetGuard.recordTransaction(wallet.address, amount);
+      });
+      setConfirmDialogOpen(true);
+      return;
     }
     depositMutation.mutate();
     mainnetGuard.recordTransaction(wallet.address, amount);
@@ -2144,6 +2168,20 @@ export default function Hedge() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* In-app confirmation dialog — replaces window.confirm() which is blocked in some mobile/PWA contexts */}
+      <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <AlertDialogContent className="bg-card border-border text-foreground">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Transaction</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">{confirmMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-muted-foreground" onClick={() => { setConfirmDialogOpen(false); setPendingAction(null); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => { setConfirmDialogOpen(false); pendingAction?.(); setPendingAction(null); }}>Confirm & Send</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>
