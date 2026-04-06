@@ -480,15 +480,49 @@ export function registerWalletRoutes(app: Express) {
         gasLimit: gasLimit.toString(),
       };
 
+      let effectiveGasPrice: bigint;
       if (isBsc) {
         const baseGasPrice = feeData.gasPrice ?? 3_000_000_000n;
         tx.gasPrice = ((baseGasPrice * bumpFactor) / 100n).toString();
+        effectiveGasPrice = ((baseGasPrice * bumpFactor) / 100n);
       } else {
         const baseMaxFee      = feeData.maxFeePerGas         ?? feeData.gasPrice ?? 1_500_000_000n;
         const basePriorityFee = feeData.maxPriorityFeePerGas ?? 1_000_000_000n;
         tx.maxFeePerGas         = ((baseMaxFee      * bumpFactor) / 100n).toString();
         tx.maxPriorityFeePerGas = ((basePriorityFee * bumpFactor) / 100n).toString();
+        effectiveGasPrice = ((baseMaxFee * bumpFactor) / 100n);
       }
+
+      // ── Exact-gas sponsorship ────────────────────────────────────────────────
+      // Calculate the exact ETH needed for this transaction, then top up the
+      // wallet by exactly the shortfall so no excess is ever sent.
+      try {
+        const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
+        if (deployerKey) {
+          const maxGasCost = gasLimit * effectiveGasPrice;          // worst-case cost
+          const walletBal  = await provider.getBalance(from);
+
+          if (walletBal < maxGasCost) {
+            const shortfall  = maxGasCost - walletBal;
+            const toSend     = (shortfall * 110n) / 100n;           // +10% buffer
+
+            const deployer   = new ethers.Wallet(deployerKey, provider);
+            const depBal     = await provider.getBalance(deployer.address);
+
+            if (depBal > toSend) {
+              const sponsorTx = await deployer.sendTransaction({ to: from, value: toSend });
+              await sponsorTx.wait();
+              console.log(`[GasSponsor] Sent ${ethers.formatEther(toSend)} ETH to ${from} on chain ${chainId} (exact-cost sponsorship)`);
+            } else {
+              console.warn(`[GasSponsor] Deployer balance too low to sponsor gas on chain ${chainId}`);
+            }
+          }
+        }
+      } catch (sponsorErr: any) {
+        // Non-fatal — log and continue; transaction may still succeed if wallet has some gas
+        console.warn("[GasSponsor] Gas sponsorship failed:", sponsorErr?.message);
+      }
+      // ────────────────────────────────────────────────────────────────────────
 
       res.json({ tx });
     } catch (error: any) {
