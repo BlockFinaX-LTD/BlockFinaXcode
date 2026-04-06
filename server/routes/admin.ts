@@ -240,8 +240,8 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       await Promise.allSettled(
         chainEvents.map(async (event) => {
           const [positions, deposits] = await Promise.all([
-            readChainPositionsByEvent(event.id),
-            readChainDepositsByEvent(event.id),
+            readChainPositionsByEvent(event.id, (event as any).chainId),
+            readChainDepositsByEvent(event.id, (event as any).chainId),
           ]);
           allPositions.push(...positions);
           allDeposits.push(...deposits);
@@ -263,8 +263,8 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       await Promise.allSettled(
         chainEvents.map(async (event) => {
           const [positions, deposits] = await Promise.all([
-            readChainPositionsByEvent(event.id),
-            readChainDepositsByEvent(event.id),
+            readChainPositionsByEvent(event.id, (event as any).chainId),
+            readChainDepositsByEvent(event.id, (event as any).chainId),
           ]);
           allPositions.push(...positions);
           allDeposits.push(...deposits);
