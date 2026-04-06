@@ -45,7 +45,7 @@ import {
   type InsertArticle,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, or, and, sql, lt, lte } from "drizzle-orm";
+import { eq, desc, or, and, sql, lt, lte, gt } from "drizzle-orm";
 
 /**
  * Storage interface defining all database operations
@@ -743,7 +743,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOpenHedgeEvents(): Promise<HedgeEvent[]> {
-    return await db.select().from(hedgeEvents).where(eq(hedgeEvents.status, "open")).orderBy(desc(hedgeEvents.createdAt));
+    // Only return events that are still 'open' AND haven't passed their expiry date.
+    // Expired events keep status='open' in the DB until ChainSync updates them,
+    // so we must also gate on expiryDate to avoid showing them as buyable.
+    return await db.select().from(hedgeEvents)
+      .where(and(
+        eq(hedgeEvents.status, "open"),
+        gt(hedgeEvents.expiryDate, new Date()),
+      ))
+      .orderBy(desc(hedgeEvents.createdAt));
   }
 
   async updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined> {

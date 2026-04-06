@@ -134,6 +134,26 @@ app.use((req, res, next) => {
   // Sync on-chain hedge events into the DB (non-blocking — runs in background)
   startupChainSync().catch((e) => console.error("[ChainSync] Startup sync error:", e?.message));
 
+  // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.
+  // Keeps DB status consistent even when ChainSync hasn't run or the oracle hasn't settled yet.
+  async function markExpiredHedgeEvents() {
+    try {
+      const { storage } = await import("./storage");
+      const all = await storage.getAllHedgeEvents();
+      const now = new Date();
+      const expired = all.filter(e => e.status === "open" && new Date(e.expiryDate) <= now);
+      for (const e of expired) {
+        await storage.updateHedgeEvent(e.id, { status: "expired" });
+        console.log(`[AutoExpire] Event #${e.id} (${e.name}) marked expired`);
+      }
+      if (expired.length === 0) console.log("[AutoExpire] No newly expired events");
+    } catch (err: any) {
+      console.warn("[AutoExpire] Failed to mark expired events:", err?.message);
+    }
+  }
+  markExpiredHedgeEvents();
+  setInterval(markExpiredHedgeEvents, 60 * 60 * 1000); // re-check every hour
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

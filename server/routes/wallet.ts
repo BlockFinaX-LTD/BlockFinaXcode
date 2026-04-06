@@ -456,10 +456,35 @@ export function registerWalletRoutes(app: Express) {
       // gasBumpPct: optional caller-requested percentage bump on top of base fee (for replacement txs)
       const gasBumpPct = Math.max(0, Math.min(200, Number(req.body.gasBumpPct ?? 0)));
 
+      // Estimate gas — but distinguish contract reverts from network errors.
+      // A contract revert during eth_estimateGas means the tx WILL fail on-chain;
+      // we should reject it here rather than sending it and wasting gas.
+      async function estimateGasSafe(): Promise<bigint> {
+        try {
+          return await provider.estimateGas({ from, to, data: txData, value: txValue });
+        } catch (e: any) {
+          const msg: string = e?.message || e?.reason || '';
+          const isRevert =
+            e?.code === 'CALL_EXCEPTION' ||
+            msg.toLowerCase().includes('execution reverted') ||
+            msg.toLowerCase().includes('revert') ||
+            msg.toLowerCase().includes('invalid opcode') ||
+            msg.toLowerCase().includes('out of gas');
+          if (isRevert) {
+            // Surface the revert reason so the client can show it
+            const reason = e?.reason || e?.data || msg;
+            throw new Error(`Contract simulation failed — transaction would revert: ${reason}`);
+          }
+          // Pure network / RPC error — fall back silently
+          console.warn('[tx-params] gas estimation network error, using fallback:', msg);
+          return 100_000n;
+        }
+      }
+
       const [nonce, feeData, gasEstimate] = await Promise.all([
         provider.getTransactionCount(from, "pending"),
         provider.getFeeData(),
-        provider.estimateGas({ from, to, data: txData, value: txValue }).catch(() => 100_000n),
+        estimateGasSafe(),
       ]);
 
       // BSC doesn't support EIP-1559 — use legacy gasPrice
