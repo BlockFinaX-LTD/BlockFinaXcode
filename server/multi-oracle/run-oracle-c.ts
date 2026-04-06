@@ -2,7 +2,7 @@
  * run-oracle-c.ts — Oracle Node C
  *
  * Data sources: Frankfurter API (ECB data, free, no key) for major FX pairs,
- *               Binance public API for crypto (direct exchange price, no key),
+ *               Kraken public API for crypto (free, no key, accessible from cloud IPs),
  *               Yahoo Finance for commodities.
  *
  * Note on FX coverage: Frankfurter only covers major currency pairs (EUR, USD,
@@ -68,14 +68,22 @@ const FRANKFURTER_PAIRS: Record<string, { from: string; to: string }> = {
   "EUR/TND": { from: "EUR", to: "TND" },
 };
 
-// Binance symbol format: BTCUSDT, ETHUSDT, etc.
-const BINANCE_SYMBOLS: Record<string, string> = {
-  "BTC/USD": "BTCUSDT",
-  "ETH/USD": "ETHUSDT",
-  "BNB/USD": "BNBUSDT",
-  "SOL/USD": "SOLUSDT",
-  "XRP/USD": "XRPUSDT",
-  "ADA/USD": "ADAUSDT",
+// Kraken pair codes — accessible from cloud IPs, no geo-restriction
+// Binance was geo-blocking server IPs; Kraken is the replacement.
+// BNB/USD is not listed on Kraken (Binance's native token).
+const KRAKEN_PAIRS: Record<string, string> = {
+  "BTC/USD": "XBTUSD",
+  "ETH/USD": "ETHUSD",
+  "SOL/USD": "SOLUSD",
+  "XRP/USD": "XRPUSD",
+  "ADA/USD": "ADAUSD",
+};
+// Kraken returns non-standard aliases in response keys (XXBTZUSD, XETHZUSD, XXRPZUSD).
+// Map them back to our standard query codes.
+const KRAKEN_ALIASES: Record<string, string> = {
+  "XXBTZUSD": "XBTUSD",
+  "XETHZUSD": "ETHUSD",
+  "XXRPZUSD": "XRPUSD",
 };
 
 const YAHOO_TICKERS: Record<string, string> = {
@@ -117,32 +125,29 @@ async function fetchFrankfurterRates(): Promise<Record<string, number>> {
   }
 }
 
-async function fetchBinancePrices(): Promise<Record<string, number>> {
+async function fetchKrakenPrices(): Promise<Record<string, number>> {
   try {
-    const symbols = Object.values(BINANCE_SYMBOLS);
-    const symbolsParam = JSON.stringify(symbols);
-    const res = await fetch(
-      `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolsParam)}`,
-      { headers: { Accept: "application/json" } }
-    );
+    const queryCodes = Object.values(KRAKEN_PAIRS).join(",");
+    const res = await fetch(`https://api.kraken.com/0/public/Ticker?pair=${queryCodes}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (data.error?.length > 0) throw new Error(data.error.join(", "));
 
-    const result: Record<string, number> = {};
-    const bySymbol: Record<string, number> = {};
-
-    if (Array.isArray(data)) {
-      for (const entry of data) {
-        if (entry.symbol && entry.price) {
-          bySymbol[entry.symbol] = parseFloat(entry.price);
-        }
-      }
+    // Build reverse map: Kraken response key → standard pair name
+    const reverseMap: Record<string, string> = {};
+    for (const [pairName, code] of Object.entries(KRAKEN_PAIRS)) {
+      reverseMap[code] = pairName;
+    }
+    for (const [alias, code] of Object.entries(KRAKEN_ALIASES)) {
+      if (reverseMap[code]) reverseMap[alias] = reverseMap[code];
     }
 
-    for (const [pair, symbol] of Object.entries(BINANCE_SYMBOLS)) {
-      if (bySymbol[symbol] && bySymbol[symbol] > 0) {
-        result[pair] = bySymbol[symbol];
-      }
+    const result: Record<string, number> = {};
+    for (const [key, val] of Object.entries(data.result as Record<string, any>)) {
+      const pairName = reverseMap[key];
+      if (!pairName) continue;
+      const price = parseFloat((val as any).c?.[0]);
+      if (price > 0) result[pairName] = price;
     }
     return result;
   } catch {
@@ -194,7 +199,7 @@ async function fetchPrices(): Promise<PriceMap> {
   const [fxRates, erApiRates, cryptoPrices, ...yahooResults] = await Promise.all([
     fetchFrankfurterRates(),
     fetchErApiRates(),
-    fetchBinancePrices(),
+    fetchKrakenPrices(),
     ...Object.entries(YAHOO_TICKERS).map(([, ticker]) => fetchYahooPrice(ticker)),
   ]);
 

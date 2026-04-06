@@ -2,7 +2,7 @@
  * run-oracle-b.ts — Oracle Node B
  *
  * Data sources: ExchangeRate-API v4 (exchangerate-api.com) for FX,
- *               CoinCap for crypto (free, no key, independent from CoinGecko),
+ *               Coinbase public API for crypto (free, no key, reliable from cloud IPs),
  *               Yahoo Finance for commodities.
  *
  * Required env vars:
@@ -64,14 +64,14 @@ const FX_PAIRS: Record<string, { base: string; quote: string }> = {
   "GBP/KES": { base: "GBP", quote: "KES" },
 };
 
-// CoinCap asset IDs — free, no key, independent from CoinGecko
-const COINCAP_IDS: Record<string, string> = {
-  "BTC/USD": "bitcoin",
-  "ETH/USD": "ethereum",
-  "BNB/USD": "binance-coin",
-  "SOL/USD": "solana",
-  "XRP/USD": "xrp",
-  "ADA/USD": "cardano",
+// Coinbase public spot price API — no key required, not geo-restricted
+const COINBASE_PAIRS: Record<string, string> = {
+  "BTC/USD": "BTC-USD",
+  "ETH/USD": "ETH-USD",
+  "BNB/USD": "BNB-USD",
+  "SOL/USD": "SOL-USD",
+  "XRP/USD": "XRP-USD",
+  "ADA/USD": "ADA-USD",
 };
 
 const YAHOO_TICKERS: Record<string, string> = {
@@ -97,31 +97,19 @@ async function fetchFxRates(base: string): Promise<Record<string, number>> {
 }
 
 async function fetchCryptoPrices(): Promise<Record<string, number>> {
-  try {
-    const ids = Object.values(COINCAP_IDS).join(",");
-    const res = await fetch(
-      `https://api.coincap.io/v2/assets?ids=${ids}`,
-      { headers: { Accept: "application/json" } }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const result: Record<string, number> = {};
-    const byId: Record<string, number> = {};
-
-    if (Array.isArray(data.data)) {
-      for (const asset of data.data) {
-        if (asset.id && asset.priceUsd) {
-          byId[asset.id] = parseFloat(asset.priceUsd);
-        }
-      }
-    }
-    for (const [pair, assetId] of Object.entries(COINCAP_IDS)) {
-      if (byId[assetId] && byId[assetId] > 0) result[pair] = byId[assetId];
-    }
-    return result;
-  } catch {
-    return {};
-  }
+  const result: Record<string, number> = {};
+  await Promise.all(
+    Object.entries(COINBASE_PAIRS).map(async ([pair, cbPair]) => {
+      try {
+        const res = await fetch(`https://api.coinbase.com/v2/prices/${cbPair}/spot`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const price = parseFloat(data?.data?.amount);
+        if (price > 0) result[pair] = price;
+      } catch { /* skip this pair */ }
+    })
+  );
+  return result;
 }
 
 async function fetchYahooPrice(ticker: string): Promise<number | null> {
