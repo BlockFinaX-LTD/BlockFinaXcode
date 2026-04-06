@@ -541,28 +541,33 @@ export default function Hedge() {
       toast({ title: "Wallet locked", description: "Please unlock your wallet to buy protection.", variant: "destructive" });
       return;
     }
-    const amount = parseFloat(notional) || 0;
+    // totalCostCalc = premium + hedger fee — the actual USDC leaving the wallet (not the notional)
+    const paymentAmount = totalCostCalc;
     const chainCheck = mainnetGuard.validateChainId(activeChainId);
     if (!chainCheck.allowed) {
       toast({ title: "Network error", description: chainCheck.reason, variant: "destructive" });
       return;
     }
-    const txCheck = mainnetGuard.validateTransaction(amount, wallet.address);
+    const txCheck = mainnetGuard.validateTransaction(paymentAmount, wallet.address);
     if (!txCheck.allowed) {
       toast({ title: "Transaction blocked", description: txCheck.reason, variant: "destructive" });
       return;
     }
-    if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
-      setConfirmMessage(txCheck.confirmationMessage);
+    if (txCheck.requiresConfirmation) {
+      const notionalNum = parseFloat(notional) || 0;
+      setConfirmMessage(
+        `You are paying $${paymentAmount.toFixed(2)} ${eventTokenSymbol} (premium + fee) to buy $${notionalNum.toLocaleString()} notional coverage on ${selectedNetwork.name}. ` +
+        `This uses real funds and cannot be reversed.`
+      );
       setPendingAction(() => () => {
         buyProtectionMutation.mutate();
-        mainnetGuard.recordTransaction(wallet.address, amount);
+        mainnetGuard.recordTransaction(wallet.address, paymentAmount);
       });
       setConfirmDialogOpen(true);
       return;
     }
     buyProtectionMutation.mutate();
-    mainnetGuard.recordTransaction(wallet.address, amount);
+    mainnetGuard.recordTransaction(wallet.address, paymentAmount);
   };
 
   const guardedDeposit = () => {
@@ -582,8 +587,11 @@ export default function Hedge() {
       toast({ title: "Transaction blocked", description: txCheck.reason, variant: "destructive" });
       return;
     }
-    if (txCheck.requiresConfirmation && txCheck.confirmationMessage) {
-      setConfirmMessage(txCheck.confirmationMessage);
+    if (txCheck.requiresConfirmation) {
+      setConfirmMessage(
+        `You are depositing $${amount.toFixed(2)} ${eventTokenSymbol} as liquidity on ${selectedNetwork.name}. ` +
+        `This uses real funds and cannot be reversed.`
+      );
       setPendingAction(() => () => {
         depositMutation.mutate();
         mainnetGuard.recordTransaction(wallet.address, amount);

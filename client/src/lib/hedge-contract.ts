@@ -389,10 +389,23 @@ class HedgeContractManager {
         });
         if (res.ok) {
           const body = await res.json();
-          if (body.confirmed) return { logs: body.logs };
+          if (body.confirmed) {
+            // status 0 = reverted on-chain; status 1 = success
+            if (body.status === 0) {
+              throw new Error(
+                `Transaction was mined but reverted on-chain. ` +
+                `This usually means the contract rejected the call — e.g. the liquidity pool is empty, ` +
+                `the token transfer failed, or the event is no longer active. ` +
+                `Hash: ${txHash}`
+              );
+            }
+            return { logs: body.logs };
+          }
         }
-      } catch {
-        // network hiccup — keep polling
+      } catch (e: any) {
+        // Re-throw on-chain reverts immediately — these are definitive, not transient
+        if (e?.message?.includes('reverted on-chain')) throw e;
+        // Otherwise it's a network hiccup — keep polling
       }
       await new Promise(r => setTimeout(r, 3_000));
     }
