@@ -154,18 +154,18 @@ export async function registerProtocolRoutes(app: Express) {
       const provider = new ethers.JsonRpcProvider(rpc);
 
       const userBalance = await provider.getBalance(walletAddress);
-      const minGasBalance = ethers.parseEther("0.001");
+      const minGasBalance = ethers.parseEther("0.00005");
       if (userBalance >= minGasBalance) return res.json({ success: true, sponsored: false, message: "Sufficient gas balance" });
 
       const deployer = new ethers.Wallet(deployerKey, provider);
-      const gasAmount = ethers.parseEther("0.005");
+      const gasAmount = ethers.parseEther("0.0001");
       const deployerBalance = await provider.getBalance(deployer.address);
       if (deployerBalance < gasAmount) return res.status(400).json({ message: "Gas sponsor wallet low on funds" });
 
       const tx = await deployer.sendTransaction({ to: walletAddress, value: gasAmount });
       await tx.wait();
       gasSponsorCooldown.set(cooldownKey, now);
-      res.json({ success: true, sponsored: true, txHash: tx.hash, amount: "0.005" });
+      res.json({ success: true, sponsored: true, txHash: tx.hash, amount: "0.0001" });
     } catch (error: any) {
       console.error("Gas sponsor error:", error);
       res.status(500).json({ message: error.message || "Gas sponsorship failed" });
