@@ -4,13 +4,13 @@
  * All interaction with the BlockFinaX Diamond contract on Lisk Mainnet goes through this file.
  * Covers: event creation, buying protection (hedger), providing liquidity (LP),
  * claiming payouts, withdrawing LP funds, fetching event and position data.
- * Contract address: 0x885E663645173a0791b82f0e6608921D31E3D700 (Diamond — Lisk Mainnet)
+ * Contract address: 0x69cB5BA093e44B345B617f72a148Ee43c4a18465 (Diamond — Lisk Mainnet)
  * Exports: DIAMOND_ADDRESS, USDC_ADDRESS, getHedgeFacetContract, createHedgeEvent,
  *          buyProtection, depositLiquidity, claimPayout, withdrawLiquidity, and more.
  */
 import { ethers } from 'ethers';
 
-export const DIAMOND_ADDRESS = '0x885E663645173a0791b82f0e6608921D31E3D700';
+export const DIAMOND_ADDRESS = '0x69cB5BA093e44B345B617f72a148Ee43c4a18465';
 export const USDC_ADDRESS = '0xF242275d3a6527d877f2c927a82D9b057609cc71';
 export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
 export const LISK_SEPOLIA_CHAIN_ID = 1135;
@@ -37,9 +37,9 @@ export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = {
 };
 
 export const CHAIN_DIAMOND_MAP: Record<number, string> = {
-  1135: '0x885E663645173a0791b82f0e6608921D31E3D700',
-  8453: '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
-  56:   '0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6',
+  1135: '0x69cB5BA093e44B345B617f72a148Ee43c4a18465',  // Lisk Mainnet
+  8453: '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',  // Base Mainnet
+  56:   '0xaC939C0897981Abc0711ec4e37527F13106180fc',  // BSC Mainnet
 };
 
 export const CHAIN_USDC_MAP: Record<number, string> = {
