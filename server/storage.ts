@@ -743,12 +743,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOpenHedgeEvents(): Promise<HedgeEvent[]> {
-    // Only return events that are still 'open' AND haven't passed their expiry date.
-    // Expired events keep status='open' in the DB until ChainSync updates them,
-    // so we must also gate on expiryDate to avoid showing them as buyable.
+    // Only return events that:
+    //   1. are still 'open' in the DB
+    //   2. haven't passed their expiry date (on-chain status may lag)
+    //   3. have the pool open — if poolOpen=false nobody can buy, so skip them
     return await db.select().from(hedgeEvents)
       .where(and(
         eq(hedgeEvents.status, "open"),
+        eq(hedgeEvents.poolOpen, true),
         gt(hedgeEvents.expiryDate, new Date()),
       ))
       .orderBy(desc(hedgeEvents.createdAt));

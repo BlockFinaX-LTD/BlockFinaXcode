@@ -13,13 +13,25 @@
 import { ethers } from "ethers";
 import { storage } from "./storage";
 
-const HEDGE_READ_ABI = [
+// Lisk Diamond ABI — full return type including underlying, initialRate, strikeAbove
+const HEDGE_READ_ABI_EXPANDED = [
   "function getTotalHedgeEvents() view returns (uint256)",
   "function getHedgeEventCore(uint256) view returns (uint256 id, address creator, string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, uint8 status, bool poolOpen, bool allowExternalLp, uint256 initialRate, bool strikeAbove)",
   "function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 hedgerCount, uint256 lpCount, uint256 totalMaxPayout)",
 ];
 
-const STATUS_MAP: Record<number, string> = { 0: "open", 1: "settled", 2: "expired" };
+// Base / BSC Diamond ABI — compact format, no underlying/initialRate/strikeAbove fields.
+// status enum on Base: 1 = Active/Open, 2 = Settled, 3 = Expired
+const HEDGE_READ_ABI_COMPACT = [
+  "function getTotalHedgeEvents() view returns (uint256)",
+  "function getHedgeEventCore(uint256) view returns (uint256 id, address creator, string name, uint256 premiumRate, uint256 payoutPercent, uint256 strikePrice, uint256 expiryDate, bool poolOpen, bool allowExternalLp, uint8 status)",
+  "function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 hedgerCount, uint256 lpCount, uint256 totalMaxPayout)",
+];
+
+// Lisk: 0=Open, 1=Settled, 2=Expired
+const STATUS_MAP_LISK: Record<number, string> = { 0: "open", 1: "settled", 2: "expired" };
+// Base/BSC: 1=Active(open), 2=Settled, 3=Expired  (0=inactive/draft, never shown)
+const STATUS_MAP_BASE: Record<number, string> = { 0: "open", 1: "open", 2: "settled", 3: "expired" };
 
 function formatUnits6(val: bigint): string {
   return parseFloat(ethers.formatUnits(val, 6)).toFixed(6);
@@ -30,6 +42,13 @@ interface ChainConfig {
   chainId: number;
   diamond: string;
   rpc: string;
+  abi: string[];
+  statusMap: Record<number, string>;
+  // Whether the chain supports buyProtection — used to skip upsert of events where
+  // the buy function doesn't exist (prevents showing unbuyable events as open).
+  supportsBuy: boolean;
+  // field name in the compact ABI for the underlying/pair (differs between expanded/compact)
+  underlyingField: "underlying" | "name";
 }
 
 function getChains(): ChainConfig[] {
@@ -39,18 +58,30 @@ function getChains(): ChainConfig[] {
       chainId: 1135,
       diamond: process.env.DIAMOND_ADDRESS || "0x885E663645173a0791b82f0e6608921D31E3D700",
       rpc: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
+      abi: HEDGE_READ_ABI_EXPANDED,
+      statusMap: STATUS_MAP_LISK,
+      supportsBuy: true,
+      underlyingField: "underlying",
     },
     {
       label: "Base",
       chainId: 8453,
       diamond: process.env.BASE_DIAMOND_ADDRESS || "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
       rpc: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+      abi: HEDGE_READ_ABI_COMPACT,
+      statusMap: STATUS_MAP_BASE,
+      supportsBuy: false,   // Base Diamond doesn't have buyProtection facet yet
+      underlyingField: "name", // compact ABI has no separate underlying field
     },
     {
       label: "BSC",
       chainId: 56,
       diamond: process.env.BSC_DIAMOND_ADDRESS || "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
       rpc: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org",
+      abi: HEDGE_READ_ABI_COMPACT,
+      statusMap: STATUS_MAP_BASE,
+      supportsBuy: true,    // BSC Diamond supports buyProtection
+      underlyingField: "name",
     },
   ].filter(c => !!c.diamond);
 }
@@ -74,7 +105,7 @@ export async function syncChainEvents(chainId?: number): Promise<SyncChainResult
 
     try {
       const provider = new ethers.JsonRpcProvider(chain.rpc, chain.chainId, { staticNetwork: true });
-      const contract = new ethers.Contract(chain.diamond, HEDGE_READ_ABI, provider);
+      const contract = new ethers.Contract(chain.diamond, chain.abi, provider);
 
       let total: number;
       try {
@@ -93,23 +124,32 @@ export async function syncChainEvents(chainId?: number): Promise<SyncChainResult
         try {
           const core = await contract.getHedgeEventCore(i);
           const onChainId = Number(core.id);
-          const status = STATUS_MAP[Number(core.status)] ?? "open";
+          const status = chain.statusMap[Number(core.status)] ?? "open";
           const expiryDate = new Date(Number(core.expiryDate) * 1000);
-          const strike = formatUnits6(core.strike);
+          // Compact ABI has strikePrice, expanded has strike
+          const strikeRaw: bigint = core.strike ?? core.strikePrice ?? 0n;
+          const strike = formatUnits6(strikeRaw);
           const premiumRate = formatUnits6(core.premiumRate);
+          // Compact ABI has no separate 'underlying' field — use 'name' as the underlying pair
+          const underlying: string = chain.underlyingField === "underlying"
+            ? (core.underlying || core.name || `Event #${onChainId}`)
+            : (core.name || `Event #${onChainId}`);
+          // If this chain doesn't support buyProtection, force poolOpen=false so
+          // the UI never shows a "Buy Protection" button for these events.
+          const poolOpen = chain.supportsBuy ? Boolean(core.poolOpen) : false;
 
           const { created } = await storage.upsertHedgeEventFromChain(chain.chainId, onChainId, {
             name: core.name || `Event #${onChainId}`,
             description: null,
-            underlying: core.underlying,
+            underlying,
             strike,
             premiumRate,
             payoutRate: "0.100000",
             safetyFactor: "0.80",
             expiryDate,
             status,
-            poolOpen: core.poolOpen,
-            allowExternalLp: core.allowExternalLp,
+            poolOpen,
+            allowExternalLp: Boolean(core.allowExternalLp),
             createdBy: core.creator,
           });
 
