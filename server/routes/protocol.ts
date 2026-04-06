@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { storage } from "../storage";
 import { eq } from "drizzle-orm";
-import { authSessions, platformFees } from "../../shared/schema";
+import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits } from "../../shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
 import { syncChainEvents } from "../chain-sync";
@@ -272,6 +272,25 @@ export async function registerProtocolRoutes(app: Express) {
       res.json({ ok: true, results });
     } catch (error: any) {
       res.status(500).json({ message: error?.message || "Sync failed" });
+    }
+  });
+
+  // Clear all cached hedge event data (admin-only) — use when switching contract addresses
+  app.post("/api/admin/clear-hedge-events", requireAdmin, async (req, res) => {
+    try {
+      // Delete in order of foreign key dependencies
+      await db.delete(hedgePositions);
+      await db.delete(hedgeLpDeposits);
+      await db.delete(hedgeEvents);
+
+      res.json({
+        ok: true,
+        message: "All hedge events, positions, and LP deposits cleared"
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        message: error?.message || "Failed to clear hedge events"
+      });
     }
   });
 
