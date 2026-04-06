@@ -1216,20 +1216,24 @@ export default function Hedge() {
                           <p className="text-[11px] text-amber-400 font-medium flex items-center gap-1.5">
                             <Clock className="h-3.5 w-3.5" /> Event expired — funds locked on-chain
                           </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {event.hedgerCount === 0
-                              ? "No one bought protection from your pool. Withdraw and claim your funds."
-                              : "Settlement pending. Call Recover to close the event and release funds."}
-                          </p>
-                          <Button
-                            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-8 text-xs"
-                            onClick={() => recoverExpiredMutation.mutate(event.id)}
-                            disabled={recoverExpiredMutation.isPending}
-                          >
-                            {recoverExpiredMutation.isPending
-                              ? (txStep || 'Processing...')
-                              : event.hedgerCount === 0 ? 'Withdraw My Funds' : 'Recover Expired Funds'}
-                          </Button>
+                          {event.hedgerCount === 0 ? (
+                            <>
+                              <p className="text-[10px] text-muted-foreground">
+                                No one bought protection from your pool. Withdraw and claim your funds.
+                              </p>
+                              <Button
+                                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-8 text-xs"
+                                onClick={() => recoverExpiredMutation.mutate(event.id)}
+                                disabled={recoverExpiredMutation.isPending}
+                              >
+                                {recoverExpiredMutation.isPending ? (txStep || 'Processing...') : 'Withdraw My Funds'}
+                              </Button>
+                            </>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground">
+                              This event had {event.hedgerCount} buyer{event.hedgerCount !== 1 ? 's' : ''}. The oracle is settling positions — your withdrawal will be available shortly once settlement completes.
+                            </p>
+                          )}
                         </div>
                       )}
                       {event.status === "open" && new Date() < event.expiryDate && (
