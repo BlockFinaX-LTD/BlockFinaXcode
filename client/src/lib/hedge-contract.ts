@@ -886,19 +886,23 @@ class HedgeContractManager {
     onStep?: (s: string) => void
   ): Promise<void> {
     const readContract = this.getReadContract();
+    // getFeeConfig() has error handling + defaults for chains where getHedgeFeeConfig()
+    // is absent (e.g. Base Diamond uses a different facet version).
     const [core, feeConfig, tokenAddress] = await Promise.all([
       readContract.getHedgeEventCore(eventId),
-      readContract.getHedgeFeeConfig(),
+      this.getFeeConfig(),
       readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
     ]);
 
     const dec = this.tokenDecimals;
     const notionalWei = ethers.parseUnits(notional, dec);
     const premiumRate = core.premiumRate as bigint;
-    const hedgerFeeRate = feeConfig[1] as bigint;
+    // getFeeConfig returns hedgerFeeRate as a float (e.g. 0.005 = 0.5%).
+    // Convert back to 6-decimal fixed-point bigint to match contract math.
+    const hedgerFeeRateBigInt = BigInt(Math.round(feeConfig.hedgerFeeRate * PRECISION));
 
     const premium = (notionalWei * premiumRate) / BigInt(PRECISION);
-    const fee = (notionalWei * hedgerFeeRate) / BigInt(PRECISION);
+    const fee = (notionalWei * hedgerFeeRateBigInt) / BigInt(PRECISION);
     const totalCost = premium + fee;
 
     const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
