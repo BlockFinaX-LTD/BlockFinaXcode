@@ -739,9 +739,9 @@ function RevenueSection() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Net Platform Revenue" value={`$${r.netPlatformRevenue || "0.00"}`} sub="All fee sources combined" icon={DollarSign} color="text-green-700" />
-        <StatCard title="Transaction Fees (0.3%)" value={`$${r.totalTransactionFees || "0.00"}`} sub={`${r.transactionFeeCount || 0} transfers | Vol: $${r.totalTransferVolume || "0.00"}`} icon={DollarSign} color="text-purple-600" />
-        <StatCard title="Hedge Platform Fees" value={`$${r.hedgePoolFee || "0.00"}`} sub="Creation + hedger + payout + LP fees" icon={DollarSign} color="text-blue-600" />
-        <StatCard title="Total Premiums Collected" value={`$${parseFloat(r.totalPremiumsCollected || 0).toFixed(2)}`} sub="From hedge positions" icon={DollarSign} color="text-green-600" />
+        <StatCard title="Event Creation Fees" value={`$${r.totalCreationFees || "0.00"}`} sub={`${r.eventCount || 0} on-chain events × $2`} icon={DollarSign} color="text-amber-600" />
+        <StatCard title="Protocol Fees (Hedger + Payout)" value={`$${r.hedgePoolFee || "0.00"}`} sub="Deducted per position on-chain" icon={DollarSign} color="text-blue-600" />
+        <StatCard title="Transfer Fees (0.3%)" value={`$${r.totalTransactionFees || "0.00"}`} sub={`${r.transactionFeeCount || 0} transfers | Vol: $${r.totalTransferVolume || "0.00"}`} icon={DollarSign} color="text-purple-600" />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title="Total Payouts" value={`$${parseFloat(r.totalPayouts || 0).toFixed(2)}`} sub="Paid to hedgers" icon={DollarSign} color="text-red-600" />

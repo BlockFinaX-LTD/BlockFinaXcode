@@ -256,6 +256,8 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
   app.get("/api/admin/revenue", async (_req, res) => {
     try {
+      const EVENT_CREATION_FEE_USD = 2; // must match on-chain initializeHedgeFees
+
       const chainEvents = await readChainEvents();
       const allPositions: any[] = [];
       const allDeposits: any[] = [];
@@ -273,25 +275,41 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
       const totalPremiumsCollected = allPositions.reduce((s, p) => s + p.premiumPaid, 0);
       const totalPayouts = allPositions.reduce((s, p) => s + p.payoutAmount, 0);
+      // On-chain protocol fees deducted per position (hedger fee + payout fee)
+      const totalPositionProtocolFees = allPositions.reduce((s, p) => s + (p.platformFeePaid || 0), 0);
       const totalLiquidityDeposited = allDeposits.reduce((s, d) => s + d.amount, 0);
       const totalLpPremiumsEarned = allDeposits.reduce((s, d) => s + d.premiumsEarned, 0);
-      const platformFeeRevenue = await readPlatformFees();
 
+      // Accumulated on-chain platform fees (works on Lisk; Base Diamond has no view fn for this)
+      const onChainAccumulatedFees = await readPlatformFees();
+
+      // Creation fees: count confirmed on-chain events per chain × $2
+      const [dbEventStats] = await db.select({
+        eventCount: sql<number>`count(*)::int`,
+      }).from(hedgeEvents).where(sql`chain_id IS NOT NULL`);
+      const totalCreationFees = (dbEventStats?.eventCount || 0) * EVENT_CREATION_FEE_USD;
+
+      // Transfer fees recorded in DB (0.3% on wallet-to-wallet USDC sends)
       const [txFeeStats] = await db.select({
         totalTxFees: sql<string>`coalesce(sum(fee_amount::numeric), 0)::text`,
         totalTransferVolume: sql<string>`coalesce(sum(transfer_amount::numeric), 0)::text`,
         txFeeCount: sql<number>`count(*)::int`,
       }).from(platformFees);
-
       const totalTxFees = parseFloat(txFeeStats.totalTxFees);
-      const netPlatformRevenue = (platformFeeRevenue + totalTxFees).toFixed(2);
+
+      // Use the greater of on-chain accumulated fees vs position-level protocol fees
+      // (they measure the same thing but availability varies by chain/contract version)
+      const hedgeProtocolFees = Math.max(onChainAccumulatedFees, totalPositionProtocolFees);
+      const netPlatformRevenue = (totalCreationFees + hedgeProtocolFees + totalTxFees).toFixed(2);
 
       res.json({
         totalPremiumsCollected: totalPremiumsCollected.toFixed(6),
         totalPayouts: totalPayouts.toFixed(6),
         totalLiquidityDeposited: totalLiquidityDeposited.toFixed(6),
         totalLpPremiumsEarned: totalLpPremiumsEarned.toFixed(6),
-        hedgePoolFee: platformFeeRevenue.toFixed(2),
+        totalCreationFees: totalCreationFees.toFixed(2),
+        eventCount: dbEventStats?.eventCount || 0,
+        hedgePoolFee: hedgeProtocolFees.toFixed(2),
         totalTransactionFees: totalTxFees.toFixed(2),
         totalTransferVolume: parseFloat(txFeeStats.totalTransferVolume).toFixed(2),
         transactionFeeCount: txFeeStats.txFeeCount,
