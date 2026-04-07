@@ -799,6 +799,9 @@ class HedgeContractManager {
     }
 
     await this.approveToken(signer, tokenAddress, ethers.formatUnits(totalCost, dec), onStep);
+    // Brief pause so the approve TX propagates to all RPC nodes before we
+    // call estimateGas for createEvent — avoids "exceeds allowance" on lagging nodes.
+    await new Promise(r => setTimeout(r, 2500));
     await this.ensureGas(signer.address);
 
     const iface = new ethers.Interface(HEDGE_ABI);
@@ -884,6 +887,7 @@ class HedgeContractManager {
     }
 
     await this.approveToken(signer, tokenAddress, amount, onStep);
+    await new Promise(r => setTimeout(r, 2500));
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('deposit', [eventId, amountWei]);
     onStep?.('Submitting deposit...');
@@ -936,6 +940,7 @@ class HedgeContractManager {
     }
 
     await this.approveToken(signer, tokenAddress as string, ethers.formatUnits(totalCost, dec), onStep);
+    await new Promise(r => setTimeout(r, 2500));
 
     const iface = new ethers.Interface(HEDGE_ABI);
     try {

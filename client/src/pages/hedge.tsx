@@ -186,10 +186,15 @@ export default function Hedge() {
     if (raw.includes('insufficient funds')) return 'Not enough ETH (gas) in your wallet to pay network fees.';
     if (raw.includes('user rejected') || raw.includes('User denied')) return 'Transaction was cancelled.';
     if (raw.includes('nonce too low')) return 'Nonce conflict — please wait a moment and try again.';
+    if (raw.toLowerCase().includes('allowance') || raw.toLowerCase().includes('exceeds allowance') || raw.toLowerCase().includes('transfer amount exceeds')) {
+      return 'Token approval not yet confirmed on-chain. Please wait a moment and try again.';
+    }
     if (raw.includes('execution reverted')) {
       if (raw.includes('Pool closed')) return 'This event pool is currently closed to new hedgers.';
       if (raw.includes('Insufficient liquidity')) return 'Not enough liquidity in this pool for that notional amount.';
       if (raw.includes('Event expired')) return 'This event has already expired.';
+      if (raw.includes('Event not found')) return 'Event not found on-chain. It may have been created on a different network.';
+      if (raw.includes('Fees not initialized')) return 'Contract fees not yet configured. Please try again shortly.';
       return 'The contract rejected the transaction. Check your inputs and try again.';
     }
     return raw;

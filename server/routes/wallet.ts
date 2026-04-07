@@ -464,14 +464,30 @@ export function registerWalletRoutes(app: Express) {
           return await provider.estimateGas({ from, to, data: txData, value: txValue });
         } catch (e: any) {
           const msg: string = e?.message || e?.reason || '';
+          const msgLow = msg.toLowerCase();
           const isRevert =
             e?.code === 'CALL_EXCEPTION' ||
-            msg.toLowerCase().includes('execution reverted') ||
-            msg.toLowerCase().includes('revert') ||
-            msg.toLowerCase().includes('invalid opcode') ||
-            msg.toLowerCase().includes('out of gas');
+            msgLow.includes('execution reverted') ||
+            msgLow.includes('revert') ||
+            msgLow.includes('invalid opcode') ||
+            msgLow.includes('out of gas');
+
           if (isRevert) {
-            // Surface the revert reason so the client can show it
+            // ERC-20 allowance errors occur when the approval TX has confirmed on one
+            // RPC node but hasn't propagated to the node used for gas estimation yet.
+            // Treat these as soft/transient failures: use a generous fixed gas limit
+            // so the TX is still broadcast — by the time it is mined, the approve
+            // will already be in a prior block.
+            const isAllowanceError =
+              msgLow.includes('allowance') ||
+              msgLow.includes('transfer amount exceeds') ||
+              msgLow.includes('exceeds allowance') ||
+              msgLow.includes('insufficient allowance');
+            if (isAllowanceError) {
+              console.warn('[tx-params] ERC-20 allowance not yet propagated to this RPC node — using safe fallback gas (600000):', msg);
+              return 600_000n;
+            }
+            // All other reverts are definitive — surface the reason to the client.
             const reason = e?.reason || e?.data || msg;
             throw new Error(`Contract simulation failed — transaction would revert: ${reason}`);
           }
