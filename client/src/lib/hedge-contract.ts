@@ -361,6 +361,14 @@ class HedgeContractManager {
         onStep?.('Retrying with higher gas...');
         return this.sendContractTx(signer, to, calldata, value, gasBumpPct + 40, onStep);
       }
+      // "nonce too low" means the RPC returned a stale nonce (e.g. a prior tx just
+      // confirmed on a different node). Retry once — tx-params will fetch a fresh nonce.
+      if ((errMsg.toLowerCase().includes('nonce too low') || errMsg.toLowerCase().includes('nonce has already been used')) && gasBumpPct === 0) {
+        console.warn('[sendContractTx] nonce too low — waiting 1.5 s then retrying with fresh nonce');
+        onStep?.('Retrying transaction...');
+        await new Promise(r => setTimeout(r, 1500));
+        return this.sendContractTx(signer, to, calldata, value, 1, onStep); // gasBumpPct=1 prevents looping
+      }
       throw new Error(errMsg);
     }
     const { hash } = await broadcastRes.json();
