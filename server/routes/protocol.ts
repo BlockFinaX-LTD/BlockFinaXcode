@@ -131,8 +131,16 @@ export async function registerProtocolRoutes(app: Express) {
   // ── Gas sponsorship ──────────────────────────────────────────────────────────
   app.post("/api/gas/sponsor", strictLimiter, async (req, res) => {
     try {
+      const sponsorToken = (req.headers['x-session-token'] as string) || null;
+      if (!sponsorToken) return res.status(401).json({ message: 'Authentication required' });
+      const [sponsorSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, sponsorToken));
+      if (!sponsorSess || sponsorSess.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
+
       const { walletAddress, chainId } = req.body;
       if (!walletAddress) return res.status(400).json({ message: "Wallet address required" });
+      if (walletAddress.toLowerCase() !== sponsorSess.walletAddress?.toLowerCase()) {
+        return res.status(403).json({ message: 'You can only request gas for your own wallet' });
+      }
 
       const addr = walletAddress.toLowerCase();
       const now = Date.now();

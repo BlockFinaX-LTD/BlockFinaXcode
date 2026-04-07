@@ -105,7 +105,7 @@ const HEDGE_ABI = [
   'function setOracleAdmin(address)',
   'function withdrawPlatformFees(uint256)',
   'function getHedgeEventCore(uint256) view returns (uint256 id, address creator, string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, uint8 status, bool poolOpen, bool allowExternalLp, uint256 initialRate, bool strikeAbove)',
-  'function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 hedgerCount, uint256 lpCount, uint256 totalMaxPayout)',
+  'function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 lpCount, uint256 hedgerCount, uint256 totalMaxPayout)',
   'function getHedgePosition(uint256) view returns (uint256 id, uint256 eventId, address hedger, uint256 notional, uint256 premiumPaid, uint256 platformFeePaid, uint256 payoutAmount, uint8 status, bool claimed)',
   'function getHedgeLpDeposit(uint256) view returns (uint256 id, uint256 eventId, address lp, uint256 amount, uint256 shares, uint256 premiumsEarned, uint256 premiumsClaimed, bool withdrawn)',
   'function getEventPositionIds(uint256) view returns (uint256[])',
@@ -291,9 +291,12 @@ class HedgeContractManager {
       const balance = await Promise.race([this.getProvider().getBalance(walletAddress), timeout]);
       const minGas = ethers.parseEther("0.001");
       if (balance < minGas) {
+        const sessionToken = localStorage.getItem('bfx_session');
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (sessionToken) headers['x-session-token'] = sessionToken;
         const res = await fetch("/api/gas/sponsor", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ walletAddress, chainId: this._chainId }),
         });
         const data = await res.json();

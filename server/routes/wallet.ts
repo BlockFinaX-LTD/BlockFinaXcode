@@ -30,7 +30,10 @@ export function registerWalletRoutes(app: Express) {
   app.post("/api/wallets", async (req, res) => {
     try {
       const existing = await storage.getWalletByAddress(req.body.address);
-      if (existing) return res.status(200).json(existing);
+      if (existing) {
+        const { encryptedPrivateKey: _k, encryptedMnemonic: _m, ...safeExisting } = existing as any;
+        return res.status(200).json(safeExisting);
+      }
 
       const wallet = await storage.createWallet(req.body);
 
@@ -63,6 +66,9 @@ export function registerWalletRoutes(app: Express) {
     try {
       const { walletAddress, email } = req.body;
       if (!walletAddress || !email) return res.status(400).json({ error: "walletAddress and email required" });
+      if (walletAddress.toLowerCase() !== emailSess.walletAddress?.toLowerCase()) {
+        return res.status(403).json({ error: 'You can only update your own wallet profile' });
+      }
       await db.update(wallets).set({ email }).where(eq(wallets.address, walletAddress));
       res.json({ success: true });
     } catch (error) {
@@ -78,6 +84,9 @@ export function registerWalletRoutes(app: Express) {
       if (!session || session.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
       const wallet = await storage.getWallet(parseInt(req.params.id));
       if (!wallet) return res.status(404).json({ message: "Wallet not found" });
+      if (wallet.address.toLowerCase() !== session.walletAddress?.toLowerCase()) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
       const { encryptedPrivateKey: _k, encryptedMnemonic: _m, ...safeWallet } = wallet as any;
       res.json(safeWallet);
     } catch (error) {
