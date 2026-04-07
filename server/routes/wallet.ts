@@ -37,22 +37,22 @@ export function registerWalletRoutes(app: Express) {
 
       const wallet = await storage.createWallet(req.body);
 
+      // Idempotent signup bonus — only grant once (when no points record exists yet)
       const SIGNUP_BONUS = 100;
-      let pts = await storage.getUserPoints(wallet.address);
+      const pts = await storage.getUserPoints(wallet.address);
       if (!pts) {
-        pts = await storage.createUserPoints({ walletAddress: wallet.address, totalPoints: SIGNUP_BONUS, referralPoints: 0 });
-      } else {
-        await storage.updateUserPoints(wallet.address, SIGNUP_BONUS);
+        await storage.createUserPoints({ walletAddress: wallet.address, totalPoints: SIGNUP_BONUS, referralPoints: 0 });
+        await storage.createPointTransaction({
+          walletAddress: wallet.address,
+          type: 'signup_bonus',
+          points: SIGNUP_BONUS,
+          description: 'Welcome bonus for creating an account',
+          referenceId: wallet.address,
+        });
       }
-      await storage.createPointTransaction({
-        walletAddress: wallet.address,
-        type: 'signup_bonus',
-        points: SIGNUP_BONUS,
-        description: 'Welcome bonus for creating an account',
-        referenceId: wallet.address,
-      });
 
-      res.status(201).json(wallet);
+      const { encryptedPrivateKey: _k, encryptedMnemonic: _m, ...safeWallet } = wallet as any;
+      res.status(201).json(safeWallet);
     } catch (error) {
       res.status(400).json({ message: error instanceof Error ? error.message : "Failed to create wallet" });
     }
@@ -376,7 +376,25 @@ export function registerWalletRoutes(app: Express) {
   // JSON-RPC proxy — routes eth_call / eth_getBalance / etc. from the browser
   // through the server to avoid rate-limits imposed on browser IPs by public nodes.
   // POST { chainId, ...jsonRpcBody }  → forwards to an RPC and returns the JSON result.
+  // Only read-only methods are allowed — write/signing methods are blocked.
+  const RPC_BLOCKED_METHODS = new Set([
+    'eth_sendRawTransaction', 'eth_sendTransaction',
+    'eth_sign', 'eth_signTransaction', 'eth_signTypedData',
+    'eth_signTypedData_v1', 'eth_signTypedData_v3', 'eth_signTypedData_v4',
+    'personal_sign', 'personal_ecRecover',
+    'wallet_addEthereumChain', 'wallet_switchEthereumChain',
+    'wallet_watchAsset', 'wallet_requestPermissions',
+  ]);
+  const rpcMethodBlocked = (body: any): boolean => {
+    if (Array.isArray(body)) return body.some(r => RPC_BLOCKED_METHODS.has(r?.method));
+    return RPC_BLOCKED_METHODS.has(body?.method);
+  };
+
   app.post("/api/rpc/:chainId", async (req, res) => {
+    if (rpcMethodBlocked(req.body)) {
+      return res.status(403).json({ jsonrpc: "2.0", error: { code: -32601, message: "Method not permitted via proxy" }, id: (req.body as any)?.id ?? null });
+    }
+
     const chainId = parseInt(req.params.chainId, 10);
     const RPC_LIST: Record<number, string[]> = {
       1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
