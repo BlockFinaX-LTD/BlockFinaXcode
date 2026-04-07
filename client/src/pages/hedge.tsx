@@ -168,12 +168,14 @@ export default function Hedge() {
     paymentCurrency: "USDC" as "USDC" | "USDT"
   });
 
-  // Reset to USDC when switching to a network that doesn't support USDT (e.g. Lisk)
+  // On BSC force USDT (BSC Diamond only accepts USDT). On networks without USDT, fall back to USDC.
   useEffect(() => {
-    if (!activeUsdtAddress && newEvent.paymentCurrency === 'USDT') {
+    if (activeChainId === 56 && activeUsdtAddress) {
+      setNewEvent(p => ({ ...p, paymentCurrency: 'USDT' }));
+    } else if (!activeUsdtAddress && newEvent.paymentCurrency === 'USDT') {
       setNewEvent(p => ({ ...p, paymentCurrency: 'USDC' }));
     }
-  }, [activeUsdtAddress]);
+  }, [activeChainId, activeUsdtAddress]);
 
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -185,18 +187,19 @@ export default function Hedge() {
     if (raw.includes('replacement fee too low')) return 'A previous transaction is still pending. Retrying automatically...';
     if (raw.includes('insufficient funds')) return 'Not enough ETH (gas) in your wallet to pay network fees.';
     if (raw.includes('user rejected') || raw.includes('User denied')) return 'Transaction was cancelled.';
-    if (raw.includes('nonce too low')) return 'Nonce conflict — please wait a moment and try again.';
+    if (raw.includes('nonce too low') || raw.includes('nonce has already been used')) return 'Nonce conflict — please wait a moment and try again.';
     if (raw.toLowerCase().includes('allowance') || raw.toLowerCase().includes('exceeds allowance') || raw.toLowerCase().includes('transfer amount exceeds')) {
       return 'Token approval not yet confirmed on-chain. Please wait a moment and try again.';
     }
-    if (raw.includes('execution reverted')) {
-      if (raw.includes('Pool closed')) return 'This event pool is currently closed to new hedgers.';
-      if (raw.includes('Insufficient liquidity')) return 'Not enough liquidity in this pool for that notional amount.';
-      if (raw.includes('Event expired')) return 'This event has already expired.';
-      if (raw.includes('Event not found')) return 'Event not found on-chain. It may have been created on a different network.';
-      if (raw.includes('Fees not initialized')) return 'Contract fees not yet configured. Please try again shortly.';
-      return 'The contract rejected the transaction. Check your inputs and try again.';
-    }
+    // Contract revert reasons (both live reverts and pre-flight simulation errors)
+    const isRevert = raw.includes('execution reverted') || raw.includes('transaction would revert') || raw.includes('Contract simulation failed');
+    if (raw.includes('Pool closed')) return 'This event pool is currently closed to new hedgers.';
+    if (raw.includes('Insufficient liquidity')) return 'Not enough liquidity in this pool for that notional amount.';
+    if (raw.includes('Event expired')) return 'This event has already expired.';
+    if (raw.includes('Event not found')) return 'Event not found on-chain. It may have been created on a different network.';
+    if (raw.includes('Fees not initialized')) return 'Contract fees not yet configured. Please try again shortly.';
+    if (raw.includes('Payment token not whitelisted')) return 'This chain only accepts USDT as payment. Please select USDT and try again.';
+    if (isRevert) return 'The contract rejected the transaction. Check your inputs and try again.';
     return raw;
   };
   const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
@@ -425,6 +428,17 @@ export default function Hedge() {
       if (newEvent.poolOpen && newEventId) {
         setTxStep('Opening pool...');
         await hedgeContract.setPoolSettings(signer, newEventId, true, newEvent.allowExternalLp, setTxStep);
+      }
+
+      // Persist description to server (on-chain doesn't store text)
+      if (newEventId && newEvent.description.trim()) {
+        try {
+          await fetch(`/api/hedge/events/chain/${activeChainId}/${newEventId}/description`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: newEvent.description.trim() }),
+          });
+        } catch { /* non-critical — description is optional */ }
       }
     },
     onSuccess: async () => {

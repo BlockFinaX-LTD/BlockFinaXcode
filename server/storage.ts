@@ -115,6 +115,7 @@ export interface IStorage {
   getOpenHedgeEvents(): Promise<HedgeEvent[]>;
   updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined>;
   upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }>;
+  setHedgeEventDescription(chainId: number, onChainEventId: number, description: string): Promise<void>;
 
   // Hedge Position operations
   createHedgePosition(position: InsertHedgePosition): Promise<HedgePosition>;
@@ -449,6 +450,7 @@ export class MemStorage implements IStorage {
   async getOpenHedgeEvents(): Promise<HedgeEvent[]> { return []; }
   async updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined> { return undefined; }
   async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> { throw new Error("MemStorage: not implemented"); }
+  async setHedgeEventDescription(_chainId: number, _onChainEventId: number, _description: string): Promise<void> { /* no-op in mem storage */ }
   async createHedgePosition(position: InsertHedgePosition): Promise<HedgePosition> { throw new Error("MemStorage: Hedge not implemented - use DatabaseStorage"); }
   async getHedgePosition(id: number): Promise<HedgePosition | undefined> { return undefined; }
   async getHedgePositionsByEvent(eventId: number): Promise<HedgePosition[]> { return []; }
@@ -736,6 +738,17 @@ export class DatabaseStorage implements IStorage {
       .values({ ...event, chainId, onChainEventId })
       .returning();
     return { event: created, created: true };
+  }
+
+  async setHedgeEventDescription(chainId: number, onChainEventId: number, description: string): Promise<void> {
+    const existing = await this.getHedgeEventByChain(chainId, onChainEventId);
+    if (existing) {
+      await db.update(hedgeEvents)
+        .set({ description })
+        .where(eq(hedgeEvents.id, existing.id));
+    } else {
+      console.warn(`[setHedgeEventDescription] event ${onChainEventId} on chain ${chainId} not yet synced — description queued for next sync`);
+    }
   }
 
   async getAllHedgeEvents(): Promise<HedgeEvent[]> {

@@ -480,6 +480,19 @@ export async function registerProtocolRoutes(app: Express) {
     }
   });
 
+  app.patch("/api/hedge/events/chain/:chainId/:onChainId/description", async (req, res) => {
+    try {
+      const chainId = parseInt(req.params.chainId);
+      const onChainEventId = parseInt(req.params.onChainId);
+      const { description } = req.body;
+      if (!description || typeof description !== 'string') return res.status(400).json({ message: "description required" });
+      await storage.setHedgeEventDescription(chainId, onChainEventId, description.trim());
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to save description" });
+    }
+  });
+
   app.patch("/api/hedge/events/:id/pool", async (req, res) => {
     try {
       const { poolOpen, allowExternalLp, callerAddress } = req.body;
