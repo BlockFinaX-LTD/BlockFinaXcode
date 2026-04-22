@@ -3,15 +3,30 @@
  *
  * The old WalletManager (Lit-based) is gone. Now wallets are managed by Rift.
  * This module exposes a compatible API so existing call sites (hedge-contract,
- * use-transactions) keep working — they delegate to Rift via /api/rift/*.
+ * use-transactions) keep working — they delegate to Rift.
  *
- * For on-chain hedge contract calls, the migration to Rift's
- * `rift_send_transaction` is still pending. Those paths throw a clear error.
+ * `getSigner()` returns a read-only stub: hedge-contract only uses `signer.address`
+ * and `signer.connect(provider)` for read calls. All writes go through
+ * `sendContractTx` which routes to `rift.signer.sendTransaction`.
  */
 
+import { ethers } from 'ethers';
 import { isLoggedIn } from './rift-client';
 
 let _cachedAddress: string | null = null;
+
+/**
+ * Minimal signer-like object used by hedge-contract for read ops (balance checks
+ * via connected contracts). Write ops in hedge-contract ignore this entirely and
+ * route through Rift — see `sendContractTx` in hedge-contract.ts.
+ */
+class ReadOnlySigner {
+  constructor(public readonly address: string) {}
+  connect(provider: ethers.Provider): ethers.Contract | any {
+    // Return a Voidable "runner" that can do reads. Writes will not reach the signer.
+    return new ethers.VoidSigner(this.address, provider);
+  }
+}
 
 export interface WalletBalance {
   networkId: number;
@@ -50,8 +65,16 @@ class WalletManager {
     throw new Error('On-chain transaction signing has not yet been migrated to Rift. Use /api/rift/send instead.');
   }
 
+  /**
+   * Returns a read-only signer-like object. hedge-contract uses this for:
+   *   1. `signer.address` — the user's wallet address (needed for balance/allowance checks)
+   *   2. `signer.connect(provider)` — to build read contracts
+   * All write transactions are routed through Rift inside `sendContractTx`, so
+   * the returned object never actually signs anything.
+   */
   async getSigner(_networkId?: number): Promise<any> {
-    throw new Error('Direct ethers signer access is no longer available. Use Rift API endpoints (/api/rift/send, /api/rift/balance) instead.');
+    if (!_cachedAddress) return null;
+    return new ReadOnlySigner(_cachedAddress);
   }
 
   // Stubbed transaction helpers — UIs that call these will display the error toast.

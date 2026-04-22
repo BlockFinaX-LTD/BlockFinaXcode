@@ -1,16 +1,60 @@
-node_modules
-dist
-.DS_Store
-server/public
-vite.config.ts.*
+# ── Dependencies ─────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Build output ─────────────────────────────────────────────────────────
+dist/
+build/
+server/public/
 *.tar.gz
 
-# Python files — not part of this project
+# ── Environment & secrets ────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+**/.env
+**/.env.local
+**/.env.*.local
+# Keep example files so new contributors know what vars are needed
+!.env.example
+!**/.env.example
+
+# ── Hardhat / Solidity build artifacts ──────────────────────────────────
+contracts/artifacts/
+contracts/cache/
+contracts/cache-lisk/
+contracts/typechain/
+contracts/typechain-types/
+contracts/coverage/
+contracts/coverage.json
+
+# ── Test / coverage / debug output ──────────────────────────────────────
+coverage/
+.nyc_output/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Editor / OS ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Python files — not part of this project ─────────────────────────────
 pyproject.toml
 uv.lock
 main.py
 
-# Replit internal files — do not upload to GitHub
+# ── Replit internal files — do not upload to GitHub ─────────────────────
 .replit
 replit.md
 .semgrep
@@ -21,10 +65,27 @@ replit.md
 .agents/
 .pythonlibs/
 
-# Junk files in attached_assets — exclude non-image files only
+# ── Vite / tooling temp ─────────────────────────────────────────────────
+vite.config.ts.*
+.vite/
+
+# ── Keys / certs ────────────────────────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ── Attached assets: keep only images ───────────────────────────────────
 attached_assets/*.txt
 attached_assets/*.pdf
 attached_assets/*.xlsx
 attached_assets/*.html
 attached_assets/generated_images/
 attached_assets/generated_videos/
+
+# ── Audit artifacts (keep the source .md, not the built PDFs/HTML) ─────
+audit-report.html
+BlockFinaX-Audit-Report.pdf
+BlockFinaX-Audit-V2-Report.pdf
+BlockFinaX-Audit-V2-Report.html

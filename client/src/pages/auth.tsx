@@ -1,15 +1,12 @@
 /**
  * auth.tsx — Sign in / sign up via Rift Finance
  *
- * Three login methods:
- *   1. Email + OTP code
- *   2. Phone + OTP code
- *   3. External ID + Password (no OTP)
+ * Explicit Sign In vs Sign Up tabs. Inside each, pick one of 3 methods:
+ *   1. Email + OTP        — SDK: signup({email, displayName}) / login({email, otpCode})
+ *   2. Phone + OTP        — SDK: signup({phoneNumber, displayName}) / login({phoneNumber, otpCode})
+ *   3. Username + Password — SDK: signup({externalId, password, displayName}) / login({externalId, password})
  *
- * Plus a Sign Up tab for new users.
- *
- * After successful login, Rift's smart wallets are auto-deployed across
- * all chains (Base, Polygon, Arbitrum, Lisk, BNB, etc.). User lands on /home.
+ * displayName is auto-derived from the identifier so users don't fill extra fields.
  */
 
 import { useState } from 'react';
@@ -20,53 +17,43 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, Phone, Key, UserPlus } from 'lucide-react';
+import { Loader2, Mail, Phone, Key } from 'lucide-react';
 import { FinanceAnimatedBackground } from '@/components/ui/finance-background';
 import logoPath from '@/assets/logo.png';
 import { sendOtp, login as riftLogin, signup as riftSignup } from '@/lib/rift-client';
 
-type LoginMethod = 'email' | 'phone' | 'password';
-type View = 'signin' | 'signup' | 'otp';
+type Mode = 'signin' | 'signup';
+type Method = 'email' | 'phone' | 'password';
 
 export default function Auth() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [view, setView] = useState<View>('signin');
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
+  const [mode, setMode] = useState<Mode>('signin');
+  const [method, setMethod] = useState<Method>('email');
   const [isLoading, setIsLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
 
-  // Sign-in fields
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [externalId, setExternalId] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
-  // Sign-up fields
-  const [signupForm, setSignupForm] = useState({
-    externalId: '',
-    password: '',
-    displayName: '',
-    email: '',
-    phoneNumber: '',
-  });
+  const resetOtp = () => { setOtpCode(''); setOtpSent(false); };
 
-  // ── Send OTP (email or phone) ───────────────────────────────────────────
-  const handleSendOtp = async () => {
-    if (loginMethod === 'email' && !email) {
-      toast({ title: 'Enter your email', variant: 'destructive' });
-      return;
-    }
-    if (loginMethod === 'phone' && !phone) {
-      toast({ title: 'Enter your phone number', variant: 'destructive' });
+  // ── Sign in (email/phone): just send OTP, no signup call ────────────────
+  const handleSigninSendCode = async () => {
+    const identifier = method === 'email' ? email : phone;
+    if (!identifier) {
+      toast({ title: `Enter your ${method}`, variant: 'destructive' });
       return;
     }
     setIsLoading(true);
     try {
-      await sendOtp(loginMethod === 'email' ? { email } : { phone });
-      toast({ title: 'Code sent', description: `Check your ${loginMethod}` });
-      setView('otp');
+      await sendOtp(method === 'email' ? { email } : { phone });
+      setOtpSent(true);
+      toast({ title: 'Code sent', description: `Check your ${method}` });
     } catch (err: any) {
       toast({ title: 'Failed to send code', description: err.message, variant: 'destructive' });
     } finally {
@@ -74,16 +61,65 @@ export default function Auth() {
     }
   };
 
-  // ── Login ───────────────────────────────────────────────────────────────
-  const handleLogin = async () => {
+  // ── Sign up (email/phone): create account then send OTP ─────────────────
+  // If account already exists (409), fall through and send OTP anyway — the
+  // user just goes through the login flow.
+  const handleSignupSendCode = async () => {
+    const identifier = method === 'email' ? email : phone;
+    if (!identifier) {
+      toast({ title: `Enter your ${method}`, variant: 'destructive' });
+      return;
+    }
     setIsLoading(true);
     try {
-      let params: Parameters<typeof riftLogin>[0];
-      if (loginMethod === 'email') params = { email, otpCode };
-      else if (loginMethod === 'phone') params = { phoneNumber: phone, otpCode };
-      else params = { externalId, password };
+      const displayName = method === 'email' ? email.split('@')[0] : phone;
+      let alreadyExists = false;
+      try {
+        await riftSignup(
+          method === 'email'
+            ? { email, displayName }
+            : { phoneNumber: phone, displayName }
+        );
+      } catch (err: any) {
+        if (err?.status === 409) alreadyExists = true;
+        else throw err;
+      }
+      await sendOtp(method === 'email' ? { email } : { phone });
+      setOtpSent(true);
+      toast({
+        title: alreadyExists ? 'Account already exists' : 'Account created',
+        description: alreadyExists ? 'Signing you in instead — check your ' + method + ' for a code' : `Check your ${method} for a code`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Signup failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      await riftLogin(params);
+  // ── Verify OTP → login ──────────────────────────────────────────────────
+  const handleVerifyOtp = async () => {
+    setIsLoading(true);
+    try {
+      await riftLogin(method === 'email' ? { email, otpCode } : { phoneNumber: phone, otpCode });
+      toast({ title: mode === 'signup' ? 'Welcome!' : 'Welcome back!' });
+      setLocation('/home');
+    } catch (err: any) {
+      toast({ title: 'Login failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Password sign in ────────────────────────────────────────────────────
+  const handlePasswordSignin = async () => {
+    if (!username || !password) {
+      toast({ title: 'Username and password required', variant: 'destructive' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await riftLogin({ externalId: username, password });
       toast({ title: 'Welcome back!' });
       setLocation('/home');
     } catch (err: any) {
@@ -93,25 +129,25 @@ export default function Auth() {
     }
   };
 
-  // ── Signup ──────────────────────────────────────────────────────────────
-  const handleSignup = async () => {
-    const { externalId: sId, password: pw, displayName, email: e, phoneNumber: ph } = signupForm;
-    if (!sId || !pw || !displayName) {
-      toast({ title: 'Username, password, and display name required', variant: 'destructive' });
+  // ── Password sign up ────────────────────────────────────────────────────
+  // If username already taken (409), try logging in with the supplied password.
+  // That way a returning user who clicks "Create Account" is handled gracefully.
+  const handlePasswordSignup = async () => {
+    if (!username || !password) {
+      toast({ title: 'Username and password required', variant: 'destructive' });
       return;
     }
     setIsLoading(true);
     try {
-      await riftSignup({
-        externalId: sId,
-        password: pw,
-        displayName,
-        email: e || undefined,
-        phoneNumber: ph || undefined,
-      });
-      // Auto-login after signup with externalId + password
-      await riftLogin({ externalId: sId, password: pw });
-      toast({ title: 'Account created!', description: 'Your wallet is ready.' });
+      let alreadyExists = false;
+      try {
+        await riftSignup({ externalId: username, password, displayName: username });
+      } catch (err: any) {
+        if (err?.status === 409) alreadyExists = true;
+        else throw err;
+      }
+      await riftLogin({ externalId: username, password });
+      toast({ title: alreadyExists ? 'Welcome back!' : 'Account created!' });
       setLocation('/home');
     } catch (err: any) {
       toast({ title: 'Signup failed', description: err.message, variant: 'destructive' });
@@ -121,6 +157,8 @@ export default function Auth() {
   };
 
   // ── Render ──────────────────────────────────────────────────────────────
+  const identifierLabel = method === 'phone' ? phone : email;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4 relative overflow-hidden">
       <FinanceAnimatedBackground />
@@ -133,141 +171,14 @@ export default function Auth() {
             <p className="text-xs text-muted-foreground">P2P hedging & cross-border payments</p>
           </div>
 
-          {view !== 'otp' && (
-            <Tabs value={view} onValueChange={(v) => setView(v as View)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
-                <TabsTrigger value="signup">Sign Up</TabsTrigger>
-              </TabsList>
-
-              {/* ── SIGN IN ── */}
-              <TabsContent value="signin" className="space-y-4 mt-4">
-                <Tabs value={loginMethod} onValueChange={(v) => setLoginMethod(v as LoginMethod)}>
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="email"><Mail className="h-3 w-3 mr-1" />Email</TabsTrigger>
-                    <TabsTrigger value="phone"><Phone className="h-3 w-3 mr-1" />Phone</TabsTrigger>
-                    <TabsTrigger value="password"><Key className="h-3 w-3 mr-1" />Password</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="email" className="space-y-3 mt-4">
-                    <div>
-                      <Label htmlFor="email" className="text-sm">Email</Label>
-                      <Input
-                        id="email" type="email" placeholder="you@example.com"
-                        value={email} onChange={(e) => setEmail(e.target.value)} autoFocus
-                      />
-                    </div>
-                    <Button onClick={handleSendOtp} disabled={isLoading || !email} className="w-full">
-                      {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
-                      Send Code
-                    </Button>
-                  </TabsContent>
-
-                  <TabsContent value="phone" className="space-y-3 mt-4">
-                    <div>
-                      <Label htmlFor="phone" className="text-sm">Phone (with country code)</Label>
-                      <Input
-                        id="phone" type="tel" placeholder="+254712345678"
-                        value={phone} onChange={(e) => setPhone(e.target.value)} autoFocus
-                      />
-                    </div>
-                    <Button onClick={handleSendOtp} disabled={isLoading || !phone} className="w-full">
-                      {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Phone className="h-4 w-4 mr-2" />}
-                      Send Code
-                    </Button>
-                  </TabsContent>
-
-                  <TabsContent value="password" className="space-y-3 mt-4">
-                    <div>
-                      <Label htmlFor="ext-id" className="text-sm">Username</Label>
-                      <Input
-                        id="ext-id" type="text" placeholder="your-username"
-                        value={externalId} onChange={(e) => setExternalId(e.target.value)} autoFocus
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="pw" className="text-sm">Password</Label>
-                      <Input
-                        id="pw" type="password" placeholder="••••••••"
-                        value={password} onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </div>
-                    <Button onClick={handleLogin} disabled={isLoading || !externalId || !password} className="w-full">
-                      {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Key className="h-4 w-4 mr-2" />}
-                      Sign In
-                    </Button>
-                  </TabsContent>
-                </Tabs>
-              </TabsContent>
-
-              {/* ── SIGN UP ── */}
-              <TabsContent value="signup" className="space-y-3 mt-4">
-                <div>
-                  <Label htmlFor="su-name" className="text-sm">Display name</Label>
-                  <Input
-                    id="su-name" type="text" placeholder="Jane Doe"
-                    value={signupForm.displayName}
-                    onChange={(e) => setSignupForm(s => ({ ...s, displayName: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="su-username" className="text-sm">Username</Label>
-                  <Input
-                    id="su-username" type="text" placeholder="janedoe"
-                    value={signupForm.externalId}
-                    onChange={(e) => setSignupForm(s => ({ ...s, externalId: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="su-pw" className="text-sm">Password</Label>
-                  <Input
-                    id="su-pw" type="password" placeholder="••••••••"
-                    value={signupForm.password}
-                    onChange={(e) => setSignupForm(s => ({ ...s, password: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="su-email" className="text-sm">Email <span className="text-muted-foreground">(optional)</span></Label>
-                  <Input
-                    id="su-email" type="email" placeholder="you@example.com"
-                    value={signupForm.email}
-                    onChange={(e) => setSignupForm(s => ({ ...s, email: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="su-phone" className="text-sm">Phone <span className="text-muted-foreground">(optional)</span></Label>
-                  <Input
-                    id="su-phone" type="tel" placeholder="+254712345678"
-                    value={signupForm.phoneNumber}
-                    onChange={(e) => setSignupForm(s => ({ ...s, phoneNumber: e.target.value }))}
-                  />
-                </div>
-
-                <Button
-                  onClick={handleSignup}
-                  disabled={isLoading || !signupForm.externalId || !signupForm.password || !signupForm.displayName}
-                  className="w-full"
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                  Create Account
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  Smart wallets auto-deployed across Base, Polygon, Arbitrum, Lisk &amp; more.
-                </p>
-              </TabsContent>
-            </Tabs>
-          )}
-
-          {/* ── OTP ENTRY ── */}
-          {view === 'otp' && (
+          {otpSent ? (
             <div className="space-y-4">
               <div className="text-center">
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                  {loginMethod === 'phone' ? <Phone className="h-6 w-6 text-primary" /> : <Mail className="h-6 w-6 text-primary" />}
+                  {method === 'phone' ? <Phone className="h-6 w-6 text-primary" /> : <Mail className="h-6 w-6 text-primary" />}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Code sent to <span className="font-medium text-foreground">{loginMethod === 'phone' ? phone : email}</span>
+                  Code sent to <span className="font-medium text-foreground">{identifierLabel}</span>
                 </p>
               </div>
 
@@ -280,22 +191,100 @@ export default function Auth() {
                 placeholder="ABCD"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4))}
+                onKeyDown={(e) => { if (e.key === 'Enter' && otpCode.length === 4) handleVerifyOtp(); }}
                 className="text-center text-2xl font-mono tracking-[0.5em] h-14 uppercase"
                 autoFocus
               />
 
-              <Button onClick={handleLogin} disabled={isLoading || otpCode.length !== 4} className="w-full h-11">
+              <Button onClick={handleVerifyOtp} disabled={isLoading || otpCode.length !== 4} className="w-full h-11">
                 {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Verify &amp; Sign In
+                Continue
               </Button>
 
-              <Button
-                variant="ghost" size="sm" className="w-full text-muted-foreground"
-                onClick={() => { setView('signin'); setOtpCode(''); }}
-              >
-                Use a different {loginMethod}
+              <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={resetOtp}>
+                Back
               </Button>
             </div>
+          ) : (
+            <Tabs value={mode} onValueChange={(v) => { setMode(v as Mode); resetOtp(); }}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              </TabsList>
+
+              {/* Method selector, shared across both modes */}
+              <Tabs value={method} onValueChange={(v) => setMethod(v as Method)} className="mt-4">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="email"><Mail className="h-3 w-3 mr-1" />Email</TabsTrigger>
+                  <TabsTrigger value="phone"><Phone className="h-3 w-3 mr-1" />Phone</TabsTrigger>
+                  <TabsTrigger value="password"><Key className="h-3 w-3 mr-1" />Password</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="email" className="space-y-3 mt-4">
+                  <div>
+                    <Label htmlFor="email" className="text-sm">Email</Label>
+                    <Input
+                      id="email" type="email" placeholder="you@example.com"
+                      value={email} onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && email) (mode === 'signup' ? handleSignupSendCode : handleSigninSendCode)(); }}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    onClick={mode === 'signup' ? handleSignupSendCode : handleSigninSendCode}
+                    disabled={isLoading || !email} className="w-full"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
+                    {mode === 'signup' ? 'Create account' : 'Send sign-in code'}
+                  </Button>
+                </TabsContent>
+
+                <TabsContent value="phone" className="space-y-3 mt-4">
+                  <div>
+                    <Label htmlFor="phone" className="text-sm">Phone (with country code)</Label>
+                    <Input
+                      id="phone" type="tel" placeholder="+254712345678"
+                      value={phone} onChange={(e) => setPhone(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && phone) (mode === 'signup' ? handleSignupSendCode : handleSigninSendCode)(); }}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    onClick={mode === 'signup' ? handleSignupSendCode : handleSigninSendCode}
+                    disabled={isLoading || !phone} className="w-full"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Phone className="h-4 w-4 mr-2" />}
+                    {mode === 'signup' ? 'Create account' : 'Send sign-in code'}
+                  </Button>
+                </TabsContent>
+
+                <TabsContent value="password" className="space-y-3 mt-4">
+                  <div>
+                    <Label htmlFor="username" className="text-sm">Username</Label>
+                    <Input
+                      id="username" type="text" placeholder="your-username"
+                      value={username} onChange={(e) => setUsername(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pw" className="text-sm">Password</Label>
+                    <Input
+                      id="pw" type="password" placeholder="••••••••"
+                      value={password} onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && username && password) (mode === 'signup' ? handlePasswordSignup : handlePasswordSignin)(); }}
+                    />
+                  </div>
+                  <Button
+                    onClick={mode === 'signup' ? handlePasswordSignup : handlePasswordSignin}
+                    disabled={isLoading || !username || !password} className="w-full"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Key className="h-4 w-4 mr-2" />}
+                    {mode === 'signup' ? 'Create account' : 'Sign in'}
+                  </Button>
+                </TabsContent>
+              </Tabs>
+            </Tabs>
           )}
         </CardContent>
       </Card>
