@@ -1,307 +1,302 @@
 /**
- * auth.tsx — Unified authentication entry page
+ * auth.tsx — Sign in / sign up via Rift Finance
  *
- * Options:
- *   1. Continue with Google (requires GOOGLE_CLIENT_ID env var)
- *   2. Continue with Email (magic link)
- *   3. Use Face ID / Fingerprint (WebAuthn passkey)
- *   4. Import existing wallet (seed phrase / private key)
+ * Three login methods:
+ *   1. Email + OTP code
+ *   2. Phone + OTP code
+ *   3. External ID + Password (no OTP)
  *
- * After any successful auth, redirects to /set-pin (new users) or /home (returning users).
+ * Plus a Sign Up tab for new users.
+ *
+ * After successful login, Rift's smart wallets are auto-deployed across
+ * all chains (Base, Polygon, Arbitrum, Lisk, BNB, etc.). User lands on /home.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, ArrowRight, Fingerprint, Download, ArrowLeft } from 'lucide-react';
-import { SiGoogle } from 'react-icons/si';
+import { Loader2, Mail, Phone, Key, UserPlus } from 'lucide-react';
 import { FinanceAnimatedBackground } from '@/components/ui/finance-background';
 import logoPath from '@/assets/logo.png';
-import { isWebAuthnSupported, authenticateWithPasskey, getPasskeyLabel } from '@/lib/webauthn';
-import { decryptPinFromLocalStorage, hasLocalPin } from '@/lib/auth-crypto';
-import { SESSION_KEY } from '@/hooks/use-auth';
-import { pinStore } from '@/lib/pin-store';
+import { sendOtp, login as riftLogin, signup as riftSignup } from '@/lib/rift-client';
 
-type View = 'main' | 'email';
+type LoginMethod = 'email' | 'phone' | 'password';
+type View = 'signin' | 'signup' | 'otp';
 
 export default function Auth() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [view, setView] = useState<View>('main');
-  const [email, setEmail] = useState('');
+  const [view, setView] = useState<View>('signin');
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [isLoading, setIsLoading] = useState(false);
-  const [passkeyLabel, setPasskeyLabel] = useState('Face ID / Fingerprint');
-  const [webauthnAvailable, setWebauthnAvailable] = useState(false);
-  const [hasStoredPin, setHasStoredPin] = useState(false);
 
-  const googleConfigured = !!(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+  // Sign-in fields
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [externalId, setExternalId] = useState('');
+  const [password, setPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
 
-  // Check WebAuthn support and whether a passkey is already registered on this device
-  useEffect(() => {
-    getPasskeyLabel().then(setPasskeyLabel);
-    setWebauthnAvailable(isWebAuthnSupported());
-    setHasStoredPin(hasLocalPin());
-  }, []);
+  // Sign-up fields
+  const [signupForm, setSignupForm] = useState({
+    externalId: '',
+    password: '',
+    displayName: '',
+    email: '',
+    phoneNumber: '',
+  });
 
-  // Popup-based Google sign-in — opens a small window for the OAuth flow,
-  // listens for the session token via postMessage, then navigates in-place.
-  const handleGoogleClick = useCallback(() => {
-    const width = 500;
-    const height = 620;
-    const left = Math.round(window.screenX + (window.outerWidth - width) / 2);
-    const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
-    const popup = window.open(
-      '/api/auth/google/start?popup=1',
-      'google-oauth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
-    );
-    if (!popup) {
-      // Popup was blocked — fall back to redirect
-      window.location.href = '/api/auth/google/start';
+  // ── Send OTP (email or phone) ───────────────────────────────────────────
+  const handleSendOtp = async () => {
+    if (loginMethod === 'email' && !email) {
+      toast({ title: 'Enter your email', variant: 'destructive' });
       return;
     }
-    setIsLoading(true);
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (!event.data || event.data.type !== 'google-auth') return;
-      window.removeEventListener('message', onMessage);
-      setIsLoading(false);
-
-      if (event.data.error) {
-        const msg = event.data.error === 'access_denied' ? 'Sign-in was cancelled.' : `Google sign-in failed: ${event.data.error}`;
-        toast({ title: 'Google sign-in failed', description: msg, variant: 'destructive' });
-        return;
-      }
-
-      if (event.data.token) {
-        localStorage.setItem(SESSION_KEY, event.data.token);
-        const hasLocalWallet = !!localStorage.getItem('wallet_encrypted');
-        setLocation(hasLocalWallet ? '/unlock-wallet' : '/set-pin');
-      }
-    };
-
-    window.addEventListener('message', onMessage);
-
-    // Clean up if user closes the popup manually
-    const pollClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(pollClosed);
-        window.removeEventListener('message', onMessage);
-        setIsLoading(false);
-      }
-    }, 500);
-  }, [setLocation, toast]);
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast({ title: 'Enter a valid email address', variant: 'destructive' });
+    if (loginMethod === 'phone' && !phone) {
+      toast({ title: 'Enter your phone number', variant: 'destructive' });
       return;
     }
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/magic-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      // Save poll token so the "check your email" page can detect cross-device login
-      if (data.pollToken) {
-        sessionStorage.setItem('bfx_poll_token', data.pollToken);
-      }
-      // Dev mode: if no SMTP configured, server returns the verification URL directly
-      if (data.devUrl) {
-        toast({ title: 'Dev mode: magic link', description: 'Click the link in the console or use the URL returned by the API.' });
-        console.log('[Auth] Magic link URL:', data.devUrl);
-        // In dev, auto-redirect to the verify URL
-        window.location.href = data.devUrl;
-        return;
-      }
-      setLocation(`/auth/email-sent?email=${encodeURIComponent(email)}`);
+      await sendOtp(loginMethod === 'email' ? { email } : { phone });
+      toast({ title: 'Code sent', description: `Check your ${loginMethod}` });
+      setView('otp');
     } catch (err: any) {
-      toast({ title: 'Failed to send link', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to send code', description: err.message, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handlePasskey = async () => {
+  // ── Login ───────────────────────────────────────────────────────────────
+  const handleLogin = async () => {
     setIsLoading(true);
     try {
-      // Get challenge from server
-      const challengeRes = await fetch('/api/auth/webauthn/auth-challenge', { method: 'POST' });
-      const options = await challengeRes.json();
-      // Prompt Face ID / fingerprint
-      const authResponse = await authenticateWithPasskey(options);
-      // Send assertion to server
-      const res = await fetch('/api/auth/webauthn/authenticate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response: authResponse }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      localStorage.setItem(SESSION_KEY, data.sessionToken);
-      // Try to auto-unlock wallet using device unlock key + stored encrypted PIN
-      if (data.deviceUnlockKey && hasLocalPin()) {
-        const pin = await decryptPinFromLocalStorage(data.deviceUnlockKey);
-        if (pin) {
-          pinStore.set(pin);
-        }
-      }
+      let params: Parameters<typeof riftLogin>[0];
+      if (loginMethod === 'email') params = { email, otpCode };
+      else if (loginMethod === 'phone') params = { phoneNumber: phone, otpCode };
+      else params = { externalId, password };
+
+      await riftLogin(params);
+      toast({ title: 'Welcome back!' });
       setLocation('/home');
     } catch (err: any) {
-      if (err.name === 'NotAllowedError') {
-        toast({ title: 'Cancelled', description: 'Face ID / fingerprint was cancelled.' });
-      } else {
-        toast({ title: 'Face ID failed', description: err.message || 'Please try PIN instead.', variant: 'destructive' });
-      }
+      toast({ title: 'Login failed', description: err.message, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ── Signup ──────────────────────────────────────────────────────────────
+  const handleSignup = async () => {
+    const { externalId: sId, password: pw, displayName, email: e, phoneNumber: ph } = signupForm;
+    if (!sId || !pw || !displayName) {
+      toast({ title: 'Username, password, and display name required', variant: 'destructive' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await riftSignup({
+        externalId: sId,
+        password: pw,
+        displayName,
+        email: e || undefined,
+        phoneNumber: ph || undefined,
+      });
+      // Auto-login after signup with externalId + password
+      await riftLogin({ externalId: sId, password: pw });
+      toast({ title: 'Account created!', description: 'Your wallet is ready.' });
+      setLocation('/home');
+    } catch (err: any) {
+      toast({ title: 'Signup failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4 relative overflow-hidden">
       <FinanceAnimatedBackground />
 
-      <Card className="w-full max-w-sm relative z-10 shadow-xl border-border/60 backdrop-blur-sm bg-card/95">
+      <Card className="w-full max-w-md relative z-10 shadow-xl border-border/60 backdrop-blur-sm bg-card/95">
         <CardContent className="pt-8 pb-8 space-y-6">
-
-          {/* Logo + title */}
-          <div className="text-center space-y-2">
+          <div className="text-center space-y-1">
             <img src={logoPath} alt="BlockFinaX" className="h-10 w-10 object-contain mx-auto" />
-            <h1 className="text-2xl font-bold">Welcome to BlockFinaX</h1>
-            <p className="text-sm text-muted-foreground">P2P hedging for African markets</p>
+            <h1 className="text-xl font-bold">Welcome to BlockFinaX</h1>
+            <p className="text-xs text-muted-foreground">P2P hedging & cross-border payments</p>
           </div>
 
-          {view === 'main' && (
-            <div className="space-y-3">
-              {/* Google — only shown when VITE_GOOGLE_CLIENT_ID is set */}
-              {googleConfigured && (
-                <Button
-                  variant="outline"
-                  className="w-full h-12 text-sm font-medium"
-                  onClick={handleGoogleClick}
-                  disabled={isLoading}
-                >
-                  <SiGoogle className="h-4 w-4 mr-3 text-[#4285F4]" />
-                  Continue with Google
-                </Button>
-              )}
+          {view !== 'otp' && (
+            <Tabs value={view} onValueChange={(v) => setView(v as View)}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              </TabsList>
 
-              {/* Email */}
-              <Button
-                variant="outline"
-                className="w-full h-12 text-sm font-medium"
-                onClick={() => setView('email')}
-                disabled={isLoading}
-              >
-                <Mail className="h-4 w-4 mr-3 text-muted-foreground" />
-                Continue with Email
-              </Button>
+              {/* ── SIGN IN ── */}
+              <TabsContent value="signin" className="space-y-4 mt-4">
+                <Tabs value={loginMethod} onValueChange={(v) => setLoginMethod(v as LoginMethod)}>
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="email"><Mail className="h-3 w-3 mr-1" />Email</TabsTrigger>
+                    <TabsTrigger value="phone"><Phone className="h-3 w-3 mr-1" />Phone</TabsTrigger>
+                    <TabsTrigger value="password"><Key className="h-3 w-3 mr-1" />Password</TabsTrigger>
+                  </TabsList>
 
-              {/* Face ID / Fingerprint — only show if device supports it */}
-              {webauthnAvailable && (
-                <Button
-                  variant="outline"
-                  className="w-full h-12 text-sm font-medium"
-                  onClick={handlePasskey}
-                  disabled={isLoading}
-                >
-                  {isLoading
-                    ? <Loader2 className="h-4 w-4 mr-3 animate-spin" />
-                    : <Fingerprint className="h-4 w-4 mr-3 text-muted-foreground" />
-                  }
-                  {hasStoredPin ? `Unlock with ${passkeyLabel}` : passkeyLabel}
-                </Button>
-              )}
+                  <TabsContent value="email" className="space-y-3 mt-4">
+                    <div>
+                      <Label htmlFor="email" className="text-sm">Email</Label>
+                      <Input
+                        id="email" type="email" placeholder="you@example.com"
+                        value={email} onChange={(e) => setEmail(e.target.value)} autoFocus
+                      />
+                    </div>
+                    <Button onClick={handleSendOtp} disabled={isLoading || !email} className="w-full">
+                      {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
+                      Send Code
+                    </Button>
+                  </TabsContent>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <Separator />
+                  <TabsContent value="phone" className="space-y-3 mt-4">
+                    <div>
+                      <Label htmlFor="phone" className="text-sm">Phone (with country code)</Label>
+                      <Input
+                        id="phone" type="tel" placeholder="+254712345678"
+                        value={phone} onChange={(e) => setPhone(e.target.value)} autoFocus
+                      />
+                    </div>
+                    <Button onClick={handleSendOtp} disabled={isLoading || !phone} className="w-full">
+                      {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Phone className="h-4 w-4 mr-2" />}
+                      Send Code
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="password" className="space-y-3 mt-4">
+                    <div>
+                      <Label htmlFor="ext-id" className="text-sm">Username</Label>
+                      <Input
+                        id="ext-id" type="text" placeholder="your-username"
+                        value={externalId} onChange={(e) => setExternalId(e.target.value)} autoFocus
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="pw" className="text-sm">Password</Label>
+                      <Input
+                        id="pw" type="password" placeholder="••••••••"
+                        value={password} onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
+                    <Button onClick={handleLogin} disabled={isLoading || !externalId || !password} className="w-full">
+                      {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Key className="h-4 w-4 mr-2" />}
+                      Sign In
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+              </TabsContent>
+
+              {/* ── SIGN UP ── */}
+              <TabsContent value="signup" className="space-y-3 mt-4">
+                <div>
+                  <Label htmlFor="su-name" className="text-sm">Display name</Label>
+                  <Input
+                    id="su-name" type="text" placeholder="Jane Doe"
+                    value={signupForm.displayName}
+                    onChange={(e) => setSignupForm(s => ({ ...s, displayName: e.target.value }))}
+                  />
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">or</span>
+                <div>
+                  <Label htmlFor="su-username" className="text-sm">Username</Label>
+                  <Input
+                    id="su-username" type="text" placeholder="janedoe"
+                    value={signupForm.externalId}
+                    onChange={(e) => setSignupForm(s => ({ ...s, externalId: e.target.value }))}
+                  />
                 </div>
+                <div>
+                  <Label htmlFor="su-pw" className="text-sm">Password</Label>
+                  <Input
+                    id="su-pw" type="password" placeholder="••••••••"
+                    value={signupForm.password}
+                    onChange={(e) => setSignupForm(s => ({ ...s, password: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="su-email" className="text-sm">Email <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    id="su-email" type="email" placeholder="you@example.com"
+                    value={signupForm.email}
+                    onChange={(e) => setSignupForm(s => ({ ...s, email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="su-phone" className="text-sm">Phone <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    id="su-phone" type="tel" placeholder="+254712345678"
+                    value={signupForm.phoneNumber}
+                    onChange={(e) => setSignupForm(s => ({ ...s, phoneNumber: e.target.value }))}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleSignup}
+                  disabled={isLoading || !signupForm.externalId || !signupForm.password || !signupForm.displayName}
+                  className="w-full"
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                  Create Account
+                </Button>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  Smart wallets auto-deployed across Base, Polygon, Arbitrum, Lisk &amp; more.
+                </p>
+              </TabsContent>
+            </Tabs>
+          )}
+
+          {/* ── OTP ENTRY ── */}
+          {view === 'otp' && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                  {loginMethod === 'phone' ? <Phone className="h-6 w-6 text-primary" /> : <Mail className="h-6 w-6 text-primary" />}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Code sent to <span className="font-medium text-foreground">{loginMethod === 'phone' ? phone : email}</span>
+                </p>
               </div>
 
-              {/* Import wallet */}
-              <Button
-                variant="ghost"
-                className="w-full h-12 text-sm font-medium text-muted-foreground hover:text-foreground"
-                onClick={() => setLocation('/import-wallet')}
-                disabled={isLoading}
-              >
-                <Download className="h-4 w-4 mr-3" />
-                Import existing wallet
+              <Input
+                type="text"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoComplete="one-time-code"
+                maxLength={4}
+                placeholder="ABCD"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4))}
+                className="text-center text-2xl font-mono tracking-[0.5em] h-14 uppercase"
+                autoFocus
+              />
+
+              <Button onClick={handleLogin} disabled={isLoading || otpCode.length !== 4} className="w-full h-11">
+                {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Verify &amp; Sign In
               </Button>
 
-              {/* Existing users with password wallets */}
-              <p className="text-center text-xs text-muted-foreground pt-1">
-                Have an existing BlockFinaX wallet?{' '}
-                <button
-                  className="text-primary hover:underline font-medium"
-                  onClick={() => setLocation('/unlock-wallet')}
-                >
-                  Unlock it here
-                </button>
-              </p>
+              <Button
+                variant="ghost" size="sm" className="w-full text-muted-foreground"
+                onClick={() => { setView('signin'); setOtpCode(''); }}
+              >
+                Use a different {loginMethod}
+              </Button>
             </div>
           )}
-
-          {view === 'email' && (
-            <form onSubmit={handleEmailSubmit} className="space-y-4">
-              <button
-                type="button"
-                onClick={() => setView('main')}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Back
-              </button>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Your email address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  autoFocus
-                  autoComplete="email"
-                />
-              </div>
-
-              <Button type="submit" className="w-full h-12" disabled={isLoading}>
-                {isLoading
-                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  : <ArrowRight className="h-4 w-4 mr-2" />
-                }
-                Send sign-in link
-              </Button>
-
-              <p className="text-xs text-center text-muted-foreground">
-                We'll email you a link — no password needed.
-              </p>
-            </form>
-          )}
-
-          <p className="text-center text-xs text-muted-foreground border-t pt-4">
-            By continuing you agree to our{' '}
-            <a href="/terms" className="underline hover:text-foreground">Terms</a>
-            {' & '}
-            <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
-          </p>
         </CardContent>
       </Card>
     </div>

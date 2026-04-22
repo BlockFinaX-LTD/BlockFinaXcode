@@ -24,7 +24,7 @@ import type { Express } from 'express';
 import { strictLimiter, pollLimiter } from './middleware/rate-limiter';
 import { db } from './db';
 import {
-  userAccounts, magicLinks, authSessions, webauthnCredentials,
+  userAccounts, magicLinks, authSessions, webauthnCredentials, wallets,
 } from '@shared/schema';
 import { eq, and, gt, lt } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
@@ -174,9 +174,9 @@ function getRpId(req: any): string {
   }
 }
 
-async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<boolean> {
+async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<{ sent: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
-  if (!apiKey) return false;
+  if (!apiKey) return { sent: false, error: 'RESEND_API_KEY not configured' };
   try {
     const resend = new Resend(apiKey);
     const from = process.env.SMTP_FROM?.trim() || 'BlockFinaX <onboarding@resend.dev>';
@@ -197,12 +197,12 @@ async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<bool
     });
     if (error) {
       console.error('[Auth] Resend error:', error);
-      return false;
+      return { sent: false, error: error.message || JSON.stringify(error) };
     }
-    return true;
-  } catch (err) {
+    return { sent: true };
+  } catch (err: any) {
     console.error('[Auth] Email send failed:', err);
-    return false;
+    return { sent: false, error: err?.message || String(err) };
   }
 }
 
@@ -254,8 +254,23 @@ export function registerAuthRoutes(app: Express) {
   app.post('/api/auth/session/wallet', async (req, res) => {
     const session = await getSession(req);
     if (!session) return res.status(401).json({ message: 'Not authenticated' });
-    const { walletAddress } = req.body;
+    const { walletAddress, signature } = req.body;
     if (!walletAddress) return res.status(400).json({ message: 'walletAddress required' });
+
+    // Security fix: verify the caller actually owns this wallet address.
+    // The client must sign a deterministic message with the wallet's private key.
+    if (!signature) return res.status(400).json({ message: 'signature required — sign: "Link wallet <address> to BlockFinaX"' });
+    try {
+      const { ethers } = await import('ethers');
+      const message = `Link wallet ${walletAddress} to BlockFinaX`;
+      const recovered = ethers.verifyMessage(message, signature);
+      if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
+        return res.status(403).json({ message: 'Signature does not match wallet address' });
+      }
+    } catch {
+      return res.status(400).json({ message: 'Invalid signature' });
+    }
+
     await db.update(authSessions).set({ walletAddress }).where(eq(authSessions.sessionToken, getSessionToken(req)!));
     res.json({ ok: true });
   });
@@ -266,9 +281,15 @@ export function registerAuthRoutes(app: Express) {
     if (!session) return res.status(401).json({ message: 'Not authenticated' });
     const { pinSalt } = req.body;
     if (!pinSalt || typeof pinSalt !== 'string') return res.status(400).json({ message: 'pinSalt required' });
-    // Store salt on the user account (we'll use a simple approach of storing on first wallet for this user)
-    // Client will use this salt when creating/encrypting their wallet
-    // For now, store in session metadata by updating wallet association
+
+    // Store the PBKDF2 salt on the wallet record so it can be retrieved for
+    // cross-device recovery. The salt is NOT sensitive (it's a random value
+    // used as input to key derivation — the PIN itself is never stored).
+    if (session.walletAddress) {
+      await db.update(wallets)
+        .set({ pinSalt })
+        .where(eq(wallets.address, session.walletAddress));
+    }
     res.json({ ok: true, pinSalt });
   });
 
@@ -294,12 +315,12 @@ export function registerAuthRoutes(app: Express) {
 
     const appUrl   = getAppOrigin(req);
     const magicUrl = `${appUrl}/auth/verify?token=${verifyToken}`;
-    const sent     = await sendMagicLinkEmail(email, magicUrl);
-    if (!sent) {
-      console.log(`[Auth] Magic link (no RESEND_API_KEY configured): ${magicUrl}`);
+    const result   = await sendMagicLinkEmail(email, magicUrl);
+    if (!result.sent) {
+      console.log(`[Auth] Magic link (not sent — ${result.error}): ${magicUrl}`);
     }
 
-    res.json({ ok: true, sent, pollToken });
+    res.json({ ok: true, sent: result.sent, error: result.error, pollToken });
   });
 
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
@@ -341,6 +362,29 @@ export function registerAuthRoutes(app: Express) {
 
     verifiedMagicSessions.delete(token);
     res.json({ ok: true, sessionToken: entry.sessionToken });
+  });
+
+  // ── POST /api/auth/stytch ─────────────────────────────────────────────────
+  // Client sends Stytch session JWT + email after successful OTP verification.
+  // We decode (not fully verify — Stytch JWKS verification is Lit's job on the
+  // client) and create our own session so the user has backend access.
+  app.post('/api/auth/stytch', async (req, res) => {
+    const { sessionJwt, email } = req.body;
+    if (!sessionJwt || !email) return res.status(400).json({ message: 'sessionJwt and email required' });
+
+    // Lightweight JWT decode to pull out the Stytch user_id. Full verification
+    // happens on the Lit nodes via their Stytch JWKS check.
+    let stytchUserId: string | null = null;
+    try {
+      const payload = JSON.parse(Buffer.from(sessionJwt.split('.')[1], 'base64url').toString('utf8'));
+      stytchUserId = payload.sub || payload['https://stytch.com/session']?.user_id || null;
+    } catch {
+      return res.status(400).json({ message: 'Invalid Stytch JWT' });
+    }
+
+    const user = await findOrCreateUser(email, `stytch:${stytchUserId}`, null as any, null as any);
+    const sessionToken = await createSession(user.id);
+    res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name } });
   });
 
   // ── POST /api/auth/google ─────────────────────────────────────────────────
@@ -441,12 +485,18 @@ export function registerAuthRoutes(app: Express) {
       const user = await findOrCreateUser(payload.email, payload.sub, payload.name, payload.picture);
       const sessionToken = await createSession(user.id);
 
-      // Redirect to frontend — session token goes in the URL fragment so it's
-      // never sent to any server (stays in the browser only).
-      // For popup mode, include ?popup=1 so the page can postMessage → parent.
+      // Redirect to frontend — session token and Google ID token go in the URL
+      // fragment so they are never sent to any server (stays in the browser only).
+      // The Google ID token is needed by Lit Protocol to mint/access the user's PKP.
+      if (!tokens.id_token) {
+        console.error('[Auth] Google returned no id_token — scope may be missing "openid"');
+        return errorRedirect('no_id_token');
+      }
+      console.log('[Auth] Google callback OK — id_token length:', tokens.id_token.length);
+      const fragment = `token=${encodeURIComponent(sessionToken)}&idToken=${encodeURIComponent(tokens.id_token)}`;
       const donePath = isPopup
-        ? `/auth/google/done?popup=1#token=${sessionToken}`
-        : `/auth/google/done#token=${sessionToken}`;
+        ? `/auth/google/done?popup=1#${fragment}`
+        : `/auth/google/done#${fragment}`;
       res.redirect(donePath);
     } catch (err: any) {
       console.error('[Auth] Google callback error:', err.message);

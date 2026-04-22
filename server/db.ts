@@ -1,16 +1,12 @@
 /**
  * Drizzle ORM Database Connection
- * 
- * Establishes connection to Neon PostgreSQL database with Drizzle ORM.
- * Exports: pool, db instances configured with schema
+ *
+ * Supports both Neon serverless (WebSocket) and standard PostgreSQL (TCP).
+ * Auto-detects based on DATABASE_URL: Neon URLs use the serverless driver,
+ * all others (Railway, Supabase, local) use the standard pg driver.
  */
 
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
 import * as schema from "@shared/schema";
-
-neonConfig.webSocketConstructor = ws;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -18,11 +14,43 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL,
-  max: 3, // Further limit concurrent connections
-  idleTimeoutMillis: 15000,
-  connectionTimeoutMillis: 5000,
-  ssl: false, // Reduce SSL overhead
-});
-export const db = drizzle({ client: pool, schema });
+const dbUrl = process.env.DATABASE_URL;
+const isNeon = dbUrl.includes('neon.tech');
+
+let pool: any;
+let db: any;
+
+if (isNeon) {
+  // Neon serverless driver (WebSocket-based, works in edge runtimes)
+  const { Pool, neonConfig } = await import('@neondatabase/serverless');
+  const ws = (await import('ws')).default;
+  neonConfig.webSocketConstructor = ws;
+
+  pool = new Pool({
+    connectionString: dbUrl,
+    max: 3,
+    idleTimeoutMillis: 15000,
+    connectionTimeoutMillis: 5000,
+    ssl: true,
+  });
+
+  const { drizzle } = await import('drizzle-orm/neon-serverless');
+  db = drizzle({ client: pool, schema });
+} else {
+  // Standard pg driver (TCP — works with Railway, Supabase, local PostgreSQL)
+  const pg = await import('pg');
+  const needsSsl = dbUrl.includes('sslmode=require');
+
+  pool = new pg.default.Pool({
+    connectionString: dbUrl,
+    max: 3,
+    idleTimeoutMillis: 15000,
+    connectionTimeoutMillis: 5000,
+    ssl: needsSsl ? { rejectUnauthorized: false } : false,
+  });
+
+  const { drizzle } = await import('drizzle-orm/node-postgres');
+  db = drizzle({ client: pool, schema });
+}
+
+export { pool, db };

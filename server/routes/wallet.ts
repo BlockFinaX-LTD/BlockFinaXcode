@@ -28,6 +28,12 @@ export function registerWalletRoutes(app: Express) {
   });
 
   app.post("/api/wallets", async (req, res) => {
+    // Security fix: require a valid session to register a wallet and receive signup bonus.
+    const token = (req.headers['x-session-token'] as string) || null;
+    if (!token) return res.status(401).json({ message: 'Authentication required' });
+    const [session] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, token));
+    if (!session || session.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
+
     try {
       const existing = await storage.getWalletByAddress(req.body.address);
       if (existing) {
@@ -35,7 +41,9 @@ export function registerWalletRoutes(app: Express) {
         return res.status(200).json(safeExisting);
       }
 
-      const wallet = await storage.createWallet(req.body);
+      // Link wallet to the authenticated user
+      const walletData = { ...req.body, userId: session.userId };
+      const wallet = await storage.createWallet(walletData);
 
       // Idempotent signup bonus — only grant once (when no points record exists yet)
       const SIGNUP_BONUS = 100;

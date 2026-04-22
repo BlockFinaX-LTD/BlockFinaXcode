@@ -1,10 +1,11 @@
 /**
  * Server Entry Point
- * 
+ *
  * Express.js server with WebSocket support for blockchain communication platform.
  * Handles API routing, database initialization, request logging, and error handling.
  */
 
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
@@ -43,11 +44,13 @@ app.use(helmet({
         "https://sepolia-blockscout.lisk.com",
         "wss://rpc.sepolia-api.lisk.com",
         "wss://rpc.api.lisk.com",
+        "https://accounts.google.com",
+        "https://oauth2.googleapis.com",
       ],
-      frameSrc:       ["'none'"],
+      frameSrc:       ["https://accounts.google.com"],
       objectSrc:      ["'none'"],
       baseUri:        ["'self'"],
-      formAction:     ["'self'"],
+      formAction:     ["'self'", "https://accounts.google.com"],
       upgradeInsecureRequests: [],
     },
   } : false,

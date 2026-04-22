@@ -3,7 +3,9 @@ import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/bottom-nav';
 import { TermsGate } from '@/components/terms-gate';
 import { AppHeader } from '@/components/app-header';
-import { BackupWarningBanner, BACKUP_SKIPPED_KEY } from '@/components/wallet/backup-warning-banner';
+import { BackupWarningBanner } from '@/components/wallet/backup-warning-banner';
+import { RiftWalletCard } from '@/components/wallet/rift-wallet-card';
+import { RiftHistoryCard } from '@/components/wallet/rift-history-card';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +55,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-const BACKUP_MNEMONIC_KEY = 'bfx_pending_backup';
+// Backup mnemonic no longer needed — Lit Protocol wallets have no seed phrase.
 
 type FXRate = { pair: string; rate: number; source: string; timestamp: number; lastUpdated: string; change24h?: number };
 
@@ -114,44 +116,6 @@ export default function HomePage() {
   );
   const totalValue = nativeUsd + tokenUsd;
   const isLoadingBalance = nativeBalanceQuery.isLoading || tokenBalanceQuery.isLoading;
-
-  const [backupMnemonic, setBackupMnemonic] = useState<string | null>(null);
-  const [showBackup, setShowBackup] = useState(false);
-  const [backupCopied, setBackupCopied] = useState(false);
-
-  // Check if a new wallet was just created and needs its seed phrase backed up
-  useEffect(() => {
-    const pending = sessionStorage.getItem(BACKUP_MNEMONIC_KEY);
-    if (pending) {
-      setBackupMnemonic(pending);
-      setShowBackup(true);
-    }
-  }, []);
-
-  const handleSkipBackup = () => {
-    // User closed without saving — keep a flag so we can show the warning banner
-    if (wallet?.address) {
-      localStorage.setItem(BACKUP_SKIPPED_KEY(wallet.address), '1');
-    }
-    sessionStorage.removeItem(BACKUP_MNEMONIC_KEY);
-    setShowBackup(false);
-  };
-
-  const handleDismissBackup = () => {
-    // User confirmed they saved it — clear the skipped flag permanently
-    if (wallet?.address) {
-      localStorage.removeItem(BACKUP_SKIPPED_KEY(wallet.address));
-    }
-    sessionStorage.removeItem(BACKUP_MNEMONIC_KEY);
-    setShowBackup(false);
-  };
-
-  const handleCopyMnemonic = async () => {
-    if (!backupMnemonic) return;
-    await navigator.clipboard.writeText(backupMnemonic);
-    setBackupCopied(true);
-    setTimeout(() => setBackupCopied(false), 2000);
-  };
 
   const { data: referralCode } = useQuery<{ code: string; currentUses: number }>({
     queryKey: ['/api/referrals/codes', wallet?.address],
@@ -318,46 +282,18 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col bg-background">
       <AppHeader onRefresh={handleRefresh} refreshing={refreshing} />
 
-      {/* Seed phrase backup reminder — shown once right after wallet creation */}
-      <Dialog open={showBackup} onOpenChange={(open) => { if (!open) handleSkipBackup(); }}>
-        <DialogContent className="max-w-sm mx-auto">
-          <DialogHeader>
-            <div className="h-12 w-12 rounded-full bg-amber-50 dark:bg-amber-950 flex items-center justify-center mx-auto mb-2">
-              <Shield className="h-6 w-6 text-amber-500" />
-            </div>
-            <DialogTitle className="text-center">Back up your secret phrase</DialogTitle>
-            <DialogDescription className="text-center">
-              Write these 12 words down in order and keep them somewhere safe. They are the only way to recover your wallet.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-3 gap-2 my-4">
-            {(backupMnemonic || '').split(' ').map((word, i) => (
-              <div key={i} className="flex items-center gap-1.5 bg-muted rounded-lg px-2 py-2">
-                <span className="text-[10px] text-muted-foreground w-4 shrink-0">{i + 1}.</span>
-                <span className="text-sm font-mono font-medium">{word}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button variant="outline" className="w-full" onClick={handleCopyMnemonic}>
-              <Copy className="h-4 w-4 mr-2" />
-              {backupCopied ? 'Copied!' : 'Copy all words'}
-            </Button>
-            <Button className="w-full" onClick={handleDismissBackup}>
-              I've saved my secret phrase
-            </Button>
-            <Button variant="ghost" className="w-full text-muted-foreground text-sm" onClick={handleSkipBackup}>
-              Skip for now
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Persistent backup warning for users who skipped saving their secret phrase */}
       <BackupWarningBanner />
 
       <main className="flex-1 pb-20">
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+
+          {/* Rift Smart Wallet — address + token balances + send action */}
+          <RiftWalletCard />
+
+          {/* Rift Recent Activity */}
+          <RiftHistoryCard />
 
           {/* Portfolio Overview */}
           <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20">

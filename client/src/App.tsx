@@ -5,11 +5,14 @@
  * Handles wallet authentication flow, referral processing, and global providers.
  */
 
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { isLoggedIn } from "@/lib/rift-client";
+import { TxAuthDialog } from "@/components/wallet/tx-auth-dialog";
 
 // Public pages
 import Website from "@/pages/website";
@@ -22,14 +25,7 @@ import NotFound from "@/pages/not-found";
 
 // Wallet & auth
 import Wallet from "@/pages/wallet";
-import CreateWallet from "@/pages/create-wallet";
-import ImportWallet from "@/pages/import-wallet";
-import UnlockWallet from "@/pages/unlock-wallet";
 import Auth from "@/pages/auth";
-import AuthEmailSent from "@/pages/auth-email-sent";
-import AuthVerify from "@/pages/auth-verify";
-import AuthGoogleDone from "@/pages/auth-google-done";
-import SetPin from "@/pages/set-pin";
 
 // Core features
 import HomePage from "@/pages/home";
@@ -50,6 +46,20 @@ import ProposeOwnershipFacet from "@/pages/propose-ownership-facet";
 import SafeAddOwner from "@/pages/safe-add-owner";
 import ProposeV2Upgrades from "@/pages/propose-v2-upgrades";
 
+// Routes that require Rift login. Unauthenticated visits redirect to /auth.
+const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards'];
+
+function AuthGuard() {
+  const [location, setLocation] = useLocation();
+  useEffect(() => {
+    const requiresAuth = PROTECTED_ROUTES.some(p => location === p || location.startsWith(p + '/'));
+    if (requiresAuth && !isLoggedIn()) {
+      setLocation('/auth');
+    }
+  }, [location, setLocation]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -60,16 +70,11 @@ function Router() {
       <Route path="/data-room" component={DataRoom} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
-      {/* Wallet & auth */}
-      <Route path="/wallet" component={Wallet} />
-      <Route path="/create-wallet" component={CreateWallet} />
-      <Route path="/import-wallet" component={ImportWallet} />
-      <Route path="/unlock-wallet" component={UnlockWallet} />
+      {/* Auth */}
       <Route path="/auth" component={Auth} />
-      <Route path="/auth/email-sent" component={AuthEmailSent} />
-      <Route path="/auth/verify" component={AuthVerify} />
-      <Route path="/auth/google/done" component={AuthGoogleDone} />
-      <Route path="/set-pin" component={SetPin} />
+
+      {/* Protected — AuthGuard above redirects unauthenticated users to /auth */}
+      <Route path="/wallet" component={Wallet} />
 
       {/* Core features */}
       <Route path="/home" component={HomePage} />
@@ -101,6 +106,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
+        <AuthGuard />
+        <TxAuthDialog />
         <Router />
       </TooltipProvider>
     </QueryClientProvider>

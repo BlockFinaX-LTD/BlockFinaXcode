@@ -15,44 +15,29 @@ function WalletLanding() {
   const [, setLocation] = useLocation();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
-      {/* Subtle blue glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full pointer-events-none"
         style={{ background: 'radial-gradient(circle, rgba(26,68,128,0.08) 0%, transparent 70%)' }} />
 
       <div className="flex flex-col items-center px-6 w-full max-w-sm relative z-10">
-        {/* Logo */}
-        <img
-          src={logoPath}
-          alt="BlockFinaX"
-          className="w-28 h-28 object-contain mb-6"
-        />
+        <img src={logoPath} alt="BlockFinaX" className="w-28 h-28 object-contain mb-6" />
         <h1 className="text-4xl font-extrabold tracking-tight text-center leading-tight" style={{ color: '#1a4480' }}>
           BlockFinaX
         </h1>
         <p className="mt-3 text-sm text-center" style={{ color: '#6b7280' }}>
-          P2P hedging against price volatility
+          Cross-border payments &amp; hedging
         </p>
 
-        {/* Buttons */}
         <div className="mt-10 w-full space-y-3">
           <button
-            onClick={() => setLocation('/create-wallet')}
+            onClick={() => setLocation('/auth')}
             className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
             style={{ backgroundColor: '#1a4480', color: '#ffffff' }}
           >
-            Create a new wallet
-          </button>
-          <button
-            onClick={() => setLocation('/import-wallet')}
-            className="w-full py-4 rounded-2xl text-base font-semibold transition-all active:scale-[0.98]"
-            style={{ backgroundColor: '#ffffff', color: '#1a4480', border: '1.5px solid #1a4480' }}
-          >
-            I have an existing wallet
+            Sign In or Create Account
           </button>
         </div>
       </div>
 
-      {/* Brand bottom strip */}
       <div className="fixed bottom-0 left-0 right-0 h-1.5" style={{ backgroundColor: '#1a4480' }} />
     </div>
   );
@@ -71,10 +56,11 @@ export default function Wallet() {
   }, []);
 
   useEffect(() => {
-    if (!isLoading && walletExists() && !isUnlocked) {
-      setLocation('/unlock-wallet');
+    // Anyone not logged in goes to the auth page (sign in or create account)
+    if (!isLoading && !isUnlocked) {
+      setLocation('/auth');
     }
-  }, [isUnlocked, walletExists, isLoading, setLocation]);
+  }, [isUnlocked, isLoading, setLocation]);
 
   if (isLoading) {
     return (

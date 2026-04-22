@@ -61,16 +61,9 @@ const AUTO_LOCK_OPTIONS = [
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { wallet, settings, updateSettings, exportPrivateKey, exportMnemonic, deleteWallet, lockWallet, isUnlocked } = useWallet();
+  const { wallet, settings, updateSettings, deleteWallet, lockWallet, isUnlocked } = useWallet();
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showKeyDialog, setShowKeyDialog] = useState(false);
-  const [showPhraseDialog, setShowPhraseDialog] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [revealedKey, setRevealedKey] = useState<string | null>(null);
-  const [revealedPhrase, setRevealedPhrase] = useState<string | null>(null);
-  const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -96,45 +89,6 @@ export default function SettingsPage() {
     } catch {
       toast({ title: 'Copy failed — please select and copy manually', variant: 'destructive' });
     }
-  };
-
-  const handleRevealKey = () => {
-    try {
-      const key = exportPrivateKey();
-      setRevealedKey(key);
-      setPinError('');
-    } catch (err: any) {
-      setPinError(err?.message || 'Failed to export key. Make sure your wallet is unlocked.');
-    }
-  };
-
-  const handleRevealPhrase = () => {
-    try {
-      const phrase = exportMnemonic();
-      if (!phrase) {
-        setPinError('No recovery phrase available for this wallet (imported via private key).');
-        return;
-      }
-      setRevealedPhrase(phrase);
-      setPinError('');
-    } catch {
-      setPinError('Failed to export recovery phrase.');
-    }
-  };
-
-  const handleCloseKeyDialog = () => {
-    setShowKeyDialog(false);
-    setRevealedKey(null);
-    setShowKey(false);
-    setPinInput('');
-    setPinError('');
-  };
-
-  const handleClosePhraseDialog = () => {
-    setShowPhraseDialog(false);
-    setRevealedPhrase(null);
-    setPinInput('');
-    setPinError('');
   };
 
   const handleDeleteWallet = () => {
@@ -350,122 +304,21 @@ export default function SettingsPage() {
         <p className="text-center text-xs text-muted-foreground mt-6 mb-4">BlockFinaX · Lisk Mainnet</p>
       </div>
 
-      {/* Export Private Key Dialog */}
-      <Dialog open={showKeyDialog} onOpenChange={handleCloseKeyDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
-              Export Private Key
-            </DialogTitle>
-            <DialogDescription>
-              Your private key gives full access to your wallet. Never share it with anyone.
-              Anyone with this key can steal all your funds.
-            </DialogDescription>
-          </DialogHeader>
-
-          {!revealedKey ? (
-            <div className="space-y-4">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-300">
-                Make sure no one is looking at your screen before proceeding.
-              </div>
-              {pinError && <p className="text-sm text-red-500">{pinError}</p>}
-              <DialogFooter>
-                <Button variant="outline" onClick={handleCloseKeyDialog}>Cancel</Button>
-                <Button variant="destructive" onClick={handleRevealKey}>Reveal Key</Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="relative">
-                <input
-                  readOnly
-                  type={showKey ? 'text' : 'password'}
-                  value={revealedKey ?? ''}
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                  className="w-full font-mono text-xs bg-muted rounded-lg px-3 py-3 pr-10 border-0 outline-none cursor-text select-all"
-                />
-                <button
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute top-1/2 -translate-y-1/2 right-3 text-muted-foreground hover:text-foreground"
-                >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground text-center">
-                {revealedKey?.length ?? 0} characters
-              </p>
-              <Button className="w-full" variant="outline" onClick={() => copyToClipboard(revealedKey ?? '')}>
-                <Copy className="h-4 w-4 mr-2" /> Copy Key
-              </Button>
-              <Button className="w-full" onClick={handleCloseKeyDialog}>Done</Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Backup Phrase Dialog */}
-      <Dialog open={showPhraseDialog} onOpenChange={handleClosePhraseDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
-              Recovery Phrase
-            </DialogTitle>
-            <DialogDescription>
-              Your 12-word recovery phrase is the master backup for your wallet.
-              Store it offline in a safe place — never share it with anyone.
-            </DialogDescription>
-          </DialogHeader>
-
-          {!revealedPhrase ? (
-            <div className="space-y-4">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-300">
-                Make sure no one is looking at your screen before proceeding.
-              </div>
-              {pinError && <p className="text-sm text-red-500">{pinError}</p>}
-              <DialogFooter>
-                <Button variant="outline" onClick={handleClosePhraseDialog}>Cancel</Button>
-                <Button variant="destructive" onClick={handleRevealPhrase}>Reveal Phrase</Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                {revealedPhrase.split(' ').map((word, i) => (
-                  <div key={i} className="bg-muted rounded-lg px-2 py-1.5 flex items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                    <span className="text-sm font-medium">{word}</span>
-                  </div>
-                ))}
-              </div>
-              <Button className="w-full" variant="outline" onClick={() => copyToClipboard(revealedPhrase)}>
-                <Copy className="h-4 w-4 mr-2" /> Copy All Words
-              </Button>
-              <Button className="w-full" onClick={handleClosePhraseDialog}>Done</Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* Delete Wallet Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="h-5 w-5" />
-              Delete Wallet
+              Remove Wallet
             </DialogTitle>
             <DialogDescription>
-              This will permanently remove your wallet from this device.
-              Make sure you have backed up your private key or recovery phrase before proceeding.
-              <strong className="block mt-2 text-foreground">This action cannot be undone.</strong>
+              This will remove your wallet link from this device.
+              Your wallet is secured by your Google account via Lit Protocol — you can reconnect anytime by signing in again.
+              <strong className="block mt-2 text-foreground">This action cannot be undone on this device.</strong>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-800 dark:text-red-300">
-              You will lose access to your funds if you have not backed up your wallet.
-            </div>
             <div>
               <Label className="text-sm">Type <strong>DELETE</strong> to confirm</Label>
               <Input
@@ -485,7 +338,7 @@ export default function SettingsPage() {
               disabled={deleteConfirmText !== 'DELETE'}
               onClick={handleDeleteWallet}
             >
-              Delete Wallet
+              Remove Wallet
             </Button>
           </DialogFooter>
         </DialogContent>

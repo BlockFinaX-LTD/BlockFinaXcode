@@ -53,7 +53,7 @@ async function broadcastTx(signedTx: string, chainId: number): Promise<string> {
 }
 
 async function sendTokenViaServer(
-  wallet: ethers.Wallet,
+  walletAddress: string,
   chainId: number,
   tokenAddress: string,
   recipient: string,
@@ -63,20 +63,20 @@ async function sendTokenViaServer(
   const iface = new ethers.Interface(['function transfer(address,uint256) returns (bool)']);
   const tokenAmount = ethers.parseUnits(amount, tokenDecimals);
   const data = iface.encodeFunctionData('transfer', [recipient, tokenAmount]);
-  const params = await fetchTxParams(chainId, wallet.address, tokenAddress, data, 0n);
-  const signedTx = await wallet.signTransaction(rehydrateTx(params));
+  const params = await fetchTxParams(chainId, walletAddress, tokenAddress, data, 0n);
+  const signedTx = await walletManager.signOffline(params);
   return broadcastTx(signedTx, chainId);
 }
 
 async function sendNativeViaServer(
-  wallet: ethers.Wallet,
+  walletAddress: string,
   chainId: number,
   recipient: string,
   amount: string,
 ): Promise<string> {
   const value = ethers.parseEther(amount);
-  const params = await fetchTxParams(chainId, wallet.address, recipient, '0x', value);
-  const signedTx = await wallet.signTransaction(rehydrateTx(params));
+  const params = await fetchTxParams(chainId, walletAddress, recipient, '0x', value);
+  const signedTx = await walletManager.signOffline(params);
   return broadcastTx(signedTx, chainId);
 }
 
@@ -188,23 +188,23 @@ export function useTransactions(networkId: number) {
       feeAmount?: string;
       treasuryAddress?: string;
     }) => {
-      // Always get a fresh wallet reference — avoids stale singleton issue
-      const rawWallet = walletManager.getWallet();
-      if (!rawWallet) throw new Error('Wallet is locked — please unlock first');
+      // Get wallet address — works for both local wallets and Lit PKPs
+      const walletAddress = walletManager.getAddress();
+      if (!walletAddress) throw new Error('Wallet is locked — please unlock first');
 
       const network = getNetworkById(networkId);
       if (!network) throw new Error('Unknown network selected');
       const chainId = network.chainId;
 
       // Ensure gas is available (non-fatal if it fails)
-      await ensureGas(rawWallet.address, chainId);
+      await ensureGas(walletAddress, chainId);
 
       if (tokenAddress && tokenDecimals && feeAmount && treasuryAddress) {
         // Stablecoin send WITH fee split
         const decimalPlaces = Math.min(tokenDecimals, 18);
         const netAmount = (parseFloat(amount) - parseFloat(feeAmount)).toFixed(decimalPlaces);
 
-        const hash = await sendTokenViaServer(rawWallet, chainId, tokenAddress, to, netAmount, tokenDecimals);
+        const hash = await sendTokenViaServer(walletAddress, chainId, tokenAddress, to, netAmount, tokenDecimals);
 
         // Fee transfer with nonce + 1
         let feeTxHash: string | null = null;
@@ -212,9 +212,9 @@ export function useTransactions(networkId: number) {
           const iface = new ethers.Interface(['function transfer(address,uint256) returns (bool)']);
           const feeAmt = ethers.parseUnits(parseFloat(feeAmount).toFixed(decimalPlaces), tokenDecimals);
           const feeData = iface.encodeFunctionData('transfer', [treasuryAddress, feeAmt]);
-          const feeParams = await fetchTxParams(chainId, rawWallet.address, tokenAddress, feeData, 0n);
+          const feeParams = await fetchTxParams(chainId, walletAddress, tokenAddress, feeData, 0n);
           feeParams.nonce += 1;
-          const signedFeeTx = await rawWallet.signTransaction(rehydrateTx(feeParams));
+          const signedFeeTx = await walletManager.signOffline(feeParams);
           feeTxHash = await broadcastTx(signedFeeTx, chainId);
         } catch { /* fee collection failure is non-fatal */ }
 
@@ -226,7 +226,7 @@ export function useTransactions(networkId: number) {
             body: JSON.stringify({
               txHash: hash,
               feeTxHash,
-              fromWallet: rawWallet.address,
+              fromWallet: walletAddress,
               toWallet: to,
               transferAmount: amount,
               feeAmount,
@@ -241,12 +241,12 @@ export function useTransactions(networkId: number) {
 
       } else if (tokenAddress && tokenDecimals) {
         // ERC-20 send without fee
-        const hash = await sendTokenViaServer(rawWallet, chainId, tokenAddress, to, amount, tokenDecimals);
+        const hash = await sendTokenViaServer(walletAddress, chainId, tokenAddress, to, amount, tokenDecimals);
         return { hash, transaction: { hash } };
 
       } else {
         // Native ETH/BNB send
-        const hash = await sendNativeViaServer(rawWallet, chainId, to, amount);
+        const hash = await sendNativeViaServer(walletAddress, chainId, to, amount);
         return { hash, transaction: { hash } };
       }
     },

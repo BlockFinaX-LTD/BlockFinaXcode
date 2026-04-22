@@ -285,7 +285,19 @@ class HedgeContractManager {
     return new ethers.Contract(CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS, USDC_ABI, connected);
   }
 
-  async ensureGas(walletAddress: string): Promise<void> {
+  /**
+   * Return the on-chain address that actually holds funds and executes calls.
+   * AA chains (Base, BSC): smart account address (where user sends USDC).
+   * Legacy chains (Lisk): PKP EOA address.
+   */
+  async getEffectiveAddress(fallback: string): Promise<string> {
+    // With Rift, the smart wallet address is the same across all chains.
+    return fallback;
+  }
+
+  async ensureGas(_walletAddress: string): Promise<void> {
+    // Rift handles gas (gasless transactions paid in USDC). No-op.
+    return;
     try {
       const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('gas check timeout')), 5000));
       const balance = await Promise.race([this.getProvider().getBalance(walletAddress), timeout]);
@@ -315,68 +327,49 @@ class HedgeContractManager {
    * signing is done offline. Only the signed hex leaves the browser.
    */
   private async sendContractTx(
-    signer: ethers.Wallet,
+    _signer: ethers.Wallet,
     to: string,
     calldata: string,
     value: bigint = 0n,
-    gasBumpPct = 0,
+    _gasBumpPct = 0,
     onStep?: (step: string) => void
   ): Promise<string> {
     const chainId = this._chainId;
 
-    const paramsRes = await fetch('/api/wallet/tx-params', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chainId,
-        from: signer.address,
-        to,
-        data: calldata,
-        value: value.toString(),
-        gasBumpPct,
-      }),
-    });
-    if (!paramsRes.ok) {
-      const err = await paramsRes.json().catch(() => ({}));
-      throw new Error((err as any).error || `tx-params failed (${paramsRes.status})`);
+    // Route the contract call through Rift's signer service.
+    // The user's smart wallet (managed by Rift) signs + broadcasts, gasless.
+    const { chainIdToRift, signerSendTransaction } = await import('./rift-client');
+    const { requestTxAuth } = await import('./tx-auth');
+
+    const chainName = chainIdToRift(chainId);
+    if (!chainName) {
+      throw new Error(`Chain ${chainId} is not supported by Rift.`);
     }
-    const { tx } = await paramsRes.json();
 
-    // Use a bare (provider-free) wallet for offline signing.
-    // This prevents ethers from making any RPC calls (e.g. eth_chainId)
-    // during signTransaction, which would be CORS-blocked on Base/BSC.
-    const bareWallet = new ethers.Wallet(signer.privateKey);
-    const signed = await bareWallet.signTransaction(tx);
+    onStep?.('Authorizing transaction...');
+    const auth = await requestTxAuth(
+      'Authorize on-chain action',
+      'Enter your credential to submit this transaction. The code is valid for 5 minutes.'
+    );
 
-    const broadcastRes = await fetch('/api/wallet/broadcast', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signedTx: signed, chainId }),
-    });
-    if (!broadcastRes.ok) {
-      const err = await broadcastRes.json().catch(() => ({}));
-      const errMsg: string = (err as any).error || `broadcast failed (${broadcastRes.status})`;
-
-      // "replacement fee too low" means a pending tx with this nonce exists.
-      // Auto-retry once with a 40% extra bump (total 60% above market = enough to replace).
-      if (errMsg.toLowerCase().includes('replacement fee too low') && gasBumpPct < 80) {
-        console.warn(`[sendContractTx] replacement fee too low — retrying with +${gasBumpPct + 40}% gas bump`);
-        onStep?.('Retrying with higher gas...');
-        return this.sendContractTx(signer, to, calldata, value, gasBumpPct + 40, onStep);
+    onStep?.('Submitting transaction via Rift...');
+    try {
+      const { hash } = await signerSendTransaction(
+        { chain: chainName, to, data: calldata, value: value.toString() },
+        auth,
+      );
+      if (!hash) throw new Error('Rift returned no transaction hash');
+      return hash;
+    } catch (err: any) {
+      // If auth was rejected (wrong OTP/password), clear the cache so the next
+      // attempt re-prompts instead of silently failing on the stale credential.
+      const msg = String(err?.message || err || '').toLowerCase();
+      if (msg.includes('unauthorized') || msg.includes('invalid code') || msg.includes('invalid otp') || msg.includes('invalid password')) {
+        const { clearCachedTxAuth } = await import('./tx-auth');
+        clearCachedTxAuth();
       }
-      // "nonce too low" means the RPC returned a stale nonce (e.g. a prior tx just
-      // confirmed on a different node). Retry once — tx-params will fetch a fresh nonce.
-      if ((errMsg.toLowerCase().includes('nonce too low') || errMsg.toLowerCase().includes('nonce has already been used')) && gasBumpPct === 0) {
-        console.warn('[sendContractTx] nonce too low — waiting 1.5 s then retrying with fresh nonce');
-        onStep?.('Retrying transaction...');
-        await new Promise(r => setTimeout(r, 1500));
-        return this.sendContractTx(signer, to, calldata, value, 1, onStep); // gasBumpPct=1 prevents looping
-      }
-      throw new Error(errMsg);
+      throw err;
     }
-    const { hash } = await broadcastRes.json();
-    if (!hash) throw new Error('Broadcast returned no transaction hash');
-    return hash as string;
   }
 
   /**
@@ -474,12 +467,11 @@ class HedgeContractManager {
   /** Generic ERC-20 approve for the Diamond — works for USDC, USDT, or any whitelisted token. */
   async approveToken(signer: ethers.Wallet, tokenAddress: string, _amount: string, onStep?: (s: string) => void): Promise<void> {
     await this.ensureGas(signer.address);
-    // Check existing allowance — skip the approve tx if already unlimited.
-    // Wrapped in try/catch: if the read RPC call fails (e.g. network hiccup),
-    // we simply re-send the approve rather than crashing the whole flow.
+    // On AA chains the approval is from the smart account (not the PKP EOA).
+    const effectiveAddr = await this.getEffectiveAddress(signer.address);
     try {
       const token = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-      const currentAllowance = await token.allowance(signer.address, this.activeDiamond);
+      const currentAllowance = await token.allowance(effectiveAddr, this.activeDiamond);
       const maxThreshold = ethers.parseUnits("1000000000", this.tokenDecimals);
       if (currentAllowance >= maxThreshold) {
         return; // already approved — skip silently
@@ -795,7 +787,8 @@ class HedgeContractManager {
 
     try {
       const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-      const balance = await tokenContract.balanceOf(signer.address);
+      const effectiveAddr = await this.getEffectiveAddress(signer.address);
+      const balance = await tokenContract.balanceOf(effectiveAddr);
       if (balance < totalCost) {
         const balanceFormatted = ethers.formatUnits(balance, dec);
         const costFormatted = ethers.formatUnits(totalCost, dec);
@@ -883,7 +876,8 @@ class HedgeContractManager {
 
     try {
       const tokenContract = new ethers.Contract(tokenAddress, USDC_ABI, this.getProvider());
-      const balance = await tokenContract.balanceOf(signer.address);
+      const effectiveAddr = await this.getEffectiveAddress(signer.address);
+      const balance = await tokenContract.balanceOf(effectiveAddr);
       if (balance < amountWei) {
         const balanceFormatted = ethers.formatUnits(balance, dec);
         const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();
@@ -937,7 +931,8 @@ class HedgeContractManager {
     const symbol = (tokenAddress as string).toLowerCase() === activeUsdc ? 'USDC' : 'USDT';
     try {
       const tokenContract = new ethers.Contract(tokenAddress as string, USDC_ABI, this.getProvider());
-      const balance = await tokenContract.balanceOf(signer.address);
+      const effectiveAddr = await this.getEffectiveAddress(signer.address);
+      const balance = await tokenContract.balanceOf(effectiveAddr);
       if (balance < totalCost) {
         const balanceFormatted = ethers.formatUnits(balance, dec);
         const costFormatted = ethers.formatUnits(totalCost, dec);
