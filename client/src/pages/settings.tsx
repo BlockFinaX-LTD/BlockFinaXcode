@@ -189,19 +189,8 @@ export default function SettingsPage() {
               </SettingRow>
             )}
 
-            <SettingRow
-              icon={Key}
-              label="Export private key"
-              sublabel="Show the raw key for this wallet"
-              onClick={() => { setRevealedKey(null); setShowKey(false); setShowKeyDialog(true); }}
-            />
-
-            <SettingRow
-              icon={BookOpen}
-              label="Backup recovery phrase"
-              sublabel="12-word seed phrase"
-              onClick={() => { setRevealedPhrase(null); setShowPhraseDialog(true); }}
-            />
+            {/* Export private key + Backup recovery phrase removed — Rift custodies the
+                key material; users authenticate via OTP/password rather than holding a seed. */}
 
             <SettingRow
               icon={Trash2}

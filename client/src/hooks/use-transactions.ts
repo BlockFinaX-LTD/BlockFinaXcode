@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ethers } from 'ethers';
-import { walletManager, type WalletBalance, type TransactionData } from '@/lib/wallet';
+import { walletManager, type WalletBalance } from '@/lib/wallet';
 import { fallbackProvider } from '@/lib/rpc-provider';
 import { tokenManager, getTokensForNetwork } from '@/lib/tokens';
 import { NETWORKS, getNetworkById } from '@/lib/networks';
@@ -277,7 +277,7 @@ export function useTransactions(networkId: number) {
     setIsEstimatingGas(true);
     try {
       const estimate = await walletManager.estimateGasFee(to, amount, networkId, tokenAddress, tokenDecimals);
-      setGasEstimate(estimate);
+      setGasEstimate(estimate.fee);
     } catch (error) {
       setGasEstimate('0.001'); // Fallback
     } finally {

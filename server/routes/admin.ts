@@ -11,7 +11,7 @@ import {
   adminSessions, adminChallenges, requireAdmin, generateAdminToken,
   getOwnerAddresses, ADMIN_SESSION_TTL_MS,
 } from "../middleware/admin-auth";
-import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFeesPerChain } from "../hedge-reader";
+import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain } from "../hedge-reader";
 
 export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   app.post("/api/admin/wallet-challenge", strictLimiter, (req, res) => {
