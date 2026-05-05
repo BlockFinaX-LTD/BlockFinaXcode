@@ -38,13 +38,13 @@ import SettingsPage from "@/pages/settings";
 import AdminDashboard from "@/pages/admin-dashboard";
 import VideoPage from "@/pages/video";
 import FinancialModel from "@/pages/financial-model";
-import AcceptOwnership from "@/pages/accept-ownership";
-import OracleSetup from "@/pages/oracle-setup";
-import InstallTimelock from "@/pages/install-timelock";
-import SafeTransfer from "@/pages/safe-transfer";
-import ProposeOwnershipFacet from "@/pages/propose-ownership-facet";
-import SafeAddOwner from "@/pages/safe-add-owner";
-import ProposeV2Upgrades from "@/pages/propose-v2-upgrades";
+// NOTE: 7 single-purpose governance pages were removed in cleanup — they targeted
+// the legacy Lisk Diamond (0x885E…) and a Safe-ownership-transfer + timelock-install
+// migration path that was never executed on the current production Diamonds. Active
+// admin operations now go through scripts in contracts/scripts/ (set-pricing-signer,
+// upgrade-cut-facet, upgrade-hedge-v8, etc.) signed by the deployer or Safe keys.
+// Removed pages: accept-ownership, oracle-setup, install-timelock, safe-transfer,
+// propose-ownership-facet, safe-add-owner, propose-v2-upgrades.
 
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
 const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards'];
@@ -86,13 +86,6 @@ function Router() {
       {/* Rewards & admin */}
       <Route path="/rewards" component={TasksPage} />
       <Route path="/admin" component={AdminDashboard} />
-      <Route path="/accept-ownership" component={AcceptOwnership} />
-      <Route path="/oracle-setup" component={OracleSetup} />
-      <Route path="/install-timelock" component={InstallTimelock} />
-      <Route path="/safe-transfer" component={SafeTransfer} />
-      <Route path="/propose-ownership-facet" component={ProposeOwnershipFacet} />
-      <Route path="/safe-add-owner" component={SafeAddOwner} />
-      <Route path="/propose-v2-upgrades" component={ProposeV2Upgrades} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
 

@@ -8,7 +8,11 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "pricing:test": "tsx --test server/pricing/__tests__/*.test.ts",
+    "pricing:bootstrap": "tsx server/pricing/scripts/bootstrap.ts",
+    "pricing:scan-onchain": "tsx server/pricing/scripts/scan-onchain-pairs.ts",
+    "pricing:scan-everything": "tsx server/pricing/scripts/scan-onchain-everything.ts"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.13.0",

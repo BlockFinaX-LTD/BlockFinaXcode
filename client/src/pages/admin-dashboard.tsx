@@ -1098,14 +1098,17 @@ function slugify(s: string) {
 
 // ─── Protocol / Owner Functions ─────────────────────────────────────────────
 
+// Admin dashboard targets the CURRENT production Diamonds (post v8 upgrade).
+// Diamond proxy addresses match client/src/lib/hedge-contract.ts CHAIN_DIAMOND_MAP
+// — single source of truth lives there; if you ever rotate, update both.
 const ADMIN_CHAINS = {
   lisk: {
     label: "Lisk",
     chainId: 1135, hex: "0x46F", rpc: "https://rpc.api.lisk.com",
-    diamond: "0x885E663645173a0791b82f0e6608921D31E3D700",
+    diamond: "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
     safe: "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D",
     usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
-    usdt: "0x05D032ac25d322df992303dCa074EE7392C117b9",
+    usdt: null as string | null,
     usdcDecimals: 6, usdtDecimals: 6,
     explorer: "https://blockscout.lisk.com",
     explorerApi: "https://blockscout.lisk.com/api",
@@ -1115,10 +1118,10 @@ const ADMIN_CHAINS = {
   base: {
     label: "Base",
     chainId: 8453, hex: "0x2105", rpc: "https://mainnet.base.org",
-    diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+    diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
     safe: "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    usdt: null as string | null,
+    usdt: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
     usdcDecimals: 6, usdtDecimals: 6,
     explorer: "https://basescan.org",
     explorerApi: "https://base.blockscout.com/api",
@@ -1128,7 +1131,7 @@ const ADMIN_CHAINS = {
   bsc: {
     label: "BSC",
     chainId: 56, hex: "0x38", rpc: "https://bsc-dataseed.binance.org",
-    diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+    diamond: "0xaC939C0897981Abc0711ec4e37527F13106180fc",
     safe: "0x2a0ab363E01b518B189218e39f79Bfc3AE310807",
     usdc: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
     usdt: "0x55d398326f99059fF775485246999027B3197955",

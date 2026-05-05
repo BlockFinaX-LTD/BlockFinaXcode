@@ -91,7 +91,8 @@ const LIQUIDITY_DEPOSITED_TOPIC = '0xbff736a88c4d6fc1bc430cb94a5d36706a0d4b369de
 const EVENT_CREATED_TOPIC = '0x971a52d02f8b95a7a75a0f42d1fb5ab027b59b71c15f1f6095e5323ddd308736';
 
 const HEDGE_ABI = [
-  'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken)) returns (uint256)',
+  // v7 + v8: payoutCap (range product) + signature/timestamp/nonce (pricing-engine attestation)
+  'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 payoutCap, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken, bytes signature, uint256 quoteTimestamp, bytes32 quoteNonce)) returns (uint256)',
   'function setPoolSettings(uint256 _eventId, bool _poolOpen, bool _allowExternalLp)',
   'function deposit(uint256 _eventId, uint256 _amount) returns (uint256)',
   'function buyProtection(uint256 _eventId, uint256 _notional, uint256 _maxCost, uint256 _deadline) returns (uint256)',
@@ -116,6 +117,14 @@ const HEDGE_ABI = [
   'function getHedgeFeeConfig() view returns (uint256,uint256,uint256,uint256,uint256)',
   'function getHedgePlatformFees() view returns (uint256)',
   'function getTotalHedgeEvents() view returns (uint256)',
+  // v7: range geometry view + what-if quote
+  'function getHedgeEventRange(uint256) view returns (uint256 strike, uint256 payoutCap, uint256 initialRate, bool strikeAbove)',
+  'function quoteRangePayout(uint256, uint256, uint256) view returns (uint256)',
+  // v8: pricing-engine attestation
+  'function setPricingEngineSigner(address)',
+  'function getPricingEngineSigner() view returns (address)',
+  'function getEventQuoteSigner(uint256) view returns (address)',
+  'function isQuoteNonceUsed(bytes32) view returns (bool)',
   'function getPoolUtilization(uint256) view returns (uint256 totalLiquidity, uint256 totalExposure, uint256 availableCapacity, uint256 utilizationRate)',
   // v3 multi-token functions
   'function getEventPaymentToken(uint256) view returns (address)',
@@ -297,28 +306,6 @@ class HedgeContractManager {
 
   async ensureGas(_walletAddress: string): Promise<void> {
     // Rift handles gas (gasless transactions paid in USDC). No-op.
-    return;
-    try {
-      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('gas check timeout')), 5000));
-      const balance = await Promise.race([this.getProvider().getBalance(walletAddress), timeout]);
-      const minGas = ethers.parseEther("0.001");
-      if (balance < minGas) {
-        const sessionToken = localStorage.getItem('bfx_session');
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (sessionToken) headers['x-session-token'] = sessionToken;
-        const res = await fetch("/api/gas/sponsor", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ walletAddress, chainId: this._chainId }),
-        });
-        const data = await res.json();
-        if (data.sponsored) {
-          await new Promise(r => setTimeout(r, 2000));
-        }
-      }
-    } catch (e) {
-      console.warn("Gas sponsorship check failed:", e);
-    }
   }
 
   /**
@@ -768,6 +755,8 @@ class HedgeContractManager {
       name: string;
       underlying: string;
       strike: number;
+      /** v7: far edge of the payout range. Pass 0 for legacy single-strike events. */
+      payoutCap: number;
       premiumRate: number;
       expiryDate: Date;
       allowExternalLp: boolean;
@@ -775,6 +764,10 @@ class HedgeContractManager {
       initialRate: number;
       strikeAbove: boolean;
       paymentToken?: string;
+      /** v8 pricing-engine attestation (required when on-chain pricingEngineSigner is set). */
+      signature?: string;        // 0x-prefixed 65-byte hex; default "0x" for legacy mode
+      quoteTimestamp?: number;   // unix seconds; default 0 for legacy mode
+      quoteNonce?: string;       // 0x-prefixed 32-byte hex; default ZeroHash for legacy mode
     },
     onStep?: (step: string) => void
   ): Promise<number | null> {
@@ -810,15 +803,24 @@ class HedgeContractManager {
 
     const iface = new ethers.Interface(HEDGE_ABI);
     const strikeWei = ethers.parseUnits(params.strike.toString(), 6);
+    const payoutCapWei = ethers.parseUnits((params.payoutCap || 0).toString(), 6);
     const premiumRateWei = ethers.parseUnits(params.premiumRate.toString(), 6);
     const expiryTimestamp = toTimestamp(params.expiryDate);
     const initialRateWei = ethers.parseUnits(params.initialRate.toFixed(6), 6);
+
+    // v8: pricing-engine attestation. Empty defaults match the contract's "legacy mode"
+    // when the on-chain pricingEngineSigner is unset; the contract rejects empty
+    // signatures once a signer is registered.
+    const signature = params.signature || "0x";
+    const quoteTimestamp = BigInt(params.quoteTimestamp || 0);
+    const quoteNonce = params.quoteNonce || ethers.ZeroHash;
 
     try {
       const calldata = iface.encodeFunctionData('createEvent', [[
         params.name,
         params.underlying,
         strikeWei,
+        payoutCapWei,
         premiumRateWei,
         expiryTimestamp,
         params.allowExternalLp,
@@ -826,6 +828,9 @@ class HedgeContractManager {
         initialRateWei,
         params.strikeAbove,
         tokenAddress,
+        signature,
+        quoteTimestamp,
+        quoteNonce,
       ]]);
       onStep?.('Submitting to blockchain...');
       const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);

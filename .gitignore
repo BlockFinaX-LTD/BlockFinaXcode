@@ -31,6 +31,13 @@ contracts/typechain-types/
 contracts/coverage/
 contracts/coverage.json
 
+# ── Pricing engine — on-chain reconnaissance dumps ──────────────────────
+onchain-snapshot-*.json
+
+# ── Random one-off documents that don't belong in a code repo ──────────
+BlockFinaX_Market_Landscape_Tracker.xlsx
+.canvas/
+
 # ── Test / coverage / debug output ──────────────────────────────────────
 coverage/
 .nyc_output/

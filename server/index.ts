@@ -13,6 +13,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
 import { startAllOracleNodes } from "./multi-oracle/start-all";
 import { startupChainSync } from "./chain-sync";
+import { startDailyRefresh } from "./pricing/dailyRefresh";
 
 // Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
 const _originalExit = process.exit.bind(process);
@@ -136,6 +137,10 @@ app.use((req, res, next) => {
 
   // Sync on-chain hedge events into the DB (non-blocking — runs in background)
   startupChainSync().catch((e) => console.error("[ChainSync] Startup sync error:", e?.message));
+
+  // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
+  // No-op if TWELVEDATA_API_KEY is not configured.
+  startDailyRefresh();
 
   // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.
   // Keeps DB status consistent even when ChainSync hasn't run or the oracle hasn't settled yet.

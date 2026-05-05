@@ -289,7 +289,7 @@ function ExecSummary({ token }: { token: string }) {
       <p style={S.p}>{data.traction}</p>
       <h2 style={S.h2}>Technology</h2>
       <p style={S.p}>{data.technology}</p>
-      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x885E663645173a0791b82f0e6608921D31E3D700 · HedgeFacet: 0x96aCAD2039F1796929Eba578C81fe12E8f23C989</p>
+      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x69cB5BA093e44B345B617f72a148Ee43c4a18465 · HedgeFacet: 0x77964366e43a1f2311b04801F37BFb772F84b0F5</p>
       <h2 style={S.h2}>The Ask</h2>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead>
@@ -555,30 +555,30 @@ function SecurityAuditDoc({ token }: { token: string }) {
       {[
         {
           chain: "Lisk Mainnet", chainId: 1135, explorer: "https://blockscout.lisk.com",
-          diamond: "0x885E663645173a0791b82f0e6608921D31E3D700",
+          diamond: "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
           safe:    "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D",
-          usdc:    "0xF242275d3a6527d877f2c927a82D9b057609cc71",
-          cut:     "0x3581E16414286AD77601f9489F26a11eD96A9Be4",
-          hedge:   "0x96aCAD2039F1796929Eba578C81fe12E8f23C989",
-          oracle:  "0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73",
+          paySymbol: "USDC", payToken: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
+          cut:     "0x210e7e7Dd2E46f37a091a59A6fBCbCeBC1F783D7",
+          hedge:   "0x77964366e43a1f2311b04801F37BFb772F84b0F5",
+          oracle:  "0xca5946d2Acb788DCd792bb4Cef437f6CF6c6203B",
         },
         {
           chain: "Base Mainnet", chainId: 8453, explorer: "https://basescan.org",
-          diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+          diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
           safe:    "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
-          usdc:    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-          cut:     "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D",
-          hedge:   "0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73",
-          oracle:  "0x2132f2ADB40ce3c353e15ae1139b7447FF3D3BFf",
+          paySymbol: "USDC", payToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          cut:     "0x31098B8fF039cfb400bee2c272004dcf03C2AF06",
+          hedge:   "0x66aF6cA48f80A6d9e838aAF152c71eD26ed82F66",
+          oracle:  "0x1bba706e69F3a49c971E7e639b039fcBd4447E86",
         },
         {
           chain: "BNB Smart Chain", chainId: 56, explorer: "https://bscscan.com",
-          diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6",
+          diamond: "0xaC939C0897981Abc0711ec4e37527F13106180fc",
           safe:    "0x2a0ab363E01b518B189218e39f79Bfc3AE310807",
-          usdc:    "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
-          cut:     "0x3eDfA00a1E3C158A591097de2FA1756aCD66860D",
-          hedge:   "0xA7af536A57eA2c20a3a3ae6B70b6943c78226f73",
-          oracle:  "0x2132f2ADB40ce3c353e15ae1139b7447FF3D3BFf",
+          paySymbol: "USDT", payToken: "0x55d398326f99059fF775485246999027B3197955",
+          cut:     "0xAEcE90e767E257dE7cd9C6E1e93cEb880575C394",
+          hedge:   "0x94e1436180C4c577D98e769D1830F39f62F0b122",
+          oracle:  "0x090a3cC9A71e2272f6a681C2bA940C71D36c239f",
         },
       ].map(c => (
         <div key={c.chainId} style={{ marginBottom: "16px" }}>
@@ -587,12 +587,12 @@ function SecurityAuditDoc({ token }: { token: string }) {
             <a href={`${c.explorer}/address/${c.diamond}`} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "#4070F4", textDecoration: "none" }}>↗ Explorer</a>
           </div>
           <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#475569", background: "#f8fafc", padding: "10px 14px", borderRadius: "6px", lineHeight: 2 }}>
-            <div>Diamond:    <strong>{c.diamond}</strong></div>
+            <div>Diamond:     <strong>{c.diamond}</strong></div>
             <div>Gnosis Safe: <strong>{c.safe}</strong></div>
-            <div>HedgeFacet: <strong>{c.hedge}</strong></div>
+            <div>HedgeFacet:  <strong>{c.hedge}</strong></div>
             <div>OracleFacet: <strong>{c.oracle}</strong></div>
-            <div>CutFacet:   <strong>{c.cut}</strong></div>
-            <div>USDC:       <strong>{c.usdc}</strong></div>
+            <div>CutFacet:    <strong>{c.cut}</strong></div>
+            <div>{c.paySymbol}:        <strong>{c.payToken}</strong></div>
           </div>
         </div>
       ))}

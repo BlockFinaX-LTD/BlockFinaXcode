@@ -48,6 +48,7 @@ import {
 import { Link } from "wouter";
 import { hedgeContract, USDT_ADDRESS_SEPOLIA, getUsdcAddress, getUsdtAddress, type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig } from "@/lib/hedge-contract";
 import { walletManager } from "@/lib/wallet";
+import { ethers } from "ethers";
 import { mainnetGuard } from "@/lib/mainnet-guard";
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from "@/lib/networks";
 
@@ -162,10 +163,11 @@ export default function Hedge() {
 
   const [newEvent, setNewEvent] = useState({
     name: "", description: "", assetClass: "fx" as "fx" | "commodity" | "crypto",
-    underlying: "USD/GHS", strike: "", premiumRate: "",
+    underlying: "USD/GHS", strike: "", payoutCap: "", premiumRate: "",
     expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true,
     direction: "up" as "up" | "down",
-    paymentCurrency: "USDC" as "USDC" | "USDT"
+    paymentCurrency: "USDC" as "USDC" | "USDT",
+    overrideAcknowledged: false,    // user must check this box to set premium below the engine's quote
   });
 
   // On BSC force USDT (BSC Diamond only accepts USDT). On networks without USDT, fall back to USDC.
@@ -176,6 +178,77 @@ export default function Hedge() {
       setNewEvent(p => ({ ...p, paymentCurrency: 'USDC' }));
     }
   }, [activeChainId, activeUsdtAddress]);
+
+  // ── v8: pricing-engine quote ──────────────────────────────────────────────
+  // Debounced quote fetch — fires whenever the inputs that affect the premium
+  // change. Returns null while the inputs are incomplete or the request is in flight.
+  // The returned attestation is what gets passed into createEvent's signature
+  // / quoteTimestamp / quoteNonce slots so the on-chain Diamond accepts the call.
+  const [pricingQuote, setPricingQuote] = useState<import("@/lib/pricing-quote").QuoteResponse | null>(null);
+  const [pricingQuoteLoading, setPricingQuoteLoading] = useState(false);
+  const [pricingQuoteError, setPricingQuoteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPricingQuote(null);
+    setPricingQuoteError(null);
+
+    const strikeNum = parseFloat(newEvent.strike);
+    const payoutCapNum = parseFloat(newEvent.payoutCap);
+    const liquidityNum = parseFloat(newEvent.initialLiquidity);
+    const expiryHoursNum = parseInt(newEvent.expiryHours, 10);
+
+    // Need a complete shape before we can quote. Notional defaults to initialLiquidity
+    // (creator's seed) when none specified; pricing only depends on it for the absolute
+    // dollar premium, not the rate.
+    if (!Number.isFinite(strikeNum) || strikeNum <= 0) return;
+    if (!Number.isFinite(payoutCapNum) || payoutCapNum <= 0) return;
+    if (!Number.isFinite(liquidityNum) || liquidityNum <= 0) return;
+    if (!Number.isFinite(expiryHoursNum) || expiryHoursNum <= 0) return;
+    if (!wallet?.address) return;
+
+    const handle = setTimeout(async () => {
+      setPricingQuoteLoading(true);
+      try {
+        const { fetchPricingQuote } = await import("@/lib/pricing-quote");
+        const expiryUnixSeconds = Math.floor(Date.now() / 1000) + expiryHoursNum * 60 * 60;
+        const result = await fetchPricingQuote({
+          pair: newEvent.underlying,
+          strike: strikeNum,
+          payoutCap: payoutCapNum,
+          expiryUnixSeconds,
+          notional: liquidityNum,
+          strikeAbove: newEvent.direction === "up",
+          chainId: activeChainId,
+          diamondAddress: hedgeContract.activeDiamond,
+          creator: wallet.address,
+        });
+        setPricingQuote(result);
+        setPricingQuoteError(null);
+      } catch (err: any) {
+        setPricingQuote(null);
+        setPricingQuoteError(err?.message || "Pricing engine unavailable");
+      } finally {
+        setPricingQuoteLoading(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(handle);
+  }, [
+    newEvent.underlying, newEvent.strike, newEvent.payoutCap,
+    newEvent.expiryHours, newEvent.initialLiquidity, newEvent.direction,
+    wallet?.address, activeChainId,
+  ]);
+
+  // Detects whether the user's typed premium is materially below the engine's quote.
+  // Used to gate submit on an explicit "I understand" checkbox.
+  const userPremiumNum = parseFloat(newEvent.premiumRate);
+  const suggestedPctRate = pricingQuote ? pricingQuote.premiumRate * 100 : null;
+  const isPremiumBelowSuggested = !!(
+    suggestedPctRate !== null &&
+    Number.isFinite(userPremiumNum) &&
+    userPremiumNum > 0 &&
+    userPremiumNum < suggestedPctRate * 0.9   // >10% below suggested
+  );
 
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -412,10 +485,47 @@ export default function Hedge() {
       const paymentTokenAddr = newEvent.paymentCurrency === 'USDT' && activeUsdtAddress
         ? activeUsdtAddress
         : activeUsdcAddress;
+
+      // v7: payoutCap. Pass 0 to opt into legacy single-strike behaviour;
+      // otherwise we require it to be on the right side of strike (UI validates).
+      const payoutCapNum = parseFloat(newEvent.payoutCap || "0") || 0;
+
+      // v8: signed-quote attestation. Refresh once more to guarantee freshness
+      // (the cached quote in pricingQuote may have crossed the on-chain 120s window
+      // by the time the user clicks Submit). Re-fetch right before sending the tx.
+      let signature: string = "0x";
+      let quoteTimestamp = 0;
+      let quoteNonce: string = ethers.ZeroHash;
+      try {
+        const { fetchPricingQuote } = await import("@/lib/pricing-quote");
+        const fresh = await fetchPricingQuote({
+          pair: newEvent.underlying,
+          strike: strikePrice,
+          payoutCap: payoutCapNum,
+          expiryUnixSeconds: Math.floor(expiryDate.getTime() / 1000),
+          notional: parseFloat(newEvent.initialLiquidity || "0") || 0,
+          strikeAbove,
+          chainId: activeChainId,
+          diamondAddress: hedgeContract.activeDiamond,
+          creator: signer.address,
+        });
+        if (fresh.attestation) {
+          signature = fresh.attestation.signature;
+          quoteTimestamp = parseInt(fresh.attestation.quoteTimestamp, 10);
+          quoteNonce = fresh.attestation.quoteNonce;
+        }
+        // If attestation is null and the on-chain pricingEngineSigner is unset,
+        // the contract will accept the empty defaults (legacy mode). If signer IS
+        // set on-chain, the contract will revert with a clear error.
+      } catch (err) {
+        console.warn('[createEvent] Pricing quote unavailable; submitting with empty signature (will fail if signer enforced on-chain):', err);
+      }
+
       const newEventId = await hedgeContract.createEvent(signer, {
         name: newEvent.name,
         underlying: newEvent.underlying,
         strike: strikePrice,
+        payoutCap: payoutCapNum,
         premiumRate: parseFloat(newEvent.premiumRate) / 100,
         expiryDate,
         allowExternalLp: newEvent.allowExternalLp,
@@ -423,6 +533,9 @@ export default function Hedge() {
         initialRate: currentFxRate,
         strikeAbove,
         paymentToken: paymentTokenAddr,
+        signature,
+        quoteTimestamp,
+        quoteNonce,
       }, setTxStep);
 
       if (newEvent.poolOpen && newEventId) {
@@ -450,7 +563,7 @@ export default function Hedge() {
       toast({ title: "Event Created", description: msg });
       setCreateEventDialogOpen(false);
       setActiveTab("my-events");
-      setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC" });
+      setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", payoutCap: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC", overrideAcknowledged: false });
     },
     onError: (error: any) => {
       setTxStep('');
@@ -1849,8 +1962,26 @@ export default function Hedge() {
                 className="bg-muted border-border text-foreground mt-1" />
               <p className="text-[10px] text-muted-foreground/70 mt-1">
                 {newEvent.direction === "up"
-                  ? "Set above the current rate. Event settles when price rises to this level."
-                  : "Set below the current rate. Event settles when price falls to this level."}
+                  ? "Set above the current rate. Payouts begin when price reaches this level."
+                  : "Set below the current rate. Payouts begin when price reaches this level."}
+              </p>
+            </div>
+
+            {/* v7: Payout Cap — far edge of the payout range. */}
+            <div>
+              <Label className="text-muted-foreground">Payout Cap</Label>
+              <Input type="number" step="0.01" value={newEvent.payoutCap}
+                onChange={e => setNewEvent(p => ({ ...p, payoutCap: e.target.value }))}
+                placeholder={
+                  newEvent.strike
+                    ? `e.g. ${(parseFloat(newEvent.strike) * (newEvent.direction === "up" ? 1.05 : 0.95)).toFixed(2)}`
+                    : "(set strike first)"
+                }
+                className="bg-muted border-border text-foreground mt-1" />
+              <p className="text-[10px] text-muted-foreground/70 mt-1">
+                {newEvent.direction === "up"
+                  ? "Set ABOVE the strike. Payout grows linearly between strike and cap, then flattens. Bounds LP loss."
+                  : "Set BELOW the strike. Payout grows linearly between strike and cap, then flattens. Bounds LP loss."}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1858,7 +1989,24 @@ export default function Hedge() {
                 <Label className="text-muted-foreground text-xs">Premium %</Label>
                 <Input type="number" step="0.1" value={newEvent.premiumRate}
                   onChange={e => setNewEvent(p => ({ ...p, premiumRate: e.target.value }))}
-                  placeholder="2.5" className="bg-muted border-border text-foreground mt-1" />
+                  placeholder={suggestedPctRate !== null ? suggestedPctRate.toFixed(2) : "2.5"}
+                  className="bg-muted border-border text-foreground mt-1" />
+                {/* v8: pricing-engine quote indicator next to the premium input */}
+                {pricingQuoteLoading && (
+                  <p className="text-[10px] text-muted-foreground/70 mt-1 italic">Computing fair-value quote…</p>
+                )}
+                {!pricingQuoteLoading && suggestedPctRate !== null && (
+                  <button
+                    type="button"
+                    className="text-[10px] mt-1 underline text-primary hover:text-primary/80"
+                    onClick={() => setNewEvent(p => ({ ...p, premiumRate: suggestedPctRate.toFixed(3) }))}
+                  >
+                    Use suggested: {suggestedPctRate.toFixed(3)}%
+                  </button>
+                )}
+                {!pricingQuoteLoading && pricingQuoteError && (
+                  <p className="text-[10px] text-amber-400 mt-1">Quote unavailable: {pricingQuoteError}</p>
+                )}
               </div>
               <div className="relative">
                 <Label className="text-muted-foreground text-xs">Duration</Label>
@@ -1955,8 +2103,65 @@ export default function Hedge() {
                 </p>
               </div>
             </div>
+
+            {/* v8: Pricing-engine quote card — shows the math behind the suggested premium. */}
+            {pricingQuote && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-primary">Suggested premium (fair value)</span>
+                  <span className="text-sm font-bold text-primary">
+                    {(pricingQuote.premiumRate * 100).toFixed(3)}% &middot; ${pricingQuote.premiumUsd.toFixed(2)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[10px] text-muted-foreground">
+                  <span>Spot:</span>            <span className="font-mono">{pricingQuote.breakdown.spot}</span>
+                  <span>Range width:</span>     <span className="font-mono">{pricingQuote.breakdown.rangeWidth.toFixed(4)}</span>
+                  <span>Time to expiry:</span>  <span className="font-mono">{pricingQuote.breakdown.T_days.toFixed(1)} days</span>
+                  <span>USD risk-free (r):</span><span className="font-mono">{(pricingQuote.breakdown.inputs.r * 100).toFixed(2)}%</span>
+                  <span>Empirical drift (μ):</span>
+                  <span className="font-mono">
+                    {pricingQuote.breakdown.inputs.mu === null ? "n/a" : (pricingQuote.breakdown.inputs.mu * 100).toFixed(2) + "%/yr"}
+                  </span>
+                  <span>Vol (σ, post-markup):</span><span className="font-mono">{(pricingQuote.breakdown.inputs.sigma * 100).toFixed(2)}%</span>
+                  <span>Vol markup tier:</span>  <span className="font-mono">{pricingQuote.breakdown.pairClassification.tier}</span>
+                  <span>Max payout:</span>      <span className="font-mono">${pricingQuote.maxPayoutUsd.toFixed(2)}</span>
+                </div>
+                {pricingQuote.attestation ? (
+                  <p className="text-[9px] text-emerald-400">
+                    ✓ Cryptographically signed by pricing engine ({pricingQuote.attestation.signerAddress.slice(0, 10)}…) — accepted on-chain.
+                  </p>
+                ) : (
+                  <p className="text-[9px] text-amber-400">
+                    ⚠ Quote unsigned (PRICING_ENGINE_PRIVATE_KEY not configured server-side). On-chain submission will fail if a signer is registered.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* v8: Override-warning if user types premium below the engine's quote. */}
+            {isPremiumBelowSuggested && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 space-y-2">
+                <p className="text-xs font-semibold text-red-400">
+                  Premium is more than 10% below the suggested fair value of {suggestedPctRate?.toFixed(3)}%.
+                </p>
+                <p className="text-[10px] text-red-400/80">
+                  Liquidity providers backing this event will earn less than the model thinks the risk is worth.
+                  You are committing to underwrite this loss yourself if you proceed.
+                </p>
+                <label className="flex items-center gap-2 text-[10px] text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newEvent.overrideAcknowledged}
+                    onChange={e => setNewEvent(p => ({ ...p, overrideAcknowledged: e.target.checked }))}
+                    className="rounded"
+                  />
+                  I understand and accept the risk of underwriting at a below-fair price.
+                </label>
+              </div>
+            )}
+
             <p className="text-[10px] text-muted-foreground/70">
-              One-touch option: settles when rate touches the strike price. Payout is predetermined at purchase: Notional × (Strike − Initial Rate) / Initial Rate.
+              Range payout: payout grows linearly between strike and cap, then flattens. Maximum LP loss = Notional × (Cap − Strike) / Initial Rate.
               {fxData?.rates[newEvent.underlying] && newEvent.strike && parseFloat(newEvent.strike) > fxData.rates[newEvent.underlying].rate ? (
                 <span className="text-green-400 font-semibold"> Payout = {(((parseFloat(newEvent.strike) - fxData.rates[newEvent.underlying].rate) / fxData.rates[newEvent.underlying].rate) * 100).toFixed(1)}% of notional.</span>
               ) : null}
@@ -2091,7 +2296,14 @@ export default function Hedge() {
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setCreateEventDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
             <Button onClick={() => createEventMutation.mutate()}
-              disabled={!newEvent.name || !newEvent.strike || !newEvent.premiumRate || !newEvent.initialLiquidity || parseFloat(newEvent.initialLiquidity || "0") < 10 || createEventMutation.isPending}
+              disabled={
+                !newEvent.name || !newEvent.strike || !newEvent.payoutCap || !newEvent.premiumRate ||
+                !newEvent.initialLiquidity || parseFloat(newEvent.initialLiquidity || "0") < 10 ||
+                createEventMutation.isPending ||
+                // v8: if user typed a premium materially below the engine's quote, gate on the
+                // explicit acknowledgement checkbox.
+                (isPremiumBelowSuggested && !newEvent.overrideAcknowledged)
+              }
               className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
               {createEventMutation.isPending
                 ? (txStep || "Preparing...")

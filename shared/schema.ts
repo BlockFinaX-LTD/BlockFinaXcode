@@ -255,6 +255,54 @@ export const rateSnapshots = pgTable("rate_snapshots", {
 export type RateSnapshot = typeof rateSnapshots.$inferSelect;
 export type InsertRateSnapshot = typeof rateSnapshots.$inferInsert;
 
+
+// ── Pricing engine: historical FX time series ────────────────────────────────
+// Daily closing prices per pair, used by the pricing engine to compute realized
+// vol (EWMA over last 60 days) and empirical drift (5y annualized log-return).
+//
+// Backfilled once at setup from TwelveData (one timeseries call per pair).
+// Refreshed daily by a cron at ~00:30 UTC (one call per pair per day).
+//
+// Lookups are always: "give me the last N days for pair X, ordered by date desc".
+// Composite unique on (pair, date) prevents accidental double-inserts during
+// retries.
+export const historicalFxCloses = pgTable("historical_fx_closes", {
+  id: serial("id").primaryKey(),
+  pair: text("pair").notNull(),
+  date: text("date").notNull(),                                    // ISO date YYYY-MM-DD; text avoids tz pitfalls
+  close: decimal("close", { precision: 30, scale: 10 }).notNull(), // base/quote price
+  source: text("source").notNull().default("twelvedata"),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (t) => ({
+  uqPairDate: uniqueIndex("historical_fx_closes_pair_date").on(t.pair, t.date),
+}));
+
+export type HistoricalFxClose = typeof historicalFxCloses.$inferSelect;
+export type InsertHistoricalFxClose = typeof historicalFxCloses.$inferInsert;
+
+
+// ── Pricing engine: per-pair governance configuration ────────────────────────
+// One row per supported pair. Encodes:
+//   - Whether the pair is IRP-holding (use rate differential q)
+//     OR EM (use empirical drift μ via the §3.5 correction).
+//   - The risk-premium markup tier applied on top of realized vol (§6.5).
+//   - Last drift recompute timestamp (governance can flag for re-baseline after
+//     regime breaks like devaluations).
+//
+// Bootstrap rows are inserted on first server start; ongoing updates are
+// admin-only via a TBD admin route.
+export const pairClassification = pgTable("pair_classification", {
+  pair: text("pair").primaryKey(),                          // e.g. "USD/GHS"
+  useEmpiricalDrift: boolean("use_empirical_drift").notNull(),
+  tier: text("tier").notNull(),                             // 'g10' | 'majorEM' | 'lessLiquidEM' | 'frontierEM' | 'pegged'
+  notes: text("notes"),
+  lastDriftRecompute: timestamp("last_drift_recompute"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PairClassification = typeof pairClassification.$inferSelect;
+export type InsertPairClassification = typeof pairClassification.$inferInsert;
+
 export const termsAcceptances = pgTable("terms_acceptances", {
   id: serial("id").primaryKey(),
   walletAddress: text("wallet_address").notNull(),
