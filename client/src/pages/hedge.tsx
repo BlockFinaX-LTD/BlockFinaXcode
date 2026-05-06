@@ -1954,6 +1954,58 @@ export default function Hedge() {
               </p>
             </div>
 
+            {/* Coverage presets — auto-fill strike + cap based on the user's intent.
+                Spot is read from fxData.rates[underlying]; if not loaded yet, buttons are disabled. */}
+            {fxData?.rates[newEvent.underlying] && (() => {
+              const spot = fxData.rates[newEvent.underlying].rate;
+              const isUp = newEvent.direction === "up";
+              const presets = [
+                {
+                  key: "full",
+                  label: "Full coverage",
+                  sub: "Strike at spot, cap +25%",
+                  strike: spot,
+                  cap: isUp ? spot * 1.25 : spot * 0.75,
+                },
+                {
+                  key: "moderate",
+                  label: "Moderate (5% deductible)",
+                  sub: "Cheaper, ~80% of FX loss covered",
+                  strike: isUp ? spot * 1.05 : spot * 0.95,
+                  cap:    isUp ? spot * 1.20 : spot * 0.80,
+                },
+                {
+                  key: "speculative",
+                  label: "Speculative",
+                  sub: "Cheap, lottery-ticket payout",
+                  strike: isUp ? spot * 1.10 : spot * 0.90,
+                  cap:    isUp ? spot * 1.15 : spot * 0.85,
+                },
+              ];
+              return (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Coverage preset</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-1">
+                    {presets.map(p => (
+                      <button key={p.key} type="button"
+                        onClick={() => setNewEvent(prev => ({
+                          ...prev,
+                          strike: p.strike.toFixed(4),
+                          payoutCap: p.cap.toFixed(4),
+                        }))}
+                        className="flex flex-col items-start py-2 px-3 rounded-md border border-border bg-muted text-left hover:border-primary/50 transition-colors">
+                        <span className="text-xs font-medium text-foreground">{p.label}</span>
+                        <span className="text-[10px] text-muted-foreground/70 mt-0.5">{p.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/70 mt-1">
+                    Or set strike + cap manually below.
+                  </p>
+                </div>
+              );
+            })()}
+
             <div>
               <Label className="text-muted-foreground">Strike Price</Label>
               <Input type="number" step="0.01" value={newEvent.strike}
@@ -2125,6 +2177,27 @@ export default function Hedge() {
                   <span>Vol (σ, post-markup):</span><span className="font-mono">{(pricingQuote.breakdown.inputs.sigma * 100).toFixed(2)}%</span>
                   <span>Vol markup tier:</span>  <span className="font-mono">{pricingQuote.breakdown.pairClassification.tier}</span>
                   <span>Max payout:</span>      <span className="font-mono">${pricingQuote.maxPayoutUsd.toFixed(2)}</span>
+                  {/* Coverage: % of underlying FX loss the hedge offsets at the cap.
+                      Colour-code so users instantly see whether they're getting a partial or full hedge. */}
+                  {typeof pricingQuote.breakdown.coveragePercent === "number" && (() => {
+                    const pct = pricingQuote.breakdown.coveragePercent;
+                    const tone =
+                      pct >= 0.95 ? "text-emerald-400" :
+                      pct >= 0.50 ? "text-amber-300"  :
+                                    "text-red-400";
+                    const label =
+                      pct >= 0.95 ? "Full coverage" :
+                      pct >= 0.50 ? "Partial coverage" :
+                                    "Lottery-ticket — most FX loss uncovered";
+                    return (
+                      <>
+                        <span>Coverage at cap:</span>
+                        <span className={`font-mono ${tone}`}>
+                          {(pct * 100).toFixed(1)}% — {label}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
                 {pricingQuote.attestation ? (
                   <p className="text-[9px] text-emerald-400">

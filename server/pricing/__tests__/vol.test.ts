@@ -97,7 +97,7 @@ describe("applyPeggedFloor (legacy shim)", () => {
 });
 
 describe("applyTierFloor (per-tier floors)", () => {
-  it("frontierEM floored at 10% when below — closes the GHS lottery-ticket bug", () => {
+  it("frontierEM floored at 15% when below — closes the GHS lottery-ticket bug", () => {
     // Without this floor: σ=5% on USD/GHS produced premium ~$1 on $4,453 max payout
     // (4,453× leverage). With floor: premium becomes realistic and the leverage cap stops blocking.
     const r = applyTierFloor(0.05, "frontierEM");
@@ -106,9 +106,9 @@ describe("applyTierFloor (per-tier floors)", () => {
     assert.equal(r.floorValue, FRONTIER_EM_VOL_FLOOR);
   });
 
-  it("frontierEM NOT floored when realized × markup is already above 10%", () => {
-    const r = applyTierFloor(0.18, "frontierEM");
-    assert.equal(r.vol, 0.18);
+  it("frontierEM NOT floored when realized × markup is already above 15%", () => {
+    const r = applyTierFloor(0.20, "frontierEM");
+    assert.equal(r.vol, 0.20);
     assert.equal(r.floorHit, false);
     assert.equal(r.floorValue, FRONTIER_EM_VOL_FLOOR);   // floor still reported for diagnostics
   });
@@ -129,8 +129,10 @@ describe("applyTierFloor (per-tier floors)", () => {
     }
   });
 
-  it("frontier floor is set to 10% — regression for the value", () => {
-    assert.equal(FRONTIER_EM_VOL_FLOOR, 0.10);
+  it("frontier floor is set to 15% — regression for the value", () => {
+    // Bumped from 10% → 15% after observing 3-day GHS hedges still pricing too cheap
+    // (1% premium for moves that realistically happen ~30-50% of the time).
+    assert.equal(FRONTIER_EM_VOL_FLOOR, 0.15);
   });
 });
 

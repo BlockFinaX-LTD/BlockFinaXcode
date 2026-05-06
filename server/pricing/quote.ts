@@ -80,6 +80,21 @@ export interface QuoteResponse {
     T_days: number;
     notional: number;
     direction: "upward" | "downward";
+    /**
+     * % of underlying FX loss that the hedge would offset at the cap.
+     *
+     * For an upward hedge (strikeAbove=true) on FX-denominated exposure:
+     *   coverage = max_payout / underlying_loss_at_cap
+     *            = (notional × (cap−strike)/spot) / (notional × (1 − spot/cap))
+     *            = cap × (cap−strike) / (spot × (cap−spot))
+     *
+     * Range: 0 to slightly above 1 (slightly above when strike < spot, which
+     * makes the hedge "over-cover" the cap-reaching loss).
+     *
+     * UI should surface this prominently. < 0.5 = partial hedge ("with deductible"),
+     * > 0.95 = full coverage (strike at/near spot).
+     */
+    coveragePercent: number;
     inputs: {
       r: number;            // USD risk-free rate (decimal)
       q: number | null;     // local rate if applicable (null when using empirical drift)
@@ -193,6 +208,16 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
   const rangeWidth = Math.abs(req.payoutCap - req.strike);
   const maxPayoutUsd = (req.notional * rangeWidth) / S;
 
+  // Coverage at the cap: what fraction of underlying FX loss does the hedge offset?
+  // Upward hedge: underlying loss at cap = notional × (1 − spot/cap)
+  // Downward: underlying loss at cap = notional × (1 − cap/spot)  (cap < strike < spot)
+  const underlyingLossAtCap = req.strikeAbove
+    ? req.notional * (1 - S / req.payoutCap)
+    : req.notional * (1 - req.payoutCap / S);
+  const coveragePercent = underlyingLossAtCap > 0
+    ? maxPayoutUsd / underlyingLossAtCap
+    : 0;
+
   // Sanity check: leverage = max_payout / premium. A premium <$0.01 with a
   // max_payout > $1 means the engine thinks the option is essentially free —
   // signals a model mispricing (usually σ stuck at floor for a pair that
@@ -270,6 +295,7 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
       T_days,
       notional: req.notional,
       direction,
+      coveragePercent,
       inputs: {
         r: rUsd,
         q,
