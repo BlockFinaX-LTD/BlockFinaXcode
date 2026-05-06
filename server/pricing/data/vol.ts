@@ -1,48 +1,35 @@
 /**
- * vol.ts — realized volatility (EWMA) plus risk-premium markup per pair tier.
+ * vol.ts — DB-bound full pipeline.
  *
- * Pipeline (matches docs/pricing-engine.md §6):
+ * Pipeline (matches docs/pricing/pricing-engine.md §6):
  *   1. Pull last 61 daily closes for the pair
- *   2. Compute 60 daily log returns
- *   3. EWMA variance with λ = 0.94 (RiskMetrics standard)
- *   4. Annualize: σ_realized = sqrt(variance) × sqrt(252)
- *   5. Apply pair-tier markup (frontierEM gets +75%)
- *   6. Floor / ceiling: 5% to 200% — anything outside is bad data
+ *   2. Reject if too few RECENT closes (catches stale + sparse history)
+ *   3. Compute 60 daily log returns
+ *   4. EWMA variance with λ = 0.94, seeded from unweighted variance of the
+ *      first SEED_RETURNS returns (avoids single-squared-return seed bias)
+ *   5. Annualize: σ_realized = sqrt(variance) × sqrt(252)
+ *   6. Apply pair-tier risk-premium markup
+ *   7. Pegged-tier vol floor (30%) — sizes jump risk EWMA can't see
+ *   8. Clamp [VOL_FLOOR, VOL_CEILING]
  *
- * Returns the σ that the pricing kernel uses.
+ * Pure pieces live in vol-math.ts so they're unit-testable without the DB.
  */
 
 import { getRecentCloses } from "./historical";
 import { getPairClassification } from "./classification";
 import type { PairTier } from "./pairs";
+import {
+  WINDOW_CLOSES, MIN_CLOSES, VOL_FLOOR, VOL_CEILING, RISK_PREMIUM_MARKUP,
+  checkFreshness, computeRealizedVol, applyRiskPremium, applyPeggedFloor,
+} from "./vol-math";
 
-const LAMBDA = 0.94;
-const TRADING_DAYS_PER_YEAR = 252;
-const WINDOW_CLOSES = 61;        // 61 closes → 60 returns
-const MIN_CLOSES   = 30;         // refuse to compute below this
-const VOL_FLOOR = 0.05;          // 5% annualized
-const VOL_CEILING = 3.00;        // 300% annualized — raised because crypto can spike here
-
-// Risk-premium markup applied on top of EWMA realized vol.
-// Higher tier = thinner market / fatter tails / more regime risk → larger buffer.
-const RISK_PREMIUM_MARKUP: Record<PairTier, number> = {
-  // FX
-  g10:              0.125,   // EUR/USD etc. — mature liquid market
-  majorEM:          0.25,    // BRL, MXN, ZAR, INR
-  lessLiquidEM:     0.40,    // PHP, COP, IDR
-  frontierEM:       0.75,    // GHS, NGN, KES, UGX
-  pegged:           1.50,    // pegged/managed — devaluation tail dominates
-  // Commodities
-  commodityMetal:   0.15,    // XAU/XAG/XPT/XPD — deep liquid metals market
-  commodityEnergy:  0.30,    // WTI/Brent/NatGas — geopolitical regime risk
-  commodityAgri:    0.35,    // sugar/coffee/cocoa/wheat — weather-driven shocks
-  // Crypto
-  cryptoMajor:      0.20,    // BTC/ETH — already very volatile, smaller buffer needed
-  cryptoOther:      0.50,    // BNB/SOL/XRP/ADA — idiosyncratic and platform risk
-};
+// Re-export pure helpers for callers that already import from vol.ts.
+export {
+  computeRealizedVol, applyRiskPremium, applyPeggedFloor, checkFreshness,
+} from "./vol-math";
 
 export interface VolResult {
-  /** σ that the pricing kernel uses — realized × (1 + markup), bounded. */
+  /** σ that the pricing kernel uses — realized × (1 + markup), pegged-floored, clamped. */
   sigma: number;
   /** Realized vol BEFORE markup, annualized — for diagnostics. */
   realizedAnnualized: number;
@@ -52,48 +39,19 @@ export interface VolResult {
   tier: PairTier;
   /** Number of returns used in the EWMA window. */
   returnsUsed: number;
+  /** True if the pegged floor (30%) was hit, dominating realized × markup. */
+  peggedFloorHit: boolean;
 }
 
-/** Compute annualized realized volatility from a series of closing prices, oldest-first. */
-export function computeRealizedVol(closes: number[]): number {
-  if (closes.length < MIN_CLOSES) {
-    throw new Error(`Need at least ${MIN_CLOSES} closes for vol, got ${closes.length}`);
-  }
-
-  // Step 2: log returns
-  const returns: number[] = [];
-  for (let i = 1; i < closes.length; i++) {
-    const prev = closes[i - 1];
-    const cur = closes[i];
-    if (!Number.isFinite(prev) || prev <= 0 || !Number.isFinite(cur) || cur <= 0) {
-      throw new Error(`Bad close at index ${i}: prev=${prev}, cur=${cur}`);
-    }
-    returns.push(Math.log(cur / prev));
-  }
-
-  // Step 3: EWMA variance, seeded with the first squared return
-  let variance = returns[0] * returns[0];
-  for (let i = 1; i < returns.length; i++) {
-    variance = LAMBDA * variance + (1 - LAMBDA) * returns[i] * returns[i];
-  }
-
-  // Step 4: annualize
-  return Math.sqrt(variance) * Math.sqrt(TRADING_DAYS_PER_YEAR);
-}
-
-/** Apply the per-tier risk-premium markup. */
-export function applyRiskPremium(realizedVol: number, tier: PairTier): number {
-  const markup = RISK_PREMIUM_MARKUP[tier];
-  if (markup === undefined) throw new Error(`Unknown pair tier: ${tier}`);
-  return realizedVol * (1 + markup);
-}
-
-/** Full pipeline: DB → closes → EWMA → markup → bounds. */
+/** Full pipeline: DB → freshness check → closes → EWMA → markup → pegged floor → bounds. */
 export async function getPricingVol(pair: string): Promise<VolResult> {
   const rows = await getRecentCloses(pair, WINDOW_CLOSES);
   if (rows.length < MIN_CLOSES) {
     throw new Error(`Insufficient history for ${pair}: ${rows.length} closes`);
   }
+
+  const staleReason = checkFreshness(rows);
+  if (staleReason) throw new Error(`${pair}: ${staleReason}`);
 
   const closeValues = rows.map(r => Number(r.close));
   const realizedAnnualized = computeRealizedVol(closeValues);
@@ -102,8 +60,9 @@ export async function getPricingVol(pair: string): Promise<VolResult> {
   const tier = cls.tier as PairTier;
   const markup = RISK_PREMIUM_MARKUP[tier];
   const withMarkup = applyRiskPremium(realizedAnnualized, tier);
+  const { vol: afterPegged, floorHit } = applyPeggedFloor(withMarkup, tier);
 
-  const sigma = Math.max(VOL_FLOOR, Math.min(VOL_CEILING, withMarkup));
+  const sigma = Math.max(VOL_FLOOR, Math.min(VOL_CEILING, afterPegged));
 
   return {
     sigma,
@@ -111,5 +70,6 @@ export async function getPricingVol(pair: string): Promise<VolResult> {
     markup,
     tier,
     returnsUsed: closeValues.length - 1,
+    peggedFloorHit: floorHit,
   };
 }
