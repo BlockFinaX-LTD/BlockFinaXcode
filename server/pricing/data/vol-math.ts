@@ -29,8 +29,12 @@ export const MIN_RECENT_CLOSES = 60;
 //
 // Calibration notes:
 //   pegged       30%   XOF/XAF go years at ~0% then jump 25–50% on devaluation
-//   frontierEM   10%   GHS/NGN/KES/etc. routinely have multi-percent days; 60-day
-//                      EWMA on a stable patch underestimates realised risk by 2–3×
+//   frontierEM   15%   GHS/NGN/KES/etc. routinely have 1–2% daily moves; at
+//                      annualized 15% σ_3d ≈ 1.36% — covers normal day-to-day
+//                      noise. Bumped from 10% after observing 3-day GHS hedges
+//                      pricing at <1% premium when realistic 3-day moves are
+//                      regularly 1%+ (i.e. 1σ events under the 10% floor are
+//                      actually closer to 0.7σ events under realistic vol).
 //   (others unset → no floor; clamp to VOL_FLOOR/VOL_CEILING is what applies)
 //
 // Empirical evidence motivating the frontierEM floor: at σ=5% (engine VOL_FLOOR)
@@ -38,7 +42,7 @@ export const MIN_RECENT_CLOSES = 60;
 // — implying max_payout/premium > 4000×, which is structurally a free lottery
 // ticket and would never clear any real options market.
 export const PEGGED_VOL_FLOOR = 0.30;
-export const FRONTIER_EM_VOL_FLOOR = 0.10;
+export const FRONTIER_EM_VOL_FLOOR = 0.15;
 
 const TIER_VOL_FLOOR: Partial<Record<PairTier, number>> = {
   pegged:     PEGGED_VOL_FLOOR,

@@ -31,6 +31,8 @@ export interface QuoteBreakdown {
   T_days: number;
   notional: number;
   direction: "upward" | "downward";
+  /** Fraction of underlying FX loss covered when settlement reaches the cap (0..~1.05). */
+  coveragePercent: number;
   inputs: {
     r: number;                // USD risk-free rate
     q: number | null;
