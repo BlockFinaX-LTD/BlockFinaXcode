@@ -39,14 +39,30 @@ app.use(helmet({
       fontSrc:        ["'self'"],
       connectSrc: [
         "'self'",
+        // Lisk
         "https://rpc.sepolia-api.lisk.com",
         "https://rpc.api.lisk.com",
         "https://blockscout.lisk.com",
         "https://sepolia-blockscout.lisk.com",
         "wss://rpc.sepolia-api.lisk.com",
         "wss://rpc.api.lisk.com",
+        // Base (multi-chain support added with v8)
+        "https://mainnet.base.org",
+        "https://sepolia.base.org",
+        "https://base.blockscout.com",
+        "https://api.basescan.org",
+        // BSC (multi-chain support added with v8)
+        "https://bsc-dataseed.binance.org",
+        "https://data-seed-prebsc-1-s1.binance.org:8545",
+        "https://api.bscscan.com",
+        // Google OAuth
         "https://accounts.google.com",
         "https://oauth2.googleapis.com",
+        // Rift Finance — wallet SDK calls these directly from the browser
+        "https://payment.riftfi.xyz",
+        "https://*.riftfi.xyz",
+        "https://*.rift.fi",
+        "https://*.rift-finance.com",
       ],
       frameSrc:       ["https://accounts.google.com"],
       objectSrc:      ["'none'"],
