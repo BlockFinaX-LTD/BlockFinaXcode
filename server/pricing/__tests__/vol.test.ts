@@ -18,7 +18,10 @@ import {
   computeRealizedVol,
   applyRiskPremium,
   applyPeggedFloor,
+  applyTierFloor,
   checkFreshness,
+  PEGGED_VOL_FLOOR,
+  FRONTIER_EM_VOL_FLOOR,
 } from "../data/vol-math";
 
 /** Helper: ISO-date strings for the last `n` calendar days, oldest-first. */
@@ -73,10 +76,10 @@ describe("applyRiskPremium", () => {
   });
 });
 
-describe("applyPeggedFloor", () => {
+describe("applyPeggedFloor (legacy shim)", () => {
   it("floors pegged tier at 30% when realized × markup is below", () => {
     const r = applyPeggedFloor(0.05, "pegged");
-    assert.equal(r.vol, 0.30);
+    assert.equal(r.vol, PEGGED_VOL_FLOOR);
     assert.equal(r.floorHit, true);
   });
 
@@ -86,10 +89,48 @@ describe("applyPeggedFloor", () => {
     assert.equal(r.floorHit, false);
   });
 
-  it("does NOT touch other tiers, even if vol is well below 30%", () => {
+  it("does NOT touch g10 (no floor configured)", () => {
     const r = applyPeggedFloor(0.08, "g10");
     assert.equal(r.vol, 0.08);
     assert.equal(r.floorHit, false);
+  });
+});
+
+describe("applyTierFloor (per-tier floors)", () => {
+  it("frontierEM floored at 10% when below — closes the GHS lottery-ticket bug", () => {
+    // Without this floor: σ=5% on USD/GHS produced premium ~$1 on $4,453 max payout
+    // (4,453× leverage). With floor: premium becomes realistic and the leverage cap stops blocking.
+    const r = applyTierFloor(0.05, "frontierEM");
+    assert.equal(r.vol, FRONTIER_EM_VOL_FLOOR);
+    assert.equal(r.floorHit, true);
+    assert.equal(r.floorValue, FRONTIER_EM_VOL_FLOOR);
+  });
+
+  it("frontierEM NOT floored when realized × markup is already above 10%", () => {
+    const r = applyTierFloor(0.18, "frontierEM");
+    assert.equal(r.vol, 0.18);
+    assert.equal(r.floorHit, false);
+    assert.equal(r.floorValue, FRONTIER_EM_VOL_FLOOR);   // floor still reported for diagnostics
+  });
+
+  it("pegged floor (30%) still applies under the generalised function", () => {
+    const r = applyTierFloor(0.05, "pegged");
+    assert.equal(r.vol, PEGGED_VOL_FLOOR);
+    assert.equal(r.floorHit, true);
+    assert.equal(r.floorValue, PEGGED_VOL_FLOOR);
+  });
+
+  it("tiers without a floor (g10, majorEM, commodities, crypto) are passthrough", () => {
+    for (const tier of ["g10", "majorEM", "lessLiquidEM", "commodityMetal", "commodityEnergy", "commodityAgri", "cryptoMajor", "cryptoOther"] as const) {
+      const r = applyTierFloor(0.02, tier);
+      assert.equal(r.vol, 0.02, `tier ${tier} should be passthrough`);
+      assert.equal(r.floorHit, false);
+      assert.equal(r.floorValue, null);
+    }
+  });
+
+  it("frontier floor is set to 10% — regression for the value", () => {
+    assert.equal(FRONTIER_EM_VOL_FLOOR, 0.10);
   });
 });
 

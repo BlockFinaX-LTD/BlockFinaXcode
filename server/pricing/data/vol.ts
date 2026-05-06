@@ -9,7 +9,7 @@
  *      first SEED_RETURNS returns (avoids single-squared-return seed bias)
  *   5. Annualize: σ_realized = sqrt(variance) × sqrt(252)
  *   6. Apply pair-tier risk-premium markup
- *   7. Pegged-tier vol floor (30%) — sizes jump risk EWMA can't see
+ *   7. Per-tier σ floor (pegged 30%, frontierEM 10%) — sizes jump risk EWMA can't see
  *   8. Clamp [VOL_FLOOR, VOL_CEILING]
  *
  * Pure pieces live in vol-math.ts so they're unit-testable without the DB.
@@ -20,16 +20,16 @@ import { getPairClassification } from "./classification";
 import type { PairTier } from "./pairs";
 import {
   WINDOW_CLOSES, MIN_CLOSES, VOL_FLOOR, VOL_CEILING, RISK_PREMIUM_MARKUP,
-  checkFreshness, computeRealizedVol, applyRiskPremium, applyPeggedFloor,
+  checkFreshness, computeRealizedVol, applyRiskPremium, applyTierFloor,
 } from "./vol-math";
 
 // Re-export pure helpers for callers that already import from vol.ts.
 export {
-  computeRealizedVol, applyRiskPremium, applyPeggedFloor, checkFreshness,
+  computeRealizedVol, applyRiskPremium, applyPeggedFloor, applyTierFloor, checkFreshness,
 } from "./vol-math";
 
 export interface VolResult {
-  /** σ that the pricing kernel uses — realized × (1 + markup), pegged-floored, clamped. */
+  /** σ that the pricing kernel uses — realized × (1 + markup), tier-floored, clamped. */
   sigma: number;
   /** Realized vol BEFORE markup, annualized — for diagnostics. */
   realizedAnnualized: number;
@@ -39,11 +39,15 @@ export interface VolResult {
   tier: PairTier;
   /** Number of returns used in the EWMA window. */
   returnsUsed: number;
-  /** True if the pegged floor (30%) was hit, dominating realized × markup. */
+  /** True if any per-tier floor (pegged 30%, frontierEM 10%) was hit. */
+  tierFloorHit: boolean;
+  /** The floor value that applied (or null if tier has no floor). */
+  tierFloorValue: number | null;
+  /** @deprecated kept for legacy callers; use tierFloorHit. Equals tierFloorHit when tier is pegged. */
   peggedFloorHit: boolean;
 }
 
-/** Full pipeline: DB → freshness check → closes → EWMA → markup → pegged floor → bounds. */
+/** Full pipeline: DB → freshness check → closes → EWMA → markup → tier floor → bounds. */
 export async function getPricingVol(pair: string): Promise<VolResult> {
   const rows = await getRecentCloses(pair, WINDOW_CLOSES);
   if (rows.length < MIN_CLOSES) {
@@ -60,9 +64,9 @@ export async function getPricingVol(pair: string): Promise<VolResult> {
   const tier = cls.tier as PairTier;
   const markup = RISK_PREMIUM_MARKUP[tier];
   const withMarkup = applyRiskPremium(realizedAnnualized, tier);
-  const { vol: afterPegged, floorHit } = applyPeggedFloor(withMarkup, tier);
+  const { vol: afterFloor, floorHit, floorValue } = applyTierFloor(withMarkup, tier);
 
-  const sigma = Math.max(VOL_FLOOR, Math.min(VOL_CEILING, afterPegged));
+  const sigma = Math.max(VOL_FLOOR, Math.min(VOL_CEILING, afterFloor));
 
   return {
     sigma,
@@ -70,6 +74,8 @@ export async function getPricingVol(pair: string): Promise<VolResult> {
     markup,
     tier,
     returnsUsed: closeValues.length - 1,
-    peggedFloorHit: floorHit,
+    tierFloorHit: floorHit,
+    tierFloorValue: floorValue,
+    peggedFloorHit: floorHit && tier === "pegged",
   };
 }

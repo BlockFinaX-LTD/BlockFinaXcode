@@ -22,11 +22,28 @@ export const VOL_CEILING = 3.00;        // 300% annualized — raised because cr
 export const FRESHNESS_WINDOW_DAYS = 90;
 export const MIN_RECENT_CLOSES = 60;
 
-// Pegged / heavily managed currencies (XOF, XAF, etc.) run ~0% realized vol
-// for years, then a 25–50% jump on devaluation day. EWMA can't see jump risk
-// in advance. Floor σ at 30% so the kernel always prices in *some* devaluation
-// premium even if recent returns look flat.
+// Per-tier σ floors (post-markup). Same idea as PEGGED_VOL_FLOOR — when EWMA on
+// recent quiet days reads abnormally low for a tier known to have hidden jump
+// risk (devaluation events, capital-control regime breaks), we floor the σ that
+// goes into the kernel so the engine always prices in *some* tail premium.
+//
+// Calibration notes:
+//   pegged       30%   XOF/XAF go years at ~0% then jump 25–50% on devaluation
+//   frontierEM   10%   GHS/NGN/KES/etc. routinely have multi-percent days; 60-day
+//                      EWMA on a stable patch underestimates realised risk by 2–3×
+//   (others unset → no floor; clamp to VOL_FLOOR/VOL_CEILING is what applies)
+//
+// Empirical evidence motivating the frontierEM floor: at σ=5% (engine VOL_FLOOR)
+// the engine prices a 60-day USD/GHS hedge at ~0.001% premium for a 4.5% range
+// — implying max_payout/premium > 4000×, which is structurally a free lottery
+// ticket and would never clear any real options market.
 export const PEGGED_VOL_FLOOR = 0.30;
+export const FRONTIER_EM_VOL_FLOOR = 0.10;
+
+const TIER_VOL_FLOOR: Partial<Record<PairTier, number>> = {
+  pegged:     PEGGED_VOL_FLOOR,
+  frontierEM: FRONTIER_EM_VOL_FLOOR,
+};
 
 // Risk-premium markup applied on top of EWMA realized vol.
 // Higher tier = thinner market / fatter tails / more regime risk → larger buffer.
@@ -110,9 +127,23 @@ export function applyRiskPremium(realizedVol: number, tier: PairTier): number {
   return realizedVol * (1 + markup);
 }
 
-/** Apply pegged-tier vol floor (no-op for non-pegged tiers). */
+/**
+ * Apply the per-tier σ floor. Generalises the old pegged-only floor to any tier
+ * listed in TIER_VOL_FLOOR (currently pegged + frontierEM). No-op for tiers
+ * without a floor.
+ */
+export function applyTierFloor(vol: number, tier: PairTier): { vol: number; floorHit: boolean; floorValue: number | null } {
+  const floor = TIER_VOL_FLOOR[tier];
+  if (floor === undefined) return { vol, floorHit: false, floorValue: null };
+  if (vol >= floor) return { vol, floorHit: false, floorValue: floor };
+  return { vol: floor, floorHit: true, floorValue: floor };
+}
+
+/**
+ * @deprecated Use applyTierFloor — kept as a thin shim so the legacy export
+ * doesn't break callers that imported it directly.
+ */
 export function applyPeggedFloor(vol: number, tier: PairTier): { vol: number; floorHit: boolean } {
-  if (tier !== "pegged") return { vol, floorHit: false };
-  if (vol >= PEGGED_VOL_FLOOR) return { vol, floorHit: false };
-  return { vol: PEGGED_VOL_FLOOR, floorHit: true };
+  const r = applyTierFloor(vol, tier);
+  return { vol: r.vol, floorHit: r.floorHit };
 }
