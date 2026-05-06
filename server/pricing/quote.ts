@@ -20,6 +20,12 @@ import { getPairClassification } from "./data/classification";
 import { callSpreadValue, putSpreadValue, premiumInBaseCurrency } from "./kernel";
 import { signQuote, rateToFixed6, type SignedQuote } from "./signer";
 
+// Safety cap on max_payout/premium ratio. Quotes above this are rejected
+// because they indicate the option is essentially free, which is always a
+// pricing-model failure (σ stuck at floor on a tier with real jump risk).
+// See the leverage check below for the rationale.
+export const MAX_LEVERAGE_RATIO = 100;
+
 export interface QuoteRequest {
   pair: string;            // e.g. "USD/GHS"
   strike: number;          // entry-edge of the payout zone
@@ -186,6 +192,30 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
   // Max payout when settlement reaches the cap end of the range.
   const rangeWidth = Math.abs(req.payoutCap - req.strike);
   const maxPayoutUsd = (req.notional * rangeWidth) / S;
+
+  // Sanity check: leverage = max_payout / premium. A premium <$0.01 with a
+  // max_payout > $1 means the engine thinks the option is essentially free —
+  // signals a model mispricing (usually σ stuck at floor for a pair that
+  // actually has hidden jump risk). Refuse to issue an attestation in that
+  // regime; LPs would never write the contract and shipping a signed quote
+  // would just generate orphan events on-chain.
+  //
+  // Threshold 100× was chosen because it sits well above any realistic option:
+  //   - ATM 30d call typically prices ~10–30× the premium when discounted
+  //   - Even cheap deep-OTM lottery tickets rarely exceed ~50×
+  //   - Anything beyond 100× indicates the model is undervaluing the leg
+  if (premiumUsd > 0) {
+    const leverage = maxPayoutUsd / premiumUsd;
+    if (leverage > MAX_LEVERAGE_RATIO) {
+      throw new Error(
+        `Quote rejected: max_payout/premium = ${leverage.toFixed(0)}× exceeds ` +
+        `safety cap of ${MAX_LEVERAGE_RATIO}×. This usually means σ for ${req.pair} ` +
+        `is at the engine floor and the option is mispriced. Move the strike closer ` +
+        `to spot, narrow the cap, or wait for the volatility floor for this tier ` +
+        `to be recalibrated.`,
+      );
+    }
+  }
 
   // ── v8: convert quote inputs to the fixed-6 representation the contract verifies ──
   // The on-chain signature commits to fixed-point integers, not floats.
