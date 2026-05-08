@@ -503,6 +503,11 @@ export default function Hedge() {
       let signature: string = "0x";
       let quoteTimestamp = 0;
       let quoteNonce: string = ethers.ZeroHash;
+      // initialRate must MATCH the spot the server signed against — using a
+      // separately-fetched spot creates a payload mismatch on-chain ("Invalid
+      // pricing-engine signature"). When we get a signed quote, override
+      // currentFxRate with the server-side spot from the response.
+      let signedInitialRate: number = currentFxRate;
 
       if (newEvent.selfPriced) {
         // Mode 2 — explicit opt-out. Submit with empty signature; contract will
@@ -511,7 +516,7 @@ export default function Hedge() {
       } else {
         try {
           const { fetchPricingQuote } = await import("@/lib/pricing-quote");
-          const fresh = await fetchPricingQuote({
+          const quoteRequest = {
             pair: newEvent.underlying,
             strike: strikePrice,
             payoutCap: payoutCapNum,
@@ -521,16 +526,45 @@ export default function Hedge() {
             chainId: activeChainId,
             diamondAddress: hedgeContract.activeDiamond,
             creator: signer.address,
+          };
+          console.log('[createEvent] → POST /api/pricing/quote:', quoteRequest);
+          const fresh = await fetchPricingQuote(quoteRequest);
+          console.log('[createEvent] ← /api/pricing/quote response:', {
+            premiumRate: fresh.premiumRate,
+            premiumUsd: fresh.premiumUsd,
+            spot: fresh.breakdown?.spot,
+            attestationPresent: !!fresh.attestation,
+            attestationSigner: fresh.attestation?.signerAddress,
+            attestationSigLen: fresh.attestation?.signature?.length,
           });
           if (fresh.attestation) {
             signature = fresh.attestation.signature;
             quoteTimestamp = parseInt(fresh.attestation.quoteTimestamp, 10);
             quoteNonce = fresh.attestation.quoteNonce;
+            // CRITICAL: use the EXACT spot the server signed against. Even a
+            // 1e-6 difference between client-side and server-side spot causes
+            // the on-chain ECDSA recover to produce a different address than
+            // pricingEngineSigner → "Invalid pricing-engine signature".
+            signedInitialRate = fresh.breakdown.spot;
+          } else {
+            console.warn('[createEvent] ⚠ Server returned no attestation — signature will be empty. Contract on Base requires it. Either: (a) server has no PRICING_ENGINE_PRIVATE_KEY in env, or (b) chainId/diamondAddress/creator missing from request.');
           }
         } catch (err) {
-          console.warn('[createEvent] Pricing quote unavailable; falling back to self-priced submission:', err);
+          console.warn('[createEvent] ✗ Pricing quote fetch failed entirely:', err);
         }
       }
+
+      console.log('[createEvent] → Submitting with:', {
+        signature: signature === '0x' ? 'EMPTY (will revert if pricingEngineSigner is set on-chain)' : `${signature.slice(0, 18)}…${signature.slice(-6)} (${signature.length} chars)`,
+        quoteTimestamp,
+        quoteNonce: quoteNonce === ethers.ZeroHash ? 'ZERO (will revert)' : quoteNonce.slice(0, 18) + '…',
+        strike: strikePrice,
+        payoutCap: payoutCapNum,
+        initialRate: signedInitialRate,
+        creator: signer.address,
+        chainId: activeChainId,
+        diamond: hedgeContract.activeDiamond,
+      });
 
       const newEventId = await hedgeContract.createEvent(signer, {
         name: newEvent.name,
@@ -541,7 +575,7 @@ export default function Hedge() {
         expiryDate,
         allowExternalLp: newEvent.allowExternalLp,
         initialLiquidity: newEvent.initialLiquidity || "0",
-        initialRate: currentFxRate,
+        initialRate: signedInitialRate,
         strikeAbove,
         paymentToken: paymentTokenAddr,
         signature,

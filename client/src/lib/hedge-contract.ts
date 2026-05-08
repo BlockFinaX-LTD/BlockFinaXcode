@@ -815,11 +815,15 @@ class HedgeContractManager {
     await this.ensureGas(signer.address);
 
     const iface = new ethers.Interface(HEDGE_ABI);
-    const strikeWei = ethers.parseUnits(params.strike.toString(), 6);
-    const payoutCapWei = ethers.parseUnits((params.payoutCap || 0).toString(), 6);
-    const premiumRateWei = ethers.parseUnits(params.premiumRate.toString(), 6);
+    // .toFixed(6) for ALL price-like inputs — JS floats produce noise like
+    // 0.0028100000000000004, which parseUnits(_, 6) rejects ("too many decimals
+    // for format"). Truncating to exactly 6 decimal places matches the on-chain
+    // PRECISION = 1e6 and avoids the underflow.
+    const strikeWei       = ethers.parseUnits(params.strike.toFixed(6), 6);
+    const payoutCapWei    = ethers.parseUnits((params.payoutCap || 0).toFixed(6), 6);
+    const premiumRateWei  = ethers.parseUnits(params.premiumRate.toFixed(6), 6);
     const expiryTimestamp = toTimestamp(params.expiryDate);
-    const initialRateWei = ethers.parseUnits(params.initialRate.toFixed(6), 6);
+    const initialRateWei  = ethers.parseUnits(params.initialRate.toFixed(6), 6);
 
     // v8: pricing-engine attestation. Empty defaults match the contract's "legacy mode"
     // when the on-chain pricingEngineSigner is unset; the contract rejects empty
