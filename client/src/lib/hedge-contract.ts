@@ -183,6 +183,13 @@ export interface HedgeEventData {
   payoutPercent: number;
   /** ERC-20 token address used for all payments in this event (USDC or USDT). */
   paymentToken: string;
+  /**
+   * v8: address of the pricing-engine signer that attested this event's premium,
+   * or address(0) if the creator self-priced (skipped engine attestation). UIs use
+   * this to display a "Priced by engine" vs "Manually priced" badge so hedgers
+   * know whether the premium came from the platform's pricing model.
+   */
+  quoteSigner?: string;
   /** Optional description added by the event creator (stored in DB, not on-chain). */
   description?: string;
 }
@@ -627,13 +634,19 @@ class HedgeContractManager {
 
   async getEvent(eventId: number): Promise<HedgeEventData> {
     const contract = this.getReadContract();
-    const [core, stats, eventTimestamps, paymentToken] = await Promise.all([
+    // getEventQuoteSigner is a v8 function — wrap in a catch so older Diamonds
+    // (or in-flight upgrades) don't blow up the dialog. Returns ZeroAddress on
+    // any error, which the UI interprets as "manually priced / unknown".
+    const [core, stats, eventTimestamps, paymentToken, quoteSigner] = await Promise.all([
       contract.getHedgeEventCore(eventId),
       contract.getHedgeEventStats(eventId),
       this.getEventTimestamps(),
       contract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
+      contract.getEventQuoteSigner(eventId).catch(() => ethers.ZeroAddress),
     ]);
-    return this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
+    const ev = this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
+    ev.quoteSigner = quoteSigner as string;
+    return ev;
   }
 
   async getPositionsByWallet(address: string): Promise<HedgePositionData[]> {

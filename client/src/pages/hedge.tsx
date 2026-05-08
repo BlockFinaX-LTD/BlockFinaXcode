@@ -168,6 +168,7 @@ export default function Hedge() {
     direction: "up" as "up" | "down",
     paymentCurrency: "USDC" as "USDC" | "USDT",
     overrideAcknowledged: false,    // user must check this box to set premium below the engine's quote
+    selfPriced: false,              // when true, skip engine attestation entirely; on-chain quoteSigner = address(0)
   });
 
   // On BSC force USDT (BSC Diamond only accepts USDT). On networks without USDT, fall back to USDC.
@@ -490,35 +491,45 @@ export default function Hedge() {
       // otherwise we require it to be on the right side of strike (UI validates).
       const payoutCapNum = parseFloat(newEvent.payoutCap || "0") || 0;
 
-      // v8: signed-quote attestation. Refresh once more to guarantee freshness
-      // (the cached quote in pricingQuote may have crossed the on-chain 120s window
-      // by the time the user clicks Submit). Re-fetch right before sending the tx.
+      // v8: signed-quote attestation. THREE submission modes:
+      //   1. Auto (default) — fetch a fresh engine quote and attach the signature.
+      //      The on-chain quoteSigner = pricingEngineSigner, so consumers can label
+      //      the event "✓ Priced by engine".
+      //   2. Override — user has ticked the "use my own premium" box. We skip the
+      //      engine fetch entirely and submit with empty defaults. Contract records
+      //      quoteSigner = address(0), labelled "Manually priced" downstream.
+      //   3. Quote unavailable — engine fetch failed (network, server down). We fall
+      //      back to mode 2 and warn the user.
       let signature: string = "0x";
       let quoteTimestamp = 0;
       let quoteNonce: string = ethers.ZeroHash;
-      try {
-        const { fetchPricingQuote } = await import("@/lib/pricing-quote");
-        const fresh = await fetchPricingQuote({
-          pair: newEvent.underlying,
-          strike: strikePrice,
-          payoutCap: payoutCapNum,
-          expiryUnixSeconds: Math.floor(expiryDate.getTime() / 1000),
-          notional: parseFloat(newEvent.initialLiquidity || "0") || 0,
-          strikeAbove,
-          chainId: activeChainId,
-          diamondAddress: hedgeContract.activeDiamond,
-          creator: signer.address,
-        });
-        if (fresh.attestation) {
-          signature = fresh.attestation.signature;
-          quoteTimestamp = parseInt(fresh.attestation.quoteTimestamp, 10);
-          quoteNonce = fresh.attestation.quoteNonce;
+
+      if (newEvent.selfPriced) {
+        // Mode 2 — explicit opt-out. Submit with empty signature; contract will
+        // record this as a self-priced event.
+        console.log('[createEvent] Self-priced mode — engine attestation skipped.');
+      } else {
+        try {
+          const { fetchPricingQuote } = await import("@/lib/pricing-quote");
+          const fresh = await fetchPricingQuote({
+            pair: newEvent.underlying,
+            strike: strikePrice,
+            payoutCap: payoutCapNum,
+            expiryUnixSeconds: Math.floor(expiryDate.getTime() / 1000),
+            notional: parseFloat(newEvent.initialLiquidity || "0") || 0,
+            strikeAbove,
+            chainId: activeChainId,
+            diamondAddress: hedgeContract.activeDiamond,
+            creator: signer.address,
+          });
+          if (fresh.attestation) {
+            signature = fresh.attestation.signature;
+            quoteTimestamp = parseInt(fresh.attestation.quoteTimestamp, 10);
+            quoteNonce = fresh.attestation.quoteNonce;
+          }
+        } catch (err) {
+          console.warn('[createEvent] Pricing quote unavailable; falling back to self-priced submission:', err);
         }
-        // If attestation is null and the on-chain pricingEngineSigner is unset,
-        // the contract will accept the empty defaults (legacy mode). If signer IS
-        // set on-chain, the contract will revert with a clear error.
-      } catch (err) {
-        console.warn('[createEvent] Pricing quote unavailable; submitting with empty signature (will fail if signer enforced on-chain):', err);
       }
 
       const newEventId = await hedgeContract.createEvent(signer, {
@@ -563,7 +574,7 @@ export default function Hedge() {
       toast({ title: "Event Created", description: msg });
       setCreateEventDialogOpen(false);
       setActiveTab("my-events");
-      setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", payoutCap: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC", overrideAcknowledged: false });
+      setNewEvent({ name: "", description: "", assetClass: "fx", underlying: "USD/GHS", strike: "", payoutCap: "", premiumRate: "", expiryHours: "24", initialLiquidity: "", poolOpen: true, allowExternalLp: true, direction: "up", paymentCurrency: "USDC", overrideAcknowledged: false, selfPriced: false });
     },
     onError: (error: any) => {
       setTxStep('');
@@ -1644,6 +1655,34 @@ export default function Hedge() {
           </DialogHeader>
           {selectedEvent && (
             <div className="space-y-4">
+              {/* Pricing-source badge: helps the hedger know whether the premium was
+                  computed by the platform's pricing engine (✓) or set manually by the
+                  event creator (⚠). Read straight from the on-chain quoteSigner field. */}
+              {(() => {
+                const qs = (selectedEvent.quoteSigner || "").toLowerCase();
+                const isEnginePriced = qs && qs !== "0x0000000000000000000000000000000000000000";
+                return isEnginePriced ? (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 flex items-center gap-2">
+                    <span className="text-emerald-400 text-sm">✓</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-emerald-400">Priced by engine</p>
+                      <p className="text-[10px] text-emerald-400/80 mt-0.5">
+                        Premium computed by the platform's pricing model from live market data. On-chain attested by {qs.slice(0, 8)}…
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 flex items-center gap-2">
+                    <span className="text-amber-400 text-sm">⚠</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-amber-400">Manually priced</p>
+                      <p className="text-[10px] text-amber-400/80 mt-0.5">
+                        Premium set by the event creator without the platform's pricing engine. Evaluate the rate yourself before buying.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               {selectedEvent.description && (
                 <div className="bg-muted/40 rounded-lg p-3 border border-border/50">
                   <p className="text-xs text-muted-foreground/70 mb-1 font-medium uppercase tracking-wide">About this event</p>
@@ -2154,6 +2193,28 @@ export default function Hedge() {
                   })()}
                 </p>
               </div>
+            </div>
+
+            {/* Self-price toggle — always available. When ticked, the engine quote
+                becomes purely advisory: no attestation is attached to the on-chain
+                createEvent call, and the resulting event is labelled "Manually priced"
+                for hedgers. Default is OFF (engine-attested). */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="selfPriced"
+                checked={newEvent.selfPriced}
+                onChange={e => setNewEvent(p => ({ ...p, selfPriced: e.target.checked }))}
+                className="mt-0.5 rounded"
+              />
+              <label htmlFor="selfPriced" className="cursor-pointer flex-1">
+                <span className="text-xs font-medium text-foreground">Use my own pricing (skip engine attestation)</span>
+                <p className="text-[10px] text-muted-foreground/80 mt-1">
+                  {newEvent.selfPriced
+                    ? "On-chain quoteSigner will be address(0). Hedgers see this event labelled “Manually priced” — they’ll need to evaluate the premium themselves."
+                    : "On-chain quoteSigner will match the platform’s pricing engine. Hedgers see “✓ Priced by engine”, signalling the premium was computed by the model below."}
+                </p>
+              </label>
             </div>
 
             {/* v8: Pricing-engine quote card — shows the math behind the suggested premium. */}
