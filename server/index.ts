@@ -34,9 +34,19 @@ app.use(helmet({
     directives: {
       defaultSrc:     ["'self'"],
       scriptSrc:      ["'self'"],
-      styleSrc:       ["'self'", "'unsafe-inline'"],
-      imgSrc:         ["'self'", "data:", "https:"],
-      fontSrc:        ["'self'"],
+      // style-src needs Google Fonts because index.html loads Inter + Geist
+      // Mono from fonts.googleapis.com. Without it the page renders with
+      // system fonts and the stylesheet is blocked.
+      styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc:         [
+        "'self'",
+        "data:",
+        "blob:",
+        "https:",
+      ],
+      // font-src needs gstatic.com because Google Fonts CSS pulls font
+      // files from there once the stylesheet is parsed.
+      fontSrc:        ["'self'", "data:", "https://fonts.gstatic.com"],
       connectSrc: [
         "'self'",
         // Lisk
@@ -63,8 +73,18 @@ app.use(helmet({
         "https://*.riftfi.xyz",
         "https://*.rift.fi",
         "https://*.rift-finance.com",
+        // Cloudinary — direct-to-cloud upload for task evidence
+        "https://api.cloudinary.com",
+        "https://res.cloudinary.com",
       ],
-      frameSrc:       ["https://accounts.google.com"],
+      // frame-src must include the Rift sign-in widget; otherwise the
+      // iframe is blocked and users can't sign in.
+      frameSrc: [
+        "https://accounts.google.com",
+        "https://widget.riftfi.xyz",
+        "https://*.riftfi.xyz",
+        "https://*.rift.fi",
+      ],
       objectSrc:      ["'none'"],
       baseUri:        ["'self'"],
       formAction:     ["'self'", "https://accounts.google.com"],
