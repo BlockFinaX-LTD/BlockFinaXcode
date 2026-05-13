@@ -36,6 +36,12 @@ import {
   hedgeLpDeposits,
   type HedgeLpDeposit,
   type InsertHedgeLpDeposit,
+  hedgeActivity,
+  type HedgeActivity,
+  type InsertHedgeActivity,
+  dailyTasks,
+  userTaskCompletions,
+  platformSettings,
   rateSnapshots,
   type RateSnapshot,
   type InsertRateSnapshot,
@@ -884,6 +890,280 @@ export class DatabaseStorage implements IStorage {
   async deleteArticle(id: number): Promise<boolean> {
     const result = await db.delete(articles).where(eq(articles.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ── Hedge activity feed ─────────────────────────────────────────────────
+  // Idempotent: composite unique on (chainId, txHash, actionType) means we
+  // can call this from the client without worrying about double-submits
+  // (StrictMode, network retries, etc).
+  async recordHedgeActivity(activity: InsertHedgeActivity): Promise<HedgeActivity> {
+    const [row] = await db
+      .insert(hedgeActivity)
+      .values({
+        ...activity,
+        walletAddress: activity.walletAddress.toLowerCase(),
+      })
+      .onConflictDoNothing({ target: [hedgeActivity.chainId, hedgeActivity.txHash, hedgeActivity.actionType] })
+      .returning();
+    if (row) return row;
+    // If insert was a no-op (already exists), fetch and return the existing row
+    const [existing] = await db
+      .select()
+      .from(hedgeActivity)
+      .where(and(
+        eq(hedgeActivity.chainId, activity.chainId),
+        eq(hedgeActivity.txHash, activity.txHash),
+        eq(hedgeActivity.actionType, activity.actionType),
+      ));
+    return existing;
+  }
+
+  async getHedgeActivityByWallet(walletAddress: string, opts: { limit?: number; chainId?: number } = {}): Promise<HedgeActivity[]> {
+    const { limit = 50, chainId } = opts;
+    const wallet = walletAddress.toLowerCase();
+    const where = chainId
+      ? and(eq(hedgeActivity.walletAddress, wallet), eq(hedgeActivity.chainId, chainId))
+      : eq(hedgeActivity.walletAddress, wallet);
+    return await db
+      .select()
+      .from(hedgeActivity)
+      .where(where)
+      .orderBy(desc(hedgeActivity.createdAt))
+      .limit(limit);
+  }
+
+  /**
+   * Checks whether a wallet has at least one confirmed `hedge_activity` row of
+   * the given action type. Used by the task-claim endpoint to enforce
+   * on-chain verifiers (verifier='onchain:buy_protection' etc.) without
+   * trusting the client.
+   */
+  async hasHedgeAction(walletAddress: string, actionType: string): Promise<boolean> {
+    const wallet = walletAddress.toLowerCase();
+    const rows = await db
+      .select({ id: hedgeActivity.id })
+      .from(hedgeActivity)
+      .where(and(
+        eq(hedgeActivity.walletAddress, wallet),
+        eq(hedgeActivity.actionType, actionType),
+      ))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  // ── Platform settings (key/value) ───────────────────────────────────────
+  async getSetting(key: string): Promise<string | null> {
+    const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, key));
+    return row?.value ?? null;
+  }
+
+  async setSetting(key: string, value: string, updatedBy: string | null = null): Promise<void> {
+    await db
+      .insert(platformSettings)
+      .values({ key, value, updatedBy })
+      .onConflictDoUpdate({
+        target: platformSettings.key,
+        set: { value, updatedBy, updatedAt: new Date() },
+      });
+  }
+
+  // ── Task-completion payouts ─────────────────────────────────────────────
+  /**
+   * Admin queue: returns task completions joined with task metadata, plus a
+   * `paid` flag derived from the presence of `paidTxHash`. The admin UI uses
+   * this to populate the Payouts table.
+   */
+  async listTaskCompletions(opts: { status?: 'paid' | 'unpaid' | 'pending' | 'rejected' | 'all'; limit?: number } = {}) {
+    const { status = 'unpaid', limit = 100 } = opts;
+    const baseQuery = db
+      .select({
+        completionId: userTaskCompletions.id,
+        walletAddress: userTaskCompletions.walletAddress,
+        completedAt: userTaskCompletions.completedAt,
+        pointsEarned: userTaskCompletions.pointsEarned,
+        reviewStatus: userTaskCompletions.reviewStatus,
+        evidenceUrl: userTaskCompletions.evidenceUrl,
+        evidenceImage: userTaskCompletions.evidenceImage,
+        evidenceText: userTaskCompletions.evidenceText,
+        reviewedBy: userTaskCompletions.reviewedBy,
+        reviewedAt: userTaskCompletions.reviewedAt,
+        reviewNotes: userTaskCompletions.reviewNotes,
+        paidTxHash: userTaskCompletions.paidTxHash,
+        paidAmount: userTaskCompletions.paidAmount,
+        paidToken: userTaskCompletions.paidToken,
+        paidChainId: userTaskCompletions.paidChainId,
+        paidAt: userTaskCompletions.paidAt,
+        paidBy: userTaskCompletions.paidBy,
+        taskId: dailyTasks.id,
+        taskKey: dailyTasks.taskKey,
+        taskTitle: dailyTasks.title,
+        taskCategory: dailyTasks.category,
+        taskVerifier: dailyTasks.verifier,
+        taskIsDaily: dailyTasks.isDaily,
+      })
+      .from(userTaskCompletions)
+      .innerJoin(dailyTasks, eq(dailyTasks.id, userTaskCompletions.taskId));
+
+    // Payout filters operate on `paidTxHash`; review filters operate on
+    // `reviewStatus`. Mutually exclusive view-modes for the admin queue.
+    const filtered =
+      status === 'paid'     ? baseQuery.where(sql`${userTaskCompletions.paidTxHash} IS NOT NULL`)
+    : status === 'unpaid'   ? baseQuery.where(sql`${userTaskCompletions.paidTxHash} IS NULL AND ${userTaskCompletions.reviewStatus} IN ('auto', 'approved')`)
+    : status === 'pending'  ? baseQuery.where(eq(userTaskCompletions.reviewStatus, 'pending'))
+    : status === 'rejected' ? baseQuery.where(eq(userTaskCompletions.reviewStatus, 'rejected'))
+    : baseQuery;
+
+    return await filtered.orderBy(desc(userTaskCompletions.completedAt)).limit(limit);
+  }
+
+  /**
+   * Approve a pending submission: flip status to 'approved' and credit the
+   * earned points (insert/update userPoints + log a pointTransaction).
+   * Idempotent: a no-op if the row is no longer 'pending'.
+   */
+  async approveTaskSubmission(completionId: number, reviewer: string, notes?: string): Promise<boolean> {
+    // Load the row + task in one shot so we know what points to credit
+    const [row] = await db
+      .select({
+        id: userTaskCompletions.id,
+        walletAddress: userTaskCompletions.walletAddress,
+        pointsEarned: userTaskCompletions.pointsEarned,
+        reviewStatus: userTaskCompletions.reviewStatus,
+        taskId: userTaskCompletions.taskId,
+        taskTitle: dailyTasks.title,
+      })
+      .from(userTaskCompletions)
+      .innerJoin(dailyTasks, eq(dailyTasks.id, userTaskCompletions.taskId))
+      .where(eq(userTaskCompletions.id, completionId));
+
+    if (!row || row.reviewStatus !== 'pending') return false;
+    const wallet = row.walletAddress.toLowerCase();
+
+    // 1. Flip the row to 'approved' atomically (CAS — refuses if no longer pending)
+    const updated = await db
+      .update(userTaskCompletions)
+      .set({
+        reviewStatus: 'approved',
+        reviewedBy: reviewer.toLowerCase(),
+        reviewedAt: new Date(),
+        reviewNotes: notes ?? null,
+      })
+      .where(and(
+        eq(userTaskCompletions.id, completionId),
+        eq(userTaskCompletions.reviewStatus, 'pending'),
+      ))
+      .returning({ id: userTaskCompletions.id });
+    if (updated.length === 0) return false;
+
+    // 2. Credit points (insert/update userPoints + log pointTransaction)
+    const existing = await db.select().from(userPoints).where(eq(userPoints.walletAddress, wallet));
+    if (existing.length === 0) {
+      await db.insert(userPoints).values({ walletAddress: wallet, totalPoints: row.pointsEarned, referralPoints: 0 });
+    } else {
+      await db.update(userPoints)
+        .set({ totalPoints: sql`${userPoints.totalPoints} + ${row.pointsEarned}`, lastUpdated: new Date() })
+        .where(eq(userPoints.walletAddress, wallet));
+    }
+    await db.insert(pointTransactions).values({
+      walletAddress: wallet,
+      type: 'task_reward',
+      points: row.pointsEarned,
+      description: `Approved: ${row.taskTitle}`,
+      referenceId: `task_${row.taskId}`,
+    });
+
+    return true;
+  }
+
+  async rejectTaskSubmission(completionId: number, reviewer: string, notes?: string): Promise<boolean> {
+    const result = await db
+      .update(userTaskCompletions)
+      .set({
+        reviewStatus: 'rejected',
+        reviewedBy: reviewer.toLowerCase(),
+        reviewedAt: new Date(),
+        reviewNotes: notes ?? null,
+      })
+      .where(and(
+        eq(userTaskCompletions.id, completionId),
+        eq(userTaskCompletions.reviewStatus, 'pending'),
+      ))
+      .returning({ id: userTaskCompletions.id });
+    return result.length > 0;
+  }
+
+  async recordTaskPayout(
+    completionId: number,
+    payout: { txHash: string; amount: string; token: string; chainId: number; paidBy: string },
+  ): Promise<boolean> {
+    const result = await db
+      .update(userTaskCompletions)
+      .set({
+        paidTxHash: payout.txHash,
+        paidAmount: payout.amount,
+        paidToken: payout.token,
+        paidChainId: payout.chainId,
+        paidBy: payout.paidBy.toLowerCase(),
+        paidAt: new Date(),
+      })
+      .where(and(
+        eq(userTaskCompletions.id, completionId),
+        sql`${userTaskCompletions.paidTxHash} IS NULL`,  // idempotency — never overwrite
+      ))
+      .returning({
+        id: userTaskCompletions.id,
+        walletAddress: userTaskCompletions.walletAddress,
+        pointsEarned: userTaskCompletions.pointsEarned,
+        taskId: userTaskCompletions.taskId,
+      });
+    if (result.length === 0) return false;
+
+    // After the row is paid, surface the event in the two user-facing feeds:
+    //   1. point_transactions  → renders on the Earn page History tab
+    //   2. hedge_activity      → renders on the wallet Activity tab + home page
+    // Both are best-effort — payout itself already succeeded on-chain; if the
+    // log fails the user can still see the points balance + tx in the explorer.
+    const row = result[0];
+    const userWallet = row.walletAddress.toLowerCase();
+    const [task] = await db.select().from(dailyTasks).where(eq(dailyTasks.id, row.taskId));
+    const amountNum = parseFloat(payout.amount);
+
+    try {
+      await db.insert(pointTransactions).values({
+        walletAddress: userWallet,
+        type: 'task_payout',
+        // Mirror the points cashed out so the history row carries enough context
+        // to show "100 pts → $5.00". We don't debit totalPoints; admins treat
+        // points as lifetime-earned and pay against unpaid completions.
+        points: row.pointsEarned,
+        description: `Reward: ${task?.title ?? 'task payout'} → $${amountNum.toFixed(2)} ${payout.token}`,
+        referenceId: payout.txHash,
+      });
+    } catch (e) {
+      console.warn('[recordTaskPayout] point_transactions log failed:', e);
+    }
+
+    try {
+      await db.insert(hedgeActivity).values({
+        walletAddress: userWallet,
+        chainId: payout.chainId,
+        txHash: payout.txHash,
+        actionType: 'reward_payout',
+        amount: payout.amount,
+        token: payout.token,
+        metadata: JSON.stringify({
+          taskId: row.taskId,
+          taskTitle: task?.title ?? null,
+          points: row.pointsEarned,
+          paidBy: payout.paidBy.toLowerCase(),
+        }),
+        status: 'confirmed',
+      }).onConflictDoNothing();
+    } catch (e) {
+      console.warn('[recordTaskPayout] hedge_activity log failed:', e);
+    }
+
+    return true;
   }
 }
 

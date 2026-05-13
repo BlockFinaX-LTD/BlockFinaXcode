@@ -19,6 +19,16 @@ export function getOwnerAddresses(): string[] {
   return raw.split(",").map(a => a.trim().toLowerCase()).filter(Boolean);
 }
 
+/**
+ * Admin email allowlist. The /api/admin/login endpoint accepts a Rift
+ * access token, calls Rift to resolve the signed-in user's email, and
+ * grants admin access if that email appears here. Comma-separated.
+ */
+export function getOwnerEmails(): string[] {
+  const raw = process.env.ADMIN_EMAILS || "";
+  return raw.split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+}
+
 export function requireAdmin(req: any, res: any, next: any) {
   const token = req.headers["x-admin-token"] as string;
   const expiry = token ? adminSessions.get(token) : undefined;

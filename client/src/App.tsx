@@ -1,18 +1,23 @@
 /**
  * Main Application Component
- * 
+ *
  * React application root with routing, state management, and wallet integration.
- * Handles wallet authentication flow, referral processing, and global providers.
+ * Auth + wallet provisioning is handled by the @rift-finance/react widget
+ * (RiftProvider + RiftAuth). RiftTokenBridge keeps the JWT in sync with the
+ * legacy wallet SDK so non-React modules can keep calling typed methods.
  */
 
 import { Switch, Route, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { isLoggedIn } from "@/lib/rift-client";
+import { RiftProvider, RiftAuth, useRift } from "@rift-finance/react";
+import { RiftTokenBridge } from "@/lib/rift-token-bridge";
+import { getMe, setCachedUserSummary, clearLocalRiftState } from "@/lib/rift-client";
 import { TxAuthDialog } from "@/components/wallet/tx-auth-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 // Public pages
 import Website from "@/pages/website";
@@ -38,25 +43,68 @@ import SettingsPage from "@/pages/settings";
 import AdminDashboard from "@/pages/admin-dashboard";
 import VideoPage from "@/pages/video";
 import FinancialModel from "@/pages/financial-model";
-// NOTE: 7 single-purpose governance pages were removed in cleanup — they targeted
-// the legacy Lisk Diamond (0x885E…) and a Safe-ownership-transfer + timelock-install
-// migration path that was never executed on the current production Diamonds. Active
-// admin operations now go through scripts in contracts/scripts/ (set-pricing-signer,
-// upgrade-cut-facet, upgrade-hedge-v8, etc.) signed by the deployer or Safe keys.
-// Removed pages: accept-ownership, oracle-setup, install-timelock, safe-transfer,
-// propose-ownership-facet, safe-add-owner, propose-v2-upgrades.
+
+const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
 const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards'];
 
+// True on first paint if the Rift provider has a persisted session in storage.
+// Used to suppress the /auth redirect during the brief window between mount
+// and the provider rehydrating its JWT — without it, signed-in users bounce
+// to /auth on every cold reload.
+function hasStoredRiftSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return !!window.localStorage.getItem('rift:identity'); } catch { return false; }
+}
+
 function AuthGuard() {
+  const { isAuthenticated } = useRift();
   const [location, setLocation] = useLocation();
+  // Snapshot once at mount — flips false only after the user explicitly signs out.
+  const [pendingHydration, setPendingHydration] = useState<boolean>(() => hasStoredRiftSession());
   useEffect(() => {
+    // The moment the provider confirms auth, hydration is done.
+    if (isAuthenticated) setPendingHydration(false);
+  }, [isAuthenticated]);
+  useEffect(() => {
+    // Fallback: if the stored session is invalid (expired refresh, server
+    // revoked, etc.) we still need to redirect eventually. 2s is enough
+    // for the iframe-based silent refresh to complete in practice.
+    if (!pendingHydration) return;
+    const t = setTimeout(() => setPendingHydration(false), 2000);
+    return () => clearTimeout(t);
+  }, [pendingHydration]);
+  useEffect(() => {
+    if (pendingHydration) return;
     const requiresAuth = PROTECTED_ROUTES.some(p => location === p || location.startsWith(p + '/'));
-    if (requiresAuth && !isLoggedIn()) {
+    if (requiresAuth && !isAuthenticated) {
       setLocation('/auth');
     }
-  }, [location, setLocation]);
+  }, [location, isAuthenticated, pendingHydration, setLocation]);
+  return null;
+}
+
+/**
+ * Reacts to widget sign-in by (a) caching the user summary so the wallet
+ * page can render instantly on reload, and (b) fetching the full user
+ * profile so OTP-gated tx prompts know which channel to use.
+ */
+function RiftPostSigninSync() {
+  const { user, isAuthenticated } = useRift();
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setCachedUserSummary({
+        user: user.user,
+        address: user.address,
+        btcAddress: user.btcAddress,
+      });
+      // Fire-and-forget — pulls email/phone for the AuthMethod cache.
+      getMe().catch(() => {});
+    } else if (!isAuthenticated) {
+      clearLocalRiftState();
+    }
+  }, [isAuthenticated, user?.user, user?.accessToken]);
   return null;
 }
 
@@ -94,16 +142,47 @@ function Router() {
   );
 }
 
+function RiftAuthMount() {
+  const { toast } = useToast();
+  return (
+    <RiftAuth
+      // Full-page modal — the widget owns the entire viewport instead of
+      // floating as a centered card. Mobile users get the same experience.
+      maxHeight="100dvh"
+      maxWidth="100vw"
+      radius={0}
+      backdrop={{
+        color: 'hsl(var(--background))',
+        blur: 0,
+      }}
+      iframeStyle={{
+        width: '100vw',
+        height: '100dvh',
+        border: 'none',
+      }}
+      onError={(msg) => toast({ title: 'Sign-in error', description: msg, variant: 'destructive' })}
+    />
+  );
+}
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <AuthGuard />
-        <TxAuthDialog />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    // `persist` keeps the session in storage across reloads so signed-in users
+    // don't get bounced back to /auth on refresh. Combined with the isReady
+    // gate in AuthGuard, the redirect only fires after rehydration completes.
+    <RiftProvider apiKey={RIFT_API_KEY} persist>
+      <RiftTokenBridge />
+      <RiftPostSigninSync />
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <RiftAuthMount />
+          <AuthGuard />
+          <TxAuthDialog />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </RiftProvider>
   );
 }
 

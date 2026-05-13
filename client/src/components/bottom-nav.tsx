@@ -1,44 +1,70 @@
 /**
- * Bottom Navigation Bar - Mobile navigation shown at the bottom of app pages
+ * Bottom Navigation Bar — BlockFinaX 2026 redesign
  *
- * Fixed bottom bar with icon links to Home, Wallet, Hedge, and Tasks.
- * Only visible on mobile screens. Highlights the currently active page.
- * Exports: BottomNav
+ * Floating, frosted-glass pill anchored at the bottom of the viewport.
+ * Four tabs: Home, Wallet, Cover (the rebranded Hedge), Earn.
+ * Active state shows a small primary dot below the icon.
  */
 import { useLocation } from 'wouter';
-import { Home as HomeIcon, Wallet as WalletIcon, Shield, ListChecks } from 'lucide-react';
+import { Home as HomeIcon, Wallet as WalletIcon, Shield, Star } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const TABS = [
+  { path: '/home', label: 'Home', icon: HomeIcon, matches: ['/home'] },
+  { path: '/wallet', label: 'Wallet', icon: WalletIcon, matches: ['/wallet'] },
+  { path: '/hedge', label: 'Cover', icon: Shield, matches: ['/hedge'] },
+  { path: '/rewards', label: 'Earn', icon: Star, matches: ['/rewards', '/tasks'] },
+];
 
 export function BottomNav() {
   const [location, setLocation] = useLocation();
 
-  const tabs = [
-    { path: '/home', label: 'Home', icon: HomeIcon },
-    { path: '/wallet', label: 'Wallet', icon: WalletIcon },
-    { path: '/hedge', label: 'Hedge', icon: Shield },
-    { path: '/tasks', label: 'Rewards', icon: ListChecks },
-  ];
-
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border/50 z-50 safe-area-bottom">
-      <div className="max-w-2xl mx-auto">
-        <div className="grid grid-cols-4 h-16">
-          {tabs.map((tab) => {
-            const isActive = location === tab.path || (tab.path === '/tasks' && location === '/rewards');
+    <div className="fixed bottom-0 inset-x-0 z-50 pointer-events-none pb-[max(env(safe-area-inset-bottom),12px)]">
+      <nav className="pointer-events-auto bfx-nav-float mx-auto mb-3 max-w-md rounded-[22px] h-[64px] px-2">
+        <div className="relative grid grid-cols-4 h-full">
+          {TABS.map((tab) => {
+            const isActive = tab.matches.some(
+              (m) => location === m || location.startsWith(m + '/'),
+            );
+            const Icon = tab.icon;
             return (
               <button
                 key={tab.path}
+                type="button"
                 onClick={() => !isActive && setLocation(tab.path)}
-                className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={cn(
+                  'relative flex flex-col items-center justify-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-xl transition-colors group',
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground active:scale-95',
+                )}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <tab.icon className="h-5 w-5" />
-                <span className="text-[10px] font-medium">{tab.label}</span>
+                <span
+                  className={cn(
+                    'relative h-7 w-12 inline-flex items-center justify-center rounded-full transition-all duration-200',
+                    isActive && 'bg-primary/12',
+                  )}
+                >
+                  <Icon
+                    className={cn('h-[18px] w-[18px] transition-transform', isActive && 'text-primary')}
+                    strokeWidth={isActive ? 2 : 1.7}
+                  />
+                </span>
+                <span
+                  className={cn(
+                    'text-[10px] tracking-tight leading-none transition-all',
+                    isActive ? 'font-semibold text-primary' : 'font-medium',
+                  )}
+                >
+                  {tab.label}
+                </span>
               </button>
             );
           })}
         </div>
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 }

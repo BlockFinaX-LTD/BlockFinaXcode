@@ -35,12 +35,14 @@ docs/
 | File | What's in it |
 |---|---|
 | [pricing-engine.md](pricing/pricing-engine.md) | Complete pricing engine doc: data sources, formulas, EM drift correction, signed quotes |
+| [pricing-model-explained.html](pricing/pricing-model-explained.html) / [.pdf](pricing/pricing-model-explained.pdf) | Plain-English walkthrough of the model — 12 sections including two worked examples (USD/NGN 90d and USD/GHS 30d), six calibration adjustments, LP economics, and what hedgers actually receive |
 
 ## upgrades/ — Upgrade history & roadmap
 
 | File | What's in it |
 |---|---|
 | [v7-range-product-upgrade.md](upgrades/v7-range-product-upgrade.md) | The range-product upgrade (v7) and signed-quote attestation (v8) |
+| [v8-optional-signing.md](upgrades/v8-optional-signing.md) | Optional-signing upgrade (2026-05-08) — engine attestation made advisory rather than mandatory; deployed addresses + UI changes + new self-priced badge flow |
 | [infrastructure-roadmap.md](upgrades/infrastructure-roadmap.md) | Forward-looking roadmap: what to build next and why |
 
 ## ops/ — Operations

@@ -8,6 +8,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRift } from '@rift-finance/react';
 import { ethers } from 'ethers';
 import { walletManager, type WalletBalance } from '@/lib/wallet';
 import { fallbackProvider } from '@/lib/rpc-provider';
@@ -80,12 +81,15 @@ async function sendNativeViaServer(
   return broadcastTx(signedTx, chainId);
 }
 
-async function ensureGas(walletAddress: string, chainId: number) {
+async function ensureGas(chainId: number, accessToken: string) {
   try {
     const res = await fetch('/api/gas/sponsor', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ walletAddress, chainId }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ chainId }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -99,6 +103,7 @@ export function useTransactions(networkId: number) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { address } = useWallet();
+  const { getAccessToken } = useRift();
   
   // Use the new real-time balance system
   const walletBalances = useWalletBalances(networkId);
@@ -196,8 +201,10 @@ export function useTransactions(networkId: number) {
       if (!network) throw new Error('Unknown network selected');
       const chainId = network.chainId;
 
-      // Ensure gas is available (non-fatal if it fails)
-      await ensureGas(walletAddress, chainId);
+      // Both /api/gas/sponsor and /api/fees/record are Rift-authed now.
+      // Pull the access token once up front so the two calls share it.
+      const accessToken = await getAccessToken().catch(() => null);
+      if (accessToken) await ensureGas(chainId, accessToken);
 
       if (tokenAddress && tokenDecimals && feeAmount && treasuryAddress) {
         // Stablecoin send WITH fee split
@@ -218,24 +225,29 @@ export function useTransactions(networkId: number) {
           feeTxHash = await broadcastTx(signedFeeTx, chainId);
         } catch { /* fee collection failure is non-fatal */ }
 
-        // Record fee server-side
-        try {
-          await fetch('/api/fees/record', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              txHash: hash,
-              feeTxHash,
-              fromWallet: walletAddress,
-              toWallet: to,
-              transferAmount: amount,
-              feeAmount,
-              feePercent: '0.3',
-              token: 'USDC',
-              chainId,
-            }),
-          });
-        } catch {}
+        // Record fee server-side (Rift-authed, non-fatal if it fails)
+        if (accessToken) {
+          try {
+            await fetch('/api/fees/record', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                txHash: hash,
+                feeTxHash,
+                fromWallet: walletAddress,
+                toWallet: to,
+                transferAmount: amount,
+                feeAmount,
+                feePercent: '0.3',
+                token: 'USDC',
+                chainId,
+              }),
+            });
+          } catch {}
+        }
 
         return { hash, feeTxHash, transaction: { hash } };
 

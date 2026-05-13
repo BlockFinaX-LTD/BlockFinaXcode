@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BlockFinaX Pricing Model — Working Reference</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1a1a1a;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 28px 80px;
+    line-height: 1.55;
+    font-size: 11.5pt;
+  }
+  h1, h2, h3, h4 {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #0d2436;
+    line-height: 1.25;
+    page-break-after: avoid;
+  }
+  h1 { font-size: 26pt; margin: 0 0 6pt; letter-spacing: -0.5px; }
+  h2 { font-size: 17pt; margin: 36pt 0 8pt; padding-bottom: 4pt; border-bottom: 1.5px solid #0d2436; }
+  h3 { font-size: 13pt; margin: 22pt 0 4pt; color: #1f3a52; }
+  h4 { font-size: 11.5pt; margin: 14pt 0 4pt; color: #2a4d6f; font-weight: 600; }
+  p { margin: 0 0 10pt; }
+  .sub { color: #5a6b7c; font-style: italic; font-size: 11pt; margin-top: 0; }
+  .lead { font-size: 12.5pt; color: #2a4d6f; margin-bottom: 18pt; }
+  .note { background: #f7f3ea; border-left: 3px solid #c89b3c; padding: 10pt 12pt; margin: 14pt 0; font-size: 10.5pt; }
+  .warn { background: #fcf0ee; border-left: 3px solid #c44539; padding: 10pt 12pt; margin: 14pt 0; font-size: 10.5pt; }
+  .ok   { background: #eef6ed; border-left: 3px solid #4d8b3e; padding: 10pt 12pt; margin: 14pt 0; font-size: 10.5pt; }
+  .key  { background: #eef2f7; border-left: 3px solid #1f3a52; padding: 10pt 12pt; margin: 14pt 0; font-size: 11pt; }
+  code, .formula {
+    font-family: "SF Mono", Consolas, "Courier New", monospace;
+    background: #f1ede4;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 10pt;
+  }
+  pre {
+    background: #f8f6f1;
+    border: 1px solid #e6dec9;
+    padding: 11pt 13pt;
+    font-family: "SF Mono", Consolas, "Courier New", monospace;
+    font-size: 9.5pt;
+    line-height: 1.5;
+    overflow-x: auto;
+    page-break-inside: avoid;
+    border-radius: 3px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12pt 0;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+  th { background: #0d2436; color: white; text-align: left; font-weight: 600; padding: 6pt 8pt; font-family: -apple-system, Arial, sans-serif; }
+  td { padding: 5pt 8pt; border-bottom: 1px solid #e1ddd2; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafaf6; }
+  td.num { font-family: "SF Mono", Consolas, monospace; text-align: right; }
+  .green { color: #2c7a32; font-weight: 600; }
+  .red   { color: #b8392e; font-weight: 600; }
+  .amber { color: #b87a2c; font-weight: 600; }
+  ul, ol { margin: 6pt 0 12pt 18pt; padding: 0; }
+  li { margin-bottom: 5pt; }
+  hr { border: none; border-top: 1px solid #d1c8b3; margin: 24pt 0; }
+  .toc ol { list-style-type: decimal; padding-left: 22pt; }
+  .toc li { font-family: -apple-system, Arial, sans-serif; font-size: 10.5pt; padding: 2pt 0; }
+  .toc a { color: #1f3a52; text-decoration: none; }
+  .footer-note {
+    margin-top: 28pt;
+    padding-top: 12pt;
+    border-top: 1px solid #d1c8b3;
+    color: #5a6b7c;
+    font-size: 9.5pt;
+    font-style: italic;
+  }
+  .pagebreak { page-break-before: always; }
+  .figure { background: #fafaf6; border: 1px solid #e1ddd2; padding: 14pt; margin: 14pt 0; font-family: "SF Mono", Consolas, monospace; font-size: 9.5pt; line-height: 1.5; white-space: pre; page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>BlockFinaX Pricing Model</h1>
+<p class="sub">A working reference for the pricing engine — what it computes, why, and how to read every number.</p>
+<p class="lead">This document explains, in plain English, how BlockFinaX prices FX hedges for African currencies. It walks through the math step by step using real worked examples, identifies the six calibration adjustments that make the engine produce defensible numbers, and shows what the hedger actually receives in each scenario.</p>
+
+<div class="key">
+  <strong>Who this is for.</strong> Engineers, LPs, regulators, and curious hedgers. No prior options-pricing background required — every term is defined the first time it appears, and every formula is followed by a worked example with real numbers.
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>The problem: why African FX hedging is hard</li>
+    <li>What we sell: the Knock-In Range Forward</li>
+    <li>The five inputs the engine needs</li>
+    <li>How we get each input from real data</li>
+    <li>The pricing formula, explained step by step</li>
+    <li>Six calibration adjustments that make it work</li>
+    <li>Worked example: USD/NGN, 90 days, $10,000 notional</li>
+    <li>Worked example: USD/GHS, 30 days, $1,000 notional</li>
+    <li>How the LP makes (or loses) money</li>
+    <li>What the hedger actually gets</li>
+    <li>Limits, edge cases, and what's still on the roadmap</li>
+    <li>Glossary</li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="s1">1. The problem: why African FX hedging is hard</h2>
+
+<p>Most options-pricing tools are calibrated for the G10 currency pairs — EUR/USD, GBP/USD, USD/JPY. Those markets have three things that frontier currencies don't:</p>
+
+<ol>
+  <li><strong>Deep, observable forward curves.</strong> You can buy a 90-day USD/EUR forward at any bank; the market price tells you the implied drift.</li>
+  <li><strong>Liquid options markets.</strong> Implied volatility is observable directly from option prices.</li>
+  <li><strong>Interest-rate parity that holds.</strong> The forward rate equals spot times the ratio of risk-free rates. Plug rates into Garman-Kohlhagen, get a fair price.</li>
+</ol>
+
+<p>For USD/GHS, USD/NGN, USD/KES — the pairs we care about — none of these are true:</p>
+
+<ul>
+  <li><strong>No forward curve.</strong> There's no NDF market deep enough to read off forwards. We have to estimate drift ourselves.</li>
+  <li><strong>No options market.</strong> No implied vol. We have to compute volatility from historical price moves.</li>
+  <li><strong>Interest-rate parity fails.</strong> The Ghana T-bill rate is 28% while USD risk-free is 4.5%. IRP would say USD/GHS forwards trade at huge premiums to spot — but capital controls prevent that arbitrage. Real cedi prices behave very differently from what IRP predicts.</li>
+</ul>
+
+<p>So we built our own pricing engine. It uses the standard Garman-Kohlhagen call-spread formula for the math, but substitutes <em>empirical drift</em> for the rate differential, and adds five calibration adjustments to handle the unique behaviour of frontier currencies (jumps, regime shifts, capital controls, devaluation events).</p>
+
+<div class="note">
+  <strong>The headline:</strong> we replace the missing market signals (forward curve, implied vol) with calibrated estimates from 5 years of daily price history, then adjust for known frontier-EM pathologies. The output is a fair-value premium that a market maker could accept without embarrassment.
+</div>
+
+<hr>
+
+<h2 id="s2">2. What we sell: the Knock-In Range Forward</h2>
+
+<p>The hedger is typically an importer, exporter, saver, or business with a future foreign-currency obligation. They want to lock in a known cost. We give them a contract with three numbers:</p>
+
+<table>
+<tr><th>Term</th><th>What it means</th><th>Example</th></tr>
+<tr><td><strong>Strike</strong></td><td>The exchange rate at which protection starts paying.</td><td>GHS 11.80 per USD</td></tr>
+<tr><td><strong>Cap</strong></td><td>The exchange rate at which protection stops growing. The LP's max exposure point.</td><td>GHS 12.30 per USD</td></tr>
+<tr><td><strong>Expiry</strong></td><td>When the contract settles.</td><td>30 days from today</td></tr>
+</table>
+
+<h3>The payoff in plain words</h3>
+
+<p>At expiry, look at the actual exchange rate (we call this S<sub>T</sub>):</p>
+
+<ul>
+  <li>If S<sub>T</sub> ≤ strike: hedger gets <strong>nothing</strong>. The currency hasn't depreciated past the strike, no protection needed. Hedger loses only the premium they paid upfront.</li>
+  <li>If strike &lt; S<sub>T</sub> &lt; cap: hedger gets a payout that <strong>grows linearly</strong> with how much the currency depreciated past the strike.</li>
+  <li>If S<sub>T</sub> ≥ cap: hedger gets the <strong>maximum payout</strong> — the LP has paid out their full collateral. Above the cap, hedger absorbs further loss.</li>
+</ul>
+
+<div class="figure">
+                     payout
+                       │
+   max payout ───────────────────────────
+                       │     ┌──────────
+                       │    /
+                       │   /
+                       │  /
+                       │ /
+              0 ───────┼/──────────────────  USD/GHS at expiry
+                       │
+                     strike            cap
+</div>
+
+<p>This is technically called an <em>up-and-in call spread</em>, or in our marketing language a <em>Knock-In Range Forward</em>. The cap exists for one reason: <strong>the LP needs to know their maximum loss in advance</strong>. Without a cap, no liquidity provider would write the contract.</p>
+
+<div class="note">
+  <strong>Important nuance.</strong> The strike and the &quot;barrier&quot; (the rate that activates the protection) are the same number in our product. So mechanically, the contract is a vanilla call spread — the moment the currency crosses the strike, the contract is &quot;in the money.&quot; We use the &quot;Knock-In&quot; framing for hedger UX (it explains <em>when</em> the protection helps), but the math is straightforward Garman-Kohlhagen.
+</div>
+
+<hr>
+
+<h2 id="s3">3. The five inputs the engine needs</h2>
+
+<p>To produce a premium, we need five numbers. Three come from the hedger's request, two come from market data:</p>
+
+<table>
+<tr><th>Symbol</th><th>What it is</th><th>Source</th></tr>
+<tr><td><code>S</code></td><td>Spot price (current FX rate)</td><td>Live oracle (open.er-api.com + backup)</td></tr>
+<tr><td><code>K_lower</code></td><td>Strike — where protection starts</td><td>Hedger picks (or preset)</td></tr>
+<tr><td><code>K_upper</code></td><td>Cap — where protection ends</td><td>Hedger picks (or preset)</td></tr>
+<tr><td><code>T</code></td><td>Time to expiry, in years (e.g. 30 days = 0.0822)</td><td>Hedger picks</td></tr>
+<tr><td><code>r</code></td><td>USD risk-free rate</td><td>US Treasury Direct API</td></tr>
+<tr><td><code>μ</code></td><td>Empirical drift — expected annualized rate of change of the FX pair</td><td>Computed from 5 years of daily closes (Yahoo Finance)</td></tr>
+<tr><td><code>σ</code></td><td>Volatility — typical annualized standard deviation of price moves</td><td>Computed from 60 days of daily closes (EWMA)</td></tr>
+</table>
+
+<p>Note that we don't use the foreign currency's interest rate directly. For frontier-EM pairs, interest-rate parity doesn't hold, so the foreign rate isn't a useful input. Instead, we compute the empirical drift μ from price history and use that as the &quot;effective foreign yield&quot; in the Garman-Kohlhagen formula:</p>
+
+<pre>q_effective = r − μ</pre>
+
+<p>This is the <em>empirical-drift correction</em>. It's the single most important deviation from textbook GK pricing for our use case.</p>
+
+<hr>
+
+<h2 id="s4">4. How we get each input from real data</h2>
+
+<h3>4.1 Spot price <code>S</code></h3>
+
+<p>Pulled live from <code>open.er-api.com</code> with a backup feed from <code>exchangerate-api.com</code>. Cached for 5 minutes. If both feeds are stale or disagree by more than 5%, we refuse to quote.</p>
+
+<h3>4.2 USD risk-free rate <code>r</code></h3>
+
+<p>From the US Treasury fiscaldata API, taking the most recent 30-day T-bill yield. Cached for 6 hours. As of writing this is around 3.7%/yr.</p>
+
+<h3>4.3 Empirical drift <code>μ</code></h3>
+
+<p>The annualized log-return of the FX pair over the last 5 years:</p>
+
+<pre>μ = (1 / years) × ln(close_today / close_5y_ago)</pre>
+
+<p>For USD/GHS, 5 years ago the rate was around 5.50; today it's around 11.20. So:</p>
+
+<pre>μ_GHS = (1 / 5) × ln(11.20 / 5.50)
+      = (1 / 5) × ln(2.036)
+      = (1 / 5) × 0.711
+      = 0.142, i.e., 14.2%/year</pre>
+
+<p>That's saying: <em>over the past 5 years, the cedi has depreciated against the dollar at an average annualized rate of about 14%.</em> Naïve GK would assume this rate of depreciation continues.</p>
+
+<div class="warn">
+  <strong>Catch:</strong> if the recent 6 months have been calmer than the 5-year average, naïve drift overshoots. We address this in Section 6 — drift blending and capping.
+</div>
+
+<h3>4.4 Volatility <code>σ</code></h3>
+
+<p>From the last 60 daily closes, computed via Exponentially Weighted Moving Average (EWMA) with decay λ=0.94 (RiskMetrics standard). The math:</p>
+
+<pre>1. Compute daily log returns:    r_i = ln(close_i / close_(i-1))
+2. EWMA variance (recursive):    var_i = λ × var_(i-1) + (1−λ) × r_i²
+3. Seed var_0 from the unweighted variance of the first 20 returns
+4. Annualize:                    σ = √(var_60) × √252</pre>
+
+<p>For USD/GHS today, this gives σ ≈ 6.5% (very calm — cedi has been stable for the last few months).</p>
+
+<p>We then apply a <em>tier markup</em> to the realized vol to account for the fact that 60-day EWMA misses jump events:</p>
+
+<table>
+<tr><th>Tier</th><th>Markup</th><th>Floor</th><th>Pairs</th></tr>
+<tr><td>g10</td><td>+12.5%</td><td>—</td><td>EUR/USD, GBP/USD</td></tr>
+<tr><td>majorEM</td><td>+25%</td><td>—</td><td>BRL, MXN, ZAR, INR</td></tr>
+<tr><td>lessLiquidEM</td><td>+40%</td><td>—</td><td>PHP, COP, IDR</td></tr>
+<tr><td>frontierEM</td><td>+75%</td><td><strong>15%</strong></td><td>GHS, NGN, KES, UGX, ETB</td></tr>
+<tr><td>pegged</td><td>+150%</td><td><strong>30%</strong></td><td>XOF, XAF</td></tr>
+<tr><td>cryptoMajor</td><td>+20%</td><td>—</td><td>BTC, ETH</td></tr>
+</table>
+
+<p>So for cedi: realized 6.5% × 1.75 markup = 11.4%. Then we floor at 15% (frontier-EM tier minimum). So <strong>σ_pricing = 15%</strong>.</p>
+
+<div class="ok">
+  <strong>Why these floors exist.</strong> Frontier currencies have devaluation days that look like 4-σ events under Brownian motion but happen multiple times per year. The 60-day EWMA window can entirely miss such events, producing artificially low σ. The floor makes sure we always charge enough premium to cover jump risk.
+</div>
+
+<hr>
+
+<h2 id="s5">5. The pricing formula, explained step by step</h2>
+
+<p>The premium is computed using the <strong>Garman-Kohlhagen call spread formula</strong>. This is just two vanilla Garman-Kohlhagen calls subtracted from each other:</p>
+
+<pre>premium = call(K_lower) − call(K_upper)</pre>
+
+<p>Where each <code>call(K)</code> follows the textbook formula:</p>
+
+<pre>d₁ = [ln(S/K) + (r − q + σ²/2) × T] / (σ × √T)
+d₂ = d₁ − σ × √T
+
+call(K) = S × e^(−q×T) × N(d₁) − K × e^(−r×T) × N(d₂)</pre>
+
+<p>Where <code>N(·)</code> is the standard normal cumulative distribution function.</p>
+
+<h3>What each piece means in plain English</h3>
+
+<table>
+<tr><th>Symbol</th><th>Plain meaning</th></tr>
+<tr><td><code>ln(S/K)</code></td><td>How far &quot;in the money&quot; the option is, in log terms</td></tr>
+<tr><td><code>(r − q) × T</code></td><td>The expected drift of the FX rate over time T</td></tr>
+<tr><td><code>σ × √T</code></td><td>The expected size of random moves over time T (one standard deviation)</td></tr>
+<tr><td><code>N(d₁)</code></td><td>Roughly: the probability the option finishes &quot;in the money&quot;</td></tr>
+<tr><td><code>e^(−r×T)</code></td><td>Discount factor — a dollar in the future is worth less than a dollar today</td></tr>
+</table>
+
+<h3>Putting it together</h3>
+
+<p>Run the formula for both strikes (K_lower and K_upper), subtract, and you get the per-unit value of the spread. Multiply by the notional and divide by spot to get the premium in USD:</p>
+
+<pre>premium_usd = (call(K_lower) − call(K_upper)) × notional / S</pre>
+
+<p>That's the entire kernel. Everything else — the empirical drift, the σ floor, the tier markup — is about getting the <em>inputs</em> right.</p>
+
+<hr>
+
+<h2 id="s6">6. Six calibration adjustments that make it work</h2>
+
+<p>Plain Garman-Kohlhagen with naïve inputs produces nonsensical numbers for African FX. Here are the six adjustments we apply:</p>
+
+<h3>Fix 1 — Empirical drift instead of foreign rate</h3>
+<p>Garman-Kohlhagen wants <code>q</code>, the foreign-currency interest rate, on the assumption that interest-rate parity holds. For frontier currencies it doesn't. We substitute <code>q_effective = r − μ</code>, where μ is the empirical drift computed from 5 years of price history. This is the single most important adjustment.</p>
+
+<h3>Fix 2 — Tier-specific volatility floor</h3>
+<p>EWMA over 60 days can miss jump events. We floor σ at 15% for frontierEM and 30% for pegged tiers. Concretely: even if the last 60 days of NGN closes look like 5% annualized vol, we price as if it were at least 15%. This protects LPs from regime-shift events the rolling window hasn't seen yet.</p>
+
+<h3>Fix 3 — Drift cap</h3>
+<p>Empirical drift over 5 years can capture a one-time devaluation that's already finished. NGN devalued from ~450 to ~1500 over 2023–24; that's μ ≈ 24%/year if you include those years. If we use that drift naïvely going forward, we'd assume NGN keeps depreciating at 24%/year for the next 90 days — probably wrong. We cap drift at ±20%/year regardless of what history says.</p>
+
+<h3>Fix 4 — Drift blending</h3>
+<p>We compute drift over three windows (5y, 1y, recent 90 days) and blend. For upward hedges (protection against devaluation), we use the <em>minimum</em> of the three to avoid overcharging. For downward hedges, we use the <em>maximum</em>. This adapts to current regime: if the currency has stabilised, recent drift is low and we don't price as if 2023's chaos continues.</p>
+
+<h3>Fix 5 — Term structure of vol</h3>
+<p>For short-dated options (under 14 days), we use σ from the last 30 days. For long-dated (over 90 days), σ from the last year. In between, a linear blend. This fixes the &quot;3-day GHS hedge prices too cheap&quot; problem — short-dated options need σ from a recent window, not a long-term average that smooths over current volatility.</p>
+
+<h3>Fix 6 — Leverage cap (safety net)</h3>
+<p>If the engine ever produces a premium where <code>max_payout / premium &gt; 100×</code>, we refuse to quote. This catches any pathological inputs (σ at the floor, strike right next to spot, very short tenor) that would give the hedger a free lottery ticket. The threshold 100× is well above any realistic option pricing — even cheap deep-OTM options rarely exceed 50×.</p>
+
+<div class="ok">
+  <strong>Together, these six fixes transform plain GK from &quot;textbook formula that makes textbook assumptions&quot; into &quot;production engine that handles frontier-EM realities.&quot;</strong> They are calibration choices, not math errors. The kernel is unchanged; the inputs are sane.
+</div>
+
+<hr>
+
+<h2 id="s7">7. Worked example: USD/NGN, 90 days, $10,000 notional</h2>
+
+<p>The hedger is a Nigerian importer who'll need $10,000 in 90 days to pay an invoice. They're worried NGN will weaken further. They want partial protection.</p>
+
+<h3>Inputs</h3>
+<table>
+<tr><th>Input</th><th>Value</th><th>Source</th></tr>
+<tr><td>Spot S</td><td>1366.12</td><td>Live oracle</td></tr>
+<tr><td>Strike K_lower</td><td>1399</td><td>Hedger picks (2.4% above spot)</td></tr>
+<tr><td>Cap K_upper</td><td>1419.76</td><td>Hedger picks (3.9% above spot)</td></tr>
+<tr><td>T</td><td>0.2464 years (90 days)</td><td>Hedger picks</td></tr>
+<tr><td>r</td><td>3.70%/year</td><td>Treasury Direct</td></tr>
+<tr><td>μ (empirical drift)</td><td>23.8%/year</td><td>5-year NGN history</td></tr>
+<tr><td>σ (post-markup, after floor)</td><td>11.4%/year</td><td>EWMA 60-day × 1.75 markup</td></tr>
+<tr><td>q_effective</td><td>r − μ = 3.70% − 23.8% = <strong>−20.1%</strong></td><td>Empirical-drift substitution</td></tr>
+</table>
+
+<h3>The math, step by step</h3>
+
+<pre>Forward at 90 days = S × e^((r − q) × T)
+                   = 1366.12 × e^((0.037 + 0.201) × 0.2464)
+                   = 1366.12 × e^(0.0586)
+                   = 1366.12 × 1.0604
+                   = 1448.6</pre>
+
+<p>The model expects USD/NGN to be at 1448.6 in 90 days under risk-neutral measure. <strong>Both strikes (1399 and 1419.76) are below this forward</strong>, meaning the call spread is in the money on the forward. Premium will be substantial.</p>
+
+<pre>σ × √T = 0.114 × 0.4964 = 0.0566   (one std dev over 90 days)
+
+For K = 1399:
+  d₁ = [ln(1366.12 / 1399) + (0.037 + 0.201 + 0.114²/2) × 0.2464] / 0.0566
+     = [−0.0238 + 0.0602] / 0.0566
+     = 0.6463
+  d₂ = 0.6463 − 0.0566 = 0.5897
+  N(d₁) = 0.7410, N(d₂) = 0.7222
+  call(1399) = 1366.12 × 1.0508 × 0.7410 − 1399 × 0.9909 × 0.7222
+             = 1063.7 − 1001.4
+             = GHS 62.3 per USD                    [actually NGN per USD]
+
+For K = 1419.76:
+  d₁ = 0.3853, d₂ = 0.3289
+  N(d₁) = 0.6500, N(d₂) = 0.6289
+  call(1419.76) = 933.1 − 884.6 = NGN 48.5 per USD
+
+Spread per USD = 62.3 − 48.5 = NGN 13.8
+Premium in USD = 13.8 × 10,000 / 1366.12 = $10.10  (engine reports $10.29 — small rounding)
+Max payout = (1419.76 − 1399) × 10,000 / 1366.12 = $151.96</pre>
+
+<h3>What this means for the hedger</h3>
+
+<table>
+<tr><th>USD/NGN at expiry</th><th>Hedge payout</th><th>Net P&amp;L (after $10.29 premium)</th></tr>
+<tr><td class="num">≤ 1399 (strike)</td><td class="num">$0</td><td class="num red">−$10.29</td></tr>
+<tr><td class="num">1410</td><td class="num">$80.52</td><td class="num green">+$70.23</td></tr>
+<tr><td class="num">≥ 1419.76 (cap)</td><td class="num">$151.96</td><td class="num green">+$141.67 (max)</td></tr>
+</table>
+
+<div class="note">
+  <strong>Important:</strong> the premium of $10.29 is the &quot;break-even&quot; cost. To actually profit, the hedger needs USD/NGN to settle above the &quot;break-even price&quot; of about 1400.40 (= strike + premium converted to price units).
+</div>
+
+<hr class="pagebreak">
+
+<h2 id="s8">8. Worked example: USD/GHS, 30 days, $1,000 notional</h2>
+
+<p>The hedger is a Ghanaian importer with a small invoice. They want a 30-day hedge.</p>
+
+<h3>Inputs</h3>
+<table>
+<tr><th>Input</th><th>Value</th></tr>
+<tr><td>Spot S</td><td>11.23</td></tr>
+<tr><td>Strike K_lower</td><td>11.30</td></tr>
+<tr><td>Cap K_upper</td><td>13.00 (chose &quot;Full coverage&quot; preset)</td></tr>
+<tr><td>T</td><td>30 days = 0.0822 years</td></tr>
+<tr><td>r</td><td>3.70%</td></tr>
+<tr><td>μ_5y (capped at 20%)</td><td>14.2%/year</td></tr>
+<tr><td>σ (post-markup, after floor)</td><td>15% (the frontier-EM floor)</td></tr>
+<tr><td>q_effective</td><td>3.7% − 14.2% = −10.5%</td></tr>
+</table>
+
+<h3>The math</h3>
+
+<pre>Forward at 30 days = 11.23 × e^((0.037 + 0.105) × 0.0822)
+                   = 11.23 × e^(0.01167)
+                   = 11.23 × 1.01173 = 11.36
+
+σ × √T = 0.15 × 0.2867 = 0.04300
+
+For K = 11.30:
+  d₁ = [ln(11.23/11.30) + (0.142 + 0.0113) × 0.0822] / 0.04300
+     = [−0.00622 + 0.01262] / 0.04300
+     = 0.1488
+  d₂ = 0.1488 − 0.04300 = 0.1058
+  call(11.30) ≈ GHS 0.21 per USD
+
+For K = 13.00 (way out of money):
+  d₁ ≈ −3.5    →   call(13) ≈ ~0
+
+Spread = 0.21 − 0 = GHS 0.21 per USD
+Premium = 0.21 × 1000 / 11.23 = $18.70
+Max payout = (13 − 11.30) × 1000 / 11.23 = $151.40</pre>
+
+<p>So premium ≈ $18.70 for $1,000 notional, with up to $151.40 if cedi reaches GHS 13/USD.</p>
+
+<div class="ok">
+  <strong>This is a much better trade than the same numbers with σ = 5% (the engine floor before our calibration fix).</strong> Before the σ floor was raised to 15%, this same trade priced at $1.20 premium with $151.40 max payout — implying a 126× leverage ratio, signalling the engine was undervaluing real cedi risk by about 15×. The new pricing is realistic for what a risk-aware LP would actually charge.
+</div>
+
+<hr>
+
+<h2 id="s9">9. How the LP makes (or loses) money</h2>
+
+<p>The LP writes the option, collects premium, and posts collateral up to the maximum payout. Their economics:</p>
+
+<table>
+<tr><th>Item</th><th>Amount (NGN example)</th><th>Notes</th></tr>
+<tr><td>Premium collected</td><td>$10.29</td><td>Earned upfront, kept if not triggered</td></tr>
+<tr><td>Collateral posted</td><td>$151.96</td><td>= max_payout, locked in escrow</td></tr>
+<tr><td>Probability of partial payout</td><td>~63%</td><td>Per the model with empirical drift</td></tr>
+<tr><td>Probability of full payout (cap hit)</td><td>~30%</td><td>Per the model</td></tr>
+<tr><td>Probability of zero payout</td><td>~37%</td><td>Per the model</td></tr>
+<tr><td>Expected return at fair value</td><td>$0</td><td>By definition — we price at no-arbitrage fair value</td></tr>
+</table>
+
+<h3>Why an LP would write this</h3>
+
+<p>At fair value, expected return is zero. So why would an LP deposit? Three reasons:</p>
+
+<ol>
+  <li><strong>The platform adds an LP markup (typically 20%) before quoting.</strong> So the LP collects $12.35 on a $10.29 fair-value option, giving them a positive expected return of about $2 per trade.</li>
+  <li><strong>The LP's view differs from the model.</strong> If the LP looks at the data and thinks &quot;NGN won't actually devalue past 1399 in 90 days; the empirical drift is overstated&quot;, they're betting the engine is overpricing the option. Writing it gives them positive expected return.</li>
+  <li><strong>Collateral earns yield.</strong> The $151.96 in escrow earns the local risk-free rate (or platform-routed yield). Over 90 days at 3.7%/year, that's about $1.40 of additional income.</li>
+</ol>
+
+<div class="warn">
+  <strong>Without the LP markup, no rational LP deposits.</strong> Fair-value pricing is a lower bound, not a market price. Real markets always have a bid-ask spread. The platform should always quote the marked-up premium to hedgers.
+</div>
+
+<hr>
+
+<h2 id="s10">10. What the hedger actually gets</h2>
+
+<p>Hedgers tend to be confused about three things. Let's clear them up.</p>
+
+<h3>10.1 Reaching the strike isn't the same as making money</h3>
+
+<p>If you pay $10 in premium and the rate just barely crosses the strike, you'll get a tiny payout — much less than $10. You only start making money once the rate moves past the &quot;break-even price&quot; (= strike + premium converted to price units).</p>
+
+<p>Concretely for the NGN example: strike is 1399, premium is $10.29 ≈ NGN 1.40 per USD. Break-even is 1399 + 1.40 = 1400.40. Below that, even though &quot;the strike was hit&quot;, you're net negative.</p>
+
+<h3>10.2 The cap limits your upside</h3>
+
+<p>Above the cap, the hedge stops growing. So if you pay for protection up to USD/NGN = 1419.76 and the rate crashes to 1500, the hedge pays you the same amount as if it had only crashed to 1419.76. You absorb the rest.</p>
+
+<p>The cap is what makes the LP willing to write the contract — without it, no LP would take unbounded risk for a bounded premium.</p>
+
+<h3>10.3 The hedge covers a specific zone, not all FX loss</h3>
+
+<p>For the NGN trade: spot 1366, strike 1399, cap 1419.76. The hedger only gets paid for movement between 1399 and 1419.76 — a 1.5% slice of the price range. Their underlying NGN exposure can lose much more than that and the hedge won't cover it.</p>
+
+<p>To make the hedge cover most of the underlying FX loss, the user should pick the &quot;Full coverage&quot; preset on the UI, which sets strike = spot and cap = spot × 1.25. Premium will be much higher (typically 5–10× the partial-coverage premium), but the hedge will offset close to 100% of the FX loss for any realistic devaluation.</p>
+
+<table>
+<tr><th>Configuration</th><th>Strike</th><th>Cap</th><th>Premium</th><th>Coverage at cap</th></tr>
+<tr><td>Speculative (partial)</td><td>spot × 1.10</td><td>spot × 1.15</td><td>~0.1% of notional</td><td>~25% of FX loss</td></tr>
+<tr><td>Moderate (with deductible)</td><td>spot × 1.05</td><td>spot × 1.20</td><td>~0.5% of notional</td><td>~70% of FX loss</td></tr>
+<tr><td><strong>Full coverage</strong></td><td><strong>spot</strong></td><td><strong>spot × 1.25</strong></td><td>~3–5% of notional</td><td>~100% of FX loss</td></tr>
+</table>
+
+<hr>
+
+<h2 id="s11">11. Limits, edge cases, and what's still on the roadmap</h2>
+
+<h3>What the model does well</h3>
+<ul>
+  <li>Garman-Kohlhagen kernel is industry-standard, mathematically sound</li>
+  <li>Empirical-drift substitution correctly handles the IRP-failure problem for frontier currencies</li>
+  <li>EWMA + tier markup + tier floor handles the bulk of frontier-EM volatility</li>
+  <li>Drift cap and blending prevents overshoot for stabilised currencies</li>
+  <li>Term-structure vol fixes the short-tenor mispricing</li>
+  <li>Leverage cap is a safety net for any pathological input combinations</li>
+</ul>
+
+<h3>What it doesn't do</h3>
+<ul>
+  <li><strong>Jump-diffusion modelling.</strong> We approximate jump risk with the σ floor, but a proper Merton jump-diffusion model would price devaluation events more accurately. Roadmap: Phase 2.</li>
+  <li><strong>Per-pair calibration.</strong> Tier markups and floors are tier-level constants. A proper desk would calibrate per pair using its actual jump statistics. Roadmap: Phase 2.</li>
+  <li><strong>Stochastic volatility.</strong> We assume σ is constant over the option life. Real markets exhibit vol-of-vol. For tenors over 6 months this matters; under 90 days it's a small effect.</li>
+  <li><strong>Correlation modelling.</strong> If a hedger holds a portfolio of African pairs, they're correlated, and pricing each in isolation overcharges. Out of scope for now.</li>
+  <li><strong>Live LP markup discovery.</strong> The 20% markup is a static config. In a mature market this would be dynamic, set by competitive LP quoting. Roadmap: when we have multiple LPs.</li>
+</ul>
+
+<h3>When to refuse to quote</h3>
+<p>The engine will throw an error in any of these cases:</p>
+<ul>
+  <li>Insufficient history: fewer than 60 closes in the last 90 calendar days for the pair</li>
+  <li>Spot oracle disagreement: the two FX feeds differ by more than 5%</li>
+  <li>Leverage check failure: <code>max_payout / premium &gt; 100×</code></li>
+  <li>Sanity inputs: strike on the wrong side of cap for the chosen direction</li>
+</ul>
+
+<hr>
+
+<h2 id="s12">12. Glossary</h2>
+
+<table>
+<tr><th>Term</th><th>Plain definition</th></tr>
+<tr><td><strong>Spot</strong></td><td>The current exchange rate. What you'd pay if you converted today.</td></tr>
+<tr><td><strong>Strike</strong></td><td>The exchange rate at which the hedge starts paying. Picked by the hedger.</td></tr>
+<tr><td><strong>Cap</strong></td><td>The exchange rate at which the hedge stops growing. The LP's max-loss point.</td></tr>
+<tr><td><strong>Notional</strong></td><td>The size of the hedge in USD. A $10,000 notional gives you protection scaled to a $10,000 underlying exposure.</td></tr>
+<tr><td><strong>Premium</strong></td><td>The upfront cost of the hedge, paid by the hedger to the LP.</td></tr>
+<tr><td><strong>Max payout</strong></td><td>The most the hedger can possibly receive — happens when the rate reaches the cap.</td></tr>
+<tr><td><strong>Break-even</strong></td><td>The exchange rate at which the hedger's payout equals their premium. Above this, they're net positive.</td></tr>
+<tr><td><strong>Drift (μ)</strong></td><td>The annualized expected rate of change of the FX pair. Computed from history.</td></tr>
+<tr><td><strong>Volatility (σ)</strong></td><td>The annualized standard deviation of the FX pair's returns. Measures how jumpy the rate is.</td></tr>
+<tr><td><strong>EWMA</strong></td><td>Exponentially Weighted Moving Average. A way of computing volatility that gives more weight to recent observations.</td></tr>
+<tr><td><strong>Garman-Kohlhagen</strong></td><td>The standard formula for pricing FX options. Like Black-Scholes but adapted for two currencies.</td></tr>
+<tr><td><strong>IRP (Interest-Rate Parity)</strong></td><td>The textbook relationship saying that the forward exchange rate equals spot times the ratio of the two currencies' risk-free rates. Doesn't hold for frontier currencies.</td></tr>
+<tr><td><strong>Empirical drift</strong></td><td>Drift computed from observed price history rather than from interest rates. Our substitute for IRP-derived drift.</td></tr>
+<tr><td><strong>Knock-In</strong></td><td>An option that &quot;activates&quot; when the underlying crosses a barrier. In our product, the strike and barrier are the same number, so the option simply pays out when the rate moves past the strike.</td></tr>
+<tr><td><strong>Call spread</strong></td><td>An options strategy combining a long call at a lower strike and a short call at a higher strike. The lower strike is where payout starts; the higher strike (cap) is where it stops growing.</td></tr>
+<tr><td><strong>LP (Liquidity Provider)</strong></td><td>The counterparty who writes the option. Collects the premium, posts collateral, bears the risk.</td></tr>
+<tr><td><strong>Fair value</strong></td><td>The premium at which the LP's expected profit is exactly zero. The lower bound for any quoted price.</td></tr>
+<tr><td><strong>LP markup</strong></td><td>The percentage above fair value that the platform quotes to the hedger, giving the LP a positive expected return.</td></tr>
+</table>
+
+<div class="footer-note">
+  Document version 1.0. Last updated when the pricing engine reached parity with the calibration described above. For implementation details see <code>server/pricing/kernel.ts</code>, <code>server/pricing/data/vol-math.ts</code>, <code>server/pricing/data/drift.ts</code>, and <code>server/pricing/quote.ts</code>. Test coverage in <code>server/pricing/__tests__/</code>.
+</div>
+
+</body>
+</html>

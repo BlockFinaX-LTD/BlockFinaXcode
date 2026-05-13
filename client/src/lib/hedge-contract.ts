@@ -183,6 +183,13 @@ export interface HedgeEventData {
   payoutPercent: number;
   /** ERC-20 token address used for all payments in this event (USDC or USDT). */
   paymentToken: string;
+  /**
+   * v8: address of the pricing-engine signer that attested this event's premium,
+   * or address(0) if the creator self-priced (skipped engine attestation). UIs use
+   * this to display a "Priced by engine" vs "Manually priced" badge so hedgers
+   * know whether the premium came from the platform's pricing model.
+   */
+  quoteSigner?: string;
   /** Optional description added by the event creator (stored in DB, not on-chain). */
   description?: string;
 }
@@ -627,13 +634,19 @@ class HedgeContractManager {
 
   async getEvent(eventId: number): Promise<HedgeEventData> {
     const contract = this.getReadContract();
-    const [core, stats, eventTimestamps, paymentToken] = await Promise.all([
+    // getEventQuoteSigner is a v8 function — wrap in a catch so older Diamonds
+    // (or in-flight upgrades) don't blow up the dialog. Returns ZeroAddress on
+    // any error, which the UI interprets as "manually priced / unknown".
+    const [core, stats, eventTimestamps, paymentToken, quoteSigner] = await Promise.all([
       contract.getHedgeEventCore(eventId),
       contract.getHedgeEventStats(eventId),
       this.getEventTimestamps(),
       contract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
+      contract.getEventQuoteSigner(eventId).catch(() => ethers.ZeroAddress),
     ]);
-    return this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
+    const ev = this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
+    ev.quoteSigner = quoteSigner as string;
+    return ev;
   }
 
   async getPositionsByWallet(address: string): Promise<HedgePositionData[]> {
@@ -770,7 +783,7 @@ class HedgeContractManager {
       quoteNonce?: string;       // 0x-prefixed 32-byte hex; default ZeroHash for legacy mode
     },
     onStep?: (step: string) => void
-  ): Promise<number | null> {
+  ): Promise<{ eventId: number | null; txHash: string }> {
     const feeConfig = await this.getFeeConfig();
     const tokenAddress = params.paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
     const dec = this.tokenDecimals;
@@ -802,11 +815,15 @@ class HedgeContractManager {
     await this.ensureGas(signer.address);
 
     const iface = new ethers.Interface(HEDGE_ABI);
-    const strikeWei = ethers.parseUnits(params.strike.toString(), 6);
-    const payoutCapWei = ethers.parseUnits((params.payoutCap || 0).toString(), 6);
-    const premiumRateWei = ethers.parseUnits(params.premiumRate.toString(), 6);
+    // .toFixed(6) for ALL price-like inputs — JS floats produce noise like
+    // 0.0028100000000000004, which parseUnits(_, 6) rejects ("too many decimals
+    // for format"). Truncating to exactly 6 decimal places matches the on-chain
+    // PRECISION = 1e6 and avoids the underflow.
+    const strikeWei       = ethers.parseUnits(params.strike.toFixed(6), 6);
+    const payoutCapWei    = ethers.parseUnits((params.payoutCap || 0).toFixed(6), 6);
+    const premiumRateWei  = ethers.parseUnits(params.premiumRate.toFixed(6), 6);
     const expiryTimestamp = toTimestamp(params.expiryDate);
-    const initialRateWei = ethers.parseUnits(params.initialRate.toFixed(6), 6);
+    const initialRateWei  = ethers.parseUnits(params.initialRate.toFixed(6), 6);
 
     // v8: pricing-engine attestation. Empty defaults match the contract's "legacy mode"
     // when the on-chain pricingEngineSigner is unset; the contract rejects empty
@@ -839,10 +856,8 @@ class HedgeContractManager {
 
       // Parse the new event ID from the EventCreated log (topic[1] = event ID)
       const eventLog = logs?.find(l => l.topics?.[0] === EVENT_CREATED_TOPIC);
-      if (eventLog?.topics?.[1]) {
-        return parseInt(eventLog.topics[1], 16);
-      }
-      return null;
+      const eventId = eventLog?.topics?.[1] ? parseInt(eventLog.topics[1], 16) : null;
+      return { eventId, txHash };
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
@@ -858,7 +873,7 @@ class HedgeContractManager {
     poolOpen: boolean,
     allowExternalLp: boolean,
     onStep?: (s: string) => void
-  ): Promise<void> {
+  ): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('setPoolSettings', [eventId, poolOpen, allowExternalLp]);
@@ -866,6 +881,7 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
   async deposit(
@@ -873,7 +889,7 @@ class HedgeContractManager {
     eventId: number,
     amount: string,
     onStep?: (s: string) => void
-  ): Promise<void> {
+  ): Promise<string> {
     const readContract = this.getReadContract();
     const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS) as string;
     const dec = this.tokenDecimals;
@@ -904,6 +920,7 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
   async buyProtection(
@@ -911,7 +928,7 @@ class HedgeContractManager {
     eventId: number,
     notional: string,
     onStep?: (s: string) => void
-  ): Promise<void> {
+  ): Promise<string> {
     const readContract = this.getReadContract();
     // getFeeConfig() has error handling + defaults for chains where getHedgeFeeConfig()
     // is absent (e.g. Base Diamond uses a different facet version).
@@ -964,6 +981,7 @@ class HedgeContractManager {
       const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
       onStep?.('Waiting for confirmation...');
       await this.waitForTx(txHash);
+      return txHash;
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
@@ -973,7 +991,7 @@ class HedgeContractManager {
     }
   }
 
-  async claimPayout(signer: ethers.Wallet, positionId: number, onStep?: (s: string) => void): Promise<void> {
+  async claimPayout(signer: ethers.Wallet, positionId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('claimPayout', [positionId]);
@@ -981,9 +999,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async claimPremiums(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<void> {
+  async claimPremiums(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('claimPremiums', [depositId]);
@@ -991,9 +1010,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async withdrawCapital(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<void> {
+  async withdrawCapital(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('withdrawCapital', [depositId]);
@@ -1001,9 +1021,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async withdrawCreatorEarnings(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<void> {
+  async withdrawCreatorEarnings(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('withdrawCreatorEarnings', [eventId]);
@@ -1011,9 +1032,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async recoverExpiredPayouts(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<void> {
+  async recoverExpiredPayouts(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('recoverExpiredPayouts', [eventId]);
@@ -1021,6 +1043,7 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 }
 

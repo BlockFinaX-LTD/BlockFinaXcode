@@ -27,6 +27,14 @@
   --warning: 43 96% 56%;
   --error: 0 72% 51%;
   --navy: 213 50% 24%;
+  /* BlockFinaX design tokens (post-2026 redesign) */
+  --bfx-ink: 213 53% 17%;          /* deep ink for text on light */
+  --bfx-navy: 213 53% 26%;         /* secondary text */
+  --bfx-muted: 213 19% 45%;        /* muted text */
+  --bfx-card-dark: 213 60% 9%;     /* dark hero card bg */
+  --bfx-card-dark-2: 213 56% 12%;  /* dark card surface 2 */
+  --bfx-border-dark: 213 35% 21%;  /* dark card border */
+  --bfx-surface: 210 22% 96%;      /* subtle surface tint */
 }
 
 .dark {
@@ -244,3 +252,84 @@
     margin-bottom: 12px;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+ * BlockFinaX 2026 redesign — utility classes
+ * ────────────────────────────────────────────────────────────────────── */
+
+.font-mono-data {
+  font-family: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
+  font-feature-settings: "tnum", "cv01";
+}
+
+.bfx-display {
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Dark hero card — used on Home for the balance summary */
+.bfx-hero-dark {
+  background: hsl(var(--bfx-card-dark));
+  border: 1px solid hsl(var(--bfx-border-dark));
+  color: #fff;
+}
+
+.bfx-hero-dark .bfx-watermark {
+  position: absolute;
+  right: -28px;
+  top: -32px;
+  pointer-events: none;
+  opacity: 0.07;
+}
+
+/*
+ * Brand hero card — matches the BlockFinaX logo's deep navy hexagon
+ * and the landing page's primary dark-blue surface (#0f2744). The brighter
+ * royal-blue swirl on the logo (#1a4480) is used as the subtle highlight.
+ */
+.bfx-hero-brand {
+  background: #0f2744;
+  background-image:
+    radial-gradient(ellipse 80% 60% at top right, rgba(26,68,128,0.55), transparent 55%),
+    radial-gradient(ellipse 70% 50% at bottom left, rgba(26,68,128,0.25), transparent 60%),
+    linear-gradient(180deg, #142e51 0%, #0f2744 55%, #0a1d35 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #fff;
+  box-shadow:
+    0 12px 32px -10px rgba(10,29,53,0.55),
+    0 1px 0 rgba(255,255,255,0.10) inset;
+}
+
+.bfx-hero-brand-dotgrid {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Floating bottom nav — frosted glass pill */
+.bfx-nav-float {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 8px 24px rgba(14, 17, 22, 0.08), 0 1px 0 rgba(255,255,255,0.7) inset;
+}
+
+.dark .bfx-nav-float {
+  background: rgba(20, 28, 44, 0.85);
+  border-color: hsl(var(--bfx-border-dark));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+/* Subtle dotted texture used behind hero sections */
+.bfx-dotgrid {
+  background-image: radial-gradient(circle, rgba(14, 17, 22, 0.06) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.bfx-dotgrid-dark {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+
