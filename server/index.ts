@@ -92,6 +92,19 @@ app.use(helmet({
     },
   } : false,
   crossOriginEmbedderPolicy: false,
+  // Helmet's default Cross-Origin-Opener-Policy is `same-origin`, which
+  // severs the link between the page and any popup it opens (window.opener
+  // becomes null cross-origin). Google Sign-In opens a popup from the Rift
+  // widget iframe and needs to postMessage back to it — without
+  // `same-origin-allow-popups`, GSI logs:
+  //   [GSI_LOGGER]: Failed to open popup window … Maybe blocked by the browser?
+  // and Google sign-in silently fails. Other auth methods (email OTP, Apple)
+  // are unaffected.
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  // CORP=same-origin (helmet default) is too strict for the Rift widget's
+  // postMessage handshake. `same-site` allows cross-origin embeds while
+  // still preventing arbitrary other origins from reading our responses.
+  crossOriginResourcePolicy: { policy: "same-site" },
 }));
 
 app.use(express.json({ limit: '1mb' }));
