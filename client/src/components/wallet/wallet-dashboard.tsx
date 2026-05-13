@@ -10,6 +10,7 @@ import { DepositModal } from './deposit-modal';
 import { RefreshCw, Send, ArrowDownLeft, Copy, Check } from 'lucide-react';
 import { EthIcon, UsdcIcon, UsdtIcon, BnbIcon } from '@/components/crypto-icons';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BfxMark } from '@/components/ui/bfx';
 
 interface EnhancedWalletOverviewProps {
   selectedNetworkId: number;
@@ -99,7 +100,7 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
   if (isLoading && !nativeQuery.data) {
     return (
       <div className={`space-y-4 ${className}`}>
-        <div className="bg-card rounded-xl border p-6">
+        <div className="bg-card rounded-2xl border p-6">
           <Skeleton className="h-4 w-24 mb-3" />
           <Skeleton className="h-10 w-40 mb-2" />
           <Skeleton className="h-4 w-32" />
@@ -111,64 +112,81 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Balance Card */}
-      <div className="bg-card rounded-xl border p-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm text-muted-foreground font-medium">Total Balance</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="relative overflow-hidden bfx-hero-brand rounded-2xl p-5 sm:p-6">
+        <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-60 pointer-events-none" />
+        <BfxMark
+          size={160}
+          className="absolute -right-8 -top-10 pointer-events-none"
+          primary="rgba(255,255,255,0.08)"
+          accent="rgba(255,255,255,0.18)"
+        />
 
-        <div className="mb-5">
-          <div className="text-3xl sm:text-4xl font-semibold tracking-tight mb-1">
-            {formatCurrency(localTotalValue)}
+        <div className="relative">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-white/70 font-semibold">Total balance</p>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="h-8 w-8 inline-flex items-center justify-center rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label="Refresh balances"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {network?.name || 'Network'}
-          </div>
-        </div>
 
-        {/* Wallet Address */}
-        {address && (
-          <div
-            className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
-            onClick={handleCopyAddress}
-          >
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xs font-medium text-primary">{address.slice(2, 4).toUpperCase()}</span>
+          <div className="mb-4">
+            <div className="bfx-display text-3xl sm:text-[36px] font-semibold tracking-tight text-white leading-none">
+              {formatCurrency(localTotalValue)}
             </div>
-            <code className="text-sm text-muted-foreground flex-1">{formatAddress(address)}</code>
-            {copied ? (
-              <Check className="h-4 w-4 text-green-500" />
-            ) : (
-              <Copy className="h-4 w-4 text-muted-foreground" />
-            )}
+            <div className="text-[12px] text-white/55 mt-1.5">
+              {assetCount} asset{assetCount !== 1 ? 's' : ''}
+            </div>
           </div>
-        )}
 
-        {/* Actions */}
-        <div className="grid grid-cols-2 gap-3 mt-5">
-          <Button onClick={() => setSendModalOpen(true)} className="h-11">
-            <Send className="h-4 w-4 mr-2" />
-            Send
-          </Button>
-          <Button variant="outline" onClick={() => setDepositModalOpen(true)} className="h-11">
-            <ArrowDownLeft className="h-4 w-4 mr-2" />
-            Receive
-          </Button>
+          {/* Wallet Address */}
+          {address && (
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 p-2.5 bg-white/[0.05] border border-white/10 rounded-xl cursor-pointer hover:bg-white/10 transition-colors text-left"
+              onClick={handleCopyAddress}
+            >
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                <span className="text-[11px] font-semibold text-white font-mono-data">{address.slice(2, 4).toUpperCase()}</span>
+              </div>
+              <code className="text-xs text-white/75 flex-1 font-mono-data truncate">{formatAddress(address)}</code>
+              {copied ? (
+                <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+              ) : (
+                <Copy className="h-4 w-4 text-white/55 shrink-0" />
+              )}
+            </button>
+          )}
+
+          {/* Actions */}
+          <div className="grid grid-cols-2 gap-2.5 mt-4">
+            <Button
+              onClick={() => setSendModalOpen(true)}
+              className="h-11 rounded-xl bg-white text-[#0f2744] hover:bg-white/95 font-semibold shadow-sm"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send
+            </Button>
+            <Button
+              onClick={() => setDepositModalOpen(true)}
+              className="h-11 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/15 font-semibold"
+            >
+              <ArrowDownLeft className="h-4 w-4 mr-2" />
+              Receive
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Assets */}
-      <div className="bg-card rounded-xl border">
+      <div className="bg-card rounded-2xl border overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b">
-          <span className="font-medium">Assets</span>
-          <span className="text-sm text-muted-foreground">{assetCount} assets</span>
+          <span className="text-sm font-semibold">Assets</span>
+          <span className="text-xs text-muted-foreground">{assetCount} asset{assetCount !== 1 ? 's' : ''}</span>
         </div>
 
         <div className="divide-y divide-border">
@@ -181,15 +199,15 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
                   : <EthIcon className="w-5 h-5" />}
               </div>
               <div>
-                <div className="font-medium">{nativeTokenName}</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm font-semibold leading-tight">{nativeTokenName}</div>
+                <div className="text-[11px] text-muted-foreground font-mono-data">
                   {formatCrypto(nativeBalance, nativeSym)}
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <div className="font-medium">{formatCurrency(nativeUsdValue)}</div>
-              <div className="text-xs text-muted-foreground">{priceDisplay}</div>
+              <div className="text-sm font-semibold font-mono-data">{formatCurrency(nativeUsdValue)}</div>
+              <div className="text-[11px] text-muted-foreground font-mono-data">{priceDisplay}</div>
             </div>
           </div>
 
@@ -210,15 +228,15 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
                   )}
                 </div>
                 <div>
-                  <div className="font-medium">{token.name}</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm font-semibold leading-tight">{token.name}</div>
+                  <div className="text-[11px] text-muted-foreground font-mono-data">
                     {formatCrypto(balance, token.symbol, token.decimals === 6 ? 2 : 4)}
                   </div>
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-medium">{formatCurrency(usdValue)}</div>
-                <div className="text-xs text-muted-foreground">$1.00</div>
+                <div className="text-sm font-semibold font-mono-data">{formatCurrency(usdValue)}</div>
+                <div className="text-[11px] text-muted-foreground font-mono-data">$1.00</div>
               </div>
             </div>
           ))}

@@ -40,8 +40,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
-  Shield, TrendingUp, TrendingDown, DollarSign, Clock, AlertTriangle, CheckCircle2, 
-  Plus, ArrowLeft, Wallet, BarChart3, Users, Lock, Unlock, Award,
+  Shield, TrendingUp, TrendingDown, DollarSign, Clock, AlertTriangle, CheckCircle2,
+  Plus, ArrowLeft, ArrowRight, Wallet, BarChart3, Users, Lock, Unlock, Award,
   Activity, PieChart, RefreshCw, ChevronDown, ChevronUp, ToggleLeft, ToggleRight,
   LockKeyhole, Globe, Settings, Share2, ExternalLink
 } from "lucide-react";
@@ -437,12 +437,53 @@ export default function Hedge() {
     });
   };
 
+  // Fire-and-forget activity logger. Server is idempotent (composite unique on
+  // chainId+txHash+actionType), so retries are safe. We never block UX on this —
+  // network failure here just means a missing row in the local feed, the
+  // on-chain action already succeeded.
+  const recordActivity = async (payload: {
+    actionType: string;
+    txHash: string;
+    onChainEventId?: number | null;
+    amount?: string | number | null;
+    token?: string | null;
+    metadata?: Record<string, any> | null;
+  }) => {
+    if (!wallet?.address || !payload.txHash) return;
+    try {
+      await fetch('/api/hedge/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: wallet.address,
+          chainId: activeChainId,
+          ...payload,
+        }),
+      });
+    } catch (e) {
+      console.warn('[activity] record failed (non-blocking):', e);
+    }
+  };
+
   const buyProtectionMutation = useMutation({
     mutationFn: async () => {
       if (!selectedEvent) throw new Error("No event selected");
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
-      await hedgeContract.buyProtection(signer, selectedEvent.id, notional, setTxStep);
+      const txHash = await hedgeContract.buyProtection(signer, selectedEvent.id, notional, setTxStep);
+      await recordActivity({
+        actionType: 'buy_protection',
+        txHash,
+        onChainEventId: selectedEvent.id,
+        amount: notional,
+        token: selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT',
+        metadata: {
+          eventName: selectedEvent.name,
+          underlying: selectedEvent.underlying,
+          strike: selectedEvent.strike,
+          premiumRate: selectedEvent.premiumRate,
+        },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -464,7 +505,19 @@ export default function Hedge() {
       if (!selectedEvent) throw new Error("No event selected");
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available. Please unlock your wallet.");
-      await hedgeContract.deposit(signer, selectedEvent.id, depositAmount, setTxStep);
+      const txHash = await hedgeContract.deposit(signer, selectedEvent.id, depositAmount, setTxStep);
+      await recordActivity({
+        actionType: 'lp_deposit',
+        txHash,
+        onChainEventId: selectedEvent.id,
+        amount: depositAmount,
+        token: selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT',
+        metadata: {
+          eventName: selectedEvent.name,
+          underlying: selectedEvent.underlying,
+          strike: selectedEvent.strike,
+        },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -515,7 +568,7 @@ export default function Hedge() {
       const quoteNonce: string = ethers.ZeroHash;
       const signedInitialRate: number = currentFxRate;
 
-      const newEventId = await hedgeContract.createEvent(signer, {
+      const { eventId: newEventId, txHash: createTxHash } = await hedgeContract.createEvent(signer, {
         name: newEvent.name,
         underlying: newEvent.underlying,
         strike: strikePrice,
@@ -532,9 +585,31 @@ export default function Hedge() {
         quoteNonce,
       }, setTxStep);
 
+      await recordActivity({
+        actionType: 'create_event',
+        txHash: createTxHash,
+        onChainEventId: newEventId,
+        amount: newEvent.initialLiquidity || '0',
+        token: newEvent.paymentCurrency,
+        metadata: {
+          eventName: newEvent.name,
+          underlying: newEvent.underlying,
+          strike: parseFloat(newEvent.strike),
+          premiumRate: parseFloat(newEvent.premiumRate) / 100,
+          expiryHours: newEvent.expiryHours,
+          direction: newEvent.direction,
+        },
+      });
+
       if (newEvent.poolOpen && newEventId) {
         setTxStep('Opening pool...');
-        await hedgeContract.setPoolSettings(signer, newEventId, true, newEvent.allowExternalLp, setTxStep);
+        const toggleTxHash = await hedgeContract.setPoolSettings(signer, newEventId, true, newEvent.allowExternalLp, setTxStep);
+        await recordActivity({
+          actionType: 'toggle_pool',
+          txHash: toggleTxHash,
+          onChainEventId: newEventId,
+          metadata: { eventName: newEvent.name, poolOpen: true, allowExternalLp: newEvent.allowExternalLp },
+        });
       }
 
       // Persist description to server (on-chain doesn't store text)
@@ -571,13 +646,15 @@ export default function Hedge() {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
       const event = events.find(e => e.id === eventId);
-      await hedgeContract.setPoolSettings(
-        signer,
-        eventId,
-        typeof poolOpen === "boolean" ? poolOpen : (event?.poolOpen ?? true),
-        typeof allowExternalLp === "boolean" ? allowExternalLp : (event?.allowExternalLp ?? true),
-        setTxStep
-      );
+      const nextPoolOpen = typeof poolOpen === "boolean" ? poolOpen : (event?.poolOpen ?? true);
+      const nextAllowLp  = typeof allowExternalLp === "boolean" ? allowExternalLp : (event?.allowExternalLp ?? true);
+      const txHash = await hedgeContract.setPoolSettings(signer, eventId, nextPoolOpen, nextAllowLp, setTxStep);
+      await recordActivity({
+        actionType: 'toggle_pool',
+        txHash,
+        onChainEventId: eventId,
+        metadata: { eventName: event?.name, poolOpen: nextPoolOpen, allowExternalLp: nextAllowLp },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -594,7 +671,17 @@ export default function Hedge() {
     mutationFn: async (positionId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.claimPayout(signer, positionId, setTxStep);
+      const position = myPositions.find(p => p.id === positionId);
+      const event = position ? events.find(e => e.id === position.eventId) : null;
+      const txHash = await hedgeContract.claimPayout(signer, positionId, setTxStep);
+      await recordActivity({
+        actionType: 'claim_payout',
+        txHash,
+        onChainEventId: position?.eventId ?? null,
+        amount: position?.payoutAmount ?? null,
+        token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT',
+        metadata: { positionId, eventName: event?.name, underlying: event?.underlying },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -611,7 +698,17 @@ export default function Hedge() {
     mutationFn: async (depositId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.withdrawCapital(signer, depositId, setTxStep);
+      const dep = myDeposits.find(d => d.id === depositId);
+      const event = dep ? events.find(e => e.id === dep.eventId) : null;
+      const txHash = await hedgeContract.withdrawCapital(signer, depositId, setTxStep);
+      await recordActivity({
+        actionType: 'withdraw_lp',
+        txHash,
+        onChainEventId: dep?.eventId ?? null,
+        amount: dep?.amount ?? null,
+        token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT',
+        metadata: { depositId, eventName: event?.name, underlying: event?.underlying },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -629,7 +726,14 @@ export default function Hedge() {
     mutationFn: async (eventId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.recoverExpiredPayouts(signer, eventId, setTxStep);
+      const event = events.find(e => e.id === eventId);
+      const txHash = await hedgeContract.recoverExpiredPayouts(signer, eventId, setTxStep);
+      await recordActivity({
+        actionType: 'recover_expired',
+        txHash,
+        onChainEventId: eventId,
+        metadata: { eventName: event?.name, underlying: event?.underlying },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -647,7 +751,18 @@ export default function Hedge() {
     mutationFn: async (depositId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error("Wallet signer not available.");
-      await hedgeContract.claimPremiums(signer, depositId, setTxStep);
+      const dep = myDeposits.find(d => d.id === depositId);
+      const event = dep ? events.find(e => e.id === dep.eventId) : null;
+      const claimable = dep ? (dep.premiumsEarned - dep.premiumsClaimed) : null;
+      const txHash = await hedgeContract.claimPremiums(signer, depositId, setTxStep);
+      await recordActivity({
+        actionType: 'claim_premiums',
+        txHash,
+        onChainEventId: dep?.eventId ?? null,
+        amount: claimable,
+        token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT',
+        metadata: { depositId, eventName: event?.name, underlying: event?.underlying },
+      });
     },
     onSuccess: async () => {
       setTxStep('');
@@ -759,139 +874,115 @@ export default function Hedge() {
   const netPredeterminedPayout = predeterminedPayout > 0 ? predeterminedPayout * 0.99 : 0;
 
   return (
-    <div className="min-h-screen bg-muted/30 pb-20">
+    <div className="min-h-screen bg-background pb-28">
       <AppHeader
-        title="P2P Trade Hedge"
+        title="Cover"
         rightContent={
           <Button
             onClick={() => setCreateEventDialogOpen(true)}
             size="sm"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs"
+            className="h-9 rounded-full text-xs px-3"
           >
-            <Plus className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Create Event</span>
+            <Plus className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">New pool</span>
           </Button>
         }
       />
 
-      {/* ── Wallet Balance Strip ─────────────────────────────────────────── */}
-      <div className="max-w-2xl mx-auto px-4 pt-3 pb-1">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
-          {/* Chain badge */}
-          <div
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border"
-            style={{ borderColor: selectedNetwork.color + '66', backgroundColor: selectedNetwork.color + '1A', color: selectedNetwork.color }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: selectedNetwork.color }} />
-            {selectedNetwork.name}
-          </div>
+      {/* ── Page intro + balance strip ─────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto px-4 pt-5">
+        <div className="mb-3">
+          <h1 className="bfx-display text-[24px] font-semibold tracking-tight leading-tight">
+            Cover marketplace
+          </h1>
+          <p className="text-[12.5px] text-muted-foreground mt-0.5">
+            Protect against FX moves — or earn premium providing cover.
+          </p>
+        </div>
 
-          {/* Native balance */}
-          <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs">
-            <span className="text-muted-foreground">{selectedNetwork.symbol}</span>
-            <span className="font-mono font-semibold text-foreground">
+        {/* Spendable balances — one tidy strip, no network/address pill */}
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5 -mx-4 px-4">
+          <span className="flex-shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold">
+            Spendable
+          </span>
+          <div className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-gray-100 dark:border-border/40 text-[11px]">
+            <span className="text-muted-foreground font-medium">{selectedNetwork.symbol}</span>
+            <span className="font-mono-data font-semibold text-foreground tabular-nums">
               {nativeBalance !== undefined
                 ? parseFloat(nativeBalance).toFixed(4)
                 : <span className="text-muted-foreground animate-pulse">···</span>}
             </span>
           </div>
-
-          {/* USDC balance */}
-          <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs">
-            <span className="text-muted-foreground">USDC</span>
-            <span className="font-mono font-semibold text-foreground">
+          <div className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-gray-100 dark:border-border/40 text-[11px]">
+            <span className="text-muted-foreground font-medium">USDC</span>
+            <span className="font-mono-data font-semibold text-foreground tabular-nums">
               {usdcBalance !== undefined
                 ? parseFloat(usdcBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : <span className="text-muted-foreground animate-pulse">···</span>}
             </span>
           </div>
-
-          {/* USDT balance (only on Base & BSC) */}
           {activeUsdtAddress && (
-            <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs">
-              <span className="text-muted-foreground">USDT</span>
-              <span className="font-mono font-semibold text-foreground">
+            <div className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-gray-100 dark:border-border/40 text-[11px]">
+              <span className="text-muted-foreground font-medium">USDT</span>
+              <span className="font-mono-data font-semibold text-foreground tabular-nums">
                 {usdtBalance !== undefined
                   ? parseFloat(usdtBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                   : <span className="text-muted-foreground animate-pulse">···</span>}
               </span>
             </div>
           )}
-
-          {/* Address pill */}
-          <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/60 text-xs text-muted-foreground ml-auto">
-            {wallet?.address ? `${wallet.address.slice(0,6)}…${wallet.address.slice(-4)}` : '—'}
-          </div>
         </div>
       </div>
-      {/* ─────────────────────────────────────────────────────────────────── */}
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-        <Collapsible open={statsOpen} onOpenChange={setStatsOpen}>
-          <CollapsibleTrigger asChild>
-            <button className="w-full flex items-center justify-between px-4 py-3 bg-card rounded-xl border border-border hover:bg-accent/50 transition-colors">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">My Stats</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">
-                  {myPositions.filter(p => p.status === "active").length} positions · ${myDeposits.filter(d => !d.withdrawn).reduce((s, d) => s + d.amount, 0).toLocaleString()} deposited
-                </span>
-                {statsOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-              </div>
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="bg-card rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Activity className="h-3.5 w-3.5 text-green-400" />
-                  <span className="text-[11px] text-muted-foreground">Active Events</span>
-                </div>
-                <p className="text-xl font-bold text-foreground">{events.filter(e => e.status === "open").length}</p>
-              </div>
-              <div className="bg-card rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Shield className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-[11px] text-muted-foreground">My Positions</span>
-                </div>
-                <p className="text-xl font-bold text-foreground">{myPositions.filter(p => p.status === "active").length}</p>
-              </div>
-              <div className="bg-card rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-[11px] text-muted-foreground">LP Deposits</span>
-                </div>
-                <p className="text-xl font-bold text-foreground">
-                  ${myDeposits.filter(d => !d.withdrawn).reduce((s, d) => s + d.amount, 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-card rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Award className="h-3.5 w-3.5 text-purple-400" />
-                  <span className="text-[11px] text-muted-foreground">Premiums Earned</span>
-                </div>
-                <p className="text-xl font-bold text-foreground">
-                  ${myDeposits.reduce((s, d) => s + d.premiumsEarned, 0).toLocaleString()}
-                </p>
-              </div>
+        {/* ── Your portfolio summary (brand card) ─────────────────── */}
+        <div className="relative overflow-hidden rounded-2xl bfx-hero-brand p-4">
+          <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-60 pointer-events-none" />
+          <div className="grid grid-cols-4 gap-2 relative">
+            <div className="text-center">
+              <p className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">Open pools</p>
+              <p className="bfx-display text-white text-[20px] font-semibold mt-1">
+                {events.filter(e => e.status === 'open').length}
+              </p>
             </div>
-          </CollapsibleContent>
-        </Collapsible>
+            <div className="text-center border-l border-white/15">
+              <p className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">As buyer</p>
+              <p className="bfx-display text-white text-[20px] font-semibold mt-1">
+                {myPositions.filter(p => p.status === 'active').length}
+              </p>
+            </div>
+            <div className="text-center border-l border-white/15">
+              <p className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">As provider</p>
+              <p className="bfx-display text-white text-[20px] font-semibold mt-1 font-mono-data">
+                ${myDeposits.filter(d => !d.withdrawn).reduce((s, d) => s + d.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="text-center border-l border-white/15">
+              <p className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">Premium</p>
+              <p className="bfx-display text-emerald-300 text-[20px] font-semibold mt-1 font-mono-data">
+                ${myDeposits.reduce((s, d) => s + d.premiumsEarned, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          </div>
+        </div>
 
         {fxData && Object.keys(fxData.rates).length > 0 && (
           <Collapsible open={fxOracleOpen} onOpenChange={setFxOracleOpen}>
             <CollapsibleTrigger asChild>
-              <button className="w-full flex items-center justify-between px-4 py-3 bg-card rounded-xl border border-border hover:bg-accent/50 transition-colors">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-green-400" />
-                  <span className="text-sm font-semibold text-foreground">Live Market Rates</span>
+              <button className="w-full flex items-center justify-between px-4 py-3.5 bg-card rounded-2xl border border-gray-100 dark:border-border/40 hover:border-primary/30 hover:shadow-[0_2px_8px_-2px_rgba(26,68,128,0.08)] transition-all">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-500/10 inline-flex items-center justify-center">
+                    <Activity className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  </span>
+                  <span className="text-[14px] font-semibold tracking-tight text-foreground">Live market rates</span>
                   <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                   </span>
                 </div>
-                {fxOracleOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+                  {Object.keys(fxData.rates).length} pairs
+                  {fxOracleOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </span>
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -957,38 +1048,78 @@ export default function Hedge() {
           </Collapsible>
         )}
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground shrink-0">Asset Class:</span>
-          <div className="flex gap-1.5 flex-wrap">
-            {(['all', 'fx', 'commodity', 'crypto'] as AssetClass[]).map(cls => (
-              <button key={cls} onClick={() => setAssetClassFilter(cls)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  assetClassFilter === cls
-                    ? cls === 'all' ? 'bg-primary text-primary-foreground border-primary'
-                      : cls === 'fx' ? 'bg-blue-500/30 text-blue-300 border-blue-500/50'
-                      : cls === 'commodity' ? 'bg-amber-500/30 text-amber-300 border-amber-500/50'
-                      : 'bg-purple-500/30 text-purple-300 border-purple-500/50'
-                    : 'bg-card text-muted-foreground border-border hover:bg-accent/50'
-                }`}>
-                {cls === 'all' ? 'All' : cls === 'fx' ? 'FX' : cls === 'commodity' ? 'Commodities' : 'Crypto'}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Asset-class segmented control */}
+        {(() => {
+          const openPools = events.filter(e => e.status === 'open');
+          const countFor = (cls: AssetClass) =>
+            cls === 'all' ? openPools.length : openPools.filter(e => getAssetClass(e.underlying) === cls).length;
+          const ITEMS: { key: AssetClass; label: string; dot?: string }[] = [
+            { key: 'all',       label: 'All' },
+            { key: 'fx',        label: 'FX',          dot: 'bg-blue-400' },
+            { key: 'commodity', label: 'Commodities', dot: 'bg-amber-400' },
+            { key: 'crypto',    label: 'Crypto',      dot: 'bg-purple-400' },
+          ];
+          return (
+            <div className="grid grid-cols-4 gap-1 bg-muted/50 rounded-xl p-1">
+              {ITEMS.map(item => {
+                const active = assetClassFilter === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setAssetClassFilter(item.key)}
+                    className={`relative flex items-center justify-center gap-1.5 h-9 rounded-lg text-[11px] font-semibold transition-all ${
+                      active
+                        ? 'bg-card shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {item.dot && (
+                      <span className={`w-1.5 h-1.5 rounded-full ${item.dot} ${active ? '' : 'opacity-60'}`} />
+                    )}
+                    {item.label}
+                    <span className={`text-[10px] font-mono-data tabular-nums ${active ? 'text-muted-foreground' : 'opacity-60'}`}>
+                      {countFor(item.key)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="bg-card border border-border w-full grid grid-cols-4 h-11">
-            <TabsTrigger value="hedger" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Shield className="h-4 w-4 mr-1.5 shrink-0" /> <span className="hidden sm:inline">Buy Protection</span><span className="sm:hidden">Hedge</span>
+          <TabsList className="bg-muted/50 w-full grid grid-cols-4 h-11 p-1 rounded-xl">
+            <TabsTrigger
+              value="hedger"
+              className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground text-xs sm:text-sm font-semibold gap-1.5"
+            >
+              <Shield className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <span className="hidden sm:inline">Buy cover</span>
+              <span className="sm:hidden">Buy</span>
             </TabsTrigger>
-            <TabsTrigger value="provider" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <TrendingUp className="h-4 w-4 mr-1.5 shrink-0" /> <span className="hidden sm:inline">Provide Liquidity</span><span className="sm:hidden">LP</span>
+            <TabsTrigger
+              value="provider"
+              className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground text-xs sm:text-sm font-semibold gap-1.5"
+            >
+              <TrendingUp className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <span className="hidden sm:inline">Provide</span>
+              <span className="sm:hidden">Earn</span>
             </TabsTrigger>
-            <TabsTrigger value="my-events" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Settings className="h-4 w-4 mr-1.5 shrink-0" /> <span className="hidden sm:inline">My Events</span><span className="sm:hidden">Events</span>
+            <TabsTrigger
+              value="my-events"
+              className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground text-xs sm:text-sm font-semibold gap-1.5"
+            >
+              <Settings className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <span className="hidden sm:inline">My pools</span>
+              <span className="sm:hidden">Pools</span>
             </TabsTrigger>
-            <TabsTrigger value="my-hedges" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <BarChart3 className="h-4 w-4 mr-1.5 shrink-0" /> <span className="hidden sm:inline">My Position</span><span className="sm:hidden">Position</span>
+            <TabsTrigger
+              value="my-hedges"
+              className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground text-xs sm:text-sm font-semibold gap-1.5"
+            >
+              <BarChart3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <span className="hidden sm:inline">Positions</span>
+              <span className="sm:hidden">Mine</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1011,115 +1142,150 @@ export default function Hedge() {
                   <p className="text-muted-foreground/70 text-sm mt-1">Create an event to get started</p>
                 )}
               </div>
-            ) : events.filter(e => e.status === "open" && e.creator.toLowerCase() !== (wallet?.address || "").toLowerCase() && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => (
-              <Card key={event.id} className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer overflow-hidden"
+            ) : events.filter(e => e.status === "open" && e.creator.toLowerCase() !== (wallet?.address || "").toLowerCase() && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => {
+              const cls = getAssetClass(event.underlying);
+              const clsTone = cls === 'fx' ? { dot: 'bg-blue-400',   label: 'text-blue-600 dark:text-blue-400' }
+                           : cls === 'commodity' ? { dot: 'bg-amber-400', label: 'text-amber-600 dark:text-amber-400' }
+                           : { dot: 'bg-purple-400', label: 'text-purple-600 dark:text-purple-400' };
+              const spot = fxData?.rates[event.underlying]?.rate;
+              const isTouched = spot !== undefined ? (event.strikeAbove ? spot >= event.strike : spot <= event.strike) : false;
+              const utilPct = Math.min(100, Math.round(((event.totalLiquidity - event.availableCapacity) / Math.max(1, event.totalLiquidity)) * 100));
+              const isExpired = new Date() > event.expiryDate;
+              const payToken = event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT';
+              return (
+              <div key={event.id}
+                className={`group relative rounded-2xl bg-card border border-gray-100 dark:border-border/40 hover:border-primary/30 hover:shadow-[0_4px_16px_-4px_rgba(26,68,128,0.15)] transition-all cursor-pointer overflow-hidden ${isTouched ? 'ring-1 ring-emerald-300/60 dark:ring-emerald-500/40' : ''}`}
                 onClick={async () => { await fetchEventDetails(event.id); setBuyDialogOpen(true); }}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-foreground">{event.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{event.underlying} Protection</p>
+                <div className="p-4 space-y-3.5">
+                  {/* Header — asset glyph + name + status + expiry */}
+                  <div className="flex items-start gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-primary/8 border border-primary/15 flex items-center justify-center shrink-0 font-mono-data text-[11px] font-semibold text-primary tracking-tight">
+                      {event.underlying.split('/')[0].slice(0, 3)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.1em] font-semibold ${clsTone.label}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${clsTone.dot}`} />
+                          {cls === 'fx' ? 'FX' : cls === 'commodity' ? 'Commodity' : 'Crypto'}
+                        </span>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span className="text-[10.5px] text-muted-foreground font-mono-data font-medium">{event.underlying}</span>
+                      </div>
+                      <p className="bfx-display text-[15.5px] font-semibold tracking-tight leading-tight mt-0.5 truncate">{event.name}</p>
                       {event.description && (
-                        <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-2 max-w-[240px]">{event.description}</p>
+                        <p className="text-[11px] text-muted-foreground/80 mt-0.5 line-clamp-1">{event.description}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      <Badge className={`text-[10px] border ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].bg} ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].color}`}>
-                        {ASSET_CLASS_LABELS[getAssetClass(event.underlying)].label}
-                      </Badge>
-                      <Badge className={`text-[10px] border flex items-center gap-0.5 ${event.strikeAbove ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}>
-                        {event.strikeAbove ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
-                        {event.strikeAbove ? "Upward" : "Downward"}
-                      </Badge>
-                      <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                        {event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"}
-                      </Badge>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
-                        onClick={(e) => { e.stopPropagation(); copyShareLink(event.id, "buy"); }}
-                        title="Share hedge link">
-                        <Share2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px]">Open</Badge>
-                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); copyShareLink(event.id, "buy"); }}
+                      className="h-7 w-7 rounded-full hover:bg-muted/60 inline-flex items-center justify-center text-muted-foreground hover:text-primary transition-colors shrink-0"
+                      title="Share">
+                      <Share2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Strike</p>
-                      <p className="text-xs font-bold text-foreground">{event.strike.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Premium</p>
-                      <p className="text-xs font-bold text-primary">{(event.premiumRate * 100).toFixed(1)}%</p>
-                    </div>
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Now</p>
-                      <p className="text-xs font-bold text-foreground">
-                        {fxData?.rates[event.underlying]?.rate.toFixed(2) || "—"}
+                  {/* Direction sentence + countdown */}
+                  <div className="flex items-center justify-between gap-3 text-[12px]">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      {event.strikeAbove ? (
+                        <TrendingUp className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2.2} />
+                      ) : (
+                        <TrendingDown className="h-3.5 w-3.5 text-red-500" strokeWidth={2.2} />
+                      )}
+                      <span>Pays if</span>
+                      <span className="font-mono-data font-semibold text-foreground tabular-nums">{event.underlying}</span>
+                      <span>{event.strikeAbove ? 'rises above' : 'falls below'}</span>
+                      <span className="font-mono-data font-semibold text-foreground tabular-nums">{event.strike.toFixed(2)}</span>
+                    </span>
+                    <span className="text-[11px] font-mono-data tabular-nums shrink-0">
+                      <CountdownTimer expiryDate={event.expiryDate} />
+                    </span>
+                  </div>
+
+                  {/* Key metrics row */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Premium</p>
+                      <p className="text-[14px] font-semibold font-mono-data text-primary tabular-nums mt-0.5">
+                        {(event.premiumRate * 100).toFixed(1)}%
                       </p>
                     </div>
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Expires In</p>
-                      <p className="text-xs font-bold"><CountdownTimer expiryDate={event.expiryDate} /></p>
+                    <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Spot now</p>
+                      <p className="text-[14px] font-semibold font-mono-data text-foreground tabular-nums mt-0.5">
+                        {spot ? spot.toFixed(2) : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Pay in</p>
+                      <p className="text-[14px] font-semibold font-mono-data text-foreground tabular-nums mt-0.5">
+                        {payToken}
+                      </p>
                     </div>
                   </div>
 
-                  {fxData?.rates[event.underlying] && (() => {
-                    const spot = fxData.rates[event.underlying].rate;
-                    const isTouched = event.strikeAbove ? spot >= event.strike : spot <= event.strike;
-                    return (
-                      <div className={`rounded-lg px-3 py-2 flex items-center justify-between ${isTouched ? "bg-red-500/10 border border-red-500/20" : "bg-green-500/10 border border-green-500/20"}`}>
-                        <div className="flex items-center gap-1.5">
-                          <Activity className="h-3 w-3 text-green-400" />
-                          <span className="text-xs text-muted-foreground">Spot:</span>
-                          <span className="text-xs font-bold text-foreground">{spot.toFixed(4)}</span>
-                        </div>
-                        <span className={`text-[10px] font-bold ${isTouched ? "text-red-400" : "text-green-400"}`}>
-                          {isTouched ? "TOUCHED — SETTLING" : "Monitoring"}
-                        </span>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-muted-foreground">
-                      Pool: <span className="font-semibold text-primary">${event.totalLiquidity.toLocaleString()}</span>
-                      <span className="mx-1.5">·</span>
-                      Available: <span className="font-semibold text-green-400">${event.availableCapacity.toLocaleString()}</span>
+                  {/* Pool capacity bar */}
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="text-muted-foreground">Capacity</span>
+                      <span className="font-mono-data tabular-nums">
+                        <span className="font-semibold text-foreground">${event.availableCapacity.toLocaleString()}</span>
+                        <span className="text-muted-foreground"> / ${event.totalLiquidity.toLocaleString()}</span>
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {!event.poolOpen && <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">Closed</Badge>}
-                      {!event.allowExternalLp && <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0">Private</Badge>}
+                    <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
+                      <div className="h-full bg-primary/70 rounded-full transition-all" style={{ width: `${utilPct}%` }} />
                     </div>
                   </div>
 
-                  {event.creator && (
-                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                      <button onClick={(e) => openCreatorProfile(event.creator, e)}
-                        className="text-[10px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        by {shortenAddress(event.creator)}
-                      </button>
+                  {/* Spot indicator banner (only when interesting) */}
+                  {isTouched && (
+                    <div className="rounded-xl px-3 py-2 flex items-center justify-between bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
+                      <span className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                        <Activity className="h-3 w-3" />
+                        Strike touched — settling
+                      </span>
                     </div>
                   )}
 
-                  {new Date() > event.expiryDate ? (
-                    <Button className="w-full bg-muted text-muted-foreground font-semibold h-10" disabled>
+                  {/* Footer — creator + CTA */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={(e) => openCreatorProfile(event.creator, e)}
+                      className="text-[10.5px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 shrink-0">
+                      <Users className="h-3 w-3" />
+                      by {shortenAddress(event.creator)}
+                    </button>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      {!event.poolOpen && (
+                        <Badge variant="outline" className="text-[9.5px] rounded-full border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 font-semibold">Closed</Badge>
+                      )}
+                      {!event.allowExternalLp && (
+                        <Badge variant="outline" className="text-[9.5px] rounded-full border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold">Private</Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {isExpired ? (
+                    <Button className="w-full h-10 rounded-xl bg-muted text-muted-foreground font-semibold" disabled>
                       Expired
                     </Button>
                   ) : event.poolOpen ? (
-                    <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10"
+                    <Button
+                      className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
                       onClick={async (e) => { e.stopPropagation(); await fetchEventDetails(event.id); setBuyDialogOpen(true); }}>
-                      Buy Protection
+                      Buy protection
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   ) : (
-                    <Button className="w-full bg-muted text-muted-foreground font-semibold h-10" disabled>
-                      Pool Closed
+                    <Button className="w-full h-10 rounded-xl bg-muted text-muted-foreground font-semibold" disabled>
+                      Pool closed
                     </Button>
                   )}
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              </div>
+              );
+            })}
           </TabsContent>
 
           <TabsContent value="provider" className="space-y-3">
@@ -1130,175 +1296,219 @@ export default function Hedge() {
                 <TrendingUp className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
                 <p className="text-muted-foreground font-medium">No pools available</p>
               </div>
-            ) : events.filter(e => e.status === "open" && new Date() < e.expiryDate && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => (
-              <Card key={event.id} className={`bg-card border-border hover:border-primary/50 transition-colors cursor-pointer ${wallet?.address?.toLowerCase() === event.creator.toLowerCase() ? 'ring-1 ring-primary/30' : ''}`}
+            ) : events.filter(e => e.status === "open" && new Date() < e.expiryDate && (assetClassFilter === 'all' || getAssetClass(e.underlying) === assetClassFilter)).map(event => {
+              const cls = getAssetClass(event.underlying);
+              const clsTone = cls === 'fx' ? { dot: 'bg-blue-400',   label: 'text-blue-600 dark:text-blue-400' }
+                           : cls === 'commodity' ? { dot: 'bg-amber-400', label: 'text-amber-600 dark:text-amber-400' }
+                           : { dot: 'bg-purple-400', label: 'text-purple-600 dark:text-purple-400' };
+              const isCreator = wallet?.address?.toLowerCase() === event.creator.toLowerCase();
+              const canDeposit = event.allowExternalLp || isCreator;
+              return (
+              <div key={event.id}
+                className={`group relative rounded-2xl bg-card border transition-all overflow-hidden ${
+                  canDeposit
+                    ? 'border-gray-100 dark:border-border/40 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:shadow-[0_4px_16px_-4px_rgba(16,185,129,0.18)] cursor-pointer'
+                    : 'border-gray-100 dark:border-border/40 opacity-70'
+                } ${isCreator ? 'ring-1 ring-primary/30' : ''}`}
                 onClick={async () => {
-                  const isCreator = wallet?.address?.toLowerCase() === event.creator.toLowerCase();
-                  if (!event.allowExternalLp && !isCreator) return;
+                  if (!canDeposit) return;
                   await fetchEventDetails(event.id); setDepositDialogOpen(true);
                 }}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-foreground">{event.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Earn premiums · {event.underlying}</p>
+                <div className="p-4 space-y-3.5">
+                  {/* Header — APY-first hierarchy */}
+                  <div className="flex items-start gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 flex flex-col items-center justify-center shrink-0">
+                      <p className="bfx-display text-[14px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums leading-none">
+                        {(event.premiumRate * 100).toFixed(1)}
+                      </p>
+                      <p className="text-[8px] uppercase tracking-wider text-emerald-700/70 dark:text-emerald-400/70 font-semibold leading-none mt-0.5">%</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {wallet?.address?.toLowerCase() === event.creator.toLowerCase() && (
-                        <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] px-1.5 py-0">Your Pool</Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.1em] font-semibold ${clsTone.label}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${clsTone.dot}`} />
+                          {cls === 'fx' ? 'FX' : cls === 'commodity' ? 'Commodity' : 'Crypto'}
+                        </span>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span className="text-[10.5px] text-muted-foreground font-mono-data font-medium">{event.underlying}</span>
+                      </div>
+                      <p className="bfx-display text-[15.5px] font-semibold tracking-tight leading-tight mt-0.5 truncate">{event.name}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Earn premium on each cover sold</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isCreator && (
+                        <Badge variant="outline" className="text-[9px] rounded-full border-primary/30 bg-primary/8 text-primary font-semibold">Your pool</Badge>
                       )}
-                      <Badge className={`text-[10px] border ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].bg} ${ASSET_CLASS_LABELS[getAssetClass(event.underlying)].color}`}>
-                        {ASSET_CLASS_LABELS[getAssetClass(event.underlying)].label}
-                      </Badge>
                       {event.allowExternalLp && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
+                        <button
                           onClick={(e) => { e.stopPropagation(); copyShareLink(event.id, "lp"); }}
+                          className="h-7 w-7 rounded-full hover:bg-muted/60 inline-flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
                           title="Share LP deposit link">
                           <Share2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       )}
-                      {!event.allowExternalLp && wallet?.address?.toLowerCase() !== event.creator.toLowerCase() && (
-                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0">Private</Badge>
-                      )}
-                      <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-                        {event.poolOpen ? "Open" : "Closed"}
-                      </Badge>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Earn</p>
-                      <p className="text-xs font-bold text-green-400">{(event.premiumRate * 100).toFixed(1)}%</p>
+                  {/* Key context metrics */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Strike</p>
+                      <p className="text-[14px] font-semibold font-mono-data text-foreground tabular-nums mt-0.5">{event.strike.toFixed(2)}</p>
                     </div>
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Strike</p>
-                      <p className="text-xs font-bold text-foreground">{event.strike.toFixed(2)}</p>
+                    <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Pool</p>
+                      <p className="text-[14px] font-semibold font-mono-data text-foreground tabular-nums mt-0.5">${event.totalLiquidity.toLocaleString()}</p>
                     </div>
-                    <div className="bg-muted/50 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Expires In</p>
-                      <p className="text-xs font-bold"><CountdownTimer expiryDate={event.expiryDate} /></p>
+                    <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Expires</p>
+                      <p className="text-[13px] font-semibold font-mono-data tabular-nums mt-0.5">
+                        <CountdownTimer expiryDate={event.expiryDate} />
+                      </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Pool: <span className="font-semibold text-primary">${event.totalLiquidity.toLocaleString()}</span></span>
-                    <span>LPs: {event.lpCount} · Hedgers: {event.hedgerCount}</span>
+                  {/* Participants strip */}
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        <span className="font-semibold text-foreground tabular-nums">{event.lpCount}</span> LPs
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Shield className="h-3 w-3" />
+                        <span className="font-semibold text-foreground tabular-nums">{event.hedgerCount}</span> hedgers
+                      </span>
+                    </span>
+                    <button
+                      onClick={(e) => openCreatorProfile(event.creator, e)}
+                      className="text-[10.5px] hover:text-primary transition-colors flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      by {shortenAddress(event.creator)}
+                    </button>
                   </div>
-
-                  {event.creator && (
-                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                      <button onClick={(e) => openCreatorProfile(event.creator, e)}
-                        className="text-[10px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        by {shortenAddress(event.creator)}
-                      </button>
-                    </div>
-                  )}
 
                   {(() => {
-                    const isCreator = wallet?.address?.toLowerCase() === event.creator.toLowerCase();
                     if (isCreator) {
                       return (
                         <Button
-                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10"
-                          onClick={async (e) => { e.stopPropagation(); await fetchEventDetails(event.id); setDepositDialogOpen(true); }}
-                        >
-                          <DollarSign className="h-4 w-4 mr-1" /> Add to My Pool
+                          className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
+                          onClick={async (e) => { e.stopPropagation(); await fetchEventDetails(event.id); setDepositDialogOpen(true); }}>
+                          <DollarSign className="h-4 w-4 mr-1.5" /> Add to my pool
                         </Button>
                       );
                     }
                     if (!event.allowExternalLp) {
                       return (
-                        <Button className="w-full bg-muted text-muted-foreground font-semibold h-10" disabled>
-                          <LockKeyhole className="h-4 w-4 mr-1" /> Private Pool
+                        <Button className="w-full h-10 rounded-xl bg-muted text-muted-foreground font-semibold" disabled>
+                          <LockKeyhole className="h-4 w-4 mr-1.5" /> Private pool
                         </Button>
                       );
                     }
                     return (
-                      <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10"
+                      <Button
+                        className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
                         onClick={async (e) => { e.stopPropagation(); await fetchEventDetails(event.id); setDepositDialogOpen(true); }}>
-                        <DollarSign className="h-4 w-4 mr-1" /> Deposit Liquidity
+                        Provide liquidity
+                        <ArrowRight className="h-4 w-4 ml-1.5" />
                       </Button>
                     );
                   })()}
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              </div>
+              );
+            })}
 
             {myDeposits.length > 0 && (
               <Collapsible defaultOpen>
                 <CollapsibleTrigger asChild>
-                  <button className="w-full flex items-center justify-between px-4 py-3 bg-card rounded-xl border border-border hover:bg-accent/50 transition-colors mt-2">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-semibold text-foreground">My LP Deposits ({myDeposits.length})</span>
+                  <button className="w-full flex items-center justify-between px-4 py-3.5 bg-card rounded-2xl border border-gray-100 dark:border-border/40 hover:border-primary/30 hover:shadow-[0_2px_8px_-2px_rgba(26,68,128,0.08)] transition-all mt-2 group">
+                    <div className="flex items-center gap-2.5">
+                      <span className="h-7 w-7 rounded-full bg-primary/10 inline-flex items-center justify-center">
+                        <DollarSign className="h-3.5 w-3.5 text-primary" />
+                      </span>
+                      <span className="text-[14px] font-semibold tracking-tight">My deposits</span>
+                      <Badge variant="outline" className="text-[10px] rounded-full border-gray-200 dark:border-border/60 font-mono-data tabular-nums">
+                        {myDeposits.length}
+                      </Badge>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground group-data-[state=open]:rotate-180 transition-transform" />
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className="space-y-3 mt-3">
+                  <div className="space-y-2.5 mt-2.5">
                     {myDeposits.map(dep => {
                       const earned = dep.premiumsEarned;
                       const claimed = dep.premiumsClaimed;
                       const claimable = earned - claimed;
                       const depEvent = events.find(e => e.id === dep.eventId);
                       const isStillActive = depEvent?.status === "open" && new Date() < depEvent.expiryDate;
+                      const poolShare = depEvent && depEvent.totalLiquidity > 0 ? ((dep.amount / depEvent.totalLiquidity) * 100) : 0;
                       return (
-                        <Card key={dep.id} className="bg-card border-border">
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-foreground font-medium">Event #{dep.eventId}</p>
-                                <p className="text-[11px] text-muted-foreground">
-                                  ${dep.amount.toLocaleString()} deposited · {depEvent && depEvent.totalLiquidity > 0 ? ((dep.amount / depEvent.totalLiquidity) * 100).toFixed(2) : '0.00'}% of pool
+                        <div key={dep.id} className={`rounded-2xl bg-card border ${claimable > 0 ? 'border-emerald-200 dark:border-emerald-500/30 ring-1 ring-emerald-200/40 dark:ring-emerald-500/20' : 'border-gray-100 dark:border-border/40'}`}>
+                          <div className="p-4 space-y-3">
+                            <div className="flex items-start gap-3">
+                              <div className="h-10 w-10 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 flex items-center justify-center shrink-0">
+                                <DollarSign className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">
+                                  Event #{dep.eventId} {depEvent && <>· {depEvent.underlying}</>}
+                                </p>
+                                <p className="text-[13.5px] font-semibold tracking-tight mt-0.5 truncate">{depEvent?.name || `Pool #${dep.eventId}`}</p>
+                                <p className="text-[10.5px] text-muted-foreground font-mono-data tabular-nums mt-0.5">
+                                  ${dep.amount.toLocaleString()} · {poolShare.toFixed(2)}% of pool
                                 </p>
                               </div>
                               {dep.withdrawn ? (
-                                <Badge variant="secondary" className="text-[10px]">Withdrawn</Badge>
+                                <Badge variant="outline" className="text-[9.5px] rounded-full font-semibold bg-muted/60 text-muted-foreground border-gray-200 dark:border-border/60 shrink-0">
+                                  Withdrawn
+                                </Badge>
                               ) : isStillActive ? (
-                                <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 text-[10px]">
-                                  <Lock className="h-2.5 w-2.5 mr-0.5" /> Locked
+                                <Badge variant="outline" className="text-[9.5px] rounded-full font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-500/20 shrink-0 flex items-center gap-1">
+                                  <Lock className="h-2.5 w-2.5" /> Locked
                                 </Badge>
                               ) : (
-                                <Button size="sm" variant="outline" className="text-xs h-7"
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-[11px] h-7 rounded-lg border-gray-200 dark:border-border/60 font-semibold shrink-0"
                                   onClick={() => withdrawMutation.mutate(dep.id)}
                                   disabled={withdrawMutation.isPending}>
                                   <Unlock className="h-3 w-3 mr-1" />
-                                  {withdrawMutation.isPending ? (txStep || 'Sending...') : 'Withdraw'}
+                                  {withdrawMutation.isPending ? (txStep || 'Sending…') : 'Withdraw'}
                                 </Button>
                               )}
                             </div>
 
                             {(earned > 0 || claimable > 0) && (
-                              <div className="bg-muted/50 rounded-lg px-3 py-2 space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="text-xs">
-                                    <span className="text-muted-foreground">Earned: </span>
-                                    <span className="text-green-400 font-medium">${earned.toFixed(2)}</span>
-                                    {claimable > 0 && (
-                                      <span className="text-primary font-medium ml-2">· Claimable: ${claimable.toFixed(2)}</span>
-                                    )}
+                              <div className="rounded-xl border border-gray-100 dark:border-border/40 bg-muted/30 px-3 py-2.5 space-y-2">
+                                <div className="flex items-baseline justify-between">
+                                  <div className="space-y-0.5">
+                                    <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Premiums earned</p>
+                                    <p className="text-[16px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums">${earned.toFixed(2)}</p>
                                   </div>
                                   {claimable > 0 && (
-                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                                    <Button
+                                      size="sm"
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-[11.5px] px-3 rounded-lg font-semibold"
                                       onClick={() => claimPremiumsMutation.mutate(dep.id)}
                                       disabled={claimPremiumsMutation.isPending}>
-                                      {claimPremiumsMutation.isPending ? (txStep || 'Sending...') : 'Claim'}
+                                      <CheckCircle2 className="h-3 w-3 mr-1" strokeWidth={2.2} />
+                                      {claimPremiumsMutation.isPending ? (txStep || 'Sending…') : `Claim $${(claimable * (1 - (feeConfig?.lpProfitFeeRate || 0.01))).toFixed(2)}`}
                                     </Button>
                                   )}
                                 </div>
                                 {claimable > 0 && (
-                                  <div className="text-[10px] text-muted-foreground/70 flex justify-between">
-                                    <span>{feeConfig ? (feeConfig.lpProfitFeeRate * 100).toFixed(0) : "1"}% profit fee: ${(claimable * (feeConfig?.lpProfitFeeRate || 0.01)).toFixed(4)}</span>
-                                    <span>You receive: ${(claimable * (1 - (feeConfig?.lpProfitFeeRate || 0.01))).toFixed(2)}</span>
+                                  <div className="text-[10px] text-muted-foreground/80 flex justify-between border-t border-gray-200/60 dark:border-border/30 pt-1.5">
+                                    <span className="font-mono-data tabular-nums">Claimable ${claimable.toFixed(2)}</span>
+                                    <span className="font-mono-data tabular-nums">Fee {(feeConfig ? feeConfig.lpProfitFeeRate * 100 : 1).toFixed(0)}% · ${(claimable * (feeConfig?.lpProfitFeeRate || 0.01)).toFixed(4)}</span>
                                   </div>
                                 )}
                               </div>
                             )}
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -1309,10 +1519,19 @@ export default function Hedge() {
 
           <TabsContent value="my-events" className="space-y-3">
             {events.filter(e => e.creator.toLowerCase() === wallet?.address?.toLowerCase()).length === 0 ? (
-              <div className="text-center py-16">
-                <Settings className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-                <p className="text-muted-foreground font-medium">No events created</p>
-                <p className="text-muted-foreground/70 text-sm mt-1">Create an event to start earning premiums</p>
+              <div className="text-center py-14 px-4">
+                <div className="h-12 w-12 rounded-full bg-primary/10 mx-auto mb-3 flex items-center justify-center">
+                  <Settings className="h-6 w-6 text-primary" strokeWidth={1.8} />
+                </div>
+                <p className="text-[15px] font-semibold tracking-tight">No pools created</p>
+                <p className="text-[12px] text-muted-foreground mt-1">Create a pool to start earning premiums from hedgers.</p>
+                <Button
+                  onClick={() => setCreateEventDialogOpen(true)}
+                  className="mt-4 h-9 rounded-xl text-[12.5px] font-semibold"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" strokeWidth={2.2} /> Create your first pool
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -1321,94 +1540,127 @@ export default function Hedge() {
                   const totalPremiums = myEvents.reduce((sum, e) => sum + e.totalPremiums, 0);
                   const totalLoyalty = myEvents.reduce((sum, e) => sum + e.creatorEarnings, 0);
                   return (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-muted/50 rounded-xl p-3 text-center border border-border">
-                        <p className="text-[10px] text-muted-foreground/70">Pool Premiums Earned</p>
-                        <p className="text-lg font-bold text-green-400">${totalPremiums.toFixed(2)}</p>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="rounded-2xl border border-gray-100 dark:border-border/40 px-3.5 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Pool premiums</p>
+                        <p className="bfx-display text-[20px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">${totalPremiums.toFixed(2)}</p>
                       </div>
-                      <div className="bg-muted/50 rounded-xl p-3 text-center border border-border">
-                        <p className="text-[10px] text-muted-foreground/70">Creator's Earnings</p>
-                        <p className="text-lg font-bold text-amber-400">${totalLoyalty.toFixed(2)}</p>
+                      <div className="rounded-2xl border border-gray-100 dark:border-border/40 px-3.5 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Loyalty earnings</p>
+                        <p className="bfx-display text-[20px] font-semibold font-mono-data text-amber-700 dark:text-amber-400 tabular-nums mt-0.5">${totalLoyalty.toFixed(2)}</p>
                       </div>
                     </div>
                   );
                 })()}
-                {events.filter(e => e.creator.toLowerCase() === wallet?.address?.toLowerCase()).map(event => (
-                  <Card key={event.id} className="bg-card border-border">
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{event.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{event.underlying} · Strike: {event.strike.toFixed(2)}</p>
+                {events.filter(e => e.creator.toLowerCase() === wallet?.address?.toLowerCase()).map(event => {
+                  const cls = getAssetClass(event.underlying);
+                  const clsTone = cls === 'fx' ? { dot: 'bg-blue-400',   label: 'text-blue-600 dark:text-blue-400' }
+                               : cls === 'commodity' ? { dot: 'bg-amber-400', label: 'text-amber-600 dark:text-amber-400' }
+                               : { dot: 'bg-purple-400', label: 'text-purple-600 dark:text-purple-400' };
+                  const isLive = event.status === 'open' && new Date() < event.expiryDate;
+                  return (
+                  <div key={event.id} className="rounded-2xl bg-card border border-gray-100 dark:border-border/40">
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="h-11 w-11 rounded-2xl bg-primary/8 border border-primary/15 flex items-center justify-center shrink-0 font-mono-data text-[11px] font-semibold text-primary tracking-tight">
+                          {event.underlying.split('/')[0].slice(0, 3)}
                         </div>
-                        <Badge className={event.status === "open" ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px]" : event.status === "settled" ? "bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]" : "bg-muted/50 text-muted-foreground border-border text-[10px]"}>
-                          {event.status === "open" ? "Active" : event.status}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.1em] font-semibold ${clsTone.label}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${clsTone.dot}`} />
+                              {cls === 'fx' ? 'FX' : cls === 'commodity' ? 'Commodity' : 'Crypto'}
+                            </span>
+                            <span className="text-muted-foreground/40">·</span>
+                            <span className="text-[10.5px] text-muted-foreground font-mono-data font-medium tabular-nums">strike {event.strike.toFixed(2)}</span>
+                          </div>
+                          <p className="bfx-display text-[14.5px] font-semibold tracking-tight leading-tight mt-0.5 truncate">{event.name}</p>
+                        </div>
+                        <Badge variant="outline" className={`text-[9.5px] rounded-full font-semibold shrink-0 ${
+                          event.status === 'open'
+                            ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20'
+                            : event.status === 'settled'
+                            ? 'bg-primary/8 text-primary border-primary/20'
+                            : 'bg-muted/60 text-muted-foreground border-gray-200 dark:border-border/60'
+                        }`}>
+                          {event.status === 'open' ? 'Active' : event.status}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-4 gap-2 text-center">
-                        <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                          <span className="text-[10px] text-muted-foreground/70">Pool</span>
-                          <p className="text-xs font-bold text-foreground">${event.totalLiquidity.toLocaleString()}</p>
+
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="rounded-xl bg-muted/30 px-2 py-2">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Pool</p>
+                          <p className="text-[12px] font-semibold font-mono-data tabular-nums mt-0.5">${event.totalLiquidity.toLocaleString()}</p>
                         </div>
-                        <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                          <span className="text-[10px] text-muted-foreground/70">Available</span>
-                          <p className="text-xs font-bold text-green-400">${event.availableCapacity.toLocaleString()}</p>
+                        <div className="rounded-xl bg-muted/30 px-2 py-2">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Available</p>
+                          <p className="text-[12px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">${event.availableCapacity.toLocaleString()}</p>
                         </div>
-                        <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                          <span className="text-[10px] text-muted-foreground/70">Hedgers</span>
-                          <p className="text-xs font-bold text-foreground">{event.hedgerCount}</p>
+                        <div className="rounded-xl bg-muted/30 px-2 py-2">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Hedgers</p>
+                          <p className="text-[12px] font-semibold font-mono-data tabular-nums mt-0.5">{event.hedgerCount}</p>
                         </div>
-                        <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                          <span className="text-[10px] text-muted-foreground/70">Premiums</span>
-                          <p className="text-xs font-bold text-green-400">${event.totalPremiums.toFixed(2)}</p>
+                        <div className="rounded-xl bg-muted/30 px-2 py-2">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Premiums</p>
+                          <p className="text-[12px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">${event.totalPremiums.toFixed(2)}</p>
                         </div>
                       </div>
-                      {event.status === "open" && new Date() < event.expiryDate && (
-                        <div className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-1.5 border border-border/40">
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Pool expires in</span>
-                          <CountdownTimer expiryDate={event.expiryDate} className="text-[10px]" />
+
+                      {isLive && (
+                        <div className="flex items-center justify-between rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2">
+                          <span className="text-[10.5px] text-muted-foreground flex items-center gap-1.5">
+                            <Clock className="h-3 w-3" /> Expires in
+                          </span>
+                          <span className="text-[12px] font-mono-data tabular-nums font-semibold">
+                            <CountdownTimer expiryDate={event.expiryDate} />
+                          </span>
                         </div>
                       )}
-                      {event.status === "open" && new Date() >= event.expiryDate && (
-                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 space-y-2">
-                          <p className="text-[11px] text-amber-400 font-medium flex items-center gap-1.5">
-                            <Clock className="h-3.5 w-3.5" /> Event expired — funds locked on-chain
+
+                      {event.status === 'open' && new Date() >= event.expiryDate && (
+                        <div className="rounded-xl border border-amber-100 dark:border-amber-500/20 bg-amber-50/60 dark:bg-amber-500/5 px-3 py-2.5 space-y-2">
+                          <p className="text-[11.5px] text-amber-900 dark:text-amber-300 font-semibold flex items-center gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Pool expired — funds locked on-chain
                           </p>
                           {event.hedgerCount === 0 ? (
                             <>
-                              <p className="text-[10px] text-muted-foreground">
-                                No one bought protection from your pool. Withdraw and claim your funds.
+                              <p className="text-[10.5px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                                Nobody bought protection. Recover your seeded liquidity.
                               </p>
                               <Button
-                                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-8 text-xs"
+                                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-9 text-[12.5px] rounded-xl"
                                 onClick={() => recoverExpiredMutation.mutate(event.id)}
-                                disabled={recoverExpiredMutation.isPending}
-                              >
-                                {recoverExpiredMutation.isPending ? (txStep || 'Processing...') : 'Withdraw My Funds'}
+                                disabled={recoverExpiredMutation.isPending}>
+                                {recoverExpiredMutation.isPending ? (txStep || 'Processing…') : 'Withdraw my funds'}
                               </Button>
                             </>
                           ) : (
-                            <p className="text-[10px] text-muted-foreground">
-                              This event had {event.hedgerCount} buyer{event.hedgerCount !== 1 ? 's' : ''}. The oracle is settling positions — your withdrawal will be available shortly once settlement completes.
+                            <p className="text-[10.5px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                              {event.hedgerCount} buyer{event.hedgerCount !== 1 ? 's' : ''} settled — oracle is processing. Your withdrawal opens once settlement completes.
                             </p>
                           )}
                         </div>
                       )}
-                      {event.status === "open" && new Date() < event.expiryDate && (
-                        <div className="space-y-2 bg-muted/20 rounded-lg p-2.5 border border-border/50">
+
+                      {isLive && (
+                        <div className="rounded-xl border border-gray-100 dark:border-border/40 p-3 space-y-2.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              {event.poolOpen ? <Unlock className="h-3 w-3 text-green-400" /> : <Lock className="h-3 w-3 text-red-400" />}
-                              Open to Hedgers
+                            <span className="text-[11.5px] flex items-center gap-1.5 font-medium">
+                              {event.poolOpen
+                                ? <Unlock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                : <Lock className="h-3.5 w-3.5 text-red-500" />}
+                              Open to hedgers
                             </span>
                             <Switch checked={event.poolOpen ?? true}
                               onCheckedChange={v => { togglePoolMutation.mutate({ eventId: event.id, poolOpen: v }); }}
                               disabled={togglePoolMutation.isPending} />
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              {event.allowExternalLp ? <Globe className="h-3 w-3 text-blue-400" /> : <LockKeyhole className="h-3 w-3 text-amber-400" />}
-                              Allow Other LPs
+                            <span className="text-[11.5px] flex items-center gap-1.5 font-medium">
+                              {event.allowExternalLp
+                                ? <Globe className="h-3.5 w-3.5 text-blue-500" />
+                                : <LockKeyhole className="h-3.5 w-3.5 text-amber-500" />}
+                              Allow other LPs
                             </span>
                             <Switch checked={event.allowExternalLp ?? true}
                               onCheckedChange={v => { togglePoolMutation.mutate({ eventId: event.id, allowExternalLp: v }); }}
@@ -1416,200 +1668,216 @@ export default function Hedge() {
                           </div>
                         </div>
                       )}
-                      {event.status === "open" && new Date() < event.expiryDate && (
+
+                      {isLive && (
                         <Button
-                          className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-semibold h-9 text-sm"
-                          variant="outline"
-                          onClick={async () => { await fetchEventDetails(event.id); setDepositDialogOpen(true); }}
-                        >
-                          <DollarSign className="h-4 w-4 mr-1.5" /> Add Liquidity to My Pool
+                          className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
+                          onClick={async () => { await fetchEventDetails(event.id); setDepositDialogOpen(true); }}>
+                          <DollarSign className="h-4 w-4 mr-1.5" /> Add liquidity to my pool
                         </Button>
                       )}
-                      {(event.status === "settled" || event.status === "expired") && (
-                        <div className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
-                          <span className="text-xs text-muted-foreground">
-                            Settlement: {event.settlementPrice ? event.settlementPrice.toFixed(2) : "Pending"}
+
+                      {(event.status === 'settled' || event.status === 'expired') && (
+                        <div className="flex items-center justify-between rounded-xl bg-muted/30 px-3 py-2.5">
+                          <span className="text-[11.5px] text-muted-foreground">
+                            Settlement: <span className="font-mono-data tabular-nums font-semibold text-foreground">{event.settlementPrice ? event.settlementPrice.toFixed(2) : '—'}</span>
                           </span>
-                          <Badge className={event.triggered ? "bg-red-500/20 text-red-400 text-[10px]" : "bg-muted/50 text-muted-foreground text-[10px]"}>
-                            {event.triggered ? "Triggered" : "Not Triggered"}
+                          <Badge variant="outline" className={`text-[10px] rounded-full font-semibold ${
+                            event.triggered
+                              ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-100 dark:border-red-500/20'
+                              : 'bg-muted/60 text-muted-foreground border-gray-200 dark:border-border/60'
+                          }`}>
+                            {event.triggered ? 'Triggered' : 'Not triggered'}
                           </Badge>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
-                ))}
+                    </div>
+                  </div>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
 
           <TabsContent value="my-hedges" className="space-y-3">
             {myPositions.length === 0 ? (
-              <div className="text-center py-16">
-                <Shield className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-                <p className="text-muted-foreground font-medium">No positions yet</p>
-                <p className="text-muted-foreground/70 text-sm mt-1">Buy protection on the Hedge tab to open a position</p>
+              <div className="text-center py-14 px-4">
+                <div className="h-12 w-12 rounded-full bg-primary/10 mx-auto mb-3 flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-primary" strokeWidth={1.8} />
+                </div>
+                <p className="text-[15px] font-semibold tracking-tight">No positions yet</p>
+                <p className="text-[12px] text-muted-foreground mt-1">Buy cover from the Buy cover tab to open a position.</p>
+                <Button
+                  onClick={() => setActiveTab('hedger')}
+                  className="mt-4 h-9 rounded-xl text-[12.5px] font-semibold"
+                  size="sm"
+                >
+                  Browse pools <ArrowRight className="h-3.5 w-3.5 ml-1.5" strokeWidth={2.2} />
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
                 {myPositions.filter(p => p.status === "active").length > 0 && (
-                  <div className="flex items-center gap-2 px-1">
-                    <Shield className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Positions</span>
-                  </div>
+                  <h3 className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground font-semibold px-1">
+                    Active positions
+                  </h3>
                 )}
 
-                {myPositions.map(pos => {
+                {myPositions.filter(p => p.status === "active").map(pos => {
                   const event = events.find(e => e.id === pos.eventId);
-
                   const notionalNum = pos.notional;
                   const strikeNum = event ? event.strike : 0;
-                  const currentRate = event && fxData?.rates?.[event.underlying]?.rate || 0;
+                  const currentRate = (event && fxData?.rates?.[event.underlying]?.rate) || 0;
                   const grossPayout = pos.payoutAmount;
                   const estNetPayout = grossPayout > 0 ? grossPayout * 0.99 : 0;
                   const hasPayout = grossPayout > 0;
-
                   return (
-                    <Card key={pos.id} className="bg-card border-border">
-                      <CardContent className="p-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs font-semibold text-foreground">#{pos.id}</span>
-                            {event && <span className="text-[10px] text-muted-foreground truncate">{event.underlying} · {event.name}</span>}
+                    <div key={pos.id} className={`rounded-2xl bg-card border ${hasPayout ? 'border-emerald-200 dark:border-emerald-500/30 ring-1 ring-emerald-200/50 dark:ring-emerald-500/20' : 'border-gray-100 dark:border-border/40'}`}>
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-start gap-3">
+                          <div className="h-11 w-11 rounded-2xl bg-primary/8 border border-primary/15 flex items-center justify-center shrink-0 font-mono-data text-[11px] font-semibold text-primary">
+                            {event?.underlying.split('/')[0].slice(0, 3) || '—'}
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {pos.status === "active" && event && (
-                              <CountdownTimer expiryDate={event.expiryDate} className="text-[10px]" />
-                            )}
-                            {pos.status === "settled_win" && (
-                              <span className="text-[10px] font-medium text-green-400">Payout ready</span>
-                            )}
-                            <Badge className={
-                              pos.status === "active" ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0" :
-                              pos.status === "settled_win" ? "bg-primary/20 text-primary border-primary/30 text-[10px] px-1.5 py-0" :
-                              pos.status === "claimed" ? "bg-primary/20 text-primary border-primary/30 text-[10px] px-1.5 py-0" :
-                              "bg-muted/50 text-muted-foreground border-border text-[10px] px-1.5 py-0"
-                            }>
-                              {pos.status === "active" ? "Active" :
-                               pos.status === "settled_win" ? "Won" :
-                               pos.status === "expired" ? "Lost" :
-                               pos.status === "claimed" ? "Claimed" : pos.status}
-                            </Badge>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Position</span>
+                              <span className="text-muted-foreground/40">·</span>
+                              <span className="text-[10.5px] font-mono-data text-muted-foreground font-medium">#{pos.id}</span>
+                            </div>
+                            <p className="bfx-display text-[14.5px] font-semibold tracking-tight leading-tight mt-0.5 truncate">{event?.name || `Event #${pos.eventId}`}</p>
+                            <p className="text-[11px] text-muted-foreground font-mono-data tabular-nums mt-0.5">{event?.underlying} · strike {strikeNum.toFixed(2)}</p>
                           </div>
+                          <Badge variant="outline" className="text-[9.5px] rounded-full font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20 shrink-0">
+                            Active
+                          </Badge>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                            <span className="text-[10px] text-muted-foreground/70">Notional</span>
-                            <p className="text-xs font-bold text-foreground">${notionalNum.toLocaleString()}</p>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="rounded-xl bg-muted/30 px-3 py-2">
+                            <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Notional</p>
+                            <p className="text-[13px] font-semibold font-mono-data tabular-nums mt-0.5">${notionalNum.toLocaleString()}</p>
                           </div>
-                          <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                            <span className="text-[10px] text-muted-foreground/70">Premium Paid</span>
-                            <p className="text-xs font-bold text-primary">${pos.premiumPaid.toFixed(2)}</p>
+                          <div className="rounded-xl bg-muted/30 px-3 py-2">
+                            <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Premium paid</p>
+                            <p className="text-[13px] font-semibold font-mono-data text-primary tabular-nums mt-0.5">${pos.premiumPaid.toFixed(2)}</p>
                           </div>
-                          <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                            <span className="text-[10px] text-muted-foreground/70">Strike</span>
-                            <p className="text-xs font-bold text-foreground">{strikeNum.toFixed(2)}</p>
+                          <div className="rounded-xl bg-muted/30 px-3 py-2">
+                            <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Expires</p>
+                            <p className="text-[12.5px] font-semibold font-mono-data tabular-nums mt-0.5">
+                              {event ? <CountdownTimer expiryDate={event.expiryDate} /> : '—'}
+                            </p>
                           </div>
                         </div>
 
-                        {pos.status === "active" && event && (
-                          <div className={`rounded-lg p-2.5 border ${hasPayout ? "bg-green-500/5 border-green-500/20" : "bg-muted/20 border-border/50"}`}>
+                        {event && (
+                          <div className={`rounded-xl p-3 border ${hasPayout ? 'bg-emerald-50/60 dark:bg-emerald-500/5 border-emerald-100 dark:border-emerald-500/20' : 'bg-muted/30 border-gray-100 dark:border-border/40'}`}>
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] text-muted-foreground">Current Rate</span>
-                              <span className="text-xs font-bold text-foreground">{currentRate > 0 ? currentRate.toFixed(4) : "Loading..."}</span>
+                              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Current rate</span>
+                              <span className="text-[13px] font-semibold font-mono-data tabular-nums">{currentRate > 0 ? currentRate.toFixed(4) : '…'}</span>
                             </div>
-                            <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                              <span className="text-[10px] text-muted-foreground">Predetermined Payout</span>
-                              <span className={`text-sm font-bold ${hasPayout ? "text-green-400" : "text-muted-foreground"}`}>
-                                ${grossPayout > 0 ? grossPayout.toFixed(2) : "0.00"}
-                                <span className="text-[10px] text-muted-foreground ml-1">(net ${estNetPayout.toFixed(2)})</span>
+                            <div className="flex items-baseline justify-between pt-2 border-t border-gray-200/60 dark:border-border/30">
+                              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">If triggered</span>
+                              <span className={`bfx-display text-[18px] font-semibold font-mono-data tabular-nums ${hasPayout ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
+                                ${grossPayout > 0 ? grossPayout.toFixed(2) : '0.00'}
+                                {grossPayout > 0 && <span className="text-[10px] text-muted-foreground font-normal ml-1">net ${estNetPayout.toFixed(2)}</span>}
                               </span>
                             </div>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  );
+                })}
 
-                        {(pos.status === "settled_win" || pos.status === "claimable" || pos.status === "claimed") && hasPayout && (
-                          <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-muted-foreground">{pos.status === "claimed" ? "Claimed Payout" : "Payout Ready"}</span>
-                              <span className="text-sm font-bold text-green-400">${grossPayout.toFixed(2)}</span>
-                            </div>
+                {myPositions.filter(p => p.status === 'settled_win').map(pos => {
+                  const event = events.find(e => e.id === pos.eventId);
+                  const gross = pos.payoutAmount;
+                  const payoutFeeRate = feeConfig?.hedgerPayoutFeeRate || 0.01;
+                  const fee = gross * payoutFeeRate;
+                  const net = gross - fee;
+                  if (pos.claimed) return null;
+                  return (
+                    <div key={`win-${pos.id}`} className="rounded-2xl bg-card border border-emerald-200 dark:border-emerald-500/40 ring-1 ring-emerald-300/40 dark:ring-emerald-500/30 shadow-[0_4px_16px_-4px_rgba(16,185,129,0.2)] overflow-hidden">
+                      <div className="bfx-hero-brand px-4 py-3 relative">
+                        <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-40 pointer-events-none" />
+                        <div className="relative flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-white/60 font-semibold flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3 w-3 text-emerald-300" /> Payout ready
+                            </p>
+                            <p className="bfx-display text-[24px] font-semibold font-mono-data text-emerald-300 tabular-nums mt-1">${net.toFixed(2)}</p>
                           </div>
-                        )}
-
-                        {pos.status === "expired" && (
-                          <div className="bg-muted/20 border border-border/50 rounded-lg p-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-muted-foreground">Payout</span>
-                              <span className="text-[10px] text-muted-foreground">$0.00 — rate stayed below strike</span>
-                            </div>
-                          </div>
-                        )}
-                        {pos.status === "settled_win" && !pos.claimed && (() => {
-                          const gross = pos.payoutAmount;
-                          const payoutFeeRate = feeConfig?.hedgerPayoutFeeRate || 0.01;
-                          const fee = gross * payoutFeeRate;
-                          const net = gross - fee;
-                          return (
-                            <div className="space-y-1.5">
-                              <div className="text-[10px] text-muted-foreground/70 flex justify-between px-1">
-                                <span>Payout: ${gross.toFixed(2)} · Fee ({(payoutFeeRate * 100).toFixed(0)}%): ${fee.toFixed(4)}</span>
-                                <span>You receive: ${net.toFixed(2)}</span>
-                              </div>
-                              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
-                                onClick={() => claimMutation.mutate(pos.id)}
-                                disabled={claimMutation.isPending}>
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                {claimMutation.isPending ? (txStep || 'Sending...') : `Claim $${net.toFixed(2)}`}
-                              </Button>
-                            </div>
-                          );
-                        })()}
-                      </CardContent>
-                    </Card>
+                          <p className="text-[11px] text-white/55 font-mono-data tabular-nums text-right">
+                            #{pos.id}<br />{event?.underlying}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="p-4 space-y-2">
+                        <div className="text-[10.5px] text-muted-foreground flex justify-between">
+                          <span>Gross payout</span>
+                          <span className="font-mono-data tabular-nums">${gross.toFixed(2)}</span>
+                        </div>
+                        <div className="text-[10.5px] text-muted-foreground flex justify-between">
+                          <span>Fee ({(payoutFeeRate * 100).toFixed(0)}%)</span>
+                          <span className="font-mono-data tabular-nums">−${fee.toFixed(4)}</span>
+                        </div>
+                        <Button className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mt-2"
+                          onClick={() => claimMutation.mutate(pos.id)}
+                          disabled={claimMutation.isPending}>
+                          <CheckCircle2 className="h-4 w-4 mr-1.5" strokeWidth={2.2} />
+                          {claimMutation.isPending ? (txStep || 'Sending…') : `Claim $${net.toFixed(2)}`}
+                        </Button>
+                      </div>
+                    </div>
                   );
                 })}
 
                 {myPositions.filter(p => p.status !== "active").length > 0 && (
                   <>
-                    <div className="flex items-center gap-2 px-1 pt-2">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</span>
-                    </div>
-                    {myPositions.filter(p => p.status !== "active").map(pos => {
+                    <h3 className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground font-semibold px-1 pt-2">
+                      History
+                    </h3>
+                    {myPositions.filter(p => p.status !== "active" && !(p.status === 'settled_win' && !p.claimed)).map(pos => {
                       const event = events.find(e => e.id === pos.eventId);
                       const triggered = pos.status === "settled_win" || pos.status === "claimed";
                       return (
-                        <Card key={`hist-${pos.id}`} className="bg-card border-border opacity-80">
-                          <CardContent className="p-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs font-semibold text-foreground">#{pos.id} · {event?.underlying || `Event #${pos.eventId}`}</p>
-                                <p className="text-[11px] text-muted-foreground">{event?.name}</p>
+                        <div key={`hist-${pos.id}`} className="rounded-2xl bg-card border border-gray-100 dark:border-border/40 opacity-90">
+                          <div className="p-4 space-y-2.5">
+                            <div className="flex items-start justify-between">
+                              <div className="min-w-0">
+                                <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">
+                                  #{pos.id} · {event?.underlying || `Event #${pos.eventId}`}
+                                </p>
+                                <p className="text-[13.5px] font-semibold tracking-tight truncate mt-0.5">{event?.name}</p>
                               </div>
-                              <Badge className={triggered
-                                ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px]"
-                                : "bg-muted/50 text-muted-foreground border-border text-[10px]"}>
-                                {triggered ? "Triggered" : "Expired"}
+                              <Badge variant="outline" className={`text-[9.5px] rounded-full font-semibold shrink-0 ${
+                                triggered
+                                  ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20'
+                                  : 'bg-muted/60 text-muted-foreground border-gray-200 dark:border-border/60'
+                              }`}>
+                                {triggered ? (pos.status === 'claimed' ? 'Claimed' : 'Triggered') : 'Expired'}
                               </Badge>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 text-center">
-                              <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                                <span className="text-[10px] text-muted-foreground/70">Notional</span>
-                                <p className="text-xs font-bold text-foreground">${pos.notional.toLocaleString()}</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="rounded-xl bg-muted/30 px-3 py-2">
+                                <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Notional</p>
+                                <p className="text-[12.5px] font-semibold font-mono-data tabular-nums mt-0.5">${pos.notional.toLocaleString()}</p>
                               </div>
-                              <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                                <span className="text-[10px] text-muted-foreground/70">Premium Paid</span>
-                                <p className="text-xs font-bold text-muted-foreground">${pos.premiumPaid.toFixed(2)}</p>
+                              <div className="rounded-xl bg-muted/30 px-3 py-2">
+                                <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Premium</p>
+                                <p className="text-[12.5px] font-semibold font-mono-data text-muted-foreground tabular-nums mt-0.5">${pos.premiumPaid.toFixed(2)}</p>
                               </div>
-                              <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                                <span className="text-[10px] text-muted-foreground/70">{triggered ? "Payout" : "Result"}</span>
-                                <p className={`text-xs font-bold ${triggered ? "text-green-400" : "text-muted-foreground"}`}>
-                                  {triggered ? `$${pos.payoutAmount.toFixed(2)}` : "$0.00"}
+                              <div className="rounded-xl bg-muted/30 px-3 py-2">
+                                <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">
+                                  {triggered ? 'Payout' : 'Result'}
+                                </p>
+                                <p className={`text-[12.5px] font-semibold font-mono-data tabular-nums mt-0.5 ${triggered ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                                  {triggered ? `$${pos.payoutAmount.toFixed(2)}` : '$0.00'}
                                 </p>
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })}
                   </>
@@ -1621,223 +1889,268 @@ export default function Hedge() {
       </div>
 
       <Dialog open={buyDialogOpen} onOpenChange={setBuyDialogOpen}>
-        <DialogContent className="bg-card border-border text-foreground sm:max-w-[450px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              Buy FX Protection
-              {selectedEvent && (
-                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                  {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} pool
-                </Badge>
-              )}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              {selectedEvent?.name} — {selectedEvent?.underlying}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="bg-card border-gray-100 dark:border-border/40 text-foreground sm:max-w-[460px] max-h-[88vh] overflow-y-auto p-0 rounded-2xl">
           {selectedEvent && (
-            <div className="space-y-4">
-              {/* Pricing-source badge intentionally omitted from the hedger view. Every
-                  new event submits with signature = "0x" (on-chain quoteSigner = 0), so
-                  surfacing a "Manually priced" warning on every event would be noise.
-                  The premium itself is the trust signal — hedgers compare it against
-                  market rates and the engine's suggestion before buying. */}
-              {selectedEvent.description && (
-                <div className="bg-muted/40 rounded-lg p-3 border border-border/50">
-                  <p className="text-xs text-muted-foreground/70 mb-1 font-medium uppercase tracking-wide">About this event</p>
-                  <p className="text-sm text-foreground/90">{selectedEvent.description}</p>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground/70">Strike Price</p>
-                  <p className="text-lg font-bold text-foreground">{selectedEvent.strike.toFixed(2)}</p>
-                </div>
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground/70">Expires In</p>
-                  <p className="text-lg font-bold"><CountdownTimer expiryDate={selectedEvent.expiryDate} /></p>
+            <>
+              {/* Brand hero header */}
+              <div className="relative overflow-hidden bfx-hero-brand px-6 pt-5 pb-5">
+                <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-40 pointer-events-none" />
+                <div className="relative">
+                  <p className="text-[10.5px] uppercase tracking-[0.14em] text-white/60 font-semibold flex items-center gap-1.5">
+                    <Shield className="h-3 w-3" /> Buy cover
+                  </p>
+                  <DialogTitle className="bfx-display text-[22px] font-semibold tracking-tight text-white mt-1.5 leading-tight">
+                    {selectedEvent.name}
+                  </DialogTitle>
+                  <p className="text-[12px] text-white/70 font-mono-data mt-0.5">{selectedEvent.underlying}</p>
+                  <div className="flex items-center gap-3 mt-4 text-[11px] text-white/75">
+                    <span className="inline-flex items-center gap-1.5">
+                      {selectedEvent.strikeAbove ? <TrendingUp className="h-3 w-3 text-emerald-300" strokeWidth={2.2} /> : <TrendingDown className="h-3 w-3 text-red-300" strokeWidth={2.2} />}
+                      Strike <span className="font-mono-data font-semibold text-white tabular-nums">{selectedEvent.strike.toFixed(2)}</span>
+                    </span>
+                    <span className="text-white/30">·</span>
+                    <span className="inline-flex items-center gap-1 font-mono-data tabular-nums">
+                      <Clock className="h-3 w-3" /> <CountdownTimer expiryDate={selectedEvent.expiryDate} />
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-muted/50 rounded-lg p-3">
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Pool Utilization</span>
-                  <span>{(selectedEvent.utilization * 100).toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-primary h-2 rounded-full" style={{ width: `${Math.min(selectedEvent.utilization * 100, 100)}%` }} />
-                </div>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  Available: ${selectedEvent.availableCapacity.toLocaleString()}
-                </p>
-              </div>
+              <div className="px-6 pt-5 pb-2 space-y-4">
+                {selectedEvent.description && (
+                  <div className="bg-muted/40 rounded-xl p-3 border border-gray-100 dark:border-border/40">
+                    <p className="text-[9.5px] text-muted-foreground mb-0.5 font-semibold uppercase tracking-[0.1em]">About</p>
+                    <p className="text-[12.5px] text-foreground/90 leading-relaxed">{selectedEvent.description}</p>
+                  </div>
+                )}
 
-              <div>
-                <Label className="text-muted-foreground">Coverage Amount ({eventTokenSymbol})</Label>
-                <Input
-                  type="number" min="10" step="1" placeholder="e.g. 100"
-                  value={notional} onChange={e => setNotional(e.target.value)}
-                  className="bg-muted border-border text-foreground mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Your balance:{" "}
-                  <span className={tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? "text-destructive font-semibold" : "font-medium"}>
-                    {selectedEventTokenBalance !== undefined ? parseFloat(selectedEventTokenBalance).toFixed(2) : "…"} {eventTokenSymbol}
-                  </span>
+                {/* Pool capacity bar */}
+                <div>
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-muted-foreground font-medium">Pool capacity</span>
+                    <span className="font-mono-data tabular-nums">
+                      <span className="font-semibold text-foreground">${selectedEvent.availableCapacity.toLocaleString()}</span>
+                      <span className="text-muted-foreground"> available</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary/70 rounded-full transition-all" style={{ width: `${Math.min(selectedEvent.utilization * 100, 100)}%` }} />
+                  </div>
+                </div>
+
+                {/* Coverage input */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-[12px] font-semibold tracking-tight">Coverage amount</Label>
+                    <span className="text-[10.5px] text-muted-foreground">
+                      Balance:{' '}
+                      <span className={`font-mono-data tabular-nums ${tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? 'text-destructive font-semibold' : 'text-foreground font-semibold'}`}>
+                        {selectedEventTokenBalance !== undefined ? parseFloat(selectedEventTokenBalance).toFixed(2) : '…'} {eventTokenSymbol}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type="number" min="10" step="1" placeholder="100"
+                      value={notional} onChange={e => setNotional(e.target.value)}
+                      className="h-12 text-[18px] font-semibold font-mono-data tabular-nums pr-20 rounded-xl border-gray-200 dark:border-border/60"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground font-semibold">
+                      {eventTokenSymbol}
+                    </span>
+                  </div>
                   {tokenBalanceNum < totalCostCalc && totalCostCalc > 0 && (
-                    <span className="text-destructive ml-2">— insufficient</span>
+                    <p className="text-[11px] text-destructive font-medium mt-1.5 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Insufficient {eventTokenSymbol} balance
+                    </p>
                   )}
-                </p>
-              </div>
+                </div>
 
-              {notional && parseFloat(notional) >= 10 && (
-                <div className="bg-muted/50 border border-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Cost Breakdown</p>
-                  <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Coverage Amount</span>
-                    <span className="text-sm font-medium text-foreground">${parseFloat(notional).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Premium ({(selectedEvent.premiumRate * 100).toFixed(1)}%)</span>
-                    <span className="text-sm font-medium text-foreground">${premiumCalc.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Platform Fee ({(hedgerFeeRate * 100).toFixed(1)}% of coverage)</span>
-                    <span className="text-sm font-medium text-amber-400">${hedgerFeeCalc.toFixed(2)}</span>
-                  </div>
-                  <div className="border-t border-border pt-2 flex justify-between">
-                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} Required</span>
-                    <span className="text-sm font-bold text-primary">${totalCostCalc.toFixed(2)}</span>
-                  </div>
-                  <div className="border-t border-border pt-2 space-y-1.5">
-                    <div className="flex justify-between">
-                      <span className="text-xs text-muted-foreground">Initial Rate</span>
-                      <span className="text-xs font-bold text-foreground">{selectedEvent.initialRate ? selectedEvent.initialRate.toFixed(4) : "N/A"}</span>
+                {notional && parseFloat(notional) >= 10 && (
+                  <div className="rounded-2xl border border-gray-100 dark:border-border/40 bg-muted/30 p-4 space-y-2.5">
+                    <p className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">Cost breakdown</p>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[12.5px]">
+                        <span className="text-muted-foreground">Coverage</span>
+                        <span className="font-mono-data tabular-nums font-medium">${parseFloat(notional).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-[12.5px]">
+                        <span className="text-muted-foreground">Premium ({(selectedEvent.premiumRate * 100).toFixed(1)}%)</span>
+                        <span className="font-mono-data tabular-nums font-medium">${premiumCalc.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-[12.5px]">
+                        <span className="text-muted-foreground">Platform fee ({(hedgerFeeRate * 100).toFixed(1)}%)</span>
+                        <span className="font-mono-data tabular-nums font-medium text-amber-700 dark:text-amber-400">${hedgerFeeCalc.toFixed(2)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-muted-foreground">Current Rate</span>
-                      <span className="text-xs font-bold text-foreground">{currentRate ? currentRate.toFixed(4) : "Loading..."}</span>
+                    <div className="border-t border-gray-200 dark:border-border/50 pt-2.5 flex items-baseline justify-between">
+                      <span className="text-[12px] font-semibold">You pay</span>
+                      <span className="bfx-display text-[22px] font-semibold font-mono-data tabular-nums text-primary">${totalCostCalc.toFixed(2)}</span>
                     </div>
                     {payoutPercent > 0 && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-xs text-muted-foreground">Payout if Strike Hit ({(payoutPercent * 100).toFixed(1)}%)</span>
-                          <span className="text-xs font-bold text-green-400">${predeterminedPayout.toFixed(2)}</span>
+                      <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-3 py-2.5">
+                        <div className="flex items-baseline justify-between mb-0.5">
+                          <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">If strike hit</span>
+                          <span className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 font-mono-data tabular-nums">{(payoutPercent * 100).toFixed(1)}%</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-xs text-muted-foreground">Net Payout (after 1% fee)</span>
-                          <span className="text-xs font-bold text-green-400">${netPredeterminedPayout.toFixed(2)}</span>
+                        <div className="bfx-display text-[20px] font-semibold font-mono-data tabular-nums text-emerald-700 dark:text-emerald-300">
+                          ${netPredeterminedPayout.toFixed(2)}
                         </div>
-                      </>
+                        <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 mt-1">
+                          Net payout after 1% fee · fixed at purchase
+                        </p>
+                      </div>
                     )}
+                    <p className="text-[10px] text-muted-foreground/80 leading-relaxed pt-1">
+                      One-touch: pays out when {selectedEvent.underlying} touches {selectedEvent.strike.toFixed(2)}.
+                      Initial rate {selectedEvent.initialRate?.toFixed(4) || 'N/A'} · current {currentRate ? currentRate.toFixed(4) : '…'}.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground/70">
-                    One-touch: settles when rate touches strike ({selectedEvent.strike.toFixed(2)}). Payout = Notional × ({selectedEvent.strike.toFixed(2)} − {selectedEvent.initialRate.toFixed(2)}) / {selectedEvent.initialRate.toFixed(2)} = {(payoutPercent * 100).toFixed(1)}% of notional. Fixed at purchase — you know exactly what you'll get.
-                  </p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+              <DialogFooter className="px-6 py-4 border-t border-gray-100 dark:border-border/40 flex-col sm:flex-row gap-2 mt-2">
+                <Button variant="outline" onClick={() => setBuyDialogOpen(false)} className="w-full sm:w-auto rounded-xl border-gray-200 dark:border-border/60">Cancel</Button>
+                <Button onClick={guardedBuyProtection}
+                  disabled={!notional || parseFloat(notional) < 10 || buyProtectionMutation.isPending || (selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto rounded-xl font-semibold h-10">
+                  {buyProtectionMutation.isPending ? (txStep || 'Approving…')
+                    : selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0
+                      ? `Insufficient ${eventTokenSymbol}`
+                      : <>Pay ${totalCostCalc.toFixed(2)} · Buy cover <ArrowRight className="h-4 w-4 ml-1.5" strokeWidth={2.2} /></>}
+                </Button>
+              </DialogFooter>
+            </>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setBuyDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
-            <Button onClick={guardedBuyProtection}
-              disabled={!notional || parseFloat(notional) < 10 || buyProtectionMutation.isPending || (selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {buyProtectionMutation.isPending ? (txStep || 'Approving...') : selectedEventTokenBalance !== undefined && tokenBalanceNum < totalCostCalc && totalCostCalc > 0 ? `Insufficient ${eventTokenSymbol}` : `Pay $${totalCostCalc.toFixed(2)} & Buy Protection`}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>
-        <DialogContent className="bg-card border-border text-foreground sm:max-w-[450px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Deposit Liquidity
-              {selectedEvent && (
-                <Badge className={`text-[10px] border ml-1 ${selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                  {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} pool
-                </Badge>
-              )}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              {selectedEvent?.name} — Earn premiums from hedgers
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="bg-card border-gray-100 dark:border-border/40 text-foreground sm:max-w-[460px] max-h-[88vh] overflow-y-auto p-0 rounded-2xl">
           {selectedEvent && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground/70">Total Pool</p>
-                  <p className="text-lg font-bold text-foreground">${selectedEvent.totalLiquidity.toLocaleString()}</p>
-                </div>
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground/70">Utilization</p>
-                  <p className="text-lg font-bold text-foreground">{(selectedEvent.utilization * 100).toFixed(1)}%</p>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-muted-foreground">Deposit Amount ({eventTokenSymbol})</Label>
-                <Input
-                  type="number" min="10" step="1" placeholder="e.g. 500"
-                  value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
-                  className="bg-muted border-border text-foreground mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Your balance:{" "}
-                  <span className={depositAmount && parseFloat(depositAmount) > tokenBalanceNum ? "text-destructive font-semibold" : "font-medium"}>
-                    {selectedEventTokenBalance !== undefined ? parseFloat(selectedEventTokenBalance).toFixed(2) : "…"} {eventTokenSymbol}
-                  </span>
-                  {depositAmount && parseFloat(depositAmount) > tokenBalanceNum && (
-                    <span className="text-destructive ml-2">— insufficient</span>
-                  )}
-                </p>
-              </div>
-
-              {depositAmount && parseFloat(depositAmount) >= 10 && (
-                <div className="bg-muted/50 border border-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Cost Breakdown</p>
-                  <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Deposit Amount</span>
-                    <span className="text-sm font-medium text-foreground">${parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Deposit Fee</span>
-                    <span className="text-sm font-medium text-green-400">$0.00 (no fee)</span>
-                  </div>
-                  <div className="border-t border-border pt-2 flex justify-between">
-                    <span className="text-xs font-semibold text-foreground">Total {selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"} Required</span>
-                    <span className="text-sm font-bold text-primary">${parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground/70">
-                    Note: A {feeConfig ? (feeConfig.lpProfitFeeRate * 100).toFixed(0) : "1"}% fee applies on LP profits at withdrawal.
+            <>
+              {/* Brand hero header — APY-first */}
+              <div className="relative overflow-hidden bfx-hero-brand px-6 pt-5 pb-5">
+                <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-40 pointer-events-none" />
+                <div className="relative">
+                  <p className="text-[10.5px] uppercase tracking-[0.14em] text-white/60 font-semibold flex items-center gap-1.5">
+                    <DollarSign className="h-3 w-3" /> Provide cover · Earn premium
                   </p>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="bfx-display text-[36px] font-semibold tracking-tight text-emerald-300 leading-none font-mono-data tabular-nums">
+                      {(selectedEvent.premiumRate * 100).toFixed(1)}%
+                    </span>
+                    <span className="text-[12px] text-white/60 font-semibold uppercase tracking-wider">per cover sold</span>
+                  </div>
+                  <DialogTitle className="text-[15px] font-semibold tracking-tight text-white mt-3 leading-tight">
+                    {selectedEvent.name}
+                  </DialogTitle>
+                  <p className="text-[12px] text-white/70 font-mono-data mt-0.5">{selectedEvent.underlying} · pays in {eventTokenSymbol}</p>
                 </div>
-              )}
-
-              <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 space-y-1.5">
-                <p className="text-xs text-muted-foreground">
-                  <AlertTriangle className="h-3 w-3 inline mr-1 text-yellow-400" />
-                  Risk: Payout scales with rate movement above strike ({selectedEvent.strike.toFixed(2)}).
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  <CheckCircle2 className="h-3 w-3 inline mr-1 text-green-400" />
-                  Reward: Share of premiums proportional to your deposit.
-                </p>
               </div>
-            </div>
+
+              <div className="px-6 pt-5 pb-2 space-y-4">
+                {/* Pool stats */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2.5">
+                    <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Pool size</p>
+                    <p className="text-[15px] font-semibold font-mono-data text-foreground tabular-nums mt-0.5">${selectedEvent.totalLiquidity.toLocaleString()}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2.5">
+                    <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Utilization</p>
+                    <p className="text-[15px] font-semibold font-mono-data text-foreground tabular-nums mt-0.5">{(selectedEvent.utilization * 100).toFixed(1)}%</p>
+                  </div>
+                </div>
+
+                {/* Deposit input */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-[12px] font-semibold tracking-tight">Deposit amount</Label>
+                    <span className="text-[10.5px] text-muted-foreground">
+                      Balance:{' '}
+                      <span className={`font-mono-data tabular-nums ${depositAmount && parseFloat(depositAmount) > tokenBalanceNum ? 'text-destructive font-semibold' : 'text-foreground font-semibold'}`}>
+                        {selectedEventTokenBalance !== undefined ? parseFloat(selectedEventTokenBalance).toFixed(2) : '…'} {eventTokenSymbol}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type="number" min="10" step="1" placeholder="500"
+                      value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
+                      className="h-12 text-[18px] font-semibold font-mono-data tabular-nums pr-20 rounded-xl border-gray-200 dark:border-border/60"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground font-semibold">
+                      {eventTokenSymbol}
+                    </span>
+                  </div>
+                  {depositAmount && parseFloat(depositAmount) > tokenBalanceNum && (
+                    <p className="text-[11px] text-destructive font-medium mt-1.5 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Insufficient {eventTokenSymbol} balance
+                    </p>
+                  )}
+                </div>
+
+                {depositAmount && parseFloat(depositAmount) >= 10 && (
+                  <div className="rounded-2xl border border-gray-100 dark:border-border/40 bg-muted/30 p-4 space-y-2">
+                    <p className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">Summary</p>
+                    <div className="flex justify-between text-[12.5px]">
+                      <span className="text-muted-foreground">Deposit</span>
+                      <span className="font-mono-data tabular-nums font-medium">${parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-[12.5px]">
+                      <span className="text-muted-foreground">Deposit fee</span>
+                      <span className="font-mono-data tabular-nums font-medium text-emerald-700 dark:text-emerald-400">$0.00 · none</span>
+                    </div>
+                    <div className="border-t border-gray-200 dark:border-border/50 pt-2 flex items-baseline justify-between">
+                      <span className="text-[12px] font-semibold">You deposit</span>
+                      <span className="bfx-display text-[22px] font-semibold font-mono-data tabular-nums text-primary">
+                        ${parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/80 leading-relaxed pt-1">
+                      Profit fee: {feeConfig ? (feeConfig.lpProfitFeeRate * 100).toFixed(0) : '1'}% on premiums earned, taken at withdrawal.
+                    </p>
+                  </div>
+                )}
+
+                {/* Risk / Reward strip */}
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="rounded-xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/60 dark:bg-emerald-500/5 px-3 py-2.5 flex items-start gap-2.5">
+                    <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-500/15 inline-flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" strokeWidth={2.2} />
+                    </span>
+                    <div>
+                      <p className="text-[12px] font-semibold text-emerald-900 dark:text-emerald-200">Reward</p>
+                      <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-snug">
+                        Share of premiums, proportional to your deposit.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-amber-100 dark:border-amber-500/20 bg-amber-50/60 dark:bg-amber-500/5 px-3 py-2.5 flex items-start gap-2.5">
+                    <span className="h-6 w-6 rounded-full bg-amber-100 dark:bg-amber-500/15 inline-flex items-center justify-center shrink-0">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" strokeWidth={2.2} />
+                    </span>
+                    <div>
+                      <p className="text-[12px] font-semibold text-amber-900 dark:text-amber-200">Risk</p>
+                      <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
+                        Payout to hedgers if rate touches strike ({selectedEvent.strike.toFixed(2)}).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="px-6 py-4 border-t border-gray-100 dark:border-border/40 flex-col sm:flex-row gap-2 mt-2">
+                <Button variant="outline" onClick={() => setDepositDialogOpen(false)} className="w-full sm:w-auto rounded-xl border-gray-200 dark:border-border/60">Cancel</Button>
+                <Button onClick={guardedDeposit}
+                  disabled={!depositAmount || parseFloat(depositAmount) < 10 || depositMutation.isPending || (selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto rounded-xl font-semibold h-10">
+                  {depositMutation.isPending ? (txStep || 'Approving…')
+                    : selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum
+                      ? `Insufficient ${eventTokenSymbol}`
+                      : <>Deposit ${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'} <ArrowRight className="h-4 w-4 ml-1.5" strokeWidth={2.2} /></>}
+                </Button>
+              </DialogFooter>
+            </>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setDepositDialogOpen(false)} className="border-border text-muted-foreground w-full sm:w-auto">Cancel</Button>
-            <Button onClick={guardedDeposit}
-              disabled={!depositAmount || parseFloat(depositAmount) < 10 || depositMutation.isPending || (selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-              {depositMutation.isPending ? (txStep || 'Approving...') : selectedEventTokenBalance !== undefined && depositAmount !== "" && parseFloat(depositAmount) > tokenBalanceNum ? `Insufficient ${eventTokenSymbol}` : `Pay $${depositAmount ? parseFloat(depositAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} & Deposit`}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -2387,95 +2700,121 @@ export default function Hedge() {
       </Dialog>
 
       <Dialog open={creatorProfileOpen} onOpenChange={setCreatorProfileOpen}>
-        <DialogContent className="bg-card border-border text-foreground sm:max-w-[480px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              Creator Profile
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground font-mono text-xs">
-              {viewingCreator}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="bg-card border-gray-100 dark:border-border/40 text-foreground sm:max-w-[480px] max-h-[88vh] overflow-y-auto p-0 rounded-2xl">
           {viewingCreator && (() => {
             const stats = getCreatorStats(viewingCreator);
             const isOwnProfile = wallet?.address?.toLowerCase() === viewingCreator.toLowerCase();
+            const hue = (() => {
+              let n = 0;
+              for (let i = 0; i < viewingCreator.length; i++) n = (n * 31 + viewingCreator.charCodeAt(i)) >>> 0;
+              return n % 360;
+            })();
+            const initials = viewingCreator.slice(2, 4).toUpperCase();
             return (
-              <div className="space-y-4">
-                {isOwnProfile ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-muted/50 rounded-lg p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Pool Premiums</p>
-                      <p className="text-lg font-bold text-green-400">${stats.totalPremiums.toFixed(2)}</p>
+              <>
+                {/* Brand hero header with avatar */}
+                <div className="relative overflow-hidden bfx-hero-brand px-6 pt-6 pb-5">
+                  <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-40 pointer-events-none" />
+                  <div className="relative flex items-center gap-3">
+                    <div
+                      className="h-14 w-14 rounded-2xl flex items-center justify-center font-mono-data text-[16px] font-bold text-white shrink-0 ring-2 ring-white/15"
+                      style={{ background: `linear-gradient(135deg, hsl(${hue} 70% 50%), hsl(${(hue + 30) % 360} 70% 42%))` }}
+                    >
+                      {initials}
                     </div>
-                    <div className="bg-muted/50 rounded-lg p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Creator's Earnings</p>
-                      <p className="text-lg font-bold text-amber-400">${stats.loyaltyEarnings.toFixed(2)}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10.5px] uppercase tracking-[0.14em] text-white/60 font-semibold">
+                        {isOwnProfile ? 'Your creator profile' : 'Creator'}
+                      </p>
+                      <DialogTitle className="bfx-display text-[18px] font-semibold tracking-tight text-white leading-tight mt-1 truncate font-mono-data">
+                        {viewingCreator.slice(0, 8)}…{viewingCreator.slice(-6)}
+                      </DialogTitle>
+                      <p className="text-[11px] text-white/60 font-mono-data tabular-nums mt-1">
+                        {stats.creatorEvents.length} pool{stats.creatorEvents.length !== 1 ? 's' : ''} · {stats.totalHedgers} hedger{stats.totalHedgers !== 1 ? 's' : ''} served
+                      </p>
                     </div>
-                    <div className="bg-muted/50 rounded-lg p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground/70">Total Liquidity</p>
-                      <p className="text-lg font-bold text-primary">${stats.totalLiquidity.toLocaleString()}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-muted/50 rounded-lg p-3 text-center">
-                    <p className="text-[10px] text-muted-foreground/70">Total Liquidity Provided</p>
-                    <p className="text-lg font-bold text-primary">${stats.totalLiquidity.toLocaleString()}</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-muted-foreground/70">Events</p>
-                    <p className="text-sm font-bold text-foreground">{stats.creatorEvents.length}</p>
-                  </div>
-                  <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-muted-foreground/70">Active</p>
-                    <p className="text-sm font-bold text-green-400">{stats.activeEvents}</p>
-                  </div>
-                  <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-muted-foreground/70">Hedgers Served</p>
-                    <p className="text-sm font-bold text-foreground">{stats.totalHedgers}</p>
                   </div>
                 </div>
 
-                {stats.creatorEvents.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-foreground">Events</p>
-                    {stats.creatorEvents.map(event => (
-                      <div key={event.id} className="rounded-lg border border-border p-3 space-y-2">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{event.name}</p>
-                            <p className="text-[11px] text-muted-foreground">{event.underlying} · Strike: {event.strike.toFixed(2)}</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Badge className={`text-[10px] border ${event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                              {event.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? "USDC" : "USDT"}
-                            </Badge>
-                            <Badge className={event.status === "open" ? "bg-green-500/20 text-green-400 border-green-500/30 text-[10px]" : "bg-muted/50 text-muted-foreground border-border text-[10px]"}>
-                              {event.status === "open" ? "Active" : event.status}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5 text-center">
-                          <div className="bg-muted/30 rounded px-2 py-1">
-                            <span className="text-[9px] text-muted-foreground/70">Pool</span>
-                            <p className="text-[11px] font-bold text-foreground">${event.totalLiquidity.toLocaleString()}</p>
-                          </div>
-                          <div className="bg-muted/30 rounded px-2 py-1">
-                            <span className="text-[9px] text-muted-foreground/70">Hedgers</span>
-                            <p className="text-[11px] font-bold text-foreground">{event.hedgerCount}</p>
-                          </div>
-                          <div className="bg-muted/30 rounded px-2 py-1">
-                            <span className="text-[9px] text-muted-foreground/70">Earned</span>
-                            <p className="text-[11px] font-bold text-green-400">${event.totalPremiums.toFixed(2)}</p>
-                          </div>
-                        </div>
+                <div className="px-6 pt-5 pb-6 space-y-4">
+                  {/* Primary stats */}
+                  {isOwnProfile ? (
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2.5">
+                        <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Pool premiums</p>
+                        <p className="text-[14px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">${stats.totalPremiums.toFixed(2)}</p>
                       </div>
-                    ))}
+                      <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2.5">
+                        <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Loyalty</p>
+                        <p className="text-[14px] font-semibold font-mono-data text-amber-700 dark:text-amber-400 tabular-nums mt-0.5">${stats.loyaltyEarnings.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 dark:border-border/40 px-3 py-2.5">
+                        <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Liquidity</p>
+                        <p className="text-[14px] font-semibold font-mono-data text-primary tabular-nums mt-0.5">${stats.totalLiquidity.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-gray-100 dark:border-border/40 px-4 py-3 flex items-baseline justify-between">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground font-semibold">Total liquidity</p>
+                      <p className="bfx-display text-[20px] font-semibold font-mono-data text-primary tabular-nums">${stats.totalLiquidity.toLocaleString()}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-muted/30 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Pools</p>
+                      <p className="text-[14px] font-semibold font-mono-data tabular-nums mt-0.5">{stats.creatorEvents.length}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/30 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Active</p>
+                      <p className="text-[14px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">{stats.activeEvents}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/30 px-3 py-2">
+                      <p className="text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">Hedgers</p>
+                      <p className="text-[14px] font-semibold font-mono-data tabular-nums mt-0.5">{stats.totalHedgers}</p>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {stats.creatorEvents.length > 0 && (
+                    <div className="space-y-2.5">
+                      <p className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">Pools created</p>
+                      <div className="space-y-2">
+                        {stats.creatorEvents.map(event => (
+                          <div key={event.id} className="rounded-2xl border border-gray-100 dark:border-border/40 p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-[13.5px] font-semibold tracking-tight truncate">{event.name}</p>
+                                <p className="text-[11px] text-muted-foreground font-mono-data tabular-nums mt-0.5">{event.underlying} · strike {event.strike.toFixed(2)}</p>
+                              </div>
+                              <Badge variant="outline" className={`text-[9.5px] rounded-full font-semibold ${
+                                event.status === 'open'
+                                  ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/20'
+                                  : 'bg-muted/60 text-muted-foreground border-gray-200 dark:border-border/60'
+                              }`}>
+                                {event.status === 'open' ? 'Active' : event.status}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <div className="rounded-lg bg-muted/40 px-2 py-1.5">
+                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Pool</p>
+                                <p className="text-[11.5px] font-semibold font-mono-data tabular-nums mt-0.5">${event.totalLiquidity.toLocaleString()}</p>
+                              </div>
+                              <div className="rounded-lg bg-muted/40 px-2 py-1.5">
+                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Hedgers</p>
+                                <p className="text-[11.5px] font-semibold font-mono-data tabular-nums mt-0.5">{event.hedgerCount}</p>
+                              </div>
+                              <div className="rounded-lg bg-muted/40 px-2 py-1.5">
+                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Earned</p>
+                                <p className="text-[11.5px] font-semibold font-mono-data text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">${event.totalPremiums.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
             );
           })()}
         </DialogContent>

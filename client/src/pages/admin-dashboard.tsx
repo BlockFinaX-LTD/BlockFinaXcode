@@ -2,6 +2,8 @@ import { useState, createContext, useContext, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/api-client";
 import { hedgeContract, type HedgeFeeConfig, USDC_ADDRESS, USDT_ADDRESS_SEPOLIA } from "@/lib/hedge-contract";
+import { getAuthMethod, sendCrypto, sendOtp, getCachedUserSummary } from "@/lib/rift-client";
+import { useRift } from "@rift-finance/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +17,7 @@ import {
   Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
-  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info
+  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -33,7 +35,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "protocol";
+type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -41,6 +43,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "hedge", label: "Hedge", icon: Shield },
   { key: "revenue", label: "Revenue & Fees", icon: DollarSign },
   { key: "tasks", label: "Tasks & Points", icon: ListChecks },
+  { key: "payouts", label: "Reviews & Payouts", icon: Wallet },
   { key: "analytics", label: "Analytics", icon: Activity },
   { key: "content", label: "Content", icon: FileText },
   { key: "protocol", label: "Protocol", icon: Settings },
@@ -2243,69 +2246,58 @@ function LoadingSkeleton() {
 }
 
 function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
+  const { isAuthenticated, user, open, getAccessToken } = useRift();
   const [error, setError] = useState("");
-  const [step, setStep] = useState<"idle" | "signing" | "verifying">("idle");
-
+  const [step, setStep] = useState<"idle" | "verifying">("idle");
   const loading = step !== "idle";
 
-  const handleConnect = async () => {
+  const handleContinue = async () => {
     setError("");
-    const eth = (window as any).ethereum;
-    if (!eth) {
-      setError("MetaMask not found. Please install MetaMask and try again.");
+    if (!isAuthenticated) {
+      open();
       return;
     }
-
+    setStep("verifying");
     try {
-      // 1. Request account
-      setStep("signing");
-      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
-      const address = accounts[0];
-      if (!address) { setError("No account selected."); setStep("idle"); return; }
-
-      // 2. Fetch signing challenge from backend
-      const challengeRes = await fetch("/api/admin/wallet-challenge", { method: "POST" });
-      const { nonce, message } = await challengeRes.json();
-
-      // 3. Ask MetaMask to sign the message
-      const signature = await eth.request({
-        method: "personal_sign",
-        params: [message, address],
-      });
-
-      // 4. Submit to backend
-      setStep("verifying");
-      const loginRes = await fetch("/api/admin/login", {
+      const accessToken = await getAccessToken();
+      const r = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, signature, nonce }),
+        body: JSON.stringify({ accessToken }),
       });
-      const data = await loginRes.json();
-      if (!loginRes.ok) { setError(data.message || "Access denied."); setStep("idle"); return; }
-
+      const data = await r.json();
+      if (!r.ok) {
+        setError(data.message || "Access denied.");
+        setStep("idle");
+        return;
+      }
       sessionStorage.setItem("admin_token", data.token);
       onLogin(data.token);
     } catch (err: any) {
-      if (err?.code === 4001) {
-        setError("Signature request cancelled.");
-      } else {
-        setError(err?.message || "Something went wrong.");
-      }
+      setError(err?.message || "Something went wrong.");
       setStep("idle");
     }
   };
 
-  const stepLabel = step === "signing" ? "Check MetaMask to sign…" : step === "verifying" ? "Verifying…" : "Connect Wallet";
+  // Resolve the email the widget signed in with for the friendly label.
+  // We pull from the cached user summary maintained by the rest of the app
+  // and fall back to the Rift user.user UUID if the email isn't cached yet.
+  const cached = getCachedUserSummary();
+  const userLabel = (user as any)?.email || cached?.user || (user?.user ?? "");
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mx-auto w-12 h-12 rounded-xl bg-[#1a4480] flex items-center justify-center mb-2">
-            <Wallet className="h-6 w-6 text-white" />
+            <Shield className="h-6 w-6 text-white" />
           </div>
           <CardTitle>Admin Access</CardTitle>
-          <CardDescription>Connect your owner wallet to continue</CardDescription>
+          <CardDescription>
+            {isAuthenticated
+              ? "Continue with your BlockFinaX account"
+              : "Sign in with BlockFinaX to continue"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
@@ -2313,22 +2305,599 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
               {error}
             </div>
           )}
+
+          {isAuthenticated && userLabel && (
+            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
+              Signed in as <span className="font-medium text-gray-900">{userLabel}</span>
+            </div>
+          )}
+
           <Button
-            onClick={handleConnect}
+            onClick={handleContinue}
             className="w-full bg-[#1a4480] hover:bg-[#153a6e]"
             disabled={loading}
           >
             {loading && <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-            {stepLabel}
+            {isAuthenticated ? (loading ? "Verifying…" : "Continue as admin") : "Sign in"}
           </Button>
+
           <p className="text-center text-xs text-gray-400">
-            Only authorised owner addresses can access the admin panel.
+            Only allowlisted email accounts can access the admin panel.
           </p>
           <div className="text-center">
             <Link href="/">
               <span className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">Back to site</span>
             </Link>
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Payouts section ─────────────────────────────────────────────────────
+//
+// Admin tooling for converting earned points into real USDC. Backed by:
+//   - GET  /api/admin/settings/point-value     (admin: read current $/point)
+//   - PUT  /api/admin/settings/point-value     (admin: update $/point)
+//   - GET  /api/admin/task-completions         (admin: list paid/unpaid)
+//   - POST /api/admin/task-completions/:id/payout
+//                                              (admin: record the Rift tx hash)
+//
+// The actual transfer happens through the Rift SDK from the admin's own
+// signed-in account (sendCrypto with OTP/password). The endpoint only files
+// the hash so the queue knows the row is settled.
+
+interface CompletionRow {
+  completionId: number;
+  walletAddress: string;
+  completedAt: string;
+  pointsEarned: number;
+  reviewStatus: 'auto' | 'pending' | 'approved' | 'rejected';
+  evidenceUrl: string | null;
+  evidenceImage: string | null;
+  evidenceText: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+  paidTxHash: string | null;
+  paidAmount: string | null;
+  paidToken: string | null;
+  paidChainId: number | null;
+  paidAt: string | null;
+  paidBy: string | null;
+  taskId: number;
+  taskKey: string;
+  taskTitle: string;
+  taskCategory: string;
+  taskVerifier: string | null;
+  taskIsDaily: boolean | null;
+}
+
+function PayoutValueCard({ token }: { token: string }) {
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const { data, refetch } = useQuery<{ usdPerPoint: number }>({
+    queryKey: ["admin-point-value", token],
+    queryFn: async () => {
+      const r = await adminFetch("/api/admin/settings/point-value", token);
+      return r.json();
+    },
+  });
+
+  const current = data?.usdPerPoint ?? 0.05;
+
+  const save = async () => {
+    const num = Number(draft);
+    if (!Number.isFinite(num) || num < 0) {
+      toast({ title: "Invalid value", description: "Enter a non-negative number.", variant: "destructive" });
+      return;
+    }
+    const r = await adminFetch("/api/admin/settings/point-value", token, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usdPerPoint: num }),
+    });
+    if (!r.ok) {
+      toast({ title: "Save failed", variant: "destructive" });
+      return;
+    }
+    toast({ title: "Point value updated", description: `Now $${num.toFixed(4)}/pt — users will see the new value immediately.` });
+    setEditing(false);
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ["/api/platform/settings/point-value"] });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base">Point value</CardTitle>
+            <CardDescription className="text-xs">
+              How much one point is worth in USD. Shown to users on the Earn page.
+            </CardDescription>
+          </div>
+          {!editing && (
+            <Button size="sm" variant="outline" onClick={() => { setDraft(String(current)); setEditing(true); }}>
+              <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {editing ? (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label className="text-xs">USD per point</Label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                <Input
+                  type="number" step="0.001" min="0"
+                  value={draft} onChange={e => setDraft(e.target.value)}
+                  className="pl-7"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <Button size="sm" onClick={save}>
+              <Save className="h-3.5 w-3.5 mr-1.5" /> Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-[#1a4480]">${current.toFixed(4)}</span>
+            <span className="text-xs text-gray-500">per point</span>
+            <span className="ml-auto text-xs text-gray-400">e.g. 100 pts ≈ ${(current * 100).toFixed(2)}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PayoutRow({
+  row, usdPerPoint, adminWallet, token, onPaid,
+}: {
+  row: CompletionRow;
+  usdPerPoint: number;
+  adminWallet: string | null;
+  token: string;
+  onPaid: () => void;
+}) {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const authMethod = getAuthMethod();
+
+  const usdAmount = row.pointsEarned * usdPerPoint;
+
+  const openPay = async () => {
+    if (!authMethod) {
+      toast({
+        title: "Sign in with Rift first",
+        description: "Open the main app, sign in, and come back here — this admin pays out from their own Rift wallet.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setDialogOpen(true);
+    setOtpCode(""); setPassword(""); setOtpSent(false);
+    // For OTP users, ping the server to send the code right away.
+    if (authMethod.kind !== "password") {
+      setBusy("Sending code…");
+      try {
+        if (authMethod.kind === "email") await sendOtp({ email: authMethod.email });
+        else await sendOtp({ phone: authMethod.phoneNumber });
+        setOtpSent(true);
+      } catch (e: any) {
+        toast({ title: "Failed to send code", description: e?.message, variant: "destructive" });
+      } finally { setBusy(null); }
+    }
+  };
+
+  const confirm = async () => {
+    if (!authMethod || !adminWallet) return;
+    setBusy("Sending payment…");
+    try {
+      const creds: any = authMethod.kind === "password"
+        ? { externalId: authMethod.externalId, password }
+        : authMethod.kind === "email"
+          ? { email: authMethod.email, otpCode }
+          : { phoneNumber: authMethod.phoneNumber, otpCode };
+
+      const res = await sendCrypto({
+        to: row.walletAddress,
+        value: usdAmount.toFixed(6),
+        token: "USDC" as any,
+        chain: "BASE" as any,
+        type: "gasless" as any,
+        ...creds,
+      });
+      const txHash = (res as any)?.transactionHash || (res as any)?.hash;
+      if (!txHash) throw new Error("Rift did not return a transaction hash");
+
+      // File the hash so the queue marks the row paid
+      const r = await adminFetch(`/api/admin/task-completions/${row.completionId}/payout`, token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txHash, amount: usdAmount.toFixed(6),
+          token: "USDC", chainId: 8453, paidBy: adminWallet,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message || "Failed to record payout");
+
+      toast({ title: "Paid!", description: `Sent $${usdAmount.toFixed(2)} USDC to ${row.walletAddress.slice(0, 6)}…${row.walletAddress.slice(-4)}` });
+      setDialogOpen(false);
+      onPaid();
+    } catch (e: any) {
+      toast({ title: "Payment failed", description: e?.message || "Try again.", variant: "destructive" });
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <>
+      <tr className="border-b last:border-0 hover:bg-gray-50">
+        <td className="p-3 font-mono text-xs">{row.walletAddress.slice(0, 6)}…{row.walletAddress.slice(-4)}</td>
+        <td className="p-3">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-900">{row.taskTitle}</span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+              {row.taskIsDaily ? "Daily" : "One-time"} · {row.taskCategory}
+              {row.taskVerifier?.startsWith("onchain:") && (
+                <span className="ml-1 text-emerald-600 font-medium">· on-chain verified</span>
+              )}
+            </span>
+          </div>
+        </td>
+        <td className="p-3 text-right font-mono tabular-nums text-sm">{row.pointsEarned}</td>
+        <td className="p-3 text-right font-mono tabular-nums text-sm font-semibold text-[#1a4480]">${usdAmount.toFixed(2)}</td>
+        <td className="p-3 text-xs text-gray-500">{new Date(row.completedAt).toLocaleDateString()}</td>
+        <td className="p-3 text-right">
+          {row.paidTxHash ? (
+            <a
+              href={`https://basescan.org/tx/${row.paidTxHash}`}
+              target="_blank" rel="noopener noreferrer"
+              className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-0.5">
+              Paid <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : (
+            <Button size="sm" onClick={openPay} className="bg-[#1a4480] hover:bg-[#153a6e] text-white h-8 text-xs">
+              <Send className="h-3 w-3 mr-1" /> Pay
+            </Button>
+          )}
+        </td>
+      </tr>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4" /> Pay {row.pointsEarned} pts via Rift
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-gray-50 p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-gray-500">To</span><span className="font-mono">{row.walletAddress.slice(0, 8)}…{row.walletAddress.slice(-6)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Task</span><span>{row.taskTitle}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Points</span><span className="font-mono tabular-nums">{row.pointsEarned}</span></div>
+              <div className="flex justify-between pt-2 border-t border-gray-200">
+                <span className="font-semibold">Amount</span>
+                <span className="font-mono tabular-nums text-lg font-bold text-[#1a4480]">${usdAmount.toFixed(2)} USDC</span>
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-400">
+                <span>Network</span><span>Base · gasless · USDC</span>
+              </div>
+            </div>
+
+            {authMethod?.kind === "password" ? (
+              <div>
+                <Label className="text-xs">Password</Label>
+                <Input type="password" autoFocus value={password} onChange={e => setPassword(e.target.value)} placeholder="Your Rift password" />
+              </div>
+            ) : (
+              <div>
+                <Label className="text-xs">
+                  Verification code
+                  {authMethod ? <span className="text-gray-400 ml-1">— sent to {authMethod.kind === "email" ? (authMethod as any).email : (authMethod as any).phoneNumber}</span> : null}
+                </Label>
+                <Input
+                  autoFocus
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.trim())}
+                  placeholder="Verification code"
+                  className="font-mono tracking-widest uppercase"
+                  maxLength={16}
+                  autoComplete="one-time-code"
+                />
+                {!otpSent && busy === "Sending code…" && (
+                  <p className="text-[10px] text-gray-400 mt-1">Sending code…</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={!!busy}>Cancel</Button>
+              <Button
+                onClick={confirm}
+                disabled={!!busy || (authMethod?.kind === "password" ? !password : !otpCode)}
+                className="bg-[#1a4480] hover:bg-[#153a6e]">
+                {busy ? busy : `Send $${usdAmount.toFixed(2)}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// Row presented in the "Pending review" view — has evidence + approve/reject controls.
+function ReviewRow({
+  row, usdPerPoint, adminWallet, token, onReviewed,
+}: {
+  row: CompletionRow;
+  usdPerPoint: number;
+  adminWallet: string | null;
+  token: string;
+  onReviewed: () => void;
+}) {
+  const { toast } = useToast();
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+
+  const act = async (kind: "approve" | "reject") => {
+    if (!adminWallet) {
+      toast({ title: "Sign in with Rift first", description: "Open the main app and sign in.", variant: "destructive" });
+      return;
+    }
+    setBusy(kind);
+    try {
+      const r = await adminFetch(`/api/admin/task-completions/${row.completionId}/${kind}`, token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewer: adminWallet, notes: notes.trim() || undefined }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message || "Failed");
+      toast({
+        title: kind === "approve" ? "Approved" : "Rejected",
+        description: kind === "approve"
+          ? `Credited ${row.pointsEarned} pts to ${row.walletAddress.slice(0, 6)}…${row.walletAddress.slice(-4)}`
+          : `Submission marked rejected.`,
+      });
+      onReviewed();
+    } catch (e: any) {
+      toast({ title: "Failed", description: e?.message, variant: "destructive" });
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <tr className="border-b last:border-0 align-top">
+      <td className="p-3 font-mono text-xs whitespace-nowrap">
+        {row.walletAddress.slice(0, 6)}…{row.walletAddress.slice(-4)}
+      </td>
+      <td className="p-3">
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-gray-900">{row.taskTitle}</span>
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">
+            {row.taskCategory} · {row.pointsEarned} pts ≈ ${(row.pointsEarned * usdPerPoint).toFixed(2)}
+          </span>
+          <div className="mt-2 space-y-2">
+            {row.evidenceImage && (
+              <a
+                href={row.evidenceImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open full-size in new tab"
+                className="block w-fit rounded-lg overflow-hidden border border-gray-200 hover:border-[#1a4480]/60 transition-colors"
+              >
+                <img
+                  src={row.evidenceImage}
+                  alt="Submitted evidence"
+                  className="max-h-[140px] max-w-[260px] object-contain bg-gray-50"
+                  loading="lazy"
+                />
+              </a>
+            )}
+            {row.evidenceUrl && (
+              <a
+                href={row.evidenceUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-[#1a4480] hover:underline break-all"
+              >
+                {row.evidenceUrl} <ExternalLink className="h-3 w-3 shrink-0" />
+              </a>
+            )}
+            {row.evidenceText && (
+              <p className="text-[11px] text-gray-600 italic">"{row.evidenceText}"</p>
+            )}
+            {!row.evidenceImage && !row.evidenceUrl && !row.evidenceText && (
+              <p className="text-[11px] text-gray-400 italic">No evidence provided.</p>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="p-3 text-xs text-gray-500 whitespace-nowrap">
+        {new Date(row.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+      </td>
+      <td className="p-3">
+        <div className="space-y-2 min-w-[200px]">
+          <Input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional note (visible in admin records)"
+            className="h-8 text-xs"
+          />
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              onClick={() => act("approve")}
+              disabled={!!busy}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs flex-1"
+            >
+              {busy === "approve" ? "…" : <><CheckCircle className="h-3 w-3 mr-1" /> Approve</>}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => act("reject")}
+              disabled={!!busy}
+              className="h-8 text-xs flex-1 border-red-200 text-red-700 hover:bg-red-50"
+            >
+              {busy === "reject" ? "…" : <><X className="h-3 w-3 mr-1" /> Reject</>}
+            </Button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function PayoutsSection() {
+  const { token } = useContext(AdminTokenContext);
+  const [filter, setFilter] = useState<"pending" | "unpaid" | "paid" | "all">("pending");
+  // The admin's own Rift wallet address — used as `paidBy` on the audit trail.
+  const adminWallet = getCachedUserSummary()?.address ?? null;
+
+  const { data: pointValue } = useQuery<{ usdPerPoint: number }>({
+    queryKey: ["admin-point-value", token],
+    queryFn: async () => {
+      const r = await adminFetch("/api/admin/settings/point-value", token);
+      return r.json();
+    },
+  });
+  const usdPerPoint = pointValue?.usdPerPoint ?? 0.05;
+
+  const { data: rows = [], refetch, isLoading } = useQuery<CompletionRow[]>({
+    queryKey: ["admin-task-completions", filter, token],
+    queryFn: async () => {
+      const r = await adminFetch(`/api/admin/task-completions?status=${filter}&limit=200`, token);
+      return r.json();
+    },
+  });
+
+  const unpaidTotal = rows.filter(r => !r.paidTxHash).reduce((s, r) => s + r.pointsEarned * usdPerPoint, 0);
+  const isReviewMode = filter === "pending";
+
+  return (
+    <div className="space-y-6 max-w-5xl">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Payouts &amp; Reviews</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Approve manual submissions and pay out earned points. Payments send from your Rift wallet via OTP.
+        </p>
+      </div>
+
+      <PayoutValueCard token={token} />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <CardTitle className="text-base">
+                {isReviewMode ? "Submissions awaiting review" : "Task completions"}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {isReviewMode
+                  ? `${rows.length} pending submission(s) — approve to credit points`
+                  : filter === "unpaid"
+                    ? `${rows.length} pending · $${unpaidTotal.toFixed(2)} total owed`
+                    : `${rows.length} record(s)`}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 flex-wrap">
+              {([
+                { key: "pending", label: "Pending" },
+                { key: "unpaid", label: "Unpaid" },
+                { key: "paid", label: "Paid" },
+                { key: "all", label: "All" },
+              ] as const).map(s => (
+                <button key={s.key}
+                  onClick={() => setFilter(s.key)}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                    filter === s.key ? "bg-white text-[#1a4480] shadow-sm" : "text-gray-500 hover:text-gray-900"
+                  }`}>
+                  {s.label}
+                </button>
+              ))}
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => refetch()} title="Refresh">
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {!adminWallet && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 mb-3 text-xs text-amber-800">
+              You're not signed in to Rift in this browser. Open <a href="/auth" className="underline">/auth</a> and sign in
+              before reviewing or paying — admin actions are signed from your Rift wallet.
+            </div>
+          )}
+          {isReviewMode ? (
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="text-xs text-gray-500 uppercase tracking-wider">
+                <tr className="border-b">
+                  <th className="text-left p-3 font-medium">User</th>
+                  <th className="text-left p-3 font-medium">Task &amp; Evidence</th>
+                  <th className="text-left p-3 font-medium">Submitted</th>
+                  <th className="text-left p-3 font-medium">Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr><td colSpan={4} className="p-6 text-center text-gray-400 text-sm">Loading…</td></tr>
+                ) : rows.length === 0 ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">No submissions waiting for review.</td></tr>
+                ) : rows.map(r => (
+                  <ReviewRow
+                    key={r.completionId}
+                    row={r}
+                    usdPerPoint={usdPerPoint}
+                    adminWallet={adminWallet}
+                    token={token}
+                    onReviewed={() => refetch()}
+                  />
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="text-xs text-gray-500 uppercase tracking-wider">
+                <tr className="border-b">
+                  <th className="text-left p-3 font-medium">User</th>
+                  <th className="text-left p-3 font-medium">Task</th>
+                  <th className="text-right p-3 font-medium">Points</th>
+                  <th className="text-right p-3 font-medium">USD</th>
+                  <th className="text-left p-3 font-medium">Completed</th>
+                  <th className="text-right p-3 font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr><td colSpan={6} className="p-6 text-center text-gray-400 text-sm">Loading…</td></tr>
+                ) : rows.length === 0 ? (
+                  <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm">
+                    {filter === "unpaid" ? "No pending payouts." : filter === "paid" ? "No paid completions yet." : "No completions yet."}
+                  </td></tr>
+                ) : rows.map(r => (
+                  <PayoutRow
+                    key={r.completionId}
+                    row={r}
+                    usdPerPoint={usdPerPoint}
+                    adminWallet={adminWallet}
+                    token={token}
+                    onPaid={() => refetch()}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -2353,6 +2922,34 @@ export default function AdminDashboard() {
 
   return (
     <AdminTokenContext.Provider value={{ token: adminToken, logout }}>
+      <AdminLayout section={section} setSection={setSection} adminToken={adminToken} logout={logout} />
+    </AdminTokenContext.Provider>
+  );
+}
+
+function AdminLayout({
+  section, setSection, adminToken, logout,
+}: { section: Section; setSection: (s: Section) => void; adminToken: string; logout: () => void }) {
+  // Live count of submissions awaiting review — drives the sidebar badge so
+  // the admin sees right away that there's work to do without clicking in.
+  const { data: pendingRows } = useQuery<any[]>({
+    queryKey: ["admin-pending-count", adminToken],
+    queryFn: async () => {
+      const r = await adminFetch("/api/admin/task-completions?status=pending&limit=200", adminToken);
+      return r.json();
+    },
+    refetchInterval: 30_000,
+  });
+  const pendingCount = Array.isArray(pendingRows) ? pendingRows.length : 0;
+
+  const badgeFor = (key: Section) =>
+    key === "payouts" && pendingCount > 0 ? (
+      <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold tabular-nums">
+        {pendingCount}
+      </span>
+    ) : null;
+
+  return (
     <div className="min-h-screen bg-gray-50 flex">
       <aside className="w-56 bg-white border-r border-gray-200 flex-shrink-0 hidden md:flex flex-col">
         <div className="p-4 border-b">
@@ -2374,7 +2971,8 @@ export default function AdminDashboard() {
               }`}
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1 text-left">{item.label}</span>
+              {badgeFor(item.key)}
             </button>
           ))}
         </nav>
@@ -2406,11 +3004,11 @@ export default function AdminDashboard() {
         {section === "hedge" && <HedgeSection />}
         {section === "revenue" && <RevenueSection />}
         {section === "tasks" && <TasksSection />}
+        {section === "payouts" && <PayoutsSection />}
         {section === "analytics" && <AnalyticsSection />}
         {section === "content" && <ContentSection />}
         {section === "protocol" && <ProtocolSection />}
       </main>
     </div>
-    </AdminTokenContext.Provider>
   );
 }

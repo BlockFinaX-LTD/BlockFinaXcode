@@ -1,20 +1,17 @@
 /**
- * rift-client.ts — Client-side Rift Finance SDK wrapper
+ * rift-client.ts — Wallet SDK wrapper (auth is handled by @rift-finance/react)
  *
- * Uses @rift-finance/wallet directly in the browser. The SDK handles:
- *   - Signup, login (3 methods: email+OTP, phone+OTP, externalId+password)
- *   - Bearer token storage internally after login
- *   - Wallet balances across chains
- *   - Gasless transactions
+ * The widget (RiftProvider + RiftAuth) owns sign-in/up and the JWT lifecycle.
+ * This module keeps the @rift-finance/wallet SDK around purely for typed REST
+ * calls (balances, transactions, signer) — the JWT is pushed into the SDK by
+ * RiftTokenBridge in rift-token-bridge.tsx.
  *
- * The SDK persists the bearer token in memory only — we re-hydrate by
- * storing the access token in localStorage and calling setBearerToken on init.
+ * Exports cover everything the rest of the app calls today MINUS the old
+ * sendOtp/login/signup/getAuthMethod flow (those now live in the widget).
  */
 
 import Rift, { Environment } from '@rift-finance/wallet';
 import type {
-  LoginRequest,
-  SignupRequest,
   Balance,
   TransactionRequest,
   TransactionHistoryRequest,
@@ -23,21 +20,19 @@ import type {
   User,
 } from '@rift-finance/wallet';
 
-const ACCESS_TOKEN_KEY = 'bfx_rift_token';
-const USER_CACHE_KEY = 'bfx_rift_user';
-const AUTH_METHOD_KEY = 'bfx_rift_auth_method'; // tells the send modal what to prompt for
+const USER_CACHE_KEY = 'bfx_rift_user';            // {user, address, btcAddress}
+const AUTH_METHOD_KEY = 'bfx_rift_auth_method';    // {kind, email|phoneNumber|externalId}
 
 const apiKey = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // ── Kill HTTP cache for Rift API requests ────────────────────────────────
 // The SDK doesn't set { cache: 'no-store' } and backend returns 304s that
-// browsers cache aggressively. Patch fetch globally (only for Rift hosts)
-// so every SDK call gets fresh data.
+// browsers cache aggressively. Patch fetch globally (only for Rift hosts).
 if (typeof window !== 'undefined' && !(window as any).__riftNoCachePatched) {
   const origFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
-    if (url.includes('rift-sdk-wrapper') || url.includes('rift.fi') || url.includes('rift-finance')) {
+    if (url.includes('rift-sdk-wrapper') || url.includes('rift.fi') || url.includes('rift-finance') || url.includes('riftfi.xyz')) {
       return origFetch(input, { ...(init || {}), cache: 'no-store' });
     }
     return origFetch(input, init);
@@ -45,54 +40,17 @@ if (typeof window !== 'undefined' && !(window as any).__riftNoCachePatched) {
   (window as any).__riftNoCachePatched = true;
 }
 
-// Singleton Rift client — created once, re-used across the app.
+// Singleton Rift wallet client — bearer token is set by RiftTokenBridge.
 export const rift = new Rift({
   apiKey,
   environment: Environment.PRODUCTION,
 });
 
-// Restore bearer token from localStorage on app boot
-const storedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-if (storedToken) {
-  rift.setBearerToken(storedToken);
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────────
-
-export async function signup(req: SignupRequest) {
-  return rift.auth.signup(req);
-}
-
-export async function sendOtp(target: { email?: string; phone?: string }) {
-  if (target.email) return rift.auth.sendOtp({ email: target.email });
-  if (target.phone) return rift.auth.sendOtp({ phone: target.phone });
-  throw new Error('email or phone required');
-}
-
-export async function login(req: LoginRequest) {
-  const res = await rift.auth.login(req);
-  if (res?.accessToken) {
-    rift.setBearerToken(res.accessToken);
-    localStorage.setItem(ACCESS_TOKEN_KEY, res.accessToken);
-  }
-  if (res?.user) localStorage.setItem(USER_CACHE_KEY, JSON.stringify({
-    user: res.user,
-    address: res.address,
-    btcAddress: res.btcAddress,
-  }));
-
-  // Store the auth method + identifier so the send-modal knows what to re-prompt for.
-  // We never store passwords or OTP codes.
-  const r: any = req;
-  if (r.email) {
-    localStorage.setItem(AUTH_METHOD_KEY, JSON.stringify({ kind: 'email', email: r.email }));
-  } else if (r.phoneNumber) {
-    localStorage.setItem(AUTH_METHOD_KEY, JSON.stringify({ kind: 'phone', phoneNumber: r.phoneNumber }));
-  } else if (r.externalId) {
-    localStorage.setItem(AUTH_METHOD_KEY, JSON.stringify({ kind: 'password', externalId: r.externalId }));
-  }
-  return res;
-}
+// ── Identity surface ─────────────────────────────────────────────────────
+// Cached after the widget's first successful sign-in. The widget's RiftUser
+// only carries uuid + addresses; we need email/phone/externalId for OTP-gated
+// spending endpoints, which we get from rift.auth.getUser() once the bearer
+// is bridged in.
 
 export type AuthMethod =
   | { kind: 'email'; email: string }
@@ -108,29 +66,12 @@ export function getAuthMethod(): AuthMethod | null {
   }
 }
 
-export async function logout() {
-  rift.clearBearerToken();
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(USER_CACHE_KEY);
+export function setAuthMethod(m: AuthMethod): void {
+  localStorage.setItem(AUTH_METHOD_KEY, JSON.stringify(m));
+}
+
+export function clearAuthMethod(): void {
   localStorage.removeItem(AUTH_METHOD_KEY);
-  // Clear any cached tx-auth credential
-  const { clearCachedTxAuth } = await import('./tx-auth');
-  clearCachedTxAuth();
-}
-
-export async function getMe(): Promise<User | null> {
-  if (!rift.isAuthenticated()) return null;
-  try {
-    const res = await rift.auth.getUser();
-    return res?.user || null;
-  } catch (err) {
-    console.error('[rift] getUser failed:', err);
-    return null;
-  }
-}
-
-export function isLoggedIn(): boolean {
-  return rift.isAuthenticated();
 }
 
 export function getCachedUserSummary(): { user: string; address: string; btcAddress?: string } | null {
@@ -140,6 +81,44 @@ export function getCachedUserSummary(): { user: string; address: string; btcAddr
   } catch {
     return null;
   }
+}
+
+export function setCachedUserSummary(s: { user: string; address: string; btcAddress?: string }): void {
+  localStorage.setItem(USER_CACHE_KEY, JSON.stringify(s));
+}
+
+export function clearCachedUserSummary(): void {
+  localStorage.removeItem(USER_CACHE_KEY);
+}
+
+/**
+ * Pull the full user record from Rift (requires the bearer to be set).
+ * Returns null if not authenticated or the call fails. Side-effect: derives
+ * an AuthMethod from the user's identifiers and persists it so the tx-auth
+ * dialog knows what to prompt for.
+ */
+export async function getMe(): Promise<User | null> {
+  if (!rift.isAuthenticated()) return null;
+  try {
+    const res = await rift.auth.getUser();
+    const user = res?.user || null;
+    if (user) {
+      // Persist a method preference so OTP-gated tx prompts work. Prefer
+      // email → phone → externalId.
+      const u = user as any;
+      if (u.email) setAuthMethod({ kind: 'email', email: u.email });
+      else if (u.phoneNumber) setAuthMethod({ kind: 'phone', phoneNumber: u.phoneNumber });
+      else if (u.externalId) setAuthMethod({ kind: 'password', externalId: u.externalId });
+    }
+    return user;
+  } catch (err) {
+    console.error('[rift] getUser failed:', err);
+    return null;
+  }
+}
+
+export function isLoggedIn(): boolean {
+  return rift.isAuthenticated();
 }
 
 // ── Wallet & balances ────────────────────────────────────────────────────
@@ -154,10 +133,10 @@ export async function getTokenBalance(token: TokenSymbol, chain?: ChainName): Pr
   return res?.data || [];
 }
 
-// ── Assets — returns ONLY tokens the user actually owns ──────────────────
+// ── Assets ───────────────────────────────────────────────────────────────
 
 export interface UserToken {
-  id: string;           // e.g. "ETHEREUM-USDC"
+  id: string;
   name: string;
   chain_id: string;
   contract_address?: string | null;
@@ -169,13 +148,17 @@ export async function getUserTokens(): Promise<UserToken[]> {
   return (res?.data as UserToken[]) || [];
 }
 
-/**
- * Convenience: returns only balances where amount > 0.
- * Filters out zero-balance chains from getChainBalance.
- */
 export async function getOwnedBalances(): Promise<Balance[]> {
   const balances = await getChainBalances();
   return balances.filter(b => Number(b.amount) > 0);
+}
+
+// ── OTPs (for tx authorization — auth login OTPs live in the widget) ─────
+
+export async function sendOtp(target: { email?: string; phone?: string }) {
+  if (target.email) return rift.auth.sendOtp({ email: target.email });
+  if (target.phone) return rift.auth.sendOtp({ phone: target.phone });
+  throw new Error('email or phone required');
 }
 
 // ── Transactions ─────────────────────────────────────────────────────────
@@ -188,11 +171,26 @@ export async function getHistory(req?: TransactionHistoryRequest) {
   return rift.transactions.getHistory(req);
 }
 
+// Inbound transfers (USDC received) — separate Rift service backed by The Graph.
+// SDK returns `{ deposits: Deposit[] }` (or sometimes the bare array); caller
+// should normalize.
+export async function getDeposits() {
+  return (rift as any).deposits.getAllDeposits();
+}
+
 export async function getFee(req: { recipient: string; amount: string; chain: ChainName; token: TokenSymbol }) {
   return rift.transactions.getFee(req as any);
 }
 
-// ── Arbitrary contract calls (via rift.signer.sendTransaction) ────────────
+// ── Logout — delegates to the widget for the server-side revocation ──────
+// Local-only cleanup; the actual session revocation runs in useRift().signOut().
+export function clearLocalRiftState() {
+  rift.clearBearerToken();
+  localStorage.removeItem(USER_CACHE_KEY);
+  localStorage.removeItem(AUTH_METHOD_KEY);
+}
+
+// ── Arbitrary contract calls ─────────────────────────────────────────────
 
 export interface SignerTxArgs {
   chain: ChainName;
@@ -211,7 +209,7 @@ export interface SignerAuth {
 
 /**
  * Submit an arbitrary EVM transaction via the user's Rift smart wallet.
- * Gasless — paymaster-sponsored by Rift. Returns the on-chain tx hash.
+ * Gasless — paymaster-sponsored by Rift. Returns the UserOp hash.
  */
 export async function signerSendTransaction(
   args: SignerTxArgs,
@@ -231,7 +229,6 @@ export async function signerSendTransaction(
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/** Map our app's network IDs (chain IDs) → Rift ChainName. */
 export const CHAIN_ID_TO_RIFT: Record<number, ChainName> = {
   8453: 'BASE',
   137: 'POLYGON',
@@ -249,4 +246,4 @@ export function chainIdToRift(chainId: number): ChainName | null {
 }
 
 // Re-export types so app code doesn't need to touch the SDK directly
-export type { LoginRequest, SignupRequest, Balance, TransactionRequest, ChainName, TokenSymbol, User };
+export type { Balance, TransactionRequest, ChainName, TokenSymbol, User };

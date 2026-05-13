@@ -1,11 +1,22 @@
+/**
+ * Settings — BlockFinaX 2026 redesign
+ *
+ * Grouped settings list: Security, Preferences, Network, Legal.
+ * Each group is a rounded card with divided rows. Value renders on the
+ * right (mono if numeric/short, switch if boolean, chevron if drill-in).
+ */
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -19,8 +30,6 @@ import { Label } from '@/components/ui/label';
 import {
   ArrowLeft,
   Shield,
-  Key,
-  BookOpen,
   Trash2,
   Lock,
   Globe,
@@ -29,16 +38,14 @@ import {
   ChevronRight,
   Clock,
   DollarSign,
-  AlertTriangle,
-  Eye,
-  EyeOff,
   Copy,
   CheckCircle,
+  LogOut,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
 import { BottomNav } from '@/components/bottom-nav';
-import logoPath from "@/assets/logo.png";
+import { Pill, Dot, shortAddr } from '@/components/ui/bfx';
 
 const CURRENCIES = [
   { value: 'USD', label: 'USD — US Dollar' },
@@ -58,10 +65,66 @@ const AUTO_LOCK_OPTIONS = [
   { value: '60', label: '1 hour' },
 ];
 
+function SectionHd({ title }: { title: string }) {
+  return (
+    <p className="px-1 pt-5 pb-2 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+      {title}
+    </p>
+  );
+}
+
+function Row({
+  icon: Icon,
+  label,
+  sub,
+  onClick,
+  trailing,
+  danger,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  sub?: string;
+  onClick?: () => void;
+  trailing?: React.ReactNode;
+  danger?: boolean;
+}) {
+  const interactive = !!onClick && !trailing;
+  return (
+    <div
+      onClick={interactive ? onClick : undefined}
+      role={interactive ? 'button' : undefined}
+      className={`flex items-center justify-between px-4 py-3.5 transition-colors ${
+        interactive ? 'cursor-pointer hover:bg-muted/50' : 'cursor-default'
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className={`h-9 w-9 rounded-full inline-flex items-center justify-center shrink-0 ${
+            danger
+              ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          <Icon className="h-[18px] w-[18px]" strokeWidth={1.7} />
+        </div>
+        <div className="min-w-0">
+          <p className={`text-sm font-medium truncate ${danger ? 'text-red-600 dark:text-red-400' : ''}`}>
+            {label}
+          </p>
+          {sub && <p className="text-[11px] text-muted-foreground truncate">{sub}</p>}
+        </div>
+      </div>
+      <div className="shrink-0">
+        {trailing ? trailing : interactive ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : null}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { wallet, settings, updateSettings, deleteWallet, lockWallet, isUnlocked } = useWallet();
+  const { wallet, settings, updateSettings, deleteWallet, isUnlocked } = useWallet();
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -69,20 +132,7 @@ export default function SettingsPage() {
 
   const copyToClipboard = async (text: string) => {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        // Fallback for environments where clipboard API is unavailable
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast({ title: 'Copied to clipboard' });
@@ -97,219 +147,191 @@ export default function SettingsPage() {
     setLocation('/wallet');
   };
 
-  const SettingRow = ({
-    icon: Icon,
-    label,
-    sublabel,
-    onClick,
-    children,
-    danger,
-  }: {
-    icon: any;
-    label: string;
-    sublabel?: string;
-    onClick?: () => void;
-    children?: React.ReactNode;
-    danger?: boolean;
-  }) => (
-    <div
-      onClick={children ? undefined : onClick}
-      role={!children && onClick ? 'button' : undefined}
-      className={`w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors ${!children && onClick ? 'cursor-pointer' : 'cursor-default'}`}
-    >
-      <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${danger ? 'bg-red-100 dark:bg-red-900/30' : 'bg-muted'}`}>
-          <Icon className={`h-4 w-4 ${danger ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`} />
-        </div>
-        <div className="text-left">
-          <p className={`text-sm font-medium ${danger ? 'text-red-600 dark:text-red-400' : ''}`}>{label}</p>
-          {sublabel && <p className="text-xs text-muted-foreground">{sublabel}</p>}
-        </div>
-      </div>
-      {children ? (
-        <div>{children}</div>
-      ) : onClick ? (
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-      ) : null}
-    </div>
-  );
-
-  const SectionHeader = ({ title }: { title: string }) => (
-    <div className="px-4 pt-5 pb-2">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
-    </div>
-  );
+  if (!isUnlocked) return null;
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background border-b border-border/50">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setLocation('/home')} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <img src={logoPath} alt="BlockFinaX" className="h-6 w-auto" />
-          <h1 className="text-lg font-semibold">Settings</h1>
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b border-border/60">
+        <div className="max-w-2xl mx-auto px-3 h-14 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation('/home')}
+            className="h-9 w-9 rounded-full"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="bfx-display text-[17px] font-semibold tracking-tight">Settings</h1>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-2xl mx-auto">
-
+      <main className="max-w-2xl mx-auto px-4">
         {/* SECURITY */}
-        <SectionHeader title="Security" />
-        <Card className="mx-4 overflow-hidden">
-          <CardContent className="p-0 divide-y divide-border/50">
-
-            <SettingRow
+        <SectionHd title="Security" />
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-0 divide-y divide-border/60">
+            <Row
               icon={Lock}
               label="Auto-lock"
-              sublabel={settings.autoLock ? `Locks after ${settings.autoLockTimeout} min` : 'Disabled'}
-            >
-              <Switch
-                checked={settings.autoLock}
-                onCheckedChange={(v) => updateSettings({ autoLock: v })}
-              />
-            </SettingRow>
-
-            {settings.autoLock && (
-              <SettingRow icon={Clock} label="Lock after" sublabel="Inactivity timeout">
-                <Select
-                  value={String(settings.autoLockTimeout)}
-                  onValueChange={(v) => updateSettings({ autoLockTimeout: parseInt(v) })}
-                >
-                  <SelectTrigger className="w-32 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AUTO_LOCK_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            )}
-
-            {/* Export private key + Backup recovery phrase removed — Rift custodies the
-                key material; users authenticate via OTP/password rather than holding a seed. */}
-
-            <SettingRow
-              icon={Trash2}
-              label="Delete wallet"
-              sublabel="Permanently remove from this device"
-              onClick={() => setShowDeleteDialog(true)}
-              danger
+              sub={settings.autoLock ? `Locks after ${settings.autoLockTimeout} min` : 'Disabled'}
+              trailing={
+                <Switch
+                  checked={settings.autoLock}
+                  onCheckedChange={(v) => updateSettings({ autoLock: v })}
+                />
+              }
             />
-
+            {settings.autoLock && (
+              <Row
+                icon={Clock}
+                label="Lock after"
+                sub="Inactivity timeout"
+                trailing={
+                  <Select
+                    value={String(settings.autoLockTimeout)}
+                    onValueChange={(v) => updateSettings({ autoLockTimeout: parseInt(v) })}
+                  >
+                    <SelectTrigger className="w-32 h-8 text-xs rounded-lg">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AUTO_LOCK_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                }
+              />
+            )}
+            <Row
+              icon={Trash2}
+              danger
+              label="Delete wallet"
+              sub="Permanently remove from this device"
+              onClick={() => setShowDeleteDialog(true)}
+            />
           </CardContent>
         </Card>
 
         {/* PREFERENCES */}
-        <SectionHeader title="Preferences" />
-        <Card className="mx-4 overflow-hidden">
-          <CardContent className="p-0 divide-y divide-border/50">
-
-            <SettingRow icon={DollarSign} label="Display currency" sublabel="Used for balance estimates">
-              <Select
-                value={settings.currency}
-                onValueChange={(v: any) => updateSettings({ currency: v })}
-              >
-                <SelectTrigger className="w-36 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map(c => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingRow>
-
+        <SectionHd title="Preferences" />
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-0 divide-y divide-border/60">
+            <Row
+              icon={DollarSign}
+              label="Display currency"
+              sub="Used for balance estimates"
+              trailing={
+                <Select
+                  value={settings.currency}
+                  onValueChange={(v: any) => updateSettings({ currency: v })}
+                >
+                  <SelectTrigger className="w-36 h-8 text-xs rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              }
+            />
           </CardContent>
         </Card>
 
         {/* NETWORK */}
-        <SectionHeader title="Network" />
-        <Card className="mx-4 overflow-hidden">
-          <CardContent className="p-0 divide-y divide-border/50">
-
-            <div className="flex items-center justify-between px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Lisk Mainnet</p>
-                  <p className="text-xs text-muted-foreground">Chain ID 1135 · Live network</p>
-                </div>
-              </div>
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                Live
-              </Badge>
-            </div>
-
-            <SettingRow
+        <SectionHd title="Network" />
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-0 divide-y divide-border/60">
+            <Row
+              icon={Globe}
+              label="Lisk Mainnet"
+              sub="Chain ID 1135 · Live network"
+              trailing={
+                <Pill tone="success" uppercase={false}>
+                  <Dot size={4} className="text-emerald-500" /> Live
+                </Pill>
+              }
+            />
+            <Row
               icon={ExternalLink}
               label="Block explorer"
-              sublabel="View transactions on Blockscout"
+              sub="View transactions on Blockscout"
               onClick={() => window.open('https://blockscout.lisk.com', '_blank')}
             />
-
           </CardContent>
         </Card>
 
         {/* LEGAL */}
-        <SectionHeader title="Legal" />
-        <Card className="mx-4 overflow-hidden">
-          <CardContent className="p-0 divide-y divide-border/50">
-
-            <SettingRow
-              icon={FileText}
-              label="Terms of Service"
-              onClick={() => setLocation('/terms')}
-            />
-
-            <SettingRow
-              icon={Shield}
-              label="Privacy Policy"
-              onClick={() => setLocation('/privacy')}
-            />
-
+        <SectionHd title="Legal" />
+        <Card className="rounded-2xl overflow-hidden">
+          <CardContent className="p-0 divide-y divide-border/60">
+            <Row icon={FileText} label="Terms of service" onClick={() => setLocation('/terms')} />
+            <Row icon={Shield} label="Privacy policy" onClick={() => setLocation('/privacy')} />
           </CardContent>
         </Card>
 
         {/* Wallet address */}
         {wallet?.address && (
-          <div className="mx-4 mt-5 mb-2">
-            <p className="text-xs text-muted-foreground mb-1 px-1">Your wallet address</p>
-            <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
-              <p className="font-mono text-xs text-muted-foreground flex-1 truncate">{wallet.address}</p>
-              <button onClick={() => copyToClipboard(wallet.address)}>
-                {copied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+          <div className="mt-5">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 px-1">
+              Your wallet address
+            </p>
+            <div className="flex items-center gap-2 bg-muted/50 rounded-xl px-3.5 py-3 border border-border/60">
+              <p className="font-mono-data text-[12px] text-muted-foreground flex-1 truncate">
+                {wallet.address}
+              </p>
+              <button
+                onClick={() => copyToClipboard(wallet.address)}
+                className="shrink-0 inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-background"
+                aria-label="Copy address"
+              >
+                {copied ? (
+                  <CheckCircle className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4 text-muted-foreground" />
+                )}
               </button>
             </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 px-1 font-mono-data">
+              {shortAddr(wallet.address)} · Lisk Mainnet
+            </p>
           </div>
         )}
 
-        <p className="text-center text-xs text-muted-foreground mt-6 mb-4">BlockFinaX · Lisk Mainnet</p>
-      </div>
+        <p className="text-center text-[11px] text-muted-foreground mt-8 mb-2">
+          BlockFinaX · Lisk Mainnet
+        </p>
+      </main>
 
       {/* Delete Wallet Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="h-5 w-5" />
               Remove Wallet
             </DialogTitle>
             <DialogDescription>
-              This will remove your wallet link from this device.
-              Your wallet is secured by your Google account via Lit Protocol — you can reconnect anytime by signing in again.
-              <strong className="block mt-2 text-foreground">This action cannot be undone on this device.</strong>
+              This will remove your wallet link from this device. Your wallet is secured by your Rift
+              sign-in — you can reconnect anytime by signing in again.
+              <strong className="block mt-2 text-foreground">
+                This action cannot be undone on this device.
+              </strong>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-sm">Type <strong>DELETE</strong> to confirm</Label>
+              <Label className="text-sm">
+                Type <strong>DELETE</strong> to confirm
+              </Label>
               <Input
                 className="mt-1.5"
                 placeholder="DELETE"
@@ -319,7 +341,13 @@ export default function SettingsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setDeleteConfirmText(''); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setDeleteConfirmText('');
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -327,7 +355,8 @@ export default function SettingsPage() {
               disabled={deleteConfirmText !== 'DELETE'}
               onClick={handleDeleteWallet}
             >
-              Remove Wallet
+              <LogOut className="h-4 w-4 mr-1.5" />
+              Remove wallet
             </Button>
           </DialogFooter>
         </DialogContent>

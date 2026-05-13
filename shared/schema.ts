@@ -183,6 +183,54 @@ export const insertHedgeLpDepositSchema = createInsertSchema(hedgeLpDeposits).om
 export type InsertHedgeLpDeposit = z.infer<typeof insertHedgeLpDepositSchema>;
 export type HedgeLpDeposit = typeof hedgeLpDeposits.$inferSelect;
 
+/**
+ * P2P Hedge Activity Log
+ *
+ * Append-only feed of every on-chain action a wallet takes against the
+ * hedge Diamond — used by the in-app Activity tab + home page activity
+ * snapshot. Records the tx hash so each row can deep-link to a block
+ * explorer. ChainSync indexes events only; this table indexes actions.
+ *
+ * actionType values:
+ *   "create_event"       — creator deployed a new pool
+ *   "buy_protection"     — hedger bought cover
+ *   "lp_deposit"         — LP funded a pool
+ *   "claim_payout"       — hedger claimed a triggered position
+ *   "claim_premiums"     — LP claimed earned premiums
+ *   "withdraw_lp"        — LP withdrew capital
+ *   "recover_expired"    — creator pulled funds from an expired empty pool
+ *   "toggle_pool"        — creator toggled poolOpen/allowExternalLp
+ *   "settle_event"       — admin / oracle settled
+ */
+export const hedgeActivity = pgTable("hedge_activity", {
+  id: serial("id").primaryKey(),
+  walletAddress: text("wallet_address").notNull(),
+  chainId: integer("chain_id").notNull(),
+  txHash: text("tx_hash").notNull(),
+  actionType: text("action_type").notNull(),
+  // Optional links — populated when applicable
+  eventId: integer("event_id"),               // local hedgeEvents.id (may be null until ChainSync catches up)
+  onChainEventId: integer("on_chain_event_id"), // contract's event counter — useful when local eventId not yet known
+  positionId: integer("position_id"),
+  depositId: integer("deposit_id"),
+  // Optional context fields
+  amount: decimal("amount", { precision: 18, scale: 6 }), // USD or token amount, whichever fits the action
+  token: text("token"),                         // 'USDC' | 'USDT' | etc.
+  metadata: text("metadata"),                   // JSON-serialized extras (premium %, strike, pair name, settings, …)
+  status: text("status").notNull().default("confirmed"), // pending | confirmed | failed
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("hedge_activity_chain_tx_action_idx").on(table.chainId, table.txHash, table.actionType),
+]);
+
+export const insertHedgeActivitySchema = createInsertSchema(hedgeActivity).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertHedgeActivity = z.infer<typeof insertHedgeActivitySchema>;
+export type HedgeActivity = typeof hedgeActivity.$inferSelect;
+
 export const dailyTasks = pgTable("daily_tasks", {
   id: serial("id").primaryKey(),
   taskKey: varchar("task_key", { length: 50 }).unique().notNull(),
@@ -196,6 +244,18 @@ export const dailyTasks = pgTable("daily_tasks", {
   isDaily: boolean("is_daily").default(true),
   isActive: boolean("is_active").default(true),
   sortOrder: integer("sort_order").default(0),
+  /**
+   * How the server verifies a claim before awarding points.
+   *
+   *   null | 'auto'                 — trust the client (current default)
+   *   'onchain:<action_type>'       — require a matching row in hedge_activity
+   *                                   (e.g. 'onchain:buy_protection',
+   *                                   'onchain:lp_deposit', 'onchain:create_event')
+   *   'manual'                      — never auto-award; admin must approve
+   *                                   (NOT used by current claim flow; reserved
+   *                                   for a future admin-approval UI)
+   */
+  verifier: text("verifier"),
 });
 
 export const userTaskCompletions = pgTable("user_task_completions", {
@@ -204,7 +264,47 @@ export const userTaskCompletions = pgTable("user_task_completions", {
   taskId: integer("task_id").references(() => dailyTasks.id).notNull(),
   completedAt: timestamp("completed_at").defaultNow().notNull(),
   pointsEarned: integer("points_earned").notNull(),
+  // ── Manual-review submission (verifier='manual') ──────────────────────
+  // For tasks where the user attaches evidence (e.g. a tweet URL or a
+  // proof-of-action screenshot) and an admin reviews before points credit.
+  //
+  // review_status values:
+  //   'auto'      — no review needed; points credit immediately on insert
+  //   'pending'   — submitted, awaiting admin review; points NOT yet credited
+  //   'approved'  — admin approved; points credited on transition
+  //   'rejected'  — admin rejected; no points
+  reviewStatus: text("review_status").notNull().default("auto"),
+  evidenceUrl: text("evidence_url"),        // optional link the user attached (tweet, post, etc.)
+  evidenceImage: text("evidence_image"),    // optional Cloudinary URL (screenshot upload)
+  evidenceText: text("evidence_text"),      // optional free-form note
+  reviewedBy: text("reviewed_by"),          // admin wallet who reviewed
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),        // admin's reason / note
+  // ── Payout tracking ────────────────────────────────────────────────────
+  // Set when an admin uses the Payouts queue to settle the points as a
+  // Rift transfer. Until then the row is "unpaid" and shows up in the queue.
+  paidTxHash: text("paid_tx_hash"),
+  paidAmount: decimal("paid_amount", { precision: 18, scale: 6 }),
+  paidToken: text("paid_token"),            // 'USDC' | 'USDT'
+  paidChainId: integer("paid_chain_id"),
+  paidAt: timestamp("paid_at"),
+  paidBy: text("paid_by"),                  // admin wallet address
 });
+
+/**
+ * Generic key/value config table — used today for `point_value_usd`
+ * (how many USD a point is worth). Read by the Earn page hero (to show
+ * "≈ $X.XX worth") and by the admin Payouts section (to compute payout
+ * amounts in USD before triggering a Rift send).
+ */
+export const platformSettings = pgTable("platform_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: text("updated_by"),
+});
+
+export type PlatformSetting = typeof platformSettings.$inferSelect;
 
 export const insertDailyTaskSchema = createInsertSchema(dailyTasks).omit({
   id: true,

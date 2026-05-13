@@ -8,51 +8,92 @@ import { userProfiles } from "../../shared/profile-schema";
 import { referrals, referralCodes, userPoints, pointTransactions } from "../../shared/referral-schema";
 import { strictLimiter } from "../middleware/rate-limiter";
 import {
-  adminSessions, adminChallenges, requireAdmin, generateAdminToken,
-  getOwnerAddresses, ADMIN_SESSION_TTL_MS,
+  adminSessions, requireAdmin, generateAdminToken,
+  getOwnerEmails, ADMIN_SESSION_TTL_MS,
 } from "../middleware/admin-auth";
+
+// Rift API base — same host the wallet SDK uses internally.
+const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
+const RIFT_API_KEY = process.env.VITE_RIFT_API_KEY || process.env.RIFT_API_KEY || "";
 import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain } from "../hedge-reader";
 
 export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
-  app.post("/api/admin/wallet-challenge", strictLimiter, (req, res) => {
-    const nonce = generateAdminToken().slice(0, 32);
-    adminChallenges.set(nonce, Date.now() + 5 * 60_000);
-    const message = `Sign this message to access BlockFinaX Admin.\n\nNonce: ${nonce}\nValid for 5 minutes.`;
-    res.json({ nonce, message });
-  });
-
+  /**
+   * Admin login — Rift-based email allowlist.
+   *
+   * The client passes the Rift access token of the currently signed-in user.
+   * We hit Rift's `/user/me` to resolve the email, then check it against
+   * ADMIN_EMAILS. On success, issue an 8-hour `x-admin-token` (unchanged
+   * from the legacy flow — every other admin endpoint keeps working).
+   */
   app.post("/api/admin/login", strictLimiter, async (req, res) => {
     try {
-      const { address, signature, nonce } = req.body;
-      if (!address || !signature || !nonce) {
-        return res.status(400).json({ message: "address, signature and nonce are required" });
+      const { accessToken } = req.body ?? {};
+      if (!accessToken || typeof accessToken !== "string") {
+        return res.status(400).json({ message: "accessToken is required" });
       }
 
-      const nonceExpiry = adminChallenges.get(nonce);
-      if (!nonceExpiry || Date.now() > nonceExpiry) {
-        return res.status(401).json({ message: "Challenge expired. Please try again." });
-      }
-      adminChallenges.delete(nonce);
-
-      const owners = getOwnerAddresses();
-      if (owners.length === 0) {
-        return res.status(500).json({ message: "No admin wallet addresses configured." });
+      const allowedEmails = getOwnerEmails();
+      if (allowedEmails.length === 0) {
+        return res.status(500).json({
+          message: "No admin emails configured. Set ADMIN_EMAILS in the server environment.",
+        });
       }
 
-      const { ethers } = await import("ethers");
-      const message = `Sign this message to access BlockFinaX Admin.\n\nNonce: ${nonce}\nValid for 5 minutes.`;
-      const recovered = ethers.verifyMessage(message, signature).toLowerCase();
+      if (!RIFT_API_KEY) {
+        return res.status(500).json({ message: "Server is missing the Rift API key." });
+      }
 
-      if (!owners.includes(recovered)) {
-        return res.status(403).json({ message: "Wallet not authorised." });
+      // Verify the access token by asking Rift for the user record. Anyone
+      // could send a JWT — Rift is the source of truth on whether it's valid
+      // and which email it belongs to.
+      let riftRes: Response;
+      try {
+        riftRes = await fetch(`${RIFT_API_BASE}/user/me`, {
+          method: "GET",
+          headers: {
+            "X-API-Key": RIFT_API_KEY,
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        });
+      } catch (err: any) {
+        console.error("[Admin login] Rift /user/me unreachable:", err?.message);
+        return res.status(502).json({ message: "Could not reach Rift to verify your account." });
+      }
+
+      if (riftRes.status === 401 || riftRes.status === 403) {
+        return res.status(401).json({ message: "Your Rift session is expired — sign in again." });
+      }
+      if (!riftRes.ok) {
+        console.error("[Admin login] Rift /user/me returned", riftRes.status);
+        return res.status(502).json({ message: "Rift returned an error verifying your account." });
+      }
+
+      const body = await riftRes.json() as any;
+      // The wallet SDK wraps payloads as { data: { user } } or { user } — be liberal.
+      const user = body?.user ?? body?.data?.user ?? body?.data ?? body;
+      const email: string | undefined = user?.email;
+      if (!email) {
+        return res.status(403).json({
+          message: "Your Rift account has no email on file — admin access requires an email account.",
+        });
+      }
+      if (!allowedEmails.includes(email.toLowerCase())) {
+        return res.status(403).json({ message: "This account is not authorised for admin access." });
       }
 
       const token = generateAdminToken();
       adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
-      res.json({ token, address: recovered, expiresAt: Date.now() + ADMIN_SESSION_TTL_MS });
+      res.json({
+        token,
+        email,
+        address: user?.address ?? null,
+        expiresAt: Date.now() + ADMIN_SESSION_TTL_MS,
+      });
     } catch (err: any) {
       console.error("[Admin login]", err);
-      res.status(500).json({ message: "Signature verification failed." });
+      res.status(500).json({ message: "Admin login failed." });
     }
   });
 
@@ -384,7 +425,7 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
   app.post("/api/admin/tasks", async (req, res) => {
     try {
-      const { taskKey, title, description, points, category, icon, actionUrl, actionType, isDaily, isActive, sortOrder } = req.body;
+      const { taskKey, title, description, points, category, icon, actionUrl, actionType, isDaily, isActive, sortOrder, verifier } = req.body;
       if (!taskKey || !title || !description || !category) {
         return res.status(400).json({ message: "taskKey, title, description, and category are required" });
       }
@@ -398,6 +439,7 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
         isDaily: isDaily !== undefined ? isDaily : true,
         isActive: isActive !== undefined ? isActive : true,
         sortOrder: sortOrder || 0,
+        verifier: verifier ?? null,
       }).returning();
       res.json(created);
     } catch (error) {
@@ -408,7 +450,7 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   app.patch("/api/admin/tasks/:id", async (req, res) => {
     try {
       const taskId = parseInt(req.params.id);
-      const { points, isActive, title, description, category, taskKey, icon, actionUrl, actionType, isDaily, sortOrder } = req.body;
+      const { points, isActive, title, description, category, taskKey, icon, actionUrl, actionType, isDaily, sortOrder, verifier } = req.body;
       const updates: any = {};
       if (points !== undefined) updates.points = points;
       if (isActive !== undefined) updates.isActive = isActive;
@@ -421,10 +463,113 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       if (actionType !== undefined) updates.actionType = actionType;
       if (isDaily !== undefined) updates.isDaily = isDaily;
       if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+      if (verifier !== undefined) updates.verifier = verifier;
       const [updated] = await db.update(dailyTasks).set(updates).where(eq(dailyTasks.id, taskId)).returning();
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update task" });
+    }
+  });
+
+  // ── Platform settings (admin-write) ────────────────────────────────────
+  // Currently exposes `point_value_usd`; admins set the USD value of one
+  // point. The user-facing GET lives in community.ts as /api/platform/...
+  app.get("/api/admin/settings/point-value", requireAdmin, async (_req, res) => {
+    try {
+      const v = await storage.getSetting("point_value_usd");
+      res.json({ usdPerPoint: v ? parseFloat(v) : 0.05 });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to load setting" });
+    }
+  });
+
+  app.put("/api/admin/settings/point-value", requireAdmin, async (req, res) => {
+    try {
+      const { usdPerPoint, adminWallet } = req.body ?? {};
+      const num = Number(usdPerPoint);
+      if (!Number.isFinite(num) || num < 0) {
+        return res.status(400).json({ message: "usdPerPoint must be a non-negative number" });
+      }
+      await storage.setSetting("point_value_usd", String(num), adminWallet ?? null);
+      res.json({ usdPerPoint: num });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to save setting" });
+    }
+  });
+
+  // ── Task-completion queue (review + payout) ────────────────────────────
+  // Filter modes:
+  //   pending  — manual submissions awaiting admin review (evidence shown)
+  //   unpaid   — auto/approved completions with no payout yet (USDC owed)
+  //   paid     — completed AND paid; archive view
+  //   rejected — submissions the admin rejected; archive view
+  //   all      — everything
+  app.get("/api/admin/task-completions", requireAdmin, async (req, res) => {
+    try {
+      const q = req.query.status as string;
+      const status: 'paid' | 'unpaid' | 'pending' | 'rejected' | 'all' =
+        q === 'paid' ? 'paid'
+        : q === 'pending' ? 'pending'
+        : q === 'rejected' ? 'rejected'
+        : q === 'all' ? 'all'
+        : 'unpaid';
+      const limit = Math.min(500, Number(req.query.limit) || 100);
+      const rows = await storage.listTaskCompletions({ status, limit });
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to load completions" });
+    }
+  });
+
+  // Approve a pending submission → credit points to the user.
+  app.post("/api/admin/task-completions/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid completion id" });
+      const { reviewer, notes } = req.body ?? {};
+      if (!reviewer || typeof reviewer !== 'string') return res.status(400).json({ message: "reviewer (admin wallet) is required" });
+      const ok = await storage.approveTaskSubmission(id, reviewer, typeof notes === 'string' ? notes : undefined);
+      if (!ok) return res.status(409).json({ message: "Submission already reviewed or not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to approve" });
+    }
+  });
+
+  // Reject a pending submission → no points credit.
+  app.post("/api/admin/task-completions/:id/reject", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid completion id" });
+      const { reviewer, notes } = req.body ?? {};
+      if (!reviewer || typeof reviewer !== 'string') return res.status(400).json({ message: "reviewer (admin wallet) is required" });
+      const ok = await storage.rejectTaskSubmission(id, reviewer, typeof notes === 'string' ? notes : undefined);
+      if (!ok) return res.status(409).json({ message: "Submission already reviewed or not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to reject" });
+    }
+  });
+
+  // Record that an admin paid out the points for a specific completion via a
+  // Rift transfer. The frontend has already submitted the on-chain tx through
+  // the Rift SDK and gotten back a tx hash — this endpoint just files it.
+  // Idempotent: the storage layer refuses to overwrite an already-paid row.
+  app.post("/api/admin/task-completions/:id/payout", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid completion id" });
+      const { txHash, amount, token, chainId, paidBy } = req.body ?? {};
+      if (!txHash || typeof txHash !== 'string') return res.status(400).json({ message: "txHash is required" });
+      if (amount == null || !Number.isFinite(Number(amount))) return res.status(400).json({ message: "amount is required" });
+      if (!token || typeof token !== 'string') return res.status(400).json({ message: "token is required" });
+      if (!Number.isFinite(chainId)) return res.status(400).json({ message: "chainId is required" });
+      if (!paidBy || typeof paidBy !== 'string') return res.status(400).json({ message: "paidBy (admin wallet) is required" });
+      const ok = await storage.recordTaskPayout(id, { txHash, amount: String(amount), token, chainId, paidBy });
+      if (!ok) return res.status(409).json({ message: "Completion already paid or not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to record payout" });
     }
   });
 

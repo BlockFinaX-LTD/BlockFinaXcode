@@ -1,13 +1,18 @@
 /**
- * useWallet Hook — Rift Finance wallet state management
+ * useWallet Hook — Wallet state sourced from the Rift widget
  *
- * Wallets are managed by Rift Finance. After login, smart wallets are
- * auto-deployed across Base, Polygon, Arbitrum, Lisk, BNB, etc.
- * No private keys, no PINs, no seed phrases on this device.
+ * The @rift-finance/react widget owns sign-in and the smart-wallet address.
+ * This hook adapts useRift() into the legacy shape (isUnlocked, wallet,
+ * address, settings, etc.) so the rest of the app didn't need to change.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getMe as riftGetMe, logout as riftLogout, isLoggedIn, getCachedUserSummary } from '@/lib/rift-client';
+import { useRift } from '@rift-finance/react';
+import {
+  getMe as riftGetMe,
+  clearLocalRiftState,
+  getCachedUserSummary,
+} from '@/lib/rift-client';
 import { walletManager } from '@/lib/wallet';
 
 export interface WalletState {
@@ -45,82 +50,90 @@ function saveSettings(s: WalletSettings) {
   localStorage.setItem('wallet_settings', JSON.stringify(s));
 }
 
+// True on first paint if the Rift provider has a persisted session in storage.
+// Without checking this, useWallet flips isLoading=false before rehydration
+// completes and pages redirect to /auth on every reload.
+function hasStoredRiftSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return !!window.localStorage.getItem('rift:identity'); } catch { return false; }
+}
+
 export function useWallet() {
-  const [state, setState] = useState<WalletState>({
-    isUnlocked: false,
-    wallet: null,
-    address: null,
-    isLoading: true,
-    error: null,
-  });
+  const { user, isAuthenticated, signOut } = useRift();
+
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // Suppresses the "logged out" state during the brief window between mount
+  // and the Rift provider rehydrating its JWT from storage.
+  const [pendingHydration, setPendingHydration] = useState<boolean>(() => hasStoredRiftSession());
 
   const [settings, setSettings] = useState<WalletSettings>(loadSettings());
   const { toast } = useToast();
 
-  // ── Check status on mount ──────────────────────────────────────────────
-  const checkWalletStatus = useCallback(async () => {
-    if (!isLoggedIn()) {
-      setState({ isUnlocked: false, wallet: null, address: null, isLoading: false, error: null });
+  // Once the provider confirms auth, hydration is done. Also clear after a
+  // 2s grace period in case the stored token is invalid and the silent
+  // refresh fails — we shouldn't leave isLoading stuck forever.
+  useEffect(() => {
+    if (isAuthenticated) { setPendingHydration(false); return; }
+    if (!pendingHydration) return;
+    const t = setTimeout(() => setPendingHydration(false), 2000);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, pendingHydration]);
+
+  // Keep walletManager + display name in sync with the widget. We also pull
+  // the full Rift user profile (once per session) so OTP-gated tx prompts
+  // know which channel to use.
+  useEffect(() => {
+    // Don't decide "user is logged out" while the JWT is still rehydrating.
+    if (pendingHydration) return;
+
+    if (!isAuthenticated || !user) {
+      walletManager.setAddress(null);
+      setDisplayName(null);
+      setIsLoading(false);
       return;
     }
 
-    // Use cached snapshot first for instant render
+    walletManager.setAddress(user.address);
+
+    // Cached snapshot for instant render
     const cached = getCachedUserSummary();
-    if (cached?.address) {
-      walletManager.setAddress(cached.address);
-      setState({
-        isUnlocked: true,
-        wallet: { address: cached.address, name: cached.user || 'My Wallet' },
-        address: cached.address,
-        isLoading: false,
-        error: null,
-      });
-    }
+    setDisplayName(cached?.user || 'My Wallet');
+    setIsLoading(false);
 
-    try {
-      const user = await riftGetMe();
-      const address = user?.address || cached?.address || null;
-      const name = user?.displayName || user?.externalId || cached?.user || 'My Wallet';
-      walletManager.setAddress(address);
-      setState({
-        isUnlocked: true,
-        wallet: address ? { address, name } : null,
-        address,
-        isLoading: false,
-        error: null,
-      });
-    } catch (err: any) {
-      console.warn('[useWallet] Failed to fetch user, clearing session:', err?.message);
-      await riftLogout();
-      setState({ isUnlocked: false, wallet: null, address: null, isLoading: false, error: null });
-    }
-  }, []);
-
-  useEffect(() => { checkWalletStatus(); }, [checkWalletStatus]);
+    // Best-effort: pull the full user record from Rift (also persists the
+    // AuthMethod so the tx-auth dialog can prompt for the right channel)
+    riftGetMe().then((profile) => {
+      if (!profile) return;
+      const name = (profile as any).displayName || (profile as any).externalId || (profile as any).email || 'My Wallet';
+      setDisplayName(name);
+    }).catch(() => {});
+  }, [pendingHydration, isAuthenticated, user?.user, user?.address]);
 
   // ── Auto-lock timer ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!settings.autoLock || !state.isUnlocked) return;
+    if (!settings.autoLock || !isAuthenticated) return;
     const timeout = setTimeout(() => {
       lockWallet();
       toast({ title: 'Wallet Locked', description: 'Auto-locked for security.' });
     }, settings.autoLockTimeout * 60 * 1000);
     return () => clearTimeout(timeout);
-  }, [state.isUnlocked, settings.autoLock, settings.autoLockTimeout]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, settings.autoLock, settings.autoLockTimeout]);
 
-  // ── Lock (logout) ──────────────────────────────────────────────────────
+  // ── Lock (sign out via the widget; clears server session + local state) ─
   const lockWallet = useCallback(async () => {
-    await riftLogout();
+    await signOut();
+    clearLocalRiftState();
     walletManager.lockWallet();
-    setState({ isUnlocked: false, wallet: null, address: null, isLoading: false, error: null });
-  }, []);
+    setDisplayName(null);
+  }, [signOut]);
 
-  // ── Delete (also logout — Rift account itself is preserved) ────────────
   const deleteWallet = useCallback(async () => {
-    await riftLogout();
-    setState({ isUnlocked: false, wallet: null, address: null, isLoading: false, error: null });
+    await lockWallet();
     toast({ title: 'Signed Out', description: 'You can sign back in any time.' });
-  }, [toast]);
+  }, [lockWallet, toast]);
 
   // ── Settings ───────────────────────────────────────────────────────────
   const updateSettings = useCallback((newSettings: Partial<WalletSettings>) => {
@@ -129,15 +142,24 @@ export function useWallet() {
     saveSettings(updated);
   }, [settings]);
 
-  const walletExists = useCallback(() => isLoggedIn(), []);
+  const walletExists = useCallback(() => isAuthenticated, [isAuthenticated]);
+
+  const address = user?.address ?? null;
+  const wallet = isAuthenticated && address
+    ? { address, name: displayName || 'My Wallet' }
+    : null;
 
   return {
-    ...state,
+    isUnlocked: isAuthenticated,
+    wallet,
+    address,
+    isLoading,
+    error,
     settings,
     lockWallet,
     deleteWallet,
     updateSettings,
     walletExists,
-    checkWalletStatus,
+    checkWalletStatus: async () => {}, // no-op — widget drives state now
   };
 }

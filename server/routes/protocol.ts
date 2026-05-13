@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { eq } from "drizzle-orm";
 import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits } from "../../shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";
+import { requireRiftUser } from "../middleware/rift-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
 import { syncChainEvents } from "../chain-sync";
 
@@ -129,20 +130,13 @@ export async function registerProtocolRoutes(app: Express) {
   startOraclePoller(5 * 60 * 1000);
 
   // ── Gas sponsorship ──────────────────────────────────────────────────────────
-  app.post("/api/gas/sponsor", strictLimiter, async (req, res) => {
+  // Auth: Authorization: Bearer <rift access token>. The authenticated wallet
+  // is the one we sponsor — we never trust a wallet address from the body.
+  app.post("/api/gas/sponsor", strictLimiter, requireRiftUser, async (req, res) => {
     try {
-      const sponsorToken = (req.headers['x-session-token'] as string) || null;
-      if (!sponsorToken) return res.status(401).json({ message: 'Authentication required' });
-      const [sponsorSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, sponsorToken));
-      if (!sponsorSess || sponsorSess.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
-
-      const { walletAddress, chainId } = req.body;
-      if (!walletAddress) return res.status(400).json({ message: "Wallet address required" });
-      if (walletAddress.toLowerCase() !== sponsorSess.walletAddress?.toLowerCase()) {
-        return res.status(403).json({ message: 'You can only request gas for your own wallet' });
-      }
-
-      const addr = walletAddress.toLowerCase();
+      const { chainId } = req.body ?? {};
+      const addr = req.riftUser!.address;           // already lowercased + verified by Rift
+      const walletAddress = addr;
       const now = Date.now();
       const cooldownKey = `${addr}:${chainId || 1135}`;
       const lastSponsored = gasSponsorCooldown.get(cooldownKey) || 0;
@@ -195,15 +189,16 @@ export async function registerProtocolRoutes(app: Express) {
     }
   });
 
-  app.post("/api/fees/record", async (req, res) => {
-    const sessionToken = (req.headers['x-session-token'] as string) || null;
-    if (!sessionToken) return res.status(401).json({ message: 'Authentication required' });
-    const [sess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, sessionToken));
-    if (!sess || sess.expiresAt < new Date()) return res.status(401).json({ message: 'Session expired' });
-
+  // Auth: Authorization: Bearer <rift access token>. The recorder must be the
+  // sender of the transfer — we cross-check `fromWallet` against the verified
+  // Rift identity so the books can't be polluted by random callers.
+  app.post("/api/fees/record", requireRiftUser, async (req, res) => {
     try {
       const { txHash, feeTxHash, fromWallet, toWallet, transferAmount, token, chainId } = req.body;
       if (!txHash || !fromWallet || !toWallet || !transferAmount) return res.status(400).json({ message: "Missing required fields" });
+      if (String(fromWallet).toLowerCase() !== req.riftUser!.address) {
+        return res.status(403).json({ message: 'You can only record fees for transfers from your own wallet' });
+      }
 
       const amt = parseFloat(transferAmount);
       if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: "Invalid transfer amount" });
@@ -809,6 +804,74 @@ export async function registerProtocolRoutes(app: Express) {
       });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to claim payout" });
+    }
+  });
+
+  // ── Hedge activity feed ─────────────────────────────────────────────────
+  // Append-only log of every on-chain action a wallet has taken. The client
+  // POSTs to this endpoint immediately after a mutation's tx receipt resolves.
+  // The composite unique on (chainId, txHash, actionType) makes it idempotent —
+  // re-posting the same row (e.g. on a retry) is a no-op.
+
+  const ACTION_TYPES = new Set([
+    "create_event", "buy_protection", "lp_deposit",
+    "claim_payout", "claim_premiums", "withdraw_lp",
+    "recover_expired", "toggle_pool", "settle_event",
+    "reward_payout",
+  ]);
+
+  app.post("/api/hedge/activity", async (req, res) => {
+    try {
+      const {
+        walletAddress, chainId, txHash, actionType,
+        eventId, onChainEventId, positionId, depositId,
+        amount, token, metadata, status,
+      } = req.body ?? {};
+
+      if (!walletAddress || typeof walletAddress !== "string") {
+        return res.status(400).json({ message: "walletAddress is required" });
+      }
+      if (!Number.isFinite(chainId)) {
+        return res.status(400).json({ message: "chainId is required" });
+      }
+      if (!txHash || typeof txHash !== "string") {
+        return res.status(400).json({ message: "txHash is required" });
+      }
+      if (!ACTION_TYPES.has(actionType)) {
+        return res.status(400).json({ message: `actionType must be one of: ${Array.from(ACTION_TYPES).join(", ")}` });
+      }
+
+      const row = await storage.recordHedgeActivity({
+        walletAddress,
+        chainId,
+        txHash,
+        actionType,
+        eventId: eventId ?? null,
+        onChainEventId: onChainEventId ?? null,
+        positionId: positionId ?? null,
+        depositId: depositId ?? null,
+        amount: amount != null ? String(amount) : null,
+        token: token ?? null,
+        metadata: metadata != null ? (typeof metadata === "string" ? metadata : JSON.stringify(metadata)) : null,
+        status: status ?? "confirmed",
+      });
+      res.json(row);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to record activity" });
+    }
+  });
+
+  // GET — returns the wallet's full activity feed. Optional ?chainId=xxxx&limit=NN
+  app.get("/api/hedge/activity/:wallet", async (req, res) => {
+    try {
+      const wallet = String(req.params.wallet || "");
+      if (!wallet) return res.status(400).json({ message: "wallet param required" });
+      const chainId = req.query.chainId ? Number(req.query.chainId) : undefined;
+      const limit = req.query.limit ? Math.min(200, Number(req.query.limit) || 50) : 50;
+      const rows = await storage.getHedgeActivityByWallet(wallet, { chainId, limit });
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to load activity" });
     }
   });
 }

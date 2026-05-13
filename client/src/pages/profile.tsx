@@ -1,3 +1,11 @@
+/**
+ * Profile — BlockFinaX 2026 redesign
+ *
+ * Avatar hero card → grouped form sections (Personal, Contact, Location,
+ * Social) → collapsible optional sections (Business, Identity) → public
+ * profile toggle → sticky Save bar. All form/data wiring identical to
+ * the prior version (react-hook-form + Zod + TanStack mutations).
+ */
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -5,10 +13,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,13 +37,11 @@ import {
   User,
   Building2,
   Mail,
-  Phone,
   MapPin,
   Globe,
   Shield,
   Save,
   CheckCircle,
-  XCircle,
   Clock,
   ArrowLeft,
   ChevronDown,
@@ -42,7 +52,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
 import { queryClient } from '@/lib/api-client';
-import logoPath from "@/assets/logo.png";
+import { BottomNav } from '@/components/bottom-nav';
+import { Pill, shortAddr } from '@/components/ui/bfx';
 
 const profileSchema = z.object({
   displayName: z.string().optional().or(z.literal('')),
@@ -77,12 +88,35 @@ const africanCountries = [
   'DRC Congo', 'Angola', 'Madagascar', 'Mali', 'Burkina Faso', 'Niger', 'Benin',
   'Togo', 'Sierra Leone', 'Liberia', 'Guinea', 'Gambia',
 ];
-
 const otherCountries = [
   'United States', 'United Kingdom', 'Canada', 'Germany', 'France', 'Netherlands',
   'Switzerland', 'UAE', 'Singapore', 'China', 'Japan', 'India', 'Brazil', 'Australia',
   'Other',
 ];
+
+function SectionCard({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-4 space-y-4">
+        <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
+          <span className="h-7 w-7 rounded-full bg-primary/10 text-primary inline-flex items-center justify-center">
+            <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
+          </span>
+          {title}
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
@@ -93,11 +127,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!walletLoading) {
-      if (!walletExists()) {
-        setLocation('/wallet');
-      } else if (!isUnlocked) {
-        setLocation('/unlock-wallet');
-      }
+      if (!walletExists()) setLocation('/wallet');
+      else if (!isUnlocked) setLocation('/auth');
     }
   }, [isUnlocked, walletExists, walletLoading, setLocation]);
 
@@ -166,12 +197,8 @@ export default function ProfilePage() {
         bio: profile.bio || '',
         isPublic: profile.isPublic || false,
       });
-      if (profile.companyName || profile.jobTitle || profile.taxId) {
-        setShowBusiness(true);
-      }
-      if (profile.idType || profile.idNumber) {
-        setShowIdentity(true);
-      }
+      if (profile.companyName || profile.jobTitle || profile.taxId) setShowBusiness(true);
+      if (profile.idType || profile.idNumber) setShowIdentity(true);
     }
   }, [profile]);
 
@@ -181,43 +208,35 @@ export default function ProfilePage() {
       for (const [key, val] of Object.entries(data)) {
         cleaned[key] = typeof val === 'string' && val.trim() === '' ? null : val;
       }
-      if (profile) {
-        const res = await fetch(`/api/profiles/${walletAddress}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cleaned),
-        });
-        if (!res.ok) throw new Error('Failed to update');
-        return res.json();
-      } else {
-        const res = await fetch('/api/profiles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cleaned),
-        });
-        if (!res.ok) throw new Error('Failed to create');
-        return res.json();
-      }
+      const url = profile ? `/api/profiles/${walletAddress}` : '/api/profiles';
+      const method = profile ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleaned),
+      });
+      if (!res.ok) throw new Error(profile ? 'Failed to update' : 'Failed to create');
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/profiles', walletAddress] });
-      toast({ title: 'Profile saved', description: 'Your profile has been updated successfully.' });
+      toast({ title: 'Profile saved', description: 'Your profile has been updated.' });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to save profile. Please try again.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to save profile. Please try again.',
+        variant: 'destructive',
+      });
     },
   });
 
-  const onSubmit = (data: ProfileFormData) => {
-    saveMutation.mutate(data);
-  };
+  const onSubmit = (data: ProfileFormData) => saveMutation.mutate(data);
 
   const copyAddress = () => {
     navigator.clipboard.writeText(walletAddress);
     toast({ title: 'Copied', description: 'Wallet address copied to clipboard.' });
   };
-
-  const shortAddr = walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '';
 
   const getInitials = () => {
     const fn = form.watch('firstName');
@@ -233,46 +252,59 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-7 w-7 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-8">
-      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-md border-b border-border/50">
-        <div className="w-full px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setLocation('/home')} className="h-8 w-8">
+    <div className="min-h-screen bg-background pb-32">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b border-border/60">
+        <div className="max-w-2xl mx-auto px-3 h-14 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLocation('/home')}
+              className="h-9 w-9 rounded-full"
+            >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <img src={logoPath} alt="BlockFinaX" className="w-7 h-7 object-contain" />
-            <h1 className="text-lg font-bold">Profile</h1>
+            <h1 className="bfx-display text-[17px] font-semibold tracking-tight">Profile</h1>
           </div>
           {profile && (
-            <Badge variant="secondary" className="text-xs">
+            <Pill tone={profile.kycStatus === 'verified' ? 'success' : 'warning'} uppercase={false}>
               {profile.kycStatus === 'verified' ? (
-                <span className="flex items-center gap-1"><CheckCircle className="h-3 w-3 text-green-500" /> Verified</span>
+                <>
+                  <CheckCircle className="h-3 w-3" /> Verified
+                </>
               ) : (
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-yellow-500" /> Unverified</span>
+                <>
+                  <Clock className="h-3 w-3" /> Unverified
+                </>
               )}
-            </Badge>
+            </Pill>
           )}
         </div>
       </header>
 
-      <main className="w-full px-4 py-4 space-y-4">
-        <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-background">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center shrink-0">
-              <span className="text-lg font-bold text-primary">{getInitials()}</span>
+      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        {/* Avatar hero */}
+        <Card className="rounded-2xl bfx-hero-dark border-0 relative overflow-hidden">
+          <CardContent className="p-5 flex items-center gap-4 relative">
+            <div className="h-14 w-14 rounded-full bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
+              <span className="bfx-display text-lg font-semibold text-white">{getInitials()}</span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-base font-semibold truncate">
+              <p className="bfx-display text-[18px] font-semibold text-white truncate">
                 {form.watch('displayName') || form.watch('firstName') || 'Set up your profile'}
               </p>
-              <button onClick={copyAddress} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <span className="font-mono">{shortAddr}</span>
+              <button
+                onClick={copyAddress}
+                className="mt-0.5 flex items-center gap-1 text-[11px] font-mono-data text-white/70 hover:text-white transition-colors"
+              >
+                {shortAddr(walletAddress)}
                 <Copy className="h-3 w-3" />
               </button>
             </div>
@@ -281,231 +313,253 @@ export default function ProfilePage() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <User className="h-4 w-4 text-primary" />
-                  <span>Personal Info</span>
-                </div>
-
+            {/* Personal */}
+            <SectionCard icon={User} title="Personal info">
+              <FormField
+                control={form.control}
+                name="displayName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Display name
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="How others see you" {...field} className="rounded-xl" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
-                  name="displayName"
+                  name="firstName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Display Name</FormLabel>
+                      <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        First name
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="How others see you" {...field} />
+                        <Input placeholder="John" {...field} className="rounded-xl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Name</FormLabel>
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        Last name
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="Doe" {...field} className="rounded-xl" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="bio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Bio
+                    </FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Tell others a bit about yourself…"
+                        className="min-h-[80px] resize-none rounded-xl"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SectionCard>
+
+            {/* Contact */}
+            <SectionCard icon={Mail} title="Contact">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Email
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="you@example.com" {...field} className="rounded-xl" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phoneNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Phone
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="+233 XX XXX XXXX" {...field} className="rounded-xl" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SectionCard>
+
+            {/* Location */}
+            <SectionCard icon={MapPin} title="Location">
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="country"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        Country
+                      </FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ''}>
                         <FormControl>
-                          <Input placeholder="John" {...field} />
+                          <SelectTrigger className="rounded-xl">
+                            <SelectValue placeholder="Select country" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Doe" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="bio"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bio</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Tell others a bit about yourself..." className="min-h-[80px] resize-none" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Mail className="h-4 w-4 text-primary" />
-                  <span>Contact</span>
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="you@example.com" {...field} />
-                      </FormControl>
+                        <SelectContent className="max-h-60">
+                          <SelectItem value="__africa_label" disabled>
+                            --- Africa ---
+                          </SelectItem>
+                          {africanCountries.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="__other_label" disabled>
+                            --- Other ---
+                          </SelectItem>
+                          {otherCountries.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
                   control={form.control}
-                  name="phoneNumber"
+                  name="city"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        City
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="+233 XX XXX XXXX" {...field} />
+                        <Input placeholder="Accra" {...field} className="rounded-xl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </CardContent>
-            </Card>
+              </div>
+              <FormField
+                control={form.control}
+                name="nationality"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Nationality
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="Country of citizenship" {...field} className="rounded-xl" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SectionCard>
 
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span>Location</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="country"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Country</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select country" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="max-h-60">
-                            <SelectItem value="__africa_label" disabled>--- Africa ---</SelectItem>
-                            {africanCountries.map(c => (
-                              <SelectItem key={c} value={c}>{c}</SelectItem>
-                            ))}
-                            <SelectItem value="__other_label" disabled>--- Other ---</SelectItem>
-                            {otherCountries.map(c => (
-                              <SelectItem key={c} value={c}>{c}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>City</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Accra" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+            {/* Social */}
+            <SectionCard icon={Globe} title="Social & web">
+              <FormField
+                control={form.control}
+                name="website"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Website
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://yoursite.com" {...field} className="rounded-xl" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
-                  name="nationality"
+                  name="linkedin"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nationality</FormLabel>
+                      <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        LinkedIn
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="Country of citizenship" {...field} />
+                        <Input placeholder="linkedin.com/in/you" {...field} className="rounded-xl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Globe className="h-4 w-4 text-primary" />
-                  <span>Social & Web</span>
-                </div>
                 <FormField
                   control={form.control}
-                  name="website"
+                  name="twitter"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Website</FormLabel>
+                      <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        X (Twitter)
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="https://yoursite.com" {...field} />
+                        <Input placeholder="@yourhandle" {...field} className="rounded-xl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="linkedin"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>LinkedIn</FormLabel>
-                        <FormControl>
-                          <Input placeholder="linkedin.com/in/you" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="twitter"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>X (Twitter)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="@yourhandle" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </SectionCard>
 
+            {/* Business (optional, collapsible) */}
             <Collapsible open={showBusiness} onOpenChange={setShowBusiness}>
-              <Card>
+              <Card className="rounded-2xl">
                 <CardContent className="p-4 space-y-4">
                   <CollapsibleTrigger className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <Building2 className="h-4 w-4 text-primary" />
-                      <span>Business Info</span>
-                      <Badge variant="outline" className="text-[10px] ml-1">Optional</Badge>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
+                      <span className="h-7 w-7 rounded-full bg-primary/10 text-primary inline-flex items-center justify-center">
+                        <Building2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                      </span>
+                      Business info
+                      <Pill tone="neutral" uppercase={false} className="ml-1">
+                        Optional
+                      </Pill>
                     </div>
-                    {showBusiness ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    {showBusiness ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    )}
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-4 pt-2">
                     <FormField
@@ -513,9 +567,11 @@ export default function ProfilePage() {
                       name="companyName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Company / Organization</FormLabel>
+                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Company / Organization
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="Company name" {...field} />
+                            <Input placeholder="Company name" {...field} className="rounded-xl" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -526,9 +582,15 @@ export default function ProfilePage() {
                       name="jobTitle"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Role / Title</FormLabel>
+                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Role / Title
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Trader, CEO, Student" {...field} />
+                            <Input
+                              placeholder="e.g. Trader, CEO, Student"
+                              {...field}
+                              className="rounded-xl"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -539,9 +601,15 @@ export default function ProfilePage() {
                       name="taxId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tax ID / Business Reg.</FormLabel>
+                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Tax ID / Business reg.
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="Business registration number" {...field} />
+                            <Input
+                              placeholder="Business registration number"
+                              {...field}
+                              className="rounded-xl"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -552,16 +620,25 @@ export default function ProfilePage() {
               </Card>
             </Collapsible>
 
+            {/* Identity (optional, collapsible) */}
             <Collapsible open={showIdentity} onOpenChange={setShowIdentity}>
-              <Card>
+              <Card className="rounded-2xl">
                 <CardContent className="p-4 space-y-4">
                   <CollapsibleTrigger className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <Shield className="h-4 w-4 text-primary" />
-                      <span>Identity Verification</span>
-                      <Badge variant="outline" className="text-[10px] ml-1">Optional</Badge>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
+                      <span className="h-7 w-7 rounded-full bg-primary/10 text-primary inline-flex items-center justify-center">
+                        <Shield className="h-3.5 w-3.5" strokeWidth={1.9} />
+                      </span>
+                      Identity (KYC)
+                      <Pill tone="neutral" uppercase={false} className="ml-1">
+                        Optional
+                      </Pill>
                     </div>
-                    {showIdentity ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    {showIdentity ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    )}
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-4 pt-2">
                     <FormField
@@ -569,10 +646,12 @@ export default function ProfilePage() {
                       name="idType"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Type</FormLabel>
+                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            ID type
+                          </FormLabel>
                           <Select onValueChange={field.onChange} value={field.value || ''}>
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="rounded-xl">
                                 <SelectValue placeholder="Select ID type" />
                               </SelectTrigger>
                             </FormControl>
@@ -593,9 +672,11 @@ export default function ProfilePage() {
                       name="idNumber"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Number</FormLabel>
+                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            ID number
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="Document number" {...field} />
+                            <Input placeholder="Document number" {...field} className="rounded-xl" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -606,9 +687,11 @@ export default function ProfilePage() {
                       name="dateOfBirth"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Date of Birth</FormLabel>
+                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Date of birth
+                          </FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <Input type="date" {...field} className="rounded-xl" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -619,7 +702,8 @@ export default function ProfilePage() {
               </Card>
             </Collapsible>
 
-            <Card>
+            {/* Public toggle */}
+            <Card className="rounded-2xl">
               <CardContent className="p-4">
                 <FormField
                   control={form.control}
@@ -627,8 +711,10 @@ export default function ProfilePage() {
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-center justify-between">
                       <div>
-                        <FormLabel className="text-sm font-medium">Public Profile</FormLabel>
-                        <p className="text-xs text-muted-foreground">Let others find and view your profile</p>
+                        <FormLabel className="text-sm font-medium">Public profile</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">
+                          Let others find and view your profile
+                        </p>
                       </div>
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -639,20 +725,31 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
-            <Button
-              type="submit"
-              className="w-full h-12 text-base font-semibold"
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? (
-                <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</span>
-              ) : (
-                <span className="flex items-center gap-2"><Save className="h-4 w-4" /> Save Profile</span>
-              )}
-            </Button>
+            {/* Sticky save bar */}
+            <div className="fixed bottom-[88px] inset-x-0 z-40 pointer-events-none">
+              <div className="max-w-2xl mx-auto px-4 pointer-events-auto">
+                <Button
+                  type="submit"
+                  className="w-full h-12 rounded-2xl shadow-lg"
+                  disabled={saveMutation.isPending}
+                >
+                  {saveMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" /> Save profile
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </form>
         </Form>
       </main>
+
+      <BottomNav />
     </div>
   );
 }

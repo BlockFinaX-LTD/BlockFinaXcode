@@ -783,7 +783,7 @@ class HedgeContractManager {
       quoteNonce?: string;       // 0x-prefixed 32-byte hex; default ZeroHash for legacy mode
     },
     onStep?: (step: string) => void
-  ): Promise<number | null> {
+  ): Promise<{ eventId: number | null; txHash: string }> {
     const feeConfig = await this.getFeeConfig();
     const tokenAddress = params.paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
     const dec = this.tokenDecimals;
@@ -856,10 +856,8 @@ class HedgeContractManager {
 
       // Parse the new event ID from the EventCreated log (topic[1] = event ID)
       const eventLog = logs?.find(l => l.topics?.[0] === EVENT_CREATED_TOPIC);
-      if (eventLog?.topics?.[1]) {
-        return parseInt(eventLog.topics[1], 16);
-      }
-      return null;
+      const eventId = eventLog?.topics?.[1] ? parseInt(eventLog.topics[1], 16) : null;
+      return { eventId, txHash };
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
@@ -875,7 +873,7 @@ class HedgeContractManager {
     poolOpen: boolean,
     allowExternalLp: boolean,
     onStep?: (s: string) => void
-  ): Promise<void> {
+  ): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('setPoolSettings', [eventId, poolOpen, allowExternalLp]);
@@ -883,6 +881,7 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
   async deposit(
@@ -890,7 +889,7 @@ class HedgeContractManager {
     eventId: number,
     amount: string,
     onStep?: (s: string) => void
-  ): Promise<void> {
+  ): Promise<string> {
     const readContract = this.getReadContract();
     const tokenAddress = await readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS) as string;
     const dec = this.tokenDecimals;
@@ -921,6 +920,7 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
   async buyProtection(
@@ -928,7 +928,7 @@ class HedgeContractManager {
     eventId: number,
     notional: string,
     onStep?: (s: string) => void
-  ): Promise<void> {
+  ): Promise<string> {
     const readContract = this.getReadContract();
     // getFeeConfig() has error handling + defaults for chains where getHedgeFeeConfig()
     // is absent (e.g. Base Diamond uses a different facet version).
@@ -981,6 +981,7 @@ class HedgeContractManager {
       const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
       onStep?.('Waiting for confirmation...');
       await this.waitForTx(txHash);
+      return txHash;
     } catch (error: any) {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
@@ -990,7 +991,7 @@ class HedgeContractManager {
     }
   }
 
-  async claimPayout(signer: ethers.Wallet, positionId: number, onStep?: (s: string) => void): Promise<void> {
+  async claimPayout(signer: ethers.Wallet, positionId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('claimPayout', [positionId]);
@@ -998,9 +999,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async claimPremiums(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<void> {
+  async claimPremiums(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('claimPremiums', [depositId]);
@@ -1008,9 +1010,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async withdrawCapital(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<void> {
+  async withdrawCapital(signer: ethers.Wallet, depositId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('withdrawCapital', [depositId]);
@@ -1018,9 +1021,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async withdrawCreatorEarnings(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<void> {
+  async withdrawCreatorEarnings(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('withdrawCreatorEarnings', [eventId]);
@@ -1028,9 +1032,10 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 
-  async recoverExpiredPayouts(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<void> {
+  async recoverExpiredPayouts(signer: ethers.Wallet, eventId: number, onStep?: (s: string) => void): Promise<string> {
     await this.ensureGas(signer.address);
     const iface = new ethers.Interface(HEDGE_ABI);
     const calldata = iface.encodeFunctionData('recoverExpiredPayouts', [eventId]);
@@ -1038,6 +1043,7 @@ class HedgeContractManager {
     const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
+    return txHash;
   }
 }
 
