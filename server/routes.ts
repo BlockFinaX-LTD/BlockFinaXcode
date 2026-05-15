@@ -54,6 +54,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPricingRoutes(app);
   await registerProtocolRoutes(app);
 
+  // NOTE: The public/integrator REST API used to live at /api/v1 here.
+  // It now ships as a standalone package at `integrator-api/` so it can
+  // be deployed independently — see that package's README for the surface.
+
   // ── WebSocket server (wallet-scoped pub/sub) ───────────────────────────────
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
