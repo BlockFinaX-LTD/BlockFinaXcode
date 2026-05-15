@@ -56,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // NOTE: The public/integrator REST API used to live at /api/v1 here.
   // It now ships as a standalone repo deployed independently:
-  //   https://github.com/amschel99/blockfinax-integrator-api
+  //   https://github.com/BlockFinaX-LTD/blockfinax-integrator-api
   // /v1/pricing/* in that API proxies back to /api/pricing/* on this server.
 
   // ── WebSocket server (wallet-scoped pub/sub) ───────────────────────────────
