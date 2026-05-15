@@ -73,6 +73,10 @@ Oracle      GET /v1/oracle/oracles/:chainId
             GET /v1/oracle/submission/:chainId/:eventId/:oracle
             GET /v1/oracle/submitter-count/:chainId/:eventId
 
+Pricing     POST /v1/pricing/quote                       fair premium + optional v8 signed attestation
+            GET  /v1/pricing/health                      engine status (signer, USD rate, pair coverage)
+            GET  /v1/pricing/signer                      just the active signer address
+
 Tx (build)  POST /v1/tx/erc20/approve
 
             POST /v1/tx/hedge/create-event
@@ -189,6 +193,11 @@ BSC_DIAMOND_ADDRESS=0xaC939C0897981Abc0711ec4e37527F13106180fc
 
 # Optional CORS — leave unset to allow any origin
 CORS_ORIGINS=https://yourdomain.com,https://anotherdomain.com
+
+# Upstream pricing engine — required for /v1/pricing/* endpoints.
+# The pricing engine has live data deps (Twelvedata, TreasuryDirect, Postgres)
+# so it runs as the main BlockFinaX service and this API proxies through.
+PRICING_ENGINE_URL=https://api.blockfinax.com
 ```
 
 ## Local development

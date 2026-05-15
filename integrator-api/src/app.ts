@@ -20,6 +20,7 @@ import oracleReadsRouter from "./routes/oracle-reads";
 import governanceReadsRouter from "./routes/governance-reads";
 import txBuildRouter from "./routes/tx-build";
 import txBroadcastRouter from "./routes/tx-broadcast";
+import pricingRouter from "./routes/pricing";
 
 export function createApp(): Express {
   const app = express();
@@ -39,6 +40,7 @@ export function createApp(): Express {
   app.use("/v1/oracle", oracleReadsRouter);
   app.use("/v1/tx", txBuildRouter);
   app.use("/v1/tx", txBroadcastRouter);
+  app.use("/v1/pricing", pricingRouter);
 
   const openApiDoc = buildOpenApiDocument();
   app.get("/v1/openapi.json", (_req, res) => res.json(openApiDoc));
