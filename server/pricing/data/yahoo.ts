@@ -99,3 +99,66 @@ export async function fetchYahooLatestClose(yahooTicker: string): Promise<DailyC
   }
   return series[series.length - 1];
 }
+
+/**
+ * Fetch daily closes over an explicit UNIX-seconds period range.
+ *
+ * This is the longest-history fetch — `range=10y` caps Yahoo at 10y, but the
+ * period1/period2 parameter is unbounded. For FX, Yahoo typically returns from
+ * the early 2000s onwards (KES=X starts ~2003-12, BRL=X ~2003-12, INR=X ~2003-12).
+ * For commodities, mid-2000s. For crypto, from listing date.
+ *
+ * If period1 is older than Yahoo's earliest data, Yahoo silently returns from
+ * its earliest available date — no error. So calling with period1 = Jan 1 1996
+ * for "give me everything you have up to 30 years" works correctly.
+ *
+ * Matches exactly the URL format the user pointed to:
+ *   https://query1.finance.yahoo.com/v8/finance/chart/KES=X?period1=...&period2=...&interval=1d
+ *
+ * @param yahooTicker  e.g. "KES=X" for USD/KES, "GC=F" for gold front-month
+ * @param period1      UNIX-seconds inclusive start
+ * @param period2      UNIX-seconds inclusive end (typically Math.floor(Date.now()/1000))
+ */
+export async function fetchYahooDailyTimeSeriesPeriod(
+  yahooTicker: string,
+  period1: number,
+  period2: number,
+): Promise<DailyClose[]> {
+  if (period1 <= 0 || period2 <= 0 || period1 >= period2) {
+    throw new Error(`Invalid period range for ${yahooTicker}: ${period1} → ${period2}`);
+  }
+  const url = `${YAHOO_BASE}/${encodeURIComponent(yahooTicker)}?interval=1d&period1=${period1}&period2=${period2}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+    signal: AbortSignal.timeout(60_000),   // longer timeout — 25y of daily closes is ~6500 rows
+  });
+
+  if (!res.ok) {
+    throw new Error(`Yahoo HTTP ${res.status} for ${yahooTicker}`);
+  }
+
+  const body = (await res.json()) as YahooChartResult;
+  if (body.chart?.error) {
+    throw new Error(`Yahoo error for ${yahooTicker}: ${body.chart.error.description}`);
+  }
+
+  const r = body.chart?.result?.[0];
+  const timestamps = r?.timestamp ?? [];
+  const closes = r?.indicators?.quote?.[0]?.close ?? [];
+
+  if (timestamps.length === 0 || closes.length === 0) {
+    throw new Error(`Yahoo returned no data for ${yahooTicker} in [${period1}, ${period2}]`);
+  }
+  if (timestamps.length !== closes.length) {
+    throw new Error(`Yahoo length mismatch for ${yahooTicker}: ts=${timestamps.length} closes=${closes.length}`);
+  }
+
+  const out: DailyClose[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const c = closes[i];
+    if (c !== null && c !== undefined && Number.isFinite(c) && c > 0) {
+      out.push({ date: isoDate(timestamps[i]), close: c });
+    }
+  }
+  return out;
+}

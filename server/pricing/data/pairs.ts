@@ -58,6 +58,92 @@ export interface PairSpec {
   notes: string;
 }
 
+// ── FX: USD vs major / less-liquid EM (LatAm + Asia ex-China) ───────────────
+// Audited 2026-05-17: every pair below returns ≥15y of daily closes from Yahoo
+// via period1/period2 fetch. Tier assignments follow Hull / standard market
+// convention: BRL/MXN/INR/ZAR/KRW = majorEM (deep NDF, IRP roughly holds);
+// PHP/COP/IDR/THB/MYR/CLP = lessLiquidEM (NDF exists but thinner); ARS/TRY/
+// VND/PKR/EGP = frontier-ish (capital controls, devaluation regimes).
+const USD_LATAM_ASIA_PAIRS: PairSpec[] = [
+  // ── majorEM ────────────────────────────────────────────────────────────
+  { displayPair: "USD/BRL", assetClass: "fx", source: "yahoo", sourceSymbol: "BRL=X",
+    tier: "majorEM", useEmpiricalDrift: true,
+    notes: "Brazilian real — deep NDF + free float. IRP roughly holds; could flip to NDF-derived q." },
+  { displayPair: "USD/MXN", assetClass: "fx", source: "yahoo", sourceSymbol: "MXN=X",
+    tier: "majorEM", useEmpiricalDrift: true,
+    notes: "Mexican peso — most liquid LatAm FX; deep options market." },
+  { displayPair: "USD/INR", assetClass: "fx", source: "yahoo", sourceSymbol: "INR=X",
+    tier: "majorEM", useEmpiricalDrift: true,
+    notes: "Indian rupee — RBI-managed crawling peg; NDF active." },
+  { displayPair: "USD/KRW", assetClass: "fx", source: "yahoo", sourceSymbol: "KRW=X",
+    tier: "majorEM", useEmpiricalDrift: true,
+    notes: "Korean won — deep NDF, BOK-managed during stress." },
+
+  // ── lessLiquidEM ───────────────────────────────────────────────────────
+  { displayPair: "USD/PHP", assetClass: "fx", source: "yahoo", sourceSymbol: "PHP=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Philippine peso." },
+  { displayPair: "USD/COP", assetClass: "fx", source: "yahoo", sourceSymbol: "COP=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Colombian peso — commodity-currency linked (oil)." },
+  { displayPair: "USD/IDR", assetClass: "fx", source: "yahoo", sourceSymbol: "IDR=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Indonesian rupiah — central bank intervention common." },
+  { displayPair: "USD/THB", assetClass: "fx", source: "yahoo", sourceSymbol: "THB=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Thai baht — BOT managed." },
+  { displayPair: "USD/MYR", assetClass: "fx", source: "yahoo", sourceSymbol: "MYR=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Malaysian ringgit — NDF-only since 1998 controls." },
+  { displayPair: "USD/CLP", assetClass: "fx", source: "yahoo", sourceSymbol: "CLP=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Chilean peso — copper-linked." },
+  { displayPair: "USD/PEN", assetClass: "fx", source: "yahoo", sourceSymbol: "PEN=X",
+    tier: "lessLiquidEM", useEmpiricalDrift: true,
+    notes: "Peruvian sol — copper + gold linked." },
+
+  // ── frontier / capital-control regimes ────────────────────────────────
+  { displayPair: "USD/ARS", assetClass: "fx", source: "yahoo", sourceSymbol: "ARS=X",
+    tier: "frontierEM", useEmpiricalDrift: true,
+    notes: "Argentine peso — hyperinflation + dual-rate regime. Empirical drift dominates." },
+  { displayPair: "USD/TRY", assetClass: "fx", source: "yahoo", sourceSymbol: "TRY=X",
+    tier: "frontierEM", useEmpiricalDrift: true,
+    notes: "Turkish lira — heterodox policy + capital flight; classic jump regime." },
+  { displayPair: "USD/VND", assetClass: "fx", source: "yahoo", sourceSymbol: "VND=X",
+    tier: "frontierEM", useEmpiricalDrift: true,
+    notes: "Vietnamese dong — SBV-managed crawling band." },
+  { displayPair: "USD/PKR", assetClass: "fx", source: "yahoo", sourceSymbol: "PKR=X",
+    tier: "frontierEM", useEmpiricalDrift: true,
+    notes: "Pakistani rupee — IMF-program cycles." },
+];
+
+// ── G10 FX (DM benchmark) ────────────────────────────────────────────────────
+// Useful as a control group — the engine collapses to plain GK for these
+// (λ=0). Also gives the engine real σ_LR / μ for cross-pair comparisons.
+const G10_FX_PAIRS: PairSpec[] = [
+  { displayPair: "EUR/USD", assetClass: "fx", source: "yahoo", sourceSymbol: "EURUSD=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Euro — IRP holds; needs rate-differential q (NDF not needed)." },
+  { displayPair: "GBP/USD", assetClass: "fx", source: "yahoo", sourceSymbol: "GBPUSD=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Sterling — IRP holds." },
+  { displayPair: "USD/JPY", assetClass: "fx", source: "yahoo", sourceSymbol: "JPY=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Yen — IRP holds; BOJ intervention is the tail risk." },
+  { displayPair: "USD/CHF", assetClass: "fx", source: "yahoo", sourceSymbol: "CHF=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Swiss franc — IRP holds; SNB floor break (Jan 2015) is in the history." },
+  { displayPair: "USD/CAD", assetClass: "fx", source: "yahoo", sourceSymbol: "CAD=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Loonie — commodity-currency, IRP holds." },
+  { displayPair: "AUD/USD", assetClass: "fx", source: "yahoo", sourceSymbol: "AUDUSD=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Aussie — commodity-currency, IRP holds." },
+  { displayPair: "NZD/USD", assetClass: "fx", source: "yahoo", sourceSymbol: "NZDUSD=X",
+    tier: "g10", useEmpiricalDrift: false,
+    notes: "Kiwi — IRP holds." },
+];
+
 // ── FX: USD vs Africa ────────────────────────────────────────────────────────
 // All audited on Yahoo 2026-05-06: full 5-year history, zero gaps >7 days.
 const USD_AFRICA_PAIRS: PairSpec[] = [
@@ -171,6 +257,8 @@ const CRYPTO: PairSpec[] = [
 
 // ── Master registry ──────────────────────────────────────────────────────────
 export const SUPPORTED_PAIRS: PairSpec[] = [
+  ...G10_FX_PAIRS,
+  ...USD_LATAM_ASIA_PAIRS,
   ...USD_AFRICA_PAIRS,
   ...EUR_AFRICA_PAIRS,
   ...GBP_AFRICA_PAIRS,

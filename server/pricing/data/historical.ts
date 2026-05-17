@@ -17,7 +17,11 @@ import { db } from "../../db";
 import { historicalFxCloses, type HistoricalFxClose } from "../../../shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { fetchDailyTimeSeries as fetchTwelveDataSeries, fetchLatestClose as fetchTwelveDataLatest, type DailyClose } from "./twelvedata";
-import { fetchYahooDailyTimeSeries, fetchYahooLatestClose } from "./yahoo";
+import {
+  fetchYahooDailyTimeSeries,
+  fetchYahooLatestClose,
+  fetchYahooDailyTimeSeriesPeriod,
+} from "./yahoo";
 import { requirePairSpec } from "./pairs";
 
 /**
@@ -113,6 +117,59 @@ export async function getRecentCloses(pair: string, n: number): Promise<Historic
     .limit(n);
 
   return rows.reverse(); // return oldest-first for convenience
+}
+
+/**
+ * Backfill the full available history for a pair over an explicit UNIX-seconds
+ * date range. Use this to seed 20+ years of closes from Yahoo (e.g. for the
+ * 30-year history backfill — `pricing:backfill-30y`).
+ *
+ * Yahoo silently clamps `period1` to the earliest available date, so passing
+ * 1996-01-01 even for FX pairs that only start in 2003 is fine — you get
+ * everything Yahoo has.
+ *
+ * TwelveData doesn't support arbitrary-range fetches on the free tier, so this
+ * function intentionally only supports Yahoo. Calling it on a TD-sourced pair
+ * throws.
+ *
+ * @param pair       e.g. "USD/KES"
+ * @param period1    UNIX-seconds inclusive start
+ * @param period2    UNIX-seconds inclusive end
+ * @returns          { inserted, oldestDate, newestDate, totalSeries }
+ */
+export async function backfillPairWithRange(
+  pair: string,
+  period1: number,
+  period2: number,
+): Promise<{ inserted: number; oldestDate: string | null; newestDate: string | null; totalSeries: number }> {
+  const spec = requirePairSpec(pair);
+  if (spec.source !== "yahoo") {
+    throw new Error(`backfillPairWithRange only supports Yahoo-sourced pairs (got source=${spec.source} for ${pair})`);
+  }
+  const series = await fetchYahooDailyTimeSeriesPeriod(spec.sourceSymbol, period1, period2);
+  if (series.length === 0) {
+    return { inserted: 0, oldestDate: null, newestDate: null, totalSeries: 0 };
+  }
+
+  const rows = series.map(s => ({
+    pair,
+    date: s.date,
+    close: String(s.close),
+    source: spec.source,
+  }));
+
+  const result = await db
+    .insert(historicalFxCloses)
+    .values(rows)
+    .onConflictDoNothing({ target: [historicalFxCloses.pair, historicalFxCloses.date] })
+    .returning({ id: historicalFxCloses.id });
+
+  return {
+    inserted: result.length,
+    oldestDate: series[0].date,
+    newestDate: series[series.length - 1].date,
+    totalSeries: series.length,
+  };
 }
 
 /**

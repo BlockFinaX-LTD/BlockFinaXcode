@@ -38,9 +38,29 @@ export interface QuoteBreakdown {
     q: number | null;
     mu: number | null;        // empirical drift (when EM correction active)
     qEffective: number;
-    sigma: number;            // pricing vol (post-markup)
-    sigmaRealizedRaw: number; // pre-markup
+    sigma: number;            // pricing vol that fed the kernel (post-GARCH integration)
+    sigmaRealizedRaw: number; // EWMA realized vol, pre-markup
     volMarkup: number;
+    /**
+     * v2 engine: GARCH(1,1)-style integrated variance forecast. Tells you how
+     * spot vol was blended toward long-run vol over the option's life.
+     */
+    garch?: {
+      sigma0: number;
+      sigmaLongRun: number;
+      persistence: number;
+      sigmaIntegrated: number;
+    };
+    /**
+     * v2 engine: Merton jump-diffusion parameters. λ=0 means pure GK was used
+     * (no jumps modelled for this tier). Otherwise the option price includes
+     * the Poisson-weighted jump component.
+     */
+    jump?: {
+      lambda: number;
+      jumpMean: number;
+      jumpStd: number;
+    };
   };
   method: "garman-kohlhagen-with-rate-differential" | "garman-kohlhagen-with-empirical-drift";
   pairClassification: {

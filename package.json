@@ -10,7 +10,12 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "pricing:test": "tsx --test server/pricing/__tests__/*.test.ts",
-    "pricing:bootstrap": "tsx server/pricing/scripts/bootstrap.ts",
+    "pricing:price": "tsx --env-file-if-exists=.env server/pricing/scripts/price-cli.ts",
+    "pricing:bootstrap": "tsx --env-file=.env server/pricing/scripts/bootstrap.ts",
+    "pricing:backfill-30y": "tsx --env-file=.env server/pricing/scripts/backfill-30y.ts",
+    "pricing:calibrate-jumps": "tsx --env-file=.env server/pricing/scripts/calibrate-jumps.ts",
+    "pricing:calibrate-garch": "tsx --env-file=.env server/pricing/scripts/calibrate-garch.ts",
+    "pricing:backtest": "tsx --env-file=.env server/pricing/scripts/backtest.ts",
     "pricing:scan-onchain": "tsx server/pricing/scripts/scan-onchain-pairs.ts",
     "pricing:scan-everything": "tsx server/pricing/scripts/scan-onchain-everything.ts"
   },

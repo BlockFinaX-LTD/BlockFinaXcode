@@ -17,8 +17,17 @@ import { fetchUsdRate } from "./data/usdRate";
 import { computeEmpiricalDrift } from "./data/drift";
 import { getPricingVol } from "./data/vol";
 import { getPairClassification } from "./data/classification";
-import { callSpreadValue, putSpreadValue, premiumInBaseCurrency } from "./kernel";
+import { getRecentCloses } from "./data/historical";
+import { mertonCallSpread, mertonPutSpread, premiumInBaseCurrency } from "./kernel";
 import { signQuote, rateToFixed6, type SignedQuote } from "./signer";
+import { getPairJumpParams } from "./data/jump-params";
+import {
+  integratedVariance,
+  longRunVolFromCloses,
+  persistenceForTier,
+  getPairGarchParams,
+} from "./data/garch";
+import type { PairTier } from "./data/pairs";
 
 // Safety cap on max_payout/premium ratio. Quotes above this are rejected
 // because they indicate the option is essentially free, which is always a
@@ -100,9 +109,32 @@ export interface QuoteResponse {
       q: number | null;     // local rate if applicable (null when using empirical drift)
       mu: number | null;    // empirical drift (null when using rate differential)
       qEffective: number;   // what actually went into the kernel
-      sigma: number;        // vol with risk-premium markup applied
-      sigmaRealizedRaw: number; // vol BEFORE markup, for transparency
+      sigma: number;        // vol that actually fed the kernel (post-GARCH integration)
+      sigmaRealizedRaw: number; // EWMA realized vol BEFORE tier-floor + markup
       volMarkup: number;    // markup fraction (e.g. 0.75 for frontierEM)
+      /**
+       * GARCH(1,1) integrated-variance forecast block.
+       * Tells you how spot vol was blended toward long-run vol over [0,T]:
+       *   sigma = sqrt( V_L + ((1 - p^N) / (N(1-p))) * (sigma0² - V_L) )
+       * where p = persistence, N = T_days. Hull §23.3.
+       */
+      garch?: {
+        sigma0: number;            // spot vol (post-EWMA, before integration)
+        sigmaLongRun: number;      // 5y equally-weighted sample stdev anchor
+        persistence: number;       // α+β for the tier (mean-reversion knob)
+        sigmaIntegrated: number;   // = sigma field above; duplicated here for clarity
+      };
+      /**
+       * Merton (1976) jump-diffusion parameters that fed the kernel. λ=0
+       * means the engine fell back to plain GK (no jumps modelled for this
+       * tier). Otherwise the option premium includes the Poisson-weighted
+       * jump component — Hull Ch 27.
+       */
+      jump?: {
+        lambda: number;        // jumps per year
+        jumpMean: number;      // mean log-jump
+        jumpStd: number;       // std-dev of log-jump
+      };
     };
     method: "garman-kohlhagen-with-rate-differential" | "garman-kohlhagen-with-empirical-drift";
     pairClassification: {
@@ -140,12 +172,19 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
   }
 
   // ── Pull every input in parallel ─────────────────────────────────────────
-  const [spotRow, rUsd, classification, volResult] = await Promise.all([
-    getRate(req.pair),
-    fetchUsdRate(),
-    getPairClassification(req.pair),
-    getPricingVol(req.pair),
-  ]);
+  // We need TWO vol measurements now:
+  //   sigma0      — current vol (EWMA, sensitive to recent moves)
+  //   sigmaLongRun — long-run anchor (sample stdev over the full 5y window)
+  // GARCH(1,1) integrated variance blends these by mean-reverting σ_0 toward σ_LR.
+  const [spotRow, rUsd, classification, volResult, longRunCloses, jump] =
+    await Promise.all([
+      getRate(req.pair),
+      fetchUsdRate(),
+      getPairClassification(req.pair),
+      getPricingVol(req.pair),
+      getRecentCloses(req.pair, 252 * 5),     // 5y for the long-run anchor
+      getPairJumpParams(req.pair),
+    ]);
 
   if (!spotRow) {
     throw new Error(`No live spot for pair ${req.pair}`);
@@ -174,13 +213,48 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
     );
   }
 
-  // ── Run the kernel ───────────────────────────────────────────────────────
-  const sigma = volResult.sigma;
+  // ── GARCH(1,1) integrated variance ───────────────────────────────────────
+  // σ_0 is the EWMA estimate from vol.ts (already has tier-floor + risk-premium
+  // markup applied — the conservative diffusion-vol assumption).
+  // σ_longRun is the equally-weighted 5-year sample stdev — anchors mean reversion.
+  // For T > a few weeks, the integrated variance pulls σ_0 toward σ_longRun,
+  // matching Hull §23 expected-average-variance.
+  const sigma0 = volResult.sigma;
+  let sigmaLongRun = sigma0;  // fallback if we can't compute it
+  try {
+    if (longRunCloses.length >= 60) {
+      sigmaLongRun = longRunVolFromCloses(longRunCloses.map(c => Number(c.close)));
+    }
+  } catch {
+    // bad closes — keep fallback
+  }
+  // Prefer the per-pair MLE-fitted persistence (written to pair_classification.notes
+  // by `pricing:calibrate-garch`); fall back to the tier default if no calibration
+  // has been written yet. Either way, sigma0 → sigma_longRun mean-reversion is
+  // governed by α+β, with the integral over [0,T] feeding the kernel.
+  let persistence = persistenceForTier(classification.tier as PairTier);
+  try {
+    const garchParams = await getPairGarchParams(req.pair);
+    persistence = garchParams.persistence;
+  } catch {
+    // No per-pair fit yet — tier default is already set
+  }
+  const integ = integratedVariance({
+    sigma0,
+    sigmaLongRun,
+    TYears: T_years,
+    persistence,
+  });
+  const sigma = integ.sigmaIntegrated;   // <-- this is what feeds the kernel
+
+  // ── Run the kernel (Merton jump-diffusion spread) ────────────────────────
+  // λ=0 for g10 collapses this to plain GK; for frontier-EM the jump component
+  // is what actually fixes the smile/fat-tail under-pricing.
   const direction: "upward" | "downward" = req.strikeAbove ? "upward" : "downward";
 
   let perUnit: number;
   if (req.strikeAbove) {
-    perUnit = callSpreadValue({
+    perUnit = mertonCallSpread({
       S,
       K_lower: req.strike,
       K_upper: req.payoutCap,
@@ -188,9 +262,12 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
       r: rUsd,
       q: qEffective,
       sigma,
+      lambda: jump.lambda,
+      jumpMean: jump.jumpMean,
+      jumpStd: jump.jumpStd,
     });
   } else {
-    perUnit = putSpreadValue({
+    perUnit = mertonPutSpread({
       S,
       K_lower: req.payoutCap,
       K_upper: req.strike,
@@ -198,6 +275,9 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
       r: rUsd,
       q: qEffective,
       sigma,
+      lambda: jump.lambda,
+      jumpMean: jump.jumpMean,
+      jumpStd: jump.jumpStd,
     });
   }
 
@@ -304,6 +384,17 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
         sigma,
         sigmaRealizedRaw: volResult.realizedAnnualized,
         volMarkup: volResult.markup,
+        garch: {
+          sigma0,
+          sigmaLongRun,
+          persistence,
+          sigmaIntegrated: integ.sigmaIntegrated,
+        },
+        jump: {
+          lambda: jump.lambda,
+          jumpMean: jump.jumpMean,
+          jumpStd: jump.jumpStd,
+        },
       },
       method,
       pairClassification: {
