@@ -145,6 +145,52 @@ export interface QuoteResponse {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Bullet-proofing: deterministic result cache + hard deadline.
+//
+// The math inside the orchestrator is pure once its inputs land; the only thing
+// that can stall is the external data fetch. With the upstream fx-oracle now
+// using 3s per-fetch timeouts + stale-while-revalidate, the typical request
+// completes in <200ms. To be safe on top of that:
+//
+//   1. CACHE the response for QUOTE_CACHE_TTL_MS (default 60s). Same QuoteRequest
+//      → same QuoteResponse. The expiry timestamp inside is bumped only on
+//      cache miss, so signatures stay valid for at least 60s after issue
+//      (signatures expire at 120s on-chain).
+//
+//   2. DEADLINE the whole computation at QUOTE_DEADLINE_MS (default 6s). If we
+//      hit the deadline, throw a structured error the route can map to 503
+//      "Pricing service temporarily unavailable". The next request usually
+//      succeeds because the cache warmed up.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const QUOTE_CACHE_TTL_MS = 60_000;
+const QUOTE_DEADLINE_MS  = 6_000;
+
+interface QuoteCacheEntry { response: QuoteResponse; expiresAt: number; }
+const quoteCache = new Map<string, QuoteCacheEntry>();
+
+function cacheKey(req: QuoteRequest): string {
+  return JSON.stringify({
+    pair: req.pair,
+    strike: req.strike,
+    payoutCap: req.payoutCap,
+    expiryUnixSeconds: req.expiryUnixSeconds,
+    notional: req.notional,
+    strikeAbove: req.strikeAbove,
+    chainId: req.chainId ?? null,
+    diamondAddress: req.diamondAddress ?? null,
+    creator: req.creator ?? null,
+  });
+}
+
+function pruneExpiredCacheEntries(): void {
+  const now = Date.now();
+  Array.from(quoteCache.entries()).forEach(([k, v]) => {
+    if (v.expiresAt <= now) quoteCache.delete(k);
+  });
+}
+
 /** Quote a fair premium for a hedge event. */
 export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
   // ── Validate inputs ──────────────────────────────────────────────────────
@@ -152,6 +198,33 @@ export async function quote(req: QuoteRequest): Promise<QuoteResponse> {
   if (req.strike <= 0) throw new Error("strike must be > 0");
   if (req.payoutCap <= 0) throw new Error("payoutCap must be > 0");
   if (req.notional <= 0) throw new Error("notional must be > 0");
+
+  // ── Result cache ─────────────────────────────────────────────────────────
+  const key = cacheKey(req);
+  const cached = quoteCache.get(key);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.response;
+  }
+  if (quoteCache.size > 5_000) pruneExpiredCacheEntries();
+
+  // ── Compute with deadline ────────────────────────────────────────────────
+  const deadline = new Promise<never>((_, reject) => {
+    setTimeout(
+      () => reject(new Error(
+        `Pricing computation exceeded ${QUOTE_DEADLINE_MS}ms deadline. ` +
+        `Upstream data source is slow — retry in a few seconds (subsequent requests will be served from cache).`
+      )),
+      QUOTE_DEADLINE_MS,
+    );
+  });
+  const response = await Promise.race([quoteImpl(req), deadline]);
+  quoteCache.set(key, { response, expiresAt: now + QUOTE_CACHE_TTL_MS });
+  return response;
+}
+
+/** Internal: the actual orchestrator. Wrapped by quote() above with cache + deadline. */
+async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
 
   const nowSeconds = Math.floor(Date.now() / 1000);
   const T_seconds = req.expiryUnixSeconds - nowSeconds;

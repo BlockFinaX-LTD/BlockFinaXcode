@@ -134,9 +134,17 @@ const CACHE_TTL = 5 * 60 * 1000;
 const API_URL = "https://open.er-api.com/v6/latest";
 const BACKUP_API_URL = "https://api.exchangerate-api.com/v4/latest";
 
+// Per-fetch timeout for any external rate provider. 3s is aggressive but the
+// quote endpoint is user-facing and the values are cached for 5 minutes — if
+// a provider is slow, we'd rather fail this attempt fast and let the cache
+// fill from the next one.
+const FETCH_TIMEOUT_MS = 3_000;
+
 async function fetchRatesFromBackupSource(base: string): Promise<Record<string, number>> {
   try {
-    const response = await fetch(`${BACKUP_API_URL}/${base}`);
+    const response = await fetch(`${BACKUP_API_URL}/${base}`, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`Backup API returned ${response.status}`);
     const data = await response.json();
     return data.rates ?? {};
@@ -187,7 +195,9 @@ const HEDGE_ABI = [
 
 async function fetchRatesForBase(base: string): Promise<Record<string, number>> {
   try {
-    const response = await fetch(`${API_URL}/${base}`);
+    const response = await fetch(`${API_URL}/${base}`, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const data = await response.json();
     if (data.result !== "success") throw new Error("API returned error");
@@ -206,7 +216,10 @@ async function fetchCryptoPrices(): Promise<Record<string, PriceWithChange>> {
   try {
     const ids = Object.values(CRYPTO_IDS).join(',');
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`CoinGecko returned ${response.status}`);
     const data = await response.json();
     const result: Record<string, PriceWithChange> = {};
@@ -231,6 +244,7 @@ async function fetchYahooCommodityPrice(ticker: string): Promise<PriceWithChange
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -265,13 +279,45 @@ async function fetchCommodityPrices(): Promise<Record<string, PriceWithChange>> 
   return result;
 }
 
+// Stale-while-revalidate: if a refresh is in flight, subsequent callers piggy-back
+// on the same promise instead of starting parallel fetches. Combined with the cache
+// fallback below, this means the quote endpoint NEVER waits longer than the slowest
+// upstream fetch — and even that only happens for one caller at a time.
+let inflightRefresh: Promise<Record<string, FXRate>> | null = null;
+
 export async function fetchAllRates(): Promise<Record<string, FXRate>> {
   const now = Date.now();
-  if (now - cache.lastFetch < CACHE_TTL && Object.keys(cache.rates).length > 0) {
+  const hasCache = Object.keys(cache.rates).length > 0;
+  const cacheFresh = hasCache && now - cache.lastFetch < CACHE_TTL;
+  if (cacheFresh) {
     return cache.rates;
   }
 
-  const bases = [...new Set(Object.values(FX_PAIRS).map(p => p.base))];
+  // SWR: if cache exists (even stale), kick off a background refresh and return it
+  // immediately. The next call gets the refreshed value. This eliminates the
+  // "first request after cache expiry waits for 5+ network round-trips" pathology.
+  if (hasCache) {
+    if (!inflightRefresh) {
+      inflightRefresh = refreshAllRates()
+        .then(rates => { cache.rates = rates; cache.lastFetch = Date.now(); return rates; })
+        .catch(() => cache.rates)        // refresh failed — keep stale cache
+        .finally(() => { inflightRefresh = null; });
+    }
+    return cache.rates;
+  }
+  // Cold start: actually await. inflightRefresh dedupes parallel callers.
+  if (!inflightRefresh) {
+    inflightRefresh = refreshAllRates()
+      .then(rates => { cache.rates = rates; cache.lastFetch = Date.now(); return rates; })
+      .finally(() => { inflightRefresh = null; });
+  }
+  return inflightRefresh;
+}
+
+async function refreshAllRates(): Promise<Record<string, FXRate>> {
+  const now = Date.now();
+
+  const bases = Array.from(new Set(Object.values(FX_PAIRS).map(p => p.base)));
   const allRates: Record<string, Record<string, number>> = {};
 
   const backupRates: Record<string, Record<string, number>> = {};
@@ -342,8 +388,7 @@ export async function fetchAllRates(): Promise<Record<string, FXRate>> {
     };
   }
 
-  cache.rates = result;
-  cache.lastFetch = now;
+  // (cache writes now happen in the SWR wrapper above — single source of truth.)
 
   const snapshots = Object.values(result).map(r => ({
     pair: r.pair,
