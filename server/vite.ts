@@ -82,7 +82,21 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Public static assets (logos, fonts, images, JS, CSS) must be embeddable
+  // from third-party origins — most importantly the Rift sign-in widget at
+  // widget.riftfi.xyz which renders our logo in its branded header. The
+  // global helmet config sets Cross-Origin-Resource-Policy: same-site for
+  // every response, which causes browsers to silently block <img src="…">
+  // from cross-site contexts (emails work because Gmail proxies the fetch
+  // server-side; the widget doesn't, so it falls back to a "B" initial).
+  //
+  // Override CORP to `cross-origin` for everything under the static-asset
+  // tree — this is the standard posture for public images and JS bundles.
+  app.use(express.static(distPath, {
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {

@@ -104,6 +104,12 @@ app.use(helmet({
   // CORP=same-origin (helmet default) is too strict for the Rift widget's
   // postMessage handshake. `same-site` allows cross-origin embeds while
   // still preventing arbitrary other origins from reading our responses.
+  //
+  // NOTE: this same-site value is the DEFAULT for API responses. Public
+  // static assets (logos, fonts, images) are served with CORP=cross-origin
+  // overridden in serveStatic() — see server/vite.ts. Without that
+  // override, third-party embeds like the Rift widget's branded header
+  // can't render our logo.
   crossOriginResourcePolicy: { policy: "same-site" },
 }));
 
