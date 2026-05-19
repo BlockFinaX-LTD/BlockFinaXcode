@@ -32,8 +32,12 @@ interface CharacterProps {
 export function Character({ mood, facing = 0, scale = 1 }: CharacterProps) {
   return (
     <g transform={`scale(${scale}) translate(${facing * 1.2}, 0)`}>
-      {/* Shadow */}
+      {/* Shadow — stationary, not part of breathing motion */}
       <ellipse cx="0" cy="58" rx="22" ry="4" fill="#000" opacity="0.12" />
+      <motion.g
+        animate={{ y: [0, -1.2, 0] }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+      >
 
       {/* Legs */}
       <rect x="-9" y="32" width="7" height="24" rx="3" fill={pants} />
@@ -108,6 +112,7 @@ export function Character({ mood, facing = 0, scale = 1 }: CharacterProps) {
           <ellipse cx="8" cy="-17" rx="2.5" ry="1.5" fill="#ed8688" opacity="0.55" />
         </>
       )}
+      </motion.g>
     </g>
   );
 }

@@ -73,11 +73,11 @@ export function FxLossScene(p: Props) {
             <circle cx="520" cy="55" r="20" fill="#ffd24c" />
           </motion.g>
 
-          {/* Storm cloud rolls in */}
+          {/* Storm cloud rolls in — slight overshoot for natural settling */}
           <motion.g
             initial={{ x: 700 }}
             animate={inView ? { x: 0 } : {}}
-            transition={{ duration: 1.8, delay: 1.3, ease: "easeOut" }}
+            transition={{ delay: 1.3, type: "spring", stiffness: 38, damping: 13, mass: 1.2 }}
           >
             <g transform="translate(380, 55)">
               <ellipse cx="0" cy="0" rx="60" ry="22" fill="#475569" />
@@ -197,28 +197,29 @@ export function FxLossScene(p: Props) {
             </motion.g>
           </g>
 
-          {/* Loss badge — bottom right */}
-          <motion.g
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={inView ? { opacity: [0, 0, 0, 1], scale: [0.5, 0.5, 0.5, 1], y: [20, 20, 20, 0] } : {}}
-            transition={{ duration: 5, times: [0, 0.65, 0.75, 0.85], ease: "easeOut" }}
-            transform="translate(460, 215)"
-          >
-            <rect x="-90" y="-18" width="180" height="36" rx="18" fill="#dc2626" />
-            <rect x="-90" y="-18" width="180" height="18" rx="18" fill="#ef4444" opacity="0.5" />
-            <text
-              x="0"
-              y="5"
-              textAnchor="middle"
-              fontSize="11.5"
-              fontWeight="800"
-              fill="#ffffff"
-              letterSpacing="0.6"
-              style={{ fontFamily: FONT }}
+          {/* Loss badge — bottom right (static-positioned wrapper avoids framer overriding our translate) */}
+          <g transform="translate(460, 215)">
+            <motion.g
+              initial={{ opacity: 0, scale: 0.5, y: 30 }}
+              animate={inView ? { opacity: [0, 0, 0, 1], scale: [0.5, 0.5, 0.5, 1], y: [30, 30, 30, 0] } : {}}
+              transition={{ duration: 5, times: [0, 0.65, 0.75, 0.92], ease: [0.2, 0.8, 0.4, 1] }}
             >
-              LOST {p.toSymbol}{fmt(loss)} TO FX
-            </text>
-          </motion.g>
+              <rect x="-90" y="-18" width="180" height="36" rx="18" fill="#dc2626" />
+              <rect x="-90" y="-18" width="180" height="18" rx="18" fill="#ef4444" opacity="0.5" />
+              <text
+                x="0"
+                y="5"
+                textAnchor="middle"
+                fontSize="11.5"
+                fontWeight="800"
+                fill="#ffffff"
+                letterSpacing="0.6"
+                style={{ fontFamily: FONT }}
+              >
+                LOST {p.toSymbol}{fmt(loss)} TO FX
+              </text>
+            </motion.g>
+          </g>
         </svg>
       </div>
 

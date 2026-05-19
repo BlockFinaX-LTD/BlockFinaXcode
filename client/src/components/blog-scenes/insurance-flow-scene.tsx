@@ -156,50 +156,50 @@ export function InsuranceFlowScene(p: Props) {
             <CharacterMoodSwap inView={inView} duration={DURATION} />
           </g>
 
-          {/* Shield appearing around character */}
-          <motion.g
-            initial={{ opacity: 0, scale: 0.4 }}
-            animate={inView ? { opacity: [0, 0, 1, 1, 1, 1], scale: [0.4, 0.4, 1, 1, 1, 1] } : {}}
-            transition={{ duration: DURATION, times: [0, 0.32, 0.4, 0.6, 0.85, 1] }}
-            transform="translate(310, 145)"
-          >
+          {/* Shield appearing around character (static positioning, animated scale) */}
+          <g transform="translate(310, 145)">
             <motion.g
-              animate={{ scale: [1, 1.04, 1] }}
-              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-              style={{ transformOrigin: "0px 0px" }}
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={inView ? { opacity: [0, 0, 1, 1, 1, 1], scale: [0.4, 0.4, 1, 1, 1, 1] } : {}}
+              transition={{ duration: DURATION, times: [0, 0.32, 0.42, 0.6, 0.85, 1], ease: [0.2, 0.8, 0.4, 1] }}
             >
-              <circle r="62" fill="url(#shieldGlow)" />
-              <path
-                d="M 0 -44 L 38 -29 L 38 6 Q 38 33 0 50 Q -38 33 -38 6 L -38 -29 Z"
-                fill="#4a90e2"
-                fillOpacity="0.2"
-                stroke="#1a4480"
-                strokeWidth="2.2"
-              />
-              <path
-                d="M 0 -39 L 33 -25 L 33 5 Q 33 28 0 42 Q -33 28 -33 5 L -33 -25 Z"
-                fill="none"
-                stroke="#4a90e2"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-                opacity="0.7"
-              />
-              <path
-                d="M -11 0 L -2 10 L 15 -10"
-                stroke="#1a4480"
-                strokeWidth="4.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
+              <motion.g
+                animate={{ scale: [1, 1.04, 1] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <circle r="62" fill="url(#shieldGlow)" />
+                <path
+                  d="M 0 -44 L 38 -29 L 38 6 Q 38 33 0 50 Q -38 33 -38 6 L -38 -29 Z"
+                  fill="#4a90e2"
+                  fillOpacity="0.2"
+                  stroke="#1a4480"
+                  strokeWidth="2.2"
+                />
+                <path
+                  d="M 0 -39 L 33 -25 L 33 5 Q 33 28 0 42 Q -33 28 -33 5 L -33 -25 Z"
+                  fill="none"
+                  stroke="#4a90e2"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.7"
+                />
+                <path
+                  d="M -11 0 L -2 10 L 15 -10"
+                  stroke="#1a4480"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </motion.g>
             </motion.g>
-          </motion.g>
+          </g>
 
-          {/* Storm rolls over */}
+          {/* Storm rolls over with a natural settling overshoot */}
           <motion.g
             initial={{ x: 700 }}
             animate={inView ? { x: 0 } : {}}
-            transition={{ duration: 1.5, delay: 3.8, ease: "easeOut" }}
+            transition={{ delay: 3.8, type: "spring", stiffness: 40, damping: 13, mass: 1.2 }}
           >
             <g transform="translate(310, 52)">
               <ellipse cx="0" cy="0" rx="55" ry="20" fill="#475569" />
@@ -230,26 +230,27 @@ export function InsuranceFlowScene(p: Props) {
           </motion.g>
 
           {/* Deflection sparks at shield top */}
-          <motion.g
-            initial={{ opacity: 0 }}
-            animate={inView ? { opacity: [0, 0, 0, 0, 1, 1, 0] } : {}}
-            transition={{ duration: DURATION, times: [0, 0.55, 0.6, 0.65, 0.7, 0.85, 0.95] }}
-            transform="translate(310, 105)"
-          >
-            {[-28, -12, 12, 28].map((x, i) => (
-              <motion.circle
-                key={i}
-                cx={x}
-                cy={0}
-                r="2.5"
-                fill="#fde047"
-                animate={{ scale: [0.4, 1.3, 0.4], opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 0.65, repeat: Infinity, delay: i * 0.13 }}
-              />
-            ))}
-          </motion.g>
+          <g transform="translate(310, 105)">
+            <motion.g
+              initial={{ opacity: 0 }}
+              animate={inView ? { opacity: [0, 0, 0, 0, 1, 1, 0] } : {}}
+              transition={{ duration: DURATION, times: [0, 0.55, 0.6, 0.65, 0.7, 0.85, 0.95] }}
+            >
+              {[-28, -12, 12, 28].map((x, i) => (
+                <motion.circle
+                  key={i}
+                  cx={x}
+                  cy={0}
+                  r="2.5"
+                  fill="#fde047"
+                  animate={{ scale: [0.4, 1.3, 0.4], opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 0.65, repeat: Infinity, delay: i * 0.13 }}
+                />
+              ))}
+            </motion.g>
+          </g>
 
-          {/* Payout bag flies in at end */}
+          {/* Payout bag flies in at end — larger bag so label fits */}
           <motion.g
             initial={{ opacity: 0, x: 460, y: 90, scale: 0.5 }}
             animate={
@@ -257,30 +258,32 @@ export function InsuranceFlowScene(p: Props) {
                 ? {
                     opacity: [0, 0, 0, 1, 1],
                     x: [460, 460, 460, 460, 380],
-                    y: [90, 90, 90, 30, 180],
+                    y: [90, 90, 90, 30, 175],
                     scale: [0.5, 0.5, 0.5, 1, 1],
                   }
                 : {}
             }
-            transition={{ duration: DURATION, times: [0, 0.78, 0.83, 0.9, 1] }}
+            transition={{ duration: DURATION, times: [0, 0.78, 0.83, 0.9, 1], ease: [0.5, 0, 0.3, 1] }}
           >
             <g>
-              <ellipse cx="0" cy="14" rx="14" ry="2" fill="#000" opacity="0.18" />
+              <ellipse cx="0" cy="20" rx="22" ry="3" fill="#000" opacity="0.18" />
               <path
-                d="M -16 -4 Q -16 14 0 14 Q 16 14 16 -4 Q 12 -1 7 -1 L -7 -1 Q -12 -1 -16 -4 Z"
+                d="M -24 -4 Q -24 20 0 20 Q 24 20 24 -4 Q 19 -1 11 -1 L -11 -1 Q -19 -1 -24 -4 Z"
                 fill="#86efac"
                 stroke="#166534"
-                strokeWidth="1.4"
+                strokeWidth="1.6"
               />
-              <path d="M -7 -1 L -5 -7 L 5 -7 L 7 -1 Z" fill="#65d489" />
-              <path d="M -5 -7 Q -1 -10 1 -10 Q 5 -10 5 -7" fill="none" stroke="#166534" strokeWidth="1.4" />
+              <path d="M -24 -4 Q -22 6 0 6 Q 22 6 24 -4 L 24 4 L -24 4 Z" fill="#65d489" opacity="0.45" />
+              <path d="M -11 -1 L -8 -9 L 8 -9 L 11 -1 Z" fill="#65d489" stroke="#166534" strokeWidth="1" />
+              <path d="M -8 -9 Q -2 -13 2 -13 Q 8 -13 8 -9" fill="none" stroke="#166534" strokeWidth="1.6" />
               <text
                 x="0"
-                y="9"
+                y="13"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="10.5"
                 fontWeight="800"
                 fill="#064e3b"
+                letterSpacing="0.3"
                 style={{ fontFamily: MONO }}
               >
                 +{p.currencySymbol}{fmt(p.payout)}
@@ -289,27 +292,28 @@ export function InsuranceFlowScene(p: Props) {
           </motion.g>
 
           {/* "You got paid" badge */}
-          <motion.g
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={inView ? { opacity: [0, 0, 0, 0, 1], scale: [0.5, 0.5, 0.5, 0.5, 1] } : {}}
-            transition={{ duration: DURATION, times: [0, 0.75, 0.85, 0.92, 0.97], ease: "easeOut" }}
-            transform="translate(490, 215)"
-          >
-            <rect x="-72" y="-18" width="144" height="36" rx="18" fill="#16a34a" />
-            <rect x="-72" y="-18" width="144" height="18" rx="18" fill="#22c55e" opacity="0.5" />
-            <text
-              x="0"
-              y="5"
-              textAnchor="middle"
-              fontSize="11.5"
-              fontWeight="800"
-              fill="#fff"
-              letterSpacing="0.6"
-              style={{ fontFamily: FONT }}
+          <g transform="translate(490, 218)">
+            <motion.g
+              initial={{ opacity: 0, scale: 0.5, y: 30 }}
+              animate={inView ? { opacity: [0, 0, 0, 0, 1], scale: [0.5, 0.5, 0.5, 0.5, 1], y: [30, 30, 30, 30, 0] } : {}}
+              transition={{ duration: DURATION, times: [0, 0.75, 0.85, 0.92, 0.97], ease: [0.2, 0.8, 0.4, 1] }}
             >
-              YOU GOT PAID
-            </text>
-          </motion.g>
+              <rect x="-72" y="-18" width="144" height="36" rx="18" fill="#16a34a" />
+              <rect x="-72" y="-18" width="144" height="18" rx="18" fill="#22c55e" opacity="0.5" />
+              <text
+                x="0"
+                y="5"
+                textAnchor="middle"
+                fontSize="11.5"
+                fontWeight="800"
+                fill="#fff"
+                letterSpacing="0.6"
+                style={{ fontFamily: FONT }}
+              >
+                YOU GOT PAID
+              </text>
+            </motion.g>
+          </g>
         </svg>
       </div>
 

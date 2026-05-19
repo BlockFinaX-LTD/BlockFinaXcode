@@ -129,26 +129,27 @@ export function BankWallScene({ barriers }: Props) {
           </g>
 
           {/* Minimum sign on the steps */}
-          <motion.g
-            initial={{ opacity: 0, scale: 0 }}
-            animate={inView ? { opacity: 1, scale: 1 } : {}}
-            transition={{ delay: 0.2, duration: 0.5 }}
-            transform="translate(430, 207)"
-          >
-            <rect x="-58" y="-8" width="116" height="20" rx="3" fill="#fcd34d" stroke="#92400e" strokeWidth="1.5" />
-            <text
-              x="0"
-              y="6"
-              textAnchor="middle"
-              fontSize="9"
-              fontWeight="800"
-              fill="#7c2d12"
-              letterSpacing="0.6"
-              style={{ fontFamily: FONT }}
+          <g transform="translate(430, 207)">
+            <motion.g
+              initial={{ opacity: 0, scale: 0.4, rotate: -8 }}
+              animate={inView ? { opacity: 1, scale: 1, rotate: 0 } : {}}
+              transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 14 }}
             >
-              MIN DEAL: $100,000
-            </text>
-          </motion.g>
+              <rect x="-58" y="-8" width="116" height="20" rx="3" fill="#fcd34d" stroke="#92400e" strokeWidth="1.5" />
+              <text
+                x="0"
+                y="6"
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="800"
+                fill="#7c2d12"
+                letterSpacing="0.6"
+                style={{ fontFamily: FONT }}
+              >
+                MIN DEAL: $100,000
+              </text>
+            </motion.g>
+          </g>
 
           {/* Character walking */}
           <CharacterWalk inView={inView} totalDuration={totalAnimation} />
