@@ -170,7 +170,7 @@ function SolutionsSection() {
             <p className="text-xs sm:text-sm text-blue-100 leading-relaxed mb-4">
               Send and receive payments across borders instantly, without banks, delays, or wire transfer fees.
             </p>
-            <Link href="/unlock-wallet">
+            <Link href="/wallet">
               <button className="text-xs sm:text-sm font-medium text-white/80 hover:text-white flex items-center gap-1">
                 Open your wallet <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </button>
@@ -691,8 +691,8 @@ export default function Website() {
                     <Link href="/whitepaper">
                       <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Whitepaper</button>
                     </Link>
-                    <Link href="/insights">
-                      <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Insights</button>
+                    <Link href="/blog">
+                      <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Blog</button>
                     </Link>
                     <Link href="/pitch">
                       <button onClick={() => setExploreOpen(false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Pitch Deck</button>
@@ -732,7 +732,7 @@ export default function Website() {
                   {mobileExploreOpen && (
                     <div className="pl-6 space-y-1">
                       <Link href="/whitepaper"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Whitepaper</button></Link>
-                      <Link href="/insights"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Insights</button></Link>
+                      <Link href="/blog"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Blog</button></Link>
                       <Link href="/pitch"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg">Pitch Deck</button></Link>
                       <Link href="/data-room"><button onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-[#1a4480] font-medium hover:bg-blue-50 rounded-lg">Investor Access (NDA)</button></Link>
                     </div>
@@ -887,16 +887,16 @@ export default function Website() {
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Platform</h4>
                 <ul className="space-y-2 text-sm text-gray-400">
-                  <li><Link href="/unlock-wallet" className="hover:text-gray-600 transition-colors">Wallet</Link></li>
+                  <li><Link href="/wallet" className="hover:text-gray-600 transition-colors">Wallet</Link></li>
                   <li><Link href="/hedge" className="hover:text-gray-600 transition-colors">Hedge</Link></li>
-                  <li><Link href="/create-wallet" className="hover:text-gray-600 transition-colors">Create Wallet</Link></li>
+                  <li><Link href="/auth" className="hover:text-gray-600 transition-colors">Create Wallet</Link></li>
                 </ul>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Resources</h4>
                 <ul className="space-y-2 text-sm text-gray-400">
                   <li><Link href="/whitepaper" className="hover:text-gray-600 transition-colors">Whitepaper</Link></li>
-                  <li><Link href="/insights" className="hover:text-gray-600 transition-colors">Insights</Link></li>
+                  <li><Link href="/blog" className="hover:text-gray-600 transition-colors">Blog</Link></li>
                   <li><Link href="/pitch" className="hover:text-gray-600 transition-colors">Pitch Deck</Link></li>
                   <li><a href="mailto:info@blockfinax.com" className="hover:text-gray-600 transition-colors">Contact</a></li>
                 </ul>

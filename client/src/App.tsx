@@ -26,6 +26,7 @@ import Whitepaper from "@/pages/whitepaper";
 import DataRoom from "@/pages/data-room";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
+import BlogPage from "@/pages/blog";
 import NotFound from "@/pages/not-found";
 
 // Wallet & auth
@@ -118,6 +119,8 @@ function Router() {
       <Route path="/data-room" component={DataRoom} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/blog" component={BlogPage} />
+      <Route path="/blog/:slug" component={BlogPage} />
       {/* Auth */}
       <Route path="/auth" component={Auth} />
 
