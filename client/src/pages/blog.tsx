@@ -16,6 +16,7 @@ import {
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { MermaidBlock } from "@/components/mermaid-block";
+import { BlogScene } from "@/components/blog-scene";
 import { loadArticles, findArticle, type Article } from "@/lib/blog-loader";
 import logoPath from "@/assets/logo.png";
 
@@ -292,6 +293,9 @@ function ArticleView({ slug }: { slug: string }) {
                     const codeText = String(children).replace(/\n$/, "");
                     if (!inline && lang === "mermaid") {
                       return <MermaidBlock code={codeText} />;
+                    }
+                    if (!inline && lang === "scene") {
+                      return <BlogScene body={codeText} />;
                     }
                     if (!inline && lang) {
                       return (
