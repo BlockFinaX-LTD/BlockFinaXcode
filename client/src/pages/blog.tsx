@@ -286,6 +286,15 @@ function ArticleView({ slug }: { slug: string }) {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
+                  pre(props: any) {
+                    const { children } = props;
+                    const child = Array.isArray(children) ? children[0] : children;
+                    const className = child?.props?.className || "";
+                    if (/language-(scene|mermaid)/.test(className)) {
+                      return <>{children}</>;
+                    }
+                    return <pre {...props} />;
+                  },
                   code(props: any) {
                     const { inline, className, children, ...rest } = props;
                     const match = /language-(\w+)/.exec(className || "");

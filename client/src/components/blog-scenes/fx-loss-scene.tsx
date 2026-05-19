@@ -1,5 +1,5 @@
-import { motion, AnimatePresence } from "framer-motion";
-import { useInView } from "./use-in-view";
+import { motion } from "framer-motion";
+import { useInView, useAnimatedNumber } from "./use-in-view";
 import { Character, MoneyBag } from "./character";
 
 interface Props {
@@ -15,80 +15,93 @@ interface Props {
   marginEnd: number;
 }
 
+const FONT = "Inter, system-ui, -apple-system, sans-serif";
+const MONO = "ui-monospace, 'JetBrains Mono', monospace";
+
 function fmt(n: number) {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
 export function FxLossScene(p: Props) {
   const [ref, inView] = useInView<HTMLDivElement>(0.3);
+  const day = useAnimatedNumber(0, p.days, 5, inView);
+  const rate = useAnimatedNumber(p.startRate, p.endRate, 5, inView);
+  const loss = (p.endRate - p.startRate) * p.invoice;
 
   return (
     <div ref={ref} className="my-8">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#e8f0fa] via-[#f6e6d0] to-[#fde2c4] border border-amber-100 aspect-[2/1] sm:aspect-[2.4/1]">
-        {/* Sun */}
-        <motion.circle
-          initial={{ opacity: 1 }}
-          animate={inView ? { opacity: [1, 1, 0.2, 0.2] } : {}}
-          transition={{ duration: 6, times: [0, 0.25, 0.45, 1] }}
-        />
-
-        <svg viewBox="0 0 600 250" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <div className="relative overflow-hidden rounded-3xl border border-amber-100 aspect-[2/1] sm:aspect-[2.4/1] shadow-sm">
+        <svg viewBox="0 0 600 250" className="w-full h-full block" preserveAspectRatio="xMidYMid meet" style={{ fontFamily: FONT }}>
           <defs>
-            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id="fxSky" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#bcd7f5" />
-              <stop offset="100%" stopColor="#f6e6d0" />
+              <stop offset="60%" stopColor="#e6dfca" />
+              <stop offset="100%" stopColor="#f3e4c4" />
+            </linearGradient>
+            <linearGradient id="fxGround" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#e9d3a8" />
+              <stop offset="100%" stopColor="#d9bb7f" />
             </linearGradient>
             <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#ffe17a" stopOpacity="0.9" />
+              <stop offset="0%" stopColor="#ffe17a" stopOpacity="0.7" />
               <stop offset="100%" stopColor="#ffe17a" stopOpacity="0" />
             </radialGradient>
           </defs>
 
           {/* Sky */}
-          <rect width="600" height="180" fill="url(#sky)" />
+          <rect width="600" height="180" fill="url(#fxSky)" />
+          {/* Sky darkens as storm rolls in */}
+          <motion.rect
+            width="600"
+            height="180"
+            fill="#1e293b"
+            initial={{ opacity: 0 }}
+            animate={inView ? { opacity: [0, 0, 0.25] } : {}}
+            transition={{ duration: 5, times: [0, 0.4, 0.7] }}
+          />
           {/* Ground */}
-          <rect y="180" width="600" height="70" fill="#e9d3a8" />
-          <rect y="180" width="600" height="3" fill="#d9bb7f" />
+          <rect y="180" width="600" height="70" fill="url(#fxGround)" />
+          <rect y="180" width="600" height="2" fill="#b89559" opacity="0.5" />
 
-          {/* Sun → fades */}
+          {/* Sun — top right, fades as storm comes */}
           <motion.g
             initial={{ opacity: 1 }}
-            animate={inView ? { opacity: [1, 1, 0.15, 0.15] } : { opacity: 1 }}
-            transition={{ duration: 6, times: [0, 0.25, 0.45, 1] }}
+            animate={inView ? { opacity: [1, 1, 0.15] } : {}}
+            transition={{ duration: 5, times: [0, 0.3, 0.55] }}
           >
-            <circle cx="500" cy="55" r="50" fill="url(#sunGlow)" />
-            <circle cx="500" cy="55" r="22" fill="#ffd24c" />
+            <circle cx="520" cy="55" r="48" fill="url(#sunGlow)" />
+            <circle cx="520" cy="55" r="20" fill="#ffd24c" />
           </motion.g>
 
-          {/* Storm cloud — rolls in */}
+          {/* Storm cloud rolls in */}
           <motion.g
-            initial={{ x: 700, opacity: 0 }}
-            animate={inView ? { x: 0, opacity: 1 } : {}}
-            transition={{ duration: 2, delay: 1.5, ease: "easeOut" }}
+            initial={{ x: 700 }}
+            animate={inView ? { x: 0 } : {}}
+            transition={{ duration: 1.8, delay: 1.3, ease: "easeOut" }}
           >
-            <g transform="translate(380, 50)">
-              <ellipse cx="0" cy="0" rx="55" ry="22" fill="#4a5568" />
-              <ellipse cx="-30" cy="-10" rx="28" ry="20" fill="#5a6473" />
-              <ellipse cx="25" cy="-12" rx="32" ry="22" fill="#5a6473" />
-              <ellipse cx="-10" cy="-18" rx="25" ry="18" fill="#6b7785" />
-              <ellipse cx="0" cy="3" rx="55" ry="6" fill="#374151" opacity="0.5" />
+            <g transform="translate(380, 55)">
+              <ellipse cx="0" cy="0" rx="60" ry="22" fill="#475569" />
+              <ellipse cx="-32" cy="-8" rx="28" ry="20" fill="#64748b" />
+              <ellipse cx="28" cy="-10" rx="34" ry="22" fill="#64748b" />
+              <ellipse cx="-8" cy="-18" rx="26" ry="18" fill="#7e8b9c" />
+              <ellipse cx="0" cy="4" rx="60" ry="6" fill="#334155" opacity="0.5" />
               {/* Rain */}
               <motion.g
                 initial={{ opacity: 0 }}
-                animate={inView ? { opacity: [0, 0, 1, 1] } : {}}
-                transition={{ duration: 6, times: [0, 0.4, 0.5, 1] }}
+                animate={inView ? { opacity: [0, 0, 1] } : {}}
+                transition={{ duration: 5, times: [0, 0.45, 0.55] }}
               >
-                {[-30, -15, 0, 15, 30].map((x, i) => (
+                {[-32, -18, -4, 12, 26].map((x, i) => (
                   <motion.line
                     key={i}
                     x1={x}
                     y1={10}
                     x2={x - 3}
-                    y2={28}
-                    stroke="#5a8fc7"
+                    y2={32}
+                    stroke="#7aaad8"
                     strokeWidth="2"
                     strokeLinecap="round"
-                    animate={{ opacity: [1, 0.2, 1] }}
+                    animate={{ opacity: [0.9, 0.3, 0.9] }}
                     transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.12 }}
                   />
                 ))}
@@ -96,205 +109,147 @@ export function FxLossScene(p: Props) {
             </g>
           </motion.g>
 
-          {/* Lightning flash */}
-          <motion.g
-            initial={{ opacity: 0 }}
-            animate={inView ? { opacity: [0, 0, 0, 1, 0, 1, 0] } : {}}
-            transition={{ duration: 6, times: [0, 0.4, 0.48, 0.5, 0.55, 0.58, 0.65] }}
-          >
-            <path d="M 380 75 L 372 100 L 380 100 L 372 130 L 392 95 L 384 95 L 392 75 Z" fill="#fde047" stroke="#facc15" strokeWidth="1.5" />
-          </motion.g>
+          {/* Day counter — top right, animated */}
+          <g transform="translate(540, 30)">
+            <rect x="-44" y="-14" width="88" height="28" rx="14" fill="#1a4480" />
+            <text
+              x="0"
+              y="5"
+              textAnchor="middle"
+              fontSize="11"
+              fontWeight="800"
+              fill="#fff"
+              letterSpacing="0.8"
+              style={{ fontFamily: FONT }}
+            >
+              DAY {Math.round(day)}
+            </text>
+          </g>
 
-          {/* Rate sign — counter */}
-          <g transform="translate(120, 70)">
+          {/* Rate panel — top left */}
+          <g transform="translate(100, 60)">
             <motion.g
-              initial={{ scale: 0, y: -10 }}
-              animate={inView ? { scale: 1, y: 0 } : {}}
+              initial={{ opacity: 0, y: -8 }}
+              animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              <rect x="-55" y="-22" width="110" height="44" rx="8" fill="#fff" stroke="#1a4480" strokeWidth="2" />
-              <text x="0" y="-7" textAnchor="middle" fontSize="9" fontWeight="700" fill="#6b7280">
+              <rect x="-60" y="-26" width="120" height="52" rx="10" fill="#ffffff" stroke="#1a4480" strokeWidth="1.8" />
+              <text
+                x="-50"
+                y="-10"
+                fontSize="8.5"
+                fontWeight="700"
+                fill="#6b7280"
+                letterSpacing="0.6"
+                style={{ fontFamily: FONT }}
+              >
                 {p.fromCurrency}/{p.toCurrency}
               </text>
-              <RateText startRate={p.startRate} endRate={p.endRate} inView={inView} />
-            </motion.g>
-            {/* Arrow */}
-            <motion.g
-              initial={{ opacity: 0, y: 0 }}
-              animate={inView ? { opacity: 1, y: [0, 5, 0, 5, 0] } : {}}
-              transition={{ delay: 1.8, duration: 2, repeat: Infinity }}
-            >
-              <path d="M 0 35 L 0 60 M -8 52 L 0 60 L 8 52" stroke="#dc2626" strokeWidth="3" strokeLinecap="round" fill="none" />
+              <text
+                x="0"
+                y="18"
+                textAnchor="middle"
+                fontSize="22"
+                fontWeight="800"
+                fill="#dc2626"
+                letterSpacing="-0.5"
+                style={{ fontFamily: MONO }}
+              >
+                {rate.toFixed(2)}
+              </text>
+              {/* Trend arrow on the right */}
+              <motion.g
+                initial={{ opacity: 0 }}
+                animate={inView ? { opacity: 1, y: [0, 3, 0, 3, 0] } : {}}
+                transition={{ opacity: { delay: 1 }, y: { duration: 1.5, repeat: Infinity } }}
+              >
+                <path d="M 46 -4 L 46 14 M 40 8 L 46 14 L 52 8" stroke="#dc2626" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </motion.g>
             </motion.g>
           </g>
 
-          {/* Character on left */}
-          <g transform="translate(155, 175)">
-            <CharacterMoodSwitcher inView={inView} />
+          {/* Character (left of center, in the ground area) */}
+          <g transform="translate(220, 175)">
+            <CharacterTimeline inView={inView} />
           </g>
 
-          {/* Money bag in character's hand — shrinks */}
-          <g transform="translate(195, 175)">
+          {/* Money bag in front of character — shrinks */}
+          <g transform="translate(280, 175)">
             <motion.g
               initial={{ scale: 1 }}
-              animate={inView ? { scale: [1, 1, 1, 0.55] } : {}}
-              transition={{ duration: 6, times: [0, 0.45, 0.55, 1], ease: "easeInOut" }}
+              animate={inView ? { scale: [1, 1, 1, 0.55] } : { scale: 1 }}
+              transition={{ duration: 5, times: [0, 0.45, 0.55, 1], ease: "easeInOut" }}
+              style={{ transformOrigin: "0 14px" }}
             >
-              <MoneyBag label={`${p.fromSymbol}${fmt(p.invoice)}`} />
-            </motion.g>
-          </g>
-
-          {/* Loss label appears at end */}
-          <AnimatePresence>
-            {inView && (
-              <motion.g
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 4.2, duration: 0.6, type: "spring" }}
+              <MoneyBag />
+              <text
+                x="0"
+                y="36"
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="700"
+                fill="#3a2410"
+                letterSpacing="0.3"
+                style={{ fontFamily: MONO }}
               >
-                <rect x="300" y="195" width="200" height="40" rx="20" fill="#dc2626" />
-                <rect x="300" y="195" width="200" height="40" rx="20" fill="url(#lossShine)" opacity="0.4" />
-                <text x="400" y="221" textAnchor="middle" fontSize="13" fontWeight="800" fill="#fff" letterSpacing="0.3">
-                  LOST {p.toSymbol}{fmt((p.endRate - p.startRate) * p.invoice)} TO FX
-                </text>
-                <defs>
-                  <linearGradient id="lossShine" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fff" />
-                    <stop offset="100%" stopColor="#dc2626" />
-                  </linearGradient>
-                </defs>
-              </motion.g>
-            )}
-          </AnimatePresence>
-
-          {/* Day counter */}
-          <g transform="translate(540, 30)">
-            <motion.g
-              initial={{ opacity: 0 }}
-              animate={inView ? { opacity: 1 } : {}}
-              transition={{ delay: 0.4 }}
-            >
-              <rect x="-40" y="-15" width="80" height="30" rx="15" fill="#1a4480" />
-              <DayText days={p.days} inView={inView} />
+                {p.fromSymbol}{fmt(p.invoice)}
+              </text>
             </motion.g>
           </g>
 
-          {/* Tree on far right for atmosphere */}
-          <g transform="translate(560, 195)">
-            <rect x="-3" y="-5" width="6" height="20" fill="#7a5230" />
-            <circle cx="0" cy="-15" r="18" fill="#5a8a3f" />
-            <circle cx="-10" cy="-10" r="12" fill="#6c9b4d" />
-            <circle cx="10" cy="-12" r="13" fill="#6c9b4d" />
-          </g>
+          {/* Loss badge — bottom right */}
+          <motion.g
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={inView ? { opacity: [0, 0, 0, 1], scale: [0.5, 0.5, 0.5, 1], y: [20, 20, 20, 0] } : {}}
+            transition={{ duration: 5, times: [0, 0.65, 0.75, 0.85], ease: "easeOut" }}
+            transform="translate(460, 215)"
+          >
+            <rect x="-90" y="-18" width="180" height="36" rx="18" fill="#dc2626" />
+            <rect x="-90" y="-18" width="180" height="18" rx="18" fill="#ef4444" opacity="0.5" />
+            <text
+              x="0"
+              y="5"
+              textAnchor="middle"
+              fontSize="11.5"
+              fontWeight="800"
+              fill="#ffffff"
+              letterSpacing="0.6"
+              style={{ fontFamily: FONT }}
+            >
+              LOST {p.toSymbol}{fmt(loss)} TO FX
+            </text>
+          </motion.g>
         </svg>
       </div>
 
-      <p className="text-center text-xs text-gray-400 mt-2">
-        Same deal. Same invoice. The currency moved — and your profit didn't survive.
+      <p className="text-center text-xs text-gray-400 mt-3 italic">
+        Same invoice. Currency moved. Your profit didn't survive.
       </p>
     </div>
   );
 }
 
-function RateText({ startRate, endRate, inView }: { startRate: number; endRate: number; inView: boolean }) {
-  return (
-    <motion.text
-      x="0"
-      y="14"
-      textAnchor="middle"
-      fontSize="20"
-      fontWeight="800"
-      fill="#dc2626"
-      style={{ fontFamily: "ui-monospace, monospace" }}
-    >
-      <motion.tspan
-        initial={{ opacity: 1 }}
-        animate={inView ? { opacity: [1, 1, 0] } : {}}
-        transition={{ duration: 6, times: [0, 0.4, 0.5] }}
-      >
-        {startRate.toFixed(2)}
-      </motion.tspan>
-      <motion.tspan
-        initial={{ opacity: 0 }}
-        animate={inView ? { opacity: [0, 0, 1] } : {}}
-        transition={{ duration: 6, times: [0, 0.5, 0.6] }}
-      >
-        {" "}{endRate.toFixed(2)}
-      </motion.tspan>
-    </motion.text>
-  );
-}
-
-function DayText({ days, inView }: { days: number; inView: boolean }) {
-  return (
-    <text x="0" y="5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff" letterSpacing="0.5">
-      <DayCounter days={days} inView={inView} />
-    </text>
-  );
-}
-
-function DayCounter({ days, inView }: { days: number; inView: boolean }) {
-  // We can't animate text content via framer-motion directly inside SVG <text>,
-  // so we render a few keyframes via tspans with cross-fades.
-  const keyframes = [0, Math.floor(days * 0.3), Math.floor(days * 0.6), days];
-  return (
-    <>
-      {keyframes.map((k, i) => (
-        <motion.tspan
-          key={i}
-          x="0"
-          dy={i === 0 ? 0 : -11}
-          initial={{ opacity: i === 0 ? 1 : 0 }}
-          animate={
-            inView
-              ? {
-                  opacity:
-                    i === 0
-                      ? [1, 1, 0]
-                      : i === keyframes.length - 1
-                        ? [0, 0, 1, 1]
-                        : [0, 0, 1, 1, 0],
-                }
-              : {}
-          }
-          transition={{
-            duration: 6,
-            times:
-              i === 0
-                ? [0, 0.2, 0.3]
-                : i === keyframes.length - 1
-                  ? [0, 0.7, 0.8, 1]
-                  : [0, (i - 0.5) / keyframes.length, i / keyframes.length, (i + 0.3) / keyframes.length, (i + 0.6) / keyframes.length],
-          }}
-        >
-          DAY {k}
-        </motion.tspan>
-      ))}
-    </>
-  );
-}
-
-function CharacterMoodSwitcher({ inView }: { inView: boolean }) {
+function CharacterTimeline({ inView }: { inView: boolean }) {
   return (
     <>
       <motion.g
         initial={{ opacity: 1 }}
-        animate={inView ? { opacity: [1, 1, 0, 0] } : {}}
-        transition={{ duration: 6, times: [0, 0.4, 0.5, 1] }}
+        animate={inView ? { opacity: [1, 1, 0] } : {}}
+        transition={{ duration: 5, times: [0, 0.4, 0.45] }}
       >
         <Character mood="happy" />
       </motion.g>
       <motion.g
         initial={{ opacity: 0 }}
         animate={inView ? { opacity: [0, 0, 1, 1, 0] } : {}}
-        transition={{ duration: 6, times: [0, 0.5, 0.55, 0.75, 0.85] }}
+        transition={{ duration: 5, times: [0, 0.45, 0.5, 0.7, 0.75] }}
       >
         <Character mood="shocked" />
       </motion.g>
       <motion.g
         initial={{ opacity: 0 }}
         animate={inView ? { opacity: [0, 0, 1] } : {}}
-        transition={{ duration: 6, times: [0, 0.8, 0.9] }}
+        transition={{ duration: 5, times: [0, 0.7, 0.78] }}
       >
         <Character mood="sad" />
       </motion.g>
