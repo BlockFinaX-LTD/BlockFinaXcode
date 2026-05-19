@@ -20,6 +20,7 @@ import { TermsGate } from '@/components/terms-gate';
 import { AppHeader } from '@/components/app-header';
 import { BackupWarningBanner } from '@/components/wallet/backup-warning-banner';
 import { RiftWalletCard } from '@/components/wallet/rift-wallet-card';
+import { useRiftBalances } from '@/hooks/use-rift-balances';
 import { RiftHistoryCard } from '@/components/wallet/rift-history-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -117,8 +118,21 @@ export default function HomePage() {
     (sum: number, t: any) => sum + (t.usdValue || 0),
     0,
   );
-  const totalValue = nativeUsd + tokenUsd;
-  const isLoadingBalance = nativeBalanceQuery.isLoading || tokenBalanceQuery.isLoading;
+  const onChainTotalValue = nativeUsd + tokenUsd;
+
+  // ── Cross-chain truth ────────────────────────────────────────────────
+  // The per-chain RPC query above only sees the currently-selected network.
+  // If the user has balances on other chains (BSC / Lisk / Base) they show
+  // as $0 here even though the funds exist. The Rift SDK exposes balances
+  // across every chain the wallet has touched — sum that for the headline
+  // number, and only fall back to the per-chain on-chain RPC view when the
+  // Rift SDK hasn't loaded yet.
+  const { balances: riftBalances, isLoading: riftLoading } = useRiftBalances();
+  const riftTotal = riftBalances.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+  const hasRiftTotal = !riftLoading && riftBalances.length > 0;
+  const totalValue = hasRiftTotal ? riftTotal : onChainTotalValue;
+  const isLoadingBalance =
+    nativeBalanceQuery.isLoading || tokenBalanceQuery.isLoading || riftLoading;
 
   // Referral
   const { data: referralCode } = useQuery<{ code: string; currentUses: number }>({

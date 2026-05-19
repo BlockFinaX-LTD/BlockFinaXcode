@@ -3,12 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useTransactions } from '@/hooks/use-transactions';
 import { useWallet } from '@/hooks/use-wallet';
+import { useRiftBalances } from '@/hooks/use-rift-balances';
 import { getNetworkById } from '@/lib/networks';
 import { fetchCryptoPrices, getBnbPrice } from '@/lib/price-service';
 import { SendModal } from './send-modal';
 import { DepositModal } from './deposit-modal';
 import { RefreshCw, Send, ArrowDownLeft, Copy, Check } from 'lucide-react';
-import { EthIcon, UsdcIcon, UsdtIcon, BnbIcon } from '@/components/crypto-icons';
+import { TokenIcon, ChainIcon } from '@/components/crypto-icons-cdn';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BfxMark } from '@/components/ui/bfx';
 
@@ -70,8 +71,17 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
   const nativePrice = nativeSym === 'BNB' ? (bnbPrice ?? 0) : (ethPrice ?? 0);
   const nativeUsdValue = parseFloat(nativeBalance) * nativePrice;
 
-  // Derive total from the same backend data used by the asset rows (not from useTransactions)
-  const localTotalValue = nativeUsdValue + tokenBalances.reduce((sum: number, { usdValue }: any) => sum + (usdValue || 0), 0);
+  // Per-selected-chain on-chain total (legacy — only sees the current network's RPC)
+  const onChainTotalValue = nativeUsdValue + tokenBalances.reduce((sum: number, { usdValue }: any) => sum + (usdValue || 0), 0);
+
+  // Cross-chain Rift SDK total — sums balances across every chain the wallet
+  // touched, so funds on a chain the user hasn't currently selected still
+  // count toward "Total balance". Falls back to the on-chain value while
+  // Rift is loading or if it hasn't returned anything yet.
+  const { balances: riftBalances, isLoading: riftLoading } = useRiftBalances();
+  const riftTotal = riftBalances.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+  const hasRiftTotal = !riftLoading && riftBalances.length > 0;
+  const localTotalValue = hasRiftTotal ? riftTotal : onChainTotalValue;
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
@@ -150,8 +160,14 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
               className="w-full flex items-center gap-2 p-2.5 bg-white/[0.05] border border-white/10 rounded-xl cursor-pointer hover:bg-white/10 transition-colors text-left"
               onClick={handleCopyAddress}
             >
+              {/* Brand hexagon mark instead of the misleading address-hex-slice avatar
+                  (previously displayed e.g. "60" which read like a chain ID). */}
               <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                <span className="text-[11px] font-semibold text-white font-mono-data">{address.slice(2, 4).toUpperCase()}</span>
+                <BfxMark
+                  size={18}
+                  primary="rgba(255,255,255,0.95)"
+                  accent="rgba(255,255,255,0.55)"
+                />
               </div>
               <code className="text-xs text-white/75 flex-1 font-mono-data truncate">{formatAddress(address)}</code>
               {copied ? (
@@ -193,10 +209,15 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
           {/* Native token row */}
           <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${nativeSym === 'BNB' ? '' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                {nativeSym === 'BNB'
-                  ? <BnbIcon className="w-10 h-10" />
-                  : <EthIcon className="w-5 h-5" />}
+              <div className="relative">
+                <TokenIcon symbol={nativeSym} size={40} />
+                {/* Tiny chain badge on the bottom-right corner — tells you
+                    which network this balance lives on at a glance. */}
+                {chainId && (
+                  <div className="absolute -bottom-0.5 -right-0.5 ring-2 ring-background rounded-full">
+                    <ChainIcon chainId={chainId} size={14} />
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-sm font-semibold leading-tight">{nativeTokenName}</div>
@@ -215,16 +236,12 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
           {tokenBalances.map(({ token, balance, usdValue }: any) => (
             <div key={token.symbol} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: `${token.color}15` }}
-                >
-                  {token.symbol === 'USDC' || token.symbol === 'USDC.e' ? (
-                    <UsdcIcon className="w-6 h-6" />
-                  ) : token.symbol === 'USDT' ? (
-                    <UsdtIcon className="w-6 h-6" />
-                  ) : (
-                    <span className="text-lg">{token.icon}</span>
+                <div className="relative">
+                  <TokenIcon symbol={token.symbol === 'USDC.e' ? 'USDC' : token.symbol} size={40} />
+                  {chainId && (
+                    <div className="absolute -bottom-0.5 -right-0.5 ring-2 ring-background rounded-full">
+                      <ChainIcon chainId={chainId} size={14} />
+                    </div>
                   )}
                 </div>
                 <div>

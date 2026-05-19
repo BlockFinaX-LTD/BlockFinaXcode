@@ -1,0 +1,192 @@
+{
+  "brand": {
+    "name": "BlockFinaX",
+    "tagline": "Insurance for currency fluctuation",
+    "tone": ["confident", "professional", "bold"],
+    "audience": {
+      "primary": "SME founders, CFOs, and finance leads at importers/exporters/payroll/B2B-payments/remittance companies operating in emerging markets with volatile currencies",
+      "segments": [
+        "Importers paying USD invoices from local currency in Ghana, Nigeria, Kenya, Egypt",
+        "Exporters receiving USD and converting to local currency in Tanzania, Uganda, Argentina, Turkey",
+        "Payroll providers paying out in local currency on USD-denominated contracts",
+        "Remittance corridor operators bridging USDC inflows to local-currency payouts",
+        "B2B payment companies looking to add an FX-hedge revenue line for their merchants"
+      ]
+    },
+    "language": "en-US"
+  },
+  "colors": {
+    "primary": "#1a4480",
+    "secondary": "#4a90e2",
+    "accent": "#6ea7e8",
+    "background": "#0f2744",
+    "foreground": "#ffffff",
+    "muted": "#c8ddff",
+    "extra": {
+      "deepNavy": "#0f2744",
+      "navy": "#1a4480",
+      "brandBlue": "#4a90e2",
+      "skyText": "#c8ddff",
+      "white": "#ffffff",
+      "charcoal": "#142639",
+      "successGreen": "#34d399",
+      "warningAmber": "#fbbf24",
+      "dangerRed": "#f87171",
+      "heroGradient": "radial-gradient(ellipse at 30% 0%, #2e5bba 0%, #1a4480 35%, #0f2744 70%, #081728 100%)",
+      "glow": "rgba(74, 144, 226, 0.35)"
+    }
+  },
+  "typography": {
+    "heading": {
+      "family": "Inter",
+      "weights": [600, 700, 800],
+      "fallback": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      "source": "google"
+    },
+    "body": {
+      "family": "Inter",
+      "weights": [400, 500],
+      "fallback": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      "source": "google"
+    },
+    "mono": {
+      "family": "JetBrains Mono",
+      "weights": [400, 600],
+      "fallback": "'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace",
+      "source": "google"
+    }
+  },
+  "logo": {
+    "light": "assets/blockfinax-logo.svg",
+    "dark": "assets/blockfinax-logo-transparent.png",
+    "mark": "assets/blockfinax-logo.svg",
+    "safeZone": 0.1,
+    "minHeight": 64
+  },
+  "video": {
+    "platform": "tiktok",
+    "aspectRatio": "9:16",
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "durationInSeconds": 30
+  },
+  "content": {
+    "headline": "Insurance for currency fluctuation.",
+    "subheadline": "Pay a small premium. Keep your working capital. Get paid out when the rate moves against you.",
+    "cta": {
+      "text": "Read the docs",
+      "url": "https://docs.blockfinax.com"
+    },
+    "script": "Your currency just dropped 12% overnight. Your $50,000 invoice just lost $6,000 in value. Welcome to running a business in an emerging market. // Traditional FX hedging asks you to lock up 30 to 50 percent of the notional, with a $100,000 minimum. If you're an SME, you can't afford that. So you don't hedge. And you eat the loss. // BlockFinaX is different. Pay a small premium, like insurance. Keep your working capital. If the rate moves against you, the smart contract pays you out automatically. No claim forms. No broker. Just instant settlement. // Backed by 22 years of FX data. 84 supported pairs. $1,000 minimum. 1 to 3 percent premium. // Stop absorbing FX losses. Start hedging like a Fortune 500.",
+    "scenes": [
+      {
+        "id": "hook",
+        "role": "hook",
+        "durationInSeconds": 5,
+        "text": "Your currency just dropped 12% overnight.\nYour $50,000 invoice just lost $6,000.",
+        "voiceover": "Your currency just dropped 12% overnight. Your $50,000 invoice just lost $6,000 in value. Welcome to running a business in an emerging market.",
+        "bRoll": [
+          "Vertical: full-bleed deep-navy hero gradient. Large mono-typeface 'USD/GHS' ticker animating from 11.40 → 12.77 with a red downward arrow over the second number.",
+          "Bottom third: the dollar value '$50,000' typed in Inter 700, then morphing to '$50,000 → $44,000' with the delta '−$6,000' highlighted in dangerRed.",
+          "Subtle screen shake at the moment the rate jumps; a soft red glow vignette pulses once and recedes.",
+          "Avoid: globes, world maps, stacks-of-cash imagery."
+        ],
+        "notes": "Hook is purely numeric — no narration text on screen. Let the typography + tickers do the work. Music: low confident drone enters at 0:01."
+      },
+      {
+        "id": "problem",
+        "role": "problem",
+        "durationInSeconds": 7,
+        "text": "Traditional FX hedging:\n30–50% collateral lockup.\n$100,000 minimums.\nSo you don't hedge. You eat the loss.",
+        "voiceover": "Traditional FX hedging asks you to lock up 30 to 50 percent of the notional, with a $100,000 minimum. If you're an SME, you can't afford that. So you don't hedge. And you eat the loss.",
+        "bRoll": [
+          "Split-screen card layout. Left card (white-on-charcoal) labelled 'TRADITIONAL' shows two big mono callouts: '30–50%' (collateral) and '$100,000' (minimum). Each renders with a heavy lock-icon glyph beside it.",
+          "After 2 seconds the left card fades to 50% opacity and a translucent red 'LOCKED' diagonal stamp appears across it — the 'SME can't access this' beat.",
+          "Right side remains empty/dark — the implicit promise that BlockFinaX will fill it.",
+          "Music: low rumble, slight tension build."
+        ],
+        "notes": "This is the only beat where we explicitly call out the competition. Stay factual — no name-and-shame."
+      },
+      {
+        "id": "solution",
+        "role": "solution",
+        "durationInSeconds": 10,
+        "text": "BlockFinaX:\nPay a small premium. Keep your working capital.\nRate moves against you? Smart contract pays you out automatically.",
+        "voiceover": "BlockFinaX is different. Pay a small premium, like insurance. Keep your working capital. If the rate moves against you, the smart contract pays you out automatically. No claim forms. No broker. Just instant settlement.",
+        "bRoll": [
+          "Music shifts — tension resolves into a confident swell. Background gradient brightens to the brand hero (radial ellipse from #2e5bba → #1a4480 → #0f2744).",
+          "BlockFinaX hexagon logo enters from center, scaling up with a subtle blue glow accent matching the website hero.",
+          "Three on-screen data callouts in JetBrains Mono drop in stagger-fade: '1.7% premium' / '0% collateral' / 'auto-settled'.",
+          "Animated number ticker resolves to the AGAINST-YOU rate (12.50) hitting the configured cap, then a horizontal payout bar fills left-to-right with '+$87.72' counting up — a literal payout-in-real-time visual.",
+          "Avoid: anything that looks like a crypto-bro 'coin flying' animation. The vibe is Stripe's payments-flow microscale, not yieldfarm."
+        ],
+        "notes": "This is the longest beat. Voiceover pacing should match the three callouts (one per ~2.5s) and end on 'instant settlement' as the payout bar completes."
+      },
+      {
+        "id": "proof",
+        "role": "proof",
+        "durationInSeconds": 5,
+        "text": "22 years of FX data · 84 supported pairs · $1,000 minimum · 1–3% premium.",
+        "voiceover": "Backed by 22 years of FX data. 84 supported pairs. $1,000 minimum. 1 to 3 percent premium.",
+        "bRoll": [
+          "4-stat strip mirroring the website's stats section. Each cell: large mono number on top (e.g. '22+' in Inter 700, '84', '$1K', '1–3%') with a small Inter 500 caption below in skyText color.",
+          "Quick 1-line code snippet at the bottom in JetBrains Mono, dimmed but legible: POST https://api.blockfinax.com/v1/pricing/quote → 200 OK · $17.41 premium. Establishes 'this is a real API, not a deck'.",
+          "Music holds the resolved confident chord."
+        ],
+        "notes": "Numbers should feel auditable, not marketing-fluff. The API line is the integrator wink — most viewers won't read it, but the right viewer (a founder/CFO who's considering integrating) will."
+      },
+      {
+        "id": "cta",
+        "role": "cta",
+        "durationInSeconds": 3,
+        "text": "Stop absorbing FX losses. Start hedging like a Fortune 500.\ndocs.blockfinax.com",
+        "voiceover": "Stop absorbing FX losses. Start hedging like a Fortune 500.",
+        "bRoll": [
+          "Full-bleed brand-navy hero gradient.",
+          "Centered: BlockFinaX hexagon logomark (large, mark-only), then the tagline 'Stop absorbing FX losses. Start hedging like a Fortune 500.' typed in Inter 700.",
+          "URL chip below in JetBrains Mono on a translucent white pill: 'docs.blockfinax.com'.",
+          "Music resolves on a single sustained low chord that decays into silence on the last frame."
+        ],
+        "notes": "Keep the URL in mono so it's instantly readable and 'API-able-feeling'. Logomark only (no wordmark) — the BlockFinaX text is in the tagline above."
+      }
+    ]
+  },
+  "audio": {
+    "music": {
+      "source": "license",
+      "mood": "Trailer-house, deep + confident, slightly tense in hook/problem beats then resolving on the solution. Low bass drone with a single confident swell on the brand-reveal. Not bombastic — closer to a Stripe product launch than a movie trailer. Suggested licensing sources: Musicbed 'Cinematic Tension → Resolution' category, Artlist 'Inspiring Corporate' deep variants, or Epidemic Sound 'Trailer / Modern Cinematic' searches with BPM 70–90.",
+      "volume": 0.55
+    },
+    "sfx": [
+      {
+        "id": "rate-jump",
+        "at": 1.0,
+        "description": "Subtle low-thud + slight digital glitch the moment the USD/GHS ticker jumps. Should feel like a market alert, not a horror sting."
+      },
+      {
+        "id": "lock-stamp",
+        "at": 8.5,
+        "description": "Mechanical stamp/lock sound when the red LOCKED stamp lands on the traditional-hedging card."
+      },
+      {
+        "id": "payout-fill",
+        "at": 18.0,
+        "description": "Rising bright synth tail as the payout bar fills and the +$87.72 counter ticks up. Confident, not celebratory."
+      },
+      {
+        "id": "logo-stamp",
+        "at": 27.0,
+        "description": "One soft 'whoosh-into-place' tick as the hexagon logo lands on the CTA frame."
+      }
+    ],
+    "voiceover": {
+      "provider": "manual",
+      "locale": "en-US"
+    }
+  },
+  "meta": {
+    "createdAt": "2026-05-17",
+    "version": "0.1.0"
+  }
+}
