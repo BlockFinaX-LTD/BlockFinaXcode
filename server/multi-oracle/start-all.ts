@@ -2,16 +2,14 @@
  * start-all.ts
  *
  * Starts all three oracle nodes for each configured chain.
- * Supports Lisk, Base, and BSC in parallel — 9 processes total when all
- * three chains are configured (3 oracle keys × 3 chains).
+ * Supports Base and BSC in parallel — 6 processes total when both chains
+ * are configured (3 oracle keys × 2 chains).
  *
  * Required env vars (per chain):
- *   DIAMOND_ADDRESS         — Lisk Mainnet Diamond (existing)
  *   BASE_DIAMOND_ADDRESS    — Base Mainnet Diamond
  *   BSC_DIAMOND_ADDRESS     — BNB Smart Chain Diamond
  *
  * Optional:
- *   LISK_RPC_URL            — defaults to https://rpc.api.lisk.com
  *   BASE_RPC_URL            — defaults to https://mainnet.base.org
  *   BSC_RPC_URL             — defaults to https://bsc-dataseed.binance.org
  */
@@ -32,11 +30,6 @@ const ORACLE_NODES = [
 ];
 
 const CHAINS = [
-  {
-    label: "Lisk",
-    diamondAddress: process.env.DIAMOND_ADDRESS || "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
-    rpcUrl: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
-  },
   {
     label: "Base",
     diamondAddress: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",

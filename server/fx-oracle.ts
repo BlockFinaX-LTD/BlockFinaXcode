@@ -154,17 +154,8 @@ async function fetchRatesFromBackupSource(base: string): Promise<Record<string, 
 }
 
 // Settlement chains — read from env vars so Railway configuration controls which chains are active.
-// Fallback to known mainnet addresses so Lisk always works even if env vars aren't set.
+// Base + BSC only. Lisk was removed when smart-contract support was dropped.
 const SETTLEMENT_CHAINS = [
-  {
-    label: 'Lisk',
-    chainId: 1135,
-    diamondAddress: process.env.DIAMOND_ADDRESS || '0x69cB5BA093e44B345B617f72a148Ee43c4a18465',
-    rpcUrls: [
-      process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com',
-      'https://lisk.drpc.org',
-    ],
-  },
   {
     label: 'Base',
     chainId: 8453,

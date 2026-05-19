@@ -9,8 +9,8 @@ import { getNetworkByChainId, getNetworkById, NETWORKS } from './networks';
 import { getTokensForNetwork } from './tokens';
 
 function chainIdToNetworkId(chainId: number): number {
-  if (chainId === 1135) return 1;   // Lisk Mainnet
-  if (chainId === 4202) return 2;   // Lisk Sepolia
+  // Pass-through: NETWORKS now uses chainId-compatible internal IDs
+  // (3 = Base, 4 = BSC). Lisk support has been removed.
   return chainId;
 }
 
@@ -31,7 +31,7 @@ function getUsdcConfig(chainId: number): { address: string; rpcUrl: string; deci
 }
 
 class USDCManager {
-  async getUSDCBalance(walletAddress: string, chainId: number = 1135): Promise<string> {
+  async getUSDCBalance(walletAddress: string, chainId: number = 8453): Promise<string> {
     try {
       const config = getUsdcConfig(chainId);
       if (!config) {
@@ -51,7 +51,7 @@ class USDCManager {
     }
   }
 
-  async transferUSDC(fromSigner: ethers.Wallet, toAddress: string, amount: string, chainId: number = 1135): Promise<string> {
+  async transferUSDC(fromSigner: ethers.Wallet, toAddress: string, amount: string, chainId: number = 8453): Promise<string> {
     try {
       const config = getUsdcConfig(chainId);
       if (!config) {
@@ -77,7 +77,7 @@ class USDCManager {
     }
   }
 
-  async ensureTestUSDC(walletAddress: string, chainId: number = 1135): Promise<boolean> {
+  async ensureTestUSDC(walletAddress: string, chainId: number = 8453): Promise<boolean> {
     try {
       const balance = await this.getUSDCBalance(walletAddress, chainId);
       const balanceNum = parseFloat(balance);
@@ -92,7 +92,7 @@ class USDCManager {
     }
   }
 
-  async getFormattedBalance(walletAddress: string, chainId: number = 1135): Promise<{ balance: string; needsTestTokens: boolean }> {
+  async getFormattedBalance(walletAddress: string, chainId: number = 8453): Promise<{ balance: string; needsTestTokens: boolean }> {
     const balance = await this.getUSDCBalance(walletAddress, chainId);
     const needsTestTokens = await this.ensureTestUSDC(walletAddress, chainId);
     

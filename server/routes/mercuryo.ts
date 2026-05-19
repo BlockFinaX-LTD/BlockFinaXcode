@@ -14,8 +14,7 @@ function getMercuryoNetwork(chainId: number): string {
   switch (chainId) {
     case 56:   return "BSC";
     case 8453: return "BASE";
-    case 1135: return "ETHEREUM"; // Lisk — Mercuryo routes via ETH network
-    default:   return "ETHEREUM";
+        default:   return "ETHEREUM";
   }
 }
 
@@ -41,7 +40,7 @@ export function registerMercuryoRoutes(app: Express) {
         });
       }
 
-      const { address, chainId = 1135, currency = "USDC" } = req.body;
+      const { address, chainId = 8453, currency = "USDC" } = req.body;
 
       if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
         return res.status(400).json({ error: "Invalid wallet address" });

@@ -85,7 +85,7 @@ export const MONTH_LABELS = [
 export const INITIAL_CONSTANTS: Constants = {
   hedgeYield: 0.007,
   eventCreationFee: 2,
-  gasPerEvent: 0.05,            // Lisk L2 (OP Stack): ~6 txns × ~$0.008 per txn = ~$0.05
+  gasPerEvent: 0.05,            // Base (OP Stack L2): ~6 txns × ~$0.008 per txn = ~$0.05
   gasPerWallet: 3,
   kycPerWallet: 1.50,
   avgMonthlyTransferUSD: 500,
@@ -124,7 +124,7 @@ export const INITIAL_FUNDING: FundingEntry[] = [
 //     H1 2029: CAC $10–14 — referrals now dominant channel.
 //     2030: CAC $4–6 — steady-state platform/network effect acquisition.
 //   • Break-even: ~Jul 2028 (Month 25) — under 2 years from launch.
-//   • gasPerWallet: $3 (Lisk L2); Headcount: 5 → 71 (unchanged)
+//   • gasPerWallet: $3 (Base L2); Headcount: 5 → 71 (unchanged)
 export const INITIAL_INPUTS: InputRow[] = [
   // H2 2026 — Beta/Pilot (months 1-6)
   { events:    20, avgNotional:  8000, walletPct: 5, newWallets:     65, headcount: 5, salaryPerFTE:2250, cac:40, legal:15000, infraCloud:  600, oracle:  300, ga: 1200 },

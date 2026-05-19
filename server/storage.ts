@@ -190,11 +190,11 @@ export class MemStorage implements IStorage {
   private async initializeDefaultNetworks(): Promise<void> {
     const defaultNetworks: InsertNetwork[] = [
       {
-        name: "Lisk Sepolia",
+        name: "Base Sepolia",
         chainId: 4202,
-        rpcUrl: "https://rpc.sepolia-api.lisk.com",
+        rpcUrl: "https://sepolia.base.org",
         symbol: "ETH",
-        blockExplorerUrl: "https://sepolia-blockscout.lisk.com",
+        blockExplorerUrl: "https://sepolia.basescan.org",
         isTestnet: true
       }
     ];

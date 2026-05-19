@@ -138,7 +138,7 @@ export async function registerProtocolRoutes(app: Express) {
       const addr = req.riftUser!.address;           // already lowercased + verified by Rift
       const walletAddress = addr;
       const now = Date.now();
-      const cooldownKey = `${addr}:${chainId || 1135}`;
+      const cooldownKey = `${addr}:${chainId || 8453}`;
       const lastSponsored = gasSponsorCooldown.get(cooldownKey) || 0;
       if (now - lastSponsored < 60000) return res.json({ success: true, sponsored: false, message: "Recently sponsored" });
 
@@ -146,13 +146,12 @@ export async function registerProtocolRoutes(app: Express) {
       const deployerKey = process.env.DEPLOYER_PRIVATE_KEY;
       if (!deployerKey) return res.status(500).json({ message: "Gas sponsor not configured" });
 
-      // Select RPC based on chainId — default to Lisk
+      // Select RPC based on chainId — default to Base
       const RPC_BY_CHAIN: Record<number, string> = {
-        1135: "https://rpc.api.lisk.com",
         8453: "https://mainnet.base.org",
         56:   "https://bsc-dataseed.binance.org",
       };
-      const rpc = RPC_BY_CHAIN[Number(chainId)] || "https://rpc.api.lisk.com";
+      const rpc = RPC_BY_CHAIN[Number(chainId)] || "https://mainnet.base.org";
       const provider = new ethers.JsonRpcProvider(rpc);
 
       const userBalance = await provider.getBalance(walletAddress);
@@ -306,7 +305,6 @@ export async function registerProtocolRoutes(app: Express) {
         'function isAuthorisedOracle(address) view returns (bool)',
       ];
       const CHAINS = [
-        { label: 'Lisk',   chainId: 1135, diamond: process.env.DIAMOND_ADDRESS     || '0x69cB5BA093e44B345B617f72a148Ee43c4a18465', rpc: process.env.LISK_RPC_URL || 'https://rpc.api.lisk.com' },
         { label: 'Base',   chainId: 8453, diamond: process.env.BASE_DIAMOND_ADDRESS || '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef', rpc: process.env.BASE_RPC_URL || 'https://mainnet.base.org' },
         { label: 'BSC',    chainId: 56,   diamond: process.env.BSC_DIAMOND_ADDRESS  || '0xaC939C0897981Abc0711ec4e37527F13106180fc', rpc: process.env.BSC_RPC_URL  || 'https://bsc-dataseed.binance.org' },
       ].filter(c => !!c.diamond);
@@ -683,7 +681,7 @@ export async function registerProtocolRoutes(app: Express) {
       if (!treasuryPrivateKey) return res.status(500).json({ message: "Treasury wallet not configured" });
 
       const ethers = await import("ethers");
-      const provider = new ethers.JsonRpcProvider("https://rpc.sepolia-api.lisk.com");
+      const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
       const treasuryWallet = new ethers.Wallet(treasuryPrivateKey, provider);
       const usdcAddress = "0xf52Ad63619Bf9cFeF510341ac6b4038554399562";
       const usdcContract = new ethers.Contract(usdcAddress, [

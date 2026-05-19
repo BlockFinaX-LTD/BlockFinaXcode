@@ -234,7 +234,6 @@ export const CHAIN_ID_TO_RIFT: Record<number, ChainName> = {
   137: 'POLYGON',
   42161: 'ARBITRUM',
   1: 'ETHEREUM',
-  1135: 'LISK',
   56: 'BNB',
   10: 'OPTIMISM',
   43114: 'AVAX',

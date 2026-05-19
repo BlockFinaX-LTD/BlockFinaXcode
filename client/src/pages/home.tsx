@@ -122,7 +122,7 @@ export default function HomePage() {
 
   // ── Cross-chain truth ────────────────────────────────────────────────
   // The per-chain RPC query above only sees the currently-selected network.
-  // If the user has balances on other chains (BSC / Lisk / Base) they show
+  // If the user has balances on other chains (BSC / Base) they show
   // as $0 here even though the funds exist. The Rift SDK exposes balances
   // across every chain the wallet has touched — sum that for the headline
   // number, and only fall back to the per-chain on-chain RPC view when the

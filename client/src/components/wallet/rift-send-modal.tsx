@@ -33,7 +33,7 @@ interface RiftSendModalProps {
 
 const CHAIN_LABELS: Record<string, string> = {
   BASE: 'Base', POLYGON: 'Polygon', ARBITRUM: 'Arbitrum', ETHEREUM: 'Ethereum',
-  LISK: 'Lisk', BNB: 'BNB Chain', BSC: 'BNB Chain', OPTIMISM: 'Optimism', CELO: 'Celo',
+  BNB: 'BNB Chain', BSC: 'BNB Chain', OPTIMISM: 'Optimism', CELO: 'Celo',
   AVAX: 'Avalanche', BERACHAIN: 'Berachain',
 };
 
@@ -44,7 +44,6 @@ const CHAIN_ID_TO_NAME: Record<string, ChainName> = {
   '10':    'OPTIMISM',
   '56':    'BNB',
   '137':   'POLYGON',
-  '1135':  'LISK',
   '8453':  'BASE',
   '42161': 'ARBITRUM',
   '42220': 'CELO',
@@ -457,7 +456,6 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
                   if (c === 'POLYGON') return `https://polygonscan.com/tx/${resultHash}`;
                   if (c === 'ARBITRUM') return `https://arbiscan.io/tx/${resultHash}`;
                   if (c === 'OPTIMISM') return `https://optimistic.etherscan.io/tx/${resultHash}`;
-                  if (c === 'LISK') return `https://blockscout.lisk.com/tx/${resultHash}`;
                   if (c === 'CELO') return `https://celoscan.io/tx/${resultHash}`;
                   if (c === 'AVAX') return `https://snowtrace.io/tx/${resultHash}`;
                   return `https://etherscan.io/tx/${resultHash}`;

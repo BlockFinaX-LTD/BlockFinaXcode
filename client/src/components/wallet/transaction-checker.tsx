@@ -270,7 +270,7 @@ export function TransactionChecker() {
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     <div className="space-y-2">
-                      <p>Transaction not found on Lisk mainnet.</p>
+                      <p>Transaction not found on Base mainnet.</p>
                       <p className="text-sm">This could mean:</p>
                       <ul className="text-sm list-disc list-inside space-y-1">
                         <li>The transaction hash is incorrect</li>
@@ -312,7 +312,7 @@ export function TransactionChecker() {
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              This wallet operates on Lisk mainnet. Make sure any ETH or USDC you send is on the Lisk mainnet network (chain ID 1135).
+              This wallet operates on Base and BNB Smart Chain. Make sure any ETH, BNB, or USDC you send is on one of these networks (chain ID 8453 or 56).
             </AlertDescription>
           </Alert>
         </CardContent>

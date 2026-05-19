@@ -23,10 +23,8 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api-client";
 import logoPath from "@/assets/logo.png";
-import ayaLogoPath from "@assets/image_1771686009850.png";
 import appScreenshotImg from "@assets/1_1772315359090.png";
 import tradingChartsImg from "@assets/stock_images/hero_mobile_finance.jpg";
-import liskLogoPath from "@assets/image_1771686108120.png";
 
 const FLAG_MAP: Record<string, string> = {
   'GHS': '\u{1F1EC}\u{1F1ED}', 'NGN': '\u{1F1F3}\u{1F1EC}', 'KES': '\u{1F1F0}\u{1F1EA}',
@@ -541,7 +539,7 @@ function FAQ() {
     },
     {
       q: "Is BlockFinaX live?",
-      a: "Yes — BlockFinaX is live on Lisk Mainnet. The Wallet, Hedge marketplace, and the full suite of 63 pairs are fully operational. Connect your wallet and start trading."
+      a: "Yes — BlockFinaX is live on Base and BNB Smart Chain. The Wallet, Hedge marketplace, and the full suite of 63 pairs are fully operational. Connect your wallet and start trading."
     },
     {
       q: "Is this regulated?",
@@ -794,29 +792,10 @@ export default function Website() {
                 </Link>
               </motion.div>
 
-              <motion.div initial={{ opacity: 0.7 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.2 }}
-                className="flex items-center justify-center md:justify-start gap-3 mb-5">
-                <span className="text-xs text-gray-400 uppercase tracking-wider">Backed by</span>
-                <motion.a href="https://www.ayadata.ai" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors"
-                  animate={{ y: [0, -4, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}>
-                  <img src={ayaLogoPath} alt="Aya" className="w-6 h-6 rounded" />
-                  <span className="text-sm font-medium text-gray-700">Aya</span>
-                </motion.a>
-                <motion.a href="https://lisk.com" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors"
-                  animate={{ y: [0, -4, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}>
-                  <img src={liskLogoPath} alt="Lisk" className="w-6 h-6" />
-                  <span className="text-sm font-medium text-gray-700">Lisk</span>
-                </motion.a>
-              </motion.div>
-
               <motion.div initial={{ opacity: 0.7 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.25 }}
                 className="flex items-center justify-center md:justify-start gap-2 text-sm text-gray-500">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span>Live on Lisk Mainnet</span>
+                <span>Live on Base &amp; BNB Smart Chain</span>
               </motion.div>
             </div>
 

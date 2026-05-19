@@ -1,55 +1,49 @@
 /**
  * Hedge Contract Integration - Direct on-chain calls to the HedgeFacet
  *
- * All interaction with the BlockFinaX Diamond contract on Lisk Mainnet goes through this file.
+ * All interaction with the BlockFinaX Diamond contracts goes through this file.
+ * Supported chains: Base (8453) and BSC (56). Lisk has been removed — we no
+ * longer deploy smart contracts on the Lisk network.
+ *
  * Covers: event creation, buying protection (hedger), providing liquidity (LP),
  * claiming payouts, withdrawing LP funds, fetching event and position data.
- * Contract address: 0x69cB5BA093e44B345B617f72a148Ee43c4a18465 (Diamond — Lisk Mainnet)
  * Exports: DIAMOND_ADDRESS, USDC_ADDRESS, getHedgeFacetContract, createHedgeEvent,
  *          buyProtection, depositLiquidity, claimPayout, withdrawLiquidity, and more.
  */
 import { ethers } from 'ethers';
 
-export const DIAMOND_ADDRESS = '0x69cB5BA093e44B345B617f72a148Ee43c4a18465';
-export const USDC_ADDRESS = '0xF242275d3a6527d877f2c927a82D9b057609cc71';
+// Default chain = Base
+export const DIAMOND_ADDRESS = '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef';
+export const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
-export const LISK_SEPOLIA_CHAIN_ID = 1135;
-export const LISK_SEPOLIA_RPC = 'https://rpc.api.lisk.com';
-export const LISK_BLOCKSCOUT = 'https://blockscout.lisk.com/api';
 export const PRECISION = 1e6;
 
 export const CHAIN_RPC_MAP: Record<number, string> = {
-  1135: 'https://rpc.api.lisk.com',
   8453: 'https://mainnet.base.org',
   56:   'https://bsc-dataseed.binance.org',
 };
 
 export const CHAIN_EXPLORER_API_MAP: Record<number, string> = {
-  1135: 'https://blockscout.lisk.com/api',
   8453: 'https://base.blockscout.com/api',
   56:   'https://api.bscscan.com/api',
 };
 
 export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = {
-  1135: 6,
   8453: 6,
   56:   18,
 };
 
 export const CHAIN_DIAMOND_MAP: Record<number, string> = {
-  1135: '0x69cB5BA093e44B345B617f72a148Ee43c4a18465',  // Lisk Mainnet
   8453: '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',  // Base Mainnet
   56:   '0xaC939C0897981Abc0711ec4e37527F13106180fc',  // BSC Mainnet
 };
 
 export const CHAIN_USDC_MAP: Record<number, string> = {
-  1135: '0xF242275d3a6527d877f2c927a82D9b057609cc71',
   8453: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   56:   '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
 };
 
 export const CHAIN_USDT_MAP: Record<number, string> = {
-  1135: '',
   8453: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
   56:   '0x55d398326f99059fF775485246999027B3197955',
 };
@@ -59,13 +53,11 @@ export function getUsdtAddress(chainId: number): string {
 }
 
 export const CHAIN_SAFE_MAP: Record<number, string> = {
-  1135: '0xfce89FA90Ee1C78B15eE0f12f62B03153814699D',
   8453: '0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb',
   56:   '0x2a0ab363E01b518B189218e39f79Bfc3AE310807',
 };
 
 export const CHAIN_EXPLORER_MAP: Record<number, string> = {
-  1135: 'https://blockscout.lisk.com',
   8453: 'https://basescan.org',
   56:   'https://bscscan.com',
 };
@@ -83,7 +75,7 @@ export function getSafeAddress(chainId: number): string {
 }
 
 export function getExplorerUrl(chainId: number): string {
-  return CHAIN_EXPLORER_MAP[chainId] || 'https://blockscout.lisk.com';
+  return CHAIN_EXPLORER_MAP[chainId] || 'https://basescan.org';
 }
 
 const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa26174543ad38431274eed5';
@@ -247,7 +239,7 @@ function fromTimestampOrNull(ts: bigint): Date | null {
 class HedgeContractManager {
   private provider: ethers.JsonRpcProvider | null = null;
   private timestampCache: Map<string, Date> = new Map();
-  private _chainId: number = 1135;
+  private _chainId: number = 8453;   // default to Base
 
   /** Switch the active chain. Call this whenever the user changes network. */
   setChain(chainId: number): void {
@@ -266,7 +258,7 @@ class HedgeContractManager {
   }
 
   get activeExplorerApi(): string {
-    return CHAIN_EXPLORER_API_MAP[this._chainId] || LISK_BLOCKSCOUT;
+    return CHAIN_EXPLORER_API_MAP[this._chainId] || 'https://base.blockscout.com/api';
   }
 
   get tokenDecimals(): number {
@@ -303,8 +295,8 @@ class HedgeContractManager {
 
   /**
    * Return the on-chain address that actually holds funds and executes calls.
-   * AA chains (Base, BSC): smart account address (where user sends USDC).
-   * Legacy chains (Lisk): PKP EOA address.
+   * On the supported AA chains (Base, BSC) this is the smart-account address
+   * (where user sends USDC).
    */
   async getEffectiveAddress(fallback: string): Promise<string> {
     // With Rift, the smart wallet address is the same across all chains.
@@ -531,7 +523,7 @@ class HedgeContractManager {
       );
       const fees = await Promise.race([contract.getHedgeFeeConfig(), rpcTimeout]);
       // fees[0] is the raw on-chain creation fee in the token's smallest unit
-      // (e.g. 2000000 on Lisk = $2.00 USDC with 6 decimals). Format to human-readable.
+      // (e.g. 2000000 on Base = $2.00 USDC with 6 decimals). Format to human-readable.
       const dec = this.tokenDecimals;
       this.feeConfigCache = {
         creationFee: parseFloat(ethers.formatUnits(fees[0], dec)),

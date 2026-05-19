@@ -525,7 +525,7 @@ function HedgeSection() {
       </div>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
         <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-        <span>Hedge events and positions are permanent on-chain records on <strong>Lisk, Base, and BSC Mainnets</strong>. Resetting the platform database does not affect on-chain data.</span>
+        <span>Hedge events and positions are permanent on-chain records on <strong>Base and BSC Mainnets</strong>. Resetting the platform database does not affect on-chain data.</span>
       </div>
       <div className="flex gap-2">
         {(["events", "positions", "deposits"] as const).map(t => (
@@ -686,7 +686,7 @@ function RevenueSection() {
       </div>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
         <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-        <span>Revenue figures are read directly from the selected chain's Diamond contract — permanent on-chain records. Use the chain selector in the Protocol section to view fees across Lisk, Base, and BSC.</span>
+        <span>Revenue figures are read directly from the selected chain's Diamond contract — permanent on-chain records. Use the chain selector in the Protocol section to view fees across Base and BSC.</span>
       </div>
 
       <Card>
@@ -1105,19 +1105,6 @@ function slugify(s: string) {
 // Diamond proxy addresses match client/src/lib/hedge-contract.ts CHAIN_DIAMOND_MAP
 // — single source of truth lives there; if you ever rotate, update both.
 const ADMIN_CHAINS = {
-  lisk: {
-    label: "Lisk",
-    chainId: 1135, hex: "0x46F", rpc: "https://rpc.api.lisk.com",
-    diamond: "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
-    safe: "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D",
-    usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
-    usdt: null as string | null,
-    usdcDecimals: 6, usdtDecimals: 6,
-    explorer: "https://blockscout.lisk.com",
-    explorerApi: "https://blockscout.lisk.com/api",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://blockscout.lisk.com"],
-  },
   base: {
     label: "Base",
     chainId: 8453, hex: "0x2105", rpc: "https://mainnet.base.org",
@@ -1248,7 +1235,7 @@ interface ProtocolState {
 function ProtocolSection() {
   const { toast } = useToast();
   const { token } = useAdminToken();
-  const [selectedChainKey, setSelectedChainKey] = useState<AdminChainKey>("lisk");
+  const [selectedChainKey, setSelectedChainKey] = useState<AdminChainKey>("base");
   const cfg = ADMIN_CHAINS[selectedChainKey];
   const [backupBusy, setBackupBusy] = useState(false);
   const [oracleNodes, setOracleNodes] = useState<{ label: string; address: string | null; configured: boolean }[]>([]);

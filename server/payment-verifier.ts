@@ -1,7 +1,7 @@
 /**
  * Payment Verification Module
  * 
- * Verifies on-chain USDC token transactions on Lisk Sepolia.
+ * Verifies on-chain USDC token transactions on Base Sepolia.
  * Exports: verifyUSDCPayment, getPaymentNetworkConfig
  */
 
@@ -16,21 +16,21 @@ interface NetworkPaymentConfig {
 
 const TESTNET_CONFIG: NetworkPaymentConfig = {
   usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
-  rpcUrl: "https://rpc.sepolia-api.lisk.com",
+  rpcUrl: "https://sepolia.base.org",
   chainId: 4202,
-  name: "Lisk Sepolia"
+  name: "Base Sepolia"
 };
 
 const MAINNET_CONFIG: NetworkPaymentConfig = TESTNET_CONFIG;
 
 const MAINNET_RPC_FALLBACKS = [
-  "https://rpc.sepolia-api.lisk.com",
-  "https://lisk-sepolia.drpc.org"
+  "https://sepolia.base.org",
+  "https://base-sepolia.drpc.org"
 ];
 
 const TESTNET_RPC_FALLBACKS = [
-  "https://rpc.sepolia-api.lisk.com",
-  "https://lisk-sepolia.drpc.org"
+  "https://sepolia.base.org",
+  "https://base-sepolia.drpc.org"
 ];
 
 export function getNetworkMode(): "testnet" | "mainnet" {

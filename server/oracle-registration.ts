@@ -2,16 +2,15 @@
  * oracle-registration.ts
  *
  * Ensures oracle node wallets are registered on all configured Diamond
- * contracts at startup. Runs on Lisk, Base, and BSC in parallel when
- * the respective diamond address env vars are set.
+ * contracts at startup. Runs on Base and BSC in parallel when the
+ * respective diamond address env vars are set.
  *
  * Required (at least one):
- *   DIAMOND_ADDRESS         — Lisk Mainnet Diamond
  *   BASE_DIAMOND_ADDRESS    — Base Mainnet Diamond
  *   BSC_DIAMOND_ADDRESS     — BNB Smart Chain Diamond
  *
  * Optional (defaults to public RPCs):
- *   LISK_RPC_URL / BASE_RPC_URL / BSC_RPC_URL
+ *   BASE_RPC_URL / BSC_RPC_URL
  *
  * The same DEPLOYER_PRIVATE_KEY and ORACLE_KEY_A/B/C are used across
  * all chains. Safe to run every startup — idempotent.
@@ -26,11 +25,6 @@ const ORACLE_ABI = [
 ];
 
 const CHAINS = [
-  {
-    label: "Lisk",
-    diamondAddress: process.env.DIAMOND_ADDRESS || "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
-    rpcUrl: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
-  },
   {
     label: "Base",
     diamondAddress: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",

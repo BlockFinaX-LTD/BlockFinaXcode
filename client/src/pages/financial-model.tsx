@@ -116,7 +116,7 @@ async function downloadExcel(
     [''],
     ['CONSTANTS', '', 'Value', 'Description'],
     ['Hedge Yield (net)', '', constants.hedgeYield, '= events × notional × yield → hedge fees'],
-    ['Gas / Hedge Event ($)', '', constants.gasPerEvent, 'Lisk L2 (OP Stack) — ~6 txns × ~$0.008 each = ~$0.05'],
+    ['Gas / Hedge Event ($)', '', constants.gasPerEvent, 'Base (OP Stack L2) — ~6 txns × ~$0.008 each = ~$0.05'],
     ['Gas Cost / Wallet ($)', '', constants.gasPerWallet, 'One-time wallet creation gas, sponsored by platform'],
     ['D&A / Month ($)', '', constants.daMonthly, 'Audit + infra setup amortised over 24 months'],
     ['Tax Rate', '', constants.taxRate, 'Applied only on profitable months (EBT > 0)'],
@@ -558,7 +558,7 @@ export default function FinancialModel() {
                     {[
                       { label: 'Hedge Events',       tip: 'Number of P2P protection contracts written this month. Each event = one hedger buying downside protection from the LP pool. Revenue = Events × Notional × 0.7%.', vals: slice.map(r => num(r.events)),      neutral: true },
                       { label: 'Avg Notional ($)',    tip: 'Average contract size in USD. Hedge fees = Events × Avg Notional × 0.7%. Larger notional = higher fees collected per event.', vals: slice.map(r => fmt(r.avgNotional)), neutral: true },
-                      { label: 'New Wallets',        tip: 'New users onboarding this month. Gasless UX — platform sponsors $3 in gas per wallet on Lisk L2. Wallet transfer fees scale with the cumulative wallet base, not just new wallets.', vals: slice.map(r => num(r.newWallets)),   neutral: true },
+                      { label: 'New Wallets',        tip: 'New users onboarding this month. Gasless UX — platform sponsors $3 in gas per wallet on Base L2. Wallet transfer fees scale with the cumulative wallet base, not just new wallets.', vals: slice.map(r => num(r.newWallets)),   neutral: true },
                       { label: 'Cumulative Wallets', tip: 'Total registered wallets since Jul 2026 launch. Used to compute LTV and platform network effects.', vals: slice.map(r => num(r.cumWallets)),   neutral: true },
                       { label: 'Headcount',          tip: 'Full-time equivalents. Lean Africa-based team. Salary/FTE is editable per month in the Inputs tab — starting ~$4,500/FTE in H2 2026, rising to ~$6,800/FTE by Dec 2030. Blended average reflects seniority mix.', vals: slice.map(r => num(r.headcount)),    neutral: true },
                     ].map(row => (
@@ -589,7 +589,7 @@ export default function FinancialModel() {
 
                     <tr><td colSpan={slice.length + 1} className={secCls}>Cost of Goods Sold</td></tr>
                     {[
-                      { label: 'Gas Costs',             tip: 'Two components: (1) Wallet onboarding gas — platform sponsors gas per new wallet for frictionless UX. (2) Hedge execution gas — each hedge event requires ~6 on-chain transactions (createEvent, deposit, buyProtection, settleEvent, claimPayout, etc.). On Lisk L2 (OP Stack), each transaction costs ~$0.008, so ~$0.05 per full event lifecycle. Formula: (newWallets × $3) + (events × $0.05).', vals: slice.map(r => r.gasCost) },
+                      { label: 'Gas Costs',             tip: 'Two components: (1) Wallet onboarding gas — platform sponsors gas per new wallet for frictionless UX. (2) Hedge execution gas — each hedge event requires ~6 on-chain transactions (createEvent, deposit, buyProtection, settleEvent, claimPayout, etc.). On Base (OP Stack L2), each transaction costs ~$0.008, so ~$0.05 per full event lifecycle. Formula: (newWallets × $3) + (events × $0.05).', vals: slice.map(r => r.gasCost) },
                       { label: 'Oracle / RPC',          tip: 'One-touch settlement infrastructure. The oracle polls FX, commodity, and crypto prices every 5 minutes and auto-settles contracts when the strike price is hit.', vals: slice.map(r => r.oracleCost) },
                       { label: 'Creator Loyalty (5%)',  tip: '5% of hedge protocol fees distributed to event creators as a loyalty reward. Incentivises experienced traders and institutions to create high-quality hedge events that attract LPs and hedgers.', vals: slice.map(r => r.creatorLoyalty) },
                       { label: 'KYC / AML Compliance', tip: 'Per-wallet AML/KYC identity verification cost ($1.50/wallet). Required for regulatory compliance in all African markets — includes identity checks, sanctions screening, and ongoing monitoring.', vals: slice.map(r => r.kycCost) },
@@ -760,7 +760,7 @@ export default function FinancialModel() {
                     {/* COGS section */}
                     <tr><td colSpan={annualCosts.length + 1} className="text-[10px] px-3 py-1.5 bg-orange-50 text-orange-700 font-bold uppercase tracking-wider border-y border-orange-200">Cost of Goods Sold (COGS)</td></tr>
                     {[
-                      { key: 'gas'            as const, label: 'Gas Costs',           tip: 'Gas costs on Lisk L2 (OP Stack): $3 per new wallet (6 onboarding txns × ~$0.50 each on L2) plus $0.05 per hedge event (6 settlement txns × ~$0.008 each). Enables friction-free UX.' },
+                      { key: 'gas'            as const, label: 'Gas Costs',           tip: 'Gas costs on Base (OP Stack L2): $3 per new wallet (6 onboarding txns × ~$0.50 each on L2) plus $0.05 per hedge event (6 settlement txns × ~$0.008 each). Enables friction-free UX.' },
                       { key: 'oracle'         as const, label: 'Oracle / RPC',         tip: 'On-chain price feed & settlement infrastructure costs (FX, commodity, crypto every 5 min).' },
                       { key: 'creatorLoyalty' as const, label: 'Creator Loyalty (5%)', tip: '5% of hedge fees distributed to event creators as a protocol loyalty incentive.' },
                       { key: 'kyc'            as const, label: 'KYC / AML',            tip: '$1.50/wallet AML identity verification required for African market regulatory compliance.' },
@@ -1188,7 +1188,7 @@ export default function FinancialModel() {
                   <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">B · Cost of Goods Sold (COGS) — variable costs directly tied to volume</p>
                   <div className="space-y-2">
                     {[
-                      { label: 'Gas Costs',             formula: '(New Wallets × $3.00) + (Events × $0.05)', note: 'Wallet onboarding: 6 txns × ~$0.50 on Lisk L2 = $3.00. Hedge settlement: 6 txns × ~$0.008 = $0.05. Lisk is an OP Stack L2 — gas is ~50× cheaper than Ethereum mainnet.' },
+                      { label: 'Gas Costs',             formula: '(New Wallets × $3.00) + (Events × $0.05)', note: 'Wallet onboarding: 6 txns × ~$0.50 on Base L2 = $3.00. Hedge settlement: 6 txns × ~$0.008 = $0.05. Base is an OP Stack L2 — gas is ~50× cheaper than Ethereum mainnet.' },
                       { label: 'Oracle / RPC',          formula: 'Monthly oracle cost (manual input per month)', note: 'On-chain FX/commodity/crypto price feeds polled every 5 minutes. Costs scale with RPC call volume. Budget starts at $5K/month and rises with transaction throughput.' },
                       { label: 'Creator Loyalty (5%)',  formula: 'Hedge Fees × 5%', note: '5% of hedge protocol fees distributed back to event creators as a protocol loyalty incentive. Encourages liquidity depth and event quality.' },
                       { label: 'KYC / AML',             formula: 'New Wallets × $1.50', note: '$1.50 per wallet for identity verification. Regulatory requirement for African market operations. Covers basic AML screening required by BoG sandbox.' },
@@ -1271,7 +1271,7 @@ export default function FinancialModel() {
                     {[
                       { label: 'Hedge Yield (0.7%)', note: 'Blends 0.5% hedger premium + ~0.2% LP payout fee. The full blended yield if all settlement fees are counted is ~1.1%. Model uses 0.7% — conservative.' },
                       { label: 'LP Ratio Not Modelled', note: 'The model assumes every hedge event is fully funded by LPs. LP shortfall risk is not modelled. Protocol design ensures LP deposits precede hedger buys.' },
-                      { label: 'Gas Costs (Lisk L2)', note: 'Lisk is an OP Stack L2. Gas costs are ~50× lower than Ethereum mainnet. $3/wallet and $0.05/event are based on current L2 gas at ~$0.008/txn.' },
+                      { label: 'Gas Costs (Base L2)', note: 'Base is an OP Stack L2. Gas costs are ~50× lower than Ethereum mainnet. $3/wallet and $0.05/event are based on current L2 gas at ~$0.008/txn.' },
                       { label: 'Avg Monthly Transfer $500', note: 'Conservative estimate for active wallet transfer volume. Many African SMEs move $1,000–$5,000/month for trade settlement. Adjustable in constants.' },
                       { label: 'Tax Rate 25%', note: 'Approximate corporate tax rate for a Ghana-domiciled entity. No loss carryforward modelled — tax applies to all positive EBT months individually.' },
                       { label: 'D&A $4,000/month', note: 'Non-cash amortisation of capitalised platform development costs (smart contract audits, initial infrastructure). Has no cash impact — only affects EBIT and below.' },

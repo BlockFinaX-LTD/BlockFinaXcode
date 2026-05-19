@@ -15,7 +15,7 @@
  *   DIAMOND_ADDRESS    — Diamond contract address
  *
  * Optional:
- *   ORACLE_RPC_URL     — RPC endpoint (default: Lisk Sepolia)
+ *   ORACLE_RPC_URL     — RPC endpoint (default: Base Mainnet)
  *   ORACLE_POLL_MS     — Poll interval in ms (default: 300000 = 5 min)
  *
  * Run:
@@ -25,7 +25,7 @@
 import { OracleNode, PriceMap } from "./oracle-node";
 
 const RPC_URL =
-  process.env.ORACLE_RPC_URL || "https://rpc.sepolia-api.lisk.com";
+  process.env.ORACLE_RPC_URL || "https://mainnet.base.org";
 
 const DIAMOND_ADDRESS = process.env.DIAMOND_ADDRESS;
 const ORACLE_KEY_C = process.env.ORACLE_KEY_C;

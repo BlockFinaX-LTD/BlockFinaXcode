@@ -36,7 +36,7 @@ const TOKEN_CDN_URL: Record<string, string> = {
   ETH: `${TW_ASSETS_ROOT}/ethereum/info/logo.png`,
   BNB: `${TW_ASSETS_ROOT}/binance/info/logo.png`,
   // Stablecoins — using the canonical Ethereum-mainnet contracts (Trust Wallet
-  // mirrors logos across chains, so this works for Base/BSC/Lisk too).
+  // mirrors logos across chains, so this works for Base/BSC too).
   USDC: `${TW_ASSETS_ROOT}/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png`,
   USDT: `${TW_ASSETS_ROOT}/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png`,
   DAI: `${TW_ASSETS_ROOT}/ethereum/assets/0x6B175474E89094C44Da98b954EedeAC495271d0F/logo.png`,
@@ -104,7 +104,6 @@ const CHAIN_CDN_URL: Record<number, string> = {
   1:    `${TW_ASSETS_ROOT}/ethereum/info/logo.png`,
   56:   `${TW_ASSETS_ROOT}/smartchain/info/logo.png`,
   8453: `${TW_ASSETS_ROOT}/base/info/logo.png`,
-  1135: `${TW_ASSETS_ROOT}/ethereum/info/logo.png`,  // Lisk → Trust Wallet doesn't have a logo; ETH fallback
   137:  `${TW_ASSETS_ROOT}/polygon/info/logo.png`,
   42161:`${TW_ASSETS_ROOT}/arbitrum/info/logo.png`,
   10:   `${TW_ASSETS_ROOT}/optimism/info/logo.png`,
@@ -114,7 +113,6 @@ const CHAIN_NAME: Record<number, string> = {
   1: "Ethereum",
   56: "BNB Smart Chain",
   8453: "Base",
-  1135: "Lisk",
   137: "Polygon",
   42161: "Arbitrum",
   10: "Optimism",

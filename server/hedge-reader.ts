@@ -1,20 +1,14 @@
 /**
  * Hedge Reader - Reads live hedge event data directly from the blockchain
  *
- * Connects to all three mainnet Diamond contracts (Lisk, Base, BSC) and
- * aggregates hedge events, positions, LP deposits, and platform fees.
+ * Connects to the two mainnet Diamond contracts (Base, BSC) and aggregates
+ * hedge events, positions, LP deposits, and platform fees. Lisk support
+ * was removed when smart-contract deployment on Lisk was dropped.
  * Used by the admin dashboard and hedge marketplace API.
  */
 import { ethers } from 'ethers';
 
 const CHAINS = [
-  {
-    id: 1135,
-    name: 'Lisk',
-    diamond: process.env.DIAMOND_ADDRESS || '0x69cB5BA093e44B345B617f72a148Ee43c4a18465',
-    rpcs: ['https://rpc.api.lisk.com', 'https://lisk.drpc.org'],
-    decimals: 6,
-  },
   {
     id: 8453,
     name: 'Base',

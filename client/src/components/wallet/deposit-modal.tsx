@@ -75,7 +75,7 @@ export function DepositModal({ isOpen, onClose, selectedNetworkId = 1 }: Deposit
       const res = await fetch('/api/mercuryo/sign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, chainId: network?.chainId ?? 1135, currency: selectedCurrency }),
+        body: JSON.stringify({ address, chainId: network?.chainId ?? 8453, currency: selectedCurrency }),
       });
       const data = await res.json();
       if (!data.configured) {
@@ -183,7 +183,7 @@ export function DepositModal({ isOpen, onClose, selectedNetworkId = 1 }: Deposit
             <div className="bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs">
               <p className="font-medium text-amber-700 dark:text-amber-300 mb-1">Supported Networks</p>
               <p className="text-amber-600 dark:text-amber-400">
-                Send to this address on <strong>Lisk, Base, or BSC Mainnet</strong>. Make sure the network matches.
+                Send to this address on <strong>Base or BSC Mainnet</strong>. Make sure the network matches.
               </p>
             </div>
 
@@ -240,7 +240,7 @@ export function DepositModal({ isOpen, onClose, selectedNetworkId = 1 }: Deposit
             <div className="space-y-2 text-xs text-muted-foreground">
               <div className="flex justify-between py-1 border-b border-border/50">
                 <span>Network</span>
-                <span className="font-medium text-foreground">{network?.name ?? 'Lisk'}</span>
+                <span className="font-medium text-foreground">{network?.name ?? 'Base'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-border/50">
                 <span>Receiving address</span>

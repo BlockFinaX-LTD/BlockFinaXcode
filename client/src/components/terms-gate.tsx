@@ -110,7 +110,7 @@ export function TermsModal({ walletAddress, onAccept }: TermsModalProps) {
             onScroll={handleScroll}
             style={{ minHeight: 0 }}
           >
-            <p>BlockFinaX is a decentralised peer-to-peer hedging protocol. You interact directly with open-source smart contracts on the Lisk Layer 2 blockchain. BlockFinaX does not hold your funds, act as a counterparty, or provide financial advice.</p>
+            <p>BlockFinaX is a decentralised peer-to-peer hedging protocol. You interact directly with open-source smart contracts on Base and BNB Smart Chain. BlockFinaX does not hold your funds, act as a counterparty, or provide financial advice.</p>
             <p>Use of this protocol involves significant risks including smart contract vulnerabilities, oracle failures, FX volatility, and liquidity limitations. You may lose all funds you commit to the protocol.</p>
             <p>The protocol is restricted to users who are legally permitted to use decentralised financial protocols in their jurisdiction. Use by persons in sanctioned jurisdictions or subject to OFAC restrictions is prohibited.</p>
             <p>All fees charged by the protocol are final and non-refundable. Protocol rules are enforced by smart contracts and cannot be overridden by BlockFinaX.</p>

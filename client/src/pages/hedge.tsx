@@ -374,7 +374,7 @@ export default function Hedge() {
   useEffect(() => { if (wallet?.address) loadPositions(); }, [wallet?.address]);
   useEffect(() => { if (wallet?.address) loadDeposits(); }, [wallet?.address]);
 
-  // Auto-switch to Base if no events found on current chain (e.g. existing user saved on Lisk)
+  // Auto-switch to Base if no events found on current chain (handles users on an inactive saved chain)
   useEffect(() => {
     if (!eventsLoading && events.length === 0 && !hasAutoSwitched && activeChainId !== 8453) {
       const baseNetwork = NETWORKS.find(n => n.chainId === 8453);

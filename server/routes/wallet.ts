@@ -106,13 +106,11 @@ export function registerWalletRoutes(app: Express) {
     try {
       const { address } = req.params;
       const { networkId } = req.query;
-      const chainId = networkId ? parseInt(networkId as string) : 1135;
+      const chainId = networkId ? parseInt(networkId as string) : 8453;
 
       const ethers = await import("ethers");
 
       const NATIVE_CONFIG: Record<number, { rpcUrl: string; symbol: string; name: string }> = {
-        1135: { rpcUrl: "https://rpc.api.lisk.com",           symbol: "ETH", name: "Ethereum" },
-        4202: { rpcUrl: "https://rpc.sepolia-api.lisk.com",   symbol: "ETH", name: "Ethereum" },
         8453: { rpcUrl: "https://mainnet.base.org",           symbol: "ETH", name: "Ethereum" },
         56:   { rpcUrl: "https://bsc-dataseed.binance.org",   symbol: "BNB", name: "BNB" },
       };
@@ -137,26 +135,12 @@ export function registerWalletRoutes(app: Express) {
     try {
       const { address } = req.params;
       const { networkId } = req.query;
-      const chainId = networkId ? parseInt(networkId as string) : 1135;
+      const chainId = networkId ? parseInt(networkId as string) : 8453;
 
       const ethers = await import("ethers");
 
       type TokenDef = { symbol: string; name: string; address: string; decimals: number; icon: string; color: string };
       const NETWORK_CONFIG: Record<number, { rpcUrl: string; tokens: TokenDef[] }> = {
-        1135: {
-          rpcUrl: "https://rpc.api.lisk.com",
-          tokens: [
-            { symbol: "USDC", name: "USD Coin", address: "0xF242275d3a6527d877f2c927a82D9b057609cc71", decimals: 6, icon: "💵", color: "#2775CA" },
-            { symbol: "USDT", name: "Tether USD", address: "0x05D032ac25d322df992303dCa074EE7392C117b9", decimals: 6, icon: "💲", color: "#26A17B" },
-          ],
-        },
-        4202: {
-          rpcUrl: "https://rpc.sepolia-api.lisk.com",
-          tokens: [
-            { symbol: "USDC", name: "Test USDC", address: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562", decimals: 6, icon: "💵", color: "#2775CA" },
-            { symbol: "USDT", name: "Tether USD", address: "0x05D032ac25d322df992303dCa074EE7392C117b9", decimals: 6, icon: "💲", color: "#26A17B" },
-          ],
-        },
         8453: {
           rpcUrl: "https://mainnet.base.org",
           tokens: [
@@ -215,14 +199,13 @@ export function registerWalletRoutes(app: Express) {
       const { networkId } = req.query;
 
       const EXPLORER_API: Record<number, { url: string; symbol: string; chain: string }> = {
-        1135: { url: 'https://blockscout.lisk.com/api',  symbol: 'LSK', chain: 'Lisk' },
         8453: { url: 'https://base.blockscout.com/api',  symbol: 'ETH', chain: 'Base' },
         56:   { url: 'https://api.bscscan.com/api',       symbol: 'BNB', chain: 'BSC'  },
       };
 
       // Known USDC/USDT token contracts (lower-case)
       const usdcContracts = new Set([
-        '0xf242275d3a6527d877f2c927a82d9b057609cc71', // Lisk USDC
+
         '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // Base USDC
         '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // Base USDT
         '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', // BSC USDC
@@ -233,7 +216,7 @@ export function registerWalletRoutes(app: Express) {
       const requestedChainId = networkId ? parseInt(networkId as string) : null;
       const chainsToQuery = (requestedChainId && EXPLORER_API[requestedChainId])
         ? [requestedChainId]
-        : [1135, 8453, 56];
+        : [8453, 56];
 
       // Map raw function signatures → friendly labels
       const FUNCTION_LABELS: Record<string, string> = {
@@ -405,8 +388,6 @@ export function registerWalletRoutes(app: Express) {
 
     const chainId = parseInt(req.params.chainId, 10);
     const RPC_LIST: Record<number, string[]> = {
-      1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
-      4202: ["https://rpc.sepolia-api.lisk.com"],
       8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
       56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
     };
@@ -465,8 +446,6 @@ export function registerWalletRoutes(app: Express) {
       const { ethers } = await import("ethers");
 
       const RPC_URLS: Record<number, string[]> = {
-        1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
-        4202: ["https://rpc.sepolia-api.lisk.com"],
         8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
         56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
       };
@@ -619,8 +598,6 @@ export function registerWalletRoutes(app: Express) {
       const { ethers } = await import("ethers");
 
       const RPC_URLS: Record<number, string[]> = {
-        1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
-        4202: ["https://rpc.sepolia-api.lisk.com"],
         8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
         56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
       };
@@ -661,8 +638,6 @@ export function registerWalletRoutes(app: Express) {
       const { ethers } = await import("ethers");
 
       const RPC_URLS: Record<number, string[]> = {
-        1135: ["https://rpc.api.lisk.com", "https://lisk.drpc.org"],
-        4202: ["https://rpc.sepolia-api.lisk.com"],
         8453: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
         56:   ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
       };

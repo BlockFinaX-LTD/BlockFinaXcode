@@ -340,24 +340,23 @@ const isProd = process.env.NODE_ENV === "production" || process.env.NETWORK_MODE
 const defaultNetworks = isProd
   ? [
       {
-        name: "Lisk",
-        chainId: 1135,
-        rpcUrl: "https://rpc.api.lisk.com",
+        name: "Base",
+        chainId: 8453,
+        rpcUrl: "https://mainnet.base.org",
         symbol: "ETH",
-        blockExplorerUrl: "https://blockscout.lisk.com",
+        blockExplorerUrl: "https://basescan.org",
+        isTestnet: false,
+      },
+      {
+        name: "BNB Smart Chain",
+        chainId: 56,
+        rpcUrl: "https://bsc-dataseed.binance.org",
+        symbol: "BNB",
+        blockExplorerUrl: "https://bscscan.com",
         isTestnet: false,
       },
     ]
-  : [
-      {
-        name: "Lisk Sepolia",
-        chainId: 4202,
-        rpcUrl: "https://rpc.sepolia-api.lisk.com",
-        symbol: "ETH",
-        blockExplorerUrl: "https://sepolia-blockscout.lisk.com",
-        isTestnet: true,
-      },
-    ];
+  : [];
 
 export async function initializeDatabase() {
   console.log("Initializing database...");

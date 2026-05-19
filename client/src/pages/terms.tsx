@@ -29,7 +29,7 @@ export default function TermsPage() {
           </div>
 
           <Section title="1. About the Protocol">
-            <p>BlockFinaX is a decentralised peer-to-peer (P2P) hedging protocol built on the Lisk Layer 2 blockchain network. The protocol enables users to create, buy, and provide liquidity for one-touch FX and commodity protection contracts governed entirely by open-source smart contracts.</p>
+            <p>BlockFinaX is a decentralised peer-to-peer (P2P) hedging protocol built on Base and BNB Smart Chain. The protocol enables users to create, buy, and provide liquidity for one-touch FX and commodity protection contracts governed entirely by open-source smart contracts.</p>
             <p>BlockFinaX Ltd and its contributors (collectively "BlockFinaX", "we", "us") develop and maintain the smart contract infrastructure and the interface at this domain. We do not operate as a counterparty, broker, exchange, or financial intermediary in any transaction executed through the protocol.</p>
           </Section>
 

@@ -257,7 +257,7 @@ export default function Whitepaper() {
               dispersed traders who require accessible, structured, and auditable risk management tools.
             </p>
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {["Version 1.1", "March 2026", "EVM Blockchain", "Mainnet Live", "Lisk Mainnet"].map(t => (
+              {["Version 1.1", "March 2026", "EVM Blockchain", "Mainnet Live", "Base & BSC"].map(t => (
                 <span key={t} className="px-2.5 py-1 rounded-full bg-muted border border-border">{t}</span>
               ))}
             </div>
@@ -1198,7 +1198,7 @@ export default function Whitepaper() {
             environment:
           </P>
           <BulletList items={[
-            { title: "Phase 1 (Mainnet Foundation)", body: "Live protocol on Lisk, Base, and BSC Mainnet using real stablecoins (USDC and USDT). Data collection on usage patterns and user demographics to inform regulatory submissions. Smart contract audits (v5 + v6 patches) applied." },
+            { title: "Phase 1 (Mainnet Foundation)", body: "Live protocol on Base and BSC Mainnet using real stablecoins (USDC and USDT). Data collection on usage patterns and user demographics to inform regulatory submissions. Smart contract audits (v5 + v6 patches) applied." },
             { title: "Phase 2 (Mainnet launch, 2026)", body: "Launch with voluntary KYC/AML verification available for institutional LPs. Geofencing of high-risk jurisdictions where legal advice indicates regulatory prohibitions. Engagement with Bank of Ghana sandbox formally initiated." },
             { title: "Phase 3 (Regulated operations, 2027)", body: "Full KYC/AML integration for all participants above defined thresholds, in jurisdictions requiring it. Formal licensing applications in Ghana and secondary markets as determined by regulatory engagement." },
             { title: "Phase 4 (Pan-African regulatory framework)", body: "Work with AfCFTA financial services protocol development to advocate for a harmonised regulatory framework for parametric protection products across member states." },
@@ -1221,7 +1221,7 @@ export default function Whitepaper() {
                 phase: "Phase 1", label: "Mainnet Foundation", timeline: "Q1–Q2 2026", status: "Complete",
                 color: "border-green-500/40 bg-green-500/5",
                 items: [
-                  "EVM mainnet deployment — live on Lisk, Base, and BSC",
+                  "EVM mainnet deployment — live on Base and BSC",
                   "63 pairs across FX (42), Commodities (11), Crypto (6, plus 4 planned)",
                   "Bidirectional (upward + downward) parametric protection",
                   "LP deposit, premium claim, and payout claim functionality",
@@ -1308,7 +1308,7 @@ export default function Whitepaper() {
             {[
               {
                 risk: "Smart contract risk",
-                detail: "The protocol's smart contracts have undergone multiple rounds of internal security review and audit patching (v5 and v6 fix sets applied pre-mainnet). Smart contracts are deployed on Lisk Mainnet and handle real value. A formal third-party audit is planned as a near-term priority. Smart contracts may still contain bugs or unintended behaviours and participants should size positions accordingly.",
+                detail: "The protocol's smart contracts have undergone multiple rounds of internal security review and audit patching (v5 and v6 fix sets applied pre-mainnet). Smart contracts are deployed on Base and BNB Smart Chain Mainnet and handle real value. A formal third-party audit is planned as a near-term priority. Smart contracts may still contain bugs or unintended behaviours and participants should size positions accordingly.",
               },
               {
                 risk: "Oracle and data source risk",
@@ -1384,7 +1384,7 @@ export default function Whitepaper() {
             financial innovation requires.
           </P>
           <P>
-            BlockFinaX is live on Lisk Mainnet. We invite businesses, traders,
+            BlockFinaX is live on Base and BNB Smart Chain Mainnet. We invite businesses, traders,
             liquidity providers, regulators, and builders to engage with the protocol, explore its
             mechanics, and contribute to the development of parametric protection infrastructure
             that serves the full breadth of Africa's market participants.

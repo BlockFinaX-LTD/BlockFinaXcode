@@ -8,7 +8,7 @@
 import { ethers } from "ethers";
 
 const USDC_ADDRESS = "0xf52Ad63619Bf9cFeF510341ac6b4038554399562";
-const LISK_SEPOLIA_RPC = "https://rpc.sepolia-api.lisk.com";
+const BASE_SEPOLIA_RPC = "https://sepolia.base.org";
 
 // ERC20 ABI for transfer function
 const ERC20_ABI = [
@@ -21,7 +21,7 @@ export class UnstakeManager {
   private treasuryWallet: ethers.Wallet | null = null;
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(LISK_SEPOLIA_RPC);
+    this.provider = new ethers.JsonRpcProvider(BASE_SEPOLIA_RPC);
     
     // Initialize treasury wallet from environment variable
     const treasuryPrivateKey = process.env.TREASURY_POOL_PRIVATE_KEY;

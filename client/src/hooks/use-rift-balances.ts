@@ -15,7 +15,6 @@ const NETWORK_ID_TO_RIFT_CHAIN: Record<number, ChainName> = {
   137: 'POLYGON',
   42161: 'ARBITRUM',
   1: 'ETHEREUM',
-  1135: 'LISK',
   56: 'BNB',
 };
 

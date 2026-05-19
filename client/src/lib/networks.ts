@@ -2,9 +2,10 @@
  * Networks - Blockchain network configurations
  *
  * Defines supported networks with RPC URLs and metadata.
- * Lisk Sepolia is the testnet. Mainnet supports Lisk (1135), Base (8453), and BSC (56).
- * Network mode controlled by VITE_NETWORK_MODE env var (default: "mainnet").
- * Set VITE_NETWORK_MODE=mainnet before building for production.
+ * Mainnet supports Base (8453) and BSC (56). Lisk has been removed — we
+ * no longer deploy smart contracts on the Lisk network.
+ * Testnet currently only has a Sepolia fallback. Network mode is controlled
+ * by VITE_NETWORK_MODE env var (default: "mainnet").
  * Exports: NETWORKS, TESTNET_NETWORKS, MAINNET_NETWORKS, NetworkConfig,
  *          getNetworkById, getNetworkByChainId, DEFAULT_NETWORK, isMainnet, getNetworkMode
  */
@@ -31,32 +32,11 @@ export function isMainnet(): boolean {
   return getNetworkMode() === "mainnet";
 }
 
-export const TESTNET_NETWORKS: NetworkConfig[] = [
-  {
-    id: 2,
-    name: "Lisk Sepolia",
-    chainId: 4202,
-    rpcUrl: "https://rpc.sepolia-api.lisk.com",
-    symbol: "ETH",
-    blockExplorerUrl: "https://sepolia-blockscout.lisk.com",
-    isTestnet: true,
-    color: "#4070F4",
-    icon: "fas fa-cube"
-  }
-];
+// No testnet networks currently configured. (Lisk Sepolia was the previous
+// testnet but Lisk support has been removed from the protocol.)
+export const TESTNET_NETWORKS: NetworkConfig[] = [];
 
 export const MAINNET_NETWORKS: NetworkConfig[] = [
-  {
-    id: 1,
-    name: "Lisk",
-    chainId: 1135,
-    rpcUrl: "https://rpc.api.lisk.com",
-    symbol: "ETH",
-    blockExplorerUrl: "https://blockscout.lisk.com",
-    isTestnet: false,
-    color: "#4070F4",
-    icon: "fas fa-cube"
-  },
   {
     id: 3,
     name: "Base",

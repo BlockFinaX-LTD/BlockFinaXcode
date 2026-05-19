@@ -49,14 +49,7 @@ app.use(helmet({
       fontSrc:        ["'self'", "data:", "https://fonts.gstatic.com"],
       connectSrc: [
         "'self'",
-        // Lisk
-        "https://rpc.sepolia-api.lisk.com",
-        "https://rpc.api.lisk.com",
-        "https://blockscout.lisk.com",
-        "https://sepolia-blockscout.lisk.com",
-        "wss://rpc.sepolia-api.lisk.com",
-        "wss://rpc.api.lisk.com",
-        // Base (multi-chain support added with v8)
+        // Base
         "https://mainnet.base.org",
         "https://sepolia.base.org",
         "https://base.blockscout.com",

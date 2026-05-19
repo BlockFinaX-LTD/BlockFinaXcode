@@ -252,8 +252,18 @@ export default function SettingsPage() {
           <CardContent className="p-0 divide-y divide-border/60">
             <Row
               icon={Globe}
-              label="Lisk Mainnet"
-              sub="Chain ID 1135 · Live network"
+              label="Base Mainnet"
+              sub="Chain ID 8453 · Live network"
+              trailing={
+                <Pill tone="success" uppercase={false}>
+                  <Dot size={4} className="text-emerald-500" /> Live
+                </Pill>
+              }
+            />
+            <Row
+              icon={Globe}
+              label="BNB Smart Chain"
+              sub="Chain ID 56 · Live network"
               trailing={
                 <Pill tone="success" uppercase={false}>
                   <Dot size={4} className="text-emerald-500" /> Live
@@ -263,8 +273,8 @@ export default function SettingsPage() {
             <Row
               icon={ExternalLink}
               label="Block explorer"
-              sub="View transactions on Blockscout"
-              onClick={() => window.open('https://blockscout.lisk.com', '_blank')}
+              sub="View transactions on Basescan"
+              onClick={() => window.open('https://basescan.org', '_blank')}
             />
           </CardContent>
         </Card>
@@ -301,13 +311,13 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1.5 px-1 font-mono-data">
-              {shortAddr(wallet.address)} · Lisk Mainnet
+              {shortAddr(wallet.address)} · Base &amp; BSC Mainnet
             </p>
           </div>
         )}
 
         <p className="text-center text-[11px] text-muted-foreground mt-8 mb-2">
-          BlockFinaX · Lisk Mainnet
+          BlockFinaX · Base &amp; BNB Smart Chain
         </p>
       </main>
 

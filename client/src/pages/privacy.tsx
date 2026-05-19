@@ -64,7 +64,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="5. On-Chain Data">
-            <p>Transactions you submit through the protocol are recorded permanently on the Lisk Layer 2 blockchain and are publicly visible. This includes wallet addresses, transaction amounts, contract interactions, and timestamps. BlockFinaX has no ability to alter or delete on-chain data. This data is outside the scope of this Privacy Policy.</p>
+            <p>Transactions you submit through the protocol are recorded permanently on Base and BNB Smart Chain and are publicly visible. This includes wallet addresses, transaction amounts, contract interactions, and timestamps. BlockFinaX has no ability to alter or delete on-chain data. This data is outside the scope of this Privacy Policy.</p>
           </Section>
 
           <Section title="6. Data Sharing">

@@ -100,7 +100,6 @@ class MainnetGuard {
     }
 
     const SUPPORTED_MAINNET_CHAINS: Record<number, string> = {
-      1135: "Lisk Mainnet",
       8453: "Base Mainnet",
       56:   "BNB Smart Chain Mainnet",
     };
@@ -108,7 +107,7 @@ class MainnetGuard {
     if (!SUPPORTED_MAINNET_CHAINS[chainId]) {
       return {
         allowed: false,
-        reason: `Invalid chain for mainnet. Got chain ${chainId}. Supported chains: Lisk (1135), Base (8453), BSC (56).`
+        reason: `Invalid chain for mainnet. Got chain ${chainId}. Supported chains: Base (8453), BSC (56).`
       };
     }
 

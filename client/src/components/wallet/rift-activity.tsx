@@ -67,7 +67,7 @@ export type ActivityRow = TransferRow | HedgeRow;
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 const CHAIN_ID_TO_NAME: Record<number, string> = {
-  1135: 'LISK', 8453: 'BASE', 56: 'BNB',
+  8453: 'BASE', 56: 'BNB',
   137: 'POLYGON', 42161: 'ARBITRUM', 1: 'ETHEREUM', 10: 'OPTIMISM',
 };
 
@@ -79,7 +79,6 @@ export function explorerUrl(chain: string, hash: string): string {
   if (c === 'polygon') return `https://polygonscan.com/tx/${hash}`;
   if (c === 'arbitrum') return `https://arbiscan.io/tx/${hash}`;
   if (c === 'optimism') return `https://optimistic.etherscan.io/tx/${hash}`;
-  if (c === 'lisk') return `https://blockscout.lisk.com/tx/${hash}`;
   if (c === 'celo') return `https://celoscan.io/tx/${hash}`;
   return `https://etherscan.io/tx/${hash}`;
 }

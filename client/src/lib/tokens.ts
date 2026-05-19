@@ -30,44 +30,9 @@ export const ERC20_ABI = [
 ];
 
 export const NETWORK_TOKENS: NetworkTokens = {
-  // Lisk Sepolia testnet (internal network ID 2)
-  2: [
-    {
-      symbol: 'USDC',
-      name: 'Test USDC',
-      address: '0xf52Ad63619Bf9cFeF510341ac6b4038554399562',
-      decimals: 6,
-      icon: '💵',
-      color: '#2775CA'
-    },
-    {
-      symbol: 'USDT',
-      name: 'Tether USD',
-      address: '0x05D032ac25d322df992303dCa074EE7392C117b9',
-      decimals: 6,
-      icon: '💲',
-      color: '#26A17B'
-    }
-  ],
-  // Lisk Mainnet (internal network ID 1)
-  1: [
-    {
-      symbol: 'USDC',
-      name: 'USD Coin',
-      address: '0xF242275d3a6527d877f2c927a82D9b057609cc71',
-      decimals: 6,
-      icon: '💵',
-      color: '#2775CA'
-    },
-    {
-      symbol: 'USDT',
-      name: 'Tether USD',
-      address: '0x05D032ac25d322df992303dCa074EE7392C117b9',
-      decimals: 6,
-      icon: '💲',
-      color: '#26A17B'
-    }
-  ],
+  // Lisk (network IDs 1 + 2) was removed when smart-contract support for
+  // Lisk was dropped. Supported networks: Base (3) and BSC (4).
+  //
   // Base Mainnet (internal network ID 3)
   3: [
     {

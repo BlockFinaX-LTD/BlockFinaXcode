@@ -47,7 +47,6 @@ interface ChainConfig {
   generation: "current" | "legacy";
 }
 
-const LISK_RPCS = [process.env.LISK_RPC_URL, "https://rpc.api.lisk.com", "https://lisk.drpc.org"].filter(Boolean) as string[];
 const BASE_RPCS = [process.env.BASE_RPC_URL, "https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"].filter(Boolean) as string[];
 
 // Public RPCs throttle hard under bursts. Space every call by this much.
@@ -56,12 +55,10 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const BSC_RPCS  = [process.env.BSC_RPC_URL,  "https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"].filter(Boolean) as string[];
 
 const CHAINS: ChainConfig[] = [
-  // Current production Diamonds (deployed 2026-04-06)
-  { label: "Lisk-current", chainId: 1135, diamond: "0x69cB5BA093e44B345B617f72a148Ee43c4a18465", rpcs: LISK_RPCS, paymentTokenDecimals: 6,  generation: "current" },
+  // Current production Diamonds (deployed 2026-04-06). Lisk has been removed.
   { label: "Base-current", chainId: 8453, diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef", rpcs: BASE_RPCS, paymentTokenDecimals: 6,  generation: "current" },
   { label: "BSC-current",  chainId: 56,   diamond: "0xaC939C0897981Abc0711ec4e37527F13106180fc", rpcs: BSC_RPCS,  paymentTokenDecimals: 18, generation: "current" },
   // Legacy Diamonds referenced by older admin pages
-  { label: "Lisk-legacy",  chainId: 1135, diamond: "0x885E663645173a0791b82f0e6608921D31E3D700", rpcs: LISK_RPCS, paymentTokenDecimals: 6,  generation: "legacy" },
   { label: "Base-legacy",  chainId: 8453, diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6", rpcs: BASE_RPCS, paymentTokenDecimals: 6,  generation: "legacy" },
   { label: "BSC-legacy",   chainId: 56,   diamond: "0xcC594031d1c059Eb1d6bCb0c7b1c82D31115E6E6", rpcs: BSC_RPCS,  paymentTokenDecimals: 18, generation: "legacy" },
 ];

@@ -34,12 +34,6 @@ interface ChainConfig {
 
 const CHAINS: ChainConfig[] = [
   {
-    label: "Lisk",
-    chainId: 1135,
-    diamondAddress: process.env.DIAMOND_ADDRESS || "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
-    rpcUrls: [process.env.LISK_RPC_URL || "https://rpc.api.lisk.com", "https://lisk.drpc.org"],
-  },
-  {
     label: "Base",
     chainId: 8453,
     diamondAddress: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",

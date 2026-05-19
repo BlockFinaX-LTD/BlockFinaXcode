@@ -9,8 +9,8 @@ import { getNetworkById, getNetworkByChainId } from "./networks";
 import { getTokensForNetwork } from "./tokens";
 
 function chainIdToNetworkId(chainId: number): number {
-  if (chainId === 1135) return 1;   // Lisk Mainnet
-  if (chainId === 4202) return 2;   // Lisk Sepolia
+  // Pass-through: NETWORKS uses chainId-compatible internal IDs. Lisk
+  // (1135, 4202) was removed when smart-contract support for Lisk was dropped.
   return chainId;
 }
 
@@ -46,7 +46,7 @@ export async function sendUSDCPayment(
   privateKey: string,
   toAddress: string,
   amountUSDC: string,
-  chainId: number = 1135
+  chainId: number = 8453
 ): Promise<PaymentResult> {
   try {
     

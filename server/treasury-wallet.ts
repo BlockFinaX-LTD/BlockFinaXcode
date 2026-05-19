@@ -23,16 +23,16 @@ export function isMainnetTreasury(): boolean {
 
 const NETWORK_CONFIGS = {
   testnet: {
-    rpcUrl: "https://rpc.sepolia-api.lisk.com",
+    rpcUrl: "https://sepolia.base.org",
     chainId: 4202,
     usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
-    name: "Lisk Sepolia"
+    name: "Base Sepolia"
   },
   mainnet: {
-    rpcUrl: "https://rpc.sepolia-api.lisk.com",
+    rpcUrl: "https://sepolia.base.org",
     chainId: 4202,
     usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
-    name: "Lisk Sepolia"
+    name: "Base Sepolia"
   }
 };
 

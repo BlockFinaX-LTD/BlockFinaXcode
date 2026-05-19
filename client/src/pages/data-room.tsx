@@ -197,7 +197,7 @@ const CATEGORIES = [
     color: "border-amber-200 bg-amber-50", iconColor: "text-amber-600",
     documents: [
       { id: "demo-video", title: "Product Demo Video", description: "Walkthrough of the Wallet and Hedge products on testnet — add your video link", href: null, type: "modal" as const, badge: "Video", badgeColor: "bg-amber-100 text-amber-700", icon: Video },
-      { id: "live-app", title: "Live Mainnet App", description: "Fully functional deployment on Lisk Mainnet — create a wallet and explore hedge markets with real USDC", href: "/home", type: "navigate" as const, badge: "Live", badgeColor: "bg-emerald-100 text-emerald-700", icon: Beaker },
+      { id: "live-app", title: "Live Mainnet App", description: "Fully functional deployment on Base Mainnet — create a wallet and explore hedge markets with real USDC", href: "/home", type: "navigate" as const, badge: "Live", badgeColor: "bg-emerald-100 text-emerald-700", icon: Beaker },
     ],
   },
   {
@@ -233,13 +233,13 @@ const CATEGORIES = [
 /* ─── CONTENT COMPONENTS ─── */
 
 const EXEC_D = {
-  intro: "BlockFinaX is a blockchain-native P2P parametric protection platform designed for African SMEs, traders, and cross-border businesses. Built on the EIP-2535 Diamond Standard on Lisk L2, it offers fully collateralised downside protection, stop-loss rebates, and volatility buffers across 63 asset pairs — covering 40+ African FX pairs, commodities, and major crypto assets.",
+  intro: "BlockFinaX is a blockchain-native P2P parametric protection platform designed for African SMEs, traders, and cross-border businesses. Built on the EIP-2535 Diamond Standard on Base L2, it offers fully collateralised downside protection, stop-loss rebates, and volatility buffers across 63 asset pairs — covering 40+ African FX pairs, commodities, and major crypto assets.",
   problem: "African SMEs conducting cross-border trade are structurally exposed to FX volatility, with swings of 8–25% common on pairs like GHS/USD, NGN/USD, and KES/USD. No accessible, transparent hedging product exists for sub-$1M trade flows. Banks ignore them. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs.",
   solution_hedge: "BlockFinaX Hedge — P2P one-touch parametric contracts. Hedgers buy downside protection against a specific FX strike level. LPs provide liquidity and earn premiums. No counterparty risk: payouts are reserved on-chain the moment a hedge is purchased. Settlement is automatic — triggered when the price touches the strike, or at expiry.",
   solution_wallet: "BlockFinaX Wallet — Non-custodial USDC wallet with AES-256 encrypted key storage, gasless transactions, and real-time cross-border transfers at 0.3% (min $0.50).",
-  traction: "Live on Lisk Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
-  technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Lisk L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
-  mainnet: "Live — Deployed on Lisk Mainnet, Base Mainnet, and BNB Smart Chain (Q1 2026). EIP-2535 Diamond proxy on each chain. All contracts verified (Blockscout on Lisk, Basescan on Base, BscScan on BSC). Gnosis Safe 2-of-3 multisig governs upgrades on all chains.",
+  traction: "Live on Base Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
+  technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Base L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
+  mainnet: "Live — Deployed on Base Mainnet and BNB Smart Chain (Q1 2026). EIP-2535 Diamond proxy on each chain. All contracts verified (Basescan on Base, BscScan on BSC). Gnosis Safe 2-of-3 multisig governs upgrades on all chains.",
   ask: [
     { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
     { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
@@ -289,7 +289,7 @@ function ExecSummary({ token }: { token: string }) {
       <p style={S.p}>{data.traction}</p>
       <h2 style={S.h2}>Technology</h2>
       <p style={S.p}>{data.technology}</p>
-      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond: 0x69cB5BA093e44B345B617f72a148Ee43c4a18465 · HedgeFacet: 0x77964366e43a1f2311b04801F37BFb772F84b0F5</p>
+      <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond (Base): 0xbCC51E62C4948FD35ab505bd71804C849601e4Ef · Diamond (BSC): 0xaC939C0897981Abc0711ec4e37527F13106180fc</p>
       <h2 style={S.h2}>The Ask</h2>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead>
@@ -390,7 +390,7 @@ function RevenueBreakdown() {
       <p style={S.p}>In 2027, hedge fees (including event creation) account for approximately <strong>{hedgePct27}%</strong> of total revenue, with wallet transfers contributing <strong>{walletPct27}%</strong>. By 2030, the wallet share grows as cross-border payment volume scales independently of hedge activity.</p>
 
       <h2 style={S.h2}>Margin Profile</h2>
-      <p style={S.p}>The platform is asset-light — BlockFinaX does not take principal risk. Hedges are fully collateralised by LPs. Revenue is purely fee-based. Gross margins reach <strong>{grossMargin30}%</strong> by 2030, as infrastructure costs (Lisk L2 gas, oracle, hosting) scale sub-linearly with volume.</p>
+      <p style={S.p}>The platform is asset-light — BlockFinaX does not take principal risk. Hedges are fully collateralised by LPs. Revenue is purely fee-based. Gross margins reach <strong>{grossMargin30}%</strong> by 2030, as infrastructure costs (Base L2 gas, oracle, hosting) scale sub-linearly with volume.</p>
     </div>
   );
 }
@@ -554,15 +554,6 @@ function SecurityAuditDoc({ token }: { token: string }) {
       <h2 style={S.h2}>Contract Addresses — Multi-Chain Deployment</h2>
       {[
         {
-          chain: "Lisk Mainnet", chainId: 1135, explorer: "https://blockscout.lisk.com",
-          diamond: "0x69cB5BA093e44B345B617f72a148Ee43c4a18465",
-          safe:    "0xfce89FA90Ee1C78B15eE0f12f62B03153814699D",
-          paySymbol: "USDC", payToken: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
-          cut:     "0x210e7e7Dd2E46f37a091a59A6fBCbCeBC1F783D7",
-          hedge:   "0x77964366e43a1f2311b04801F37BFb772F84b0F5",
-          oracle:  "0xca5946d2Acb788DCd792bb4Cef437f6CF6c6203B",
-        },
-        {
           chain: "Base Mainnet", chainId: 8453, explorer: "https://basescan.org",
           diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
           safe:    "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
@@ -685,7 +676,7 @@ function DemoVideoDoc({ token }: { token: string }) {
 
       <h2 style={S.h2}>What the Demo Covers</h2>
       <ul style={{ fontSize: "13px", color: "#475569", paddingLeft: "18px", lineHeight: 2 }}>
-        <li>Creating a non-custodial USDC wallet on Lisk Mainnet</li>
+        <li>Creating a non-custodial USDC wallet on Base Mainnet</li>
         <li>Browsing open hedge events across FX, commodities, and crypto pairs</li>
         <li>Buying a downside hedge — setting strike, notional, and expiry</li>
         <li>Providing liquidity as an LP and earning premiums</li>
@@ -703,7 +694,7 @@ const MARKET_D = {
   regional: "Pilot: Ghana (GHS pairs, Bank of Ghana sandbox approval) → 2027: Nigeria, Kenya → 2028: South Africa, Francophone West Africa (CEMAC/BCEAO currencies)",
   drivers: [
     { text: "594M mobile money accounts in Sub-Saharan Africa",              label: "Infrastructure" },
-    { text: "Lisk L2 near-zero gas fees enable micro-hedges from $10",       label: "Technology"     },
+    { text: "Base L2 near-zero gas fees enable micro-hedges from $10",       label: "Technology"     },
     { text: "USDC as settlement — no FX execution risk at point of hedge",   label: "Product"        },
     { text: "No incumbent serving sub-$1M cross-border trade hedging",       label: "Market gap"     },
     { text: "AfCFTA driving 60% more intra-African trade by 2030",           label: "Macro"          },
@@ -842,7 +833,7 @@ const GTM_DEFAULTS = {
     { type: "Mobile money",        examples: "M-Pesa, MTN MoMo",          value: "On/off ramp + distribution",              phase: "2" },
     { type: "Pan-African fintechs", examples: "Chipper Cash, Flutterwave", value: "User distribution, FX corridors",         phase: "2" },
     { type: "Trade finance banks", examples: "Ecobank, Access Bank",       value: "LP liquidity + institutional credibility", phase: "3" },
-    { type: "Lisk ecosystem",      examples: "Lisk Foundation",            value: "Grant funding + co-marketing",            phase: "1" },
+    { type: "Base ecosystem",      examples: "Base Foundation",            value: "Grant funding + co-marketing",            phase: "1" },
   ],
 };
 
@@ -995,14 +986,14 @@ const BOG_D = {
   intro: "BlockFinaX has applied for admission to the Bank of Ghana's Regulatory Sandbox — a controlled environment for testing innovative fintech products under regulatory supervision. Admission would grant a time-limited licence to operate in Ghana while formal regulation is developed around on-chain parametric protection products.",
   applied_for: [
     "A sandbox licence to offer parametric FX protection contracts to Ghanaian SMEs",
-    "Permission to settle contracts in USDC on a public blockchain (Lisk Mainnet)",
+    "Permission to settle contracts in USDC on a public blockchain (Base Mainnet)",
     "Regulatory safe harbour during the sandbox period for on-chain settlement mechanisms",
     "Access to the Bank of Ghana's FinTech and Innovation Office for dialogue on licensing frameworks",
   ],
   compliance: [
     { title: "USDC-only settlement",          desc: "No native token — no securities classification risk",                                  status: "done"    },
     { title: "Fully pre-funded pools",         desc: "Hedger payouts reserved on-chain before purchase — no undercollateralisation",         status: "done"    },
-    { title: "Immutable on-chain audit trail", desc: "Every settlement recorded permanently on Lisk L2",                                      status: "done"    },
+    { title: "Immutable on-chain audit trail", desc: "Every settlement recorded permanently on Base L2",                                      status: "done"    },
     { title: "No leverage",                    desc: "Hedgers can only lose their premium — no amplified loss risk",                          status: "done"    },
     { title: "No algorithmic trading",         desc: "All contracts are user-initiated — no automated position-taking",                      status: "done"    },
     { title: "KYC/AML roadmap",               desc: "Wallet-based identity linkage to mobile number (planned for commercial launch)",        status: "pending" },
@@ -1216,7 +1207,7 @@ function CostBreakdownDoc() {
           </thead>
           <tbody>
             {[
-              { label: "Gas Costs",             vals: [fmtUSD(a[1].gasCost),      fmtUSD(a[2].gasCost),      fmtUSD(a[3].gasCost),      fmtUSD(a[4].gasCost)],      driver: "Wallet onboarding gas + hedge execution gas (~6 on-chain txns per event on Lisk L2)" },
+              { label: "Gas Costs",             vals: [fmtUSD(a[1].gasCost),      fmtUSD(a[2].gasCost),      fmtUSD(a[3].gasCost),      fmtUSD(a[4].gasCost)],      driver: "Wallet onboarding gas + hedge execution gas (~6 on-chain txns per event on Base L2)" },
               { label: "Oracle / RPC",          vals: [fmtUSD(a[1].oracleCost),   fmtUSD(a[2].oracleCost),   fmtUSD(a[3].oracleCost),   fmtUSD(a[4].oracleCost)],   driver: "On-chain settlement infrastructure, scales with pairs" },
               { label: "Creator Loyalty (5%)",  vals: [fmtUSD(a[1].creatorLoyalty),fmtUSD(a[2].creatorLoyalty),fmtUSD(a[3].creatorLoyalty),fmtUSD(a[4].creatorLoyalty)], driver: "5% of hedge fees paid to event creators" },
               { label: "KYC / AML",             vals: [fmtUSD(a[1].kycCost),      fmtUSD(a[2].kycCost),      fmtUSD(a[3].kycCost),      fmtUSD(a[4].kycCost)],      driver: "AML identity verification at $1.50/wallet" },
