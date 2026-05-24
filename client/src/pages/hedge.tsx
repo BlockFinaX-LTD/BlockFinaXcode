@@ -1724,7 +1724,21 @@ export default function Hedge() {
                   </h3>
                 )}
 
-                {myPositions.filter(p => p.status === "active").map(pos => {
+                {myPositions
+                  .filter(p => p.status === "active")
+                  .sort((a, b) => {
+                    // Positions that have passed their expiry (but aren't settled yet)
+                    // sink to the bottom; genuinely-live positions stay on top.
+                    const ea = events.find(e => e.id === a.eventId);
+                    const eb = events.find(e => e.id === b.eventId);
+                    const now = Date.now();
+                    const aExpired = ea ? ea.expiryDate.getTime() <= now : false;
+                    const bExpired = eb ? eb.expiryDate.getTime() <= now : false;
+                    if (aExpired !== bExpired) return aExpired ? 1 : -1;
+                    // Within the same group, soonest-expiring first.
+                    return (ea?.expiryDate.getTime() ?? 0) - (eb?.expiryDate.getTime() ?? 0);
+                  })
+                  .map(pos => {
                   const event = events.find(e => e.id === pos.eventId);
                   const notionalNum = pos.notional;
                   const strikeNum = event ? event.strike : 0;
