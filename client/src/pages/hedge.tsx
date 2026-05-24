@@ -51,6 +51,7 @@ import { walletManager } from "@/lib/wallet";
 import { ethers } from "ethers";
 import { mainnetGuard } from "@/lib/mainnet-guard";
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from "@/lib/networks";
+import { PayoutScenarios } from "@/components/hedge/payout-scenarios";
 
 function CountdownTimer({ expiryDate, className }: { expiryDate: Date; className?: string }) {
   const calc = () => {
@@ -1776,13 +1777,26 @@ export default function Hedge() {
                               <span className="text-[13px] font-semibold font-mono-data tabular-nums">{currentRate > 0 ? currentRate.toFixed(4) : '…'}</span>
                             </div>
                             <div className="flex items-baseline justify-between pt-2 border-t border-gray-200/60 dark:border-border/30">
-                              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">If triggered</span>
+                              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Max payout (at cap)</span>
                               <span className={`bfx-display text-[18px] font-semibold font-mono-data tabular-nums ${hasPayout ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
                                 ${grossPayout > 0 ? grossPayout.toFixed(2) : '0.00'}
                                 {grossPayout > 0 && <span className="text-[10px] text-muted-foreground font-normal ml-1">net ${estNetPayout.toFixed(2)}</span>}
                               </span>
                             </div>
                           </div>
+                        )}
+
+                        {event && (
+                          <PayoutScenarios
+                            notional={pos.notional}
+                            totalCost={pos.premiumPaid + pos.platformFeePaid}
+                            maxPayout={pos.payoutAmount}
+                            strike={event.strike}
+                            initialRate={event.initialRate}
+                            strikeAbove={event.strikeAbove}
+                            underlying={event.underlying}
+                            currentRate={currentRate > 0 ? currentRate : undefined}
+                          />
                         )}
                       </div>
                     </div>
