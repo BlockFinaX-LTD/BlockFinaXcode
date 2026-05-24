@@ -6,7 +6,7 @@ import { useWallet } from '@/hooks/use-wallet';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
 import { getNetworkById } from '@/lib/networks';
 import { fetchCryptoPrices, getBnbPrice } from '@/lib/price-service';
-import { SendModal } from './send-modal';
+import { RiftSendModal } from './rift-send-modal';
 import { DepositModal } from './deposit-modal';
 import { RefreshCw, Send, ArrowDownLeft, Copy, Check } from 'lucide-react';
 import { TokenIcon, ChainIcon } from '@/components/crypto-icons-cdn';
@@ -268,10 +268,9 @@ export function EnhancedWalletOverview({ selectedNetworkId, className = '', onTa
       </div>
 
       {/* Modals */}
-      <SendModal
-        isOpen={sendModalOpen}
+      <RiftSendModal
+        open={sendModalOpen}
         onClose={() => setSendModalOpen(false)}
-        defaultNetworkId={selectedNetworkId}
       />
       <DepositModal
         isOpen={depositModalOpen}
