@@ -58,6 +58,19 @@ async function main() {
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_docs_tokens_email ON docs_tokens (email);`);
 
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS signin_tokens (
+      id              SERIAL PRIMARY KEY,
+      email           TEXT NOT NULL,
+      token_hash      TEXT NOT NULL UNIQUE,
+      expires_at      TIMESTAMP NOT NULL,
+      first_used_at   TIMESTAMP,
+      revoked_at      TIMESTAMP,
+      created_at      TIMESTAMP DEFAULT now()
+    );
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_signin_tokens_email ON signin_tokens (email);`);
+
   console.log('✓ Gating tables ready.');
   process.exit(0);
 }

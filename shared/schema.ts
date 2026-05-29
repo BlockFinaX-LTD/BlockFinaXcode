@@ -497,3 +497,20 @@ export const docsTokens = pgTable("docs_tokens", {
 
 export type DocsToken = typeof docsTokens.$inferSelect;
 
+// Issued when an admin approves an access_request. Lets an approved
+// applicant land on /auth to actually sign in via Rift — without one of
+// these tokens (in URL or localStorage), the Rift widget never renders.
+// Separate from docs_tokens so that docs access doesn't accidentally grant
+// app access and vice-versa.
+export const signinTokens = pgTable("signin_tokens", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  firstUsedAt: timestamp("first_used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type SigninToken = typeof signinTokens.$inferSelect;
+

@@ -129,15 +129,20 @@ export async function emailUserAccessReceived(to: string, name: string) {
   });
 }
 
-export async function emailUserAccessApproved(to: string, name: string) {
+export async function emailUserAccessApproved(to: string, name: string, signinToken: string) {
+  // Magic link carries the signin token so the recipient can land on /auth
+  // and actually see the sign-in surface — the AuthGate hides the Rift
+  // widget from any visitor without a valid token. Token is good for 30 days,
+  // long enough to sign in across devices before it expires.
+  const signinLink = `${APP_URL}/auth?t=${encodeURIComponent(signinToken)}`;
   const body = `
-    <h2 style="font-size:18px;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em;">You're in — welcome to BlockFinaX</h2>
-    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">Hi ${escapeHtml(name.split(' ')[0])}, your private-beta access has been approved.</p>
-    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;margin:14px 0 20px;">Sign in with this same email address — the gate will recognise you automatically.</p>
-    <div>
-      <a href="${APP_URL}/auth" style="display:inline-block;background:#1a4480;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:12px;">Sign in to BlockFinaX</a>
+    <h2 style="font-size:18px;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em;">You're approved &mdash; welcome to BlockFinaX</h2>
+    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">Hi ${escapeHtml(name.split(' ')[0])}, your access has been approved. Use the link below to sign in &mdash; it&rsquo;s good for 30 days.</p>
+    <div style="margin:22px 0;">
+      <a href="${signinLink}" style="display:inline-block;background:#1a4480;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:12px;">Sign in to BlockFinaX</a>
     </div>
-    <p style="font-size:12px;color:#6b7280;margin-top:24px;">Reply to this email if you need help getting started, or to share feedback as you explore the product.</p>
+    <p style="font-size:12px;color:#6b7280;line-height:1.5;margin:0;">The link is unique to you. Once you&rsquo;ve signed in, your browser will remember the session and you won&rsquo;t need to click it again on that device.</p>
+    <p style="font-size:12px;color:#6b7280;line-height:1.5;margin-top:14px;">Reply to this email if you need help getting started, or to share feedback as you explore the product.</p>
   `;
   return sendEmail({
     to,

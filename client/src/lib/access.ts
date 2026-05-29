@@ -85,3 +85,54 @@ export async function submitAccessRequest(payload: AccessRequestPayload): Promis
   }
   return res.json();
 }
+
+// ── Signin token (issued on approval, gates /auth) ───────────────────────
+
+const SIGNIN_KEY = 'bfx_signin_token';
+
+interface StoredSignin {
+  token: string;
+  expiresAt: string;
+}
+
+export function getStoredSigninToken(): StoredSignin | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SIGNIN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredSignin;
+    if (new Date(parsed.expiresAt).getTime() < Date.now()) {
+      localStorage.removeItem(SIGNIN_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredSigninToken(token: string, expiresAt: string): void {
+  try {
+    localStorage.setItem(SIGNIN_KEY, JSON.stringify({ token, expiresAt }));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearStoredSigninToken(): void {
+  try {
+    localStorage.removeItem(SIGNIN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function verifySigninToken(token: string): Promise<{ valid: boolean; expiresAt?: string; reason?: string }> {
+  try {
+    const res = await fetch(`/api/access/signin-verify?t=${encodeURIComponent(token)}`);
+    if (!res.ok) return { valid: false };
+    return res.json();
+  } catch {
+    return { valid: false };
+  }
+}

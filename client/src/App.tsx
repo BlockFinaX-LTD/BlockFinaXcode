@@ -51,6 +51,7 @@ import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
 import { AccessGate } from "@/components/access-gate";
 import { DocsGate } from "@/components/docs-gate";
+import { AuthGate } from "@/components/auth-gate";
 
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
@@ -134,6 +135,11 @@ const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
 const WhitepaperGated = () => <DocsGate><Whitepaper /></DocsGate>;
 const DataRoomGated   = () => <DocsGate><DataRoom /></DocsGate>;
 
+// /auth itself is gated by AuthGate: visitors need either an unexpired
+// signin-token (from the approval email) or an already-authenticated Rift
+// session. Without one of those, the Rift widget never renders.
+const AuthGated       = () => <AuthGate><Auth /></AuthGate>;
+
 function Router() {
   return (
     <Switch>
@@ -146,8 +152,9 @@ function Router() {
       <Route path="/apply" component={ApplyPage} />
       <Route path="/docs/request" component={DocsRequestPage} />
 
-      {/* Auth */}
-      <Route path="/auth" component={Auth} />
+      {/* Auth — gated by AuthGate; AccessGate downstream enforces the
+          allowlist once Rift sign-in completes */}
+      <Route path="/auth" component={AuthGated} />
 
       {/* Docs — gated by per-request magic-link token */}
       <Route path="/docs" component={DocsIndexGated} />

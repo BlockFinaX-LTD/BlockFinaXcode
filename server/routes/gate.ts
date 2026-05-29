@@ -21,7 +21,7 @@ import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { db } from '../db';
-import { accessRequests, accessGrants, docsTokens } from '@shared/schema';
+import { accessRequests, accessGrants, docsTokens, signinTokens } from '@shared/schema';
 import { requireAdmin } from '../middleware/admin-auth';
 import {
   emailAdminNewAccessRequest,
@@ -32,6 +32,8 @@ import {
   emailDocsToken,
   APP_URL,
 } from '../email';
+
+const SIGNIN_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -141,6 +143,28 @@ export function registerGateRoutes(app: Express) {
     ]);
 
     return res.json({ status: 'received', id: row.id });
+  });
+
+  // ── Public: verify a signin token from the approval email ───────────
+  // The /auth route's AuthGate calls this with ?t=<raw>. We never return
+  // which email the token belongs to — Rift learns that from the user
+  // signing in. We just confirm the token is real, unexpired, unrevoked.
+  app.get('/api/access/signin-verify', async (req, res) => {
+    const raw = String(req.query.t || '').trim();
+    if (!raw) return res.json({ valid: false });
+    const tokenHash = hashToken(raw);
+    const [tok] = await db
+      .select()
+      .from(signinTokens)
+      .where(eq(signinTokens.tokenHash, tokenHash))
+      .limit(1);
+    if (!tok) return res.json({ valid: false });
+    if (tok.revokedAt) return res.json({ valid: false, reason: 'revoked' });
+    if (tok.expiresAt.getTime() < Date.now()) return res.json({ valid: false, reason: 'expired' });
+    if (!tok.firstUsedAt) {
+      await db.update(signinTokens).set({ firstUsedAt: new Date() }).where(eq(signinTokens.id, tok.id));
+    }
+    return res.json({ valid: true, expiresAt: tok.expiresAt });
   });
 
   // ── Public: check if an email has been granted ───────────────────────
@@ -278,7 +302,22 @@ export function registerGateRoutes(app: Express) {
         .update(accessRequests)
         .set({ status: 'approved', reviewedAt: new Date(), reviewedBy: reviewer, reviewNote: note })
         .where(eq(accessRequests.id, id));
-      emailUserAccessApproved(req_.email, req_.name).catch((e) =>
+
+      // Mint a signin token so the approval email can carry a real magic link
+      // that unlocks /auth (and only /auth — separate from docs tokens). 30-day
+      // expiry so the applicant can sign in from multiple devices before it
+      // burns. The token isn't single-use — once they've signed in via Rift
+      // the widget owns the session and they don't need the link again.
+      const rawSignin = crypto.randomBytes(32).toString('base64url');
+      const signinHash = hashToken(rawSignin);
+      const signinExpiresAt = new Date(Date.now() + SIGNIN_TOKEN_TTL_MS);
+      await db.insert(signinTokens).values({
+        email: req_.email,
+        tokenHash: signinHash,
+        expiresAt: signinExpiresAt,
+      });
+
+      emailUserAccessApproved(req_.email, req_.name, rawSignin).catch((e) =>
         console.error('[admin/access] approve email failed:', e?.message),
       );
       return res.json({ status: 'approved' });
