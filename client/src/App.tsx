@@ -45,6 +45,12 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import VideoPage from "@/pages/video";
 import FinancialModel from "@/pages/financial-model";
 
+// Private beta gating
+import ApplyPage from "@/pages/apply";
+import DocsRequestPage from "@/pages/docs-request";
+import { AccessGate } from "@/components/access-gate";
+import { DocsGate } from "@/components/docs-gate";
+
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
@@ -109,33 +115,54 @@ function RiftPostSigninSync() {
   return null;
 }
 
+// Small wrappers that compose the AccessGate around each protected page so
+// signed-in-but-not-approved users see the "request access" wall instead of
+// the app itself.
+const HomeGated      = () => <AccessGate><HomePage /></AccessGate>;
+const HedgeGated     = () => <AccessGate><Hedge /></AccessGate>;
+const TasksGated     = () => <AccessGate><TasksPage /></AccessGate>;
+const ProfileGated   = () => <AccessGate><ProfilePage /></AccessGate>;
+const SettingsGated  = () => <AccessGate><SettingsPage /></AccessGate>;
+const WalletGated    = () => <AccessGate><Wallet /></AccessGate>;
+
+// Docs gate: the whitepaper, data room, and pitch deck only render once the
+// visitor has a valid magic-link token. The gate intercepts and shows a
+// "request access" form otherwise.
+const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
+const WhitepaperGated = () => <DocsGate><Whitepaper /></DocsGate>;
+const DataRoomGated   = () => <DocsGate><DataRoom /></DocsGate>;
+
 function Router() {
   return (
     <Switch>
       {/* Public */}
       <Route path="/" component={Website} />
-      <Route path="/pitch" component={PitchDeck} />
-      <Route path="/whitepaper" component={Whitepaper} />
-      <Route path="/data-room" component={DataRoom} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPage} />
+      <Route path="/apply" component={ApplyPage} />
+      <Route path="/docs/request" component={DocsRequestPage} />
+
       {/* Auth */}
       <Route path="/auth" component={Auth} />
 
-      {/* Protected — AuthGuard above redirects unauthenticated users to /auth */}
-      <Route path="/wallet" component={Wallet} />
+      {/* Docs — gated by per-request magic-link token */}
+      <Route path="/pitch" component={PitchGated} />
+      <Route path="/whitepaper" component={WhitepaperGated} />
+      <Route path="/data-room" component={DataRoomGated} />
 
-      {/* Core features */}
-      <Route path="/home" component={HomePage} />
-      <Route path="/hedge" component={Hedge} />
-      <Route path="/tasks" component={TasksPage} />
-      <Route path="/profile" component={ProfilePage} />
-      <Route path="/settings" component={SettingsPage} />
+      {/* Protected — AuthGuard redirects unauth users to /auth; AccessGate
+          shows the allowlist wall for signed-in but un-approved users. */}
+      <Route path="/wallet" component={WalletGated} />
+      <Route path="/home" component={HomeGated} />
+      <Route path="/hedge" component={HedgeGated} />
+      <Route path="/tasks" component={TasksGated} />
+      <Route path="/profile" component={ProfileGated} />
+      <Route path="/settings" component={SettingsGated} />
 
       {/* Rewards & admin */}
-      <Route path="/rewards" component={TasksPage} />
+      <Route path="/rewards" component={TasksGated} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
