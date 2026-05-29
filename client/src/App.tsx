@@ -48,6 +48,7 @@ import FinancialModel from "@/pages/financial-model";
 // Private beta gating
 import ApplyPage from "@/pages/apply";
 import DocsRequestPage from "@/pages/docs-request";
+import DocsIndex from "@/pages/docs-index";
 import { AccessGate } from "@/components/access-gate";
 import { DocsGate } from "@/components/docs-gate";
 
@@ -128,6 +129,7 @@ const WalletGated    = () => <AccessGate><Wallet /></AccessGate>;
 // Docs gate: the whitepaper, data room, and pitch deck only render once the
 // visitor has a valid magic-link token. The gate intercepts and shows a
 // "request access" form otherwise.
+const DocsIndexGated  = () => <DocsGate><DocsIndex /></DocsGate>;
 const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
 const WhitepaperGated = () => <DocsGate><Whitepaper /></DocsGate>;
 const DataRoomGated   = () => <DocsGate><DataRoom /></DocsGate>;
@@ -148,6 +150,7 @@ function Router() {
       <Route path="/auth" component={Auth} />
 
       {/* Docs — gated by per-request magic-link token */}
+      <Route path="/docs" component={DocsIndexGated} />
       <Route path="/pitch" component={PitchGated} />
       <Route path="/whitepaper" component={WhitepaperGated} />
       <Route path="/data-room" component={DataRoomGated} />
