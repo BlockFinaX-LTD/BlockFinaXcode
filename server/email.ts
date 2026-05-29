@@ -17,6 +17,7 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'amschel@blockfinax.com,anthon
   .filter(Boolean);
 
 const APP_URL = (process.env.PUBLIC_APP_URL || 'https://blockfinax.com').replace(/\/$/, '');
+const DOCS_URL = (process.env.PUBLIC_DOCS_URL || 'https://docs.blockfinax.com').replace(/\/$/, '');
 
 const resend = apiKey ? new Resend(apiKey) : null;
 
@@ -162,15 +163,28 @@ export async function emailUserAccessRejected(to: string, name: string, note?: s
   });
 }
 
-export async function emailDocsToken(to: string, name: string | null, magicLink: string, expiresAt: Date) {
+export async function emailDocsToken(to: string, name: string | null, rawToken: string, expiresAt: Date) {
   const exp = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const tokenQuery = `?t=${encodeURIComponent(rawToken)}`;
+  const marketingLink = `${APP_URL}/docs${tokenQuery}`;
+  const technicalLink = `${DOCS_URL}/${tokenQuery}`;
   const body = `
     <h2 style="font-size:18px;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em;">Your BlockFinaX docs access</h2>
-    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">${name ? `Hi ${escapeHtml(name.split(' ')[0])}, ` : ''}here's the magic link to read the BlockFinaX whitepaper, pitch deck and data room.</p>
-    <div style="margin:22px 0;">
-      <a href="${magicLink}" style="display:inline-block;background:#1a4480;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:12px;">Open the docs</a>
+    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">${name ? `Hi ${escapeHtml(name.split(' ')[0])}, ` : ''}you have access to both sets of BlockFinaX docs. Pick whichever you want first — the same magic link unlocks them.</p>
+
+    <div style="margin:22px 0 14px;padding:16px;border:1px solid #e6eaf2;border-radius:12px;background:#f9fafb;">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#1a4480;font-weight:600;margin:0 0 6px;">Strategy &amp; investor docs</p>
+      <p style="font-size:13px;color:#0f1a2f;margin:0 0 12px;line-height:1.5;">Whitepaper, pitch deck, data room.</p>
+      <a href="${marketingLink}" style="display:inline-block;background:#1a4480;color:#fff;text-decoration:none;font-weight:600;font-size:13px;padding:10px 18px;border-radius:10px;">Open strategy docs</a>
     </div>
-    <p style="font-size:12px;color:#6b7280;line-height:1.5;margin:0;">This link is unique to you and expires on <strong>${exp}</strong>. If it stops working, reply to this email and we'll issue a new one.</p>
+
+    <div style="margin:0 0 22px;padding:16px;border:1px solid #e6eaf2;border-radius:12px;background:#f9fafb;">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#1a4480;font-weight:600;margin:0 0 6px;">Technical &amp; integrator docs</p>
+      <p style="font-size:13px;color:#0f1a2f;margin:0 0 12px;line-height:1.5;">API reference, SDK guides, on-chain ABIs.</p>
+      <a href="${technicalLink}" style="display:inline-block;background:#0f1a2f;color:#fff;text-decoration:none;font-weight:600;font-size:13px;padding:10px 18px;border-radius:10px;">Open technical docs</a>
+    </div>
+
+    <p style="font-size:12px;color:#6b7280;line-height:1.5;margin:0;">Your link is unique to you and expires on <strong>${exp}</strong>. Each site stores the token in its own browser storage, so click the link from this email on every device you want to read on. If it stops working, reply to this email and we'll issue a new one.</p>
     <p style="font-size:12px;color:#6b7280;line-height:1.5;margin-top:14px;">Please don't share the link — each request is tracked and we revoke tokens that get circulated publicly.</p>
   `;
   return sendEmail({

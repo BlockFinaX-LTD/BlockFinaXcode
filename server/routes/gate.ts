@@ -182,10 +182,8 @@ export function registerGateRoutes(app: Express) {
       expiresAt,
     });
 
-    const magicLink = `${APP_URL}/docs?t=${raw}`;
-
     Promise.all([
-      emailDocsToken(data.email, data.name || null, magicLink, expiresAt).catch((e) =>
+      emailDocsToken(data.email, data.name || null, raw, expiresAt).catch((e) =>
         console.error('[docs/request] user email failed:', e?.message),
       ),
       emailAdminNewDocsRequest({ email: data.email, name: data.name, reason: data.reason }).catch(
@@ -196,8 +194,35 @@ export function registerGateRoutes(app: Express) {
     return res.json({ status: 'sent' });
   });
 
-  // ── Public: verify a docs token ──────────────────────────────────────
+  // ── Public: verify a docs token (CORS-enabled for the external docs site) ─
+  // The Docusaurus site at docs.blockfinax.com calls this endpoint cross-origin
+  // from its Root theme swizzle. Allow-listed via DOCS_SITE_ORIGINS env var
+  // (comma-separated); falls back to the prod docs subdomain.
+  const docsAllowedOrigins = (
+    process.env.DOCS_SITE_ORIGINS ||
+    'https://docs.blockfinax.com,http://localhost:3000'
+  )
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  function setDocsCors(req: any, res: any) {
+    const origin = req.headers.origin as string | undefined;
+    if (origin && docsAllowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Max-Age', '600');
+    }
+  }
+
+  app.options('/api/docs/verify', (req, res) => {
+    setDocsCors(req, res);
+    res.sendStatus(204);
+  });
+
   app.get('/api/docs/verify', async (req, res) => {
+    setDocsCors(req, res);
     const raw = String(req.query.t || '').trim();
     if (!raw) return res.json({ valid: false });
     const tokenHash = hashToken(raw);
