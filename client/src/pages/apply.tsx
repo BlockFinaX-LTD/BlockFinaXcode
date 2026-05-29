@@ -1,9 +1,8 @@
 /**
- * apply.tsx — Private-beta access request form
+ * apply.tsx — Access request form.
  *
- * Comprehensive but compact (single screen on desktop, scrolls on mobile):
- * Name · Email · Country · Role · Company / Project · Use case ·
- * How heard · Telegram or X handle.
+ * Compact, professional intake: Name · Email · Country · Role ·
+ * Company / Project · Use case · How heard · Telegram or X handle.
  * Posts to /api/access/request → admin notified, user gets confirmation.
  */
 
@@ -20,9 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, CheckCircle, Loader2, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import { submitAccessRequest } from '@/lib/access';
 import logoPath from '@/assets/logo.png';
 
@@ -64,6 +62,8 @@ const HEARD_FROM = [
   'Other',
 ];
 
+const FIELD_LABEL = 'text-[12px] font-medium text-gray-700';
+
 export default function ApplyPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -80,7 +80,10 @@ export default function ApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  const canSubmit = name.trim().length > 1 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && !submitting;
+  const canSubmit =
+    name.trim().length > 1 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+    !submitting;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -111,184 +114,149 @@ export default function ApplyPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <Card className="max-w-md w-full rounded-2xl">
-          <CardContent className="pt-8 pb-7 text-center space-y-4">
-            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex flex-col">
+        <Header onBack={() => setLocation('/')} />
+        <main className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+          <div className="w-full max-w-md text-center">
+            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-5">
               <CheckCircle className="h-7 w-7 text-emerald-600" strokeWidth={1.8} />
             </div>
-            <h1 className="bfx-display text-xl font-semibold tracking-tight">
-              We got your application
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900">
+              Application received
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Thanks, {name.split(' ')[0]}. We've sent a confirmation to{' '}
-              <span className="font-medium text-foreground font-mono-data">{email}</span> and the
-              team is reviewing. Most decisions come back within 48 hours.
+            <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
+              Thanks{name ? `, ${name.split(' ')[0]}` : ''}. We&rsquo;ve sent a
+              confirmation to{' '}
+              <span className="font-medium text-gray-900 break-words">{email}</span>{' '}
+              and the team will be in touch within 48 hours.
             </p>
-            <div className="pt-2">
-              <Button variant="outline" onClick={() => setLocation('/')} className="rounded-xl">
+            <div className="mt-8">
+              <Button
+                variant="outline"
+                onClick={() => setLocation('/')}
+                className="rounded-full px-6 h-10 border-gray-200 text-gray-700 hover:bg-gray-50"
+              >
                 Back to home
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-16">
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-border/60">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation('/')}
-            className="h-9 w-9 rounded-full"
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <img src={logoPath} alt="BlockFinaX" className="h-7 w-7 object-contain" />
-          <span className="bfx-display text-[15px] font-semibold tracking-tight">Apply for access</span>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white">
+      <Header onBack={() => setLocation('/')} />
 
-      <main className="max-w-2xl mx-auto px-4 pt-6">
-        {/* Intro */}
-        <div className="mb-6">
-          <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-primary font-semibold bg-primary/10 rounded-full px-2.5 py-1 mb-3">
-            <Lock className="h-3 w-3" />
-            Private beta
-          </div>
-          <h1 className="bfx-display text-2xl font-semibold tracking-tight">
-            Request access to BlockFinaX
+      <main className="mx-auto w-full max-w-2xl px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 pb-20">
+        <div className="mb-10 sm:mb-12">
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
+            Request access
           </h1>
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            We're onboarding partners and early users one cohort at a time so we can listen, fix,
-            and ship fast. Tell us a little about who you are and what you're trying to do — we'll
-            email you when you're in. Most decisions land within <strong>48 hours</strong>.
+          <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed max-w-xl">
+            A few details so we can route you to the right cohort. We typically respond within
+            48 hours.
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-5">
+        <form onSubmit={onSubmit} className="space-y-10">
           {/* Identity */}
-          <Card className="rounded-2xl">
-            <CardContent className="p-5 space-y-4">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                Identity
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="name" className="text-xs">Full name *</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Jane Doe"
-                    className="mt-1.5 rounded-xl"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email" className="text-xs">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    className="mt-1.5 rounded-xl"
-                    required
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Use the same email you'll sign in with.
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="country" className="text-xs">Country</Label>
-                  <Select value={country} onValueChange={setCountry}>
-                    <SelectTrigger id="country" className="mt-1.5 rounded-xl">
-                      <SelectValue placeholder="Select country" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      <SelectItem value="__africa" disabled>— Africa —</SelectItem>
-                      {AFRICAN_COUNTRIES.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                      <SelectItem value="__other" disabled>— Other —</SelectItem>
-                      {OTHER_COUNTRIES.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="social" className="text-xs">Telegram or X handle</Label>
-                  <Input
-                    id="social"
-                    value={socialHandle}
-                    onChange={(e) => setSocialHandle(e.target.value)}
-                    placeholder="@yourhandle"
-                    className="mt-1.5 rounded-xl"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <FormSection title="About you">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+              <Field label="Full name" required>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jane Doe"
+                  className="h-11 rounded-lg border-gray-200 focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+                  required
+                />
+              </Field>
+              <Field label="Work email" required hint="Use the address you'll sign in with">
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  className="h-11 rounded-lg border-gray-200 focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+                  required
+                />
+              </Field>
+              <Field label="Country">
+                <Select value={country} onValueChange={setCountry}>
+                  <SelectTrigger className="h-11 rounded-lg border-gray-200 focus:ring-gray-900 focus:ring-1 focus:ring-offset-0">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="__africa" disabled className="text-xs uppercase tracking-wider text-gray-400">
+                      Africa
+                    </SelectItem>
+                    {AFRICAN_COUNTRIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                    <SelectItem value="__other" disabled className="text-xs uppercase tracking-wider text-gray-400">
+                      Other
+                    </SelectItem>
+                    {OTHER_COUNTRIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Telegram or X handle" hint="Optional">
+                <Input
+                  value={socialHandle}
+                  onChange={(e) => setSocialHandle(e.target.value)}
+                  placeholder="@yourhandle"
+                  className="h-11 rounded-lg border-gray-200 focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+                />
+              </Field>
+            </div>
+          </FormSection>
 
-          {/* Role */}
-          <Card className="rounded-2xl">
-            <CardContent className="p-5 space-y-4">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                What brings you here
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="role" className="text-xs">Your role</Label>
-                  <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger id="role" className="mt-1.5 rounded-xl">
-                      <SelectValue placeholder="Choose one" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLE_OPTIONS.map((r) => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="company" className="text-xs">Company / Project</Label>
-                  <Input
-                    id="company"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    placeholder="If applicable"
-                    className="mt-1.5 rounded-xl"
-                  />
-                </div>
-              </div>
+          {/* Context */}
+          <FormSection title="Your context">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+              <Field label="Role">
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger className="h-11 rounded-lg border-gray-200 focus:ring-gray-900 focus:ring-1 focus:ring-offset-0">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((r) => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Company / project" hint="Optional">
+                <Input
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="If applicable"
+                  className="h-11 rounded-lg border-gray-200 focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+                />
+              </Field>
+            </div>
 
-              <div>
-                <Label htmlFor="useCase" className="text-xs">What FX problem are you trying to solve?</Label>
+            <div className="mt-5">
+              <Field label="What FX problem are you trying to solve?" hint="Optional — specifics help us route you faster">
                 <Textarea
-                  id="useCase"
                   value={useCase}
                   onChange={(e) => setUseCase(e.target.value)}
                   rows={4}
-                  placeholder="e.g. We pay suppliers in USD but earn in NGN and our margin gets eaten when the naira moves. We want to lock in cost."
-                  className="mt-1.5 rounded-xl resize-none"
+                  placeholder="e.g. We earn in NGN and pay suppliers in USD; margin gets eaten when the naira moves."
+                  className="rounded-lg border-gray-200 resize-none focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Specifics help us understand who to prioritise. Optional but appreciated.
-                </p>
-              </div>
+              </Field>
+            </div>
 
-              <div>
-                <Label htmlFor="heard" className="text-xs">How did you hear about us?</Label>
+            <div className="mt-5">
+              <Field label="How did you hear about us?">
                 <Select value={heardFrom} onValueChange={setHeardFrom}>
-                  <SelectTrigger id="heard" className="mt-1.5 rounded-xl">
-                    <SelectValue placeholder="Choose one" />
+                  <SelectTrigger className="h-11 rounded-lg border-gray-200 focus:ring-gray-900 focus:ring-1 focus:ring-offset-0">
+                    <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
                     {HEARD_FROM.map((h) => (
@@ -296,35 +264,90 @@ export default function ApplyPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </CardContent>
-          </Card>
+              </Field>
+            </div>
+          </FormSection>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+          {/* Submit */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+            <p className="text-[11px] sm:text-xs text-gray-400 leading-relaxed">
+              By submitting, you agree to our{' '}
+              <a href="/terms" className="text-gray-600 hover:text-gray-900 underline underline-offset-2">terms</a>{' '}
+              and{' '}
+              <a href="/privacy" className="text-gray-600 hover:text-gray-900 underline underline-offset-2">privacy policy</a>.
+            </p>
             <Button
-              type="button"
-              variant="outline"
-              onClick={() => setLocation('/')}
-              className="rounded-xl"
+              type="submit"
+              disabled={!canSubmit}
+              className="w-full sm:w-auto h-11 sm:min-w-[170px] rounded-full px-7 bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:text-white"
             >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit} className="rounded-xl h-11 sm:min-w-40">
               {submitting ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</>
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting&hellip;
+                </>
               ) : (
-                'Submit application'
+                'Submit'
               )}
             </Button>
           </div>
-
-          <p className="text-[11px] text-muted-foreground text-center pt-2">
-            By submitting you agree to our{' '}
-            <a href="/terms" className="underline">terms</a> and{' '}
-            <a href="/privacy" className="underline">privacy policy</a>.
-          </p>
         </form>
       </main>
+    </div>
+  );
+}
+
+// ── Local UI primitives so the form looks consistent ─────────────────────
+
+function Header({ onBack }: { onBack: () => void }) {
+  return (
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors -ml-1 px-1.5 py-1 rounded-md"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <img src={logoPath} alt="BlockFinaX" className="h-6 w-6 object-contain" />
+          <span className="text-sm font-medium tracking-tight text-gray-900">BlockFinaX</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-gray-400 mb-4">
+        {title}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <Label className={FIELD_LABEL}>
+        {label}
+        {required && <span className="text-gray-400 ml-0.5">*</span>}
+      </Label>
+      <div className="mt-1.5">{children}</div>
+      {hint && <p className="text-[11px] text-gray-400 mt-1.5">{hint}</p>}
     </div>
   );
 }

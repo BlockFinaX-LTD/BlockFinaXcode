@@ -1,5 +1,5 @@
 /**
- * docs-request.tsx — Form to request a 7-day docs magic link.
+ * docs-request.tsx — Request a 7-day docs magic link.
  */
 
 import { useState } from 'react';
@@ -8,9 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, CheckCircle, Loader2, FileText, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
 export default function DocsRequestPage() {
@@ -54,123 +53,150 @@ export default function DocsRequestPage() {
 
   if (sent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <Card className="max-w-md w-full rounded-2xl">
-          <CardContent className="pt-8 pb-7 text-center space-y-4">
-            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex flex-col">
+        <Header onBack={() => setLocation('/')} />
+        <main className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+          <div className="w-full max-w-md text-center">
+            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-5">
               <CheckCircle className="h-7 w-7 text-emerald-600" strokeWidth={1.8} />
             </div>
-            <h1 className="bfx-display text-xl font-semibold tracking-tight">Check your email</h1>
-            <p className="text-sm text-muted-foreground">
-              We've sent a magic link to{' '}
-              <span className="font-mono-data text-foreground">{email}</span>. Click it to read
-              the whitepaper, pitch deck and data room. The link is valid for 7 days.
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900">
+              Check your email
+            </h1>
+            <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
+              We&rsquo;ve sent your access link to{' '}
+              <span className="font-medium text-gray-900 break-words">{email}</span>. It&rsquo;s
+              valid for 7 days and unlocks both our strategy and technical documentation.
             </p>
-            <p className="text-[11px] text-muted-foreground">
-              Don't see it? Check your spam folder, or wait a couple of minutes — Resend can be
-              a little slow on first delivery.
+            <p className="mt-4 text-xs text-gray-400">
+              If you don&rsquo;t see it within a few minutes, check your spam folder.
             </p>
-            <div className="pt-2">
-              <Button variant="outline" onClick={() => setLocation('/')} className="rounded-xl">
+            <div className="mt-8">
+              <Button
+                variant="outline"
+                onClick={() => setLocation('/')}
+                className="rounded-full px-6 h-10 border-gray-200 text-gray-700 hover:bg-gray-50"
+              >
                 Back to home
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-16">
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-border/60">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation('/')}
-            className="h-9 w-9 rounded-full"
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <img src={logoPath} alt="BlockFinaX" className="h-7 w-7 object-contain" />
-          <span className="bfx-display text-[15px] font-semibold tracking-tight">Request docs access</span>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white flex flex-col">
+      <Header onBack={() => setLocation('/')} />
 
-      <main className="max-w-md mx-auto px-4 pt-8">
-        <div className="text-center mb-6">
-          <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
-            <FileText className="h-6 w-6" strokeWidth={1.7} />
+      <main className="flex-1 flex items-start justify-center px-4 sm:px-6 lg:px-8 pt-10 sm:pt-16 pb-20">
+        <div className="w-full max-w-md">
+          <div className="mb-8 sm:mb-10">
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
+              Access the docs
+            </h1>
+            <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
+              The strategy materials and technical documentation are behind a 7-day magic link.
+              Submit your email and we&rsquo;ll send it over.
+            </p>
           </div>
-          <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-primary font-semibold bg-primary/10 rounded-full px-2.5 py-1 mb-2">
-            <Lock className="h-3 w-3" />
-            Private beta
-          </div>
-          <h1 className="bfx-display text-xl font-semibold tracking-tight">
-            BlockFinaX docs
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            Whitepaper, pitch deck, data room. Submit your email and we'll send you a magic link
-            within a couple of minutes — valid for <strong>7 days</strong>.
-          </p>
-        </div>
 
-        <Card className="rounded-2xl">
-          <CardContent className="p-5">
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="email" className="text-xs">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className="mt-1.5 rounded-xl"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="name" className="text-xs">Name (optional)</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Doe"
-                  className="mt-1.5 rounded-xl"
-                />
-              </div>
-              <div>
-                <Label htmlFor="reason" className="text-xs">What are you evaluating? (optional)</Label>
-                <Textarea
-                  id="reason"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={3}
-                  placeholder="e.g. partnership, treasury use, investment evaluation"
-                  className="mt-1.5 rounded-xl resize-none"
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={!valid || submitting}
-                className="w-full rounded-xl h-11"
-              >
-                {submitting ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending…</>
-                ) : (
-                  'Send magic link'
-                )}
-              </Button>
-              <p className="text-[11px] text-muted-foreground text-center">
-                We don't pass your email to anyone else. Tokens are tracked and revocable.
-              </p>
-            </form>
-          </CardContent>
-        </Card>
+          <form onSubmit={onSubmit} className="space-y-5">
+            <Field label="Work email" required>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="h-11 rounded-lg border-gray-200 focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+                required
+                autoFocus
+              />
+            </Field>
+
+            <Field label="Name" hint="Optional">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Jane Doe"
+                className="h-11 rounded-lg border-gray-200 focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+              />
+            </Field>
+
+            <Field label="What are you evaluating?" hint="Optional — partnership, treasury, investment, etc.">
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. Treasury hedging for a Lagos-based fintech"
+                className="rounded-lg border-gray-200 resize-none focus-visible:ring-gray-900 focus-visible:ring-1 focus-visible:ring-offset-0"
+              />
+            </Field>
+
+            <Button
+              type="submit"
+              disabled={!valid || submitting}
+              className="w-full h-11 rounded-full bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:text-white"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending&hellip;
+                </>
+              ) : (
+                'Send access link'
+              )}
+            </Button>
+
+            <p className="text-[11px] text-gray-400 text-center pt-2 leading-relaxed">
+              Each link is unique and tracked. We revoke tokens that get shared publicly.
+            </p>
+          </form>
+        </div>
       </main>
+    </div>
+  );
+}
+
+function Header({ onBack }: { onBack: () => void }) {
+  return (
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors -ml-1 px-1.5 py-1 rounded-md"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <img src={logoPath} alt="BlockFinaX" className="h-6 w-6 object-contain" />
+          <span className="text-sm font-medium tracking-tight text-gray-900">BlockFinaX</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <Label className="text-[12px] font-medium text-gray-700">
+        {label}
+        {required && <span className="text-gray-400 ml-0.5">*</span>}
+      </Label>
+      <div className="mt-1.5">{children}</div>
+      {hint && <p className="text-[11px] text-gray-400 mt-1.5">{hint}</p>}
     </div>
   );
 }

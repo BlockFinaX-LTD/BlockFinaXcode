@@ -99,7 +99,7 @@ export function AccessGate({ children }: Props) {
             <h1 className="bfx-display text-xl font-semibold tracking-tight">
               {isPending ? 'Your application is in review'
                 : isRejected ? 'Access not granted yet'
-                : 'BlockFinaX is in private beta'}
+                : 'Request access to continue'}
             </h1>
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
               {isPending ? (

@@ -10,9 +10,8 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Lock, FileText, ArrowRight } from 'lucide-react';
+import { Loader2, FileText, ArrowRight } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
 const STORAGE_KEY = 'bfx_docs_token';
@@ -114,36 +113,36 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
 
   // Denied
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6">
-      <Card className="max-w-md w-full rounded-2xl">
-        <CardContent className="pt-8 pb-7 text-center space-y-5">
-          <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-            <FileText className="h-7 w-7" strokeWidth={1.7} />
-          </div>
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-primary font-semibold bg-primary/10 rounded-full px-2.5 py-1 mb-3">
-              <Lock className="h-3 w-3" />
-              Private docs
-            </div>
-            <h1 className="bfx-display text-xl font-semibold tracking-tight">
-              Request access to the docs
-            </h1>
-            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-              The whitepaper, pitch deck and data room are behind a magic-link
-              gate while we're in private beta. Submit the form and we'll email
-              you a 7-day access link.
-            </p>
-          </div>
+    <div className="min-h-screen bg-white flex items-center justify-center p-6">
+      <div className="w-full max-w-md text-center">
+        <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-5">
+          <FileText className="h-5 w-5 text-gray-700" strokeWidth={1.7} />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900">
+          Access the docs
+        </h1>
+        <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
+          The strategy materials and technical documentation are behind a 7-day
+          magic-link gate. Request access and we&rsquo;ll email you a link.
+        </p>
 
-          <Button onClick={() => setLocation('/docs/request')} className="w-full rounded-xl h-11">
-            Request docs access <ArrowRight className="h-4 w-4 ml-1" />
+        <div className="mt-7 flex flex-col items-center gap-3">
+          <Button
+            onClick={() => setLocation('/docs/request')}
+            className="w-full sm:w-auto h-11 sm:min-w-[200px] rounded-full px-7 bg-gray-900 text-white hover:bg-gray-800"
+          >
+            Request access <ArrowRight className="h-4 w-4 ml-1.5" />
           </Button>
-
-          <div>
-            <Button variant="ghost" size="sm" onClick={() => setLocation('/')}>Back to home</Button>
-          </div>
-        </CardContent>
-      </Card>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLocation('/')}
+            className="text-sm text-gray-500 hover:text-gray-900"
+          >
+            Back to home
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -398,81 +398,64 @@ function SolutionsSection() {
 function WhoForSection() {
   const cards = [
     {
-      emoji: "🏭",
-      role: "Importers",
-      pain: "Supplier invoices in USD, revenue in GHS.",
-      solution: "Get paid if the cedi falls past your strike."
+      role: 'Importers',
+      pain: 'Supplier invoices in USD, revenue in NGN, GHS, or KES.',
+      solution: 'Lock in the cost of dollars at a chosen strike. Get paid if the local currency drops below it.',
     },
     {
-      emoji: "🌍",
-      role: "Exporters",
-      pain: "Receive foreign currency, spend locally.",
-      solution: "Set a floor. Collect a payout if the rate moves against you."
+      role: 'Exporters',
+      pain: 'Receive foreign currency, spend at home.',
+      solution: 'Set a floor on what your USD receivables are worth. Collect a payout if the rate moves against you.',
     },
     {
-      emoji: "₿",
-      role: "Crypto Traders",
-      pain: "Can't stomach a 30% drawdown.",
-      solution: "Downside protection on your trades. Stop losses eat capital. Parametric protection rebates it."
+      role: 'Treasuries',
+      pain: 'Mixed-currency books, no working hedging line.',
+      solution: 'Programmatic hedges sized to your monthly burn. No bank relationship required to execute.',
     },
     {
-      emoji: "💧",
-      role: "Liquidity Providers",
-      pain: "Want yield on idle USDC.",
-      solution: "Deposit into pools and earn premiums from hedgers."
-    }
+      role: 'Liquidity providers',
+      pain: 'Idle USDC sitting at 5% lending yields.',
+      solution: 'Underwrite FX cover for 10–30% APY on liberalised pairs, 30–80% on frontier EM. Capped, fully-collateralised risk.',
+    },
   ];
 
   return (
-    <section id="who-this-is-for" className="py-12 sm:py-16 border-t border-gray-100">
+    <section id="who-this-is-for" className="py-16 sm:py-24 border-t border-gray-100">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.3 }}
-          className="text-center mb-8">
-          <h2 className="text-xl sm:text-3xl font-bold text-[#1a4480] mb-2">Who this is for</h2>
-          <p className="text-sm text-gray-500">Hedgers, earners, and market makers.</p>
+        <motion.div
+          initial={{ opacity: 0.6, y: 6 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-50px' }}
+          transition={{ duration: 0.3 }}
+          className="max-w-2xl mb-10 sm:mb-12"
+        >
+          <p className="text-[11px] uppercase tracking-[0.12em] text-gray-400 font-medium mb-3">Who it&rsquo;s for</p>
+          <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 leading-tight">
+            Four buyers. One protocol.
+          </h2>
+          <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
+            Built for businesses with real FX exposure and the capital that wants to write that risk.
+          </p>
         </motion.div>
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 mb-3 sm:mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {cards.map((c, i) => (
-            <motion.div key={i} initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.25, delay: i * 0.06 }}
-              className="rounded-xl sm:rounded-2xl border border-gray-100 p-4 sm:p-6 bg-white hover:border-[#1a4480]/20 hover:shadow-sm transition-all">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xl">{c.emoji}</span>
-                <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{c.role}</h3>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-400 mb-2">{c.pain}</p>
-              <p className="text-xs sm:text-sm text-[#1a4480] font-medium">{c.solution}</p>
+            <motion.div
+              key={i}
+              initial={{ opacity: 0.6, y: 8 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-50px' }}
+              transition={{ duration: 0.3, delay: i * 0.05 }}
+              className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-6 hover:border-gray-200 transition-colors"
+            >
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">{c.role}</h3>
+              <p className="mt-2 text-[13px] sm:text-sm text-gray-500 leading-relaxed">{c.pain}</p>
+              <p className="mt-3 pt-3 border-t border-gray-100 text-[13px] sm:text-sm text-gray-900 leading-relaxed">
+                {c.solution}
+              </p>
             </motion.div>
           ))}
         </div>
-
-        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.25, delay: 0.24 }}
-          className="rounded-xl sm:rounded-2xl border border-[#1a4480]/20 bg-[#1a4480]/5 p-4 sm:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">⚙️</span>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Event Creators</h3>
-              <span className="text-xs text-[#1a4480] font-medium">Market makers</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm">
-            <div className="bg-white rounded-xl p-3 sm:p-4 border border-[#1a4480]/10 text-center">
-              <p className="text-lg mb-1">🎯</p>
-              <p className="font-medium text-gray-800 mb-0.5">Design the pool</p>
-              <p className="text-gray-400 leading-snug">Set pair, strike, premium, expiry</p>
-            </div>
-            <div className="bg-white rounded-xl p-3 sm:p-4 border border-[#1a4480]/10 text-center">
-              <p className="text-lg mb-1">💰</p>
-              <p className="font-medium text-gray-800 mb-0.5">Earn 5% loyalty</p>
-              <p className="text-gray-400 leading-snug">On every fee your event generates</p>
-            </div>
-            <div className="bg-white rounded-xl p-3 sm:p-4 border border-[#1a4480]/10 text-center">
-              <p className="text-lg mb-1">🌐</p>
-              <p className="font-medium text-gray-800 mb-0.5">Open to anyone</p>
-              <p className="text-gray-400 leading-snug">Trading desks, fintechs, DeFi protocols</p>
-            </div>
-          </div>
-        </motion.div>
       </div>
     </section>
   );
@@ -969,67 +952,53 @@ export default function Website() {
 
       <LiveFxTicker />
 
-      <section className="pt-16 pb-8 md:pt-24 md:pb-12 overflow-hidden">
+      <section className="pt-12 pb-10 md:pt-20 md:pb-16 overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-[45%_55%] gap-4 md:gap-8 items-center">
+          <div className="grid md:grid-cols-[48%_52%] gap-10 md:gap-12 items-center">
 
             {/* Left: text content */}
             <div className="text-center md:text-left">
-              <motion.div initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-4">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Live on Mainnet
-                </span>
-              </motion.div>
-
-              <motion.h1 initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}
-                className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 leading-tight text-[#1a4480]">
-                Hedge against price swings
-                <br />
-                <span className="text-gray-400">and pay across borders</span>
-                <br />
-                <span className="text-[#1a4480]">with BlockFinaX.</span>
+              <motion.h1 initial={{ opacity: 0.6, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
+                className="text-[34px] sm:text-5xl md:text-[56px] font-semibold tracking-[-0.02em] leading-[1.05] text-gray-900">
+                On-chain FX protection
+                <span className="block text-gray-400 mt-1.5">for businesses banks won't serve.</span>
               </motion.h1>
 
-              <motion.p initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}
-                className="text-base text-gray-500 max-w-lg mx-auto md:mx-0 mb-8">
-                BlockFinaX lets businesses and traders protect their earnings and capital from FX losses, commodity price swings, and crypto drawdowns — hedge the downside before it hits you. All on-chain. No intermediaries.
+              <motion.p initial={{ opacity: 0.6, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}
+                className="mt-5 sm:mt-6 text-[15px] sm:text-base text-gray-500 max-w-lg mx-auto md:mx-0 leading-relaxed">
+                Buy parametric FX cover priced by a live market. Underwrite emerging-market currency risk for premium income. Settle on-chain, in USDC, without a bank in the loop.
               </motion.p>
 
-              <motion.div initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}
-                className="flex flex-row justify-center md:justify-start items-center gap-3 mb-8">
+              <motion.div initial={{ opacity: 0.6, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.16 }}
+                className="mt-8 sm:mt-10 flex flex-col sm:flex-row justify-center md:justify-start items-stretch sm:items-center gap-3">
                 <Link href="/apply">
-                  <Button className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm font-medium">
-                    Apply for access <ArrowRight className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <Button className="w-full sm:w-auto bg-gray-900 text-white hover:bg-gray-800 rounded-full px-7 h-11 text-sm font-medium">
+                    Request access <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Button>
                 </Link>
                 <Link href="/docs/request">
-                  <Button variant="outline" className="rounded-full px-5 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm font-medium border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                  <Button variant="outline" className="w-full sm:w-auto rounded-full px-7 h-11 text-sm font-medium border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900">
                     Read the docs
                   </Button>
                 </Link>
               </motion.div>
 
-              <motion.div initial={{ opacity: 0.7 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.25 }}
-                className="flex items-center justify-center md:justify-start gap-2 text-sm text-gray-500">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span>Live on Base &amp; BNB Smart Chain</span>
-              </motion.div>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.3 }}
+                className="mt-8 text-xs text-gray-400 font-medium tracking-wide uppercase">
+                Live on Base &amp; BNB Smart Chain
+              </motion.p>
             </div>
 
-            {/* Right: app screenshot — shown on mobile (smaller) and desktop */}
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
-              className="relative w-full mt-4 md:mt-0">
+            {/* Right: app screenshot */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}
+              className="relative w-full">
               <div className="relative w-full">
-                <img src={appScreenshotImg} alt="BlockFinaX app — wallet, hedge marketplace, live rates" className="w-full object-contain scale-110 md:scale-125" style={{ mixBlendMode: 'multiply' }} />
-                {/* floating stat chips */}
-                <div className="absolute bottom-4 -left-2 sm:-left-6 bg-white rounded-xl shadow-lg border border-gray-100 px-3 py-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-xs font-semibold text-gray-700">Oracle live · 5-min</span>
-                </div>
-                <div className="absolute top-4 -right-2 sm:-right-6 bg-white rounded-xl shadow-lg border border-gray-100 px-3 py-2">
-                  <span className="text-xs font-semibold text-[#1a4480]">63 pairs covered</span>
-                </div>
+                <img
+                  src={appScreenshotImg}
+                  alt="BlockFinaX — wallet, hedge marketplace, live rates"
+                  className="w-full object-contain"
+                  style={{ mixBlendMode: 'multiply' }}
+                />
               </div>
             </motion.div>
 
