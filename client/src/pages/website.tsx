@@ -135,6 +135,219 @@ function LiveHedgeEvents() {
   );
 }
 
+function ProblemSection() {
+  const stats = [
+    { figure: '-238%', label: 'NGN vs USD, 2022→2025', sub: '₦460 → ₦1,555 / $' },
+    { figure: '-69%', label: 'GHS vs USD, 2022→2025', sub: '₵6.0 → ₵15.5 / $' },
+    { figure: '-66%', label: 'EGP vs USD, Mar 2024', sub: 'devalued in a single day' },
+    { figure: '-46%', label: 'KES vs USD, 2022→2024', sub: 'KSh 115 → KSh 161 / $' },
+  ];
+  const lossExamples = [
+    {
+      headline: '$1,000,000 NGN payable, unhedged',
+      body: 'Importer with a 90-day USD invoice. Naira moves 14% over the period. Forwards from the bank are unavailable or quoted at 18%+. They eat the move directly.',
+      cost: '$140,000',
+      costLabel: 'lost margin',
+    },
+    {
+      headline: '$50,000 GHS payroll, monthly',
+      body: 'SaaS company billing in USD, paying engineers in Ghana. Cedi appreciates 4% between invoicing and pay day — gross margin drops by the same.',
+      cost: '$2,000',
+      costLabel: 'eaten in one month',
+    },
+    {
+      headline: '$200K USDC sitting idle',
+      body: 'African market-maker holding stables waiting for trades. Annualised, that capital could earn 10–18% writing FX cover — but there\'s no liquid options market locally.',
+      cost: '$20K–$36K',
+      costLabel: 'opportunity / year',
+    },
+  ];
+
+  return (
+    <section id="problem" className="py-14 sm:py-20 border-t border-gray-100 bg-gradient-to-b from-white to-gray-50/40">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="max-w-2xl mb-10">
+          <span className="inline-block text-[11px] uppercase tracking-wider text-[#1a4480] font-semibold bg-[#1a4480]/10 rounded-full px-2.5 py-1 mb-3">The problem</span>
+          <h2 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-3 leading-tight tracking-tight">
+            FX volatility is a tax on every African business that touches dollars.
+          </h2>
+          <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+            Importers, exporters, remitters, treasuries, market-makers — they all hold the wrong side of an exchange rate at some point. The hedging tools that big firms in New York use to manage this — FX forwards, options, swaps — barely exist for businesses operating in cedis, naira, or shillings. Banks, when they offer them, charge 12–25% premiums. So most firms simply absorb the loss.
+          </p>
+        </motion.div>
+
+        {/* Stat strip */}
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          {stats.map((s, i) => (
+            <div key={i} className="rounded-2xl bg-white border border-gray-100 p-4">
+              <p className="font-mono text-2xl sm:text-3xl font-bold text-red-600 tracking-tight">{s.figure}</p>
+              <p className="text-xs font-semibold text-gray-900 mt-1.5 leading-tight">{s.label}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{s.sub}</p>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Concrete loss scenarios */}
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="space-y-3">
+          {lossExamples.map((ex, i) => (
+            <div key={i} className="rounded-2xl bg-white border border-gray-100 p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:gap-6 sm:items-center">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{ex.headline}</h3>
+                <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">{ex.body}</p>
+              </div>
+              <div className="text-right shrink-0 border-t sm:border-t-0 sm:border-l border-gray-100 sm:pl-6 pt-3 sm:pt-0">
+                <p className="font-mono text-xl sm:text-2xl font-bold text-red-600">{ex.cost}</p>
+                <p className="text-[11px] text-gray-400 uppercase tracking-wider mt-1">{ex.costLabel}</p>
+              </div>
+            </div>
+          ))}
+        </motion.div>
+
+        <motion.p initial={{ opacity: 0.6 }} whileInView={{ opacity: 1 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="text-center text-sm text-gray-500 mt-8 max-w-xl mx-auto">
+          BlockFinaX exists so businesses across emerging markets can buy the same kind of FX protection a multinational treasury would buy — in USDC, on-chain, in minutes, with no bank relationship required.
+        </motion.p>
+      </div>
+    </section>
+  );
+}
+
+function UnderwriterSection() {
+  const yieldScenarios = [
+    { tier: 'Conservative', pair: 'USD/EUR', annualised: '4–7%', desc: 'Low-vol majors, wide strikes' },
+    { tier: 'Balanced', pair: 'USD/ZAR · USD/KES', annualised: '9–14%', desc: 'Liquid EM with predictable bands' },
+    { tier: 'High yield', pair: 'USD/NGN · USD/GHS · USD/EGP', annualised: '18–32%', desc: 'Frontier EM, wider premiums' },
+  ];
+
+  return (
+    <section id="underwriters" className="py-14 sm:py-20 border-t border-gray-100">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="max-w-2xl mb-10">
+          <span className="inline-block text-[11px] uppercase tracking-wider text-emerald-700 font-semibold bg-emerald-50 rounded-full px-2.5 py-1 mb-3">For liquidity providers</span>
+          <h2 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-3 leading-tight tracking-tight">
+            Underwrite FX cover. Earn premiums while you sleep.
+          </h2>
+          <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+            You deposit USDC into a cover pool of your choice — say USD/NGN at a ₦1,800 strike, 30 days out. Hedgers pay a premium upfront to buy protection backed by your capital. If the rate stays inside the band, you keep every cent. If it breaches, the pool pays out and the rest stays with you.
+          </p>
+        </motion.div>
+
+        {/* The economics, broken down */}
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-7 mb-6">
+          <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-4">Worked example · 30-day USD/NGN pool, ₦1,800 strike</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-6">
+            <div>
+              <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Your deposit</p>
+              <p className="font-mono text-xl font-bold text-gray-900">$50,000</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Premium earned</p>
+              <p className="font-mono text-xl font-bold text-emerald-600">+$1,250</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">2.5% in 30 days</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">If pool doesn't pay</p>
+              <p className="font-mono text-xl font-bold text-gray-900">$51,250</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">all premium, no payout</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Annualised</p>
+              <p className="font-mono text-xl font-bold text-emerald-600">~30%</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">if rolled monthly</p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-3">If the strike is breached</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+                <p className="text-xs text-gray-500 mb-1">Premium kept</p>
+                <p className="font-mono text-base font-bold text-amber-700">+$1,250</p>
+              </div>
+              <div className="rounded-xl bg-red-50 border border-red-100 p-3">
+                <p className="text-xs text-gray-500 mb-1">Pool payout used</p>
+                <p className="font-mono text-base font-bold text-red-700">−$3,800</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">capped per position</p>
+              </div>
+              <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-xs text-gray-500 mb-1">Net for the month</p>
+                <p className="font-mono text-base font-bold text-gray-900">−$2,550</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">−5.1% on your stake</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">
+              Payouts are <strong>capped per position</strong> using the <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px]">payoutCap</code> field on every event — your liability is bounded before a hedger ever buys. The pool is collateralised first and offered second.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Why this matters */}
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+          {[
+            { title: 'Capital efficiency', body: 'Deposit once, earn premium across the whole pool lifetime. Withdraw your principal + premium after settlement.' },
+            { title: 'Position-level risk caps', body: 'Every cover position has a capped payout. You can model your worst case exactly before depositing.' },
+            { title: 'Yield where banks won\'t go', body: 'Frontier-EM FX premiums are 3–5× higher than developed-market options. Same risk math, different price.' },
+          ].map((b, i) => (
+            <div key={i} className="rounded-2xl border border-gray-100 bg-white p-4">
+              <p className="text-sm font-semibold text-gray-900 mb-1.5">{b.title}</p>
+              <p className="text-xs text-gray-500 leading-relaxed">{b.body}</p>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Yield by pool tier */}
+        <motion.div initial={{ opacity: 0.6, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }} transition={{ duration: 0.3 }}
+          className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/50">
+            <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold">Indicative yield by tier</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-4 sm:px-5 py-3 text-[10px] uppercase tracking-wider font-medium text-gray-400">Tier</th>
+                <th className="text-left px-4 sm:px-5 py-3 text-[10px] uppercase tracking-wider font-medium text-gray-400">Typical pair</th>
+                <th className="text-right px-4 sm:px-5 py-3 text-[10px] uppercase tracking-wider font-medium text-gray-400">Annualised</th>
+              </tr>
+            </thead>
+            <tbody>
+              {yieldScenarios.map((y, i) => (
+                <tr key={i} className="border-b border-gray-50 last:border-b-0">
+                  <td className="px-4 sm:px-5 py-3.5">
+                    <p className="text-sm font-semibold text-gray-900">{y.tier}</p>
+                    <p className="text-[11px] text-gray-400">{y.desc}</p>
+                  </td>
+                  <td className="px-4 sm:px-5 py-3.5 text-sm font-mono text-gray-700">{y.pair}</td>
+                  <td className="px-4 sm:px-5 py-3.5 text-right">
+                    <p className="font-mono text-base font-bold text-emerald-600">{y.annualised}</p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </motion.div>
+
+        <p className="text-[11px] text-gray-400 text-center mt-4 max-w-2xl mx-auto">
+          Indicative ranges based on Q1 2026 pool history. Actual yields depend on pool selection, strike distance, expiry, and realised FX path. Past performance does not predict future results.
+        </p>
+
+        <div className="text-center mt-10">
+          <Link href="/apply">
+            <Button className="bg-emerald-600 text-white hover:bg-emerald-700 rounded-full px-7 h-11 text-sm font-medium">
+              Apply to underwrite <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SolutionsSection() {
   return (
     <section id="solutions" className="py-16 border-t border-gray-100">
@@ -707,9 +920,9 @@ export default function Website() {
                   </div>
                 )}
               </div>
-              <Link href="/wallet">
+              <Link href="/apply">
                 <Button size="sm" className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 text-sm font-medium">
-                  Launch App
+                  Apply for access
                 </Button>
               </Link>
             </div>
@@ -739,8 +952,13 @@ export default function Website() {
                   )}
                 </div>
                 <div className="px-3 pt-2">
-                  <Link href="/wallet">
-                    <Button className="w-full bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full font-medium" size="sm">Launch App</Button>
+                  <Link href="/apply">
+                    <Button className="w-full bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full font-medium" size="sm">Apply for access</Button>
+                  </Link>
+                </div>
+                <div className="px-3">
+                  <Link href="/docs/request">
+                    <Button variant="outline" className="w-full rounded-full font-medium" size="sm">Request docs</Button>
                   </Link>
                 </div>
               </div>
@@ -780,14 +998,14 @@ export default function Website() {
 
               <motion.div initial={{ opacity: 0.7, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}
                 className="flex flex-row justify-center md:justify-start items-center gap-3 mb-8">
-                <Link href="/wallet">
+                <Link href="/apply">
                   <Button className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm font-medium">
-                    Launch App <ArrowRight className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    Apply for access <ArrowRight className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>
                 </Link>
-                <Link href="/hedge">
+                <Link href="/docs/request">
                   <Button variant="outline" className="rounded-full px-5 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm font-medium border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                    Explore Hedge
+                    Read the docs
                   </Button>
                 </Link>
               </motion.div>
@@ -855,6 +1073,8 @@ export default function Website() {
         </div>
       </section>
 
+      <ProblemSection />
+
       <VisionSection />
 
       <SolutionsSection />
@@ -864,6 +1084,8 @@ export default function Website() {
       <HowItWorks />
 
       <ExampleSection />
+
+      <UnderwriterSection />
 
       <LiveHedgeEvents />
 
@@ -887,9 +1109,9 @@ export default function Website() {
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Platform</h4>
                 <ul className="space-y-2 text-sm text-gray-400">
-                  <li><Link href="/wallet" className="hover:text-gray-600 transition-colors">Wallet</Link></li>
-                  <li><Link href="/hedge" className="hover:text-gray-600 transition-colors">Hedge</Link></li>
-                  <li><Link href="/auth" className="hover:text-gray-600 transition-colors">Create Wallet</Link></li>
+                  <li><Link href="/apply" className="hover:text-gray-600 transition-colors">Apply for access</Link></li>
+                  <li><Link href="/docs/request" className="hover:text-gray-600 transition-colors">Request docs</Link></li>
+                  <li><a href="mailto:hello@blockfinax.com" className="hover:text-gray-600 transition-colors">Partnerships</a></li>
                 </ul>
               </div>
               <div>

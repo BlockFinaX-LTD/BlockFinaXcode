@@ -442,3 +442,58 @@ export const dataRoomContent = pgTable("data_room_content", {
 
 export type DataRoomContentRow = typeof dataRoomContent.$inferSelect;
 
+// ──────────────────────────────────────────────────────────────────────
+// Private-beta gating
+//   - access_requests: form submissions from /apply
+//   - access_grants:   approved emails (allowlist gate on the app)
+//   - docs_tokens:     per-request docs password tokens (7-day expiry)
+// ──────────────────────────────────────────────────────────────────────
+
+export const accessRequests = pgTable("access_requests", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
+  country: text("country"),
+  role: text("role"),
+  company: text("company"),
+  useCase: text("use_case"),
+  heardFrom: text("heard_from"),
+  socialHandle: text("social_handle"),
+  status: text("status").notNull().default('pending'), // pending | approved | rejected
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  reviewNote: text("review_note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAccessRequestSchema = createInsertSchema(accessRequests).omit({
+  id: true, status: true, reviewedAt: true, reviewedBy: true, reviewNote: true, createdAt: true,
+});
+
+export type AccessRequest = typeof accessRequests.$inferSelect;
+export type InsertAccessRequest = z.infer<typeof insertAccessRequestSchema>;
+
+export const accessGrants = pgTable("access_grants", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  grantedAt: timestamp("granted_at").defaultNow().notNull(),
+  grantedBy: text("granted_by"),
+  revokedAt: timestamp("revoked_at"),
+});
+
+export type AccessGrant = typeof accessGrants.$inferSelect;
+
+export const docsTokens = pgTable("docs_tokens", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  name: text("name"),
+  reason: text("reason"),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type DocsToken = typeof docsTokens.$inferSelect;
+
