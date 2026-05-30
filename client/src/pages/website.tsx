@@ -298,9 +298,8 @@ function Hero() {
             <span className="text-white/60">for emerging markets</span>
           </h1>
           <p className="mt-6 sm:mt-8 text-[15px] sm:text-lg text-white/70 max-w-2xl mx-auto leading-relaxed">
-            Parametric FX and commodity cover, fully funded by USDC collateral
-            and settled by multi-oracle consensus. Pay a one-time premium &mdash;
-            no banking relationship, no minimum size, no margin call.
+            Pay a small premium instead of the whole notional. Get paid when the
+            rate moves against you. Start from $10, where banks demand $100,000.
           </p>
           <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
             <Link href="/apply">
@@ -502,7 +501,7 @@ function WhyBlockFinaX() {
     {
       dim: 'Minimum ticket',
       bfx: 'From around $10 of premium. SMEs and traders can buy cover for the actual size they need.',
-      bank: 'Typically $250K notional and up. Below that threshold most desks won&rsquo;t quote, and the desks that do widen the spread until they do.',
+      bank: 'Typically $100K notional and up. Below that threshold most desks won&rsquo;t quote, and the desks that do widen the spread until they do.',
     },
     {
       dim: 'Access',
