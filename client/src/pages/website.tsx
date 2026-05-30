@@ -327,43 +327,26 @@ function Hero() {
 function Capability() {
   return (
     <section id="about" className="py-20 sm:py-28 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[1fr_auto] gap-10 items-center">
-        <div className="max-w-2xl">
-          <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
-            Infrastructure
-          </span>
-          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Parametric FX and commodity cover, settled on-chain in USDC
-          </h2>
-          <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
-            BlockFinaX runs a marketplace of fully-funded cover pools. Hedgers pick a
-            strike and pay a premium upfront. Capital providers underwrite the risk
-            for that premium. At expiry, a multi-oracle consensus settles each
-            event automatically against the published rate &mdash; no bank
-            relationship, no margin call, no liquidation.
-          </p>
-          <div className="mt-7">
-            <Link href="/docs/request">
-              <Button className="h-11 px-6 rounded-full bg-[#001F5C] text-white hover:bg-[#003088] text-sm font-semibold">
-                Read more <ArrowRight className="h-4 w-4 ml-1.5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Stats column — concrete numbers, no fluff */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1 lg:w-72">
-          {[
-            ['63', 'pairs covered'],
-            ['3-of-3', 'oracle consensus'],
-            ['100%', 'pre-funded collateral'],
-            ['USDC', 'settlement asset'],
-          ].map(([n, label]) => (
-            <div key={label} className="bg-gray-50 rounded-2xl p-5 border border-gray-200/60">
-              <p className="text-3xl lg:text-[34px] font-semibold tracking-tight text-[#001F5C] font-mono-data">{n}</p>
-              <p className="text-xs sm:text-sm text-gray-600 mt-1 leading-tight">{label}</p>
-            </div>
-          ))}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
+          Infrastructure
+        </span>
+        <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
+          Parametric FX and commodity cover, settled on-chain in USDC
+        </h2>
+        <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
+          BlockFinaX runs a marketplace of fully-funded cover pools. Hedgers pick a
+          strike and pay a premium upfront. Capital providers underwrite the risk
+          for that premium. At expiry, a multi-oracle consensus settles each event
+          automatically against the published rate &mdash; no bank relationship,
+          no margin call, no liquidation.
+        </p>
+        <div className="mt-7">
+          <Link href="/docs/request">
+            <Button className="h-11 px-6 rounded-full bg-[#001F5C] text-white hover:bg-[#003088] text-sm font-semibold">
+              Read more <ArrowRight className="h-4 w-4 ml-1.5" />
+            </Button>
+          </Link>
         </div>
       </div>
     </section>
