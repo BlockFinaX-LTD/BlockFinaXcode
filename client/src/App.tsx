@@ -49,6 +49,7 @@ import FinancialModel from "@/pages/financial-model";
 import ApplyPage from "@/pages/apply";
 import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
+import LiquidityProviderPage from "@/pages/liquidity-provider";
 import { AccessGate } from "@/components/access-gate";
 import { DocsGate } from "@/components/docs-gate";
 import { AuthGate } from "@/components/auth-gate";
@@ -151,6 +152,7 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPage} />
       <Route path="/apply" component={ApplyPage} />
       <Route path="/docs/request" component={DocsRequestPage} />
+      <Route path="/liquidity-provider" component={LiquidityProviderPage} />
 
       {/* Auth — gated by AuthGate; AccessGate downstream enforces the
           allowlist once Rift sign-in completes */}

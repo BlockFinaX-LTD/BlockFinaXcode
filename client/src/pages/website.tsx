@@ -878,6 +878,7 @@ export default function Website() {
               <a href="#about" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Why Us</a>
               <a href="#solutions" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">The Platform</a>
               <a href="#who-this-is-for" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Users</a>
+              <Link href="/liquidity-provider" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Liquidity provider</Link>
               <div className="relative" onMouseEnter={() => setExploreOpen(true)} onMouseLeave={() => setExploreOpen(false)}>
                 <button className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1">
                   Resources <ChevronDown className={`h-3.5 w-3.5 transition-transform ${exploreOpen ? 'rotate-180' : ''}`} />
@@ -921,6 +922,9 @@ export default function Website() {
                 <a href="#about" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">Why Us</a>
                 <a href="#solutions" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">The Platform</a>
                 <a href="#who-this-is-for" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">Users</a>
+                <Link href="/liquidity-provider">
+                  <a onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">Liquidity provider</a>
+                </Link>
                 <div>
                   <button onClick={() => setMobileExploreOpen(!mobileExploreOpen)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
                     Resources <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileExploreOpen ? 'rotate-180' : ''}`} />

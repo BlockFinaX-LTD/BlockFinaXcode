@@ -29,32 +29,7 @@ const app = express();
 
 // Security headers — must be applied before any routes
 const isProd = process.env.NODE_ENV === 'production';
-
-// Route-specific CSP for the standalone LP-tool HTML at /lp-tool.html.
-// That page is shipped as-is with inline scripts + Chart.js loaded from
-// cdnjs.cloudflare.com. Both would be blocked by the global strict CSP
-// below. This middleware runs first, sets the permissive header, and
-// short-circuits the helmet chain via an early next() bypass.
-const LP_TOOL_PATHS = new Set(['/lp-tool.html', '/lp-tool']);
-
-const lpToolHelmet = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      styleSrc:   ["'self'", "'unsafe-inline'"],
-      imgSrc:     ["'self'", "data:", "blob:", "https:"],
-      fontSrc:    ["'self'", "data:"],
-      connectSrc: ["'self'"],
-      objectSrc:  ["'none'"],
-      baseUri:    ["'self'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-});
-
-const strictHelmet = helmet({
+app.use(helmet({
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc:     ["'self'"],
@@ -129,17 +104,7 @@ const strictHelmet = helmet({
   // override, third-party embeds like the Rift widget's branded header
   // can't render our logo.
   crossOriginResourcePolicy: { policy: "same-site" },
-});
-
-// Dispatcher: pick whichever helmet matches the request path. /lp-tool.html
-// gets the permissive policy so its inline scripts + Chart.js CDN work;
-// every other path gets the hardened policy.
-app.use((req, res, next) => {
-  if (LP_TOOL_PATHS.has(req.path)) {
-    return lpToolHelmet(req, res, next);
-  }
-  return strictHelmet(req, res, next);
-});
+}));
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
