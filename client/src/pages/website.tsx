@@ -39,8 +39,6 @@ const CURRENCY_CC: Record<string, string> = {
   EUR: 'eu', GBP: 'gb', USD: 'us',
 };
 
-const FLAG_URL = (cc: string) => `https://flagcdn.com/w40/${cc}.svg`;
-
 interface Pair {
   code: string;
   label: string;
@@ -82,18 +80,21 @@ const SUPPORTED_COMMODITIES: Commodity[] = [
 
 // ── Flag image component ────────────────────────────────────────────────
 
+// Bundled SVG flags. country-flag-icons emits one React component per ISO
+// code; importing the namespace lets us look up by code at runtime without
+// caring whether a particular flag exists in the package.
+import * as Flags from 'country-flag-icons/react/3x2';
+
 function Flag({ code, size = 24 }: { code: string; size?: number }) {
-  const cc = CURRENCY_CC[code];
+  const cc = CURRENCY_CC[code]?.toUpperCase();
   if (!cc) return null;
+  const Component = (Flags as Record<string, React.ComponentType<{ title?: string; style?: React.CSSProperties; className?: string }>>)[cc];
+  if (!Component) return null;
   return (
-    <img
-      src={FLAG_URL(cc)}
-      alt={`${code} flag`}
-      width={size}
-      height={Math.round(size * 0.75)}
-      loading="lazy"
-      className="object-cover rounded-[3px] shrink-0"
-      style={{ aspectRatio: '4/3' }}
+    <Component
+      title={code}
+      style={{ width: size, height: Math.round(size * 0.75) }}
+      className="rounded-[3px] shrink-0 object-cover"
     />
   );
 }
@@ -297,9 +298,9 @@ function Hero() {
             <span className="text-white/60">for emerging markets</span>
           </h1>
           <p className="mt-6 sm:mt-8 text-[15px] sm:text-lg text-white/70 max-w-2xl mx-auto leading-relaxed">
-            Parametric FX protection priced by a live market, settled in USDC,
-            available to importers, exporters, and treasuries without a banking
-            relationship.
+            Parametric FX and commodity cover, fully funded by USDC collateral
+            and settled by multi-oracle consensus. Pay a one-time premium &mdash;
+            no banking relationship, no minimum size, no margin call.
           </p>
           <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
             <Link href="/apply">
@@ -494,28 +495,38 @@ function Products() {
 function WhyBlockFinaX() {
   const rows = [
     {
+      dim: 'Up-front capital',
+      bfx: 'Hedger pays a premium only &mdash; typically 1&ndash;5% of the notional being protected. The protocol takes the risk; the hedger keeps their cash working.',
+      bank: 'Full notional. A forward or NDF locks the entire trade value in margin for the life of the contract. Capital is unavailable until settlement.',
+    },
+    {
+      dim: 'Minimum ticket',
+      bfx: 'From around $10 of premium. SMEs and traders can buy cover for the actual size they need.',
+      bank: 'Typically $250K notional and up. Below that threshold most desks won&rsquo;t quote, and the desks that do widen the spread until they do.',
+    },
+    {
       dim: 'Access',
-      bfx: 'Open. Any business with a wallet can buy cover; any USDC holder can underwrite.',
-      bank: 'Closed. Forward contracts require a banking relationship, minimum size, and corridor approval.',
+      bfx: 'Open. Any business with a wallet can buy cover. Any USDC holder can underwrite.',
+      bank: 'Closed. A banking relationship, KYC tier, corridor approval, and a credit line are all prerequisites.',
     },
     {
       dim: 'Settlement',
-      bfx: 'Smart-contract automatic. Multi-oracle consensus posts the rate at expiry; payout is one transaction.',
-      bank: 'Manual. T+2 settlement, broker confirmation, paper trail. P2P channels require trust in the counterparty.',
+      bfx: 'Smart-contract automatic. Three independent oracle nodes submit the rate at expiry; consensus triggers payout in one transaction.',
+      bank: 'Manual. T+2, broker confirmation, paper trail. P2P channels require trust that the counterparty actually wires the money.',
     },
     {
       dim: 'Counterparty risk',
-      bfx: 'None. Every payout is pre-funded by USDC locked in the pool at the time of purchase.',
-      bank: 'Concentrated. Forward contracts depend on the dealer&rsquo;s solvency. P2P depends on the counterparty showing up.',
+      bfx: 'None. Every payout is pre-funded by USDC locked in the pool at the moment the cover is purchased.',
+      bank: 'Concentrated. Forwards depend on the dealer&rsquo;s solvency. P2P depends on the counterparty showing up.',
     },
     {
       dim: 'Underwriter loss profile',
-      bfx: 'Bounded by pool cap. Maximum loss per event is fixed before capital is committed.',
-      bank: 'Unbounded. Selling options or providing OTC quotes can produce losses well beyond initial collateral.',
+      bfx: 'Bounded by the pool cap. Maximum loss per event is fixed before capital is committed.',
+      bank: 'Unbounded. Selling options or quoting OTC can produce losses well beyond initial margin.',
     },
     {
       dim: 'Pricing transparency',
-      bfx: 'Premium rate is published on-chain per event and visible to every participant before they trade.',
+      bfx: 'Each cover event publishes its premium rate on-chain. Same number for every buyer of that event.',
       bank: 'Opaque. Dealer spreads, last-look fills, and tiered pricing all favour the desk.',
     },
   ];
