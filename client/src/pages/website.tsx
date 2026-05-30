@@ -25,34 +25,78 @@ import {
 import { Button } from '@/components/ui/button';
 import logoPath from '@/assets/logo.png';
 
-// ── Currency flag map (reused across the page) ──────────────────────────
+// ── Currency / commodity inventory ──────────────────────────────────────
 
-const FLAG_MAP: Record<string, string> = {
-  GHS: '\u{1F1EC}\u{1F1ED}',
-  NGN: '\u{1F1F3}\u{1F1EC}',
-  KES: '\u{1F1F0}\u{1F1EA}',
-  ZAR: '\u{1F1FF}\u{1F1E6}',
-  EGP: '\u{1F1EA}\u{1F1EC}',
-  ETB: '\u{1F1EA}\u{1F1F9}',
-  XOF: '\u{1F1F8}\u{1F1F3}',
-  XAF: '\u{1F1E8}\u{1F1F2}',
-  RWF: '\u{1F1F7}\u{1F1FC}',
-  UGX: '\u{1F1FA}\u{1F1EC}',
-  TZS: '\u{1F1F9}\u{1F1FF}',
-  MWK: '\u{1F1F2}\u{1F1FC}',
-  MZN: '\u{1F1F2}\u{1F1FF}',
-  ZMW: '\u{1F1FF}\u{1F1F2}',
-  AOA: '\u{1F1E6}\u{1F1F4}',
-  EUR: '\u{1F1EA}\u{1F1FA}',
-  GBP: '\u{1F1EC}\u{1F1E7}',
-  USD: '\u{1F1FA}\u{1F1F8}',
+// ISO 3166 country code per currency for the flagcdn SVGs. flagcdn.com serves
+// branded SVG flags at zero bundle cost and is permitted by the existing CSP
+// img-src directive ('https:').
+const CURRENCY_CC: Record<string, string> = {
+  NGN: 'ng', KES: 'ke', GHS: 'gh', ZAR: 'za', EGP: 'eg', ETB: 'et',
+  UGX: 'ug', TZS: 'tz', RWF: 'rw', MWK: 'mw', MZN: 'mz', ZMW: 'zm',
+  XOF: 'sn', // CFA franc — uses Senegal flag for the West African union
+  XAF: 'cm', // CFA franc — uses Cameroon flag for the Central African union
+  AOA: 'ao',
+  EUR: 'eu', GBP: 'gb', USD: 'us',
 };
 
-const SUPPORTED_PAIRS = [
-  'NGN', 'KES', 'GHS', 'ZAR', 'EGP', 'ETB',
-  'UGX', 'TZS', 'RWF', 'MWK', 'MZN', 'ZMW',
-  'XOF', 'XAF', 'AOA', 'EUR', 'GBP', 'USD',
+const FLAG_URL = (cc: string) => `https://flagcdn.com/w40/${cc}.svg`;
+
+interface Pair {
+  code: string;
+  label: string;
+}
+
+// USD-quoted FX pairs we cover.
+const SUPPORTED_PAIRS: Pair[] = [
+  { code: 'NGN', label: 'Nigerian Naira' },
+  { code: 'KES', label: 'Kenyan Shilling' },
+  { code: 'GHS', label: 'Ghanaian Cedi' },
+  { code: 'ZAR', label: 'South African Rand' },
+  { code: 'EGP', label: 'Egyptian Pound' },
+  { code: 'ETB', label: 'Ethiopian Birr' },
+  { code: 'UGX', label: 'Ugandan Shilling' },
+  { code: 'TZS', label: 'Tanzanian Shilling' },
+  { code: 'RWF', label: 'Rwandan Franc' },
+  { code: 'MWK', label: 'Malawian Kwacha' },
+  { code: 'XOF', label: 'West African CFA' },
+  { code: 'XAF', label: 'Central African CFA' },
 ];
+
+// Commodity hedges supported by the protocol.
+interface Commodity {
+  code: string;
+  name: string;
+  emoji: string;
+}
+
+const SUPPORTED_COMMODITIES: Commodity[] = [
+  { code: 'XAU', name: 'Gold', emoji: '🟡' },
+  { code: 'XAG', name: 'Silver', emoji: '⚪' },
+  { code: 'WTI', name: 'Crude oil', emoji: '🛢️' },
+  { code: 'COCOA', name: 'Cocoa', emoji: '🟫' },
+  { code: 'COFFEE', name: 'Coffee', emoji: '🟤' },
+  { code: 'COTTON', name: 'Cotton', emoji: '⚪' },
+  { code: 'WHEAT', name: 'Wheat', emoji: '🌾' },
+  { code: 'COPPER', name: 'Copper', emoji: '🟧' },
+];
+
+// ── Flag image component ────────────────────────────────────────────────
+
+function Flag({ code, size = 24 }: { code: string; size?: number }) {
+  const cc = CURRENCY_CC[code];
+  if (!cc) return null;
+  return (
+    <img
+      src={FLAG_URL(cc)}
+      alt={`${code} flag`}
+      width={size}
+      height={Math.round(size * 0.75)}
+      loading="lazy"
+      className="object-cover rounded-[3px] shrink-0"
+      style={{ aspectRatio: '4/3' }}
+    />
+  );
+}
 
 // ── Live FX ticker (real data, scrolls) ──────────────────────────────────
 
@@ -71,7 +115,7 @@ function LiveFxTicker() {
           const quote = r.pair.split('/')[1];
           return (
             <div key={i} className="flex items-center gap-2 text-sm whitespace-nowrap px-3">
-              <span className="text-base leading-none">{FLAG_MAP[quote] || ''}</span>
+              <Flag code={quote} size={18} />
               <span className="text-[#001F5C] font-semibold tracking-tight">{r.pair}</span>
               <span className="font-mono-data font-semibold text-gray-900">
                 {r.rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -272,9 +316,6 @@ function Hero() {
               </Button>
             </Link>
           </div>
-          <p className="mt-10 text-[11px] uppercase tracking-[0.12em] text-white/40 font-medium">
-            Live on Base &middot; BNB Chain &middot; Lisk
-          </p>
         </motion.div>
       </div>
     </section>
@@ -292,12 +333,14 @@ function Capability() {
             Infrastructure
           </span>
           <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Parametric FX cover and on-chain settlement infrastructure for emerging markets
+            Parametric FX and commodity cover, settled on-chain in USDC
           </h2>
           <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
-            BlockFinaX provides fully collateralised FX cover, AMM-discovered
-            pricing, and multi-chain settlement for SMEs, treasuries, and capital
-            partners operating in markets where banks won&rsquo;t write the risk.
+            BlockFinaX runs a marketplace of fully-funded cover pools. Hedgers pick a
+            strike and pay a premium upfront. Capital providers underwrite the risk
+            for that premium. At expiry, a multi-oracle consensus settles each
+            event automatically against the published rate &mdash; no bank
+            relationship, no margin call, no liquidation.
           </p>
           <div className="mt-7">
             <Link href="/docs/request">
@@ -311,14 +354,65 @@ function Capability() {
         {/* Stats column — concrete numbers, no fluff */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-1 lg:w-72">
           {[
-            ['63', 'currency pairs covered'],
-            ['3', 'production chains'],
-            ['100%', 'collateralised, no liquidations'],
-            ['N-of-M', 'oracle settlement'],
+            ['63', 'pairs covered'],
+            ['3-of-3', 'oracle consensus'],
+            ['100%', 'pre-funded collateral'],
+            ['USDC', 'settlement asset'],
           ].map(([n, label]) => (
             <div key={label} className="bg-gray-50 rounded-2xl p-5 border border-gray-200/60">
               <p className="text-3xl lg:text-[34px] font-semibold tracking-tight text-[#001F5C] font-mono-data">{n}</p>
               <p className="text-xs sm:text-sm text-gray-600 mt-1 leading-tight">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── How it works ────────────────────────────────────────────────────────
+
+function HowItWorks() {
+  const steps = [
+    {
+      n: '01',
+      title: 'A pool is opened',
+      body: 'A market-maker or platform creator opens a cover event for a specific pair, strike, and expiry. They set the premium rate, the capped payout, and seed initial liquidity.',
+    },
+    {
+      n: '02',
+      title: 'Underwriters fund the pool',
+      body: 'Capital providers deposit USDC into the pool to back the cover. Their maximum loss per event is bounded by the pool’s capped payout. Premium accrues to them as hedgers buy.',
+    },
+    {
+      n: '03',
+      title: 'Hedgers buy protection',
+      body: 'Businesses pay a one-time premium and receive a position with a fixed strike and expiry. The premium is set by the platform pricing engine using volatility models, not by a live AMM.',
+    },
+    {
+      n: '04',
+      title: 'Multi-oracle settlement',
+      body: 'At expiry, three independent oracle nodes submit the reference rate. Consensus settles the event in one transaction. Payouts and premium claims become withdrawable immediately.',
+    },
+  ];
+
+  return (
+    <section className="py-20 sm:py-28 bg-white border-t border-gray-200/60">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mb-10 sm:mb-14">
+          <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
+            How it works
+          </span>
+          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
+            Four steps. One contract. No banks.
+          </h2>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          {steps.map(({ n, title, body }) => (
+            <div key={n} className="border-t border-gray-200 pt-5">
+              <p className="text-sm font-semibold text-[#0047BB] font-mono-data tracking-wider">{n}</p>
+              <h3 className="mt-3 text-lg font-semibold tracking-tight text-gray-900">{title}</h3>
+              <p className="mt-2 text-[14px] text-gray-600 leading-relaxed">{body}</p>
             </div>
           ))}
         </div>
@@ -333,20 +427,20 @@ function Products() {
   const products = [
     {
       icon: Shield,
-      title: 'FX Cover',
-      body: 'Parametric protection priced by a live market. Cap your max loss, settle automatically on-chain at expiry. No bank relationship required.',
+      title: 'Cover marketplace',
+      body: 'Browse open cover pools by pair, strike, and expiry. Pay a one-time premium in USDC and lock the protection. Settlement is automatic at expiry — no buyer required.',
       href: '/whitepaper',
     },
     {
       icon: Layers,
       title: 'Underwriter pools',
-      body: 'Capital providers earn premium for accepting bounded FX risk. Fully collateralised, no liquidations, fixed maximum exposure per event.',
+      body: 'Provide USDC to back protection on specific pairs and earn premium. Maximum loss per event is capped before you commit. No margin calls, no liquidations, no naked exposure.',
       href: '/liquidity-provider',
     },
     {
       icon: BarChart3,
       title: 'Liquidity workbench',
-      body: 'Backtest underwriting terms against real FX history. Price exposure across pairs. Built for treasury teams and capital partners.',
+      body: 'Backtest underwriting terms against real exchange-rate history. Model return, trigger rate, and tail risk before deploying capital. Built for treasury and capital teams.',
       href: '/liquidity-provider',
     },
   ];
@@ -397,27 +491,143 @@ function Products() {
 
 // ── Supported pairs ─────────────────────────────────────────────────────
 
+function WhyBlockFinaX() {
+  const rows = [
+    {
+      dim: 'Access',
+      bfx: 'Open. Any business with a wallet can buy cover; any USDC holder can underwrite.',
+      bank: 'Closed. Forward contracts require a banking relationship, minimum size, and corridor approval.',
+    },
+    {
+      dim: 'Settlement',
+      bfx: 'Smart-contract automatic. Multi-oracle consensus posts the rate at expiry; payout is one transaction.',
+      bank: 'Manual. T+2 settlement, broker confirmation, paper trail. P2P channels require trust in the counterparty.',
+    },
+    {
+      dim: 'Counterparty risk',
+      bfx: 'None. Every payout is pre-funded by USDC locked in the pool at the time of purchase.',
+      bank: 'Concentrated. Forward contracts depend on the dealer&rsquo;s solvency. P2P depends on the counterparty showing up.',
+    },
+    {
+      dim: 'Underwriter loss profile',
+      bfx: 'Bounded by pool cap. Maximum loss per event is fixed before capital is committed.',
+      bank: 'Unbounded. Selling options or providing OTC quotes can produce losses well beyond initial collateral.',
+    },
+    {
+      dim: 'Pricing transparency',
+      bfx: 'Premium rate is published on-chain per event and visible to every participant before they trade.',
+      bank: 'Opaque. Dealer spreads, last-look fills, and tiered pricing all favour the desk.',
+    },
+  ];
+
+  return (
+    <section className="py-20 sm:py-28 bg-gray-50 border-y border-gray-200/60">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mb-10 sm:mb-14">
+          <span className="inline-block px-3 py-1 rounded-full bg-white text-[#001F5C] text-xs font-semibold tracking-wide border border-gray-200/80">
+            Why BlockFinaX
+          </span>
+          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
+            Structurally different from bank forwards and P2P
+          </h2>
+          <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
+            The same hedging objective, with a settlement model that doesn&rsquo;t
+            depend on a banking line, a trading desk, or a stranger sending a
+            confirmation.
+          </p>
+        </div>
+
+        {/* Comparison table — clean rows, no zebra striping, no decoration */}
+        <div className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden">
+          <div className="hidden md:grid grid-cols-[160px_1fr_1fr] border-b border-gray-200/80 bg-gray-50 text-[11px] uppercase tracking-[0.08em] text-gray-500 font-semibold">
+            <div className="px-5 py-3">Dimension</div>
+            <div className="px-5 py-3 border-l border-gray-200/80 text-[#001F5C]">BlockFinaX</div>
+            <div className="px-5 py-3 border-l border-gray-200/80">Bank forward / P2P</div>
+          </div>
+          <div>
+            {rows.map(({ dim, bfx, bank }, i) => (
+              <div
+                key={dim}
+                className={`grid grid-cols-1 md:grid-cols-[160px_1fr_1fr] ${
+                  i !== rows.length - 1 ? 'border-b border-gray-200/80' : ''
+                }`}
+              >
+                <div className="px-5 pt-5 pb-2 md:py-5 text-sm font-semibold text-gray-900 md:border-r md:border-gray-200/80">
+                  {dim}
+                </div>
+                <div className="px-5 py-2 md:py-5 text-[13px] sm:text-sm text-gray-700 leading-relaxed md:border-r md:border-gray-200/80">
+                  <span className="md:hidden text-[10px] font-semibold tracking-[0.08em] uppercase text-[#0047BB]">BlockFinaX</span>
+                  <p
+                    className="md:mt-0 mt-1"
+                    dangerouslySetInnerHTML={{ __html: bfx }}
+                  />
+                </div>
+                <div className="px-5 pt-2 pb-5 md:py-5 text-[13px] sm:text-sm text-gray-500 leading-relaxed">
+                  <span className="md:hidden text-[10px] font-semibold tracking-[0.08em] uppercase text-gray-400">
+                    Bank / P2P
+                  </span>
+                  <p
+                    className="md:mt-0 mt-1"
+                    dangerouslySetInnerHTML={{ __html: bank }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SupportedPairs() {
   return (
     <section className="py-20 sm:py-28 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mb-10 sm:mb-12">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Pairs supported
+            What you can hedge
           </h2>
           <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            USD-quoted, settled in USDC across Base, BNB Smart Chain, and Lisk. More
-            pairs added quarterly based on flow.
+            USD-quoted FX pairs and physical commodities, settled in USDC. New
+            pairs onboarded as flow concentrates.
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
-          {SUPPORTED_PAIRS.map((code) => (
+
+        {/* Currencies */}
+        <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-[#0047BB] mb-4">
+          Currencies
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3 mb-10 sm:mb-12">
+          {SUPPORTED_PAIRS.map(({ code, label }) => (
+            <div
+              key={code}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-[#001F5C]/30 hover:bg-gray-50 transition-colors"
+              title={label}
+            >
+              <Flag code={code} size={24} />
+              <span className="text-sm font-semibold text-gray-900 font-mono-data">{code}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Commodities */}
+        <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-[#0047BB] mb-4">
+          Commodities
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 sm:gap-3">
+          {SUPPORTED_COMMODITIES.map(({ code, name }) => (
             <div
               key={code}
               className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-[#001F5C]/30 hover:bg-gray-50 transition-colors"
             >
-              <span className="text-xl leading-none">{FLAG_MAP[code] || ''}</span>
-              <span className="text-sm font-semibold text-gray-900 font-mono-data">{code}</span>
+              <span className="h-6 w-6 rounded-md bg-[#EDF1F8] text-[#001F5C] text-[10px] font-bold font-mono-data inline-flex items-center justify-center shrink-0">
+                {code.slice(0, 3)}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 leading-tight">{name}</p>
+                <p className="text-[11px] text-gray-500 font-mono-data leading-tight">USD/{code}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -568,7 +778,9 @@ export default function Website() {
       <Hero />
       <LiveFxTicker />
       <Capability />
+      <HowItWorks />
       <Products />
+      <WhyBlockFinaX />
       <SupportedPairs />
       <TrustStrip />
       <ClosingCTA />
