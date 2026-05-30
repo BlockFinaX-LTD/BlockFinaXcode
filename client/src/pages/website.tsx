@@ -160,6 +160,7 @@ function TopNav({ tone }: { tone: 'dark' | 'light' }) {
           <div className="hidden md:flex items-center gap-7">
             <a href="#about" className={linkBase}>About</a>
             <a href="#products" className={linkBase}>Products</a>
+            <Link href="/hedger" className={linkBase}>Hedgers</Link>
             <Link href="/liquidity-provider" className={linkBase}>Liquidity provider</Link>
             <div
               className="relative"
@@ -216,6 +217,7 @@ function TopNav({ tone }: { tone: 'dark' | 'light' }) {
               {[
                 ['#about', 'About'],
                 ['#products', 'Products'],
+                ['/hedger', 'Hedgers'],
                 ['/liquidity-provider', 'Liquidity provider'],
                 ['/whitepaper', 'Whitepaper'],
                 ['/pitch', 'Pitch deck'],
@@ -474,6 +476,67 @@ function Products() {
 
 // ── Supported pairs ─────────────────────────────────────────────────────
 
+function Workbenches() {
+  const benches = [
+    {
+      audience: 'For hedgers',
+      title: 'See what protection would have changed on your trade',
+      body: 'Plug in a payment you actually made — supplier invoice, foreign tuition, project deposit — and replay the rate path that happened. The workbench shows you what premium would have cost, what payouts would have triggered, and what FX loss flowed through your margin without protection.',
+      cta: 'Open hedger workbench',
+      href: '/hedger',
+    },
+    {
+      audience: 'For capital partners',
+      title: 'Model premium yield against real exchange-rate history',
+      body: 'Pick a pair, a period, and your underwriting terms. The workbench replays the rate path and shows you period return, annualized yield, trigger rate, and the monthly P&L breakdown for any size of capital commitment.',
+      cta: 'Open LP workbench',
+      href: '/liquidity-provider',
+    },
+  ];
+
+  return (
+    <section className="py-20 sm:py-28 bg-white border-t border-gray-200/60">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mb-10 sm:mb-14">
+          <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
+            Workbenches
+          </span>
+          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
+            Plug in your numbers
+          </h2>
+          <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
+            Both sides of the market get an interactive workbench powered by real
+            historical FX data. No signup required.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {benches.map(({ audience, title, body, cta, href }) => (
+            <div
+              key={audience}
+              className="bg-gray-50 border border-gray-200/80 rounded-2xl p-6 sm:p-7 flex flex-col"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0047BB]">
+                {audience}
+              </p>
+              <h3 className="mt-3 text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight leading-tight">
+                {title}
+              </h3>
+              <p className="mt-3 text-sm text-gray-600 leading-relaxed flex-1">{body}</p>
+              <div className="mt-5">
+                <Link href={href}>
+                  <Button className="h-11 px-6 rounded-full bg-[#001F5C] text-white hover:bg-[#003088] text-sm font-semibold">
+                    {cta} <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function WhyBlockFinaX() {
   const rows = [
     {
@@ -714,6 +777,7 @@ function Footer() {
             <ul className="mt-4 space-y-2.5 text-sm text-gray-500">
               <li><Link href="/apply" className="hover:text-gray-900">Request access</Link></li>
               <li><Link href="/docs/request" className="hover:text-gray-900">Documentation</Link></li>
+              <li><Link href="/hedger" className="hover:text-gray-900">Hedgers</Link></li>
               <li><Link href="/liquidity-provider" className="hover:text-gray-900">Liquidity provider</Link></li>
             </ul>
           </div>
@@ -773,6 +837,7 @@ export default function Website() {
       <Capability />
       <HowItWorks />
       <Products />
+      <Workbenches />
       <WhyBlockFinaX />
       <SupportedPairs />
       <TrustStrip />
