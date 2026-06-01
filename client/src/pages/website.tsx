@@ -160,8 +160,8 @@ function TopNav({ tone }: { tone: 'dark' | 'light' }) {
           <div className="hidden md:flex items-center gap-7">
             <a href="#about" className={linkBase}>About</a>
             <a href="#products" className={linkBase}>Products</a>
-            <Link href="/hedger" className={linkBase}>Hedgers</Link>
-            <Link href="/liquidity-provider" className={linkBase}>Liquidity provider</Link>
+            <Link href="/hedger" className={linkBase}>For buyers</Link>
+            <Link href="/liquidity-provider" className={linkBase}>For capital partners</Link>
             <div
               className="relative"
               onMouseEnter={() => setResourcesOpen(true)}
@@ -217,8 +217,8 @@ function TopNav({ tone }: { tone: 'dark' | 'light' }) {
               {[
                 ['#about', 'About'],
                 ['#products', 'Products'],
-                ['/hedger', 'Hedgers'],
-                ['/liquidity-provider', 'Liquidity provider'],
+                ['/hedger', 'For buyers'],
+                ['/liquidity-provider', 'For capital partners'],
                 ['/whitepaper', 'Whitepaper'],
                 ['/pitch', 'Pitch deck'],
                 ['/blog', 'Blog'],
@@ -295,13 +295,14 @@ function Hero() {
           className="text-center max-w-5xl mx-auto"
         >
           <h1 className="text-white font-semibold tracking-[-0.02em] leading-[1.02] text-[40px] sm:text-6xl lg:text-[80px]">
-            On-chain FX cover
+            Protect your money
             <br />
-            <span className="text-white/60">for emerging markets</span>
+            <span className="text-white/60">when the rate moves</span>
           </h1>
           <p className="mt-6 sm:mt-8 text-[15px] sm:text-lg text-white/70 max-w-2xl mx-auto leading-relaxed">
-            Pay a small premium instead of the whole notional. Get paid when the
-            rate moves against you. Start from $10, where banks demand $100,000.
+            Pay a small fee, get covered against currency swings. If the rate
+            moves against you, the system pays you automatically. Start from
+            $10, where banks demand $100,000.
           </p>
           <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
             <Link href="/apply">
@@ -331,17 +332,18 @@ function Capability() {
     <section id="about" className="py-20 sm:py-28 bg-white">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
-          Infrastructure
+          What we do
         </span>
         <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-          Parametric FX and commodity cover, settled on-chain in USDC
+          Currency and commodity protection, paid out automatically
         </h2>
         <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
-          BlockFinaX runs a marketplace of fully-funded cover pools. Hedgers pick a
-          strike and pay a premium upfront. Capital providers underwrite the risk
-          for that premium. At expiry, a multi-oracle consensus settles each event
-          automatically against the published rate &mdash; no bank relationship,
-          no margin call, no liquidation.
+          BlockFinaX runs a marketplace of protection pools, each one fully
+          backed by cash held in reserve. Buyers pick a trigger rate and pay a
+          small fee upfront. Capital partners back the pool in exchange for that
+          fee. At the end of the term, independent rate sources confirm the
+          closing rate and the pool pays out automatically &mdash; no bank, no
+          margin call, no waiting.
         </p>
         <div className="mt-7">
           <Link href="/docs/request">
@@ -362,22 +364,22 @@ function HowItWorks() {
     {
       n: '01',
       title: 'A pool is opened',
-      body: 'A market-maker or platform creator opens a cover event for a specific pair, strike, and expiry. They set the premium rate, the capped payout, and seed initial liquidity.',
+      body: 'A partner opens a protection pool for a specific currency pair, trigger rate, and term. They set the premium, the maximum payout, and put in the first capital.',
     },
     {
       n: '02',
-      title: 'Underwriters fund the pool',
-      body: 'Capital providers deposit USDC into the pool to back the cover. Their maximum loss per event is bounded by the pool’s capped payout. Premium accrues to them as hedgers buy.',
+      title: 'Capital partners fund the pool',
+      body: 'Capital partners deposit dollars into the pool to back the protection. Their maximum loss is fixed at the cap before they commit. Premium accrues to them as buyers join.',
     },
     {
       n: '03',
-      title: 'Hedgers buy protection',
-      body: 'Businesses pay a one-time premium and receive a position with a fixed strike and expiry. The premium is set by the platform pricing engine using volatility models, not by a live AMM.',
+      title: 'Buyers pay a small fee',
+      body: 'Businesses pay a one-time fee and get protection at a fixed trigger rate for a fixed term. The fee is set by our pricing engine, not by a live order book.',
     },
     {
       n: '04',
-      title: 'Multi-oracle settlement',
-      body: 'At expiry, three independent oracle nodes submit the reference rate. Consensus settles the event in one transaction. Payouts and premium claims become withdrawable immediately.',
+      title: 'Automatic payout',
+      body: 'At the end of the term, three independent rate sources submit the closing rate. The pool pays out automatically. Funds are immediately available to withdraw.',
     },
   ];
 
@@ -389,7 +391,7 @@ function HowItWorks() {
             How it works
           </span>
           <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Four steps. One contract. No banks.
+            Four steps. One platform. No banks.
           </h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
@@ -412,20 +414,20 @@ function Products() {
   const products = [
     {
       icon: Shield,
-      title: 'Cover marketplace',
-      body: 'Browse open cover pools by pair, strike, and expiry. Pay a one-time premium in USDC and lock the protection. Settlement is automatic at expiry — no buyer required.',
+      title: 'Protection marketplace',
+      body: 'Browse open protection pools by currency pair, trigger rate, and term. Pay a one-time fee in dollars and lock in the cover. The payout is automatic at the end of the term — no one to chase.',
       href: '/whitepaper',
     },
     {
       icon: Layers,
-      title: 'Underwriter pools',
-      body: 'Provide USDC to back protection on specific pairs and earn premium. Maximum loss per event is capped before you commit. No margin calls, no liquidations, no naked exposure.',
+      title: 'Capital pools',
+      body: 'Put dollars in to back protection on specific pairs and earn fees in return. Maximum loss per pool is set before you commit. No margin calls, no liquidations, no surprises.',
       href: '/liquidity-provider',
     },
     {
       icon: BarChart3,
-      title: 'Liquidity workbench',
-      body: 'Backtest underwriting terms against real exchange-rate history. Model return, trigger rate, and tail risk before deploying capital. Built for treasury and capital teams.',
+      title: 'Capital workbench',
+      body: 'Test your terms against years of real exchange-rate history. See return, trigger rate, and worst-case losses before you commit a single dollar. Built for treasury and finance teams.',
       href: '/liquidity-provider',
     },
   ];
@@ -436,11 +438,11 @@ function Products() {
         <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-end mb-12 sm:mb-16">
           <div className="max-w-2xl">
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-white leading-[1.1]">
-              On-chain protection and liquidity, end to end
+              Protection and capital, end to end
             </h2>
             <p className="mt-5 text-base sm:text-lg text-white/70 leading-relaxed">
-              We unbundle FX hedging into the parts businesses, capital providers,
-              and treasuries actually need.
+              We split currency protection into the parts businesses, capital
+              partners, and finance teams actually need.
             </p>
           </div>
           <Link href="/liquidity-provider">
@@ -479,17 +481,17 @@ function Products() {
 function Workbenches() {
   const benches = [
     {
-      audience: 'For hedgers',
-      title: 'See what protection would have changed on your trade',
-      body: 'Plug in a payment you actually made — supplier invoice, foreign tuition, project deposit — and replay the rate path that happened. The workbench shows you what premium would have cost, what payouts would have triggered, and what FX loss flowed through your margin without protection.',
-      cta: 'Open hedger workbench',
+      audience: 'For buyers',
+      title: 'See what protection would have changed on a real trade',
+      body: 'Plug in a payment you actually made — a supplier invoice, foreign tuition, a project deposit — and replay the rate path that happened. The workbench shows you what the fee would have cost, what payouts would have fired, and what currency loss flowed through your margin without protection.',
+      cta: 'Open buyer workbench',
       href: '/hedger',
     },
     {
       audience: 'For capital partners',
-      title: 'Model premium yield against real exchange-rate history',
-      body: 'Pick a pair, a period, and your underwriting terms. The workbench replays the rate path and shows you period return, annualized yield, trigger rate, and the monthly P&L breakdown for any size of capital commitment.',
-      cta: 'Open LP workbench',
+      title: 'Model your returns against real exchange-rate history',
+      body: 'Pick a pair, a period, and your terms. The workbench replays what the rate actually did and shows you return, annualised yield, how often the pool would have paid out, and a month-by-month profit breakdown for any size of commitment.',
+      cta: 'Open capital workbench',
       href: '/liquidity-provider',
     },
   ];
@@ -505,8 +507,8 @@ function Workbenches() {
             Plug in your numbers
           </h2>
           <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            Both sides of the market get an interactive workbench powered by real
-            historical FX data. No signup required.
+            Both sides of the market get an interactive workbench powered by
+            years of real exchange-rate history. No signup required.
           </p>
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
@@ -540,39 +542,39 @@ function Workbenches() {
 function WhyBlockFinaX() {
   const rows = [
     {
-      dim: 'Up-front capital',
-      bfx: 'Hedger pays a premium only &mdash; typically 1&ndash;5% of the notional being protected. The protocol takes the risk; the hedger keeps their cash working.',
-      bank: 'Full notional. A forward or NDF locks the entire trade value in margin for the life of the contract. Capital is unavailable until settlement.',
+      dim: 'Up-front cost',
+      bfx: 'Buyer pays a small fee only &mdash; typically 1&ndash;5% of the amount being protected. The pool takes the risk; the buyer keeps their cash working.',
+      bank: 'Full amount. A bank forward locks the entire trade value in margin for the life of the contract. Capital is unavailable until settlement.',
     },
     {
       dim: 'Minimum ticket',
-      bfx: 'From around $10 of premium. SMEs and traders can buy cover for the actual size they need.',
-      bank: 'Typically $100K notional and up. Below that threshold most desks won&rsquo;t quote, and the desks that do widen the spread until they do.',
+      bfx: 'From around $10 in fees. Small businesses and traders can buy protection for the actual size they need.',
+      bank: 'Typically $100K and up. Below that threshold most banks won&rsquo;t quote, and the ones that do widen the spread until they do.',
     },
     {
       dim: 'Access',
-      bfx: 'Open. Any business with a wallet can buy cover. Any USDC holder can underwrite.',
-      bank: 'Closed. A banking relationship, KYC tier, corridor approval, and a credit line are all prerequisites.',
+      bfx: 'Open. Any business with an account can buy protection. Anyone with dollars can put up capital.',
+      bank: 'Closed. A banking relationship, identity verification, corridor approval, and a credit line are all prerequisites.',
     },
     {
-      dim: 'Settlement',
-      bfx: 'Smart-contract automatic. Three independent oracle nodes submit the rate at expiry; consensus triggers payout in one transaction.',
-      bank: 'Manual. T+2, broker confirmation, paper trail. P2P channels require trust that the counterparty actually wires the money.',
+      dim: 'Payout',
+      bfx: 'Automatic. Three independent rate sources submit the closing rate; the payout fires in one step.',
+      bank: 'Manual. T+2, broker confirmation, paper trail. Black-market channels require trust that the other side actually wires the money.',
     },
     {
       dim: 'Counterparty risk',
-      bfx: 'None. Every payout is pre-funded by USDC locked in the pool at the moment the cover is purchased.',
-      bank: 'Concentrated. Forwards depend on the dealer&rsquo;s solvency. P2P depends on the counterparty showing up.',
+      bfx: 'None. Every payout is pre-funded by dollars sitting in the pool the moment the protection is purchased.',
+      bank: 'Concentrated. Bank forwards depend on the bank&rsquo;s solvency. Informal deals depend on the other side showing up.',
     },
     {
-      dim: 'Underwriter loss profile',
-      bfx: 'Bounded by the pool cap. Maximum loss per event is fixed before capital is committed.',
-      bank: 'Unbounded. Selling options or quoting OTC can produce losses well beyond initial margin.',
+      dim: 'Capital partner loss profile',
+      bfx: 'Capped by the pool. Maximum loss is fixed before capital is committed.',
+      bank: 'Unbounded. Selling options or quoting privately can produce losses well beyond initial margin.',
     },
     {
       dim: 'Pricing transparency',
-      bfx: 'Each cover event publishes its premium rate on-chain. Same number for every buyer of that event.',
-      bank: 'Opaque. Dealer spreads, last-look fills, and tiered pricing all favour the desk.',
+      bfx: 'Each pool publishes its fee openly. Same number for every buyer.',
+      bank: 'Opaque. Bank spreads, last-look fills, and tiered pricing all favour the desk.',
     },
   ];
 
@@ -584,12 +586,12 @@ function WhyBlockFinaX() {
             Why BlockFinaX
           </span>
           <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Structurally different from bank forwards and P2P
+            Structurally different from banks and informal channels
           </h2>
           <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            The same hedging objective, with a settlement model that doesn&rsquo;t
-            depend on a banking line, a trading desk, or a stranger sending a
-            confirmation.
+            Same goal &mdash; protect your money against currency swings &mdash;
+            without depending on a banking line, a trading desk, or a stranger
+            sending a confirmation.
           </p>
         </div>
 
@@ -598,7 +600,7 @@ function WhyBlockFinaX() {
           <div className="hidden md:grid grid-cols-[160px_1fr_1fr] border-b border-gray-200/80 bg-gray-50 text-[11px] uppercase tracking-[0.08em] text-gray-500 font-semibold">
             <div className="px-5 py-3">Dimension</div>
             <div className="px-5 py-3 border-l border-gray-200/80 text-[#001F5C]">BlockFinaX</div>
-            <div className="px-5 py-3 border-l border-gray-200/80">Bank forward / P2P</div>
+            <div className="px-5 py-3 border-l border-gray-200/80">Bank or informal channel</div>
           </div>
           <div>
             {rows.map(({ dim, bfx, bank }, i) => (
@@ -620,7 +622,7 @@ function WhyBlockFinaX() {
                 </div>
                 <div className="px-5 pt-2 pb-5 md:py-5 text-[13px] sm:text-sm text-gray-500 leading-relaxed">
                   <span className="md:hidden text-[10px] font-semibold tracking-[0.08em] uppercase text-gray-400">
-                    Bank / P2P
+                    Bank or informal
                   </span>
                   <p
                     className="md:mt-0 mt-1"
@@ -642,11 +644,12 @@ function SupportedPairs() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mb-10 sm:mb-12">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            What you can hedge
+            What you can protect
           </h2>
           <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            USD-quoted FX pairs and physical commodities, settled in USDC. New
-            pairs onboarded as flow concentrates.
+            Major emerging-market currencies and physical commodities, all
+            quoted against the US dollar and paid out in dollars. New pairs
+            added as demand grows.
           </p>
         </div>
 
@@ -700,10 +703,10 @@ function TrustStrip() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
           {[
-            ['Fully collateralised', 'Every position is backed by USDC locked on-chain at the time of purchase. The protocol cannot owe more than it holds.'],
-            ['No liquidations', 'Bounded payout per event by construction. Underwriters cannot be liquidated; their downside is capped at the cap they set.'],
-            ['Multi-oracle settlement', 'N-of-M consensus on settlement rates. No single point of failure on price feeds.'],
-            ['Non-custodial', 'BlockFinaX never holds user funds. Cover positions, premium receipts, and underwriting capital live in audited contracts.'],
+            ['Fully funded', 'Every position is backed by dollars sitting in reserve the moment you buy. The system cannot owe more than it holds.'],
+            ['No liquidations', 'Every pool has a fixed cap. Capital partners cannot be liquidated; their loss is capped at the number they set.'],
+            ['Independent rate sources', 'Multiple independent sources confirm every closing rate. No single point of failure.'],
+            ['We never hold your money', 'Your protection, your fees, and your capital live in audited accounts that BlockFinaX cannot touch.'],
           ].map(([title, body]) => (
             <div key={title}>
               <p className="text-sm sm:text-base font-semibold text-[#001F5C] tracking-tight">{title}</p>
@@ -729,7 +732,7 @@ function ClosingCTA() {
     >
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-white leading-[1.1]">
-          Ready to underwrite or hedge?
+          Ready to buy protection or back a pool?
         </h2>
         <p className="mt-5 text-base sm:text-lg text-white/70 leading-relaxed">
           We&rsquo;re onboarding partners and capital one cohort at a time. Apply,
@@ -768,7 +771,7 @@ function Footer() {
               <span className="text-base font-semibold tracking-tight text-gray-900">BlockFinaX</span>
             </Link>
             <p className="mt-3 text-xs text-gray-500 max-w-xs leading-relaxed">
-              On-chain FX cover and settlement infrastructure for emerging markets.
+              Currency and commodity protection for emerging-market businesses.
             </p>
           </div>
 
@@ -777,8 +780,8 @@ function Footer() {
             <ul className="mt-4 space-y-2.5 text-sm text-gray-500">
               <li><Link href="/apply" className="hover:text-gray-900">Request access</Link></li>
               <li><Link href="/docs/request" className="hover:text-gray-900">Documentation</Link></li>
-              <li><Link href="/hedger" className="hover:text-gray-900">Hedgers</Link></li>
-              <li><Link href="/liquidity-provider" className="hover:text-gray-900">Liquidity provider</Link></li>
+              <li><Link href="/hedger" className="hover:text-gray-900">For buyers</Link></li>
+              <li><Link href="/liquidity-provider" className="hover:text-gray-900">For capital partners</Link></li>
             </ul>
           </div>
 
@@ -831,9 +834,9 @@ function Footer() {
 export default function Website() {
   return (
     <div className="min-h-screen bg-white">
+      <LiveFxTicker />
       <TopNav tone="dark" />
       <Hero />
-      <LiveFxTicker />
       <Capability />
       <HowItWorks />
       <Products />
