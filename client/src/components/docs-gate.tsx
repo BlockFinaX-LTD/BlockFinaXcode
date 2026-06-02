@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
+import { useRift } from '@rift-finance/react';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, ArrowRight } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
@@ -21,7 +22,11 @@ interface StoredToken {
   expiresAt: string;
 }
 
-async function verify(token: string): Promise<{ valid: boolean; expiresAt?: string }> {
+async function verify(token: string): Promise<{
+  valid: boolean;
+  expiresAt?: string;
+  investorToken?: string;
+}> {
   try {
     const res = await fetch(`/api/docs/verify?t=${encodeURIComponent(token)}`);
     if (!res.ok) return { valid: false };
@@ -30,6 +35,49 @@ async function verify(token: string): Promise<{ valid: boolean; expiresAt?: stri
     return { valid: false };
   }
 }
+
+function persistInvestorToken(token: string | undefined) {
+  if (!token) return;
+  try { localStorage.setItem(INVESTOR_SESSION_KEY, token); } catch { /* ignore */ }
+}
+
+async function adminBypass(accessToken: string): Promise<{ token: string; expiresAt: string } | null> {
+  try {
+    const res = await fetch('/api/docs/admin-bypass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function keyBypass(key: string): Promise<{
+  token: string;
+  expiresAt: string;
+  investorToken?: string;
+  investorExpiresAt?: string;
+} | null> {
+  try {
+    const res = await fetch('/api/docs/bypass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// The data-room page reads this localStorage key on mount; if a valid token
+// is present it skips its own password screen. Keep this in sync with
+// SESSION_KEY in client/src/pages/data-room.tsx.
+const INVESTOR_SESSION_KEY = 'bfx_investor_token';
 
 function getStoredToken(): StoredToken | null {
   try {
@@ -59,18 +107,36 @@ type Phase = 'checking' | 'allowed' | 'denied';
 export function DocsGate({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const [phase, setPhase] = useState<Phase>('checking');
+  const { isAuthenticated, getAccessToken } = useRift();
 
   useEffect(() => {
     let cancelled = false;
     async function run() {
-      // 1) Token in URL → verify + store
+      // 0) Shared admin key in URL → mint a docs token + store, strip ?key=
       const params = new URLSearchParams(window.location.search);
+      const urlKey = params.get('key');
+      if (urlKey) {
+        const minted = await keyBypass(urlKey);
+        if (cancelled) return;
+        if (minted?.token && minted.expiresAt) {
+          setStoredToken(minted.token, minted.expiresAt);
+          persistInvestorToken(minted.investorToken);
+          params.delete('key');
+          const search = params.toString();
+          const cleaned = window.location.pathname + (search ? `?${search}` : '');
+          window.history.replaceState({}, '', cleaned);
+          setPhase('allowed');
+          return;
+        }
+      }
+      // 1) Token in URL → verify + store
       const urlToken = params.get('t');
       if (urlToken) {
         const result = await verify(urlToken);
         if (cancelled) return;
         if (result.valid && result.expiresAt) {
           setStoredToken(urlToken, result.expiresAt);
+          persistInvestorToken(result.investorToken);
           // Strip ?t= from the URL so the token doesn't sit in browser history
           params.delete('t');
           const search = params.toString();
@@ -86,15 +152,42 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
       if (stored) {
         const result = await verify(stored.token);
         if (cancelled) return;
-        if (result.valid) { setPhase('allowed'); return; }
+        if (result.valid) {
+          // Server may have renewed the expiry (sliding window) — update local
+          // copy so we hold the new bound, not the old one.
+          if (result.expiresAt) setStoredToken(stored.token, result.expiresAt);
+          persistInvestorToken(result.investorToken);
+          setPhase('allowed');
+          return;
+        }
         // expired/revoked on the server — clear and continue
         localStorage.removeItem(STORAGE_KEY);
+      }
+      // 3) Signed-in admin? Mint a token for them silently and proceed.
+      //    Server validates the Rift session and checks ADMIN_EMAILS — if the
+      //    email isn't on the allowlist this returns null and we fall through.
+      if (isAuthenticated) {
+        try {
+          const token = await getAccessToken();
+          if (cancelled) return;
+          if (token) {
+            const bypass = await adminBypass(token);
+            if (cancelled) return;
+            if (bypass?.token && bypass.expiresAt) {
+              setStoredToken(bypass.token, bypass.expiresAt);
+              setPhase('allowed');
+              return;
+            }
+          }
+        } catch {
+          /* fall through to denied */
+        }
       }
       if (!cancelled) setPhase('denied');
     }
     run();
     return () => { cancelled = true; };
-  }, []);
+  }, [isAuthenticated, getAccessToken]);
 
   if (phase === 'checking') {
     return (

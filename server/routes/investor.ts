@@ -14,6 +14,25 @@ function generateInvestorToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+/**
+ * Mint an investor session and store it. Used by other routes (e.g. the
+ * docs-gate shared-key bypass) to grant admins data-room access without
+ * forcing them to retype the investor password.
+ */
+export function mintInvestorSession(opts: { editEnabled?: boolean; ttlMs?: number } = {}): {
+  token: string;
+  expiresAt: number;
+} {
+  const token = generateInvestorToken();
+  // 60 days by default. Investor sessions are in-memory so they get wiped on
+  // server restart, but the gate auto-mints fresh ones on every docs-token
+  // verify — so the user never sees the password screen on a return visit.
+  const expiry = Date.now() + (opts.ttlMs ?? 60 * 24 * 60 * 60_000);
+  investorSessions.set(token, expiry);
+  if (opts.editEnabled) investorEditSessions.add(token);
+  return { token, expiresAt: expiry };
+}
+
 function safeEqual(a: string, b: string): boolean {
   if (!a || !b) return false;
   try {

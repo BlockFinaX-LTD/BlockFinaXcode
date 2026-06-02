@@ -83,6 +83,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         const result = await verifySigninToken(stored.token);
         if (cancelled) return;
         if (result.valid) {
+          // Pick up the renewed expiry the server may have pushed forward.
+          if (result.expiresAt) setStoredSigninToken(stored.token, result.expiresAt);
           setPhase({ kind: 'allowed' });
           return;
         }

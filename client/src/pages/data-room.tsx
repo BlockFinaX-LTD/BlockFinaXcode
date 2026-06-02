@@ -2370,7 +2370,7 @@ function PasswordGate({ onSuccess }: { onSuccess: (token: string, editEnabled: b
       const res = await fetch("/api/investor/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
       const data = await res.json();
       if (!res.ok) { setError(data.message || "Invalid access code"); return; }
-      sessionStorage.setItem(SESSION_KEY, data.token);
+      localStorage.setItem(SESSION_KEY, data.token);
       onSuccess(data.token, !!data.editEnabled);
       toast({ title: "Access granted", description: "Welcome to the BlockFinaX Investor Data Room." });
     } catch { setError("Connection error. Please try again."); }
@@ -2435,7 +2435,7 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
 
   const handleLogout = useCallback(async () => {
     await fetch("/api/investor/logout", { method: "POST", headers: { "x-investor-token": token } });
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
     onLogout();
   }, [token, onLogout]);
 
@@ -2607,15 +2607,15 @@ export default function DataRoom() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(SESSION_KEY);
+    const stored = localStorage.getItem(SESSION_KEY);
     if (!stored) { setChecking(false); return; }
     fetch("/api/investor/verify", { headers: { "x-investor-token": stored } })
       .then(r => r.json())
       .then(d => {
         if (d.valid) { setToken(stored); setInitialEditEnabled(!!d.editEnabled); }
-        else sessionStorage.removeItem(SESSION_KEY);
+        else localStorage.removeItem(SESSION_KEY);
       })
-      .catch(() => sessionStorage.removeItem(SESSION_KEY))
+      .catch(() => localStorage.removeItem(SESSION_KEY))
       .finally(() => setChecking(false));
   }, []);
 

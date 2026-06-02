@@ -22,7 +22,11 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { db } from '../db';
 import { accessRequests, accessGrants, docsTokens, signinTokens } from '@shared/schema';
-import { requireAdmin } from '../middleware/admin-auth';
+import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
+import { mintInvestorSession } from './investor';
+
+const RIFT_API_BASE = process.env.RIFT_API_BASE || 'https://payment.riftfi.xyz';
+const RIFT_API_KEY = process.env.VITE_RIFT_API_KEY || process.env.RIFT_API_KEY || '';
 import {
   emailAdminNewAccessRequest,
   emailUserAccessReceived,
@@ -33,7 +37,17 @@ import {
   APP_URL,
 } from '../email';
 
-const SIGNIN_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// Once a user is invited or approved, we want them to effectively never have
+// to request access again on the same browser. Tokens are minted for 90 days
+// and renewed on use whenever they have < RENEW_BELOW_MS left — so any user
+// who hits a gated route at least once per 90 days stays logged in forever.
+const SIGNIN_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+const DOCS_TOKEN_TTL_MS   = 90 * 24 * 60 * 60 * 1000; // 90 days
+const RENEW_BELOW_MS      = 30 * 24 * 60 * 60 * 1000; // renew if < 30 days left
+
+function shouldRenew(expiresAt: Date): boolean {
+  return expiresAt.getTime() - Date.now() < RENEW_BELOW_MS;
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -164,7 +178,14 @@ export function registerGateRoutes(app: Express) {
     if (!tok.firstUsedAt) {
       await db.update(signinTokens).set({ firstUsedAt: new Date() }).where(eq(signinTokens.id, tok.id));
     }
-    return res.json({ valid: true, expiresAt: tok.expiresAt });
+    // Sliding-window renewal: keep approved users signed in indefinitely as
+    // long as they visit at least once per 90 days.
+    let expiresAt = tok.expiresAt;
+    if (shouldRenew(expiresAt)) {
+      expiresAt = new Date(Date.now() + SIGNIN_TOKEN_TTL_MS);
+      await db.update(signinTokens).set({ expiresAt }).where(eq(signinTokens.id, tok.id));
+    }
+    return res.json({ valid: true, expiresAt });
   });
 
   // ── Public: check if an email has been granted ───────────────────────
@@ -196,7 +217,7 @@ export function registerGateRoutes(app: Express) {
     // Generate a 32-byte URL-safe token, store only its sha256 hash.
     const raw = crypto.randomBytes(32).toString('base64url');
     const tokenHash = hashToken(raw);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
 
     await db.insert(docsTokens).values({
       email: data.email,
@@ -259,7 +280,118 @@ export function registerGateRoutes(app: Express) {
     if (!tok.usedAt) {
       await db.update(docsTokens).set({ usedAt: new Date() }).where(eq(docsTokens.id, tok.id));
     }
-    return res.json({ valid: true, expiresAt: tok.expiresAt });
+    // Sliding-window renewal: if the token is within RENEW_BELOW_MS of expiry,
+    // push it out to a fresh 90-day window. Active users effectively never
+    // expire as long as they visit at least once per 90 days.
+    let expiresAt = tok.expiresAt;
+    if (shouldRenew(expiresAt)) {
+      expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
+      await db.update(docsTokens).set({ expiresAt }).where(eq(docsTokens.id, tok.id));
+    }
+    // Also mint a fresh investor-room session so the data-room page never
+    // asks for a code on a return visit. Investor sessions are in-memory and
+    // die on server restart, so we re-mint on every verify to make the flow
+    // self-healing.
+    const investor = mintInvestorSession({ editEnabled: true });
+    return res.json({
+      valid: true,
+      expiresAt,
+      investorToken: investor.token,
+      investorExpiresAt: new Date(investor.expiresAt).toISOString(),
+    });
+  });
+
+  // ── Public: shared-secret bypass — admin key in URL ─────────────────────
+  // The simplest path for the team: set DOCS_BYPASS_KEY in .env to a long
+  // random string. Visit /data-room?key=<that string> and the gate mints a
+  // 7-day docs token, strips the param from the URL, and lets you through.
+  // Bookmark the URL once and you're set.
+  app.post('/api/docs/bypass', async (req, res) => {
+    const key = String(req.body?.key || '').trim();
+    const expected = (process.env.DOCS_BYPASS_KEY || '').trim();
+    if (!expected) return res.status(503).json({ error: 'DOCS_BYPASS_KEY not configured' });
+    if (!key || key !== expected) return res.status(401).json({ error: 'invalid key' });
+
+    const raw = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = hashToken(raw);
+    const expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
+    await db.insert(docsTokens).values({
+      email: 'bypass@blockfinax.local',
+      tokenHash,
+      name: 'shared-key bypass',
+      reason: 'DOCS_BYPASS_KEY',
+      expiresAt,
+      usedAt: new Date(),
+    });
+    // Also mint an investor-room session so the data-room page's own password
+    // gate doesn't ask for a second code on top of the shared-key URL.
+    const investor = mintInvestorSession({ editEnabled: true });
+    return res.json({
+      token: raw,
+      expiresAt: expiresAt.toISOString(),
+      investorToken: investor.token,
+      investorExpiresAt: new Date(investor.expiresAt).toISOString(),
+    });
+  });
+
+  // ── Public: admin bypass — mint a docs token for ADMIN_EMAILS members ──
+  // Lets a signed-in admin skip the magic-link flow entirely. The client
+  // passes their Rift access token; we resolve the email via Rift and check
+  // it against ADMIN_EMAILS. On success, mint a docs token bound to that
+  // email and return it raw — the gate stores it and proceeds.
+  app.post('/api/docs/admin-bypass', async (req, res) => {
+    const accessToken = String(req.body?.accessToken || '').trim();
+    if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
+
+    const allowed = getOwnerEmails();
+    if (allowed.length === 0) {
+      return res.status(500).json({ error: 'ADMIN_EMAILS not configured' });
+    }
+    if (!RIFT_API_KEY) {
+      return res.status(500).json({ error: 'Server is missing the Rift API key' });
+    }
+
+    let riftRes: Response;
+    try {
+      riftRes = await fetch(`${RIFT_API_BASE}/user/me`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': RIFT_API_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+    } catch (err: any) {
+      console.error('[docs/admin-bypass] Rift unreachable:', err?.message);
+      return res.status(502).json({ error: 'Could not reach Rift to verify the session' });
+    }
+    if (riftRes.status === 401 || riftRes.status === 403) {
+      return res.status(401).json({ error: 'Rift session expired' });
+    }
+    if (!riftRes.ok) {
+      return res.status(502).json({ error: 'Rift returned an error verifying the session' });
+    }
+
+    const body = (await riftRes.json()) as any;
+    const user = body?.user ?? body?.data?.user ?? body?.data ?? body;
+    const email: string | undefined = user?.email;
+    if (!email) return res.status(403).json({ error: 'No email on the Rift account' });
+    if (!allowed.includes(email.toLowerCase())) {
+      return res.status(403).json({ error: 'Not on the admin allowlist' });
+    }
+
+    const raw = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = hashToken(raw);
+    const expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
+    await db.insert(docsTokens).values({
+      email: email.toLowerCase(),
+      tokenHash,
+      name: 'admin bypass',
+      reason: 'admin email allowlist',
+      expiresAt,
+      usedAt: new Date(),
+    });
+    return res.json({ token: raw, expiresAt: expiresAt.toISOString() });
   });
 
   // ── Admin: list access requests ──────────────────────────────────────
