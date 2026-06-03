@@ -101,11 +101,16 @@ print(f"\nSTEP E: drive browser to /auth?t=<signin> and check localStorage persi
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     ctx = browser.new_context()
+    ctx.route("**/replit.com/**", lambda r: r.abort())
     page = ctx.new_page()
 
     page.goto(f"{ORIGIN}/auth?t={signin_token}", wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_load_state("networkidle", timeout=15000)
-    page.wait_for_timeout(2000)
+    # Wait for AuthGate to leave its "Checking access..." state
+    page.wait_for_function(
+        "() => !document.body.innerText.includes('Checking access')",
+        timeout=20000,
+    )
+    page.wait_for_timeout(1500)
 
     url = page.url
     print(f"  URL after gate: {url}")
@@ -124,7 +129,11 @@ with sync_playwright() as p:
     # Reload bare /auth — should still pass AuthGate
     print("\nSTEP F: reload bare /auth (no ?t=) — AuthGate should accept stored token")
     page.goto(f"{ORIGIN}/auth", wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(3000)
+    page.wait_for_function(
+        "() => !document.body.innerText.includes('Checking access')",
+        timeout=20000,
+    )
+    page.wait_for_timeout(1500)
 
     # AuthGate's deny screen shows "Sign-in is by invitation only" or
     # "Submit a short application". If we land on either, the stored token failed.
@@ -141,9 +150,14 @@ with sync_playwright() as p:
     # ── Step G: docs magic link click → /whitepaper ──────────────────
     print(f"\nSTEP G: drive browser to /whitepaper?t=<docs> and check storage + render")
     ctx2 = browser.new_context()
+    ctx2.route("**/replit.com/**", lambda r: r.abort())
     page2 = ctx2.new_page()
     page2.goto(f"{ORIGIN}/whitepaper?t={docs_token}", wait_until="domcontentloaded", timeout=60000)
-    page2.wait_for_timeout(3000)
+    page2.wait_for_function(
+        "() => !document.body.innerText.includes('Verifying access')",
+        timeout=20000,
+    )
+    page2.wait_for_timeout(1500)
 
     url2 = page2.url
     print(f"  URL after gate: {url2}")
@@ -162,7 +176,11 @@ with sync_playwright() as p:
     # ── Step H: reload bare /whitepaper — should still render ────────
     print(f"\nSTEP H: reload bare /whitepaper — DocsGate should accept stored token")
     page2.goto(f"{ORIGIN}/whitepaper", wait_until="domcontentloaded", timeout=60000)
-    page2.wait_for_timeout(3000)
+    page2.wait_for_function(
+        "() => !document.body.innerText.includes('Verifying access')",
+        timeout=20000,
+    )
+    page2.wait_for_timeout(1500)
 
     page_text2 = page2.content()
     # DocsGate deny shows "Access the docs" + a "Request access" button

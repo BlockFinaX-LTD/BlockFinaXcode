@@ -15,12 +15,18 @@ with sync_playwright() as p:
 
     console_logs = []
     page.on("console", lambda msg: console_logs.append(f"[{msg.type}] {msg.text}"))
+    # Block Replit dev banner — it times out and blocks "load"
+    ctx.route("**/replit.com/**", lambda r: r.abort())
 
     # ── Step 1: visit with the bypass key ────────────────────────────────
-    print("STEP 1: visit /data-room?key=… and let the gate work")
-    page.goto(URL_WITH_KEY)
-    page.wait_for_load_state("networkidle", timeout=15000)
-    page.wait_for_timeout(1500)  # give DocsGate time to verify
+    print("STEP 1: visit /data-room?key=... and let the gate work")
+    page.goto(URL_WITH_KEY, wait_until="domcontentloaded", timeout=60000)
+    # Wait for DocsGate to settle (loses the "Verifying access..." spinner)
+    page.wait_for_function(
+        "() => !document.body.innerText.includes('Verifying access')",
+        timeout=20000,
+    )
+    page.wait_for_timeout(1500)
 
     final_url = page.url
     print(f"  final URL after gate: {final_url}")
@@ -54,9 +60,8 @@ with sync_playwright() as p:
 
     # ── Step 2: reload the bare URL — should still work ──────────────────
     print("\nSTEP 2: reload /data-room (no ?key=) and confirm we're still in")
-    page.goto(URL_BARE)
-    page.wait_for_load_state("networkidle", timeout=15000)
-    page.wait_for_timeout(1500)
+    page.goto(URL_BARE, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(3000)
 
     final_url_2 = page.url
     print(f"  URL: {final_url_2}")

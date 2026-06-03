@@ -1,252 +1,642 @@
 /**
  * website.tsx — Public landing page.
  *
- * B2B infrastructure positioning. No problem/solution narrative, no
- * decorative animations, no emoji cards. Hero → capability statement →
- * products grid → supported pairs → trust strip → footer.
+ * Dark-by-default with a light-mode toggle. The structure follows the
+ * Claude Design handoff:
+ *   nav → hero (rotator + 3D vol surface canvas)
+ *   → three feature cards (Hedge / Yield / Trade) each with a live viz
+ *   → three payoff-diagram cards (Insure / Underwrite / Bet either side)
+ *   → signal section (marching-squares contour field + rotating word)
+ *   → tail CTA → footer
+ *
+ * All canvases use requestAnimationFrame with cleanup; everything respects
+ * prefers-reduced-motion. The theme attribute lives on the `.bfx-landing`
+ * root so the rest of the app stays unaffected.
  */
 
 import { Link } from 'wouter';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import {
-  ArrowRight,
-  Twitter,
-  Linkedin,
-  Send,
-  Menu,
-  X,
-  Shield,
-  Layers,
-  BarChart3,
-  ChevronDown,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import logoPath from '@/assets/logo.png';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import './website.css';
 
-// ── Currency / commodity inventory ──────────────────────────────────────
+const logoPath = '/favicon.png';
 
-// ISO 3166 country code per currency for the flagcdn SVGs. flagcdn.com serves
-// branded SVG flags at zero bundle cost and is permitted by the existing CSP
-// img-src directive ('https:').
-const CURRENCY_CC: Record<string, string> = {
-  NGN: 'ng', KES: 'ke', GHS: 'gh', ZAR: 'za', EGP: 'eg', ETB: 'et',
-  UGX: 'ug', TZS: 'tz', RWF: 'rw', MWK: 'mw', MZN: 'mz', ZMW: 'zm',
-  XOF: 'sn', // CFA franc — uses Senegal flag for the West African union
-  XAF: 'cm', // CFA franc — uses Cameroon flag for the Central African union
-  AOA: 'ao',
-  EUR: 'eu', GBP: 'gb', USD: 'us',
-};
+// ── Theme ───────────────────────────────────────────────────────────────
 
-interface Pair {
-  code: string;
-  label: string;
+type Theme = 'dark' | 'light';
+const THEME_KEY = 'bfx-theme';
+
+function readStoredTheme(): Theme {
+  // Light is the default. Users who explicitly toggled to dark keep it.
+  if (typeof window === 'undefined') return 'light';
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return v === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
 }
 
-// USD-quoted FX pairs we cover.
-const SUPPORTED_PAIRS: Pair[] = [
-  { code: 'NGN', label: 'Nigerian Naira' },
-  { code: 'KES', label: 'Kenyan Shilling' },
-  { code: 'GHS', label: 'Ghanaian Cedi' },
-  { code: 'ZAR', label: 'South African Rand' },
-  { code: 'EGP', label: 'Egyptian Pound' },
-  { code: 'ETB', label: 'Ethiopian Birr' },
-  { code: 'UGX', label: 'Ugandan Shilling' },
-  { code: 'TZS', label: 'Tanzanian Shilling' },
-  { code: 'RWF', label: 'Rwandan Franc' },
-  { code: 'MWK', label: 'Malawian Kwacha' },
-  { code: 'XOF', label: 'West African CFA' },
-  { code: 'XAF', label: 'Central African CFA' },
-];
+// ── Canvas helpers ──────────────────────────────────────────────────────
 
-// Commodity hedges supported by the protocol.
-interface Commodity {
-  code: string;
-  name: string;
-  emoji: string;
+function fitCanvas(cv: HTMLCanvasElement) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = cv.getBoundingClientRect();
+  const w = Math.max(1, r.width);
+  const h = Math.max(1, r.height);
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext('2d')!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
 }
 
-const SUPPORTED_COMMODITIES: Commodity[] = [
-  { code: 'XAU', name: 'Gold', emoji: '🟡' },
-  { code: 'XAG', name: 'Silver', emoji: '⚪' },
-  { code: 'WTI', name: 'Crude oil', emoji: '🛢️' },
-  { code: 'COCOA', name: 'Cocoa', emoji: '🟫' },
-  { code: 'COFFEE', name: 'Coffee', emoji: '🟤' },
-  { code: 'COTTON', name: 'Cotton', emoji: '⚪' },
-  { code: 'WHEAT', name: 'Wheat', emoji: '🌾' },
-  { code: 'COPPER', name: 'Copper', emoji: '🟧' },
-];
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
-// ── Flag image component ────────────────────────────────────────────────
+// ── Hero rotating 3D wireframe vol surface ──────────────────────────────
 
-// Bundled SVG flags. country-flag-icons emits one React component per ISO
-// code; importing the namespace lets us look up by code at runtime without
-// caring whether a particular flag exists in the package.
-import * as Flags from 'country-flag-icons/react/3x2';
+function useHeroSurface(ref: React.RefObject<HTMLCanvasElement>) {
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv) return;
+    const REDUCED = prefersReducedMotion();
+    let d = fitCanvas(cv);
+    const t0 = performance.now();
+    let raf = 0;
+    const onResize = () => { d = fitCanvas(cv); };
+    window.addEventListener('resize', onResize, { passive: true });
 
-function Flag({ code, size = 24 }: { code: string; size?: number }) {
-  const cc = CURRENCY_CC[code]?.toUpperCase();
-  if (!cc) return null;
-  const Component = (Flags as Record<string, React.ComponentType<{ title?: string; style?: React.CSSProperties; className?: string }>>)[cc];
-  if (!Component) return null;
+    const COLS = 36;
+    const ROWS = 26;
+
+    function surfaceHeight(x: number, z: number, t: number) {
+      return 0.40 * x * x - 0.10 * x + 0.13 * z
+        + 0.055 * Math.sin(3.0 * x + t) * Math.cos(2.2 * z - t * 0.8)
+        - 0.17;
+    }
+
+    function frame(now: number) {
+      const t = REDUCED ? 0.6 : (now - t0) / 1000;
+      const { ctx, w: W, h: H } = d;
+      ctx.clearRect(0, 0, W, H);
+      const cx = W / 2, cy = H * 0.54;
+      // R drives the projected size of the surface. 0.34 keeps the rotated
+      // corners and their perspective amplification inside the canvas width
+      // for the hero-visual column ratio we ship.
+      const R = Math.min(W, H) * 0.34;
+      const ay = -0.55 + Math.sin(t * 0.16) * 0.5;
+      const ax = 0.6;
+      const cosY = Math.cos(ay), sinY = Math.sin(ay);
+      const cosX = Math.cos(ax), sinX = Math.sin(ax);
+
+      function proj(i: number, j: number) {
+        const x = (i / (COLS - 1)) * 2 - 1;
+        const z = (j / (ROWS - 1)) * 2 - 1;
+        const y = surfaceHeight(x, z, t);
+        const x1 = x * cosY + z * sinY;
+        const z1 = -x * sinY + z * cosY;
+        const y1 = y * cosX - z1 * sinX;
+        const z2 = y * sinX + z1 * cosX;
+        const persp = 2.3 / (2.3 + z2);
+        return { x: cx + x1 * R * persp, y: cy - y1 * R * persp, h: y, z: z2 };
+      }
+
+      const pts: ReturnType<typeof proj>[][] = [];
+      for (let j = 0; j < ROWS; j++) {
+        pts[j] = [];
+        for (let i = 0; i < COLS; i++) pts[j][i] = proj(i, j);
+      }
+
+      function stroke(a: ReturnType<typeof proj>, b: ReturnType<typeof proj>) {
+        const front = Math.max(0, Math.min(1, (1.4 - (a.z + b.z)) / 2.8));
+        const tt = Math.max(0, Math.min(1, ((a.h + b.h) / 2 + 0.3) / 0.72));
+        const g = Math.round(108 + (182 - 108) * tt);
+        const alpha = 0.10 + 0.62 * front;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = `rgba(45,${g},255,${alpha.toFixed(3)})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      for (let j = 0; j < ROWS; j++)
+        for (let i = 0; i < COLS - 1; i++) stroke(pts[j][i], pts[j][i + 1]);
+      for (let i = 0; i < COLS; i++)
+        for (let j = 0; j < ROWS - 1; j++) stroke(pts[j][i], pts[j + 1][i]);
+
+      if (!REDUCED) raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); };
+  }, [ref]);
+}
+
+// ── Hero rotator ────────────────────────────────────────────────────────
+
+const ROTATOR_WORDS = ['Hedging', 'Trading', 'Insuring', 'Underwriting'];
+
+function HeroRotator() {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const el = ref.current;
+    if (!el) return;
+    let timeout: number;
+    const id = window.setInterval(() => {
+      el.style.transition = 'opacity .32s ease, transform .32s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-10px)';
+      timeout = window.setTimeout(() => {
+        setIdx((i) => (i + 1) % ROTATOR_WORDS.length);
+        el.style.transform = 'translateY(10px)';
+        requestAnimationFrame(() => {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+      }, 320);
+    }, 2300);
+    return () => { clearInterval(id); clearTimeout(timeout); };
+  }, []);
+  return <span ref={ref} className="rotator">{ROTATOR_WORDS[idx]}</span>;
+}
+
+// ── Hedge viz: value line caught at the protection floor ────────────────
+
+function HedgeViz({ theme }: { theme: Theme }) {
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  const statusRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const cv = cvRef.current;
+    if (!cv) return;
+    const REDUCED = prefersReducedMotion();
+    const tint = '45,108,255';
+    const ink = theme === 'light' ? '18,26,45' : '255,255,255';
+    const N = 64;
+    const floor = 0.34;
+    const data: number[] = [];
+    let v = 0.72;
+    for (let i = 0; i < N; i++) {
+      v += (Math.random() - 0.5) * 0.10 + (0.72 - v) * 0.05;
+      if (Math.random() < 0.10) v -= 0.34;
+      v = Math.max(0.08, Math.min(0.96, v));
+      data.push(v);
+    }
+    let d = fitCanvas(cv);
+    const onResize = () => { d = fitCanvas(cv); draw(); };
+    window.addEventListener('resize', onResize, { passive: true });
+
+    function draw() {
+      const { ctx, w: W, h: H } = d;
+      ctx.clearRect(0, 0, W, H);
+      const Y = (val: number) => 8 + (1 - val) * (H - 16);
+      const X = (i: number) => (i / (N - 1)) * W;
+      const fy = Y(floor);
+
+      ctx.beginPath();
+      ctx.moveTo(0, fy);
+      for (let j = 0; j < N; j++) ctx.lineTo(X(j), Y(Math.min(data[j], floor)));
+      ctx.lineTo(W, fy);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(${tint},0.18)`;
+      ctx.fill();
+
+      ctx.beginPath();
+      for (let k = 0; k < N; k++) {
+        const x = X(k), y = Y(data[k]);
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = `rgba(${ink},0.18)`;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.beginPath();
+      ctx.moveTo(0, fy);
+      ctx.lineTo(W, fy);
+      ctx.strokeStyle = `rgba(${tint},0.55)`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.beginPath();
+      for (let m = 0; m < N; m++) {
+        const hx = X(m), hy = Y(Math.max(data[m], floor));
+        if (m === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+      }
+      ctx.strokeStyle = `rgba(${tint},0.98)`;
+      ctx.lineWidth = 1.8;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(X(N - 1), Y(Math.max(data[N - 1], floor)), 3, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${tint},1)`;
+      ctx.fill();
+    }
+
+    function updateStatus() {
+      const el = statusRef.current;
+      if (!el) return;
+      const covered = data[N - 1] < floor;
+      el.textContent = covered ? 'Downside covered' : 'Protected';
+      el.classList.toggle('on', covered);
+    }
+
+    draw();
+    updateStatus();
+
+    if (REDUCED) {
+      return () => { window.removeEventListener('resize', onResize); };
+    }
+
+    const id = window.setInterval(() => {
+      v += (Math.random() - 0.5) * 0.10 + (0.72 - v) * 0.05;
+      if (Math.random() < 0.11) v -= 0.34;
+      v = Math.max(0.08, Math.min(0.96, v));
+      data.push(v); data.shift();
+      draw();
+      updateStatus();
+    }, 900);
+    return () => { clearInterval(id); window.removeEventListener('resize', onResize); };
+  }, [theme]);
+
   return (
-    <Component
-      title={code}
-      style={{ width: size, height: Math.round(size * 0.75) }}
-      className="rounded-[3px] shrink-0 object-cover"
-    />
-  );
-}
-
-// ── Live FX ticker (real data, scrolls) ──────────────────────────────────
-
-function LiveFxTicker() {
-  const { data } = useQuery<{ rates: Record<string, { pair: string; rate: number; lastUpdated: string }> }>({
-    queryKey: ['/api/fx/rates'],
-    refetchInterval: 30_000,
-  });
-  if (!data?.rates) return null;
-  const pairs = Object.values(data.rates);
-  const doubled = [...pairs, ...pairs];
-  return (
-    <div className="relative overflow-hidden border-y border-gray-200/80 py-2.5 bg-white">
-      <div className="flex animate-scroll gap-10" style={{ width: 'max-content' }}>
-        {doubled.map((r, i) => {
-          const quote = r.pair.split('/')[1];
-          return (
-            <div key={i} className="flex items-center gap-2 text-sm whitespace-nowrap px-3">
-              <Flag code={quote} size={18} />
-              <span className="text-[#001F5C] font-semibold tracking-tight">{r.pair}</span>
-              <span className="font-mono-data font-semibold text-gray-900">
-                {r.rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            </div>
-          );
-        })}
+    <div className="feat-viz">
+      <canvas ref={cvRef} className="hedge-canvas" aria-hidden="true" />
+      <div className="hedge-foot">
+        <span ref={statusRef} className="hedge-status">Downside covered</span>
+        <span className="hedge-key"><i />Protection floor</span>
       </div>
-      <style>{`
-        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        .animate-scroll { animation: scroll 120s linear infinite; }
-        .animate-scroll:hover { animation-play-state: paused; }
-      `}</style>
     </div>
   );
 }
 
-// ── Top navigation ──────────────────────────────────────────────────────
+// ── Yield viz: APR counter + utilization bar ────────────────────────────
 
-function TopNav({ tone }: { tone: 'dark' | 'light' }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [resourcesOpen, setResourcesOpen] = useState(false);
+function YieldViz() {
+  const aprRef = useRef<HTMLSpanElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+  const utilRef = useRef<HTMLSpanElement>(null);
 
-  const dark = tone === 'dark';
-  const linkBase = dark
-    ? 'text-sm text-white/80 hover:text-white transition-colors'
-    : 'text-sm text-gray-600 hover:text-gray-900 transition-colors';
+  useEffect(() => {
+    const REDUCED = prefersReducedMotion();
+    const targetApr = 20.0;
+    const targetUtil = 72;
+    const aprEl = aprRef.current;
+    const fillEl = fillRef.current;
+    const utilEl = utilRef.current;
+    if (!aprEl) return;
+
+    if (REDUCED) {
+      aprEl.textContent = targetApr.toFixed(1);
+      if (fillEl) fillEl.style.width = `${targetUtil}%`;
+      if (utilEl) utilEl.textContent = `${targetUtil}%`;
+      return;
+    }
+
+    let started = false;
+    let loopId = 0;
+    let raf = 0;
+
+    function run() {
+      if (started) return;
+      started = true;
+      if (fillEl) requestAnimationFrame(() => { fillEl.style.width = `${targetUtil}%`; });
+      const t0 = performance.now();
+      function step(now: number) {
+        const p = Math.min(1, (now - t0) / 1400);
+        const e = 1 - Math.pow(1 - p, 3);
+        if (aprEl) aprEl.textContent = (targetApr * e).toFixed(1);
+        if (utilEl) utilEl.textContent = `${Math.round(targetUtil * e)}%`;
+        if (p < 1) raf = requestAnimationFrame(step);
+        else {
+          loopId = window.setInterval(() => {
+            if (aprEl) aprEl.textContent = (targetApr + (Math.random() - 0.5) * 0.6).toFixed(1);
+          }, 1600);
+        }
+      }
+      raf = requestAnimationFrame(step);
+    }
+
+    let io: IntersectionObserver | null = null;
+    if ('IntersectionObserver' in window) {
+      io = new IntersectionObserver((es) => {
+        es.forEach((e) => { if (e.isIntersecting) { run(); io?.disconnect(); } });
+      }, { threshold: 0.4 });
+      io.observe(aprEl);
+    }
+    const fallback = window.setTimeout(run, 1200);
+    return () => {
+      clearTimeout(fallback);
+      clearInterval(loopId);
+      cancelAnimationFrame(raf);
+      io?.disconnect();
+    };
+  }, []);
 
   return (
-    <nav className={`sticky top-0 z-50 ${dark ? 'bg-[#0a1733]/80' : 'bg-white/90'} backdrop-blur-md border-b ${dark ? 'border-white/5' : 'border-gray-200/80'}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src={logoPath} alt="BlockFinaX" className="h-7 w-7 object-contain" />
-            <span className={`text-base font-semibold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
-              BlockFinaX
-            </span>
-          </Link>
+    <div className="feat-viz">
+      <div className="yld">
+        <div className="yld-apr">
+          <span ref={aprRef} className="yld-num">0.0</span>
+          <span className="yld-pct">% APR</span>
+        </div>
+        <div className="yld-label">Premium earned on collateral</div>
+        <div className="yld-bar"><div ref={fillRef} className="yld-fill" /></div>
+        <div className="yld-foot"><span>Utilization</span><span ref={utilRef}>0%</span></div>
+      </div>
+    </div>
+  );
+}
 
-          <div className="hidden md:flex items-center gap-7">
-            <a href="#about" className={linkBase}>About</a>
-            <a href="#products" className={linkBase}>Products</a>
-            <Link href="/hedger" className={linkBase}>For buyers</Link>
-            <Link href="/liquidity-provider" className={linkBase}>For capital partners</Link>
-            <div
-              className="relative"
-              onMouseEnter={() => setResourcesOpen(true)}
-              onMouseLeave={() => setResourcesOpen(false)}
-            >
-              <button className={`${linkBase} flex items-center gap-1`}>
-                Resources <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-              {resourcesOpen && (
-                <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-xl py-1.5 z-10">
-                  <Link href="/docs/request">
-                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Documentation</button>
-                  </Link>
-                  <Link href="/whitepaper">
-                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Whitepaper</button>
-                  </Link>
-                  <Link href="/pitch">
-                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Pitch deck</button>
-                  </Link>
-                  <Link href="/blog">
-                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Blog</button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
+// ── Trade viz: long/short toggle + scrolling tape ───────────────────────
 
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            <Link href="/auth">
-              <button className={`${dark ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'} h-9 px-4 rounded-full text-sm font-medium transition-colors`}>
-                Sign in
-              </button>
-            </Link>
-            <Link href="/apply">
-              <button className={`${dark ? 'bg-white text-[#001F5C] hover:bg-gray-100' : 'bg-[#001F5C] text-white hover:bg-[#003088]'} h-9 px-4 rounded-full text-sm font-semibold transition-colors`}>
-                Request access
-              </button>
-            </Link>
-          </div>
+function TradeViz() {
+  const tapeRef = useRef<HTMLCanvasElement>(null);
+  const ivRef = useRef<HTMLSpanElement>(null);
+  const [side, setSide] = useState<'long' | 'short'>('long');
 
+  useEffect(() => {
+    const cv = tapeRef.current;
+    if (!cv) return;
+    const REDUCED = prefersReducedMotion();
+    const tint = '111,140,255';
+    const N = 60;
+    const data: number[] = [];
+    let v = 0;
+    for (let i = 0; i < N; i++) { v += (Math.random() - 0.5) * 6; data.push(v); }
+    let d = fitCanvas(cv);
+    const onResize = () => { d = fitCanvas(cv); };
+    window.addEventListener('resize', onResize, { passive: true });
+
+    function draw() {
+      const { ctx, w: W, h: H } = d;
+      ctx.clearRect(0, 0, W, H);
+      const min = Math.min(...data), max = Math.max(...data);
+      const rng = max - min || 1;
+      const X = (i: number) => (i / (N - 1)) * W;
+      const Y = (val: number) => 6 + (1 - (val - min) / rng) * (H - 12);
+
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let i = 0; i < N; i++) ctx.lineTo(X(i), Y(data[i]));
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, `rgba(${tint},0.22)`);
+      g.addColorStop(1, `rgba(${tint},0)`);
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      ctx.beginPath();
+      for (let j = 0; j < N; j++) {
+        if (j === 0) ctx.moveTo(X(j), Y(data[j]));
+        else ctx.lineTo(X(j), Y(data[j]));
+      }
+      ctx.strokeStyle = `rgba(${tint},0.95)`;
+      ctx.lineWidth = 1.6;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(X(N - 1), Y(data[N - 1]), 3, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${tint},1)`;
+      ctx.fill();
+    }
+
+    draw();
+    if (REDUCED) {
+      return () => { window.removeEventListener('resize', onResize); };
+    }
+    const id = window.setInterval(() => {
+      const step = (Math.random() - 0.5) * 8;
+      data.push(data[data.length - 1] + step);
+      data.shift();
+      draw();
+      if (ivRef.current) {
+        const iv = 18 + Math.abs(step) * 1.4 + Math.random() * 4;
+        ivRef.current.textContent = `${iv.toFixed(1)}%`;
+      }
+    }, 900);
+    return () => { clearInterval(id); window.removeEventListener('resize', onResize); };
+  }, []);
+
+  return (
+    <div className="feat-viz">
+      <div className="trd">
+        <div className="trd-toggle">
           <button
-            onClick={() => setMobileOpen((o) => !o)}
-            className={`md:hidden p-2 rounded-md ${dark ? 'text-white hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'}`}
-            aria-label="Toggle menu"
+            type="button"
+            className={`trd-side${side === 'long' ? ' is-active' : ''}`}
+            onClick={() => setSide('long')}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            Long vol
+          </button>
+          <button
+            type="button"
+            className={`trd-side${side === 'short' ? ' is-active' : ''}`}
+            onClick={() => setSide('short')}
+          >
+            Short vol
           </button>
         </div>
+        <canvas ref={tapeRef} className="trd-tape" aria-hidden="true" />
+        <div className="trd-foot">
+          <span>Implied vol</span>
+          <span ref={ivRef} className="trd-iv">24.8%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        {mobileOpen && (
-          <div className={`md:hidden ${dark ? 'border-t border-white/5 bg-[#0a1733]' : 'border-t border-gray-200 bg-white'} pb-4 pt-2`}>
-            <div className="space-y-1">
-              {[
-                ['#about', 'About'],
-                ['#products', 'Products'],
-                ['/hedger', 'For buyers'],
-                ['/liquidity-provider', 'For capital partners'],
-                ['/whitepaper', 'Whitepaper'],
-                ['/pitch', 'Pitch deck'],
-                ['/blog', 'Blog'],
-              ].map(([href, label]) => (
-                <a
-                  key={label}
-                  href={href}
-                  onClick={() => setMobileOpen(false)}
-                  className={`block px-3 py-2 text-sm rounded-md ${dark ? 'text-white/80 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-100'}`}
-                >
-                  {label}
-                </a>
-              ))}
-              <div className="px-3 pt-3 grid grid-cols-2 gap-2">
-                <Link href="/auth">
-                  <button className={`w-full h-10 rounded-full text-sm font-medium ${dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-900'}`}>
-                    Sign in
-                  </button>
-                </Link>
-                <Link href="/apply">
-                  <button className={`w-full h-10 rounded-full text-sm font-semibold ${dark ? 'bg-white text-[#001F5C]' : 'bg-[#001F5C] text-white'}`}>
-                    Request access
-                  </button>
-                </Link>
+// ── Signal: marching-squares contour field ──────────────────────────────
+
+function useSignalCanvas(ref: React.RefObject<HTMLCanvasElement>) {
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv) return;
+    const REDUCED = prefersReducedMotion();
+    let d = fitCanvas(cv);
+    const t0 = performance.now();
+    let raf = 0;
+    const onResize = () => { d = fitCanvas(cv); };
+    window.addEventListener('resize', onResize, { passive: true });
+
+    const levels = [0.12, 0.19, 0.28, 0.38, 0.50, 0.64, 0.80, 0.98, 1.18, 1.40, 1.62];
+
+    function frame(now: number) {
+      const t = REDUCED ? 0 : (now - t0) / 1000;
+      const { ctx, w: W, h: H } = d;
+      ctx.clearRect(0, 0, W, H);
+
+      const cols = 70;
+      const rows = Math.max(20, Math.round(cols * H / W));
+      const gw = W / (cols - 1), gh = H / (rows - 1);
+      const cx = W * 0.5, cy = H * 0.5;
+      const sep = W * 0.15 + Math.sin(t * 0.22) * W * 0.025;
+      const p1x = cx - sep, p2x = cx + sep;
+      const p1y = cy + Math.sin(t * 0.28) * H * 0.05;
+      const p2y = cy - Math.sin(t * 0.28) * H * 0.05;
+      const s = Math.min(W, H) * 0.32;
+      const s2 = 2 * s * s;
+
+      const vals = new Float32Array(cols * rows);
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          const x = i * gw, y = j * gh;
+          const dx1 = x - p1x, dy1 = y - p1y;
+          const dx2 = x - p2x, dy2 = y - p2y;
+          vals[j * cols + i] = Math.exp(-(dx1 * dx1 + dy1 * dy1) / s2)
+                             + Math.exp(-(dx2 * dx2 + dy2 * dy2) / s2);
+        }
+      }
+
+      for (let L = 0; L < levels.length; L++) {
+        const lv = levels[L];
+        ctx.beginPath();
+        for (let jj = 0; jj < rows - 1; jj++) {
+          for (let ii = 0; ii < cols - 1; ii++) {
+            const x0 = ii * gw, y0 = jj * gh;
+            const a = vals[jj * cols + ii];
+            const b = vals[jj * cols + ii + 1];
+            const c = vals[(jj + 1) * cols + ii + 1];
+            const e = vals[(jj + 1) * cols + ii];
+            const idx = (a > lv ? 8 : 0) | (b > lv ? 4 : 0) | (c > lv ? 2 : 0) | (e > lv ? 1 : 0);
+            if (idx === 0 || idx === 15) continue;
+            const tX = x0 + gw * ((lv - a) / (b - a)), tY = y0;
+            const rX = x0 + gw, rY = y0 + gh * ((lv - b) / (c - b));
+            const bX = x0 + gw * ((lv - e) / (c - e)), bY = y0 + gh;
+            const lX = x0, lY = y0 + gh * ((lv - a) / (e - a));
+            switch (idx) {
+              case 1: ctx.moveTo(lX, lY); ctx.lineTo(bX, bY); break;
+              case 2: ctx.moveTo(bX, bY); ctx.lineTo(rX, rY); break;
+              case 3: ctx.moveTo(lX, lY); ctx.lineTo(rX, rY); break;
+              case 4: ctx.moveTo(tX, tY); ctx.lineTo(rX, rY); break;
+              case 5: ctx.moveTo(lX, lY); ctx.lineTo(tX, tY); ctx.moveTo(bX, bY); ctx.lineTo(rX, rY); break;
+              case 6: ctx.moveTo(tX, tY); ctx.lineTo(bX, bY); break;
+              case 7: ctx.moveTo(lX, lY); ctx.lineTo(tX, tY); break;
+              case 8: ctx.moveTo(tX, tY); ctx.lineTo(lX, lY); break;
+              case 9: ctx.moveTo(tX, tY); ctx.lineTo(bX, bY); break;
+              case 10: ctx.moveTo(tX, tY); ctx.lineTo(rX, rY); ctx.moveTo(lX, lY); ctx.lineTo(bX, bY); break;
+              case 11: ctx.moveTo(tX, tY); ctx.lineTo(rX, rY); break;
+              case 12: ctx.moveTo(lX, lY); ctx.lineTo(rX, rY); break;
+              case 13: ctx.moveTo(bX, bY); ctx.lineTo(rX, rY); break;
+              case 14: ctx.moveTo(lX, lY); ctx.lineTo(bX, bY); break;
+            }
+          }
+        }
+        const alpha = 0.07 + (L / levels.length) * 0.34;
+        ctx.strokeStyle = `rgba(45,108,255,${alpha.toFixed(3)})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      if (!REDUCED) raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); };
+  }, [ref]);
+}
+
+// ── Signal rotator ──────────────────────────────────────────────────────
+
+const SIGNAL_WORDS = ['see', 'hedge', 'trade'];
+
+function SignalRotator() {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const el = ref.current;
+    if (!el) return;
+    let timeout: number;
+    const id = window.setInterval(() => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(8px)';
+      timeout = window.setTimeout(() => {
+        setIdx((i) => (i + 1) % SIGNAL_WORDS.length);
+        el.style.opacity = '1';
+        el.style.transform = 'none';
+      }, 240);
+    }, 2200);
+    return () => { clearInterval(id); clearTimeout(timeout); };
+  }, []);
+  return <span ref={ref} className="rot">{SIGNAL_WORDS[idx]}</span>;
+}
+
+// ── Nav ─────────────────────────────────────────────────────────────────
+
+function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return (
+    <nav className={`nav${scrolled ? ' scrolled' : ''}`}>
+      <div className="wrap">
+        <Link href="/" className="brand" aria-label="BlockFinaX home">
+          <span className="mark"><img src={logoPath} alt="" /></span>
+          BlockFinaX
+        </Link>
+        <div className="nav-links">
+          <a href="#use">Products</a>
+          <Link href="/hedger">Hedgers</Link>
+          <Link href="/liquidity-provider">Underwriters</Link>
+          <div
+            className="nav-dropdown"
+            onMouseEnter={() => setResourcesOpen(true)}
+            onMouseLeave={() => setResourcesOpen(false)}
+          >
+            <button type="button" className="nav-dropdown-trigger">
+              Resources <ChevronDown />
+            </button>
+            {resourcesOpen && (
+              <div className="nav-dropdown-menu">
+                <Link href="/docs/request">Documentation</Link>
+                <Link href="/whitepaper">Whitepaper</Link>
+                <Link href="/pitch">Pitch deck</Link>
+                <Link href="/blog">Blog</Link>
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
+        <div className="nav-cta">
+          <button
+            type="button"
+            className="theme-toggle"
+            aria-label="Toggle light and dark theme"
+            onClick={onToggleTheme}
+          >
+            {theme === 'dark' ? (
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 14.5A8 8 0 0 1 9.5 4 6.5 6.5 0 1 0 20 14.5Z"
+                  stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"
+                  stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+          <a className="btn btn-ghost btn-sm" href="#use">Hedge</a>
+          <Link href="/apply" className="btn btn-primary btn-sm">
+            Trade <span className="arrow">→</span>
+          </Link>
+        </div>
       </div>
     </nav>
   );
@@ -255,502 +645,216 @@ function TopNav({ tone }: { tone: 'dark' | 'light' }) {
 // ── Hero ────────────────────────────────────────────────────────────────
 
 function Hero() {
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  useHeroSurface(cvRef);
   return (
-    <section
-      className="relative overflow-hidden"
-      style={{
-        background:
-          'radial-gradient(ellipse 80% 60% at 50% 0%, #1a4480 0%, #0a1733 60%, #050c1d 100%)',
-      }}
-    >
-      {/* Subtle grid texture */}
-      <div
-        className="absolute inset-0 opacity-[0.07] pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-        }}
-      />
-      {/* Star dots */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[
-          [12, 18], [78, 22], [22, 65], [85, 70], [40, 32], [62, 78],
-          [8, 88], [92, 12], [55, 10], [30, 88], [70, 45], [18, 40],
-          [88, 55], [48, 92], [5, 50], [95, 38],
-        ].map(([x, y], i) => (
-          <span
-            key={i}
-            className="absolute w-[2px] h-[2px] rounded-full bg-white/40"
-            style={{ left: `${x}%`, top: `${y}%` }}
-          />
-        ))}
-      </div>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 lg:pt-32 pb-20 sm:pb-28">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-center max-w-5xl mx-auto"
-        >
-          <h1 className="text-white font-semibold tracking-[-0.02em] leading-[1.02] text-[40px] sm:text-6xl lg:text-[80px]">
-            Protect your money
-            <br />
-            <span className="text-white/60">when the rate moves</span>
-          </h1>
-          <p className="mt-6 sm:mt-8 text-[15px] sm:text-lg text-white/70 max-w-2xl mx-auto leading-relaxed">
-            Pay a small fee, get covered against currency swings. If the rate
-            moves against you, the system pays you automatically. Start from
-            $10, where banks demand $100,000.
-          </p>
-          <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
-            <Link href="/apply">
-              <Button className="w-full sm:w-auto h-12 sm:h-13 px-7 rounded-full bg-white text-[#001F5C] hover:bg-gray-100 text-sm font-semibold">
-                Request access <ArrowRight className="h-4 w-4 ml-1.5" />
-              </Button>
-            </Link>
-            <Link href="/docs/request">
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto h-12 sm:h-13 px-7 rounded-full bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white text-sm font-medium"
-              >
-                Read the docs
-              </Button>
-            </Link>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-// ── About / capability statement ────────────────────────────────────────
-
-function Capability() {
-  return (
-    <section id="about" className="py-20 sm:py-28 bg-white">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
-          What we do
-        </span>
-        <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-          Currency and commodity protection, paid out automatically
-        </h2>
-        <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
-          BlockFinaX runs a marketplace of protection pools, each one fully
-          backed by cash held in reserve. Buyers pick a trigger rate and pay a
-          small fee upfront. Capital partners back the pool in exchange for that
-          fee. At the end of the term, independent rate sources confirm the
-          closing rate and the pool pays out automatically &mdash; no bank, no
-          margin call, no waiting.
-        </p>
-        <div className="mt-7">
-          <Link href="/docs/request">
-            <Button className="h-11 px-6 rounded-full bg-[#001F5C] text-white hover:bg-[#003088] text-sm font-semibold">
-              Read more <ArrowRight className="h-4 w-4 ml-1.5" />
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ── How it works ────────────────────────────────────────────────────────
-
-function HowItWorks() {
-  const steps = [
-    {
-      n: '01',
-      title: 'A pool is opened',
-      body: 'A partner opens a protection pool for a specific currency pair, trigger rate, and term. They set the premium, the maximum payout, and put in the first capital.',
-    },
-    {
-      n: '02',
-      title: 'Capital partners fund the pool',
-      body: 'Capital partners deposit dollars into the pool to back the protection. Their maximum loss is fixed at the cap before they commit. Premium accrues to them as buyers join.',
-    },
-    {
-      n: '03',
-      title: 'Buyers pay a small fee',
-      body: 'Businesses pay a one-time fee and get protection at a fixed trigger rate for a fixed term. The fee is set by our pricing engine, not by a live order book.',
-    },
-    {
-      n: '04',
-      title: 'Automatic payout',
-      body: 'At the end of the term, three independent rate sources submit the closing rate. The pool pays out automatically. Funds are immediately available to withdraw.',
-    },
-  ];
-
-  return (
-    <section className="py-20 sm:py-28 bg-white border-t border-gray-200/60">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mb-10 sm:mb-14">
-          <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
-            How it works
-          </span>
-          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Four steps. One platform. No banks.
-          </h2>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-          {steps.map(({ n, title, body }) => (
-            <div key={n} className="border-t border-gray-200 pt-5">
-              <p className="text-sm font-semibold text-[#0047BB] font-mono-data tracking-wider">{n}</p>
-              <h3 className="mt-3 text-lg font-semibold tracking-tight text-gray-900">{title}</h3>
-              <p className="mt-2 text-[14px] text-gray-600 leading-relaxed">{body}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ── Products section ────────────────────────────────────────────────────
-
-function Products() {
-  const products = [
-    {
-      icon: Shield,
-      title: 'Protection marketplace',
-      body: 'Browse open protection pools by currency pair, trigger rate, and term. Pay a one-time fee in dollars and lock in the cover. The payout is automatic at the end of the term — no one to chase.',
-      href: '/whitepaper',
-    },
-    {
-      icon: Layers,
-      title: 'Capital pools',
-      body: 'Put dollars in to back protection on specific pairs and earn fees in return. Maximum loss per pool is set before you commit. No margin calls, no liquidations, no surprises.',
-      href: '/liquidity-provider',
-    },
-    {
-      icon: BarChart3,
-      title: 'Capital workbench',
-      body: 'Test your terms against years of real exchange-rate history. See return, trigger rate, and worst-case losses before you commit a single dollar. Built for treasury and finance teams.',
-      href: '/liquidity-provider',
-    },
-  ];
-
-  return (
-    <section id="products" className="py-20 sm:py-28" style={{ backgroundColor: '#001F5C' }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-end mb-12 sm:mb-16">
-          <div className="max-w-2xl">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-white leading-[1.1]">
-              Protection and capital, end to end
-            </h2>
-            <p className="mt-5 text-base sm:text-lg text-white/70 leading-relaxed">
-              We split currency protection into the parts businesses, capital
-              partners, and finance teams actually need.
+    <header className="hero">
+      <div className="wrap hero-inner">
+        <div className="hero-grid2">
+          <div className="hero-copy">
+            <h1>
+              <HeroRotator />
+              <br />
+              currency risk.
+            </h1>
+            <p className="hero-sub">
+              The market to discover, trade and hedge FX risk in emerging markets.
             </p>
-          </div>
-          <Link href="/liquidity-provider">
-            <Button className="h-11 px-6 rounded-full bg-white text-[#001F5C] hover:bg-gray-100 text-sm font-semibold shrink-0">
-              See all products <ArrowRight className="h-4 w-4 ml-1.5" />
-            </Button>
-          </Link>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map(({ icon: Icon, title, body, href }) => (
-            <div
-              key={title}
-              className="bg-white rounded-2xl p-6 sm:p-7 flex flex-col"
-            >
-              <div className="h-11 w-11 rounded-xl bg-[#EDF1F8] flex items-center justify-center mb-5">
-                <Icon className="h-5 w-5 text-[#001F5C]" strokeWidth={1.8} />
-              </div>
-              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">{title}</h3>
-              <p className="mt-2 text-[14px] text-gray-600 leading-relaxed flex-1">{body}</p>
-              <Link href={href}>
-                <button className="mt-5 inline-flex items-center text-sm font-semibold text-[#001F5C] hover:gap-2 transition-all gap-1.5">
-                  Read more <ArrowRight className="h-4 w-4" />
-                </button>
+            <div className="hero-ctas">
+              <Link href="/apply" className="btn btn-primary">
+                Hedge <span className="arrow">→</span>
               </Link>
+              <a href="#use" className="btn btn-ghost">Trade</a>
             </div>
-          ))}
+          </div>
+          <div className="hero-visual">
+            <canvas ref={cvRef} className="hero-surface" aria-hidden="true" />
+          </div>
         </div>
       </div>
-    </section>
+    </header>
   );
 }
 
-// ── Supported pairs ─────────────────────────────────────────────────────
+// ── Use / three feature cards ───────────────────────────────────────────
 
-function Workbenches() {
-  const benches = [
-    {
-      audience: 'For buyers',
-      title: 'See what protection would have changed on a real trade',
-      body: 'Plug in a payment you actually made — a supplier invoice, foreign tuition, a project deposit — and replay the rate path that happened. The workbench shows you what the fee would have cost, what payouts would have fired, and what currency loss flowed through your margin without protection.',
-      cta: 'Open buyer workbench',
-      href: '/hedger',
-    },
-    {
-      audience: 'For capital partners',
-      title: 'Model your returns against real exchange-rate history',
-      body: 'Pick a pair, a period, and your terms. The workbench replays what the rate actually did and shows you return, annualised yield, how often the pool would have paid out, and a month-by-month profit breakdown for any size of commitment.',
-      cta: 'Open capital workbench',
-      href: '/liquidity-provider',
-    },
-  ];
-
+function UseSection({ theme }: { theme: Theme }) {
   return (
-    <section className="py-20 sm:py-28 bg-white border-t border-gray-200/60">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mb-10 sm:mb-14">
-          <span className="inline-block px-3 py-1 rounded-full bg-[#EDF1F8] text-[#001F5C] text-xs font-semibold tracking-wide">
-            Workbenches
-          </span>
-          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Plug in your numbers
-          </h2>
-          <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            Both sides of the market get an interactive workbench powered by
-            years of real exchange-rate history. No signup required.
-          </p>
+    <section className="use" id="use">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2>Three ways to use it.</h2>
+          <p>Hedge FX risk, earn premium on stablecoins, or trade either side.</p>
         </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          {benches.map(({ audience, title, body, cta, href }) => (
-            <div
-              key={audience}
-              className="bg-gray-50 border border-gray-200/80 rounded-2xl p-6 sm:p-7 flex flex-col"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0047BB]">
-                {audience}
-              </p>
-              <h3 className="mt-3 text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight leading-tight">
-                {title}
-              </h3>
-              <p className="mt-3 text-sm text-gray-600 leading-relaxed flex-1">{body}</p>
-              <div className="mt-5">
-                <Link href={href}>
-                  <Button className="h-11 px-6 rounded-full bg-[#001F5C] text-white hover:bg-[#003088] text-sm font-semibold">
-                    {cta} <ArrowRight className="h-4 w-4 ml-1.5" />
-                  </Button>
+        <div className="feats">
+          <article className="feat t-blue">
+            <HedgeViz theme={theme} />
+            <div className="feat-body">
+              <div className="feat-name">Hedge <span className="feat-pill">PROTECT</span></div>
+              <p>Hedge FX risk to protect your capital.</p>
+              <div className="feat-actions">
+                <Link href="/hedger" className="feat-btn primary">
+                  Hedge <span className="arrow">→</span>
                 </Link>
+                <Link href="/docs/request" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+          </article>
 
-function WhyBlockFinaX() {
-  const rows = [
-    {
-      dim: 'Up-front cost',
-      bfx: 'Buyer pays a small fee only &mdash; typically 1&ndash;5% of the amount being protected. The pool takes the risk; the buyer keeps their cash working.',
-      bank: 'Full amount. A bank forward locks the entire trade value in margin for the life of the contract. Capital is unavailable until settlement.',
-    },
-    {
-      dim: 'Minimum ticket',
-      bfx: 'From around $10 in fees. Small businesses and traders can buy protection for the actual size they need.',
-      bank: 'Typically $100K and up. Below that threshold most banks won&rsquo;t quote, and the ones that do widen the spread until they do.',
-    },
-    {
-      dim: 'Access',
-      bfx: 'Open. Any business with an account can buy protection. Anyone with dollars can put up capital.',
-      bank: 'Closed. A banking relationship, identity verification, corridor approval, and a credit line are all prerequisites.',
-    },
-    {
-      dim: 'Payout',
-      bfx: 'Automatic. Three independent rate sources submit the closing rate; the payout fires in one step.',
-      bank: 'Manual. T+2, broker confirmation, paper trail. Black-market channels require trust that the other side actually wires the money.',
-    },
-    {
-      dim: 'Counterparty risk',
-      bfx: 'None. Every payout is pre-funded by dollars sitting in the pool the moment the protection is purchased.',
-      bank: 'Concentrated. Bank forwards depend on the bank&rsquo;s solvency. Informal deals depend on the other side showing up.',
-    },
-    {
-      dim: 'Capital partner loss profile',
-      bfx: 'Capped by the pool. Maximum loss is fixed before capital is committed.',
-      bank: 'Unbounded. Selling options or quoting privately can produce losses well beyond initial margin.',
-    },
-    {
-      dim: 'Pricing transparency',
-      bfx: 'Each pool publishes its fee openly. Same number for every buyer.',
-      bank: 'Opaque. Bank spreads, last-look fills, and tiered pricing all favour the desk.',
-    },
-  ];
-
-  return (
-    <section className="py-20 sm:py-28 bg-gray-50 border-y border-gray-200/60">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mb-10 sm:mb-14">
-          <span className="inline-block px-3 py-1 rounded-full bg-white text-[#001F5C] text-xs font-semibold tracking-wide border border-gray-200/80">
-            Why BlockFinaX
-          </span>
-          <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            Structurally different from banks and informal channels
-          </h2>
-          <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            Same goal &mdash; protect your money against currency swings &mdash;
-            without depending on a banking line, a trading desk, or a stranger
-            sending a confirmation.
-          </p>
-        </div>
-
-        {/* Comparison table — clean rows, no zebra striping, no decoration */}
-        <div className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden">
-          <div className="hidden md:grid grid-cols-[160px_1fr_1fr] border-b border-gray-200/80 bg-gray-50 text-[11px] uppercase tracking-[0.08em] text-gray-500 font-semibold">
-            <div className="px-5 py-3">Dimension</div>
-            <div className="px-5 py-3 border-l border-gray-200/80 text-[#001F5C]">BlockFinaX</div>
-            <div className="px-5 py-3 border-l border-gray-200/80">Bank or informal channel</div>
-          </div>
-          <div>
-            {rows.map(({ dim, bfx, bank }, i) => (
-              <div
-                key={dim}
-                className={`grid grid-cols-1 md:grid-cols-[160px_1fr_1fr] ${
-                  i !== rows.length - 1 ? 'border-b border-gray-200/80' : ''
-                }`}
-              >
-                <div className="px-5 pt-5 pb-2 md:py-5 text-sm font-semibold text-gray-900 md:border-r md:border-gray-200/80">
-                  {dim}
-                </div>
-                <div className="px-5 py-2 md:py-5 text-[13px] sm:text-sm text-gray-700 leading-relaxed md:border-r md:border-gray-200/80">
-                  <span className="md:hidden text-[10px] font-semibold tracking-[0.08em] uppercase text-[#0047BB]">BlockFinaX</span>
-                  <p
-                    className="md:mt-0 mt-1"
-                    dangerouslySetInnerHTML={{ __html: bfx }}
-                  />
-                </div>
-                <div className="px-5 pt-2 pb-5 md:py-5 text-[13px] sm:text-sm text-gray-500 leading-relaxed">
-                  <span className="md:hidden text-[10px] font-semibold tracking-[0.08em] uppercase text-gray-400">
-                    Bank or informal
-                  </span>
-                  <p
-                    className="md:mt-0 mt-1"
-                    dangerouslySetInnerHTML={{ __html: bank }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function SupportedPairs() {
-  return (
-    <section className="py-20 sm:py-28 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mb-10 sm:mb-12">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-gray-900 leading-[1.1]">
-            What you can protect
-          </h2>
-          <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
-            Major emerging-market currencies and physical commodities, all
-            quoted against the US dollar and paid out in dollars. New pairs
-            added as demand grows.
-          </p>
-        </div>
-
-        {/* Currencies */}
-        <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-[#0047BB] mb-4">
-          Currencies
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3 mb-10 sm:mb-12">
-          {SUPPORTED_PAIRS.map(({ code, label }) => (
-            <div
-              key={code}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-[#001F5C]/30 hover:bg-gray-50 transition-colors"
-              title={label}
-            >
-              <Flag code={code} size={24} />
-              <span className="text-sm font-semibold text-gray-900 font-mono-data">{code}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Commodities */}
-        <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-[#0047BB] mb-4">
-          Commodities
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 sm:gap-3">
-          {SUPPORTED_COMMODITIES.map(({ code, name }) => (
-            <div
-              key={code}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-[#001F5C]/30 hover:bg-gray-50 transition-colors"
-            >
-              <span className="h-6 w-6 rounded-md bg-[#EDF1F8] text-[#001F5C] text-[10px] font-bold font-mono-data inline-flex items-center justify-center shrink-0">
-                {code.slice(0, 3)}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900 leading-tight">{name}</p>
-                <p className="text-[11px] text-gray-500 font-mono-data leading-tight">USD/{code}</p>
+          <article className="feat t-azure">
+            <YieldViz />
+            <div className="feat-body">
+              <div className="feat-name">Yield <span className="feat-pill">EARN</span></div>
+              <p>Earn premiums on idle stablecoins.</p>
+              <div className="feat-actions">
+                <Link href="/liquidity-provider" className="feat-btn primary">
+                  Yield <span className="arrow">→</span>
+                </Link>
+                <Link href="/docs/request" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+          </article>
 
-// ── Trust strip ─────────────────────────────────────────────────────────
-
-function TrustStrip() {
-  return (
-    <section className="py-14 sm:py-20 bg-gray-50 border-y border-gray-200/60">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-          {[
-            ['Fully funded', 'Every position is backed by dollars sitting in reserve the moment you buy. The system cannot owe more than it holds.'],
-            ['No liquidations', 'Every pool has a fixed cap. Capital partners cannot be liquidated; their loss is capped at the number they set.'],
-            ['Independent rate sources', 'Multiple independent sources confirm every closing rate. No single point of failure.'],
-            ['We never hold your money', 'Your protection, your fees, and your capital live in audited accounts that BlockFinaX cannot touch.'],
-          ].map(([title, body]) => (
-            <div key={title}>
-              <p className="text-sm sm:text-base font-semibold text-[#001F5C] tracking-tight">{title}</p>
-              <p className="mt-1.5 text-[13px] sm:text-sm text-gray-600 leading-relaxed">{body}</p>
+          <article className="feat t-indigo">
+            <TradeViz />
+            <div className="feat-body">
+              <div className="feat-name">Trade <span className="feat-pill">VOL</span></div>
+              <p>Go long or short FX risk.</p>
+              <div className="feat-actions">
+                <Link href="/apply" className="feat-btn primary">
+                  Trade <span className="arrow">→</span>
+                </Link>
+                <Link href="/docs/request" className="feat-btn ghost">Learn more</Link>
+              </div>
             </div>
-          ))}
+          </article>
         </div>
       </div>
     </section>
   );
 }
 
-// ── Closing CTA ─────────────────────────────────────────────────────────
+// ── Markets / payoff cards ──────────────────────────────────────────────
 
-function ClosingCTA() {
+function MarketsSection() {
   return (
-    <section
-      className="py-20 sm:py-28"
-      style={{
-        background:
-          'radial-gradient(ellipse 60% 80% at 50% 50%, #1a4480 0%, #0a1733 70%, #050c1d 100%)',
-      }}
-    >
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-white leading-[1.1]">
-          Ready to buy protection or back a pool?
+    <section className="assets" id="markets">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2>Markets for volatile assets.</h2>
+          <p>See the risk, then take a side.</p>
+        </div>
+        <div className="acards">
+
+          <article className="acard t-blue">
+            <h3>Insure against moves</h3>
+            <svg className="payoff" viewBox="0 0 300 190" fill="none" aria-hidden="true">
+              <line className="grid" x1="88" y1="22" x2="88" y2="158" />
+              <line className="grid" x1="166" y1="22" x2="166" y2="158" />
+              <line className="grid" x1="244" y1="22" x2="244" y2="158" />
+              <line className="grid" x1="30" y1="50" x2="275" y2="50" />
+              <line className="grid" x1="30" y1="158" x2="275" y2="158" />
+              <line className="zero" x1="30" y1="104" x2="275" y2="104" />
+              <line className="axis" x1="30" y1="22" x2="30" y2="168" />
+              <line className="strike" x1="145" y1="22" x2="145" y2="168" />
+              <path className="area" d="M169,104 L275,34 L275,104 Z" />
+              <path className="curve" d="M30,120 L145,120 L275,34" />
+              <circle className="spot" r="3" cx="275" cy="34" />
+              <text className="lbl" x="148" y="32">Strike</text>
+              <text className="lbl t" x="232" y="28">Payout</text>
+              <text className="lbl" x="245" y="178">Rate →</text>
+            </svg>
+            <p>Buy cover and get paid out when the rate moves against you.</p>
+            <Link href="/hedger" className="acard-cta">
+              Buy cover <span className="arrow">→</span>
+            </Link>
+          </article>
+
+          <article className="acard t-azure">
+            <h3>Underwrite the risk</h3>
+            <svg className="payoff" viewBox="0 0 300 190" fill="none" aria-hidden="true">
+              <line className="grid" x1="88" y1="22" x2="88" y2="158" />
+              <line className="grid" x1="166" y1="22" x2="166" y2="158" />
+              <line className="grid" x1="244" y1="22" x2="244" y2="158" />
+              <line className="grid" x1="30" y1="50" x2="275" y2="50" />
+              <line className="grid" x1="30" y1="158" x2="275" y2="158" />
+              <line className="zero" x1="30" y1="104" x2="275" y2="104" />
+              <line className="axis" x1="30" y1="22" x2="30" y2="168" />
+              <line className="strike" x1="150" y1="22" x2="150" y2="168" />
+              <path className="area" d="M30,104 L30,86 L150,86 L150,104 Z" />
+              <path className="curve" d="M30,86 L150,86 L275,166" />
+              <circle className="spot" r="3" cx="30" cy="86" />
+              <text className="lbl t" x="58" y="80">Premium</text>
+              <text className="lbl" x="153" y="32">Strike</text>
+              <text className="lbl" x="245" y="178">Rate →</text>
+            </svg>
+            <p>Set a strike and expiry, underwrite the risk, and earn the premium.</p>
+            <Link href="/liquidity-provider" className="acard-cta">
+              Underwrite <span className="arrow">→</span>
+            </Link>
+          </article>
+
+          <article className="acard t-indigo">
+            <h3>Bet on either side</h3>
+            <svg className="payoff" viewBox="0 0 300 190" fill="none" aria-hidden="true">
+              <line className="grid" x1="88" y1="22" x2="88" y2="158" />
+              <line className="grid" x1="244" y1="22" x2="244" y2="158" />
+              <line className="grid" x1="30" y1="50" x2="275" y2="50" />
+              <line className="grid" x1="30" y1="158" x2="275" y2="158" />
+              <line className="zero" x1="30" y1="104" x2="275" y2="104" />
+              <line className="axis" x1="30" y1="22" x2="30" y2="168" />
+              <line className="strike" x1="152" y1="22" x2="152" y2="168" />
+              <path className="area" d="M30,46 L152,150 L275,46 Z" />
+              <path className="curve-faint" d="M30,150 L152,46 L275,150" />
+              <path className="curve" d="M30,46 L152,150 L275,46" />
+              <circle className="spot" r="3" cx="152" cy="150" />
+              <text className="lbl t" x="34" y="40">Long vol</text>
+              <text className="lbl" x="34" y="162">Short vol</text>
+              <text className="lbl" x="138" y="184">ATM</text>
+            </svg>
+            <p>Go long or short volatility and profit from the move either way.</p>
+            <Link href="/apply" className="acard-cta">
+              Trade volatility <span className="arrow">→</span>
+            </Link>
+          </article>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Signal section ──────────────────────────────────────────────────────
+
+function SignalSection() {
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  useSignalCanvas(cvRef);
+  return (
+    <section className="signal">
+      <canvas ref={cvRef} aria-hidden="true" />
+      <div className="wrap signal-inner">
+        <h2 className="signal-title">
+          Risk you can finally <SignalRotator />.
         </h2>
-        <p className="mt-5 text-base sm:text-lg text-white/70 leading-relaxed">
-          We&rsquo;re onboarding partners and capital one cohort at a time. Apply,
-          and the team will reach out within 48 hours.
-        </p>
-        <div className="mt-9 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-center">
-          <Link href="/apply">
-            <Button className="w-full sm:w-auto h-12 px-7 rounded-full bg-white text-[#001F5C] hover:bg-gray-100 text-sm font-semibold">
-              Request access <ArrowRight className="h-4 w-4 ml-1.5" />
-            </Button>
+      </div>
+    </section>
+  );
+}
+
+// ── Tail CTA ────────────────────────────────────────────────────────────
+
+function TailCTA() {
+  return (
+    <section className="tail">
+      <div className="wrap">
+        <h2>Trade and hedge FX risk.</h2>
+        <p>Buy protection against FX risk, trade the risk.</p>
+        <div className="hero-ctas">
+          <Link href="/hedger" className="btn btn-primary">
+            Hedge <span className="arrow">→</span>
           </Link>
-          <Link href="/docs/request">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto h-12 px-7 rounded-full bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white text-sm font-medium"
-            >
-              Read the docs
-            </Button>
+          <Link href="/apply" className="btn btn-ghost">
+            Trade
           </Link>
         </div>
       </div>
@@ -762,66 +866,79 @@ function ClosingCTA() {
 
 function Footer() {
   return (
-    <footer className="bg-gray-50 border-t border-gray-200/80 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
-          <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2">
-              <img src={logoPath} alt="BlockFinaX" className="h-7 w-7 object-contain" />
-              <span className="text-base font-semibold tracking-tight text-gray-900">BlockFinaX</span>
+    <footer>
+      <div className="wrap">
+        <div className="foot-top">
+          <div className="foot-brand">
+            <Link href="/" className="brand">
+              <span className="mark"><img src={logoPath} alt="" /></span>
+              BlockFinaX
             </Link>
-            <p className="mt-3 text-xs text-gray-500 max-w-xs leading-relaxed">
-              Currency and commodity protection for emerging-market businesses.
+            <p>
+              Markets for FX risk. Trade it, underwrite it to earn yield, or
+              hedge against it to protect your money.
             </p>
           </div>
-
-          <div>
-            <p className="text-[10px] font-semibold text-gray-900 tracking-[0.08em] uppercase">Product</p>
-            <ul className="mt-4 space-y-2.5 text-sm text-gray-500">
-              <li><Link href="/apply" className="hover:text-gray-900">Request access</Link></li>
-              <li><Link href="/docs/request" className="hover:text-gray-900">Documentation</Link></li>
-              <li><Link href="/hedger" className="hover:text-gray-900">For buyers</Link></li>
-              <li><Link href="/liquidity-provider" className="hover:text-gray-900">For capital partners</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-semibold text-gray-900 tracking-[0.08em] uppercase">Resources</p>
-            <ul className="mt-4 space-y-2.5 text-sm text-gray-500">
-              <li><Link href="/whitepaper" className="hover:text-gray-900">Whitepaper</Link></li>
-              <li><Link href="/pitch" className="hover:text-gray-900">Pitch deck</Link></li>
-              <li><Link href="/blog" className="hover:text-gray-900">Blog</Link></li>
-              <li><a href="mailto:hello@blockfinax.com" className="hover:text-gray-900">Contact</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-semibold text-gray-900 tracking-[0.08em] uppercase">Social</p>
-            <ul className="mt-4 space-y-2.5 text-sm text-gray-500">
-              <li>
-                <a href="https://x.com/blockfinax?s=21" target="_blank" rel="noopener noreferrer" className="hover:text-gray-900 inline-flex items-center gap-1.5">
-                  <Twitter className="h-3.5 w-3.5" /> X / Twitter
+          <div className="foot-cols">
+            <div className="foot-col">
+              <h5>Product</h5>
+              <Link href="/apply">Request access</Link>
+              <Link href="/docs/request">Documentation</Link>
+              <Link href="/hedger">For buyers</Link>
+              <Link href="/liquidity-provider">For capital partners</Link>
+            </div>
+            <div className="foot-col">
+              <h5>Resources</h5>
+              <Link href="/whitepaper">Whitepaper</Link>
+              <Link href="/pitch">Pitch deck</Link>
+              <Link href="/blog">Blog</Link>
+              <a href="mailto:hello@blockfinax.com">Contact</a>
+            </div>
+            <div className="foot-col">
+              <h5>Social</h5>
+              <div className="foot-socs">
+                <a
+                  href="https://x.com/blockfinax?s=21"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="foot-soc-btn"
+                  aria-label="X"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644Z" />
+                  </svg>
                 </a>
-              </li>
-              <li>
-                <a href="https://www.linkedin.com/company/blockfinax/" target="_blank" rel="noopener noreferrer" className="hover:text-gray-900 inline-flex items-center gap-1.5">
-                  <Linkedin className="h-3.5 w-3.5" /> LinkedIn
+                <a
+                  href="https://www.linkedin.com/company/blockfinax/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="foot-soc-btn"
+                  aria-label="LinkedIn"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M20.45 20.45h-3.555v-5.57c0-1.328-.024-3.037-1.85-3.037-1.853 0-2.137 1.447-2.137 2.94v5.667H9.354V9h3.414v1.561h.048c.475-.9 1.636-1.85 3.367-1.85 3.6 0 4.267 2.37 4.267 5.452v6.287zM5.337 7.433a2.063 2.063 0 1 1 0-4.126 2.063 2.063 0 0 1 0 4.126zM7.114 20.45H3.558V9h3.556v11.45z" />
+                  </svg>
                 </a>
-              </li>
-              <li>
-                <a href="https://t.me/+4flz7LGYq_82YTM8" target="_blank" rel="noopener noreferrer" className="hover:text-gray-900 inline-flex items-center gap-1.5">
-                  <Send className="h-3.5 w-3.5" /> Telegram
+                <a
+                  href="https://t.me/+4flz7LGYq_82YTM8"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="foot-soc-btn"
+                  aria-label="Telegram"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M21.84 3.61a1.55 1.55 0 0 0-1.59-.23L2.5 10.48a1.36 1.36 0 0 0 .09 2.56l3.83 1.27 2.13 6.86a1.35 1.35 0 0 0 2.21.56l2.37-2.13 4.16 3.05a1.36 1.36 0 0 0 2.14-.84l3-16.29a1.55 1.55 0 0 0-.59-1.91zM9.71 14.93l-.43 4.18-1.66-5.32L17.3 7.5l-7.59 7.43z" />
+                  </svg>
                 </a>
-              </li>
-            </ul>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="pt-6 border-t border-gray-200/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs text-gray-500">
-          <p>&copy; {new Date().getFullYear()} BlockFinaX. All rights reserved.</p>
-          <div className="flex items-center gap-5">
-            <Link href="/privacy" className="hover:text-gray-900">Privacy</Link>
-            <Link href="/terms" className="hover:text-gray-900">Terms</Link>
+        <div className="foot-bottom">
+          <span>© {new Date().getFullYear()} BlockFinaX. All rights reserved.</span>
+          <div className="foot-legal">
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
           </div>
         </div>
       </div>
@@ -829,22 +946,41 @@ function Footer() {
   );
 }
 
+// ── Geist font loader ───────────────────────────────────────────────────
+
+function useGeistFont() {
+  useEffect(() => {
+    if (document.querySelector('link[data-bfx-geist]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap';
+    link.setAttribute('data-bfx-geist', '1');
+    document.head.appendChild(link);
+  }, []);
+}
+
 // ── Main page ───────────────────────────────────────────────────────────
 
 export default function Website() {
+  useGeistFont();
+  const [theme, setTheme] = useState<Theme>('light');
+  useEffect(() => { setTheme(readStoredTheme()); }, []);
+  const toggleTheme = () => {
+    setTheme((t) => {
+      const next: Theme = t === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-white">
-      <LiveFxTicker />
-      <TopNav tone="dark" />
+    <div className="bfx-landing" data-theme={theme}>
+      <TopNav theme={theme} onToggleTheme={toggleTheme} />
       <Hero />
-      <Capability />
-      <HowItWorks />
-      <Products />
-      <Workbenches />
-      <WhyBlockFinaX />
-      <SupportedPairs />
-      <TrustStrip />
-      <ClosingCTA />
+      <UseSection theme={theme} />
+      <MarketsSection />
+      <SignalSection />
+      <TailCTA />
       <Footer />
     </div>
   );
