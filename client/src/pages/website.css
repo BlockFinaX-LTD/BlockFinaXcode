@@ -491,8 +491,12 @@
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
-  .bfx-landing { --bfx-pad: 24px; }
+  .bfx-landing { --bfx-pad: 20px; }
   .bfx-landing .nav-links { display: none; }
+  .bfx-landing .nav-cta { gap: 8px; }
+  /* Hide the ghost "Hedge" CTA on mobile — keep only the primary Trade
+     CTA + theme toggle so the nav row never crams. */
+  .bfx-landing .nav-cta .btn-ghost { display: none; }
   .bfx-landing .hero-grid2 { grid-template-columns: 1fr; }
   .bfx-landing .hero-visual { display: none; }
   .bfx-landing .feats { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
@@ -501,6 +505,13 @@
 @media (max-width: 600px) {
   .bfx-landing .signal { padding: 120px 0; }
   .bfx-landing .foot-bottom { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 400px) {
+  .bfx-landing { --bfx-pad: 16px; }
+  /* Hide the theme toggle at the very smallest widths so the brand on the
+     left and the single Trade CTA on the right have room to breathe. */
+  .bfx-landing .theme-toggle { display: none; }
+  .bfx-landing .brand { font-size: 16px; gap: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
