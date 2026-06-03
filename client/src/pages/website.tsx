@@ -16,7 +16,7 @@
 
 import { Link } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import './website.css';
 
 const logoPath = '/favicon.png';
@@ -574,71 +574,176 @@ function SignalRotator() {
 
 // ── Nav ─────────────────────────────────────────────────────────────────
 
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M20 14.5A8 8 0 0 1 9.5 4 6.5 6.5 0 1 0 20 14.5Z"
+        stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"
+        stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const [scrolled, setScrolled] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileResourcesOpen, setMobileResourcesOpen] = useState(false);
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Lock body scroll while the mobile menu is open.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [mobileOpen]);
+
+  // Close the mobile menu on Escape so keyboard users can dismiss it.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
+  const closeMobile = () => { setMobileOpen(false); setMobileResourcesOpen(false); };
+
   return (
-    <nav className={`nav${scrolled ? ' scrolled' : ''}`}>
-      <div className="wrap">
-        <Link href="/" className="brand" aria-label="BlockFinaX home">
-          <span className="mark"><img src={logoPath} alt="" /></span>
-          BlockFinaX
-        </Link>
-        <div className="nav-links">
-          <a href="#use">Products</a>
-          <Link href="/hedger">Hedgers</Link>
-          <Link href="/liquidity-provider">Underwriters</Link>
-          <div
-            className="nav-dropdown"
-            onMouseEnter={() => setResourcesOpen(true)}
-            onMouseLeave={() => setResourcesOpen(false)}
-          >
-            <button type="button" className="nav-dropdown-trigger">
-              Resources <ChevronDown />
-            </button>
-            {resourcesOpen && (
-              <div className="nav-dropdown-menu">
-                <Link href="/docs/request">Documentation</Link>
-                <Link href="/whitepaper">Whitepaper</Link>
-                <Link href="/pitch">Pitch deck</Link>
-                <Link href="/blog">Blog</Link>
-              </div>
-            )}
+    <>
+      <nav className={`nav${scrolled ? ' scrolled' : ''}`}>
+        <div className="wrap">
+          <Link href="/" className="brand" aria-label="BlockFinaX home">
+            <span className="mark"><img src={logoPath} alt="" /></span>
+            BlockFinaX
+          </Link>
+          <div className="nav-links">
+            <a href="#use">Products</a>
+            <Link href="/hedger">Hedgers</Link>
+            <Link href="/liquidity-provider">Underwriters</Link>
+            <div
+              className="nav-dropdown"
+              onMouseEnter={() => setResourcesOpen(true)}
+              onMouseLeave={() => setResourcesOpen(false)}
+            >
+              <button type="button" className="nav-dropdown-trigger">
+                Resources <ChevronDown />
+              </button>
+              {resourcesOpen && (
+                <div className="nav-dropdown-menu">
+                  <Link href="/docs/request">Documentation</Link>
+                  <Link href="/whitepaper">Whitepaper</Link>
+                  <Link href="/pitch">Pitch deck</Link>
+                  <Link href="/blog">Blog</Link>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="nav-cta">
+          <div className="nav-cta">
+            <button
+              type="button"
+              className="theme-toggle"
+              aria-label="Toggle light and dark theme"
+              onClick={onToggleTheme}
+            >
+              {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+            </button>
+            <a className="btn btn-ghost btn-sm" href="#use">Hedge</a>
+            <Link href="/apply" className="btn btn-primary btn-sm">
+              Trade <span className="arrow">→</span>
+            </Link>
+          </div>
           <button
             type="button"
-            className="theme-toggle"
-            aria-label="Toggle light and dark theme"
-            onClick={onToggleTheme}
+            className="nav-hamburger"
+            aria-label="Open menu"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(true)}
           >
-            {theme === 'dark' ? (
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M20 14.5A8 8 0 0 1 9.5 4 6.5 6.5 0 1 0 20 14.5Z"
-                  stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"
-                  stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-            )}
+            <Menu />
           </button>
-          <a className="btn btn-ghost btn-sm" href="#use">Hedge</a>
-          <Link href="/apply" className="btn btn-primary btn-sm">
-            Trade <span className="arrow">→</span>
-          </Link>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {mobileOpen && (
+        <div className="nav-mobile-overlay" role="dialog" aria-modal="true" aria-label="Site menu">
+          <div className="nav-mobile-top">
+            <Link href="/" className="brand" onClick={closeMobile}>
+              <span className="mark"><img src={logoPath} alt="" /></span>
+              BlockFinaX
+            </Link>
+            <button
+              type="button"
+              className="nav-mobile-close"
+              aria-label="Close menu"
+              onClick={closeMobile}
+            >
+              <X />
+            </button>
+          </div>
+          <div className="nav-mobile-body">
+            <a href="#use" className="nav-mobile-link" onClick={closeMobile}>
+              Products
+            </a>
+            <Link href="/hedger" className="nav-mobile-link" onClick={closeMobile}>
+              Hedgers
+            </Link>
+            <Link href="/liquidity-provider" className="nav-mobile-link" onClick={closeMobile}>
+              Underwriters
+            </Link>
+            <button
+              type="button"
+              className="nav-mobile-link"
+              onClick={() => setMobileResourcesOpen((o) => !o)}
+              aria-expanded={mobileResourcesOpen}
+            >
+              Resources
+              <ChevronDown className={`chev${mobileResourcesOpen ? ' open' : ''}`} />
+            </button>
+            {mobileResourcesOpen && (
+              <div className="nav-mobile-resources">
+                <Link href="/docs/request" onClick={closeMobile}>Documentation</Link>
+                <Link href="/whitepaper" onClick={closeMobile}>Whitepaper</Link>
+                <Link href="/pitch" onClick={closeMobile}>Pitch deck</Link>
+                <Link href="/blog" onClick={closeMobile}>Blog</Link>
+              </div>
+            )}
+            <button
+              type="button"
+              className="nav-mobile-theme"
+              onClick={onToggleTheme}
+            >
+              Appearance
+              <span className="pill">
+                {theme === 'dark' ? <><MoonIcon /> Dark</> : <><SunIcon /> Light</>}
+              </span>
+            </button>
+          </div>
+          <div className="nav-mobile-ctas">
+            <a className="btn btn-ghost" href="#use" onClick={closeMobile}>
+              Hedge
+            </a>
+            <Link href="/apply" className="btn btn-primary" onClick={closeMobile}>
+              Trade <span className="arrow">→</span>
+            </Link>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

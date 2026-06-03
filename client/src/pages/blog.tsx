@@ -100,6 +100,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Earning": "bg-emerald-100 text-emerald-700",
   "Engineering": "bg-purple-100 text-purple-700",
   "Product": "bg-indigo-100 text-indigo-700",
+  "Research": "bg-teal-100 text-teal-700",
 };
 
 function ArticleCard({ article }: { article: Article }) {

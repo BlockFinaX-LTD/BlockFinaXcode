@@ -225,13 +225,14 @@
 .bfx-landing .btn:hover .arrow { transform: translateX(2px); }
 
 /* ---------- hero ---------- */
+/* No min-height — let the hero size to its content + padding so there's no
+   dead space below the CTAs on tall viewports. The canvas + headline stack
+   are tall enough on their own. */
 .bfx-landing .hero {
   position: relative;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding-top: 64px;
+  padding: 88px 0 56px;
   overflow: hidden;
 }
 .bfx-landing .hero::before {
@@ -255,8 +256,8 @@
 .bfx-landing .hero-inner { position: relative; z-index: 2; width: 100%; }
 .bfx-landing .hero-grid2 { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; width: 100%; }
 .bfx-landing .hero-copy { position: relative; z-index: 2; }
-.bfx-landing .hero-visual { position: relative; z-index: 2; margin-top: 64px; }
-.bfx-landing .hero-surface { width: 100%; height: 560px; display: block; }
+.bfx-landing .hero-visual { position: relative; z-index: 2; margin-top: 48px; }
+.bfx-landing .hero-surface { width: 100%; height: 480px; display: block; }
 .bfx-landing .rotator { color: var(--bfx-accent); display: inline-block; will-change: opacity, transform; }
 .bfx-landing .hero h1 {
   font-size: clamp(42px, 5.6vw, 82px);
@@ -268,25 +269,25 @@
   text-wrap: balance;
 }
 .bfx-landing .hero-sub {
-  margin-top: 28px;
+  margin-top: 22px;
   font-size: clamp(17px, 1.7vw, 21px);
   line-height: 1.45;
   color: var(--bfx-tx-2);
   max-width: 46ch;
   text-wrap: pretty;
 }
-.bfx-landing .hero-ctas { display: flex; gap: 12px; margin-top: 40px; flex-wrap: wrap; }
+.bfx-landing .hero-ctas { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
 
 /* ---------- feature cards (use section) ---------- */
-.bfx-landing .use { padding: 120px 0 130px; border-top: 1px solid var(--bfx-border); }
-.bfx-landing .feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.bfx-landing .use { padding: 72px 0 80px; border-top: 1px solid var(--bfx-border); }
+.bfx-landing .feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .bfx-landing .feat {
   border: 1px solid var(--bfx-border);
   border-radius: 20px;
   background:
     radial-gradient(130% 90% at 50% -10%, color-mix(in oklab, var(--bfx-tint) 9%, transparent), transparent 55%),
     var(--bfx-card);
-  padding: 8px 26px 26px;
+  padding: 6px 22px 22px;
   display: flex;
   flex-direction: column;
   transition: border-color .25s var(--bfx-ease), transform .25s var(--bfx-ease), background .25s var(--bfx-ease);
@@ -297,18 +298,18 @@
 }
 .bfx-landing .feat-viz {
   position: relative;
-  height: 176px; padding: 24px 0 22px;
+  height: 152px; padding: 20px 0 18px;
   display: flex; flex-direction: column; justify-content: center;
   border-bottom: 1px solid var(--bfx-border);
 }
-.bfx-landing .feat-body { padding: 22px 0 2px; flex: 1; display: flex; flex-direction: column; }
+.bfx-landing .feat-body { padding: 18px 0 2px; flex: 1; display: flex; flex-direction: column; }
 .bfx-landing .feat-name { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--bfx-tint); display: flex; align-items: center; gap: 12px; }
 .bfx-landing .feat-pill {
   font-family: var(--bfx-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--bfx-tx-3); border: 1px solid var(--bfx-border-2); border-radius: 999px; padding: 5px 11px;
 }
 .bfx-landing .feat-body p { color: var(--bfx-tx-3); font-size: 14.5px; margin-top: 12px; text-wrap: pretty; }
-.bfx-landing .feat-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 22px; }
+.bfx-landing .feat-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 18px; }
 .bfx-landing .feat-btn {
   height: 42px; padding: 0 20px; border-radius: 999px; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em;
   display: inline-flex; align-items: center; gap: 8px;
@@ -370,15 +371,15 @@
 .bfx-landing .trd-iv { color: var(--bfx-tint); font-variant-numeric: tabular-nums; }
 
 /* ---------- markets / payoff diagram cards ---------- */
-.bfx-landing .assets { padding: 120px 0 130px; border-top: 1px solid var(--bfx-border); background: var(--bfx-bg-2); }
-.bfx-landing .assets-head { margin-bottom: 56px; max-width: 760px; }
+.bfx-landing .assets { padding: 72px 0 80px; border-top: 1px solid var(--bfx-border); background: var(--bfx-bg-2); }
+.bfx-landing .assets-head { margin-bottom: 40px; max-width: 760px; }
 .bfx-landing .assets-head h2 { font-size: clamp(30px, 4vw, 46px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.04; }
 .bfx-landing .assets-head p { color: var(--bfx-tx-2); font-size: 17px; margin-top: 18px; max-width: 52ch; text-wrap: pretty; }
 
-.bfx-landing .acards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.bfx-landing .acards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .bfx-landing .acard {
   border: 1px solid var(--bfx-border); border-radius: 20px; background: var(--bfx-card);
-  padding: 26px 26px 30px; display: flex; flex-direction: column;
+  padding: 22px 22px 26px; display: flex; flex-direction: column;
   transition: border-color .25s var(--bfx-ease), transform .25s var(--bfx-ease), background .25s var(--bfx-ease);
 }
 .bfx-landing .acard:hover {
@@ -426,7 +427,7 @@
 /* ---------- signal section ---------- */
 .bfx-landing .signal {
   position: relative; overflow: hidden; text-align: center;
-  padding: 168px 0; border-top: 1px solid var(--bfx-border);
+  padding: 110px 0; border-top: 1px solid var(--bfx-border);
 }
 .bfx-landing .signal canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
 .bfx-landing .signal::after {
@@ -446,13 +447,13 @@
 }
 
 /* ---------- tail CTA ---------- */
-.bfx-landing .tail { padding: 130px 0 120px; border-top: 1px solid var(--bfx-border); text-align: center; position: relative; overflow: hidden; }
+.bfx-landing .tail { padding: 84px 0 76px; border-top: 1px solid var(--bfx-border); text-align: center; position: relative; overflow: hidden; }
 .bfx-landing .tail h2 { font-size: clamp(34px, 5vw, 60px); font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
-.bfx-landing .tail p { color: var(--bfx-tx-2); font-size: 18px; margin: 22px auto 38px; max-width: 44ch; }
+.bfx-landing .tail p { color: var(--bfx-tx-2); font-size: 18px; margin: 18px auto 30px; max-width: 44ch; }
 .bfx-landing .tail .hero-ctas { justify-content: center; }
 
 /* ---------- footer ---------- */
-.bfx-landing footer { border-top: 1px solid var(--bfx-border); padding: 56px 0 60px; background: var(--bfx-bg); }
+.bfx-landing footer { border-top: 1px solid var(--bfx-border); padding: 40px 0 44px; background: var(--bfx-bg); }
 .bfx-landing .foot-top { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap; }
 .bfx-landing .foot-brand { max-width: 280px; }
 .bfx-landing .foot-brand p { color: var(--bfx-tx-3); font-size: 13px; margin-top: 16px; line-height: 1.55; }
@@ -484,34 +485,162 @@
 .bfx-landing .foot-legal a:hover { color: var(--bfx-tx); }
 .bfx-landing .foot-bottom {
   display: flex; justify-content: space-between; align-items: center;
-  margin-top: 56px; padding-top: 26px; border-top: 1px solid var(--bfx-border);
+  margin-top: 36px; padding-top: 22px; border-top: 1px solid var(--bfx-border);
   color: var(--bfx-tx-4); font-size: 12.5px; font-family: var(--bfx-mono);
   flex-wrap: wrap; gap: 14px;
 }
 
 /* ---------- responsive ---------- */
+/* ---------- mobile hamburger + overlay ---------- */
+.bfx-landing .nav-hamburger {
+  display: none;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--bfx-border-2);
+  background: var(--bfx-film);
+  color: var(--bfx-tx);
+  align-items: center;
+  justify-content: center;
+  transition: background .15s var(--bfx-ease), border-color .15s var(--bfx-ease);
+}
+.bfx-landing .nav-hamburger:hover { background: var(--bfx-film-2); }
+.bfx-landing .nav-hamburger svg { width: 18px; height: 18px; }
+
+.bfx-landing .nav-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bfx-bg);
+  color: var(--bfx-tx);
+  display: flex;
+  flex-direction: column;
+  animation: bfx-overlay-in .2s var(--bfx-ease);
+}
+@keyframes bfx-overlay-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bfx-landing .nav-mobile-top {
+  height: 64px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: var(--bfx-pad);
+  padding-right: var(--bfx-pad);
+  border-bottom: 1px solid var(--bfx-border);
+}
+.bfx-landing .nav-mobile-close {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--bfx-border-2);
+  background: var(--bfx-film);
+  color: var(--bfx-tx);
+  display: inline-grid;
+  place-items: center;
+}
+.bfx-landing .nav-mobile-close svg { width: 18px; height: 18px; }
+
+.bfx-landing .nav-mobile-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px var(--bfx-pad) 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.bfx-landing .nav-mobile-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 4px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--bfx-tx);
+  border-bottom: 1px solid var(--bfx-border);
+  text-align: left;
+  width: 100%;
+}
+.bfx-landing .nav-mobile-link .chev { width: 16px; height: 16px; color: var(--bfx-tx-3); transition: transform .2s var(--bfx-ease); }
+.bfx-landing .nav-mobile-link .chev.open { transform: rotate(180deg); }
+.bfx-landing .nav-mobile-resources {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 12px 16px;
+  border-bottom: 1px solid var(--bfx-border);
+}
+.bfx-landing .nav-mobile-resources a {
+  padding: 12px 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--bfx-tx-2);
+}
+.bfx-landing .nav-mobile-theme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--bfx-tx-2);
+  margin-top: 8px;
+  border-bottom: 1px solid var(--bfx-border);
+  width: 100%;
+}
+.bfx-landing .nav-mobile-theme .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--bfx-border-2);
+  background: var(--bfx-film);
+  color: var(--bfx-tx);
+  font-size: 13px;
+  font-weight: 600;
+}
+.bfx-landing .nav-mobile-theme .pill svg { width: 14px; height: 14px; }
+
+.bfx-landing .nav-mobile-ctas {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
+  padding: 16px var(--bfx-pad) calc(20px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bfx-border);
+  background: var(--bfx-bg);
+}
+.bfx-landing .nav-mobile-ctas .btn { width: 100%; height: 50px; justify-content: center; font-size: 15px; }
+
+/* ---------- responsive ---------- */
 @media (max-width: 900px) {
   .bfx-landing { --bfx-pad: 20px; }
   .bfx-landing .nav-links { display: none; }
-  .bfx-landing .nav-cta { gap: 8px; }
-  /* Hide the ghost "Hedge" CTA on mobile — keep only the primary Trade
-     CTA + theme toggle so the nav row never crams. */
-  .bfx-landing .nav-cta .btn-ghost { display: none; }
-  .bfx-landing .hero-grid2 { grid-template-columns: 1fr; }
+  /* Drop the entire CTA cluster — everything moves into the overlay. */
+  .bfx-landing .nav-cta { display: none; }
+  .bfx-landing .nav-hamburger { display: inline-flex; }
+
+  .bfx-landing .hero { padding: 80px 0 40px; min-height: auto; }
+  .bfx-landing .hero-grid2 { grid-template-columns: 1fr; gap: 32px; }
   .bfx-landing .hero-visual { display: none; }
+  .bfx-landing .use { padding: 56px 0 64px; }
+  .bfx-landing .assets { padding: 56px 0 64px; }
+  .bfx-landing .assets-head { margin-bottom: 28px; }
+  .bfx-landing .signal { padding: 84px 0; }
+  .bfx-landing .tail { padding: 64px 0 60px; }
+  .bfx-landing footer { padding: 36px 0 40px; }
+
   .bfx-landing .feats { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
   .bfx-landing .acards { grid-template-columns: 1fr; max-width: 460px; margin: 0 auto; }
 }
 @media (max-width: 600px) {
-  .bfx-landing .signal { padding: 120px 0; }
   .bfx-landing .foot-bottom { flex-direction: column; align-items: flex-start; }
 }
 @media (max-width: 400px) {
   .bfx-landing { --bfx-pad: 16px; }
-  /* Hide the theme toggle at the very smallest widths so the brand on the
-     left and the single Trade CTA on the right have room to breathe. */
-  .bfx-landing .theme-toggle { display: none; }
   .bfx-landing .brand { font-size: 16px; gap: 10px; }
+  .bfx-landing .brand .mark { width: 28px; height: 28px; }
+  .bfx-landing .brand .mark img { width: 28px; height: 28px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
