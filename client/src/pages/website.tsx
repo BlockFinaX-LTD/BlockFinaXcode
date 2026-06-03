@@ -288,7 +288,7 @@ function YieldViz() {
 
   useEffect(() => {
     const REDUCED = prefersReducedMotion();
-    const targetApr = 20.0;
+    const targetApr = 70.0;
     const targetUtil = 72;
     const aprEl = aprRef.current;
     const fillEl = fillRef.current;
