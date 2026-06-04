@@ -118,6 +118,16 @@ function RiftPostSigninSync() {
       });
       // Fire-and-forget — pulls email/phone for the AuthMethod cache.
       getMe().catch(() => {});
+      // Fire-and-forget — ensures the dashboard user count reflects this
+      // Rift account. The server upserts by address so repeat sign-ins on
+      // the same address are idempotent no-ops.
+      if (user.accessToken) {
+        fetch('/api/rift/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: user.accessToken }),
+        }).catch(() => {});
+      }
     } else if (!isAuthenticated) {
       clearLocalRiftState();
     }

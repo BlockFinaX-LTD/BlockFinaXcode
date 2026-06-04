@@ -21,7 +21,7 @@ import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { db } from '../db';
-import { accessRequests, accessGrants, docsTokens, signinTokens } from '@shared/schema';
+import { accessRequests, accessGrants, docsTokens, signinTokens, wallets } from '@shared/schema';
 import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
 import { mintInvestorSession } from './investor';
 
@@ -392,6 +392,71 @@ export function registerGateRoutes(app: Express) {
       usedAt: new Date(),
     });
     return res.json({ token: raw, expiresAt: expiresAt.toISOString() });
+  });
+
+  // ── Public: register a Rift-authenticated user in our wallets table ─
+  //
+  // The dashboard counts users from the legacy `wallets` Postgres table,
+  // but that table is only populated by the legacy POST /api/wallets
+  // endpoint (which requires a session token from auth_sessions). After
+  // the Rift migration nobody hits that, so the count is permanently 0
+  // even when real users sign up.
+  //
+  // This endpoint is called by the client on every successful Rift
+  // sign-in (from RiftPostSigninSync). It verifies the access token via
+  // Rift's /user/me, then upserts a wallet row keyed by address. Once
+  // present, repeat sign-ins are no-ops thanks to ON CONFLICT DO NOTHING.
+  app.post('/api/rift/register', async (req, res) => {
+    const accessToken = String(req.body?.accessToken || '').trim();
+    if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
+    if (!RIFT_API_KEY) return res.status(500).json({ error: 'Server is missing the Rift API key' });
+
+    let riftRes: Response;
+    try {
+      riftRes = await fetch(`${RIFT_API_BASE}/user/me`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': RIFT_API_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+    } catch (err: any) {
+      console.error('[rift/register] Rift unreachable:', err?.message);
+      return res.status(502).json({ error: 'Could not reach Rift to verify the session' });
+    }
+    if (riftRes.status === 401 || riftRes.status === 403) {
+      return res.status(401).json({ error: 'Rift session expired' });
+    }
+    if (!riftRes.ok) {
+      return res.status(502).json({ error: 'Rift returned an error verifying the session' });
+    }
+
+    const body = (await riftRes.json()) as any;
+    const user = body?.user ?? body?.data?.user ?? body?.data ?? body;
+    const address = (user?.address || '').toString().trim();
+    const email = (user?.email || '').toString().trim().toLowerCase() || null;
+    if (!address) return res.status(400).json({ error: 'No address on the Rift account' });
+
+    // Upsert. encryptedPrivateKey is required-nonnull on the legacy table
+    // but Rift custodies the key, so we store a sentinel marker instead.
+    try {
+      const [row] = await db
+        .insert(wallets)
+        .values({
+          address,
+          name: 'Rift wallet',
+          encryptedPrivateKey: 'rift-managed',
+          email,
+          isImported: true,
+        })
+        .onConflictDoNothing({ target: wallets.address })
+        .returning({ id: wallets.id });
+      return res.json({ status: row ? 'created' : 'already_registered', address });
+    } catch (err: any) {
+      console.error('[rift/register] wallet upsert failed:', err?.message);
+      return res.status(500).json({ error: 'Failed to register user' });
+    }
   });
 
   // ── Admin: list access requests ──────────────────────────────────────
