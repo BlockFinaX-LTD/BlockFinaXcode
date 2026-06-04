@@ -144,8 +144,15 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
         }
         console.log(`[HedgeReader:${chain.name}] reading ${total} on-chain event(s)`);
 
-        const results = await Promise.allSettled(
-          Array.from({ length: total }, (_, i) => i + 1).map(async (id) => {
+        // Serialise per-event reads. Public RPCs (mainnet.base.org,
+        // bsc-dataseed) throttle the burst of 1 + total*2 parallel calls
+        // we used to send and silently 429 the per-event reads. The result
+        // was an empty allEvents and a 0 in the dashboard with no error
+        // visible anywhere. Sequential is slower but never trips.
+        const results: PromiseSettledResult<ChainEvent>[] = [];
+        for (let i = 1; i <= total; i++) {
+          const id = i;
+          try {
             const [core, stats] = await Promise.all([
               contract.getHedgeEventCore(id),
               contract.getHedgeEventStats(id),
@@ -176,13 +183,21 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
               lpCount: Number(stats.lpCount),
               totalMaxPayout: toNum(stats.totalMaxPayout, chain.decimals),
             };
-            return event;
-          })
-        );
-
-        for (const r of results) {
-          if (r.status === 'fulfilled') allEvents.push(r.value);
+            results.push({ status: 'fulfilled', value: event });
+          } catch (eventErr: any) {
+            console.warn(`[HedgeReader:${chain.name}] event #${id} read failed:`, eventErr?.message || eventErr);
+            results.push({ status: 'rejected', reason: eventErr });
+          }
         }
+
+        let acceptedFromThisChain = 0;
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            allEvents.push(r.value);
+            acceptedFromThisChain++;
+          }
+        }
+        console.log(`[HedgeReader:${chain.name}] accepted ${acceptedFromThisChain}/${total} event(s) into the result set`);
       } catch (e: any) {
         console.warn(`[HedgeReader] Could not read events from ${chain.name}:`, e?.message);
       }
