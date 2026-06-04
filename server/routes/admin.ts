@@ -15,7 +15,7 @@ import {
 // Rift API base — same host the wallet SDK uses internally.
 const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
 const RIFT_API_KEY = process.env.VITE_RIFT_API_KEY || process.env.RIFT_API_KEY || "";
-import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain } from "../hedge-reader";
+import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain, diagnoseChainReads } from "../hedge-reader";
 
 export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   /**
@@ -192,6 +192,26 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch admin overview" });
+    }
+  });
+
+  // Per-chain inspection of the chain reader. Returns only booleans, counts,
+  // durations, and error strings — no event data, no addresses beyond the
+  // Diamond contract itself. Safe to expose for debugging dashboard counts.
+  app.get("/api/admin/diagnose", requireAdmin, async (_req, res) => {
+    try {
+      const chains = await diagnoseChainReads();
+      res.json({
+        chains,
+        env: {
+          BASE_DIAMOND_ADDRESS: !!process.env.BASE_DIAMOND_ADDRESS,
+          BSC_DIAMOND_ADDRESS:  !!process.env.BSC_DIAMOND_ADDRESS,
+          BASE_RPC_URL:         !!process.env.BASE_RPC_URL,
+          BSC_RPC_URL:          !!process.env.BSC_RPC_URL,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "diagnose failed" });
     }
   });
 

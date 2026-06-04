@@ -122,14 +122,27 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
         let total: number;
         try {
           total = Number(await contract.getTotalHedgeEvents());
-        } catch {
-          // Scan upward if getTotalHedgeEvents not available
+        } catch (totalErr: any) {
+          // getTotalHedgeEvents reverted or doesn't exist on this Diamond.
+          // Fall back to scanning IDs upward. Log the original failure so
+          // we can tell whether the contract is wrong vs whether it's an
+          // RPC issue (decoder error vs network error look very different).
+          console.warn(`[HedgeReader:${chain.name}] getTotalHedgeEvents failed, scanning:`, totalErr?.message || totalErr);
           total = 0;
           for (let i = 1; i <= 20; i++) {
-            try { await contract.getHedgeEventCore(i); total = i; } catch { break; }
+            try { await contract.getHedgeEventCore(i); total = i; } catch (scanErr: any) {
+              if (i === 1) {
+                console.warn(`[HedgeReader:${chain.name}] getHedgeEventCore(1) also failed:`, scanErr?.message || scanErr);
+              }
+              break;
+            }
           }
         }
-        if (total === 0) return;
+        if (total === 0) {
+          console.warn(`[HedgeReader:${chain.name}] resolved total=0 (diamond=${chain.diamond})`);
+          return;
+        }
+        console.log(`[HedgeReader:${chain.name}] reading ${total} on-chain event(s)`);
 
         const results = await Promise.allSettled(
           Array.from({ length: total }, (_, i) => i + 1).map(async (id) => {
@@ -176,8 +189,89 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
     })
   );
 
-  _cache = { events: allEvents, fetchedAt: Date.now() };
+  // Only cache successful (non-empty) reads so a transient swallowed failure
+  // doesn't lock us into an empty result for the next CACHE_TTL.
+  if (allEvents.length > 0) {
+    _cache = { events: allEvents, fetchedAt: Date.now() };
+  }
   return allEvents;
+}
+
+// Per-chain inspection: does each step of the chain read actually work?
+// Returns no event data — only booleans, counts, durations, and error
+// strings. Safe to expose via an admin endpoint without leaking PII.
+export interface ChainDiagnosis {
+  chainId: number;
+  name: string;
+  diamond: string;
+  rpcReachable: boolean;
+  rpcUsed?: string;
+  blockNumber?: number;
+  getTotalHedgeEventsOk: boolean;
+  totalReported?: number;
+  getHedgeEventCoreOneOk: boolean;
+  sampleEventStatusInt?: number;
+  errors: Record<string, string>;
+  ms: { rpc?: number; total?: number; sampleCore?: number };
+}
+
+export async function diagnoseChainReads(): Promise<ChainDiagnosis[]> {
+  const out: ChainDiagnosis[] = [];
+  for (const chain of CHAINS) {
+    const d: ChainDiagnosis = {
+      chainId: chain.id,
+      name: chain.name,
+      diamond: chain.diamond,
+      rpcReachable: false,
+      getTotalHedgeEventsOk: false,
+      getHedgeEventCoreOneOk: false,
+      errors: {},
+      ms: {},
+    };
+
+    let provider: ethers.JsonRpcProvider | null = null;
+    const t0 = Date.now();
+    for (const url of chain.rpcs) {
+      try {
+        const p = new ethers.JsonRpcProvider(url);
+        const bn = await p.getBlockNumber();
+        provider = p;
+        d.rpcReachable = true;
+        d.rpcUsed = url;
+        d.blockNumber = bn;
+        break;
+      } catch (e: any) {
+        d.errors[`rpc:${url}`] = e?.message || String(e);
+      }
+    }
+    d.ms.rpc = Date.now() - t0;
+    if (!provider) { out.push(d); continue; }
+
+    const contract = new ethers.Contract(chain.diamond, HEDGE_ABI, provider);
+
+    const t1 = Date.now();
+    try {
+      const total = Number(await contract.getTotalHedgeEvents());
+      d.getTotalHedgeEventsOk = true;
+      d.totalReported = total;
+    } catch (e: any) {
+      d.errors.getTotalHedgeEvents = e?.message || String(e);
+    }
+    d.ms.total = Date.now() - t1;
+
+    const t2 = Date.now();
+    try {
+      const core = await contract.getHedgeEventCore(1);
+      d.getHedgeEventCoreOneOk = true;
+      d.sampleEventStatusInt = Number(core.status);
+    } catch (e: any) {
+      d.errors.getHedgeEventCoreOne = e?.message || String(e);
+    }
+    d.ms.sampleCore = Date.now() - t2;
+
+    out.push(d);
+  }
+  return out;
 }
 
 export async function readChainPositionsByEvent(eventId: number, chainId?: number): Promise<ChainPosition[]> {
