@@ -66,14 +66,20 @@ app.use(helmet({
         "https://*.riftfi.xyz",
         "https://*.rift.fi",
         "https://*.rift-finance.com",
+        // White-labeled Rift widget served from our own subdomain
+        "https://widget.blockfinax.com",
         // Cloudinary — direct-to-cloud upload for task evidence
         "https://api.cloudinary.com",
         "https://res.cloudinary.com",
       ],
       // frame-src must include the Rift sign-in widget; otherwise the
-      // iframe is blocked and users can't sign in.
+      // iframe is blocked and users can't sign in. We point production at
+      // our white-labeled widget.blockfinax.com but keep the partner hosts
+      // allow-listed so flipping VITE_RIFT_WIDGET_URL back doesn't require
+      // a server redeploy.
       frameSrc: [
         "https://accounts.google.com",
+        "https://widget.blockfinax.com",
         "https://widget.riftfi.xyz",
         "https://*.riftfi.xyz",
         "https://*.rift.fi",

@@ -57,6 +57,14 @@ import { AuthGate } from "@/components/auth-gate";
 
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
+// White-label sign-in: the widget is served from our own subdomain so the
+// Google sign-in screen reads "Sign in to BlockFinaX" instead of the partner
+// host. Same project, same API key, same behaviour — only the embed URL
+// changes. Override via VITE_RIFT_WIDGET_URL if we ever need to point back
+// at the partner-hosted widget for debugging.
+const RIFT_WIDGET_URL =
+  (import.meta.env.VITE_RIFT_WIDGET_URL || 'https://widget.blockfinax.com').trim();
+
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
 const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards'];
 
@@ -214,7 +222,7 @@ function App() {
     // `persist` keeps the session in storage across reloads so signed-in users
     // don't get bounced back to /auth on refresh. Combined with the isReady
     // gate in AuthGuard, the redirect only fires after rehydration completes.
-    <RiftProvider apiKey={RIFT_API_KEY} persist>
+    <RiftProvider apiKey={RIFT_API_KEY} widgetUrl={RIFT_WIDGET_URL} persist>
       <RiftTokenBridge />
       <RiftPostSigninSync />
       <QueryClientProvider client={queryClient}>

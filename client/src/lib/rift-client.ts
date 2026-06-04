@@ -32,7 +32,13 @@ if (typeof window !== 'undefined' && !(window as any).__riftNoCachePatched) {
   const origFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
-    if (url.includes('rift-sdk-wrapper') || url.includes('rift.fi') || url.includes('rift-finance') || url.includes('riftfi.xyz')) {
+    if (
+      url.includes('rift-sdk-wrapper') ||
+      url.includes('rift.fi') ||
+      url.includes('rift-finance') ||
+      url.includes('riftfi.xyz') ||
+      url.includes('widget.blockfinax.com')
+    ) {
       return origFetch(input, { ...(init || {}), cache: 'no-store' });
     }
     return origFetch(input, init);
