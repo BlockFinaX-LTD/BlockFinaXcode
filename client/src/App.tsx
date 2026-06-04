@@ -51,9 +51,7 @@ import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
 import LiquidityProviderPage from "@/pages/liquidity-provider";
 import HedgerPage from "@/pages/hedger";
-import { AccessGate } from "@/components/access-gate";
 import { DocsGate } from "@/components/docs-gate";
-import { AuthGate } from "@/components/auth-gate";
 
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
@@ -127,28 +125,19 @@ function RiftPostSigninSync() {
   return null;
 }
 
-// Small wrappers that compose the AccessGate around each protected page so
-// signed-in-but-not-approved users see the "request access" wall instead of
-// the app itself.
-const HomeGated      = () => <AccessGate><HomePage /></AccessGate>;
-const HedgeGated     = () => <AccessGate><Hedge /></AccessGate>;
-const TasksGated     = () => <AccessGate><TasksPage /></AccessGate>;
-const ProfileGated   = () => <AccessGate><ProfilePage /></AccessGate>;
-const SettingsGated  = () => <AccessGate><SettingsPage /></AccessGate>;
-const WalletGated    = () => <AccessGate><Wallet /></AccessGate>;
+// App routes are open — anyone who signs in via Rift can use them. The
+// allowlist gate (AccessGate) is intentionally not applied here so new
+// users can discover and use the product directly. Auth is still required
+// (AuthGuard redirects unauthenticated visitors to /auth) but the post
+// sign-in approval wall is gone.
 
 // Docs gate: the whitepaper, data room, and pitch deck only render once the
 // visitor has a valid magic-link token. The gate intercepts and shows a
-// "request access" form otherwise.
+// "request access" form otherwise. Docs stay gated.
 const DocsIndexGated  = () => <DocsGate><DocsIndex /></DocsGate>;
 const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
 const WhitepaperGated = () => <DocsGate><Whitepaper /></DocsGate>;
 const DataRoomGated   = () => <DocsGate><DataRoom /></DocsGate>;
-
-// /auth itself is gated by AuthGate: visitors need either an unexpired
-// signin-token (from the approval email) or an already-authenticated Rift
-// session. Without one of those, the Rift widget never renders.
-const AuthGated       = () => <AuthGate><Auth /></AuthGate>;
 
 function Router() {
   return (
@@ -164,9 +153,9 @@ function Router() {
       <Route path="/liquidity-provider" component={LiquidityProviderPage} />
       <Route path="/hedger" component={HedgerPage} />
 
-      {/* Auth — gated by AuthGate; AccessGate downstream enforces the
-          allowlist once Rift sign-in completes */}
-      <Route path="/auth" component={AuthGated} />
+      {/* Auth — open to anyone. Rift widget renders unconditionally so new
+          users can sign up without an invitation. */}
+      <Route path="/auth" component={Auth} />
 
       {/* Docs — gated by per-request magic-link token */}
       <Route path="/docs" component={DocsIndexGated} />
@@ -174,17 +163,18 @@ function Router() {
       <Route path="/whitepaper" component={WhitepaperGated} />
       <Route path="/data-room" component={DataRoomGated} />
 
-      {/* Protected — AuthGuard redirects unauth users to /auth; AccessGate
-          shows the allowlist wall for signed-in but un-approved users. */}
-      <Route path="/wallet" component={WalletGated} />
-      <Route path="/home" component={HomeGated} />
-      <Route path="/hedge" component={HedgeGated} />
-      <Route path="/tasks" component={TasksGated} />
-      <Route path="/profile" component={ProfileGated} />
-      <Route path="/settings" component={SettingsGated} />
+      {/* App routes — AuthGuard redirects unauthenticated visitors to /auth.
+          No allowlist check after sign-in: anyone with a Rift session can
+          use the app. */}
+      <Route path="/wallet" component={Wallet} />
+      <Route path="/home" component={HomePage} />
+      <Route path="/hedge" component={Hedge} />
+      <Route path="/tasks" component={TasksPage} />
+      <Route path="/profile" component={ProfilePage} />
+      <Route path="/settings" component={SettingsPage} />
 
       {/* Rewards & admin */}
-      <Route path="/rewards" component={TasksGated} />
+      <Route path="/rewards" component={TasksPage} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
