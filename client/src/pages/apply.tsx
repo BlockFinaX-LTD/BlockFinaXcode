@@ -85,6 +85,19 @@ export default function ApplyPage() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     !submitting;
 
+  // Short reason shown next to the Submit button when it's disabled, so the
+  // user is never staring at a greyed-out CTA wondering what's missing.
+  let disabledReason = '';
+  if (!submitting && !canSubmit) {
+    if (name.trim().length <= 1) {
+      disabledReason = 'Add your name to continue';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      disabledReason = email.trim()
+        ? 'That email doesn’t look right'
+        : 'Add your email to continue';
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -276,19 +289,26 @@ export default function ApplyPage() {
               and{' '}
               <a href="/privacy" className="text-gray-600 hover:text-gray-900 underline underline-offset-2">privacy policy</a>.
             </p>
-            <Button
-              type="submit"
-              disabled={!canSubmit}
-              className="w-full sm:w-auto h-11 sm:min-w-[170px] rounded-full px-7 bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:text-white"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting&hellip;
-                </>
-              ) : (
-                'Submit'
+            <div className="flex flex-col items-stretch sm:items-end gap-1.5">
+              <Button
+                type="submit"
+                disabled={!canSubmit}
+                className="w-full sm:w-auto h-11 sm:min-w-[170px] rounded-full px-7 bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:text-white"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting&hellip;
+                  </>
+                ) : (
+                  'Submit'
+                )}
+              </Button>
+              {disabledReason && (
+                <p className="text-[11px] text-amber-700 sm:text-right">
+                  {disabledReason}
+                </p>
               )}
-            </Button>
+            </div>
           </div>
         </form>
       </main>
