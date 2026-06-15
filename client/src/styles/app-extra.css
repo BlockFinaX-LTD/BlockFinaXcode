@@ -3,6 +3,17 @@
 @keyframes bfxspin { to { transform: rotate(360deg); } }
 .bfx-app .spin { animation: bfxspin 1s linear infinite; }
 
+/* skeleton shimmer (blue-tinted) for loading sheets */
+@keyframes bfxshimmer { 100% { background-position: -200% 0; } }
+.bfx-app .skel {
+  background: linear-gradient(90deg,
+    var(--card-2) 0%,
+    color-mix(in oklab, var(--blue) 14%, var(--card-2)) 50%,
+    var(--card-2) 100%);
+  background-size: 200% 100%;
+  animation: bfxshimmer 1.2s ease-in-out infinite;
+}
+
 /* live-rate flash colors reuse the design tokens */
 .bfx-app .rate .rv .px { transition: color .25s var(--ease); }
 .bfx-app .rate .rv .px.flash-up { color: var(--green); }
@@ -12,6 +23,17 @@
 .bfx-app .select:disabled,
 .bfx-app .btn:disabled,
 .bfx-app .input:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ============================================================
+   Grid/flex overflow safety (all widths).
+   Grid tracks default to minmax(auto,…) and grid/flex children to
+   min-width:auto, so a single wide child can push the whole layout past
+   the viewport and get clipped. Force children to be allowed to shrink.
+   ============================================================ */
+.bfx-app .earn-col, .bfx-app .sec, .bfx-app .col,
+.bfx-app .pts-hero, .bfx-app .ref-card, .bfx-app .card-sec,
+.bfx-app .pool-card, .bfx-app .create-col, .bfx-app .summary,
+.bfx-app .balance, .bfx-app .split-card { min-width: 0; }
 
 /* ============================================================
    Mobile responsiveness (≤760px) — overrides on top of the design.
@@ -34,12 +56,21 @@
   .bfx-app .r-main, .bfx-app .t-main, .bfx-app .txn-m, .bfx-app .mkt-nm, .bfx-app .pt-nm, .bfx-app .lb-w { min-width: 0; }
   .bfx-app .txn-m .a, .bfx-app .r-main .r1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* Grids must never exceed the viewport: minmax(0,…) lets tracks shrink. */
+  .bfx-app .earn-grid,
+  .bfx-app .topgrid,
+  .bfx-app .maingrid,
+  .bfx-app .pool-grid,
+  .bfx-app .create-wrap { grid-template-columns: minmax(0, 1fr); }
+  .bfx-app .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bfx-app .ref-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
   /* ---- Earn: keep it compact and reflow cleanly ---- */
   .bfx-app .pts-hero { padding: 22px 20px; }
   .bfx-app .pts-num { font-size: 34px; flex-wrap: wrap; gap: 8px; }
   .bfx-app .pts-num .usd { font-size: 14px; }
   /* points stats stay a 3-up row (the design's single column is too tall) */
-  .bfx-app .pts-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .bfx-app .pts-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .bfx-app .pstat { padding: 10px 9px; }
   .bfx-app .pstat .l { font-size: 8.5px; gap: 4px; }
   .bfx-app .pstat .l i { width: 11px; height: 11px; }
@@ -53,7 +84,8 @@
 
 /* Very small phones */
 @media (max-width: 380px) {
-  .bfx-app .pts-stats { grid-template-columns: repeat(3, 1fr); }
+  .bfx-app .pts-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .bfx-app .pstat { padding: 9px 7px; }
   .bfx-app .pstat .v { font-size: 14px; }
   .bfx-app .bal-num { font-size: 38px; }
 }
