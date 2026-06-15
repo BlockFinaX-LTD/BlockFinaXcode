@@ -154,7 +154,8 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
     else if (e.key === 'Escape') { setSearchOpen(false); inputRef.current?.blur(); }
   };
 
-  const title = greeting?.title || `${partOfDayGreeting()}, ${firstNameFromUser(user)}`;
+  // Greeting never includes the user's name.
+  const title = greeting?.title || partOfDayGreeting();
   const subtitle = greeting?.subtitle || "Here's your portfolio today";
 
   const navItem = (

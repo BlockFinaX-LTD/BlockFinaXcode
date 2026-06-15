@@ -1064,16 +1064,19 @@ export default function Hedge() {
                     {activeDeposits.map((d) => {
                       const ev = events.find((e) => e.id === d.eventId);
                       const claimable = d.premiumsEarned - d.premiumsClaimed;
-                      // Principal is withdrawable once the pool has settled OR expired —
-                      // not only after the calendar expiry date (a triggered pool settles early).
-                      const canWithdraw = ev ? (ev.status === 'settled' || ev.status === 'expired' || ev.expiryDate.getTime() <= Date.now()) : false;
+                      // Principal is only withdrawable once the event is SETTLED on-chain
+                      // (the oracle runs settleEvent — one-touch or at expiry). Gating on the
+                      // calendar date alone would surface a button that reverts before
+                      // settlement completes, so we trust the on-chain status only.
+                      const settledOnChain = ev ? (ev.status === 'settled' || ev.status === 'expired') : false;
+                      const pendingSettlement = ev ? (ev.status === 'open' && ev.expiryDate.getTime() <= Date.now()) : false;
                       return (
                         <div className="row" key={d.id}>
                           <span className="coin"><CoinSvg token="usdc" /></span>
-                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable > 0.01 ? ` · ${fmtMoney(claimable)} premium ready` : ''}{canWithdraw ? ' · ready to withdraw' : ''}</div></div>
+                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable > 0.01 ? ` · ${fmtMoney(claimable)} premium ready` : ''}{settledOnChain ? ' · ready to withdraw' : pendingSettlement ? ' · settling…' : ''}</div></div>
                           <div className="r-side" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             {claimable > 0.01 && <button className="btn-sm2 primary" disabled={claimPremiumsMutation.isPending} onClick={() => claimPremiumsMutation.mutate(d.id)}>Claim</button>}
-                            {canWithdraw && <button className="btn-sm2 ghost" disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(d.id)}>Withdraw</button>}
+                            {settledOnChain && <button className="btn-sm2 ghost" disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(d.id)}>Withdraw</button>}
                           </div>
                         </div>
                       );

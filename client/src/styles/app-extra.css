@@ -12,3 +12,48 @@
 .bfx-app .select:disabled,
 .bfx-app .btn:disabled,
 .bfx-app .input:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ============================================================
+   Mobile responsiveness (≤760px) — overrides on top of the design.
+   ============================================================ */
+@media (max-width: 760px) {
+  /* Topbar: the market search is the primary control. No name/address pill,
+     no greeting line — the search fills the bar, with theme + notifications. */
+  .bfx-app .greeting { display: none; }
+  .bfx-app .ab-acct { display: none !important; }
+  .bfx-app .appbar { padding: 0 14px; gap: 8px; }
+  .bfx-app .ab-r { flex: 1 1 auto; gap: 8px; min-width: 0; }
+  .bfx-app .hsearch { display: flex !important; flex: 1 1 auto; min-width: 0; }
+  .bfx-app .hsearch kbd { display: none; }
+  .bfx-app .iconbtn { flex: 0 0 auto; }
+  /* Search results overlay must sit above page content on touch */
+  .bfx-app .hsearch-dd { z-index: 70; }
+
+  /* Never allow a horizontal scrollbar on small screens. */
+  .bfx-app, .bfx-app .content { max-width: 100vw; overflow-x: hidden; }
+  .bfx-app .r-main, .bfx-app .t-main, .bfx-app .txn-m, .bfx-app .mkt-nm, .bfx-app .pt-nm, .bfx-app .lb-w { min-width: 0; }
+  .bfx-app .txn-m .a, .bfx-app .r-main .r1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---- Earn: keep it compact and reflow cleanly ---- */
+  .bfx-app .pts-hero { padding: 22px 20px; }
+  .bfx-app .pts-num { font-size: 34px; flex-wrap: wrap; gap: 8px; }
+  .bfx-app .pts-num .usd { font-size: 14px; }
+  /* points stats stay a 3-up row (the design's single column is too tall) */
+  .bfx-app .pts-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .bfx-app .pstat { padding: 10px 9px; }
+  .bfx-app .pstat .l { font-size: 8.5px; gap: 4px; }
+  .bfx-app .pstat .l i { width: 11px; height: 11px; }
+  .bfx-app .pstat .v { font-size: 15px; }
+  .bfx-app .earn-grid { gap: 14px; }
+  /* task rows: title + points/button reflow to two tidy lines */
+  .bfx-app .task { flex-wrap: wrap; padding: 14px 15px; }
+  .bfx-app .t-right { flex-direction: row; width: 100%; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .bfx-app .ref-stats { gap: 8px; }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+  .bfx-app .pts-stats { grid-template-columns: repeat(3, 1fr); }
+  .bfx-app .pstat .v { font-size: 14px; }
+  .bfx-app .bal-num { font-size: 38px; }
+}
