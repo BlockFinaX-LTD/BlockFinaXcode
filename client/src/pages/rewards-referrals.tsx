@@ -48,7 +48,7 @@ export default function Referrals() {
   };
 
   const referralLink = referralCode?.code
-    ? `${window.location.origin}/create-wallet?ref=${referralCode.code}`
+    ? `${window.location.origin}/auth?ref=${referralCode.code}`
     : '';
 
   if (!wallet) {
@@ -73,7 +73,7 @@ export default function Referrals() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation('/wallet')}
+            onClick={() => setLocation('/home')}
             className="h-8 w-8"
           >
             <ArrowLeft className="h-4 w-4" />

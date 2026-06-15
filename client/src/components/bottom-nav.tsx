@@ -6,14 +6,14 @@
  * Active state shows a small primary dot below the icon.
  */
 import { useLocation } from 'wouter';
-import { Home as HomeIcon, Wallet as WalletIcon, Shield, Star } from 'lucide-react';
+import { Home as HomeIcon, User as UserIcon, Shield, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { path: '/home', label: 'Home', icon: HomeIcon, matches: ['/home'] },
-  { path: '/wallet', label: 'Wallet', icon: WalletIcon, matches: ['/wallet'] },
   { path: '/hedge', label: 'Cover', icon: Shield, matches: ['/hedge'] },
-  { path: '/rewards', label: 'Earn', icon: Star, matches: ['/rewards', '/tasks'] },
+  { path: '/tasks', label: 'Earn', icon: Star, matches: ['/rewards', '/tasks'] },
+  { path: '/profile', label: 'Profile', icon: UserIcon, matches: ['/profile'] },
 ];
 
 export function BottomNav() {

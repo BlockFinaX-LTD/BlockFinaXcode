@@ -7,7 +7,7 @@
  * legacy wallet SDK so non-React modules can keep calling typed methods.
  */
 
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -29,8 +29,7 @@ import PrivacyPage from "@/pages/privacy";
 import BlogPage from "@/pages/blog";
 import NotFound from "@/pages/not-found";
 
-// Wallet & auth
-import Wallet from "@/pages/wallet";
+// Auth
 import Auth from "@/pages/auth";
 
 // Core features
@@ -176,7 +175,8 @@ function Router() {
       {/* App routes — AuthGuard redirects unauthenticated visitors to /auth.
           No allowlist check after sign-in: anyone with a Rift session can
           use the app. */}
-      <Route path="/wallet" component={Wallet} />
+      {/* Wallet page retired — its functions live on Home now. Old links/bookmarks redirect. */}
+      <Route path="/wallet"><Redirect to="/home" /></Route>
       <Route path="/home" component={HomePage} />
       <Route path="/hedge" component={Hedge} />
       <Route path="/tasks" component={TasksPage} />

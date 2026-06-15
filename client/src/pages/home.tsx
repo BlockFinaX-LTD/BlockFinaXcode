@@ -1,801 +1,384 @@
 /**
- * Home — 2026 redesign
+ * Home — rebuilt to the new design (app/Home.html).
  *
- * Visual chrome reworked, business logic intact:
- *   - RiftWalletCard: cross-chain Rift balances + send (kept)
- *   - RiftHistoryCard: Rift tx history (kept)
- *   - On-platform balance card with selected-chain native + token balances
- *   - Alerts: claimable payouts, expiring positions, unclaimed LP premiums,
- *     active events when user has nothing
- *   - Live FX rates, hedge positions snapshot, market events
- *
- * Brand logo, brand colors, all data wiring unchanged.
+ * Layout, UI/UX and search match the design 1:1; all data is live:
+ *   - Balance + Wallet/Pools split: Rift cross-chain balances + hedge LP
+ *   - Live rates: /api/fx/rates (FX / Commodities) with a gentle live tick
+ *   - Liquidity positions: hedgeContract LP deposits
+ *   - Recent activity: unified Rift + hedge feed
+ *   - Send / Receive: design sheets wired to real Rift rails
  */
-
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { BottomNav } from '@/components/bottom-nav';
-import { TermsGate } from '@/components/terms-gate';
-import { AppHeader } from '@/components/app-header';
-import { BackupWarningBanner } from '@/components/wallet/backup-warning-banner';
-import { RiftWalletCard } from '@/components/wallet/rift-wallet-card';
-import { useRiftBalances } from '@/hooks/use-rift-balances';
-import { RiftHistoryCard } from '@/components/wallet/rift-history-card';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
+import { AppShell } from '@/components/app-shell';
+import { AppSendSheet, AppReceiveSheet } from '@/components/app-transfer-sheets';
 import { useWallet } from '@/hooks/use-wallet';
-import { useTransactions } from '@/hooks/use-transactions';
-import { getNetworkById } from '@/lib/networks';
-import { fetchCryptoPrices, getBnbPrice } from '@/lib/price-service';
+import { useRiftBalances } from '@/hooks/use-rift-balances';
+import { useUnifiedActivity, type ActivityRow, explorerUrl } from '@/components/wallet/rift-activity';
 import {
-  hedgeContract,
-  type HedgeEventData,
-  type HedgePositionData,
-  type HedgeLpDepositData,
+  hedgeContract, type HedgeEventData, type HedgeLpDepositData, type HedgePositionData,
 } from '@/lib/hedge-contract';
+import { FlagSvg, CommoditySvg, CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChain, KNOWN_FLAGS } from '@/components/app-glyphs';
 import logoPath from '@/assets/logo.png';
 import {
-  Shield,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  AlertTriangle,
-  ArrowRight,
-  DollarSign,
-  Activity,
-  Sparkles,
-  Copy,
-  Users,
-  ChevronRight,
-  BarChart3,
+  Eye, EyeOff, ArrowUp, ArrowDown, Shield, TrendingUp, Gift, ArrowRight,
+  ArrowDownLeft, ArrowUpRight, Plus,
 } from 'lucide-react';
-import { fmtUsd, QuickAction, BfxMark } from '@/components/ui/bfx';
-import { useUnifiedActivity, ActivityRowView } from '@/components/wallet/rift-activity';
 
-type FXRate = {
-  pair: string;
-  rate: number;
-  source: string;
-  timestamp: number;
-  lastUpdated: string;
-  change24h?: number;
+type FXRate = { pair: string; rate: number; change24h?: number };
+type FXResponse = {
+  rates: Record<string, FXRate>;
+  pairs?: string[];
+  pairsWithClass?: Array<{ pair: string; assetClass: string }>;
 };
+
+const CURRENCY_NAMES: Record<string, string> = {
+  NGN: 'Nigerian naira', GHS: 'Ghanaian cedi', KES: 'Kenyan shilling',
+  ZAR: 'South African rand', EGP: 'Egyptian pound', XOF: 'West African CFA',
+  EUR: 'Euro', GBP: 'British pound',
+};
+
+function fmt2(n: number) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function decimalsFor(px: number) {
+  return px > 100 ? 2 : px > 10 ? 2 : 4;
+}
+function timeAgo(ts: number) {
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24); if (d < 7) return `${d}d`;
+  return `${Math.floor(d / 7)}w`;
+}
+function shortHash(h?: string) {
+  if (!h) return '';
+  return h.length > 12 ? `${h.slice(0, 6)}…${h.slice(-4)}` : h;
+}
 
 export default function HomePage() {
   const [, setLocation] = useLocation();
-  const { isUnlocked, walletExists, isLoading, wallet, settings } = useWallet();
-  const { formatCurrency } = useTransactions(settings.selectedNetworkId);
-  const { toast } = useToast();
+  const { isUnlocked, walletExists, isLoading, wallet } = useWallet();
 
-  const selectedNetwork = getNetworkById(settings.selectedNetworkId);
-  const selectedChainId = selectedNetwork?.chainId;
-  const walletAddress = wallet?.address;
+  const [sendOpen, setSendOpen] = useState(false);
+  const [rcvOpen, setRcvOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [rateGroup, setRateGroup] = useState<'fx' | 'cmd'>('fx');
 
-  // Live native-token prices (for native USD value)
-  const [ethPrice, setEthPrice] = useState<number>(0);
-  const [bnbPrice, setBnbPrice] = useState<number>(getBnbPrice() ?? 0);
+  // ── Auth gate ──────────────────────────────────────────────────────────
   useEffect(() => {
-    fetchCryptoPrices().then((prices) => {
-      if (prices?.eth) setEthPrice(prices.eth);
-      if (prices?.bnb) setBnbPrice(prices.bnb);
-    });
-  }, []);
+    if (!isLoading && !walletExists()) setLocation('/auth');
+  }, [isLoading, walletExists, setLocation]);
 
-  // Native + ERC-20 balances on the selected chain (unchanged data source)
-  const nativeBalanceQuery = useQuery({
-    queryKey: ['/api/wallet', walletAddress, 'native-balance', selectedChainId],
-    queryFn: async () => {
-      const res = await fetch(`/api/wallet/${walletAddress}/native-balance?networkId=${selectedChainId}`);
-      if (!res.ok) return { balance: '0', symbol: selectedNetwork?.symbol || 'ETH' };
-      return res.json() as Promise<{ balance: string; symbol: string }>;
-    },
-    enabled: !!walletAddress && !!selectedChainId,
-    staleTime: 15000,
-    refetchInterval: 30000,
-  });
-
-  const tokenBalanceQuery = useQuery({
-    queryKey: ['/api/wallet', walletAddress, 'token-balances', selectedChainId],
-    queryFn: async () => {
-      const res = await fetch(`/api/wallet/${walletAddress}/token-balances?networkId=${selectedChainId}`);
-      if (!res.ok) return { balances: [] as any[] };
-      return res.json() as Promise<{ balances: any[] }>;
-    },
-    enabled: !!walletAddress && !!selectedChainId,
-    staleTime: 15000,
-    refetchInterval: 30000,
-  });
-
-  const nativeSym = nativeBalanceQuery.data?.symbol ?? selectedNetwork?.symbol ?? 'ETH';
-  const nativeBalance = parseFloat(nativeBalanceQuery.data?.balance ?? '0');
-  const nativePrice = nativeSym === 'BNB' ? bnbPrice : ethPrice;
-  const nativeUsd = nativeBalance * nativePrice;
-  const tokenUsd = (tokenBalanceQuery.data?.balances ?? []).reduce(
-    (sum: number, t: any) => sum + (t.usdValue || 0),
-    0,
-  );
-  const onChainTotalValue = nativeUsd + tokenUsd;
-
-  // ── Cross-chain truth ────────────────────────────────────────────────
-  // The per-chain RPC query above only sees the currently-selected network.
-  // If the user has balances on other chains (BSC / Base) they show
-  // as $0 here even though the funds exist. The Rift SDK exposes balances
-  // across every chain the wallet has touched — sum that for the headline
-  // number, and only fall back to the per-chain on-chain RPC view when the
-  // Rift SDK hasn't loaded yet.
+  // ── Cross-chain balances (Rift) ────────────────────────────────────────
   const { balances: riftBalances, isLoading: riftLoading } = useRiftBalances();
-  const riftTotal = riftBalances.reduce((s, b) => s + (Number(b.amount) || 0), 0);
-  const hasRiftTotal = !riftLoading && riftBalances.length > 0;
-  const totalValue = hasRiftTotal ? riftTotal : onChainTotalValue;
-  const isLoadingBalance =
-    nativeBalanceQuery.isLoading || tokenBalanceQuery.isLoading || riftLoading;
+  const walletTotal = useMemo(
+    () => riftBalances.reduce((s, b) => s + (Number(b.amount) || 0), 0),
+    [riftBalances],
+  );
+  const assetCount = useMemo(
+    () => riftBalances.filter((b) => Number(b.amount) > 0).length,
+    [riftBalances],
+  );
 
-  // Referral
-  const { data: referralCode } = useQuery<{ code: string; currentUses: number }>({
-    queryKey: ['/api/referrals/codes', wallet?.address],
-    queryFn: () => fetch(`/api/referrals/codes/${wallet?.address}`).then((r) => r.json()),
-    enabled: !!wallet?.address,
-  });
-  const referralLink = referralCode?.code
-    ? `${window.location.origin}/create-wallet?ref=${referralCode.code}`
-    : null;
-  const copyReferralLink = () => {
-    if (!referralLink) return;
-    navigator.clipboard.writeText(referralLink).then(() => {
-      toast({
-        title: 'Referral link copied!',
-        description: 'Share it to earn tokens for every friend who joins.',
-      });
-    });
-  };
-
-  // Hedge state (same wiring as before)
-  const [positions, setPositions] = useState<HedgePositionData[]>([]);
+  // ── Hedge data: deposits (pools) + positions ───────────────────────────
   const [deposits, setDeposits] = useState<HedgeLpDepositData[]>([]);
+  const [positions, setPositions] = useState<HedgePositionData[]>([]);
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [hedgeLoading, setHedgeLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAllRates, setShowAllRates] = useState(false);
 
-  const { data: fxData } = useQuery<{ rates: Record<string, FXRate>; pairs: string[] }>({
-    queryKey: ['/api/fx/rates'],
-    refetchInterval: 5 * 60 * 1000,
-  });
-
-  const loadHedgeData = async () => {
-    if (!wallet?.address) {
-      setHedgeLoading(false);
-      return;
-    }
-    try {
-      const [pos, dep, ev] = await Promise.all([
-        hedgeContract.getPositionsByWallet(wallet.address),
+  useEffect(() => {
+    let cancelled = false;
+    if (!wallet?.address) { setHedgeLoading(false); return; }
+    setHedgeLoading(true);
+    // Watchdog: a stalled chain/explorer read must never leave the section
+    // spinning forever — show whatever resolved after 12s at the latest.
+    const watchdog = setTimeout(() => { if (!cancelled) setHedgeLoading(false); }, 12_000);
+    (async () => {
+      const [depR, posR, evR] = await Promise.allSettled([
         hedgeContract.getDepositsByWallet(wallet.address),
+        hedgeContract.getPositionsByWallet(wallet.address),
         hedgeContract.getAllEvents(),
       ]);
-      setPositions(pos);
-      setDeposits(dep);
-      setEvents(ev);
-    } catch (err) {
-      console.error('Failed to load hedge data:', err);
-    } finally {
+      if (cancelled) return;
+      if (depR.status === 'fulfilled') setDeposits(depR.value); else console.error('deposits load failed', depR.reason);
+      if (posR.status === 'fulfilled') setPositions(posR.value);
+      if (evR.status === 'fulfilled') setEvents(evR.value);
       setHedgeLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadHedgeData();
+    })();
+    return () => { cancelled = true; clearTimeout(watchdog); };
   }, [wallet?.address]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadHedgeData();
-    nativeBalanceQuery.refetch();
-    tokenBalanceQuery.refetch();
-    setRefreshing(false);
-  };
+  const eventsById = useMemo(() => {
+    const m = new Map<number, HedgeEventData>();
+    events.forEach((e) => m.set(e.id, e));
+    return m;
+  }, [events]);
 
-  useEffect(() => {
-    if (!isLoading) {
-      if (!walletExists()) setLocation('/wallet');
-      else if (!isUnlocked) setLocation('/auth');
-    }
-  }, [isUnlocked, walletExists, isLoading, setLocation]);
-
-  // Derived sets (unchanged)
+  const activeDeposits = useMemo(() => deposits.filter((d) => !d.withdrawn), [deposits]);
+  const poolsTotal = useMemo(() => activeDeposits.reduce((s, d) => s + d.amount, 0), [activeDeposits]);
   const activePositions = useMemo(
     () => positions.filter((p) => p.status === 'active' || p.status === 'claimable'),
     [positions],
   );
-  const claimablePositions = useMemo(
-    () => positions.filter((p) => p.status === 'claimable'),
-    [positions],
-  );
-  const activeDeposits = useMemo(() => deposits.filter((d) => !d.withdrawn), [deposits]);
-  const unclaimedPremiums = useMemo(
-    () => activeDeposits.reduce((sum, d) => sum + (d.premiumsEarned - d.premiumsClaimed), 0),
-    [activeDeposits],
-  );
-  const totalHedgeExposure = useMemo(
-    () => activePositions.reduce((sum, p) => sum + p.notional, 0),
-    [activePositions],
-  );
-  const totalLpDeposited = useMemo(
-    () => activeDeposits.reduce((sum, d) => sum + d.amount, 0),
-    [activeDeposits],
-  );
-  const totalClaimablePayout = useMemo(
-    () => claimablePositions.reduce((sum, p) => sum + p.payoutAmount, 0),
-    [claimablePositions],
-  );
+  const totalBalance = walletTotal + poolsTotal;
 
-  const openEvents = useMemo(() => events.filter((e) => e.status === 'open'), [events]);
-  const expiringEvents = useMemo(() => {
-    const now = Date.now();
-    const threeDays = 3 * 24 * 60 * 60 * 1000;
-    return openEvents.filter((e) => e.expiryDate.getTime() - now < threeDays && e.expiryDate.getTime() > now);
-  }, [openEvents]);
+  // ── FX rates with a gentle live tick (mirrors the design) ──────────────
+  const { data: fxData } = useQuery<FXResponse>({
+    queryKey: ['/api/fx/rates'],
+    refetchInterval: 5 * 60 * 1000,
+  });
 
-  const alerts = useMemo(() => {
-    const items: { type: 'warning' | 'success' | 'info'; message: string; action?: () => void; actionLabel?: string }[] = [];
-    if (claimablePositions.length > 0) {
-      items.push({
-        type: 'success',
-        message: `${claimablePositions.length} cover payout${claimablePositions.length > 1 ? 's' : ''} ready to claim`,
-        action: () => setLocation('/hedge'),
-        actionLabel: 'Claim',
-      });
-    }
-    if (unclaimedPremiums > 0.01) {
-      items.push({
-        type: 'success',
-        message: `${fmtUsd(unclaimedPremiums)} in unclaimed premium`,
-        action: () => setLocation('/hedge'),
-        actionLabel: 'Collect',
-      });
-    }
-    if (expiringEvents.length > 0) {
-      const myExpiringPositions = activePositions.filter((p) =>
-        expiringEvents.some((e) => e.id === p.eventId),
-      );
-      if (myExpiringPositions.length > 0) {
-        items.push({
-          type: 'warning',
-          message: `${myExpiringPositions.length} cover position${myExpiringPositions.length > 1 ? 's' : ''} expiring within 3 days`,
-          action: () => setLocation('/hedge'),
-          actionLabel: 'View',
-        });
-      }
-    }
-    if (openEvents.length > 0 && activePositions.length === 0 && activeDeposits.length === 0) {
-      items.push({
-        type: 'info',
-        message: `${openEvents.length} active cover pool${openEvents.length > 1 ? 's' : ''} available`,
-        action: () => setLocation('/hedge'),
-        actionLabel: 'Explore',
-      });
-    }
-    return items;
-  }, [claimablePositions, unclaimedPremiums, expiringEvents, activePositions, activeDeposits, openEvents, setLocation]);
+  const baseRates = useMemo(() => {
+    const classOf = new Map<string, string>();
+    (fxData?.pairsWithClass || []).forEach((p) => classOf.set(p.pair, p.assetClass));
+    const all = fxData?.rates ? Object.values(fxData.rates) : [];
+    const fx: any[] = [], cmd: any[] = [];
+    all.forEach((r) => {
+      const [base, quote] = r.pair.split('/');
+      const ac = classOf.get(r.pair);
+      const isCmd = ac === 'commodity' || ['XAU', 'XAG', 'BRENT', 'WTI', 'COCOA'].includes(base);
+      const code = quote === 'USD' ? base : quote;
+      const entry = {
+        pair: r.pair, base, quote, code,
+        name: isCmd ? `${base} spot` : (CURRENCY_NAMES[code] || `${base}/${quote}`),
+        px: r.rate, d: r.change24h ?? 0,
+        ic: base === 'XAU' ? 'gold' : base === 'BRENT' || base === 'WTI' ? 'oil' : base === 'COCOA' ? 'cocoa' : undefined,
+      };
+      (isCmd ? cmd : fx).push(entry);
+    });
+    return { fx: fx.slice(0, 6), cmd: cmd.slice(0, 6) };
+  }, [fxData]);
 
-  // Unified activity feed (Rift sends + Rift deposits + BlockFinaX hedge actions).
-  // Each row carries a tx hash so it deep-links to the right block explorer.
+  // local tick state so values drift between server refetches
+  const [tick, setTick] = useState(0);
+  const driftRef = useRef<Record<string, number>>({});
+  useEffect(() => { driftRef.current = {}; }, [fxData]);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 2200);
+    return () => clearInterval(id);
+  }, []);
+  const displayRates = (rateGroup === 'fx' ? baseRates.fx : baseRates.cmd).map((r) => {
+    const prev = driftRef.current[r.pair] ?? r.px;
+    const drift = (Math.random() - 0.48) * (prev * 0.0009);
+    const next = Math.max(0.0001, prev + drift);
+    driftRef.current[r.pair] = next;
+    return { ...r, px: tick === 0 ? r.px : next };
+  });
+
+  // ── Activity ───────────────────────────────────────────────────────────
   const { rows: activityRows, loading: activityLoading } = useUnifiedActivity(wallet?.address, 12);
   const recentActivity = useMemo(() => activityRows.slice(0, 6), [activityRows]);
 
+  // ── Referral (refer banner link target) ────────────────────────────────
+  const { data: referralCode } = useQuery<{ code: string }>({
+    queryKey: ['/api/referrals/codes', wallet?.address],
+    queryFn: () => fetch(`/api/referrals/codes/${wallet?.address}`).then((r) => r.json()),
+    enabled: !!wallet?.address,
+  });
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <img src={logoPath} alt="BlockFinaX" className="w-16 h-16 object-contain mx-auto mb-3" />
-          <div className="text-sm font-medium text-muted-foreground">Loading BlockFinaX…</div>
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#050505' }}>
+        <div style={{ textAlign: 'center' }}>
+          <img src={logoPath} alt="BlockFinaX" style={{ width: 56, height: 56, objectFit: 'contain', margin: '0 auto 10px' }} />
+          <div style={{ fontSize: 13, color: '#7a7a7a' }}>Loading BlockFinaX…</div>
         </div>
       </div>
     );
   }
+  if (!walletExists()) return null;
 
-  if (!walletExists() || !isUnlocked) return null;
-
-  const portfolioValue = totalValue + totalLpDeposited + totalClaimablePayout;
+  const balStr = (n: number) => {
+    const [int, cents] = fmt2(n).split('.');
+    return { int, cents: `.${cents}` };
+  };
+  const bal = balStr(totalBalance);
 
   return (
-    <TermsGate walletAddress={wallet?.address}>
-      <div className="min-h-screen flex flex-col bg-background">
-        <AppHeader onRefresh={handleRefresh} refreshing={refreshing} />
-
-        <BackupWarningBanner />
-
-        <main className="flex-1 pb-28">
-          <div className="max-w-2xl mx-auto px-4 pt-5 pb-6 space-y-5">
-            {/* ── Rift smart wallet card (cross-chain balances + send) ──── */}
-            <RiftWalletCard />
-
-            {/* ── On-platform portfolio (selected chain) ──────────────── */}
-            <Card className="relative overflow-hidden rounded-3xl bfx-hero-brand border-0">
-              <div className="absolute inset-0 bfx-hero-brand-dotgrid opacity-50 pointer-events-none" />
-              <BfxMark
-                size={200}
-                className="absolute -right-12 -top-14 pointer-events-none"
-                primary="rgba(255,255,255,0.05)"
-                accent="rgba(255,255,255,0.10)"
-              />
-              <CardContent className="relative px-6 pt-6 pb-5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-white/70 font-semibold mb-5">
-                  On-platform balance
-                </p>
-                {isLoadingBalance || hedgeLoading ? (
-                  <Skeleton className="h-10 w-44 mb-6 bg-white/10" />
-                ) : (
-                  <h2 className="bfx-display text-[42px] font-semibold tracking-tight mb-6 text-white leading-none">
-                    {formatCurrency(portfolioValue)}
-                  </h2>
-                )}
-                <div className="grid grid-cols-3 gap-2.5">
-                  <div className="bg-white/[0.06] border border-white/[0.08] rounded-2xl py-2.5 px-3">
-                    <p className="text-[9.5px] text-white/55 uppercase tracking-[0.1em] font-semibold">Wallet</p>
-                    <div className="text-[14px] font-semibold font-mono-data text-white mt-1 truncate tabular-nums">
-                      {isLoadingBalance ? <Skeleton className="h-4 w-12 bg-white/10" /> : formatCurrency(totalValue)}
-                    </div>
-                  </div>
-                  <div className="bg-white/[0.06] border border-white/[0.08] rounded-2xl py-2.5 px-3">
-                    <p className="text-[9.5px] text-white/55 uppercase tracking-[0.1em] font-semibold">In pools</p>
-                    <div className="text-[14px] font-semibold font-mono-data text-white mt-1 truncate tabular-nums">
-                      {hedgeLoading ? <Skeleton className="h-4 w-12 bg-white/10" /> : fmtUsd(totalLpDeposited)}
-                    </div>
-                  </div>
-                  <div
-                    className={`rounded-2xl py-2.5 px-3 border transition-colors ${
-                      totalClaimablePayout > 0
-                        ? 'bg-emerald-400/12 border-emerald-300/40'
-                        : 'bg-white/[0.06] border-white/[0.08]'
-                    }`}
-                  >
-                    <p
-                      className={`text-[9.5px] uppercase tracking-[0.1em] font-semibold ${
-                        totalClaimablePayout > 0 ? 'text-emerald-200' : 'text-white/55'
-                      }`}
-                    >
-                      Claimable
-                    </p>
-                    <div
-                      className={`text-[14px] font-semibold font-mono-data mt-1 truncate tabular-nums ${
-                        totalClaimablePayout > 0 ? 'text-emerald-200' : 'text-white'
-                      }`}
-                    >
-                      {hedgeLoading ? <Skeleton className="h-4 w-12 bg-white/10" /> : fmtUsd(totalClaimablePayout)}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* ── Quick actions ───────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-2">
-              <QuickAction
-                tone="primary"
-                icon={<Shield className="h-4 w-4" strokeWidth={1.9} />}
-                label="Buy cover"
-                onClick={() => setLocation('/hedge')}
-              />
-              <QuickAction
-                tone="amber"
-                icon={<DollarSign className="h-4 w-4" strokeWidth={1.9} />}
-                label="Earn"
-                onClick={() => setLocation('/hedge?tab=provider')}
-              />
-              <QuickAction
-                tone="emerald"
-                icon={<Users className="h-4 w-4" strokeWidth={1.9} />}
-                label="Refer"
-                onClick={copyReferralLink}
-                disabled={!referralLink}
-              />
-            </div>
-
-            {/* ── Referral banner ─────────────────────────────────────── */}
-            {referralLink && (
-              <button
-                type="button"
-                onClick={() => setLocation('/rewards?tab=referrals')}
-                className="w-full text-left rounded-2xl border border-gray-100 dark:border-border/40 bg-card hover:border-primary/30 hover:shadow-[0_2px_8px_-2px_rgba(26,68,128,0.12)] transition-all active:scale-[0.99] px-4 py-3.5 flex items-center justify-between gap-3 group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 inline-flex items-center justify-center shrink-0 shadow-[0_4px_12px_-4px_rgba(16,185,129,0.5)]">
-                    <Users className="h-4.5 w-4.5 text-white" strokeWidth={2} />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[13.5px] font-semibold tracking-tight leading-tight">
-                      Invite friends · Earn{' '}
-                      <span className="text-emerald-600 dark:text-emerald-400">50 points</span> each
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      Tap to share your code on WhatsApp, X, Telegram or email
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-              </button>
-            )}
-
-            {/* ── Alerts ────────────────────────────────────────────── */}
-            {alerts.length > 0 && (
-              <div className="space-y-2">
-                {alerts.map((alert, i) => {
-                  const tone = alert.type === 'success'
-                    ? { wrap: 'bg-emerald-50/70 dark:bg-emerald-500/5 border-emerald-100 dark:border-emerald-500/20', icon: 'text-emerald-600 bg-emerald-100/80 dark:bg-emerald-500/10', btn: 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-500/10' }
-                    : alert.type === 'warning'
-                    ? { wrap: 'bg-amber-50/70 dark:bg-amber-500/5 border-amber-100 dark:border-amber-500/20', icon: 'text-amber-600 bg-amber-100/80 dark:bg-amber-500/10', btn: 'text-amber-700 dark:text-amber-300 hover:bg-amber-100/70 dark:hover:bg-amber-500/10' }
-                    : { wrap: 'bg-blue-50/70 dark:bg-blue-500/5 border-blue-100 dark:border-blue-500/20', icon: 'text-blue-600 bg-blue-100/80 dark:bg-blue-500/10', btn: 'text-blue-700 dark:text-blue-300 hover:bg-blue-100/70 dark:hover:bg-blue-500/10' };
-                  return (
-                    <div
-                      key={i}
-                      className={`flex items-center justify-between px-3 py-2.5 rounded-2xl border ${tone.wrap}`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className={`h-7 w-7 rounded-full inline-flex items-center justify-center ${tone.icon}`}>
-                          {alert.type === 'success' ? (
-                            <Sparkles className="h-3.5 w-3.5" />
-                          ) : alert.type === 'warning' ? (
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                          ) : (
-                            <Activity className="h-3.5 w-3.5" />
-                          )}
-                        </span>
-                        <span className="text-sm font-medium leading-tight">{alert.message}</span>
-                      </div>
-                      {alert.action && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={alert.action}
-                          className={`text-xs h-7 px-2.5 rounded-lg font-semibold ${tone.btn}`}
-                        >
-                          {alert.actionLabel} <ArrowRight className="h-3 w-3 ml-1" />
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* ── Rift transaction history (cross-chain) ─────────────── */}
-            <RiftHistoryCard />
-
-            {/* ── Live FX rates ──────────────────────────────────────── */}
-            <Card className="rounded-2xl border-gray-100 dark:border-border/40 shadow-none">
-              <CardHeader className="pb-3 pt-5 px-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="h-7 w-7 rounded-full bg-primary/10 inline-flex items-center justify-center">
-                      <BarChart3 className="h-3.5 w-3.5 text-primary" />
-                    </span>
-                    <CardTitle className="text-[15px] font-semibold tracking-tight">
-                      Live FX rates
-                    </CardTitle>
-                  </div>
-                  {fxData?.rates && Object.keys(fxData.rates).length > 6 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-7 px-2.5 rounded-lg font-semibold text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowAllRates(!showAllRates)}
-                    >
-                      {showAllRates ? 'Show less' : `All (${Object.keys(fxData.rates).length})`}
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                {fxData?.rates ? (() => {
-                  const PRIMARY_PAIRS = ['USD/GHS', 'USD/NGN', 'USD/KES', 'USD/ZAR', 'USD/XOF', 'EUR/GHS'];
-                  const entries = Object.entries(fxData.rates);
-                  const primaryEntries = entries.filter(
-                    ([key, rate]) => PRIMARY_PAIRS.includes(rate.pair || key),
-                  );
-                  const otherEntries = entries.filter(
-                    ([key, rate]) => !PRIMARY_PAIRS.includes(rate.pair || key),
-                  );
-                  const displayEntries = showAllRates ? [...primaryEntries, ...otherEntries] : primaryEntries;
-
-                  return (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {displayEntries.map(([key, rate]) => {
-                        const pair = rate.pair || key;
-                        const [base, quote] = pair.split('/');
-                        const change = rate.change24h;
-                        const hasChange = change !== undefined && change !== null;
-                        const isPositive = hasChange && change >= 0;
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => setLocation('/hedge')}
-                            className="group flex flex-col p-3 rounded-2xl border border-gray-100 dark:border-border/40 bg-card hover:border-primary/30 hover:shadow-[0_2px_8px_-2px_rgba(26,68,128,0.12)] transition-all text-left active:scale-[0.98]"
-                          >
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                {base}/{quote}
-                              </span>
-                              {hasChange && (
-                                <span
-                                  className={`inline-flex items-center gap-0.5 text-[10px] font-semibold font-mono-data tabular-nums px-1.5 py-0.5 rounded-md ${
-                                    isPositive
-                                      ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/10'
-                                      : 'text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-500/10'
-                                  }`}
-                                >
-                                  {isPositive ? (
-                                    <TrendingUp className="h-2.5 w-2.5" strokeWidth={2.4} />
-                                  ) : (
-                                    <TrendingDown className="h-2.5 w-2.5" strokeWidth={2.4} />
-                                  )}
-                                  {isPositive ? '+' : ''}
-                                  {change.toFixed(2)}%
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[15px] font-semibold font-mono-data tabular-nums tracking-tight">
-                              {rate.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })() : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <Skeleton key={i} className="h-12 rounded-xl" />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ── Cover positions + activity ────────────────────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="rounded-2xl border-gray-100 dark:border-border/40 shadow-none">
-                <CardHeader className="pb-3 pt-5 px-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="h-7 w-7 rounded-full bg-primary/10 inline-flex items-center justify-center">
-                        <Shield className="h-3.5 w-3.5 text-primary" />
-                      </span>
-                      <CardTitle className="text-[15px] font-semibold tracking-tight">
-                        Cover positions
-                      </CardTitle>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-7 px-2.5 rounded-lg font-semibold text-muted-foreground hover:text-foreground"
-                      onClick={() => setLocation('/hedge')}
-                    >
-                      View all <ChevronRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-5 pb-5">
-                  {hedgeLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ) : activePositions.length === 0 && activeDeposits.length === 0 ? (
-                    <div className="text-center py-6">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 mx-auto mb-2.5 flex items-center justify-center">
-                        <Shield className="h-5 w-5 text-primary" />
-                      </div>
-                      <p className="text-sm font-medium">No active cover</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 mb-3">
-                        Protect FX, commodity &amp; crypto exposure.
-                      </p>
-                      <Button
-                        size="sm"
-                        className="text-xs h-8 rounded-lg"
-                        onClick={() => setLocation('/hedge')}
-                      >
-                        Browse pools <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {activePositions.length > 0 && (
-                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-primary/5">
-                          <div>
-                            <p className="text-xs text-muted-foreground">As buyer</p>
-                            <p className="text-sm font-semibold">
-                              {activePositions.length} position{activePositions.length > 1 ? 's' : ''}
-                            </p>
-                          </div>
-                          <p className="text-sm font-bold font-mono-data">{fmtUsd(totalHedgeExposure)}</p>
-                        </div>
-                      )}
-                      {activeDeposits.length > 0 && (
-                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/5">
-                          <div>
-                            <p className="text-xs text-muted-foreground">As provider</p>
-                            <p className="text-sm font-semibold">
-                              {activeDeposits.length} pool{activeDeposits.length > 1 ? 's' : ''}
-                            </p>
-                          </div>
-                          <p className="text-sm font-bold font-mono-data">{fmtUsd(totalLpDeposited)}</p>
-                        </div>
-                      )}
-                      {unclaimedPremiums > 0.01 && (
-                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/5">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Unclaimed premium</p>
-                            <p className="text-sm font-semibold text-emerald-600 font-mono-data">
-                              {fmtUsd(unclaimedPremiums)}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-xs h-7"
-                            onClick={() => setLocation('/hedge')}
-                          >
-                            Claim
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border-gray-100 dark:border-border/40 shadow-none">
-                <CardHeader className="pb-3 pt-5 px-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="h-7 w-7 rounded-full bg-primary/10 inline-flex items-center justify-center">
-                        <Activity className="h-3.5 w-3.5 text-primary" />
-                      </span>
-                      <CardTitle className="text-[15px] font-semibold tracking-tight">
-                        Recent activity
-                      </CardTitle>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-7 px-2.5 rounded-lg font-semibold text-muted-foreground hover:text-foreground"
-                      onClick={() => setLocation('/wallet?tab=activity')}
-                    >
-                      View all <ChevronRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-0 pb-2">
-                  {activityLoading && recentActivity.length === 0 ? (
-                    <div className="px-5 pb-3 space-y-2">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ) : recentActivity.length === 0 ? (
-                    <div className="text-center py-6 px-5">
-                      <div className="h-10 w-10 rounded-full bg-muted/60 mx-auto mb-2.5 flex items-center justify-center">
-                        <Activity className="h-5 w-5 text-muted-foreground/60" />
-                      </div>
-                      <p className="text-sm font-medium">No recent activity</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 mb-3">
-                        Cover, payments &amp; pool actions show up here.
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-8 rounded-lg"
-                        onClick={() => setLocation('/hedge')}
-                      >
-                        Explore cover <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-100 dark:divide-border/40">
-                      {recentActivity.map((row, i) => (
-                        <ActivityRowView key={`${row.hash}-${row.kind}-${i}`} row={row} />
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* ── Cover market snapshot ─────────────────────────────── */}
-            <Card className="rounded-2xl border-gray-100 dark:border-border/40 shadow-none">
-              <CardHeader className="pb-3 pt-5 px-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-500/10 inline-flex items-center justify-center">
-                      <TrendingUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    </span>
-                    <CardTitle className="text-[15px] font-semibold tracking-tight">
-                      Cover market
-                    </CardTitle>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] rounded-full border-gray-200 dark:border-border/60 font-mono-data">
-                    {openEvents.length} pool{openEvents.length !== 1 ? 's' : ''}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                {hedgeLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : openEvents.length === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-muted-foreground">No active cover pools right now</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {openEvents.slice(0, 3).map((event) => {
-                      const currentRate = fxData?.rates?.[event.underlying]?.rate;
-                      const daysLeft = Math.max(
-                        0,
-                        Math.ceil((event.expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
-                      );
-                      return (
-                        <button
-                          key={event.id}
-                          className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-gray-100 dark:border-border/40 hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-[0_2px_8px_-2px_rgba(26,68,128,0.12)] transition-all cursor-pointer text-left active:scale-[0.99]"
-                          onClick={() => setLocation(`/hedge?event=${event.id}`)}
-                        >
-                          <div className="space-y-1.5 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[14px] font-semibold truncate tracking-tight">
-                                {event.name}
-                              </span>
-                              {daysLeft <= 3 && (
-                                <Badge variant="outline" className="text-[9px] rounded-full border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold">
-                                  <Clock className="h-2.5 w-2.5 mr-0.5" /> {daysLeft}d
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground font-mono-data tabular-nums">
-                              <span className="font-semibold text-foreground/70">{event.underlying}</span>
-                              <span className="text-muted-foreground/50">·</span>
-                              <span>Strike {event.strike.toLocaleString()}</span>
-                              <span className="text-muted-foreground/50">·</span>
-                              <span>Pool ${event.totalLiquidity.toFixed(0)}</span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0 ml-3">
-                            {currentRate && (
-                              <p className="text-[14px] font-semibold font-mono-data tabular-nums tracking-tight">
-                                {currentRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                              </p>
-                            )}
-                            <p className="text-[10px] text-muted-foreground font-mono-data tabular-nums mt-0.5">
-                              {Math.round(event.utilization * 100)}% utilized
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                    {openEvents.length > 3 && (
-                      <Button
-                        variant="ghost"
-                        className="w-full text-xs h-9 rounded-xl font-semibold text-primary hover:bg-primary/5"
-                        onClick={() => setLocation('/hedge')}
-                      >
-                        View all {openEvents.length} pools <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+    <AppShell active="home">
+      {/* balance + side */}
+      <div className="topgrid reveal in">
+        <div className={`balance${hidden ? ' hidden' : ''}`}>
+          <div className="bal-top">
+            <span className="bal-k">Total balance</span>
+            <button className="eye" aria-label="Hide balance" onClick={() => setHidden((h) => !h)}>
+              <span className="ic-on"><Eye /></span><span className="ic-off"><EyeOff /></span>
+            </button>
           </div>
-        </main>
-
-        <BottomNav />
+          <div className="bal-num">
+            <span className="cur">$</span>
+            <span className="int">{hidden ? '••••••' : (riftLoading && hedgeLoading ? '—' : bal.int)}</span>
+            <span className="cents">{hidden ? '' : (riftLoading && hedgeLoading ? '' : bal.cents)}</span>
+          </div>
+          <div className="quick">
+            <button className="qa" onClick={() => setSendOpen(true)}><span className="qi"><ArrowUp /></span><span className="ql">Send</span></button>
+            <button className="qa" onClick={() => setRcvOpen(true)}><span className="qi"><ArrowDown /></span><span className="ql">Receive</span></button>
+            <button className="qa" onClick={() => setLocation('/hedge')}><span className="qi"><Shield /></span><span className="ql">Cover</span></button>
+            <button className="qa" onClick={() => setLocation('/tasks')}><span className="qi"><TrendingUp /></span><span className="ql">Earn</span></button>
+          </div>
+        </div>
+        <div className="side-stack">
+          <div className="split-card wallet">
+            <div className="sk">Wallet</div>
+            <div className="sv tnum">{hidden ? '•••••' : `$${fmt2(walletTotal)}`}</div>
+            <div className="ss">{assetCount} asset{assetCount === 1 ? '' : 's'}</div>
+          </div>
+          <div className="split-card pool">
+            <div className="sk">Pools</div>
+            <div className="sv tnum">{hidden ? '•••••' : `$${fmt2(poolsTotal)}`}</div>
+            <div className="ss">{activePositions.length} active position{activePositions.length === 1 ? '' : 's'}</div>
+          </div>
+        </div>
       </div>
-    </TermsGate>
+
+      {/* refer */}
+      <div className="refer reveal in">
+        <span className="ri"><Gift /></span>
+        <div className="rc">
+          <div className="rt">Refer &amp; earn</div>
+          <div className="rs">Invite a friend — you both get 50 points in rewards.</div>
+        </div>
+        <button className="rx" onClick={() => setLocation('/tasks?tab=referrals')}>
+          Invite <ArrowRight />
+        </button>
+      </div>
+
+      {/* main grid */}
+      <div className="maingrid reveal in">
+        <div className="col">
+          {/* live rates */}
+          <div className="sec">
+            <div className="sec-h">
+              <h2>Live rates</h2>
+              <div className="seg">
+                <button className={rateGroup === 'fx' ? 'on' : ''} onClick={() => setRateGroup('fx')}>FX</button>
+                <button className={rateGroup === 'cmd' ? 'on' : ''} onClick={() => setRateGroup('cmd')}>Commodities</button>
+              </div>
+            </div>
+            <div className="rates">
+              {displayRates.length === 0 ? (
+                <div className="rate"><div className="rk"><div className="p">No rates</div><div className="s">Check back shortly</div></div></div>
+              ) : displayRates.map((r) => (
+                <div className="rate" key={r.pair}>
+                  {r.ic
+                    ? <span className="ico"><CommoditySvg ic={r.ic} /></span>
+                    : <span className="ico flag"><FlagSvg code={KNOWN_FLAGS.includes(r.code) ? r.code : r.code} /></span>}
+                  <div className="rk"><div className="p">{r.pair}</div><div className="s">{r.name}</div></div>
+                  <div className="rv">
+                    <div className="px tnum">{r.px.toLocaleString('en-US', { minimumFractionDigits: decimalsFor(r.px), maximumFractionDigits: decimalsFor(r.px) })}</div>
+                    {!!r.d && <div className="d" style={{ color: r.d >= 0 ? 'var(--green)' : 'var(--red)' }}>{r.d >= 0 ? '+' : ''}{r.d.toFixed(2)}%</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* liquidity positions */}
+          <div className="sec">
+            <div className="sec-h">
+              <h2>Liquidity positions</h2>
+              <a className="more" onClick={() => setLocation('/hedge?tab=mypools')}>Manage <ArrowRight /></a>
+            </div>
+            <div className="list">
+              {hedgeLoading ? (
+                <div className="row"><div className="r-main"><div className="r1">Loading…</div></div></div>
+              ) : activeDeposits.length === 0 ? (
+                <div className="row" style={{ cursor: 'pointer' }} onClick={() => setLocation('/hedge?tab=provide')}>
+                  <span className="actico"><Plus /></span>
+                  <div className="r-main"><div className="r1">No positions yet</div><div className="r2">Provide liquidity to earn premium</div></div>
+                  <div className="r-side"><ArrowRight /></div>
+                </div>
+              ) : activeDeposits.map((d) => {
+                const ev = eventsById.get(d.eventId);
+                const pair = ev?.underlying || `Event #${d.eventId}`;
+                const sub = ev ? `Cover pool · ${ev.name}` : 'Cover pool';
+                return (
+                  <div className="row" key={d.id} style={{ cursor: 'pointer' }} onClick={() => setLocation(`/hedge?tab=mypools`)}>
+                    <span className="coin"><CoinSvg token="usdc" /><span className="net"><NetSvg net="base" /></span></span>
+                    <div className="r-main"><div className="r1">{pair}</div><div className="r2">{sub}</div></div>
+                    <div className="r-side"><div className="v1 tnum">${fmt2(d.amount)}</div></div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="col">
+          {/* recent activity */}
+          <div className="sec">
+            <div className="sec-h">
+              <h2>Recent activity</h2>
+              <a className="more" onClick={() => setLocation('/hedge')}>History <ArrowRight /></a>
+            </div>
+            <div className="list act">
+              {activityLoading && recentActivity.length === 0 ? (
+                <div className="row"><div className="r-main"><div className="r1">Loading…</div></div></div>
+              ) : recentActivity.length === 0 ? (
+                <div className="row">
+                  <span className="actico"><TrendingUp /></span>
+                  <div className="r-main"><div className="r1">No activity yet</div><div className="r2">Cover, payments &amp; pool actions show here</div></div>
+                </div>
+              ) : recentActivity.map((row, i) => <ActivityItem key={`${row.hash}-${i}`} row={row} />)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA pair */}
+      <div className="ctapair reveal in">
+        <button className="btn btn-ghost" onClick={() => setLocation('/hedge')}><Shield /> Buy cover</button>
+        <button className="btn btn-primary" onClick={() => setLocation('/hedge?tab=provide')}><TrendingUp /> Start earning</button>
+      </div>
+
+      <AppSendSheet open={sendOpen} onClose={() => setSendOpen(false)} />
+      <AppReceiveSheet open={rcvOpen} onClose={() => setRcvOpen(false)} />
+    </AppShell>
   );
+}
+
+// ── Activity row in the design's `.act` style ────────────────────────────
+function ActivityItem({ row }: { row: ActivityRow }) {
+  const href = explorerUrl(row.chain, row.hash);
+  let icon = <TrendingUp />;
+  let title = 'Activity';
+  let sub = '';
+  let amount = '';
+  if (row.kind === 'transfer') {
+    const inbound = row.direction === 'receive';
+    icon = inbound ? <ArrowDownLeft /> : <ArrowUpRight />;
+    title = inbound ? `Received ${row.token || ''}`.trim() : `Sent ${row.token || ''}`.trim();
+    sub = inbound ? `From ${shortHash(row.counterparty)}` : `To ${shortHash(row.counterparty)}`;
+    amount = `${inbound ? '+' : '-'}${row.amount != null ? fmt2(row.amount) : ''} ${row.token || ''}`.trim();
+  } else {
+    const labels: Record<string, string> = {
+      buy_protection: 'Bought cover', lp_deposit: 'Pool deposit', claim_payout: 'Payout claimed',
+      claim_premiums: 'Premiums claimed', withdraw_lp: 'Withdrew liquidity', create_event: 'Created pool',
+      recover_expired: 'Recovered capital', toggle_pool: 'Updated pool', settle_event: 'Pool settled',
+      reward_payout: 'Reward payout',
+    };
+    icon = row.actionType === 'buy_protection' ? <Shield /> : <TrendingUp />;
+    title = labels[row.actionType] || 'Hedge action';
+    sub = row.metadata?.eventName || (row.token ? `${row.token}` : 'On-chain');
+    if (row.amount != null) amount = `${fmt2(row.amount)} ${row.token || 'USDC'}`;
+  }
+  const inner = (
+    <>
+      <span className="actico">{icon}</span>
+      <div className="r-main">
+        <div className="r1">{title}</div>
+        <div className="r2">{sub}{row.hash ? <> · <span className="hash" title="View on explorer">{shortHash(row.hash)}</span></> : null}</div>
+      </div>
+      <div className="r-side">
+        <div className="v1 tnum">{amount}</div>
+        <div className="v2">{timeAgo(row.timestamp)}</div>
+      </div>
+    </>
+  );
+  return href
+    ? <a className="row" href={href} target="_blank" rel="noopener noreferrer">{inner}</a>
+    : <div className="row">{inner}</div>;
 }

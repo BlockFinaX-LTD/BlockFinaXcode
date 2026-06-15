@@ -662,8 +662,8 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             >
               {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <a className="btn btn-ghost btn-sm" href="#use">Hedge</a>
-            <Link href="/apply" className="btn btn-primary btn-sm">
+            <Link href="/hedge" className="btn btn-ghost btn-sm">Hedge</Link>
+            <Link href="/hedge" className="btn btn-primary btn-sm">
               Trade <span className="arrow">→</span>
             </Link>
           </div>
@@ -734,10 +734,10 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-ctas">
-            <a className="btn btn-ghost" href="#use" onClick={closeMobile}>
+            <Link href="/hedge" className="btn btn-ghost" onClick={closeMobile}>
               Hedge
-            </a>
-            <Link href="/apply" className="btn btn-primary" onClick={closeMobile}>
+            </Link>
+            <Link href="/hedge" className="btn btn-primary" onClick={closeMobile}>
               Trade <span className="arrow">→</span>
             </Link>
           </div>
