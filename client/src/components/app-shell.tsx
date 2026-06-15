@@ -142,8 +142,14 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
     setSearch('');
     setSearchOpen(false);
     setActiveIdx(-1);
-    // Deep-link to the specific pool; the Cover page opens its details sheet.
-    setLocation(m?.id != null ? `/hedge?event=${m.id}` : '/hedge');
+    if (m?.id != null) {
+      // Cross-page (e.g. from Home): the URL drives the Cover page's mount effect.
+      setLocation(`/hedge?event=${m.id}`);
+      // Same-page (already on Cover): the route doesn't remount, so notify it live.
+      window.dispatchEvent(new CustomEvent('bfx:open-market', { detail: { id: m.id, action: null } }));
+    } else {
+      setLocation('/hedge');
+    }
   };
 
   const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {

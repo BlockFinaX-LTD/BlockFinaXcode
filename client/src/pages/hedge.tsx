@@ -122,6 +122,20 @@ function PoolCard({ ev, onAdd, onOpen }: { ev: HedgeEventData; onAdd: () => void
   );
 }
 
+// Blue loading state shown inside a sheet while a deep-linked market's data
+// is still being read from chain.
+function SheetLoading() {
+  return (
+    <div style={{ padding: '20px 0 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+      <Loader2 className="spin" style={{ width: 26, height: 26, color: 'var(--blue)' }} />
+      <div style={{ fontSize: 13, color: 'var(--tx-3)' }}>Loading market…</div>
+      <div className="skel" style={{ height: 54, width: '100%', borderRadius: 13 }} />
+      <div className="skel" style={{ height: 86, width: '100%', borderRadius: 13 }} />
+      <div className="skel" style={{ height: 44, width: '100%', borderRadius: 13 }} />
+    </div>
+  );
+}
+
 export default function Hedge() {
   const { wallet, settings, updateSettings } = useWallet();
   const { toast } = useToast();
@@ -162,6 +176,8 @@ export default function Hedge() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [buyOpen, setBuyOpen] = useState(false);
   const [lpOpen, setLpOpen] = useState(false);
+  // A deep-linked market (from search / share link) whose data is still loading.
+  const [pendingDeep, setPendingDeep] = useState<{ id: number; action: string | null } | null>(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -367,33 +383,64 @@ export default function Hedge() {
     }
   };
 
-  // Deep-link: ?event=&action=, ?q= (from shell search), ?tab= (from home)
+  // Deep-link on mount: ?tab=, ?q= (shell search), ?event=&action= (share /
+  // search click). For ?event we open the relevant sheet IMMEDIATELY in a
+  // loading state — chain reads take a moment, and a modal that popped in later
+  // with no feedback felt broken.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
     const q = params.get('q');
+    const eventId = params.get('event');
+    const action = params.get('action');
     if (tab === 'provide') setView('lp');
     else if (tab === 'mypools') setView('mypools');
     else if (tab === 'mypos') setView('mypos');
     if (q) { setBuySearch(q); setView('buy'); }
+    if (eventId && !Number.isNaN(parseInt(eventId))) {
+      const id = parseInt(eventId);
+      setPendingDeep({ id, action });
+      if (action === 'lp') { setView('lp'); setLpOpen(true); }
+      else if (action === 'buy') { setView('buy'); setBuyOpen(true); }
+      else { setDetailOpen(true); }
+    }
+    if (tab || q || eventId) window.history.replaceState({}, '', window.location.pathname);
   }, []);
 
+  // Live deep-link while already on this page: the shell search fires this so a
+  // click works even though wouter won't remount the route (so the mount effect
+  // above never re-runs). Opens the loading sheet immediately, same as a fresh nav.
   useEffect(() => {
-    if (eventsLoading || events.length === 0) return;
-    const params = new URLSearchParams(window.location.search);
-    const eventId = params.get('event');
-    const action = params.get('action');
-    if (!eventId) return;
-    const id = parseInt(eventId);
-    if (isNaN(id)) return;
-    const event = events.find((e) => e.id === id);
-    if (!event) return;
-    setSelectedEvent(event);
-    if (action === 'buy') { setView('buy'); setBuyOpen(true); }
-    else if (action === 'lp') { setView('lp'); setLpOpen(true); }
-    else { setDetailOpen(true); }
-    window.history.replaceState({}, '', window.location.pathname);
-  }, [eventsLoading, events]);
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent).detail || {};
+      if (typeof d.id !== 'number') return;
+      const action: string | null = d.action ?? null;
+      setPendingDeep({ id: d.id, action });
+      if (action === 'lp') { setView('lp'); setLpOpen(true); }
+      else if (action === 'buy') { setView('buy'); setBuyOpen(true); }
+      else { setDetailOpen(true); }
+      try { window.history.replaceState({}, '', '/hedge'); } catch { /* ignore */ }
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('bfx:open-market', handler as EventListener);
+    return () => window.removeEventListener('bfx:open-market', handler as EventListener);
+  }, []);
+
+  // Resolve the pending deep-linked market once the chain read finishes; this
+  // swaps the loading skeleton in the open sheet for the real data.
+  useEffect(() => {
+    if (!pendingDeep || eventsLoading) return;
+    const ev = events.find((e) => e.id === pendingDeep.id);
+    if (ev) {
+      setSelectedEvent(ev);
+      setPendingDeep(null);
+      fetchEventDetails(ev.id); // background refresh with full on-chain detail
+    } else if (events.length > 0) {
+      setDetailOpen(false); setBuyOpen(false); setLpOpen(false);
+      setPendingDeep(null);
+      toast({ title: 'Market unavailable', description: `Pool #${pendingDeep.id} isn't open on ${selectedNetwork.name}.`, variant: 'destructive' });
+    }
+  }, [pendingDeep, eventsLoading, events]);
 
   const copyShareLink = (eventId: number, action: 'buy' | 'lp') => {
     const url = `${window.location.origin}/hedge?event=${eventId}&action=${action}`;
@@ -1094,7 +1141,7 @@ export default function Hedge() {
       <div className={`sheet${detailOpen ? ' on' : ''}`}>
         <div className="grab" />
         <div className="sheet-h"><h3>Market details</h3><button className="sheet-x" onClick={() => setDetailOpen(false)}><X /></button></div>
-        {selectedEvent && (() => {
+        {selectedEvent ? (() => {
           const ev = selectedEvent; const util = Math.round(ev.utilization * 100);
           return (
             <>
@@ -1119,7 +1166,7 @@ export default function Hedge() {
               </div>
             </>
           );
-        })()}
+        })() : <SheetLoading />}
       </div>
 
       {/* ===== BUY SHEET ===== */}
@@ -1127,7 +1174,7 @@ export default function Hedge() {
       <div className={`sheet${buyOpen ? ' on' : ''}`}>
         <div className="grab" />
         <div className="sheet-h"><h3>Buy cover</h3><button className="sheet-x" onClick={() => setBuyOpen(false)}><X /></button></div>
-        {selectedEvent && (
+        {selectedEvent ? (
           <>
             <div className="sum-pre" style={{ marginBottom: 16 }}>
               <div className="pair-line"><MarketFlag pair={selectedEvent.underlying} /><div><div className="pl-nm">{pairLabel(selectedEvent.underlying)}</div><div className="pl-sub">{selectedEvent.strikeAbove ? 'Rate rises past ' : 'Rate falls below '}{selectedEvent.strike.toLocaleString()} · {expiryLabel(selectedEvent.expiryDate)}</div></div></div>
@@ -1155,7 +1202,7 @@ export default function Hedge() {
               {buyProtectionMutation.isPending ? <><Loader2 className="spin" /> {txStep || 'Buying…'}</> : <><ShieldCheck /> Buy protection</>}
             </button>
           </>
-        )}
+        ) : <SheetLoading />}
       </div>
 
       {/* ===== LP SHEET ===== */}
@@ -1163,7 +1210,7 @@ export default function Hedge() {
       <div className={`sheet${lpOpen ? ' on' : ''}`}>
         <div className="grab" />
         <div className="sheet-h"><h3>Provide liquidity</h3><button className="sheet-x" onClick={() => setLpOpen(false)}><X /></button></div>
-        {selectedEvent && (() => {
+        {selectedEvent ? (() => {
           const amt = parseFloat(depositAmount) || 0;
           const share = amt > 0 ? (amt / (selectedEvent.totalLiquidity + amt)) * 100 : 0;
           return (
@@ -1189,7 +1236,7 @@ export default function Hedge() {
               </button>
             </>
           );
-        })()}
+        })() : <SheetLoading />}
       </div>
 
       {/* ===== PAIR PICKER ===== */}
