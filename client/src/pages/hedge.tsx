@@ -573,6 +573,20 @@ export default function Hedge() {
     onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
   });
 
+  // Creator loyalty earnings (separate from LP premiums) — withdrawable by the
+  // pool creator once the pool has accrued earnings.
+  const withdrawEarningsMutation = useMutation({
+    mutationFn: async (eventId: number) => {
+      const signer = await walletManager.getSigner(selectedNetworkId);
+      if (!signer) throw new Error('Wallet signer not available.');
+      const event = events.find((e) => e.id === eventId);
+      const txHash = await hedgeContract.withdrawCreatorEarnings(signer, eventId, setTxStep);
+      await recordActivity({ actionType: 'claim_premiums', txHash, onChainEventId: eventId, amount: event?.creatorEarnings ?? null, token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT', metadata: { eventName: event?.name, underlying: event?.underlying, kind: 'creator_earnings' } });
+    },
+    onSuccess: async () => { setTxStep(''); await loadEvents(); toast({ title: 'Earnings Claimed', description: 'Creator earnings sent to your wallet' }); },
+    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+  });
+
   // ── Derived for the buy/LP sheets ───────────────────────────────────────
   const premiumCalc = selectedEvent && notional ? parseFloat(notional) * selectedEvent.premiumRate : 0;
   const hedgerFeeRate = feeConfig?.hedgerFeeRate || 0.005;
@@ -666,8 +680,16 @@ export default function Hedge() {
   const myEvents = useMemo(() => events.filter((e) => e.creator.toLowerCase() === myAddr), [events, myAddr]);
   const activeDeposits = useMemo(() => myDeposits.filter((d) => !d.withdrawn), [myDeposits]);
   const activePositions = useMemo(() => myPositions.filter((p) => p.status === 'active'), [myPositions]);
-  const claimablePositions = useMemo(() => myPositions.filter((p) => p.status === 'claimable'), [myPositions]);
-  const historyPositions = useMemo(() => myPositions.filter((p) => p.status !== 'active' && p.status !== 'claimable'), [myPositions]);
+  // A winning position can be reported as either 'claimable' (1) or 'settled_win'
+  // (4) depending on contract version — both are claimable until `claimed`.
+  const claimablePositions = useMemo(
+    () => myPositions.filter((p) => (p.status === 'claimable' || p.status === 'settled_win') && !p.claimed),
+    [myPositions],
+  );
+  const historyPositions = useMemo(() => {
+    const claimSet = new Set(claimablePositions.map((p) => p.id));
+    return myPositions.filter((p) => p.status !== 'active' && !claimSet.has(p.id));
+  }, [myPositions, claimablePositions]);
 
   // ── helpers for opening sheets ──────────────────────────────────────────
   const openDetail = (ev: HedgeEventData) => { setSelectedEvent(ev); setNotional(''); setDepositAmount(''); setDetailOpen(true); };
@@ -1025,6 +1047,7 @@ export default function Hedge() {
                                 </>
                               )}
                               {expired && <button className="btn-sm2 ghost" style={{ marginTop: 12 }} disabled={recoverExpiredMutation.isPending} onClick={() => recoverExpiredMutation.mutate(ev.id)}>{recoverExpiredMutation.isPending ? 'Recovering…' : 'Recover capital'}</button>}
+                              {ev.creatorEarnings > 0.01 && <button className="btn-sm2 primary" style={{ marginTop: 8 }} disabled={withdrawEarningsMutation.isPending} onClick={() => withdrawEarningsMutation.mutate(ev.id)}>{withdrawEarningsMutation.isPending ? 'Claiming…' : `Claim earnings ${fmtMoney(ev.creatorEarnings)}`}</button>}
                             </div>
                           );
                         })}
@@ -1041,14 +1064,16 @@ export default function Hedge() {
                     {activeDeposits.map((d) => {
                       const ev = events.find((e) => e.id === d.eventId);
                       const claimable = d.premiumsEarned - d.premiumsClaimed;
-                      const expiredPool = ev ? ev.expiryDate.getTime() <= Date.now() : false;
+                      // Principal is withdrawable once the pool has settled OR expired —
+                      // not only after the calendar expiry date (a triggered pool settles early).
+                      const canWithdraw = ev ? (ev.status === 'settled' || ev.status === 'expired' || ev.expiryDate.getTime() <= Date.now()) : false;
                       return (
                         <div className="row" key={d.id}>
                           <span className="coin"><CoinSvg token="usdc" /></span>
-                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable > 0.01 ? ` · ${fmtMoney(claimable)} premium ready` : ''}</div></div>
+                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable > 0.01 ? ` · ${fmtMoney(claimable)} premium ready` : ''}{canWithdraw ? ' · ready to withdraw' : ''}</div></div>
                           <div className="r-side" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             {claimable > 0.01 && <button className="btn-sm2 primary" disabled={claimPremiumsMutation.isPending} onClick={() => claimPremiumsMutation.mutate(d.id)}>Claim</button>}
-                            {expiredPool && <button className="btn-sm2 ghost" disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(d.id)}>Withdraw</button>}
+                            {canWithdraw && <button className="btn-sm2 ghost" disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(d.id)}>Withdraw</button>}
                           </div>
                         </div>
                       );

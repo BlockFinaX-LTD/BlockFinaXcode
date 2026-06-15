@@ -338,7 +338,7 @@ class HedgeContractManager {
       'Enter your credential to submit this transaction. The code is valid for 5 minutes.'
     );
 
-    onStep?.('Submitting transaction via Rift...');
+    onStep?.('Submitting transaction...');
     try {
       const { hash } = await signerSendTransaction(
         { chain: chainName, to, data: calldata, value: value.toString() },
