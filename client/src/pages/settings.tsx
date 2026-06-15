@@ -144,7 +144,7 @@ export default function SettingsPage() {
   const handleDeleteWallet = () => {
     deleteWallet();
     setShowDeleteDialog(false);
-    setLocation('/wallet');
+    setLocation('/auth');
   };
 
   if (!isUnlocked) return null;

@@ -127,7 +127,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!walletLoading) {
-      if (!walletExists()) setLocation('/wallet');
+      if (!walletExists()) setLocation('/auth');
       else if (!isUnlocked) setLocation('/auth');
     }
   }, [isUnlocked, walletExists, walletLoading, setLocation]);

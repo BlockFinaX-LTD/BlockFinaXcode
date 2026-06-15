@@ -415,7 +415,17 @@ class HedgeContractManager {
     const map = new Map<number, Date>();
     try {
       const url = `${this.activeExplorerApi}?module=logs&action=getLogs&address=${this.activeDiamond}&fromBlock=0&toBlock=latest&topic0=${topic0}`;
-      const res = await fetch(url);
+      // The block explorer (Blockscout/BscScan) can be slow or rate-limited.
+      // Timestamps are non-essential decoration — never let them block the UI.
+      // Abort after 6s and fall back to an empty map rather than hanging reads.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      let res: Response;
+      try {
+        res = await fetch(url, { signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
       const data = await res.json();
       if (data.result && Array.isArray(data.result)) {
         for (const log of data.result) {

@@ -1,0 +1,14 @@
+/* Small additions on top of the generated app-ui.css (kept separate so the
+   generated file can be regenerated freely). */
+@keyframes bfxspin { to { transform: rotate(360deg); } }
+.bfx-app .spin { animation: bfxspin 1s linear infinite; }
+
+/* live-rate flash colors reuse the design tokens */
+.bfx-app .rate .rv .px { transition: color .25s var(--ease); }
+.bfx-app .rate .rv .px.flash-up { color: var(--green); }
+.bfx-app .rate .rv .px.flash-dn { color: var(--red); }
+
+/* disabled controls inside sheets read as muted, not interactive */
+.bfx-app .select:disabled,
+.bfx-app .btn:disabled,
+.bfx-app .input:disabled { opacity: .55; cursor: not-allowed; }

@@ -26,6 +26,9 @@ const _originalExit = process.exit.bind(process);
 };
 
 const app = express();
+// No ETags — API responses set `Cache-Control: no-store` below; this prevents
+// any 304 Not Modified revalidation across the app.
+app.set('etag', false);
 
 // Security headers — must be applied before any routes
 const isProd = process.env.NODE_ENV === 'production';
@@ -114,6 +117,16 @@ app.use(helmet({
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+
+// API responses must never be cached or conditionally revalidated. Express's
+// default ETag triggers 304 Not Modified round-trips that can serve stale data
+// to the SPA; force fresh 200s for every /api request.
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.removeHeader('ETag');
+  next();
+});
 
 // Request logging middleware for API endpoints
 app.use((req, res, next) => {
