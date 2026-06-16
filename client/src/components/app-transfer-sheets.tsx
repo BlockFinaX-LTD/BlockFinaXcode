@@ -37,6 +37,16 @@ function normalizeChain(raw: string | number | undefined): string {
   if (/^\d+$/.test(s)) return CHAIN_ID_TO_NAME[s] || s;
   return s.toUpperCase();
 }
+// Rift sometimes returns a full explorer URL as the "transactionHash". If so,
+// link to it directly and show just the 0x hash — never prepend a base URL.
+function txDisplay(chain: string, rawHash: string): { href: string; short: string } {
+  if (/^https?:\/\//i.test(rawHash)) {
+    const m = rawHash.match(/0x[a-fA-F0-9]{6,}/);
+    const h = m ? m[0] : rawHash.split('/').pop() || rawHash;
+    return { href: rawHash, short: h.length > 16 ? `${h.slice(0, 10)}…${h.slice(-6)}` : h };
+  }
+  return { href: explorerTx(chain, rawHash), short: `${rawHash.slice(0, 12)}…${rawHash.slice(-8)}` };
+}
 function explorerTx(chain: string, hash: string): string {
   const c = normalizeChain(chain);
   if (c === 'BASE') return `https://basescan.org/tx/${hash}`;
@@ -323,12 +333,15 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
             </div>
             <h3 style={{ fontSize: 17, fontWeight: 600 }}>Sent!</h3>
             <p style={{ fontSize: 12.5, color: 'var(--tx-3)', marginTop: 4 }}>{amount} {token} sent on {chainNames.get(normalizeChain(chain)) || chain}</p>
-            {hash && (
-              <a href={explorerTx(chain, hash)} target="_blank" rel="noopener noreferrer"
-                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--blue)' }}>
-                {hash.slice(0, 12)}…{hash.slice(-8)} <ChevronRight />
-              </a>
-            )}
+            {hash && (() => {
+              const { href, short } = txDisplay(chain, hash);
+              return (
+                <a href={href} target="_blank" rel="noopener noreferrer"
+                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--blue)' }}>
+                  {short} <ChevronRight />
+                </a>
+              );
+            })()}
             <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onClose}>Done</button>
           </div>
         )}

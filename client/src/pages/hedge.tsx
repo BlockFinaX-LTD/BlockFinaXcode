@@ -1,7 +1,7 @@
 /**
  * Cover — rebuilt to the new design (app/Cover.html).
  *
- * Five tabs: Buy cover / Provide liquidity / Create pool / My positions / My
+ * Five tabs: Buy cover / Underwrite / Create pool / My cover / My
  * pools. The first three mirror the design; the last two preserve the existing
  * claim / withdraw / settings functionality in the same visual language.
  *
@@ -70,6 +70,11 @@ function unitOf(pair: string): string {
   return quote || 'USD';
 }
 function fmtMoney(n: number): string { return '$' + Math.round(n).toLocaleString('en-US'); }
+// Cents-precise — use for claimable amounts so a real sub-dollar value never
+// renders as "$0" (which made it look like there was nothing to claim).
+function fmtUsd2(n: number): string { return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// Smallest amount worth a claim/withdraw tx — below this we treat it as nothing.
+const CLAIM_DUST = 0.01;
 function fmtK(n: number): string { return n >= 1000 ? '$' + (n / 1000).toFixed(n % 1000 ? 1 : 0) + 'k' : '$' + Math.round(n); }
 function pairLabel(pair: string): string {
   const cls = getAssetClass(pair);
@@ -117,7 +122,7 @@ function PoolCard({ ev, onAdd, onOpen }: { ev: HedgeEventData; onAdd: () => void
         <div className="pool-stat"><div className="l">Expires in</div><div className="v tnum">{expiryLabel(ev.expiryDate)}</div></div>
       </div>
       <div className="pool-cap"><div className="row1"><span>Capacity · {ev.lpCount} LP · {ev.hedgerCount} hedger{ev.hedgerCount === 1 ? '' : 's'}</span><span>{util}% used</span></div><div className="liqbar"><i style={{ width: `${util}%` }} /></div></div>
-      <button className="btn-sm2 primary" onClick={onAdd}>Add liquidity</button>
+      <button className="btn-sm2 primary" onClick={onAdd}>Underwrite</button>
     </div>
   );
 }
@@ -132,6 +137,40 @@ function SheetLoading() {
       <div className="skel" style={{ height: 54, width: '100%', borderRadius: 13 }} />
       <div className="skel" style={{ height: 86, width: '100%', borderRadius: 13 }} />
       <div className="skel" style={{ height: 44, width: '100%', borderRadius: 13 }} />
+    </div>
+  );
+}
+
+// Shimmer placeholders while chain data loads.
+function PoolCardSkeleton() {
+  return (
+    <div className="pool-card">
+      <div className="pool-top">
+        <div className="skel" style={{ width: 38, height: 38, borderRadius: '50%', flex: '0 0 auto' }} />
+        <div className="pt-nm" style={{ flex: 1 }}>
+          <div className="skel" style={{ height: 14, width: 100, borderRadius: 5 }} />
+          <div className="skel" style={{ height: 10, width: 130, borderRadius: 5, marginTop: 6 }} />
+        </div>
+        <div className="skel" style={{ height: 30, width: 48, borderRadius: 7 }} />
+      </div>
+      <div className="pool-stats">
+        <div className="skel" style={{ height: 42, borderRadius: 9 }} /><div className="skel" style={{ height: 42, borderRadius: 9 }} />
+        <div className="skel" style={{ height: 42, borderRadius: 9 }} /><div className="skel" style={{ height: 42, borderRadius: 9 }} />
+      </div>
+      <div className="skel" style={{ height: 8, borderRadius: 4, margin: '14px 0' }} />
+      <div className="skel" style={{ height: 38, borderRadius: 10 }} />
+    </div>
+  );
+}
+function RowSkeleton() {
+  return (
+    <div className="row">
+      <div className="skel" style={{ width: 38, height: 38, borderRadius: '50%', flex: '0 0 auto' }} />
+      <div className="r-main">
+        <div className="skel" style={{ height: 13, width: 90, borderRadius: 5 }} />
+        <div className="skel" style={{ height: 10, width: 140, borderRadius: 5, marginTop: 6 }} />
+      </div>
+      <div className="r-side"><div className="skel" style={{ height: 32, width: 64, borderRadius: 9 }} /></div>
     </div>
   );
 }
@@ -730,7 +769,7 @@ export default function Hedge() {
   // A winning position can be reported as either 'claimable' (1) or 'settled_win'
   // (4) depending on contract version — both are claimable until `claimed`.
   const claimablePositions = useMemo(
-    () => myPositions.filter((p) => (p.status === 'claimable' || p.status === 'settled_win') && !p.claimed),
+    () => myPositions.filter((p) => (p.status === 'claimable' || p.status === 'settled_win') && !p.claimed && p.payoutAmount >= CLAIM_DUST),
     [myPositions],
   );
   const historyPositions = useMemo(() => {
@@ -781,13 +820,12 @@ export default function Hedge() {
           <h1>Cover marketplace</h1>
           <p>A peer-to-peer market for currency protection. Underwriters lock USDC to sell cover; hedgers buy protection that pays out when a rate touches its strike.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setView('create')}><Plus /> Create pool</button>
       </div>
 
       {/* view tabs */}
       <div className="cv-tabs">
         <button className={view === 'buy' ? 'on' : ''} onClick={() => setView('buy')}><ShieldCheck /> Buy cover</button>
-        <button className={view === 'lp' ? 'on' : ''} onClick={() => setView('lp')}><Layers /> Provide liquidity</button>
+        <button className={view === 'lp' ? 'on' : ''} onClick={() => setView('lp')}><Layers /> Underwrite</button>
         <button className={view === 'create' ? 'on' : ''} onClick={() => setView('create')}><PlusCircle /> Create pool</button>
         <button className={view === 'mypos' ? 'on' : ''} onClick={() => setView('mypos')}><Shield /> My cover</button>
         <button className={view === 'mypools' ? 'on' : ''} onClick={() => setView('mypools')}><Award /> My pools</button>
@@ -819,7 +857,21 @@ export default function Hedge() {
               </div>
               <div>
                 {eventsLoading ? (
-                  <div className="empty">Loading markets…</div>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div className="mkt-row" key={`sk${i}`} style={{ cursor: 'default' }}>
+                      <div className="mkt-mk">
+                        <div className="skel" style={{ width: 36, height: 36, borderRadius: '50%', flex: '0 0 auto' }} />
+                        <div className="mkt-nm" style={{ width: '100%' }}>
+                          <div className="skel" style={{ height: 13, width: 90, borderRadius: 5 }} />
+                          <div className="skel" style={{ height: 10, width: 130, borderRadius: 5, marginTop: 6 }} />
+                        </div>
+                      </div>
+                      <div className="mkt-col"><div className="skel" style={{ height: 22, width: 64, borderRadius: 7 }} /></div>
+                      <div className="mkt-col"><div className="skel" style={{ height: 14, width: 50, borderRadius: 5 }} /></div>
+                      <div className="mkt-col"><div className="skel" style={{ height: 14, width: 40, borderRadius: 5 }} /></div>
+                      <div className="mkt-act"><div className="skel" style={{ height: 38, width: 92, borderRadius: 10 }} /><div className="skel" style={{ height: 38, width: 58, borderRadius: 10 }} /></div>
+                    </div>
+                  ))
                 ) : buyList.length === 0 ? (
                   <div className="empty">No covers match your filters.</div>
                 ) : buyList.map((ev) => (
@@ -829,8 +881,7 @@ export default function Hedge() {
                     <div className="mkt-col"><span className="k">Strike</span><span className="mkt-v">{ev.strike.toLocaleString()}</span></div>
                     <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{(ev.premiumRate * 100).toFixed(1)}%</span></div>
                     <div className="mkt-act">
-                      <button className="btn-sm2 ghost" onClick={(e) => { e.stopPropagation(); openLp(ev); }}>Underwrite</button>
-                      <button className="btn-sm2 primary" onClick={(e) => { e.stopPropagation(); openBuy(ev); }}>Buy</button>
+                      <button className="btn-sm2 primary" onClick={(e) => { e.stopPropagation(); openBuy(ev); }}>Buy cover</button>
                     </div>
                   </div>
                 ))}
@@ -859,7 +910,24 @@ export default function Hedge() {
           </div>
           <div className="pool-grid">
             {eventsLoading ? (
-              <div className="empty">Loading pools…</div>
+              Array.from({ length: 4 }).map((_, i) => (
+                <div className="pool-card" key={`sk${i}`}>
+                  <div className="pool-top">
+                    <div className="skel" style={{ width: 38, height: 38, borderRadius: '50%', flex: '0 0 auto' }} />
+                    <div className="pt-nm" style={{ flex: 1 }}>
+                      <div className="skel" style={{ height: 14, width: 100, borderRadius: 5 }} />
+                      <div className="skel" style={{ height: 10, width: 130, borderRadius: 5, marginTop: 6 }} />
+                    </div>
+                    <div className="skel" style={{ height: 30, width: 48, borderRadius: 7 }} />
+                  </div>
+                  <div className="pool-stats">
+                    <div className="skel" style={{ height: 42, borderRadius: 9 }} /><div className="skel" style={{ height: 42, borderRadius: 9 }} />
+                    <div className="skel" style={{ height: 42, borderRadius: 9 }} /><div className="skel" style={{ height: 42, borderRadius: 9 }} />
+                  </div>
+                  <div className="skel" style={{ height: 8, borderRadius: 4, margin: '14px 0' }} />
+                  <div className="skel" style={{ height: 38, borderRadius: 10 }} />
+                </div>
+              ))
             ) : lpList.length === 0 ? (
               <div className="empty">No open pools right now.</div>
             ) : lpList.map((ev) => (
@@ -983,7 +1051,9 @@ export default function Hedge() {
       {/* ===== MY POSITIONS ===== */}
       {view === 'mypos' && (
         <section className="cv-view on">
-          {myPositions.length === 0 ? (
+          {eventsLoading ? (
+            <div className="pool-grid" style={{ gridTemplateColumns: '1fr' }}>{[0, 1].map((i) => <PoolCardSkeleton key={i} />)}</div>
+          ) : myPositions.length === 0 ? (
             <div className="empty">No cover positions yet. Buy cover to protect your exposure.</div>
           ) : (
             <div className="pool-grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -995,7 +1065,7 @@ export default function Hedge() {
                     <div className="pool-top"><MarketFlag pair={ev?.underlying || ''} /><div className="pt-nm"><div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="b">Position #{p.id} · payout ready</div></div>
                       <div className="pool-apr"><div className="v" style={{ color: 'var(--green)' }}>{fmtMoney(net)}</div><div className="l">Claimable</div></div></div>
                     <div className="brk"><div className="brk-line"><span className="l">Gross payout</span><span className="v">{fmtMoney(gross)}</span></div><div className="brk-line"><span className="l">Claim fee (1%)</span><span className="v">-{fmtMoney(gross * 0.01)}</span></div></div>
-                    <button className="btn-sm2 primary" disabled={claimMutation.isPending} onClick={() => claimMutation.mutate(p.id)}>{claimMutation.isPending ? 'Claiming…' : `Claim ${fmtMoney(net)}`}</button>
+                    <button className="btn-sm2 primary" disabled={claimMutation.isPending} onClick={() => claimMutation.mutate(p.id)}>{claimMutation.isPending ? 'Claiming…' : `Claim ${fmtUsd2(net)}`}</button>
                   </div>
                 );
               })}
@@ -1049,8 +1119,10 @@ export default function Hedge() {
       {/* ===== MY POOLS ===== */}
       {view === 'mypools' && (
         <section className="cv-view on">
-          {myEvents.length === 0 && activeDeposits.length === 0 ? (
-            <div className="empty">You haven't created pools or provided liquidity yet.</div>
+          {eventsLoading ? (
+            <div className="pool-grid">{[0, 1].map((i) => <PoolCardSkeleton key={i} />)}</div>
+          ) : myEvents.length === 0 && activeDeposits.length === 0 ? (
+            <div className="empty">You haven't created pools or underwritten cover yet.</div>
           ) : (
             <>
               {myEvents.length > 0 && (() => {
@@ -1090,11 +1162,13 @@ export default function Hedge() {
                                 <>
                                   <div className="toggle-row"><div><div className="tt">Open to hedgers</div></div><div className={`switch${ev.poolOpen ? ' on' : ''}`} onClick={() => togglePoolMutation.mutate({ eventId: ev.id, poolOpen: !ev.poolOpen })} /></div>
                                   <div className="toggle-row"><div><div className="tt">Allow external LPs</div></div><div className={`switch${ev.allowExternalLp ? ' on' : ''}`} onClick={() => togglePoolMutation.mutate({ eventId: ev.id, allowExternalLp: !ev.allowExternalLp })} /></div>
-                                  <button className="btn-sm2 primary" style={{ marginTop: 12 }} onClick={() => openLp(ev)}>Add liquidity</button>
+                                  <button className="btn-sm2 primary" style={{ marginTop: 12 }} onClick={() => openLp(ev)}>Underwrite</button>
                                 </>
                               )}
                               {expired && <button className="btn-sm2 ghost" style={{ marginTop: 12 }} disabled={recoverExpiredMutation.isPending} onClick={() => recoverExpiredMutation.mutate(ev.id)}>{recoverExpiredMutation.isPending ? 'Recovering…' : 'Recover capital'}</button>}
-                              {ev.creatorEarnings > 0.01 && <button className="btn-sm2 primary" style={{ marginTop: 8 }} disabled={withdrawEarningsMutation.isPending} onClick={() => withdrawEarningsMutation.mutate(ev.id)}>{withdrawEarningsMutation.isPending ? 'Claiming…' : `Claim earnings ${fmtMoney(ev.creatorEarnings)}`}</button>}
+                              {ev.creatorEarnings >= CLAIM_DUST
+                                ? <button className="btn-sm2 primary" style={{ marginTop: 8 }} disabled={withdrawEarningsMutation.isPending} onClick={() => withdrawEarningsMutation.mutate(ev.id)}>{withdrawEarningsMutation.isPending ? 'Claiming…' : `Claim earnings ${fmtUsd2(ev.creatorEarnings)}`}</button>
+                                : (!live2 && <div className="hint" style={{ marginTop: 8 }}>No earnings to claim</div>)}
                             </div>
                           );
                         })}
@@ -1106,7 +1180,7 @@ export default function Hedge() {
 
               {activeDeposits.length > 0 && (
                 <div style={{ marginTop: 18 }}>
-                  <div className="sec-h"><h2>My liquidity</h2></div>
+                  <div className="sec-h"><h2>My underwriting</h2></div>
                   <div className="list">
                     {activeDeposits.map((d) => {
                       const ev = events.find((e) => e.id === d.eventId);
@@ -1120,9 +1194,9 @@ export default function Hedge() {
                       return (
                         <div className="row" key={d.id}>
                           <span className="coin"><CoinSvg token="usdc" /></span>
-                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable > 0.01 ? ` · ${fmtMoney(claimable)} premium ready` : ''}{settledOnChain ? ' · ready to withdraw' : pendingSettlement ? ' · settling…' : ''}</div></div>
+                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable >= CLAIM_DUST ? ` · ${fmtUsd2(claimable)} premium ready` : ''}{settledOnChain ? ' · ready to withdraw' : pendingSettlement ? ' · settling…' : ''}</div></div>
                           <div className="r-side" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {claimable > 0.01 && <button className="btn-sm2 primary" disabled={claimPremiumsMutation.isPending} onClick={() => claimPremiumsMutation.mutate(d.id)}>Claim</button>}
+                            {claimable >= CLAIM_DUST && <button className="btn-sm2 primary" disabled={claimPremiumsMutation.isPending} onClick={() => claimPremiumsMutation.mutate(d.id)}>Claim {fmtUsd2(claimable)}</button>}
                             {settledOnChain && <button className="btn-sm2 ghost" disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(d.id)}>Withdraw</button>}
                           </div>
                         </div>
@@ -1209,7 +1283,7 @@ export default function Hedge() {
       <div className={`sheet-scrim${lpOpen ? ' on' : ''}`} onClick={() => setLpOpen(false)} />
       <div className={`sheet${lpOpen ? ' on' : ''}`}>
         <div className="grab" />
-        <div className="sheet-h"><h3>Provide liquidity</h3><button className="sheet-x" onClick={() => setLpOpen(false)}><X /></button></div>
+        <div className="sheet-h"><h3>Underwrite cover</h3><button className="sheet-x" onClick={() => setLpOpen(false)}><X /></button></div>
         {selectedEvent ? (() => {
           const amt = parseFloat(depositAmount) || 0;
           const share = amt > 0 ? (amt / (selectedEvent.totalLiquidity + amt)) * 100 : 0;
@@ -1232,7 +1306,7 @@ export default function Hedge() {
               </div>
               <p className="hint" style={{ marginBottom: 14 }}>You earn a pro-rata share of every premium paid into this pool. Principal and premiums are withdrawable after settlement.</p>
               <button className="btn btn-primary" disabled={depositMutation.isPending || amt <= 0 || amt > tokenBalanceNum} onClick={guardedDeposit}>
-                {depositMutation.isPending ? <><Loader2 className="spin" /> {txStep || 'Depositing…'}</> : <><Layers /> Add liquidity</>}
+                {depositMutation.isPending ? <><Loader2 className="spin" /> {txStep || 'Depositing…'}</> : <><Layers /> Underwrite</>}
               </button>
             </>
           );

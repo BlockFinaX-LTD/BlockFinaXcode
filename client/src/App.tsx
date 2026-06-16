@@ -27,6 +27,7 @@ import DataRoom from "@/pages/data-room";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import BlogPage from "@/pages/blog";
+import PredictPage from "@/pages/predict";
 import NotFound from "@/pages/not-found";
 
 // Auth
@@ -157,6 +158,7 @@ function Router() {
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPage} />
+      <Route path="/predict" component={PredictPage} />
       <Route path="/apply" component={ApplyPage} />
       <Route path="/docs/request" component={DocsRequestPage} />
       <Route path="/liquidity-provider" component={LiquidityProviderPage} />

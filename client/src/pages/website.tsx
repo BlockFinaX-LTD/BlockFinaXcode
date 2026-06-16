@@ -438,19 +438,19 @@ function TradeViz() {
             className={`trd-side${side === 'long' ? ' is-active' : ''}`}
             onClick={() => setSide('long')}
           >
-            Long vol
+            Yes
           </button>
           <button
             type="button"
             className={`trd-side${side === 'short' ? ' is-active' : ''}`}
             onClick={() => setSide('short')}
           >
-            Short vol
+            No
           </button>
         </div>
         <canvas ref={tapeRef} className="trd-tape" aria-hidden="true" />
         <div className="trd-foot">
-          <span>Implied vol</span>
+          <span>Probability</span>
           <span ref={ivRef} className="trd-iv">24.8%</span>
         </div>
       </div>
@@ -662,9 +662,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             >
               {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <Link href="/hedge" className="btn btn-ghost btn-sm">Hedge</Link>
+            <Link href="/predict" className="btn btn-ghost btn-sm">Predict</Link>
             <Link href="/hedge" className="btn btn-primary btn-sm">
-              Trade <span className="arrow">→</span>
+              Launch App <span className="arrow">→</span>
             </Link>
           </div>
           <button
@@ -734,11 +734,11 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-ctas">
-            <Link href="/hedge" className="btn btn-ghost" onClick={closeMobile}>
-              Hedge
+            <Link href="/predict" className="btn btn-ghost" onClick={closeMobile}>
+              Predict
             </Link>
             <Link href="/hedge" className="btn btn-primary" onClick={closeMobile}>
-              Trade <span className="arrow">→</span>
+              Launch App <span className="arrow">→</span>
             </Link>
           </div>
         </div>
@@ -766,10 +766,10 @@ function Hero() {
               The market to discover, trade and hedge FX risk in emerging markets.
             </p>
             <div className="hero-ctas">
-              <Link href="/apply" className="btn btn-primary">
-                Hedge <span className="arrow">→</span>
+              <Link href="/hedge" className="btn btn-primary">
+                Launch App <span className="arrow">→</span>
               </Link>
-              <a href="#use" className="btn btn-ghost">Trade</a>
+              <Link href="/predict" className="btn btn-ghost">Predict</Link>
             </div>
           </div>
           <div className="hero-visual">
@@ -789,7 +789,7 @@ function UseSection({ theme }: { theme: Theme }) {
       <div className="wrap">
         <div className="assets-head">
           <h2>Three ways to use it.</h2>
-          <p>Hedge FX risk, earn premium on stablecoins, or trade either side.</p>
+          <p>Hedge FX risk, earn premium on stablecoins, or predict where it's headed.</p>
         </div>
         <div className="feats">
           <article className="feat t-blue">
@@ -798,7 +798,7 @@ function UseSection({ theme }: { theme: Theme }) {
               <div className="feat-name">Hedge <span className="feat-pill">PROTECT</span></div>
               <p>Hedge FX risk to protect your capital.</p>
               <div className="feat-actions">
-                <Link href="/hedger" className="feat-btn primary">
+                <Link href="/hedge" className="feat-btn primary">
                   Hedge <span className="arrow">→</span>
                 </Link>
                 <Link href="/docs/request" className="feat-btn ghost">Learn more</Link>
@@ -812,7 +812,7 @@ function UseSection({ theme }: { theme: Theme }) {
               <div className="feat-name">Yield <span className="feat-pill">EARN</span></div>
               <p>Earn premiums on idle stablecoins.</p>
               <div className="feat-actions">
-                <Link href="/liquidity-provider" className="feat-btn primary">
+                <Link href="/hedge" className="feat-btn primary">
                   Yield <span className="arrow">→</span>
                 </Link>
                 <Link href="/docs/request" className="feat-btn ghost">Learn more</Link>
@@ -823,13 +823,13 @@ function UseSection({ theme }: { theme: Theme }) {
           <article className="feat t-indigo">
             <TradeViz />
             <div className="feat-body">
-              <div className="feat-name">Trade <span className="feat-pill">VOL</span></div>
-              <p>Go long or short FX risk.</p>
+              <div className="feat-name">Predict <span className="feat-pill">SOON</span></div>
+              <p>Buy Yes or No shares.</p>
               <div className="feat-actions">
-                <Link href="/apply" className="feat-btn primary">
-                  Trade <span className="arrow">→</span>
+                <Link href="/predict" className="feat-btn primary">
+                  Predict <span className="arrow">→</span>
                 </Link>
-                <Link href="/docs/request" className="feat-btn ghost">Learn more</Link>
+                <Link href="/predict" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>
@@ -870,7 +870,7 @@ function MarketsSection() {
               <text className="lbl" x="245" y="178">Rate →</text>
             </svg>
             <p>Buy cover and get paid out when the rate moves against you.</p>
-            <Link href="/hedger" className="acard-cta">
+            <Link href="/hedge" className="acard-cta">
               Buy cover <span className="arrow">→</span>
             </Link>
           </article>
@@ -894,13 +894,13 @@ function MarketsSection() {
               <text className="lbl" x="245" y="178">Rate →</text>
             </svg>
             <p>Set a strike and expiry, underwrite the risk, and earn the premium.</p>
-            <Link href="/liquidity-provider" className="acard-cta">
+            <Link href="/hedge" className="acard-cta">
               Underwrite <span className="arrow">→</span>
             </Link>
           </article>
 
           <article className="acard t-indigo">
-            <h3>Bet on either side</h3>
+            <h3>Predict the move</h3>
             <svg className="payoff" viewBox="0 0 300 190" fill="none" aria-hidden="true">
               <line className="grid" x1="88" y1="22" x2="88" y2="158" />
               <line className="grid" x1="244" y1="22" x2="244" y2="158" />
@@ -913,13 +913,13 @@ function MarketsSection() {
               <path className="curve-faint" d="M30,150 L152,46 L275,150" />
               <path className="curve" d="M30,46 L152,150 L275,46" />
               <circle className="spot" r="3" cx="152" cy="150" />
-              <text className="lbl t" x="34" y="40">Long vol</text>
-              <text className="lbl" x="34" y="162">Short vol</text>
-              <text className="lbl" x="138" y="184">ATM</text>
+              <text className="lbl t" x="34" y="40">Yes</text>
+              <text className="lbl" x="34" y="162">No</text>
+              <text className="lbl" x="138" y="184">Strike</text>
             </svg>
-            <p>Go long or short volatility and profit from the move either way.</p>
-            <Link href="/apply" className="acard-cta">
-              Trade volatility <span className="arrow">→</span>
+            <p>Buy Yes or No shares on where a rate is headed.</p>
+            <Link href="/predict" className="acard-cta">
+              Predict <span className="arrow">→</span>
             </Link>
           </article>
 
@@ -952,14 +952,14 @@ function TailCTA() {
   return (
     <section className="tail">
       <div className="wrap">
-        <h2>Trade and hedge FX risk.</h2>
-        <p>Buy protection against FX risk, trade the risk.</p>
+        <h2>Hedge FX risk, or predict it.</h2>
+        <p>Buy protection against currency moves, or predict where a rate is headed.</p>
         <div className="hero-ctas">
-          <Link href="/hedger" className="btn btn-primary">
-            Hedge <span className="arrow">→</span>
+          <Link href="/hedge" className="btn btn-primary">
+            Launch App <span className="arrow">→</span>
           </Link>
-          <Link href="/apply" className="btn btn-ghost">
-            Trade
+          <Link href="/predict" className="btn btn-ghost">
+            Predict
           </Link>
         </div>
       </div>
@@ -980,7 +980,7 @@ function Footer() {
               BlockFinaX
             </Link>
             <p>
-              Markets for FX risk. Trade it, underwrite it to earn yield, or
+              Markets for FX risk. Predict it, underwrite it to earn yield, or
               hedge against it to protect your money.
             </p>
           </div>
