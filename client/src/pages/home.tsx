@@ -23,7 +23,7 @@ import { FlagSvg, CommoditySvg, CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChai
 import logoPath from '@/assets/logo.png';
 import {
   Eye, EyeOff, ArrowUp, ArrowDown, Shield, TrendingUp, Gift, ArrowRight,
-  ArrowDownLeft, ArrowUpRight, Plus,
+  ArrowDownLeft, ArrowUpRight, Plus, X, ExternalLink, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 type FXRate = { pair: string; rate: number; change24h?: number };
@@ -58,6 +58,33 @@ function shortHash(h?: string) {
   return h.length > 12 ? `${h.slice(0, 6)}…${h.slice(-4)}` : h;
 }
 
+// Shimmer placeholder for a `.list` / `.row` while data loads.
+function RowSkeleton() {
+  return (
+    <div className="row">
+      <div className="skel" style={{ width: 38, height: 38, borderRadius: '50%', flex: '0 0 auto' }} />
+      <div className="r-main">
+        <div className="skel" style={{ height: 13, width: 80, borderRadius: 5 }} />
+        <div className="skel" style={{ height: 10, width: 130, borderRadius: 5, marginTop: 6 }} />
+      </div>
+      <div className="r-side"><div className="skel" style={{ height: 14, width: 56, borderRadius: 6 }} /></div>
+    </div>
+  );
+}
+
+// Rift sometimes returns a tx reference that is ALREADY a full explorer URL.
+// In that case link to it as-is (don't prepend a base) and show just the 0x hash;
+// otherwise build the explorer URL from the bare hash.
+function txLink(chain: string, rawHash?: string): { href: string; short: string } {
+  if (!rawHash) return { href: '', short: '' };
+  if (/^https?:\/\//i.test(rawHash)) {
+    const m = rawHash.match(/0x[a-fA-F0-9]{6,}/);
+    const hash = m ? m[0] : rawHash.split('/').pop() || rawHash;
+    return { href: rawHash, short: shortHash(hash) };
+  }
+  return { href: explorerUrl(chain, rawHash), short: shortHash(rawHash) };
+}
+
 export default function HomePage() {
   const [, setLocation] = useLocation();
   const { isUnlocked, walletExists, isLoading, wallet } = useWallet();
@@ -66,6 +93,8 @@ export default function HomePage() {
   const [rcvOpen, setRcvOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [rateGroup, setRateGroup] = useState<'fx' | 'cmd'>('fx');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
 
   // ── Auth gate ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -169,8 +198,10 @@ export default function HomePage() {
   });
 
   // ── Activity ───────────────────────────────────────────────────────────
-  const { rows: activityRows, loading: activityLoading } = useUnifiedActivity(wallet?.address, 12);
-  const recentActivity = useMemo(() => activityRows.slice(0, 6), [activityRows]);
+  const { rows: activityRows, loading: activityLoading } = useUnifiedActivity(wallet?.address, 50);
+  const recentActivity = useMemo(() => activityRows.slice(0, 5), [activityRows]);
+  const HISTORY_PAGE_SIZE = 8;
+  const historyPages = Math.max(1, Math.ceil(activityRows.length / HISTORY_PAGE_SIZE));
 
   // ── Referral (refer banner link target) ────────────────────────────────
   const { data: referralCode } = useQuery<{ code: string }>({
@@ -284,7 +315,7 @@ export default function HomePage() {
             </div>
             <div className="list">
               {hedgeLoading ? (
-                <div className="row"><div className="r-main"><div className="r1">Loading…</div></div></div>
+                <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>
               ) : activeDeposits.length === 0 ? (
                 <div className="row" style={{ cursor: 'pointer' }} onClick={() => setLocation('/hedge?tab=provide')}>
                   <span className="actico"><Plus /></span>
@@ -312,11 +343,11 @@ export default function HomePage() {
           <div className="sec">
             <div className="sec-h">
               <h2>Recent activity</h2>
-              <a className="more" onClick={() => setLocation('/hedge')}>History <ArrowRight /></a>
+              <a className="more" onClick={() => { setHistoryPage(0); setHistoryOpen(true); }} style={{ cursor: 'pointer' }}>History <ArrowRight /></a>
             </div>
             <div className="list act">
               {activityLoading && recentActivity.length === 0 ? (
-                <div className="row"><div className="r-main"><div className="r1">Loading…</div></div></div>
+                <>{[0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}</>
               ) : recentActivity.length === 0 ? (
                 <div className="row">
                   <span className="actico"><TrendingUp /></span>
@@ -336,13 +367,46 @@ export default function HomePage() {
 
       <AppSendSheet open={sendOpen} onClose={() => setSendOpen(false)} />
       <AppReceiveSheet open={rcvOpen} onClose={() => setRcvOpen(false)} />
+
+      {/* ===== FULL ACTIVITY HISTORY (paginated) ===== */}
+      <div className={`sheet-scrim${historyOpen ? ' on' : ''}`} onClick={() => setHistoryOpen(false)} />
+      <div className={`sheet${historyOpen ? ' on' : ''}`} role="dialog" aria-modal="true">
+        <div className="grab" />
+        <div className="sheet-h"><h3>Activity history</h3><button className="sheet-x" onClick={() => setHistoryOpen(false)}><X /></button></div>
+        {activityRows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--tx-3)', fontSize: 13 }}>
+            {activityLoading ? 'Loading…' : 'No activity yet'}
+          </div>
+        ) : (
+          <>
+            <div className="list act" style={{ marginBottom: 14 }}>
+              {activityRows
+                .slice(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE)
+                .map((row, i) => <ActivityItem key={`${row.hash}-${historyPage}-${i}`} row={row} />)}
+            </div>
+            {historyPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <button className="btn btn-ghost" style={{ flex: 1, height: 42 }} disabled={historyPage === 0} onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}>
+                  <ChevronLeft /> Prev
+                </button>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--tx-3)', whiteSpace: 'nowrap' }}>
+                  {historyPage + 1} / {historyPages}
+                </span>
+                <button className="btn btn-ghost" style={{ flex: 1, height: 42 }} disabled={historyPage >= historyPages - 1} onClick={() => setHistoryPage((p) => Math.min(historyPages - 1, p + 1))}>
+                  Next <ChevronRight />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </AppShell>
   );
 }
 
 // ── Activity row in the design's `.act` style ────────────────────────────
 function ActivityItem({ row }: { row: ActivityRow }) {
-  const href = explorerUrl(row.chain, row.hash);
+  const { href, short } = txLink(row.chain, row.hash);
   let icon = <TrendingUp />;
   let title = 'Activity';
   let sub = '';
@@ -370,7 +434,7 @@ function ActivityItem({ row }: { row: ActivityRow }) {
       <span className="actico">{icon}</span>
       <div className="r-main">
         <div className="r1">{title}</div>
-        <div className="r2">{sub}{row.hash ? <> · <span className="hash" title="View on explorer">{shortHash(row.hash)}</span></> : null}</div>
+        <div className="r2">{sub}{short ? <> · <span className="hash" title="View on explorer">{short}</span></> : null}</div>
       </div>
       <div className="r-side">
         <div className="v1 tnum">{amount}</div>

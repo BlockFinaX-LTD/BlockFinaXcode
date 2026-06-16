@@ -6,6 +6,7 @@
 /* skeleton shimmer (blue-tinted) for loading sheets */
 @keyframes bfxshimmer { 100% { background-position: -200% 0; } }
 .bfx-app .skel {
+  display: block;
   background: linear-gradient(90deg,
     var(--card-2) 0%,
     color-mix(in oklab, var(--blue) 14%, var(--card-2)) 50%,

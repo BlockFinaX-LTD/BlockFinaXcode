@@ -18,7 +18,8 @@ import { Link, useLocation } from 'wouter';
 import { useRift } from '@rift-finance/react';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Shield, TrendingUp, Search, Bell, Moon, Sun } from 'lucide-react';
-import logoPath from '@/assets/logo.png';
+// Same brand mark as the landing-page nav (served from /public).
+const logoPath = '/favicon.png';
 import { FlagSvg, CommoditySvg, KNOWN_FLAGS } from '@/components/app-glyphs';
 import { useOpenMarkets } from '@/hooks/use-open-markets';
 import '@/styles/app-ui.css';
