@@ -34,6 +34,15 @@ export default function Auth() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const didAutoOpen = useRef(false);
 
+  // Capture a referral code carried in the URL (/auth?ref=BFX-XXXXXX) so it can
+  // be attributed after the Rift signup completes (see RiftPostSigninSync).
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref) localStorage.setItem('bfx_ref', ref.trim());
+    } catch { /* ignore */ }
+  }, []);
+
   // Auto-open the widget once on mount. This kicks off the iframe fetch
   // immediately so the user lands on /auth and the modal appears as fast
   // as Rift can serve it — no extra click needed.

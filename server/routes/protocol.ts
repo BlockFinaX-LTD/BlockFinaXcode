@@ -7,6 +7,7 @@ import { requireAdmin } from "../middleware/admin-auth";
 import { requireRiftUser } from "../middleware/rift-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
 import { syncChainEvents } from "../chain-sync";
+import { verifyHedgeTx, VERIFIABLE_ACTIONS } from "../lib/chain-verify";
 
 // ── Integer financial math helpers ───────────────────────────────────────────
 function toMicro(s: string | number): bigint {
@@ -818,17 +819,18 @@ export async function registerProtocolRoutes(app: Express) {
     "reward_payout",
   ]);
 
-  app.post("/api/hedge/activity", async (req, res) => {
+  app.post("/api/hedge/activity", requireRiftUser, async (req, res) => {
     try {
       const {
-        walletAddress, chainId, txHash, actionType,
+        chainId, txHash, actionType,
         eventId, onChainEventId, positionId, depositId,
-        amount, token, metadata, status,
+        amount, token, metadata,
       } = req.body ?? {};
 
-      if (!walletAddress || typeof walletAddress !== "string") {
-        return res.status(400).json({ message: "walletAddress is required" });
-      }
+      // Wallet comes from the verified Rift token — NEVER the body — so a caller
+      // can't log activity for someone else's address.
+      const walletAddress = req.riftUser!.address;
+
       if (!Number.isFinite(chainId)) {
         return res.status(400).json({ message: "chainId is required" });
       }
@@ -837,6 +839,18 @@ export async function registerProtocolRoutes(app: Express) {
       }
       if (!ACTION_TYPES.has(actionType)) {
         return res.status(400).json({ message: `actionType must be one of: ${Array.from(ACTION_TYPES).join(", ")}` });
+      }
+
+      // Reward-bearing actions (buy_protection / lp_deposit / create_event) are
+      // RPC-verified before we mark them 'verified' — the only status that grants
+      // task points. Other actions are logged 'confirmed' for the feed only.
+      let status = "confirmed";
+      if (VERIFIABLE_ACTIONS.has(actionType)) {
+        const v = await verifyHedgeTx(chainId, txHash, walletAddress, actionType);
+        if (!v.ok) {
+          return res.status(400).json({ message: `On-chain verification failed: ${v.reason}` });
+        }
+        status = "verified";
       }
 
       const row = await storage.recordHedgeActivity({
@@ -851,8 +865,17 @@ export async function registerProtocolRoutes(app: Express) {
         amount: amount != null ? String(amount) : null,
         token: token ?? null,
         metadata: metadata != null ? (typeof metadata === "string" ? metadata : JSON.stringify(metadata)) : null,
-        status: status ?? "confirmed",
+        status,
       });
+
+      // First verified qualifying action settles a pending referral (awards both
+      // the referrer and the referee). Fire-and-forget — never blocks the response.
+      if (status === "verified") {
+        storage.completePendingReferral(walletAddress)
+          .then((r) => { if (r) console.log(`[referral] completed for ${walletAddress} → +${r.points} to ${r.referrer}`); })
+          .catch((e) => console.warn("[referral] complete failed:", e?.message));
+      }
+
       res.json(row);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to record activity" });

@@ -128,10 +128,16 @@ export function registerCommunityRoutes(app: Express) {
       // verifier='manual'   — require an evidence submission; points
       //                       awarded only when an admin approves.
       // otherwise           — trust the client (legacy default).
-      let reviewStatus: 'auto' | 'pending' = 'auto';
+      // Credit immediately ONLY when proof is in hand: an on-chain-verified
+      // action, or a task EXPLICITLY marked verifier='auto' (free tasks, e.g.
+      // daily check-in). Anything else — including a task with no verifier set —
+      // goes to admin review, so a misconfigured task can never silently
+      // auto-award points.
+      let reviewStatus: 'auto' | 'pending';
+      const verifier = (task.verifier || '').trim();
 
-      if (task.verifier?.startsWith('onchain:')) {
-        const requiredAction = task.verifier.slice('onchain:'.length);
+      if (verifier.startsWith('onchain:')) {
+        const requiredAction = verifier.slice('onchain:'.length);
         const did = await storage.hasHedgeAction(addr, requiredAction);
         if (!did) {
           return res.status(400).json({
@@ -139,7 +145,11 @@ export function registerCommunityRoutes(app: Express) {
             hint: requiredAction,
           });
         }
-      } else if (task.verifier === 'manual') {
+        reviewStatus = 'auto';
+      } else if (verifier === 'auto') {
+        reviewStatus = 'auto';
+      } else {
+        // 'manual' OR unset/unknown → require evidence + admin approval.
         const url   = typeof evidenceUrl   === 'string' ? evidenceUrl.trim()   : '';
         const image = typeof evidenceImage === 'string' ? evidenceImage.trim() : '';
         const text  = typeof evidenceText  === 'string' ? evidenceText.trim()  : '';
@@ -183,7 +193,7 @@ export function registerCommunityRoutes(app: Express) {
         }
       }
 
-      await db.insert(userTaskCompletions).values({
+      const completionValues = {
         walletAddress: addr,
         taskId: task.id,
         pointsEarned: task.points,
@@ -191,33 +201,38 @@ export function registerCommunityRoutes(app: Express) {
         evidenceUrl: typeof evidenceUrl === 'string' ? evidenceUrl.trim() || null : null,
         evidenceImage: typeof evidenceImage === 'string' ? evidenceImage.trim() || null : null,
         evidenceText: typeof evidenceText === 'string' ? evidenceText.trim() || null : null,
-      });
+      };
 
-      // Only credit points immediately for auto-approved completions.
-      // Manual submissions credit when the admin approves them.
+      // Only auto-approved completions credit immediately. Manual submissions
+      // credit when an admin approves them.
       if (reviewStatus === 'auto') {
-        const existingPoints = await db.select().from(userPoints).where(eq(userPoints.walletAddress, addr));
-        if (existingPoints.length === 0) {
-          await db.insert(userPoints).values({ walletAddress: addr, totalPoints: task.points, referralPoints: 0 });
-        } else {
-          await db.update(userPoints)
-            .set({ totalPoints: sql`${userPoints.totalPoints} + ${task.points}`, lastUpdated: new Date() })
-            .where(eq(userPoints.walletAddress, addr));
-        }
-
-        await db.insert(pointTransactions).values({
-          walletAddress: addr,
-          type: "task_reward",
-          points: task.points,
-          description: `Completed: ${task.title}`,
-          referenceId: `task_${task.id}`,
+        // Completion + balance + ledger commit together — a mid-write crash can
+        // never leave a completion recorded but unpaid, or vice-versa.
+        await db.transaction(async (tx) => {
+          await tx.insert(userTaskCompletions).values(completionValues);
+          const existingPoints = await tx.select().from(userPoints).where(eq(userPoints.walletAddress, addr));
+          if (existingPoints.length === 0) {
+            await tx.insert(userPoints).values({ walletAddress: addr, totalPoints: task.points, referralPoints: 0 });
+          } else {
+            await tx.update(userPoints)
+              .set({ totalPoints: sql`${userPoints.totalPoints} + ${task.points}`, lastUpdated: new Date() })
+              .where(eq(userPoints.walletAddress, addr));
+          }
+          await tx.insert(pointTransactions).values({
+            walletAddress: addr,
+            type: "task_reward",
+            points: task.points,
+            description: `Completed: ${task.title}`,
+            referenceId: `task_${task.id}`,
+          });
         });
 
         const [updatedPoints] = await db.select().from(userPoints).where(eq(userPoints.walletAddress, addr));
         return res.json({ success: true, pointsEarned: task.points, totalPoints: updatedPoints?.totalPoints || task.points });
       }
 
-      // Manual: queued for review
+      // Manual / unverified: record the submission for review (no points yet).
+      await db.insert(userTaskCompletions).values(completionValues);
       res.json({ success: true, status: 'pending_review', pointsEarned: 0, message: 'Submitted for admin review. You’ll be notified once approved.' });
     } catch (error) {
       console.error('[tasks/complete]', error);
@@ -253,6 +268,32 @@ export function registerCommunityRoutes(app: Express) {
       res.json(refs);
     } catch (error) {
       res.status(500).json({ error: "Failed to get referrals" });
+    }
+  });
+
+  // Points balance for a wallet (totalPoints + referralPoints). The Earn page
+  // reads this for the hero + referral-points stat.
+  app.get("/api/points/:address", async (req, res) => {
+    try {
+      const addr = req.params.address.toLowerCase();
+      const [row] = await db.select().from(userPoints).where(eq(userPoints.walletAddress, addr));
+      res.json(row ?? { walletAddress: addr, totalPoints: 0, referralPoints: 0 });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get points" });
+    }
+  });
+
+  // Point ledger for a wallet (task rewards, referral rewards, payouts).
+  app.get("/api/points/transactions/:address", async (req, res) => {
+    try {
+      const addr = req.params.address.toLowerCase();
+      const rows = await db.select().from(pointTransactions)
+        .where(eq(pointTransactions.walletAddress, addr))
+        .orderBy(desc(pointTransactions.createdAt))
+        .limit(100);
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get point transactions" });
     }
   });
 
