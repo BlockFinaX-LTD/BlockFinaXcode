@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { db } from "../db";
 import { storage } from "../storage";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { dailyTasks, userTaskCompletions, termsAcceptances, authSessions } from "../../shared/schema";
-import { userPoints, pointTransactions } from "../../shared/referral-schema";
+import { dailyTasks, userTaskCompletions, termsAcceptances, authSessions, hedgeActivity } from "../../shared/schema";
+import { userPoints, pointTransactions, referrals, referralCodes } from "../../shared/referral-schema";
 import { requireRiftUser } from "../middleware/rift-auth";
 import { v2 as cloudinary } from "cloudinary";
 
@@ -294,6 +294,79 @@ export function registerCommunityRoutes(app: Express) {
       res.json(rows);
     } catch (error) {
       res.status(500).json({ error: "Failed to get point transactions" });
+    }
+  });
+
+  /**
+   * Unauthed user-state diagnostic. Anyone can hit this with a wallet address
+   * to see why their referrals look wrong or why an on-chain task verifier
+   * is blocking them.
+   *
+   *   GET /api/diagnose/user?wallet=0x…
+   *
+   * Returns only data that is already either on-chain (hedge_activity) or
+   * by-design public (referral codes are designed to be shared, points are
+   * shown on the user's own dashboard). No emails, no addresses besides the
+   * one in the URL, no admin internals.
+   */
+  app.get("/api/diagnose/user", async (req, res) => {
+    try {
+      const raw = String(req.query.wallet || "").trim().toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(raw)) {
+        return res.status(400).json({ error: "wallet must be 0x followed by 40 hex chars" });
+      }
+
+      const [pointsRow] = await db.select().from(userPoints).where(eq(userPoints.walletAddress, raw));
+      const codes = await db.select().from(referralCodes).where(eq(referralCodes.referrerWalletAddress, raw));
+      const refsAsReferrer = await db.select().from(referrals)
+        .where(eq(referrals.referrerWalletAddress, raw))
+        .orderBy(desc(referrals.createdAt));
+      const activity = await db.select().from(hedgeActivity)
+        .where(eq(hedgeActivity.walletAddress, raw))
+        .orderBy(desc(hedgeActivity.createdAt))
+        .limit(20);
+      const taskCompletions = await db.select().from(userTaskCompletions)
+        .where(eq(userTaskCompletions.walletAddress, raw))
+        .orderBy(desc(userTaskCompletions.completedAt))
+        .limit(20);
+
+      // Roll the activity feed up by (actionType, status) so the answer to
+      // "do I have a verified buy_protection?" is a one-line scan.
+      const activitySummary: Record<string, Record<string, number>> = {};
+      for (const a of activity) {
+        const k = a.actionType;
+        if (!activitySummary[k]) activitySummary[k] = {};
+        activitySummary[k][a.status] = (activitySummary[k][a.status] || 0) + 1;
+      }
+
+      res.json({
+        wallet: raw,
+        points: pointsRow ?? { walletAddress: raw, totalPoints: 0, referralPoints: 0 },
+        referralCodes: codes.map(c => ({
+          code: c.code, currentUses: c.currentUses, maxUses: c.maxUses, isActive: c.isActive,
+        })),
+        referrals: {
+          count: refsAsReferrer.length,
+          rows: refsAsReferrer.map(r => ({
+            referee: r.refereeWalletAddress, status: r.status,
+            createdAt: r.createdAt, completedAt: r.completedAt,
+          })),
+        },
+        hedgeActivity: {
+          summary: activitySummary,
+          recent: activity.map(a => ({
+            chainId: a.chainId, actionType: a.actionType, status: a.status,
+            txHash: a.txHash, createdAt: a.createdAt,
+          })),
+        },
+        taskCompletions: taskCompletions.map(t => ({
+          taskId: t.taskId, reviewStatus: t.reviewStatus, pointsEarned: t.pointsEarned,
+          completedAt: t.completedAt, paidAt: t.paidAt,
+        })),
+      });
+    } catch (e: any) {
+      console.error("[diagnose/user]", e?.message || e);
+      res.status(500).json({ error: "Failed to compute diagnostic" });
     }
   });
 
