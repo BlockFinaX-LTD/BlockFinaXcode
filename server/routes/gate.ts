@@ -21,6 +21,7 @@ import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { db } from '../db';
+import { storage } from '../storage';
 import { accessRequests, accessGrants, docsTokens, signinTokens, wallets } from '@shared/schema';
 import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
 import { mintInvestorSession } from './investor';
@@ -452,6 +453,19 @@ export function registerGateRoutes(app: Express) {
         })
         .onConflictDoNothing({ target: wallets.address })
         .returning({ id: wallets.id });
+
+      // Referral attribution: only for a genuinely NEW wallet, and only via a
+      // code carried from /auth?ref=CODE. storage enforces no-self-referral,
+      // code caps, and one-referrer-per-referee. Pending until the referee
+      // qualifies on-chain. Fire-and-forget — never blocks registration.
+      if (row) {
+        const referralCode = String(req.body?.referralCode || '').trim();
+        if (referralCode) {
+          storage.recordReferralSignup(address.toLowerCase(), referralCode)
+            .then((ok) => { if (ok) console.log(`[referral] pending: ${address} via ${referralCode}`); })
+            .catch((e) => console.warn('[referral] signup record failed:', e?.message));
+        }
+      }
       return res.json({ status: row ? 'created' : 'already_registered', address });
     } catch (err: any) {
       console.error('[rift/register] wallet upsert failed:', err?.message);

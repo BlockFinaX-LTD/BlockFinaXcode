@@ -122,11 +122,17 @@ function RiftPostSigninSync() {
       // Rift account. The server upserts by address so repeat sign-ins on
       // the same address are idempotent no-ops.
       if (user.accessToken) {
+        // Carry the referral code captured at /auth?ref=CODE (if any). The
+        // server only attributes it for a genuinely new wallet, then clears it.
+        let referralCode: string | null = null;
+        try { referralCode = localStorage.getItem('bfx_ref'); } catch { /* ignore */ }
         fetch('/api/rift/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken: user.accessToken }),
-        }).catch(() => {});
+          body: JSON.stringify({ accessToken: user.accessToken, ...(referralCode ? { referralCode } : {}) }),
+        })
+          .then(() => { try { localStorage.removeItem('bfx_ref'); } catch { /* ignore */ } })
+          .catch(() => {});
       }
     } else if (!isAuthenticated) {
       clearLocalRiftState();

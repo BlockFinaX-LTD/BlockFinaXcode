@@ -61,6 +61,7 @@ export default function TasksPage() {
   const [cashOpen, setCashOpen] = useState(false);
   const [cashToken, setCashToken] = useState<'USDC' | 'USDT'>('USDC');
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     if (!walletLoading && !walletExists()) setLocation('/auth');
@@ -203,6 +204,26 @@ export default function TasksPage() {
     });
   };
 
+  // Shareable link with the code in the query string. Clicking it lands a new
+  // user on /auth?ref=CODE, which captures + attributes the referral at signup.
+  const referralLink = referralCode?.code ? `${window.location.origin}/auth?ref=${referralCode.code}` : '';
+  const copyLink = () => {
+    if (!referralLink) return;
+    navigator.clipboard.writeText(referralLink).then(() => {
+      setCopiedLink(true);
+      toast({ title: 'Link copied', description: 'Share it — you both earn points.' });
+      setTimeout(() => setCopiedLink(false), 1400);
+    });
+  };
+  const shareLink = async () => {
+    if (!referralLink) return;
+    const text = `Join me on BlockFinaX — cover and cash out in stablecoins. Use my link and we both earn points: ${referralLink}`;
+    if ((navigator as any).share) {
+      try { await (navigator as any).share({ title: 'BlockFinaX', text, url: referralLink }); return; } catch { /* fell through to copy */ }
+    }
+    copyLink();
+  };
+
   if (walletLoading || !isUnlocked) return null;
 
   const taskBtn = (task: DailyTask) => {
@@ -272,12 +293,19 @@ export default function TasksPage() {
           {/* referral */}
           <div className="ref-card">
             <h3><Gift /> Refer &amp; earn</h3>
-            <p>Share your code. When a friend signs up and transacts, you both earn points.</p>
+            <p>Share your link. When a friend signs up and makes their first move, you both earn points.</p>
             <div className="ref-code">
               <span className="code">{referralCode?.code || '—'}</span>
               <button className="copy" aria-label="Copy code" onClick={copyCode}>{copied ? <Check /> : <Copy />}</button>
             </div>
-            <div className="ref-stats">
+            <div className="ref-link">
+              <span className="lk">{referralLink || 'Generating link…'}</span>
+              <button className="copy" aria-label="Copy link" onClick={copyLink}>{copiedLink ? <Check /> : <LinkIcon />}</button>
+            </div>
+            <button className="btn btn-primary" style={{ width: '100%', marginTop: 12 }} onClick={shareLink} disabled={!referralLink}>
+              <Share2 /> Share link
+            </button>
+            <div className="ref-stats" style={{ marginTop: 14 }}>
               <div className="ref-stat"><div className="l">Referees</div><div className="v tnum">{fmt(friends)}</div></div>
               <div className="ref-stat"><div className="l">Referral points</div><div className="v tnum">{fmt(referralPts)}</div></div>
             </div>

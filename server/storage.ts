@@ -940,15 +940,97 @@ export class DatabaseStorage implements IStorage {
    */
   async hasHedgeAction(walletAddress: string, actionType: string): Promise<boolean> {
     const wallet = walletAddress.toLowerCase();
+    // Only on-chain-VERIFIED rows count toward task rewards. Rows logged for the
+    // activity feed but not RPC-verified (status 'confirmed') never grant points.
     const rows = await db
       .select({ id: hedgeActivity.id })
       .from(hedgeActivity)
       .where(and(
         eq(hedgeActivity.walletAddress, wallet),
         eq(hedgeActivity.actionType, actionType),
+        eq(hedgeActivity.status, 'verified'),
       ))
       .limit(1);
     return rows.length > 0;
+  }
+
+  /**
+   * Records a referral relationship at signup as 'pending' (points are awarded
+   * later, when the referee qualifies via completePendingReferral). Enforces the
+   * anti-gaming rules: code must exist/active/under its cap, no self-referral,
+   * and one referrer per referee. Returns true only if a referral was created.
+   */
+  async recordReferralSignup(referee: string, code: string): Promise<boolean> {
+    const refee = referee.toLowerCase();
+    const rc = await this.getReferralCode(code);
+    if (!rc || !rc.isActive) return false;
+    if (rc.maxUses != null && (rc.currentUses ?? 0) >= rc.maxUses) return false;
+    const referrer = rc.referrerWalletAddress.toLowerCase();
+    if (referrer === refee) return false; // no self-referral
+    const [existing] = await db
+      .select({ id: referrals.id })
+      .from(referrals)
+      .where(eq(referrals.referredWalletAddress, refee))
+      .limit(1);
+    if (existing) return false; // already referred by someone — first one wins
+    await db.insert(referrals).values({
+      referralCode: rc.code,
+      referrerWalletAddress: referrer,
+      referredWalletAddress: refee,
+      pointsEarned: 50,
+      status: 'pending',
+    });
+    await db.update(referralCodes)
+      .set({ currentUses: sql`${referralCodes.currentUses} + 1` })
+      .where(eq(referralCodes.code, rc.code));
+    return true;
+  }
+
+  /**
+   * When a referee performs their first qualifying on-chain action, settle any
+   * pending referral: flip it to 'completed' and award points to BOTH the
+   * referrer and the referee. Idempotent and safe to call on every action — the
+   * guarded UPDATE ensures the award happens exactly once.
+   */
+  async completePendingReferral(referee: string): Promise<{ referrer: string; points: number } | null> {
+    const refee = referee.toLowerCase();
+    const [pending] = await db
+      .select()
+      .from(referrals)
+      .where(and(eq(referrals.referredWalletAddress, refee), eq(referrals.status, 'pending')))
+      .limit(1);
+    if (!pending) return null;
+
+    const pts = pending.pointsEarned ?? 50;
+    const referrer = pending.referrerWalletAddress.toLowerCase();
+
+    // Claim + award both sides in one transaction. The guarded UPDATE makes the
+    // whole thing fire exactly once even under concurrent qualifying actions.
+    let awarded = false;
+    await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(referrals)
+        .set({ status: 'completed', completedAt: new Date() })
+        .where(and(eq(referrals.id, pending.id), eq(referrals.status, 'pending')))
+        .returning({ id: referrals.id });
+      if (claimed.length === 0) return; // already settled by a concurrent call
+
+      for (const [wallet, desc] of [[referrer, 'Referral joined and qualified'], [refee, 'Welcome bonus — joined via referral']] as const) {
+        const existing = await tx.select().from(userPoints).where(eq(userPoints.walletAddress, wallet));
+        if (existing.length === 0) {
+          await tx.insert(userPoints).values({ walletAddress: wallet, totalPoints: pts, referralPoints: pts });
+        } else {
+          await tx.update(userPoints)
+            .set({ totalPoints: sql`${userPoints.totalPoints} + ${pts}`, referralPoints: sql`${userPoints.referralPoints} + ${pts}`, lastUpdated: new Date() })
+            .where(eq(userPoints.walletAddress, wallet));
+        }
+        await tx.insert(pointTransactions).values({
+          walletAddress: wallet, type: 'referral_reward', points: pts, description: desc, referenceId: `ref_${pending.id}`,
+        });
+      }
+      awarded = true;
+    });
+    return awarded ? { referrer, points: pts } : null;
   }
 
   // ── Platform settings (key/value) ───────────────────────────────────────
@@ -1039,40 +1121,44 @@ export class DatabaseStorage implements IStorage {
     if (!row || row.reviewStatus !== 'pending') return false;
     const wallet = row.walletAddress.toLowerCase();
 
-    // 1. Flip the row to 'approved' atomically (CAS — refuses if no longer pending)
-    const updated = await db
-      .update(userTaskCompletions)
-      .set({
-        reviewStatus: 'approved',
-        reviewedBy: reviewer.toLowerCase(),
-        reviewedAt: new Date(),
-        reviewNotes: notes ?? null,
-      })
-      .where(and(
-        eq(userTaskCompletions.id, completionId),
-        eq(userTaskCompletions.reviewStatus, 'pending'),
-      ))
-      .returning({ id: userTaskCompletions.id });
-    if (updated.length === 0) return false;
+    // Flip to 'approved' (CAS — refuses if no longer pending) AND credit points
+    // in one transaction, so an approval can never be recorded without its payout.
+    let credited = false;
+    await db.transaction(async (tx) => {
+      const updated = await tx
+        .update(userTaskCompletions)
+        .set({
+          reviewStatus: 'approved',
+          reviewedBy: reviewer.toLowerCase(),
+          reviewedAt: new Date(),
+          reviewNotes: notes ?? null,
+        })
+        .where(and(
+          eq(userTaskCompletions.id, completionId),
+          eq(userTaskCompletions.reviewStatus, 'pending'),
+        ))
+        .returning({ id: userTaskCompletions.id });
+      if (updated.length === 0) return; // someone else reviewed it first
 
-    // 2. Credit points (insert/update userPoints + log pointTransaction)
-    const existing = await db.select().from(userPoints).where(eq(userPoints.walletAddress, wallet));
-    if (existing.length === 0) {
-      await db.insert(userPoints).values({ walletAddress: wallet, totalPoints: row.pointsEarned, referralPoints: 0 });
-    } else {
-      await db.update(userPoints)
-        .set({ totalPoints: sql`${userPoints.totalPoints} + ${row.pointsEarned}`, lastUpdated: new Date() })
-        .where(eq(userPoints.walletAddress, wallet));
-    }
-    await db.insert(pointTransactions).values({
-      walletAddress: wallet,
-      type: 'task_reward',
-      points: row.pointsEarned,
-      description: `Approved: ${row.taskTitle}`,
-      referenceId: `task_${row.taskId}`,
+      const existing = await tx.select().from(userPoints).where(eq(userPoints.walletAddress, wallet));
+      if (existing.length === 0) {
+        await tx.insert(userPoints).values({ walletAddress: wallet, totalPoints: row.pointsEarned, referralPoints: 0 });
+      } else {
+        await tx.update(userPoints)
+          .set({ totalPoints: sql`${userPoints.totalPoints} + ${row.pointsEarned}`, lastUpdated: new Date() })
+          .where(eq(userPoints.walletAddress, wallet));
+      }
+      await tx.insert(pointTransactions).values({
+        walletAddress: wallet,
+        type: 'task_reward',
+        points: row.pointsEarned,
+        description: `Approved: ${row.taskTitle}`,
+        referenceId: `task_${row.taskId}`,
+      });
+      credited = true;
     });
 
-    return true;
+    return credited;
   }
 
   async rejectTaskSubmission(completionId: number, reviewer: string, notes?: string): Promise<boolean> {

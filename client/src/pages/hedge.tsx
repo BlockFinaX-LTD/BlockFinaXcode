@@ -14,6 +14,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import { useRift } from '@rift-finance/react';
 import { AppShell } from '@/components/app-shell';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';
@@ -177,6 +178,7 @@ function RowSkeleton() {
 
 export default function Hedge() {
   const { wallet, settings, updateSettings } = useWallet();
+  const { getAccessToken } = useRift();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const selectedNetworkId = settings?.selectedNetworkId ?? DEFAULT_NETWORK.id;
@@ -491,9 +493,13 @@ export default function Hedge() {
   const recordActivity = async (payload: { actionType: string; txHash: string; onChainEventId?: number | null; amount?: string | number | null; token?: string | null; metadata?: Record<string, any> | null }) => {
     if (!wallet?.address || !payload.txHash) return;
     try {
+      // The endpoint is Rift-authenticated and derives the wallet from the token,
+      // then RPC-verifies reward-bearing actions. Send the bearer token.
+      const accessToken = await getAccessToken().catch(() => null);
       await fetch('/api/hedge/activity', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: wallet.address, chainId: activeChainId, ...payload }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({ chainId: activeChainId, ...payload }),
       });
     } catch (e) { console.warn('[activity] record failed (non-blocking):', e); }
   };
