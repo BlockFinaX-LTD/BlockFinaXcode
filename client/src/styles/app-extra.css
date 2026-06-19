@@ -3,6 +3,23 @@
 @keyframes bfxspin { to { transform: rotate(360deg); } }
 .bfx-app .spin { animation: bfxspin 1s linear infinite; }
 
+/* referral link row (mirrors the design's .ref-code, with URL truncation) */
+.bfx-app .ref-link {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
+  border: 1px solid var(--border-2); background: var(--card-2);
+  border-radius: 12px; padding: 9px 9px 9px 13px;
+}
+.bfx-app .ref-link .lk {
+  flex: 1; min-width: 0; font-family: var(--mono); font-size: 11.5px;
+  color: var(--tx-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bfx-app .ref-link .copy {
+  width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center;
+  color: #fff; background: var(--brand-royal); flex: 0 0 auto; transition: .15s;
+}
+.bfx-app .ref-link .copy:hover { background: var(--brand-royal-2); }
+.bfx-app .ref-link .copy svg { width: 15px; height: 15px; }
+
 /* skeleton shimmer (blue-tinted) for loading sheets */
 @keyframes bfxshimmer { 100% { background-position: -200% 0; } }
 .bfx-app .skel {
