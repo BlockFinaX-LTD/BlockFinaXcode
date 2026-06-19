@@ -632,10 +632,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getReferralsByWallet(walletAddress: string): Promise<Referral[]> {
+    // Stored lowercase by recordReferralSignup; normalise here so callers
+    // can pass either case safely.
     return await db
       .select()
       .from(referrals)
-      .where(eq(referrals.referrerWalletAddress, walletAddress))
+      .where(eq(referrals.referrerWalletAddress, walletAddress.toLowerCase()))
       .orderBy(desc(referrals.createdAt));
   }
 

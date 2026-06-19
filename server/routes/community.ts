@@ -242,7 +242,10 @@ export function registerCommunityRoutes(app: Express) {
 
   app.get("/api/referrals/codes/:walletAddress", async (req, res) => {
     try {
-      const { walletAddress } = req.params;
+      // Wallet addresses are stored lowercase server-side. The dashboard
+      // sends Rift's mixed-case checksum address, so we must normalise here
+      // or look-ups + new-code inserts use mismatched casings.
+      const walletAddress = req.params.walletAddress.toLowerCase();
       let codes = await storage.getReferralCodesByWallet(walletAddress);
       if (!codes || codes.length === 0) {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -264,7 +267,9 @@ export function registerCommunityRoutes(app: Express) {
 
   app.get("/api/referrals/:walletAddress", async (req, res) => {
     try {
-      const refs = await storage.getReferralsByWallet(req.params.walletAddress);
+      // Same lowercase normalisation as above — referrals.referrer_wallet_address
+      // is stored lowercase by recordReferralSignup.
+      const refs = await storage.getReferralsByWallet(req.params.walletAddress.toLowerCase());
       res.json(refs);
     } catch (error) {
       res.status(500).json({ error: "Failed to get referrals" });
@@ -348,7 +353,10 @@ export function registerCommunityRoutes(app: Express) {
         referrals: {
           count: refsAsReferrer.length,
           rows: refsAsReferrer.map(r => ({
-            referee: r.refereeWalletAddress, status: r.status,
+            // Column is `referredWalletAddress` (the person who got referred).
+            // Earlier version of this endpoint had a typo and dropped the field.
+            referee: r.referredWalletAddress, status: r.status,
+            pointsEarned: r.pointsEarned,
             createdAt: r.createdAt, completedAt: r.completedAt,
           })),
         },
