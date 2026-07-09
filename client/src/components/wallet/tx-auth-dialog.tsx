@@ -119,7 +119,7 @@ export function TxAuthDialog() {
               <div className="flex items-center justify-between">
                 <Label className="text-xs">Email code (sent to {authMethod.email})</Label>
                 <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleSendOtp} disabled={isSendingOtp}>
-                  {isSendingOtp ? 'Sending…' : (otpSent ? 'Resend' : 'Send code')}
+                  {isSendingOtp ? 'Sending…' : 'Send code'}
                 </Button>
               </div>
               <Input
@@ -139,7 +139,7 @@ export function TxAuthDialog() {
               <div className="flex items-center justify-between">
                 <Label className="text-xs">SMS code (sent to {authMethod.phoneNumber})</Label>
                 <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleSendOtp} disabled={isSendingOtp}>
-                  {isSendingOtp ? 'Sending…' : (otpSent ? 'Resend' : 'Send code')}
+                  {isSendingOtp ? 'Sending…' : 'Send code'}
                 </Button>
               </div>
               <Input
