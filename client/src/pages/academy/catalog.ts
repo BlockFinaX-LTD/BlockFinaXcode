@@ -101,7 +101,7 @@ export const CATALOG: Lesson[] = [
     level: 'beginner',
     readMin: 8,
     toc: [
-      { id: 'the-question',  label: 'The question a hedge answers' },
+      { id: 'the-question',  label: 'The question every FX-exposed business asks' },
       { id: 'the-tools',     label: 'The three instruments' },
       { id: 'the-cost',      label: 'Why hedging always costs something' },
       { id: 'basis-risk',    label: 'The gap between hedge and exposure' },

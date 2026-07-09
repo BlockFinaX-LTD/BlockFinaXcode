@@ -845,125 +845,77 @@ function UseSection({ theme }: { theme: Theme }) {
 
 // ── Who this is for / audience cards ─────────────────────────────────────
 
+interface Persona {
+  tag: string;
+  title: string;
+  body: string;
+  cta: string;
+  href: string;
+  imgLight: string;
+  imgDark: string;
+}
+
+const PERSONAS: Persona[] = [
+  {
+    tag: 'Trade & commerce',
+    title: 'Exporters and importers',
+    body:
+      'A Kenyan agricultural exporter paid in dollars but banking in shillings. A Nigerian electronics importer whose Shenzhen suppliers invoice in dollars. Cover the leg of the trade that hurts when the local currency moves.',
+    cta: 'How hedging protects margin',
+    href: '/learn/hedging-101',
+    imgLight: '/personas/exportlight.jpeg',
+    imgDark: '/personas/exportdark.jpeg',
+  },
+  {
+    tag: 'Treasury & payments',
+    title: 'Payment companies and treasuries',
+    body:
+      'Remittance corridors carrying customer float across time zones. Neobanks with FX-exposed reserves. Corporate treasuries with dollar bills and local revenue. Hedge the exposure at the balance-sheet level, not per transaction.',
+    cta: 'How settlement works',
+    href: '/learn/how-blockfinax-works',
+    imgLight: '/personas/treasurylight.jpeg',
+    imgDark: '/personas/treasurydark.jpeg',
+  },
+  {
+    tag: 'Capital providers',
+    title: 'LPs, DAOs, and stablecoin holders',
+    body:
+      'Idle USDC on a corporate balance sheet. DAO treasuries holding stablecoins between grants. Funds looking for yield uncorrelated with rates or equity. Underwrite parametric cover, collect premium, back the hedgers who need you.',
+    cta: 'Underwriting mechanics',
+    href: '/learn/underwriting-101',
+    imgLight: '/personas/lplight.jpeg',
+    imgDark: '/personas/lpdark.jpeg',
+  },
+];
+
 function WhoSection() {
   return (
     <section className="who" id="who">
       <div className="wrap">
         <div className="assets-head">
           <h2>Built for the people who feel the rate.</h2>
-          <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Four snapshots below.</p>
+          <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Three shapes of user, one protocol.</p>
         </div>
         <div className="who-cards">
-          <article className="who-card">
-            <div className="who-ic"><SuppliersGlyph /></div>
-            <h3>Businesses paying suppliers abroad</h3>
-            <p>
-              Importers, e-commerce sellers, SaaS with USD costs, SMEs with
-              dollar-denominated inventory. Your suppliers invoice in
-              dollars. Your customers pay in cedi. Buy cover so a bad
-              exchange month doesn&apos;t take out a good quarter.
-            </p>
-            <Link href="/learn/hedging-101" className="who-cta">
-              How hedging protects margin <span className="arrow">→</span>
-            </Link>
-          </article>
-
-          <article className="who-card">
-            <div className="who-ic"><PayrollGlyph /></div>
-            <h3>Payroll, remote workers, and freelancers</h3>
-            <p>
-              Companies paying dollar salaries into weakening local
-              accounts. Freelancers earning USDC and spending in naira.
-              Payroll platforms that need to smooth cross-border swings.
-              Cover the exposure without leaving the wallet.
-            </p>
-            <Link href="/hedge" className="who-cta">
-              Open a cover pool <span className="arrow">→</span>
-            </Link>
-          </article>
-
-          <article className="who-card">
-            <div className="who-ic"><PaymentsGlyph /></div>
-            <h3>Payment and remittance companies</h3>
-            <p>
-              Corridors that carry balances between local and dollar
-              legs. Remittance platforms holding customer float across
-              time zones. Neobanks with treasury exposed to the same
-              currencies their customers earn in. Hedge the corridor,
-              not each transaction.
-            </p>
-            <Link href="/learn/how-blockfinax-works" className="who-cta">
-              How settlement works <span className="arrow">→</span>
-            </Link>
-          </article>
-
-          <article className="who-card">
-            <div className="who-ic"><TreasuryGlyph /></div>
-            <h3>Treasuries, DAOs, and stablecoin LPs</h3>
-            <p>
-              Corporate treasuries with idle USDC earning a few percent.
-              DAO treasuries holding stablecoins between grants. Funds
-              looking for yield uncorrelated with rates or equity.
-              Underwrite parametric cover, collect premium, back the
-              hedgers who need you.
-            </p>
-            <Link href="/learn/underwriting-101" className="who-cta">
-              Underwriting mechanics <span className="arrow">→</span>
-            </Link>
-          </article>
+          {PERSONAS.map((p) => (
+            <article className="who-card" key={p.tag}>
+              <div className="who-media">
+                <img src={p.imgLight} alt="" className="light" loading="lazy" />
+                <img src={p.imgDark} alt="" className="dark" loading="lazy" />
+              </div>
+              <div className="who-body">
+                <div className="who-tag">{p.tag}</div>
+                <h3>{p.title}</h3>
+                <p>{p.body}</p>
+                <Link href={p.href} className="who-cta">
+                  {p.cta} <span className="arrow">→</span>
+                </Link>
+              </div>
+            </article>
+          ))}
         </div>
       </div>
     </section>
-  );
-}
-
-/* Line-art glyphs for the persona cards. Monochrome accent, hairline strokes. */
-function SuppliersGlyph() {
-  return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <rect x="6" y="14" width="14" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <rect x="24" y="14" width="14" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="20" y1="22" x2="24" y2="22" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="9" y1="19" x2="17" y2="19" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-      <line x1="9" y1="24" x2="14" y2="24" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-      <line x1="27" y1="19" x2="35" y2="19" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-      <line x1="27" y1="24" x2="32" y2="24" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-    </svg>
-  );
-}
-function PayrollGlyph() {
-  return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <circle cx="16" cy="18" r="4" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M8 32 Q 8 25 16 25 Q 24 25 24 32" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="28" y1="15" x2="38" y2="15" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="28" y1="20" x2="38" y2="20" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
-      <line x1="28" y1="25" x2="35" y2="25" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
-      <line x1="28" y1="30" x2="38" y2="30" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
-    </svg>
-  );
-}
-function PaymentsGlyph() {
-  return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <circle cx="12" cy="22" r="6" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <circle cx="32" cy="22" r="6" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M18 22 L 26 22" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M22 18 L 26 22 L 22 26" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M22 26 L 18 22 L 22 18" stroke="currentColor" strokeWidth="1.2" fill="none" opacity="0.55" />
-    </svg>
-  );
-}
-function TreasuryGlyph() {
-  return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <path d="M8 32 L 22 12 L 36 32 Z" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="12" y1="32" x2="12" y2="24" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="18" y1="32" x2="18" y2="20" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="24" y1="32" x2="24" y2="22" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="30" y1="32" x2="30" y2="26" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="6" y1="34" x2="38" y2="34" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
   );
 }
 

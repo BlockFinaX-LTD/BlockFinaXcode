@@ -428,17 +428,16 @@
 .bfx-landing .who { padding: 72px 0 80px; border-top: 1px solid var(--bfx-border); }
 .bfx-landing .who-cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
 }
 .bfx-landing .who-card {
   border: 1px solid var(--bfx-border);
   border-radius: 20px;
   background: var(--bfx-card);
-  padding: 26px 24px 22px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 14px;
   transition: border-color .25s var(--bfx-ease), background .25s var(--bfx-ease), transform .25s var(--bfx-ease);
 }
 .bfx-landing .who-card:hover {
@@ -446,29 +445,55 @@
   background: var(--bfx-card-2);
   transform: translateY(-2px);
 }
-.bfx-landing .who-ic {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--bfx-border-2);
-  border-radius: 12px;
-  color: var(--bfx-accent);
-  background: color-mix(in oklab, var(--bfx-accent) 8%, transparent);
+.bfx-landing .who-media {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  background: var(--bfx-bg-2);
+  overflow: hidden;
+  border-bottom: 1px solid var(--bfx-border);
 }
-.bfx-landing .who-ic svg { width: 26px; height: 26px; }
+.bfx-landing .who-media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: left top;
+  display: block;
+}
+.bfx-landing[data-theme="light"] .who-media img.dark,
+.bfx-landing:not([data-theme]) .who-media img.dark { display: none; }
+.bfx-landing[data-theme="dark"] .who-media img.light { display: none; }
+
+.bfx-landing .who-body {
+  padding: 22px 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.bfx-landing .who-tag {
+  font-family: var(--bfx-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bfx-tx-3);
+  font-weight: 500;
+}
 .bfx-landing .who-card h3 {
   font-size: 19px;
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   line-height: 1.25;
   color: var(--bfx-tx);
+  margin: 2px 0 0;
 }
 .bfx-landing .who-card p {
   color: var(--bfx-tx-2);
   font-size: 14.5px;
   line-height: 1.55;
   text-wrap: pretty;
+  margin: 0;
 }
 .bfx-landing .who-cta {
   margin-top: auto;
@@ -489,8 +514,9 @@
 }
 .bfx-landing .who-cta:hover .arrow { transform: translateX(2px); }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .bfx-landing .who-cards { grid-template-columns: 1fr; }
+  .bfx-landing .who-media { aspect-ratio: 16 / 9; }
 }
 
 /* ---------- signal section ---------- */
