@@ -846,45 +846,41 @@ function UseSection({ theme }: { theme: Theme }) {
 // ── Who this is for / audience cards ─────────────────────────────────────
 
 interface Persona {
-  tag: string;
   title: string;
+  tag: string;
   body: string;
   cta: string;
   href: string;
-  imgLight: string;
-  imgDark: string;
+  Icon: React.ComponentType;
 }
 
 const PERSONAS: Persona[] = [
   {
+    title: 'Exporters',
     tag: 'Trade & commerce',
-    title: 'Exporters and importers',
     body:
-      'A Kenyan agricultural exporter paid in dollars but banking in shillings. A Nigerian electronics importer whose Shenzhen suppliers invoice in dollars. Cover the leg of the trade that hurts when the local currency moves.',
+      'You ship goods abroad, get paid in dollars, and pay everything at home in local currency. Cover the leg of the trade that hurts when the rate moves against you.',
     cta: 'How hedging protects margin',
     href: '/learn/hedging-101',
-    imgLight: '/personas/exportlight.jpeg',
-    imgDark: '/personas/exportdark.jpeg',
+    Icon: TradeIcon,
   },
   {
-    tag: 'Treasury & payments',
-    title: 'Payment companies and treasuries',
+    title: 'Treasuries',
+    tag: 'Payments & FX',
     body:
-      'Remittance corridors carrying customer float across time zones. Neobanks with FX-exposed reserves. Corporate treasuries with dollar bills and local revenue. Hedge the exposure at the balance-sheet level, not per transaction.',
+      'You hold reserves in one currency and liabilities in another. Corporate treasuries, remittance corridors, neobanks with cross-border float. Hedge at the balance-sheet level, not per transaction.',
     cta: 'How settlement works',
     href: '/learn/how-blockfinax-works',
-    imgLight: '/personas/treasurylight.jpeg',
-    imgDark: '/personas/treasurydark.jpeg',
+    Icon: VaultIcon,
   },
   {
-    tag: 'Capital providers',
-    title: 'LPs, DAOs, and stablecoin holders',
+    title: 'LPs',
+    tag: 'Capital & yield',
     body:
-      'Idle USDC on a corporate balance sheet. DAO treasuries holding stablecoins between grants. Funds looking for yield uncorrelated with rates or equity. Underwrite parametric cover, collect premium, back the hedgers who need you.',
+      'You have idle USDC on a wallet, treasury, or DAO. Underwrite parametric cover for the people who need it. Collect premium, back hedgers, hold reserves that back real economic risk.',
     cta: 'Underwriting mechanics',
     href: '/learn/underwriting-101',
-    imgLight: '/personas/lplight.jpeg',
-    imgDark: '/personas/lpdark.jpeg',
+    Icon: LiquidityIcon,
   },
 ];
 
@@ -897,39 +893,59 @@ function WhoSection() {
           <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Three shapes of user, one protocol.</p>
         </div>
         <div className="who-cards">
-          {PERSONAS.map((p, i) => (
-            <article className="who-card" key={p.tag}>
+          {PERSONAS.map((p) => (
+            <article className="who-card" key={p.title}>
+              <div className="who-ic"><p.Icon /></div>
               <div className="who-body">
-                <div className="who-head">
-                  <span className="who-idx">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="who-tag">{p.tag}</span>
-                </div>
                 <h3>{p.title}</h3>
+                <div className="who-tag">{p.tag}</div>
                 <p>{p.body}</p>
-                <Link href={p.href} className="who-cta">
-                  <span className="who-cta-txt">{p.cta}</span>
-                  <span className="who-cta-arr">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </span>
-                </Link>
               </div>
-              <div className="who-preview">
-                <div className="who-chrome" aria-hidden="true">
-                  <span /><span /><span />
-                </div>
-                <div className="who-media">
-                  <img src={p.imgLight} alt="" className="light" loading="lazy" />
-                  <img src={p.imgDark} alt="" className="dark" loading="lazy" />
-                </div>
-                <div className="who-media-fade" aria-hidden="true" />
-              </div>
+              <Link href={p.href} className="who-cta">
+                Learn more
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </Link>
             </article>
           ))}
         </div>
       </div>
     </section>
+  );
+}
+
+/* Circle-shaped icon glyphs sitting inside the persona cards.
+   Single-stroke, currentColor, on a hairline outer ring. */
+function TradeIcon() {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
+      <path d="M14 22h20M28 16l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M34 30H14M20 36l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
+    </svg>
+  );
+}
+function VaultIcon() {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
+      <path d="M12 34h24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M14 34V20l10-6 10 6v14" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <line x1="18" y1="34" x2="18" y2="22" stroke="currentColor" strokeWidth="1.6" />
+      <line x1="24" y1="34" x2="24" y2="20" stroke="currentColor" strokeWidth="1.6" />
+      <line x1="30" y1="34" x2="30" y2="22" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+function LiquidityIcon() {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
+      <ellipse cx="24" cy="18" rx="10" ry="3.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M14 18v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M14 24v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" opacity="0.55" />
+    </svg>
   );
 }
 
