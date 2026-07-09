@@ -305,7 +305,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
                 <label>
                   {authMethod.kind === 'email' ? 'Email code' : 'SMS code'}{' '}
                   <button type="button" style={{ color: 'var(--blue)', textTransform: 'none', letterSpacing: 0 }} onClick={sendFreshOtp} disabled={sendingOtp}>
-                    {sendingOtp ? 'Sending…' : otpSent ? '— resend' : '— send code'}
+                    {sendingOtp ? 'Sending…' : '— send code'}
                   </button>
                 </label>
                 <input

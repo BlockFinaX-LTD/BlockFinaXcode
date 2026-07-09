@@ -7,7 +7,7 @@
  *
  * Every data path and mutation is unchanged from the previous implementation:
  * hedgeContract reads, buyProtection / deposit / createEvent / setPoolSettings /
- * claimPayout / claimPremiums / withdrawCapital / recoverExpiredPayouts, the
+ * claimPayout / claimPremiums / withdrawCapital, the
  * pricing-engine quote, activity logging, mainnet guard, and ?event=&action=
  * deep-linking + share links.
  */
@@ -639,18 +639,6 @@ export default function Hedge() {
     onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
   });
 
-  const recoverExpiredMutation = useMutation({
-    mutationFn: async (eventId: number) => {
-      const signer = await walletManager.getSigner(selectedNetworkId);
-      if (!signer) throw new Error('Wallet signer not available.');
-      const event = events.find((e) => e.id === eventId);
-      const txHash = await hedgeContract.recoverExpiredPayouts(signer, eventId, setTxStep);
-      await recordActivity({ actionType: 'recover_expired', txHash, onChainEventId: eventId, metadata: { eventName: event?.name, underlying: event?.underlying } });
-    },
-    onSuccess: async () => { setTxStep(''); await loadEvents(); await loadDeposits(); toast({ title: 'Event Recovered', description: 'Event marked expired on-chain. You can now withdraw your liquidity.' }); },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Recovery Failed', description: friendlyError(error), variant: 'destructive' }); },
-  });
-
   const claimPremiumsMutation = useMutation({
     mutationFn: async (depositId: number) => {
       const signer = await walletManager.getSigner(selectedNetworkId);
@@ -1152,7 +1140,6 @@ export default function Hedge() {
                         {shown.map((ev) => {
                           const util = Math.round(ev.utilization * 100);
                           const live2 = isLive(ev);
-                          const expired = ev.expiryDate.getTime() <= now && ev.status === 'open';
                           return (
                             <div className="pool-card" key={ev.id}>
                               <div className="pool-top"><MarketFlag pair={ev.underlying} /><div className="pt-nm"><div className="a">{pairLabel(ev.underlying)}</div><div className="b">{ev.name}</div></div>
@@ -1171,7 +1158,16 @@ export default function Hedge() {
                                   <button className="btn-sm2 primary" style={{ marginTop: 12 }} onClick={() => openLp(ev)}>Underwrite</button>
                                 </>
                               )}
-                              {expired && <button className="btn-sm2 ghost" style={{ marginTop: 12 }} disabled={recoverExpiredMutation.isPending} onClick={() => recoverExpiredMutation.mutate(ev.id)}>{recoverExpiredMutation.isPending ? 'Recovering…' : 'Recover capital'}</button>}
+                              {(() => {
+                                const myDep = activeDeposits.find((d) => d.eventId === ev.id);
+                                const settledOnChain = ev.status === 'settled' || ev.status === 'expired';
+                                if (!myDep || !settledOnChain) return null;
+                                return (
+                                  <button className="btn-sm2 ghost" style={{ marginTop: 12 }} disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(myDep.id)}>
+                                    {withdrawMutation.isPending ? 'Withdrawing…' : 'Withdraw capital'}
+                                  </button>
+                                );
+                              })()}
                               {ev.creatorEarnings >= CLAIM_DUST
                                 ? <button className="btn-sm2 primary" style={{ marginTop: 8 }} disabled={withdrawEarningsMutation.isPending} onClick={() => withdrawEarningsMutation.mutate(ev.id)}>{withdrawEarningsMutation.isPending ? 'Claiming…' : `Claim earnings ${fmtUsd2(ev.creatorEarnings)}`}</button>
                                 : (!live2 && <div className="hint" style={{ marginTop: 8 }}>No earnings to claim</div>)}
