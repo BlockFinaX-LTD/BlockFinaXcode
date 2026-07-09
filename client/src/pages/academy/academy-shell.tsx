@@ -1,14 +1,9 @@
 /**
- * academy-shell.tsx — the chrome around every lesson.
+ * academy-shell.tsx. Chrome around every lesson.
  *
- * - Sticky top bar: brand mark, breadcrumb, theme toggle, "Try the app" CTA.
- * - Left sidebar: full course tree, grouped, current lesson highlighted.
- * - Reading column: whatever the lesson component renders.
- * - Right rail: "In this lesson" TOC + read-time + level meta.
- * - Foot: prev/next book-turn cards.
- *
- * The shell is theme-aware and persists the user's choice under a shell-local
- * key so it doesn't collide with the main app's theme setting.
+ * Sticky top bar, left sidebar (drawer on mobile), reading column,
+ * right rail with the lesson TOC, prev/next cards at the foot.
+ * Theme is local to the shell, persisted so it survives reloads.
  */
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
@@ -36,6 +31,7 @@ interface Props {
 export function AcademyShell({ slug, children }: Props) {
   const lesson = findLesson(slug);
   const [theme, setTheme] = useState<Theme>('dark');
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [location] = useLocation();
 
   useEffect(() => { setTheme(readTheme()); }, []);
@@ -48,41 +44,53 @@ export function AcademyShell({ slug, children }: Props) {
     });
   };
 
-  // Progress = position in the catalog. It's a course-completion signal, not
-  // a per-lesson scroll indicator — those are heavier and less honest.
   const { prev, next, index } = neighbourhood(slug);
   const progressPct = Math.max(0, Math.min(100, ((index + 1) / CATALOG.length) * 100));
   const groups = groupedCatalog();
-
   const lessonPath = (l: Lesson) => (l.slug ? `/learn/${l.slug}` : '/learn');
 
-  // Reset scroll on lesson change — otherwise long lessons carry their
-  // scroll position into short ones and feel broken.
+  // Reset scroll + close drawer on route change.
   useEffect(() => {
+    setDrawerOpen(false);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'auto' });
   }, [location]);
+
+  // Lock body scroll while the drawer is open.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.style.overflow = drawerOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [drawerOpen]);
 
   return (
     <div className="bfx-academy" data-theme={theme}>
       <header className="ac-top">
         <div className="ac-top-in">
+          <button
+            className="icon-btn ac-menu-btn"
+            aria-label="Open course menu"
+            onClick={() => setDrawerOpen(true)}
+          >
+            <MenuIcon />
+          </button>
+
           <Link href="/" className="ac-brand">
             <span className="ac-brand-mark"><img src={logoPath} alt="" /></span>
             <span className="ac-brand-name">BlockFinaX <em>Academy</em></span>
           </Link>
+
           <span className="ac-crumb">
-            <Link href="/learn">Course</Link>
             {lesson && slug !== '' && (
               <>
+                <Link href="/learn">Course</Link>
                 <span className="sep">/</span>
                 <span>{lesson.title}</span>
               </>
             )}
           </span>
+
           <div className="ac-top-actions">
-            <Link href="/hedge" className="ac-btn primary" style={{ height: 32, padding: '0 14px', fontSize: 12 }}>
-              Try the app
-            </Link>
+            <Link href="/hedge" className="ac-btn primary">Open app</Link>
             <button className="icon-btn" onClick={flipTheme} aria-label="Toggle theme">
               {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
@@ -92,14 +100,11 @@ export function AcademyShell({ slug, children }: Props) {
       </header>
 
       <div className="ac-shell">
-        <aside className="ac-side">
+        <aside className={`ac-side${drawerOpen ? ' on' : ''}`}>
           <div className="ac-side-title">Course</div>
-          {groups.map((g, gi) => (
+          {groups.map((g) => (
             <div className="ac-group" key={g.name}>
-              <div className="ac-group-head">
-                <span className="num">{String(gi + 1).padStart(2, '0')}</span>
-                {g.name}
-              </div>
+              <div className="ac-group-head">{g.name}</div>
               <ul>
                 {g.items.map((l) => {
                   const idx = CATALOG.indexOf(l);
@@ -118,19 +123,25 @@ export function AcademyShell({ slug, children }: Props) {
           ))}
         </aside>
 
+        <div
+          className={`ac-scrim${drawerOpen ? ' on' : ''}`}
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+
         <main className="ac-main">
           {children}
           {lesson && (
             <nav className="ac-nav" aria-label="Lesson navigation">
               {prev ? (
                 <Link href={lessonPath(prev)}>
-                  <span className="lbl">← Previous</span>
+                  <span className="lbl">Previous</span>
                   <span className="ttl">{prev.title}</span>
                 </Link>
               ) : <span />}
               {next ? (
                 <Link href={lessonPath(next)} className="next">
-                  <span className="lbl">Next →</span>
+                  <span className="lbl">Next</span>
                   <span className="ttl">{next.title}</span>
                 </Link>
               ) : <span />}
@@ -140,10 +151,10 @@ export function AcademyShell({ slug, children }: Props) {
 
         {lesson && lesson.toc.length > 0 && (
           <aside className="ac-rail">
-            <div className="ac-rail-label">In this lesson</div>
+            <div className="ac-rail-label">On this page</div>
             <div className="ac-rail-meta">
-              <span><strong>{lesson.readMin}</strong>min read</span>
-              <span><strong>{lesson.level}</strong></span>
+              <span><strong>{lesson.readMin}</strong> min read</span>
+              <span>{lesson.level}</span>
             </div>
             <ul>
               {lesson.toc.map((t) => (
@@ -159,6 +170,13 @@ export function AcademyShell({ slug, children }: Props) {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  );
+}
 function SunIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

@@ -4,6 +4,10 @@
  * The sidebar tree, prev/next chain, /learn landing curriculum, and the
  * route dispatcher all read from this single array. Adding a lesson means
  * inserting one entry here and one lesson file — nothing else.
+ *
+ * Order matters: BlockFinaX product overview leads. Theory (hedging,
+ * options, underwriting) sits behind it so newcomers can go straight to
+ * "what am I looking at" without wading through derivatives-101.
  */
 
 export interface Lesson {
@@ -28,6 +32,65 @@ export const CATALOG: Lesson[] = [
       { id: 'why',   label: 'Why this exists' },
       { id: 'paths', label: 'Three ways in' },
       { id: 'map',   label: 'The full curriculum' },
+    ],
+  },
+  {
+    slug: 'how-blockfinax-works',
+    title: 'How BlockFinaX works',
+    blurb: 'The full lifecycle: creator opens a pool, LPs underwrite, hedgers buy protection, oracle settles.',
+    group: 'How BlockFinaX works',
+    level: 'beginner',
+    readMin: 11,
+    toc: [
+      { id: 'shape',       label: 'The shape of the protocol' },
+      { id: 'roles',       label: 'The four roles' },
+      { id: 'lifecycle',   label: 'Lifecycle of a pool' },
+      { id: 'solvency',    label: 'Why pools are always solvent' },
+      { id: 'not-position',label: 'Why the protocol takes no position' },
+    ],
+  },
+  {
+    slug: 'range-product',
+    title: 'The range product',
+    blurb: 'Why we sell a call/put spread instead of a digital, and what changes because of it.',
+    group: 'How BlockFinaX works',
+    level: 'intermediate',
+    readMin: 9,
+    toc: [
+      { id: 'digital',     label: 'Digital vs. range' },
+      { id: 'geometry',    label: 'The geometry of the payoff' },
+      { id: 'width',       label: 'Why range width is capped at 10×' },
+      { id: 'legacy',      label: 'Legacy single-strike mode' },
+    ],
+  },
+  {
+    slug: 'oracle-settlement',
+    title: 'Oracle & settlement',
+    blurb: 'How a rate gets on-chain, why we settle only at expiry, and what consensus buys us.',
+    group: 'How BlockFinaX works',
+    level: 'intermediate',
+    readMin: 10,
+    toc: [
+      { id: 'question',    label: 'What settlement has to answer' },
+      { id: 'european',    label: 'Why settlement is European' },
+      { id: 'consensus',   label: 'Multi-signer consensus' },
+      { id: 'single-key',  label: 'The single-key path (and its retirement)' },
+      { id: 'stale',       label: 'Stale submissions & tolerance' },
+    ],
+  },
+  {
+    slug: 'fees',
+    title: 'Fees & incentives',
+    blurb: 'Where the platform take comes from, why it is snapshotted at creation, and how creator loyalty works.',
+    group: 'How BlockFinaX works',
+    level: 'intermediate',
+    readMin: 7,
+    toc: [
+      { id: 'streams',     label: 'The four streams' },
+      { id: 'worked',      label: 'A worked example' },
+      { id: 'snapshot',    label: 'Snapshot at creation' },
+      { id: 'creator',     label: 'Creator loyalty' },
+      { id: 'take',        label: 'What the protocol keeps' },
     ],
   },
   {
@@ -70,68 +133,10 @@ export const CATALOG: Lesson[] = [
     readMin: 9,
     toc: [
       { id: 'who',        label: 'Who writes the cover' },
-      { id: 'analogy',    label: 'The insurance analogy — and its limits' },
+      { id: 'analogy',    label: 'The insurance analogy and its limits' },
       { id: 'capital',    label: 'Reserved capital vs. earned premium' },
       { id: 'edge',       label: 'Where an LP’s edge comes from' },
       { id: 'ruin',       label: 'The one number you must not ignore' },
-    ],
-  },
-  {
-    slug: 'how-blockfinax-works',
-    title: 'How BlockFinaX works',
-    blurb: 'The full lifecycle: creator opens a pool, LPs underwrite, hedgers buy protection, oracle settles.',
-    group: 'How BlockFinaX works',
-    level: 'intermediate',
-    readMin: 11,
-    toc: [
-      { id: 'shape',       label: 'The shape of the protocol' },
-      { id: 'roles',       label: 'The four roles' },
-      { id: 'lifecycle',   label: 'Lifecycle of a pool' },
-      { id: 'solvency',    label: 'Why pools are always solvent' },
-      { id: 'not-position',label: 'Why the protocol takes no position' },
-    ],
-  },
-  {
-    slug: 'range-product',
-    title: 'The range product',
-    blurb: 'Why we sell a call/put spread instead of a digital, and what changes because of it.',
-    group: 'How BlockFinaX works',
-    level: 'intermediate',
-    readMin: 9,
-    toc: [
-      { id: 'digital',     label: 'Digital vs. range' },
-      { id: 'geometry',    label: 'The geometry of the payoff' },
-      { id: 'width',       label: 'Why range width is capped at 10×' },
-      { id: 'legacy',      label: 'Legacy single-strike mode' },
-    ],
-  },
-  {
-    slug: 'oracle-settlement',
-    title: 'Oracle & settlement',
-    blurb: 'How a rate gets on-chain, why we settle only at expiry, and what consensus buys us.',
-    group: 'How BlockFinaX works',
-    level: 'intermediate',
-    readMin: 10,
-    toc: [
-      { id: 'question',    label: 'What settlement has to answer' },
-      { id: 'european',    label: 'Why settlement is European' },
-      { id: 'consensus',   label: 'Multi-signer consensus' },
-      { id: 'single-key',  label: 'The single-key path (and its retirement)' },
-      { id: 'stale',       label: 'Stale submissions & tolerance' },
-    ],
-  },
-  {
-    slug: 'fees',
-    title: 'Fees & incentives',
-    blurb: 'Five fee streams, one loyalty program, and why they are snapshotted at creation.',
-    group: 'How BlockFinaX works',
-    level: 'intermediate',
-    readMin: 7,
-    toc: [
-      { id: 'streams',     label: 'The five streams' },
-      { id: 'snapshot',    label: 'Snapshot at creation' },
-      { id: 'creator',     label: 'Creator loyalty' },
-      { id: 'take',        label: 'What the protocol keeps' },
     ],
   },
   {
@@ -181,7 +186,7 @@ export const CATALOG: Lesson[] = [
   {
     slug: 'cheatsheet',
     title: 'Cheatsheet & glossary',
-    blurb: 'The whole protocol on one page — terms, roles, numbers, functions.',
+    blurb: 'The whole protocol on one page. Terms, roles, numbers, functions.',
     group: 'Reference',
     level: 'beginner',
     readMin: 4,
