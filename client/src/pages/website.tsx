@@ -17,6 +17,7 @@
 import { Link } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
+import { FlagSvg } from '@/components/app-glyphs';
 import './website.css';
 
 const logoPath = '/favicon.png';
@@ -856,10 +857,10 @@ interface Persona {
 
 const PERSONAS: Persona[] = [
   {
-    title: 'Exporters',
+    title: 'Exporters and importers',
     tag: 'Trade & commerce',
     body:
-      'You ship goods abroad, get paid in dollars, and pay everything at home in local currency. Cover the leg of the trade that hurts when the rate moves against you.',
+      'You ship goods abroad or bring them in, priced in dollars, while your books run in local currency. Cover the leg of the trade that hurts when the rate moves against you.',
     cta: 'How hedging protects margin',
     href: '/learn/hedging-101',
     Icon: TradeIcon,
@@ -921,8 +922,10 @@ function TradeIcon() {
   return (
     <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
       <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
-      <path d="M14 22h20M28 16l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M34 30H14M20 36l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
+      {/* Top track: right-pointing arrow at y=18 */}
+      <path d="M13 18h18M27 12l6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Bottom track: left-pointing arrow at y=30 (12 units below, no collision) */}
+      <path d="M35 30H17M21 24l-6 6 6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
     </svg>
   );
 }
@@ -946,6 +949,101 @@ function LiquidityIcon() {
       <path d="M14 18v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" />
       <path d="M14 24v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" opacity="0.55" />
     </svg>
+  );
+}
+
+// ── Request cards / underwriting CTAs ────────────────────────────────────
+// Two contrasting cards in the shape of Circle's "Partner with Circle" +
+// "Build with Circle" pair. Left: light tint, dark type. Right: near-black
+// with white type. Both target buyers/writers who can't find a fit in the
+// open marketplace and want to work with us directly.
+
+function RequestSection() {
+  return (
+    <section className="reqs" id="request">
+      <div className="wrap">
+        <div className="reqs-grid">
+          <a
+            href="mailto:hello@blockfinax.com?subject=Request%20a%20quote"
+            className="reqcard light"
+          >
+            <div className="reqcard-body">
+              <h2>Request a quote</h2>
+              <p>
+                For businesses, funds, and treasuries whose exposure doesn&apos;t
+                fit the open marketplace. Tell us the notional, the pair, the
+                expiry, and the strike range you want cover on. We&apos;ll
+                structure a bespoke pool and quote you back.
+              </p>
+              <span className="reqcard-cta">
+                Request a quote
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
+            </div>
+          </a>
+          <a
+            href="mailto:hello@blockfinax.com?subject=Apply%20to%20underwrite"
+            className="reqcard dark"
+          >
+            <div className="reqcard-body">
+              <h2>Become an underwriter</h2>
+              <p>
+                Put idle USDC to work as pool liquidity. Every time a hedger
+                buys cover from a pool you back, you earn a share of the
+                premium. If the event settles out of the money, the reserved
+                capital comes back to you. If it settles in the money, your
+                share of the payout is capped and known upfront.
+              </p>
+              <span className="reqcard-cta">
+                Apply to underwrite
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Currencies we cover / flag row ───────────────────────────────────────
+// Six emerging-market currencies with their circular flags, laid out as a
+// horizontal row (single row on desktop, wrapping grid on mobile).
+
+const CURRENCIES: Array<{ code: string; name: string; country: string }> = [
+  { code: 'NGN', name: 'Naira',    country: 'Nigeria' },
+  { code: 'GHS', name: 'Cedi',     country: 'Ghana' },
+  { code: 'TZS', name: 'Shilling', country: 'Tanzania' },
+  { code: 'ETB', name: 'Birr',     country: 'Ethiopia' },
+  { code: 'ZAR', name: 'Rand',     country: 'South Africa' },
+  { code: 'UGX', name: 'Shilling', country: 'Uganda' },
+];
+
+function CurrenciesSection() {
+  return (
+    <section className="cur" id="currencies">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2>Currencies we underwrite.</h2>
+          <p>Six emerging-market currency pairs open today, with more added as pools and oracle coverage roll out.</p>
+        </div>
+        <div className="cur-row">
+          {CURRENCIES.map((c) => (
+            <div className="cur-item" key={c.code}>
+              <div className="cur-flag"><FlagSvg code={c.code} /></div>
+              <div className="cur-lbl">
+                <div className="cur-code">{c.code}</div>
+                <div className="cur-country">{c.country}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1232,7 +1330,8 @@ export default function Website() {
       <Hero />
       <UseSection theme={theme} />
       <WhoSection />
-      <MarketsSection />
+      <RequestSection />
+      <CurrenciesSection />
       <SignalSection />
       <TailCTA />
       <BookCallCushion />
