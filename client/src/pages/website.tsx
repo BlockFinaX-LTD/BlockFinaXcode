@@ -897,19 +897,33 @@ function WhoSection() {
           <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Three shapes of user, one protocol.</p>
         </div>
         <div className="who-cards">
-          {PERSONAS.map((p) => (
+          {PERSONAS.map((p, i) => (
             <article className="who-card" key={p.tag}>
-              <div className="who-media">
-                <img src={p.imgLight} alt="" className="light" loading="lazy" />
-                <img src={p.imgDark} alt="" className="dark" loading="lazy" />
-              </div>
               <div className="who-body">
-                <div className="who-tag">{p.tag}</div>
+                <div className="who-head">
+                  <span className="who-idx">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="who-tag">{p.tag}</span>
+                </div>
                 <h3>{p.title}</h3>
                 <p>{p.body}</p>
                 <Link href={p.href} className="who-cta">
-                  {p.cta} <span className="arrow">→</span>
+                  <span className="who-cta-txt">{p.cta}</span>
+                  <span className="who-cta-arr">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </span>
                 </Link>
+              </div>
+              <div className="who-preview">
+                <div className="who-chrome" aria-hidden="true">
+                  <span /><span /><span />
+                </div>
+                <div className="who-media">
+                  <img src={p.imgLight} alt="" className="light" loading="lazy" />
+                  <img src={p.imgDark} alt="" className="dark" loading="lazy" />
+                </div>
+                <div className="who-media-fade" aria-hidden="true" />
               </div>
             </article>
           ))}
@@ -1047,6 +1061,43 @@ function TailCTA() {
   );
 }
 
+// ── Book-a-call cushion ─────────────────────────────────────────────────
+// Big brand-accent panel sitting between the tail CTA and the footer, in
+// the shape of a Rift/Vercel-style "Schedule" cushion. Solid accent fill,
+// subtle grid overlay, one primary + one secondary CTA.
+
+function BookCallCushion() {
+  return (
+    <section className="cushion" aria-labelledby="cushion-title">
+      <div className="wrap">
+        <div className="cushion-card">
+          <div className="cushion-grid" aria-hidden="true" />
+          <div className="cushion-body">
+            <div className="cushion-tag">Schedule</div>
+            <h2 id="cushion-title" className="cushion-h">Book a call.</h2>
+            <p className="cushion-sub">
+              15 minutes. We walk you through BlockFinaX and answer your questions.
+            </p>
+            <div className="cushion-actions">
+              <a
+                href="https://calendly.com/anthonykumako8/30min"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cushion-btn primary"
+              >
+                Book a call <span className="arrow" aria-hidden="true">→</span>
+              </a>
+              <Link href="/learn" className="cushion-btn ghost">
+                Read the academy <span className="arrow" aria-hidden="true">→</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Footer ──────────────────────────────────────────────────────────────
 
 function Footer() {
@@ -1168,6 +1219,7 @@ export default function Website() {
       <MarketsSection />
       <SignalSection />
       <TailCTA />
+      <BookCallCushion />
       <Footer />
     </div>
   );
