@@ -133,7 +133,7 @@ export const CATALOG: Lesson[] = [
     readMin: 9,
     toc: [
       { id: 'who',        label: 'Who writes the cover' },
-      { id: 'analogy',    label: 'The insurance analogy — and its limits' },
+      { id: 'analogy',    label: 'The insurance analogy and its limits' },
       { id: 'capital',    label: 'Reserved capital vs. earned premium' },
       { id: 'edge',       label: 'Where an LP’s edge comes from' },
       { id: 'ruin',       label: 'The one number you must not ignore' },
@@ -186,7 +186,7 @@ export const CATALOG: Lesson[] = [
   {
     slug: 'cheatsheet',
     title: 'Cheatsheet & glossary',
-    blurb: 'The whole protocol on one page — terms, roles, numbers, functions.',
+    blurb: 'The whole protocol on one page. Terms, roles, numbers, functions.',
     group: 'Reference',
     level: 'beginner',
     readMin: 4,
