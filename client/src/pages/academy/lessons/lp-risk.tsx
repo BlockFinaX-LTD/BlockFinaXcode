@@ -50,27 +50,32 @@ export default function LpRisk() {
           LP&apos;s proportional share of the loss the moment the pool
           ends, so racing to withdraw doesn&apos;t buy you anything.
         </P>
-        <Fig label="Fig. 09·1" caption="Loss share is a snapshot, not a race. Three LPs, one settling event, no advantage to withdrawing first.">
-          <svg viewBox="0 0 600 200">
-            <line x1="60" y1="150" x2="560" y2="150" className="stroke-2" />
-            <line x1="60" y1="30" x2="60" y2="150" className="stroke-2" />
-            <rect x="80" y="60" width="60" height="90" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
-            <text x="80" y="54">LP · A</text>
-            <text x="80" y="170">40%</text>
-            <rect x="180" y="80" width="60" height="70" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
-            <text x="180" y="54">LP · B</text>
-            <text x="180" y="170">35%</text>
-            <rect x="280" y="100" width="60" height="50" fill="var(--ac-accent-soft)" stroke="var(--ac-accent)" />
-            <text x="280" y="54">LP · C</text>
-            <text x="280" y="170">25%</text>
-            <line x1="360" y1="90" x2="440" y2="90" stroke="var(--ac-tx-3)" strokeWidth="1" />
-            <path d="M 435 84 L 445 90 L 435 96" stroke="var(--ac-tx-3)" fill="none" />
-            <text x="365" y="80">Settle</text>
-            <rect x="460" y="70" width="30" height="80" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
-            <text x="460" y="64">Loss</text>
-            <text x="500" y="80">A · 40%</text>
-            <text x="500" y="100">B · 35%</text>
-            <text x="500" y="120">C · 25%</text>
+        <Fig label="Fig. 09·1" caption="Loss share is a snapshot, not a race. Three LPs, one settling event. Withdrawal order doesn't move the loss around.">
+          <svg viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet">
+            <text x="20" y="24" className="lbl-major">Pool shares at settlement</text>
+
+            <rect x="20"  y="60" width="80" height="90" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
+            <rect x="110" y="80" width="80" height="70" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
+            <rect x="200" y="100" width="80" height="50" fill="var(--ac-accent-soft)" stroke="var(--ac-accent)" />
+
+            <text x="60"  y="54" textAnchor="middle">LP · A</text>
+            <text x="150" y="54" textAnchor="middle">LP · B</text>
+            <text x="240" y="54" textAnchor="middle">LP · C</text>
+            <text x="60"  y="170" textAnchor="middle">40%</text>
+            <text x="150" y="170" textAnchor="middle">35%</text>
+            <text x="240" y="170" textAnchor="middle">25%</text>
+
+            <line x1="320" y1="100" x2="380" y2="100" stroke="var(--ac-tx-3)" strokeWidth="1" />
+            <path d="M 373 94 L 383 100 L 373 106" stroke="var(--ac-tx-3)" fill="none" />
+            <text x="350" y="90" textAnchor="middle">Settle</text>
+
+            <text x="410" y="60" style={{ fill: 'var(--ac-tx-3)' }}>Loss allocation</text>
+            <text x="410" y="88">LP A</text>
+            <text x="580" y="88" textAnchor="end">40%</text>
+            <text x="410" y="112">LP B</text>
+            <text x="580" y="112" textAnchor="end">35%</text>
+            <text x="410" y="136">LP C</text>
+            <text x="580" y="136" textAnchor="end">25%</text>
           </svg>
         </Fig>
       </Section>

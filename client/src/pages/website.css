@@ -424,6 +424,75 @@
 .bfx-landing .payoff .lbl.t { fill: var(--bfx-tint); opacity: 0.85; }
 .bfx-landing .payoff .spot { fill: var(--bfx-tx); }
 
+/* ---------- who this is for ---------- */
+.bfx-landing .who { padding: 72px 0 80px; border-top: 1px solid var(--bfx-border); }
+.bfx-landing .who-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.bfx-landing .who-card {
+  border: 1px solid var(--bfx-border);
+  border-radius: 20px;
+  background: var(--bfx-card);
+  padding: 26px 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color .25s var(--bfx-ease), background .25s var(--bfx-ease), transform .25s var(--bfx-ease);
+}
+.bfx-landing .who-card:hover {
+  border-color: color-mix(in oklab, var(--bfx-accent) 30%, var(--bfx-border));
+  background: var(--bfx-card-2);
+  transform: translateY(-2px);
+}
+.bfx-landing .who-ic {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--bfx-border-2);
+  border-radius: 12px;
+  color: var(--bfx-accent);
+  background: color-mix(in oklab, var(--bfx-accent) 8%, transparent);
+}
+.bfx-landing .who-ic svg { width: 26px; height: 26px; }
+.bfx-landing .who-card h3 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--bfx-tx);
+}
+.bfx-landing .who-card p {
+  color: var(--bfx-tx-2);
+  font-size: 14.5px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.bfx-landing .who-cta {
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bfx-accent);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+}
+.bfx-landing .who-cta:hover { color: var(--bfx-accent-2); }
+.bfx-landing .who-cta .arrow {
+  display: inline-block;
+  transition: transform .18s var(--bfx-ease);
+}
+.bfx-landing .who-cta:hover .arrow { transform: translateX(2px); }
+
+@media (max-width: 900px) {
+  .bfx-landing .who-cards { grid-template-columns: 1fr; }
+}
+
 /* ---------- signal section ---------- */
 .bfx-landing .signal {
   position: relative; overflow: hidden; text-align: center;

@@ -137,18 +137,25 @@ export default function Hedging101() {
       </Section>
 
       <Fig label="Fig. 06·1" caption="Three canonical hedge shapes overlaid. The forward locks you in. The option lets you walk. The parametric cover pays out when a reading is breached.">
-        <svg viewBox="0 0 600 220">
-          <line x1="60" y1="150" x2="560" y2="150" className="stroke-2" />
-          <line x1="60" y1="30" x2="60" y2="150" className="stroke-2" />
-          <line x1="60" y1="90" x2="560" y2="90" className="mint" strokeWidth="1.4" strokeDasharray="4 2" />
-          <text x="480" y="82">Forward</text>
-          <path d="M 60 150 L 300 150 L 560 30" className="accent" strokeWidth="1.6" />
-          <text x="470" y="45" style={{ fill: 'var(--ac-accent)' }}>Option</text>
-          <path d="M 60 150 L 300 150 L 300 60 L 560 60" className="stroke" strokeWidth="1.4" strokeDasharray="2 3" />
-          <text x="440" y="55">Parametric</text>
-          <line x1="300" y1="60" x2="300" y2="150" className="stroke" strokeDasharray="2 3" />
-          <text x="290" y="170">Trigger</text>
-          <text x="270" y="200" className="lbl-major">Underlying reading</text>
+        <svg viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet">
+          <line x1="60" y1="180" x2="580" y2="180" className="stroke-2" />
+          <line x1="60" y1="30" x2="60" y2="180" className="stroke-2" />
+
+          <line x1="60" y1="120" x2="580" y2="120" className="mint" strokeWidth="1.4" strokeDasharray="4 3" />
+          <path d="M 60 180 L 320 180 L 320 90 L 580 90" className="stroke" strokeWidth="1.4" strokeDasharray="2 3" />
+          <path d="M 60 180 L 320 180 L 580 40" className="accent" strokeWidth="1.8" />
+
+          <line x1="320" y1="30" x2="320" y2="180" className="stroke" strokeDasharray="2 4" />
+
+          <circle cx="70" cy="55" r="3" fill="var(--ac-accent)" />
+          <text x="80" y="59">Option</text>
+          <circle cx="70" cy="80" r="3" fill="var(--ac-tx-3)" />
+          <text x="80" y="84">Parametric</text>
+          <circle cx="70" cy="105" r="3" fill="var(--ac-tx-3)" />
+          <text x="80" y="109">Forward</text>
+
+          <text x="320" y="200" textAnchor="middle">Trigger</text>
+          <text x="320" y="222" className="lbl-major" textAnchor="middle">Underlying reading</text>
         </svg>
       </Fig>
     </>

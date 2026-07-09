@@ -93,17 +93,21 @@ export default function OptionsBasics() {
           be sketched this way.
         </P>
         <Fig label="Fig. 07·1" caption="Long call. You pay a premium up front (the flat loss below strike). Above the strike, each unit of underlying-move flows straight to your P&L. The break-even is the strike plus premium.">
-          <svg viewBox="0 0 600 220">
-            <line x1="60" y1="140" x2="560" y2="140" className="stroke-2" />
-            <line x1="60" y1="30" x2="60" y2="200" className="stroke-2" />
-            <line x1="60" y1="170" x2="300" y2="170" className="red" strokeWidth="1.6" />
-            <line x1="300" y1="170" x2="560" y2="40" className="accent" strokeWidth="1.6" />
-            <line x1="300" y1="30" x2="300" y2="200" className="stroke" strokeDasharray="2 4" />
-            <text x="308" y="200">Strike K</text>
-            <line x1="360" y1="140" x2="360" y2="200" className="stroke" strokeDasharray="2 4" />
-            <text x="368" y="200">Break-even</text>
+          <svg viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet">
+            <text x="60" y="24" className="lbl-major">Long call, payoff at expiry</text>
+
+            <line x1="60" y1="150" x2="580" y2="150" className="stroke-2" />
+            <line x1="60" y1="40" x2="60" y2="210" className="stroke-2" />
+
+            <line x1="60" y1="180" x2="300" y2="180" className="red" strokeWidth="1.8" />
+            <line x1="300" y1="180" x2="580" y2="50" className="accent" strokeWidth="1.8" />
+
+            <line x1="300" y1="40" x2="300" y2="210" className="stroke" strokeDasharray="2 4" />
+            <line x1="380" y1="40" x2="380" y2="210" className="stroke" strokeDasharray="2 4" />
+
+            <text x="300" y="226" textAnchor="middle">Strike</text>
+            <text x="380" y="226" textAnchor="middle">Break-even</text>
             <text x="70" y="176">Premium paid</text>
-            <text x="240" y="24" className="lbl-major">Long call, payoff at expiry</text>
           </svg>
         </Fig>
       </Section>

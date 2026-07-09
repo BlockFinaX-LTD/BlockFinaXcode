@@ -253,6 +253,7 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
                   )}
                 </div>
               </div>
+              <Link href="/learn" className="ab-learn">Academy</Link>
               <button type="button" className="iconbtn" aria-label="Toggle theme" onClick={flipTheme}>
                 <span className="ic-moon"><Moon /></span>
                 <span className="ic-sun"><Sun /></span>

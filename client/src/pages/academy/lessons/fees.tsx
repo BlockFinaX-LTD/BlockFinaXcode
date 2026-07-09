@@ -72,21 +72,22 @@ export default function Fees() {
           fee. The remaining $975 lands in the pool as LP income and is
           distributed proportionally to underwriters.
         </P>
-        <Fig label="Fig. 05·1" caption="Platform fee on a $1,000 premium at 2.5%. LPs receive $975 as premium income. The platform keeps $25, of which the creator earns 5% loyalty, or $1.25.">
-          <svg viewBox="0 0 600 210">
-            <rect x="60" y="60" width="500" height="60" fill="none" stroke="var(--ac-hair-3)" strokeWidth="1" />
-            <rect x="60" y="60" width="487.5" height="60" fill="var(--ac-accent-soft)" />
-            <rect x="60" y="60" width="487.5" height="60" fill="none" stroke="var(--ac-accent)" />
-            <text x="72" y="82" style={{ fill: 'var(--ac-tx)' }}>Pool · $975 (97.5%)</text>
-            <text x="72" y="100">Distributed to LPs proportionally</text>
-            <rect x="547.5" y="60" width="12.5" height="60" fill="var(--ac-accent)" opacity="0.35" />
-            <rect x="547.5" y="60" width="12.5" height="60" fill="none" stroke="var(--ac-accent)" />
-            <text x="475" y="140" style={{ fill: 'var(--ac-tx-2)' }}>Platform · $25 (2.5%)</text>
-            <line x1="553" y1="120" x2="530" y2="160" className="stroke" />
-            <line x1="553" y1="120" x2="576" y2="160" className="stroke" />
-            <text x="472" y="176">Protocol · $23.75</text>
-            <text x="546" y="176">Creator · $1.25</text>
-            <text x="60" y="36" className="lbl-major">$1,000 premium on a $100,000 notional at 1%</text>
+        <Fig label="Fig. 05·1" caption="A $1,000 premium at 2.5%. LPs receive $975. The platform keeps $25, from which the creator earns $1.25 loyalty.">
+          <svg viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet">
+            <text x="20" y="24" className="lbl-major">$1,000 premium on a $100,000 notional at 1%</text>
+
+            <text x="20" y="60">$975 to LPs</text>
+            <text x="580" y="60" textAnchor="end" style={{ fill: 'var(--ac-accent)' }}>$25 platform</text>
+
+            <rect x="20" y="72" width="565.5" height="28" fill="var(--ac-accent-soft)" stroke="var(--ac-accent)" />
+            <rect x="585.5" y="72" width="14.5" height="28" fill="var(--ac-accent)" opacity="0.55" stroke="var(--ac-accent)" />
+
+            <text x="20" y="128" style={{ fill: 'var(--ac-tx-3)' }}>Of the $25 platform take</text>
+            <text x="20" y="156">$23.75 protocol</text>
+            <text x="580" y="156" textAnchor="end">$1.25 creator loyalty (5%)</text>
+
+            <line x1="20" y1="168" x2="580" y2="168" className="stroke-2" />
+            <line x1="20" y1="168" x2="551" y2="168" className="accent" strokeWidth="4" />
           </svg>
         </Fig>
       </Section>
