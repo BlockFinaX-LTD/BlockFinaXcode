@@ -17,6 +17,7 @@
 import { Link } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
+import { FlagSvg } from '@/components/app-glyphs';
 import './website.css';
 
 const logoPath = '/favicon.png';
@@ -845,125 +846,204 @@ function UseSection({ theme }: { theme: Theme }) {
 
 // ── Who this is for / audience cards ─────────────────────────────────────
 
+interface Persona {
+  title: string;
+  tag: string;
+  body: string;
+  cta: string;
+  href: string;
+  Icon: React.ComponentType;
+}
+
+const PERSONAS: Persona[] = [
+  {
+    title: 'Exporters and importers',
+    tag: 'Trade & commerce',
+    body:
+      'You ship goods abroad or bring them in, priced in dollars, while your books run in local currency. Cover the leg of the trade that hurts when the rate moves against you.',
+    cta: 'How hedging protects margin',
+    href: '/learn/hedging-101',
+    Icon: TradeIcon,
+  },
+  {
+    title: 'Treasuries',
+    tag: 'Payments & FX',
+    body:
+      'You hold reserves in one currency and liabilities in another. Corporate treasuries, remittance corridors, neobanks with cross-border float. Hedge at the balance-sheet level, not per transaction.',
+    cta: 'How settlement works',
+    href: '/learn/how-blockfinax-works',
+    Icon: VaultIcon,
+  },
+  {
+    title: 'LPs',
+    tag: 'Capital & yield',
+    body:
+      'You have idle USDC on a wallet, treasury, or DAO. Underwrite parametric cover for the people who need it. Collect premium, back hedgers, hold reserves that back real economic risk.',
+    cta: 'Underwriting mechanics',
+    href: '/learn/underwriting-101',
+    Icon: LiquidityIcon,
+  },
+];
+
 function WhoSection() {
   return (
     <section className="who" id="who">
       <div className="wrap">
         <div className="assets-head">
           <h2>Built for the people who feel the rate.</h2>
-          <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Four snapshots below.</p>
+          <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Three shapes of user, one protocol.</p>
         </div>
         <div className="who-cards">
-          <article className="who-card">
-            <div className="who-ic"><SuppliersGlyph /></div>
-            <h3>Businesses paying suppliers abroad</h3>
-            <p>
-              Importers, e-commerce sellers, SaaS with USD costs, SMEs with
-              dollar-denominated inventory. Your suppliers invoice in
-              dollars. Your customers pay in cedi. Buy cover so a bad
-              exchange month doesn&apos;t take out a good quarter.
-            </p>
-            <Link href="/learn/hedging-101" className="who-cta">
-              How hedging protects margin <span className="arrow">→</span>
-            </Link>
-          </article>
-
-          <article className="who-card">
-            <div className="who-ic"><PayrollGlyph /></div>
-            <h3>Payroll, remote workers, and freelancers</h3>
-            <p>
-              Companies paying dollar salaries into weakening local
-              accounts. Freelancers earning USDC and spending in naira.
-              Payroll platforms that need to smooth cross-border swings.
-              Cover the exposure without leaving the wallet.
-            </p>
-            <Link href="/hedge" className="who-cta">
-              Open a cover pool <span className="arrow">→</span>
-            </Link>
-          </article>
-
-          <article className="who-card">
-            <div className="who-ic"><PaymentsGlyph /></div>
-            <h3>Payment and remittance companies</h3>
-            <p>
-              Corridors that carry balances between local and dollar
-              legs. Remittance platforms holding customer float across
-              time zones. Neobanks with treasury exposed to the same
-              currencies their customers earn in. Hedge the corridor,
-              not each transaction.
-            </p>
-            <Link href="/learn/how-blockfinax-works" className="who-cta">
-              How settlement works <span className="arrow">→</span>
-            </Link>
-          </article>
-
-          <article className="who-card">
-            <div className="who-ic"><TreasuryGlyph /></div>
-            <h3>Treasuries, DAOs, and stablecoin LPs</h3>
-            <p>
-              Corporate treasuries with idle USDC earning a few percent.
-              DAO treasuries holding stablecoins between grants. Funds
-              looking for yield uncorrelated with rates or equity.
-              Underwrite parametric cover, collect premium, back the
-              hedgers who need you.
-            </p>
-            <Link href="/learn/underwriting-101" className="who-cta">
-              Underwriting mechanics <span className="arrow">→</span>
-            </Link>
-          </article>
+          {PERSONAS.map((p) => (
+            <article className="who-card" key={p.title}>
+              <div className="who-ic"><p.Icon /></div>
+              <div className="who-body">
+                <h3>{p.title}</h3>
+                <div className="who-tag">{p.tag}</div>
+                <p>{p.body}</p>
+              </div>
+              <Link href={p.href} className="who-cta">
+                Learn more
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </Link>
+            </article>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-/* Line-art glyphs for the persona cards. Monochrome accent, hairline strokes. */
-function SuppliersGlyph() {
+/* Circle-shaped icon glyphs sitting inside the persona cards.
+   Single-stroke, currentColor, on a hairline outer ring. */
+function TradeIcon() {
   return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <rect x="6" y="14" width="14" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <rect x="24" y="14" width="14" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="20" y1="22" x2="24" y2="22" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="9" y1="19" x2="17" y2="19" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-      <line x1="9" y1="24" x2="14" y2="24" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-      <line x1="27" y1="19" x2="35" y2="19" stroke="currentColor" strokeWidth="1" opacity="0.55" />
-      <line x1="27" y1="24" x2="32" y2="24" stroke="currentColor" strokeWidth="1" opacity="0.55" />
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
+      {/* Top track: right-pointing arrow at y=18 */}
+      <path d="M13 18h18M27 12l6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Bottom track: left-pointing arrow at y=30 (12 units below, no collision) */}
+      <path d="M35 30H17M21 24l-6 6 6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
     </svg>
   );
 }
-function PayrollGlyph() {
+function VaultIcon() {
   return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <circle cx="16" cy="18" r="4" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M8 32 Q 8 25 16 25 Q 24 25 24 32" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="28" y1="15" x2="38" y2="15" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="28" y1="20" x2="38" y2="20" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
-      <line x1="28" y1="25" x2="35" y2="25" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
-      <line x1="28" y1="30" x2="38" y2="30" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
+      <path d="M12 34h24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M14 34V20l10-6 10 6v14" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <line x1="18" y1="34" x2="18" y2="22" stroke="currentColor" strokeWidth="1.6" />
+      <line x1="24" y1="34" x2="24" y2="20" stroke="currentColor" strokeWidth="1.6" />
+      <line x1="30" y1="34" x2="30" y2="22" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );
 }
-function PaymentsGlyph() {
+function LiquidityIcon() {
   return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <circle cx="12" cy="22" r="6" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <circle cx="32" cy="22" r="6" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M18 22 L 26 22" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M22 18 L 26 22 L 22 26" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M22 26 L 18 22 L 22 18" stroke="currentColor" strokeWidth="1.2" fill="none" opacity="0.55" />
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
+      <ellipse cx="24" cy="18" rx="10" ry="3.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M14 18v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M14 24v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" opacity="0.55" />
     </svg>
   );
 }
-function TreasuryGlyph() {
+
+// ── Request cards / underwriting CTAs ────────────────────────────────────
+// Two contrasting cards in the shape of Circle's "Partner with Circle" +
+// "Build with Circle" pair. Left: light tint, dark type. Right: near-black
+// with white type. Both target buyers/writers who can't find a fit in the
+// open marketplace and want to work with us directly.
+
+function RequestSection() {
   return (
-    <svg viewBox="0 0 44 44" aria-hidden="true">
-      <path d="M8 32 L 22 12 L 36 32 Z" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="12" y1="32" x2="12" y2="24" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="18" y1="32" x2="18" y2="20" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="24" y1="32" x2="24" y2="22" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="30" y1="32" x2="30" y2="26" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="6" y1="34" x2="38" y2="34" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
+    <section className="reqs" id="request">
+      <div className="wrap">
+        <div className="reqs-grid">
+          <a
+            href="mailto:hello@blockfinax.com?subject=Request%20a%20quote"
+            className="reqcard light"
+          >
+            <div className="reqcard-body">
+              <h2>Request a quote</h2>
+              <p>
+                For businesses, funds, and treasuries whose exposure doesn&apos;t
+                fit the open marketplace. Tell us the notional, the pair, the
+                expiry, and the strike range you want cover on. We&apos;ll
+                structure a bespoke pool and quote you back.
+              </p>
+              <span className="reqcard-cta">
+                Request a quote
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
+            </div>
+          </a>
+          <a
+            href="mailto:hello@blockfinax.com?subject=Apply%20to%20underwrite"
+            className="reqcard dark"
+          >
+            <div className="reqcard-body">
+              <h2>Become an underwriter</h2>
+              <p>
+                Put idle USDC to work as pool liquidity. Every time a hedger
+                buys cover from a pool you back, you earn a share of the
+                premium. If the event settles out of the money, the reserved
+                capital comes back to you. If it settles in the money, your
+                share of the payout is capped and known upfront.
+              </p>
+              <span className="reqcard-cta">
+                Apply to underwrite
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Currencies we cover / flag row ───────────────────────────────────────
+// Six emerging-market currencies with their circular flags, laid out as a
+// horizontal row (single row on desktop, wrapping grid on mobile).
+
+const CURRENCIES: Array<{ code: string; name: string; country: string }> = [
+  { code: 'NGN', name: 'Naira',    country: 'Nigeria' },
+  { code: 'GHS', name: 'Cedi',     country: 'Ghana' },
+  { code: 'TZS', name: 'Shilling', country: 'Tanzania' },
+  { code: 'ETB', name: 'Birr',     country: 'Ethiopia' },
+  { code: 'ZAR', name: 'Rand',     country: 'South Africa' },
+  { code: 'UGX', name: 'Shilling', country: 'Uganda' },
+];
+
+function CurrenciesSection() {
+  return (
+    <section className="cur" id="currencies">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2>Currencies we underwrite.</h2>
+          <p>A few of the emerging-market pairs we cover today. If you need a pair that isn&apos;t in this list, request a quote and we&apos;ll structure it.</p>
+        </div>
+        <div className="cur-row">
+          {CURRENCIES.map((c) => (
+            <div className="cur-item" key={c.code}>
+              <div className="cur-flag"><FlagSvg code={c.code} /></div>
+              <div className="cur-lbl">
+                <div className="cur-code">{c.code}</div>
+                <div className="cur-country">{c.country}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1095,6 +1175,43 @@ function TailCTA() {
   );
 }
 
+// ── Book-a-call cushion ─────────────────────────────────────────────────
+// Big brand-accent panel sitting between the tail CTA and the footer, in
+// the shape of a Rift/Vercel-style "Schedule" cushion. Solid accent fill,
+// subtle grid overlay, one primary + one secondary CTA.
+
+function BookCallCushion() {
+  return (
+    <section className="cushion" aria-labelledby="cushion-title">
+      <div className="wrap">
+        <div className="cushion-card">
+          <div className="cushion-grid" aria-hidden="true" />
+          <div className="cushion-body">
+            <div className="cushion-tag">Schedule</div>
+            <h2 id="cushion-title" className="cushion-h">Book a call.</h2>
+            <p className="cushion-sub">
+              15 minutes. We walk you through BlockFinaX and answer your questions.
+            </p>
+            <div className="cushion-actions">
+              <a
+                href="https://calendly.com/anthonykumako8/30min"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cushion-btn primary"
+              >
+                Book a call <span className="arrow" aria-hidden="true">→</span>
+              </a>
+              <Link href="/learn" className="cushion-btn ghost">
+                Read the academy <span className="arrow" aria-hidden="true">→</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Footer ──────────────────────────────────────────────────────────────
 
 function Footer() {
@@ -1213,9 +1330,11 @@ export default function Website() {
       <Hero />
       <UseSection theme={theme} />
       <WhoSection />
-      <MarketsSection />
+      <RequestSection />
+      <CurrenciesSection />
       <SignalSection />
       <TailCTA />
+      <BookCallCushion />
       <Footer />
     </div>
   );

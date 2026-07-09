@@ -11,19 +11,46 @@ export default function Hedging101() {
         What is a small amount of certainty worth to you right now?
       </Lead>
 
-      <Section n="01" id="the-question" title="The question a hedge answers">
+      <Section n="01" id="the-question" title="The question every FX-exposed business asks">
         <P>
-          Suppose you sell fruit in Accra and pay your suppliers in
-          dollars. You take orders today in Ghanaian cedi. The shipment
-          arrives in 60 days. You settle the invoice then. What you
-          actually don&apos;t know about this trade isn&apos;t the price of fruit.
-          It&apos;s the exchange rate on day 60.
+          Any business whose costs or revenue crosses a currency border
+          eventually asks the same question. What happens if the rate
+          moves against me? Three concrete versions of that question.
         </P>
+        <KV>
+          <KVRow term="A Kenyan coffee exporter">
+            Ships to Germany. Gets paid in dollars 60 days after
+            shipping. Pays local labour, transport, and packaging in
+            shillings today. If the shilling strengthens in those 60
+            days, that dollar payment turns into fewer shillings than
+            the exporter budgeted for.
+          </KVRow>
+          <KVRow term="A Nigerian electronics importer">
+            Orders equipment from Shenzhen. The supplier invoices in
+            dollars, due 90 days later. Local customers pay in naira, at
+            a price already quoted. If the naira weakens over those 90
+            days, the dollar bill takes more naira to settle than the
+            resale ever brought in.
+          </KVRow>
+          <KVRow term="A Ghanaian remittance company">
+            Holds customer float in cedi between corridor legs. Their
+            treasury holds dollars against future payouts. If the cedi
+            devalues sharply overnight, their treasury is fine, but
+            their local liabilities just cost more to settle.
+          </KVRow>
+          <KVRow term="A DAO treasury with USDC">
+            Runs grants in local currency across three markets. Their
+            reserves are dollar stablecoins. When a grantee&apos;s local
+            currency weakens between commitment and disbursement, the
+            same USDC now goes further than promised. When it
+            strengthens, less.
+          </KVRow>
+        </KV>
         <P>
-          A hedge doesn&apos;t tell you what that rate will be. It doesn&apos;t
-          lock the rate either, in most cases. It answers a different
-          question. If the rate moves against me by more than X, how
-          much of the damage do I refuse to absorb?
+          A hedge doesn&apos;t tell any of them which way the rate will go.
+          It doesn&apos;t lock the rate either, in most cases. It answers a
+          different question. If the rate moves against me by more than
+          X, how much of the damage do I refuse to absorb?
         </P>
         <Callout label="The insight">
           Everything else about hedging (instruments, strikes, expiries,
