@@ -962,23 +962,23 @@ export default function HedgerPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="simulate" className="space-y-4">
+        <Tabs defaultValue="learn" className="space-y-4">
           <TabsList className="bg-white border border-gray-200 rounded-xl h-auto p-1 flex w-full sm:w-auto sm:inline-flex">
-            <TabsTrigger value="simulate" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
-              Simulate
-            </TabsTrigger>
             <TabsTrigger value="learn" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
               How protection works
+            </TabsTrigger>
+            <TabsTrigger value="simulate" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
+              Simulate
             </TabsTrigger>
             <TabsTrigger value="cases" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
               Use cases
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="simulate" className="mt-4 space-y-4">
-            <SimulateTab />
-          </TabsContent>
           <TabsContent value="learn" className="mt-4">
             <LearnTab />
+          </TabsContent>
+          <TabsContent value="simulate" className="mt-4 space-y-4">
+            <SimulateTab />
           </TabsContent>
           <TabsContent value="cases" className="mt-4">
             <UseCasesTab />

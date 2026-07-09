@@ -801,7 +801,7 @@ function UseSection({ theme }: { theme: Theme }) {
                 <Link href="/hedge" className="feat-btn primary">
                   Hedge <span className="arrow">→</span>
                 </Link>
-                <Link href="/hedger" className="feat-btn ghost">Learn more</Link>
+                <Link href="/learn/hedging-101" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>
@@ -815,7 +815,7 @@ function UseSection({ theme }: { theme: Theme }) {
                 <Link href="/hedge" className="feat-btn primary">
                   Yield <span className="arrow">→</span>
                 </Link>
-                <Link href="/liquidity-provider" className="feat-btn ghost">Learn more</Link>
+                <Link href="/learn/underwriting-101" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>

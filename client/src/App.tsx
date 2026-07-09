@@ -51,6 +51,7 @@ import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
 import LiquidityProviderPage from "@/pages/liquidity-provider";
 import HedgerPage from "@/pages/hedger";
+import AcademyRoute from "@/pages/academy";
 import { DocsGate } from "@/components/docs-gate";
 
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
@@ -169,6 +170,11 @@ function Router() {
       <Route path="/docs/request" component={DocsRequestPage} />
       <Route path="/liquidity-provider" component={LiquidityProviderPage} />
       <Route path="/hedger" component={HedgerPage} />
+
+      {/* Academy — public course pages under /learn. One dispatcher handles
+          the root (Start here) and every /learn/:slug lesson from the catalog. */}
+      <Route path="/learn" component={AcademyRoute} />
+      <Route path="/learn/:slug" component={AcademyRoute} />
 
       {/* Auth — open to anyone. Rift widget renders unconditionally so new
           users can sign up without an invitation. */}
