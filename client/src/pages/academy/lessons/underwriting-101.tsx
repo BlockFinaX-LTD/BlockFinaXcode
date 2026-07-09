@@ -73,18 +73,19 @@ export default function Underwriting101() {
           at expiry. If it doesn&apos;t, the reservation is released and the
           premium the hedger paid stays in the pool as your earnings.
         </P>
-        <Fig label="Fig. 08·1" caption="A schematic pool. The larger block is your unencumbered deposit. The smaller is reserved against outstanding cover.">
-          <svg viewBox="0 0 600 180">
-            <rect x="60" y="40" width="500" height="80" fill="none" stroke="var(--ac-hair-3)" strokeWidth="1" />
-            <rect x="60" y="40" width="300" height="80" fill="var(--ac-hair)" />
-            <rect x="60" y="40" width="300" height="80" fill="none" stroke="var(--ac-hair-3)" />
-            <text x="72" y="60" style={{ fill: 'var(--ac-tx-2)' }}>Unencumbered</text>
-            <text x="72" y="76">Withdrawable after settlement</text>
-            <rect x="360" y="40" width="200" height="80" className="accent-fill" />
-            <rect x="360" y="40" width="200" height="80" fill="none" stroke="var(--ac-accent)" />
-            <text x="372" y="60" style={{ fill: 'var(--ac-tx)' }}>Reserved</text>
-            <text x="372" y="76">Backing outstanding cover</text>
-            <text x="60" y="24" className="lbl-major">Pool composition (LP view)</text>
+        <Fig label="Fig. 08·1" caption="A schematic pool. Unencumbered capital is withdrawable after settlement. Reserved capital is backing outstanding cover.">
+          <svg viewBox="0 0 600 180" preserveAspectRatio="xMidYMid meet">
+            <text x="20" y="24" className="lbl-major">Pool composition (LP view)</text>
+
+            <text x="20" y="52">Unencumbered</text>
+            <text x="580" y="52" textAnchor="end" style={{ fill: 'var(--ac-accent)' }}>Reserved</text>
+
+            <rect x="20" y="66" width="340" height="44" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
+            <rect x="360" y="66" width="220" height="44" className="accent-fill" />
+            <rect x="360" y="66" width="220" height="44" fill="none" stroke="var(--ac-accent)" />
+
+            <text x="20" y="138" style={{ fill: 'var(--ac-tx-3)' }}>Withdrawable after settlement</text>
+            <text x="580" y="138" textAnchor="end" style={{ fill: 'var(--ac-tx-3)' }}>Backing outstanding cover</text>
           </svg>
         </Fig>
       </Section>

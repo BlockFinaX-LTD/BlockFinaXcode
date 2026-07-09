@@ -120,28 +120,29 @@ export function RangePayoffSVG({
   payoutLabel?: string;
 }) {
   return (
-    <svg viewBox="0 0 600 240" role="img" aria-label="Range payoff curve" preserveAspectRatio="xMidYMid meet">
-      <line x1="60" y1="200" x2="560" y2="200" className="stroke-2" />
-      <line x1="60" y1="30" x2="60" y2="200" className="stroke-2" />
-      <line x1="60" y1="80" x2="560" y2="80" className="stroke-2" strokeDasharray="2 4" />
-      <line x1="60" y1="140" x2="560" y2="140" className="stroke-2" strokeDasharray="2 4" />
+    <svg viewBox="0 0 600 260" role="img" aria-label="Range payoff curve" preserveAspectRatio="xMidYMid meet">
+      <text x="14" y="128" className="lbl-major" transform="rotate(-90 14 128)">{payoutLabel}</text>
 
-      <path d="M 60 200 L 240 200 L 400 60 L 560 60 L 560 200 Z" className="accent-fill" />
-      <path d="M 60 200 L 240 200 L 400 60 L 560 60" className="accent" strokeWidth="2" />
+      <line x1="60" y1="210" x2="580" y2="210" className="stroke-2" />
+      <line x1="60" y1="40" x2="60" y2="210" className="stroke-2" />
+      <line x1="60" y1="90" x2="580" y2="90" className="stroke-2" strokeDasharray="2 4" />
+      <line x1="60" y1="150" x2="580" y2="150" className="stroke-2" strokeDasharray="2 4" />
 
-      <line x1="240" y1="60" x2="240" y2="200" className="stroke" strokeDasharray="2 4" />
-      <circle cx="240" cy="200" r="4" fill="var(--ac-accent)" />
-      <text x="248" y="216">{strikeLabel}</text>
+      <path d="M 60 210 L 250 210 L 410 70 L 580 70 L 580 210 Z" className="accent-fill" />
+      <path d="M 60 210 L 250 210 L 410 70 L 580 70" className="accent" strokeWidth="2" />
 
-      <line x1="400" y1="60" x2="400" y2="200" className="stroke" strokeDasharray="2 4" />
-      <circle cx="400" cy="60" r="4" fill="var(--ac-accent)" />
-      <text x="408" y="216">{capLabel}</text>
+      <line x1="250" y1="70" x2="250" y2="210" className="stroke" strokeDasharray="2 4" />
+      <circle cx="250" cy="210" r="4" fill="var(--ac-accent)" />
+      <text x="250" y="230" textAnchor="middle">{strikeLabel}</text>
 
-      <text x="290" y="234" className="lbl-major">{underlyingLabel}</text>
-      <text x="14" y="118" className="lbl-major" transform="rotate(-90 14 118)">{payoutLabel}</text>
+      <line x1="410" y1="70" x2="410" y2="210" className="stroke" strokeDasharray="2 4" />
+      <circle cx="410" cy="70" r="4" fill="var(--ac-accent)" />
+      <text x="410" y="230" textAnchor="middle">{capLabel}</text>
 
-      <text x="90" y="196">No payout</text>
-      <text x="425" y="52">Capped</text>
+      <text x="155" y="206" textAnchor="middle" style={{ fill: 'var(--ac-tx-3)' }}>No payout</text>
+      <text x="495" y="62" textAnchor="middle" style={{ fill: 'var(--ac-tx-3)' }}>Capped</text>
+
+      <text x="320" y="254" className="lbl-major" textAnchor="middle">{underlyingLabel}</text>
     </svg>
   );
 }

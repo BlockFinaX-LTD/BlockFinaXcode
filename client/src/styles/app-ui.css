@@ -118,6 +118,12 @@
 .bfx-app .hs-r{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--tx-2);white-space:nowrap;}
 .bfx-app .hs-r .u{font-size:9px;color:var(--tx-4);letter-spacing:.06em;display:block;text-align:right;margin-top:1px;}
 .bfx-app .hs-empty{padding:18px;text-align:center;color:var(--tx-4);font-size:12.5px;}
+.bfx-app .ab-learn{display:inline-flex;align-items:center;height:40px;padding:0 14px;
+  border:1px solid var(--border);border-radius:11px;background:var(--card);
+  color:var(--tx-2);font-size:13px;font-weight:500;text-decoration:none;
+  transition:.18s var(--ease);}
+.bfx-app .ab-learn:hover{color:var(--tx);border-color:var(--border-2);}
+@media(max-width:640px){.bfx-app .ab-learn{display:none;}}
 .bfx-app .iconbtn{position:relative;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
   color:var(--tx-2);border:1px solid var(--border);background:var(--card);transition:.18s var(--ease);}
 .bfx-app .iconbtn:hover{color:var(--tx);border-color:var(--border-2);background:var(--card-h);}
