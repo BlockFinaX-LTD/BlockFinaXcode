@@ -1029,7 +1029,7 @@ function CurrenciesSection() {
       <div className="wrap">
         <div className="assets-head">
           <h2>Currencies we underwrite.</h2>
-          <p>Six emerging-market currency pairs open today, with more added as pools and oracle coverage roll out.</p>
+          <p>A few of the emerging-market pairs we cover today. If you need a pair that isn&apos;t in this list, request a quote and we&apos;ll structure it.</p>
         </div>
         <div className="cur-row">
           {CURRENCIES.map((c) => (
