@@ -18,13 +18,12 @@ export default function StartHere() {
     <>
       <div className="ac-hero">
         <div className="super">The Academy · Twelve lessons</div>
-        <h1>Start with the product. <em>Learn the theory only if you want it.</em></h1>
+        <h1>Protect what you've earned. <em>Or earn from protecting others.</em></h1>
         <p>
-          A course on BlockFinaX — how it works, what it charges, and the
-          derivatives fundamentals behind it. The product overview comes
-          first; the classical hedging and options theory sits behind it,
-          for readers who want the foundations. No jargon smuggled past
-          you. No form to fill in.
+          BlockFinaX is an app where two groups of people meet: people whose
+          local currency is losing value, and people with idle dollars who'd
+          like to earn from helping them. This course explains how it works
+          — in plain English, with no form to fill in.
         </p>
       </div>
 
@@ -41,7 +40,7 @@ export default function StartHere() {
             <div className="lvl">02 · Interior</div>
             <IntermediateGlyph />
             <h3>Intermediate</h3>
-            <p>You've seen the product. Now go back to first principles — what hedging is, and how options price it.</p>
+            <p>You've seen how the product works. Now understand the theory behind it — what hedging really is, and how options price it.</p>
             <span className="arrow">Open lesson →</span>
           </Link>
           <Link href={`/learn/${advanced.slug}`} className="ac-card">
@@ -56,18 +55,42 @@ export default function StartHere() {
 
       <section id="why">
         <P>
-          <em>BlockFinaX</em> is an on-chain marketplace for parametric
-          foreign-exchange protection in emerging markets. People exposed
-          to a weakening local currency buy cover that pays out automatically
-          when a rate is breached. Liquidity providers underwrite that risk
-          in exchange for premium. The protocol itself takes no market
-          position — it earns fees.
+          Two kinds of people show up here. The first are the ones getting
+          squeezed by their currency. A Ghanaian importer whose suppliers
+          invoice in dollars but who gets paid in cedi. A Nigerian
+          freelancer earning in naira with school fees creeping up every
+          term. A Kenyan family repaying a dollar loan in shillings. When
+          the dollar gets more expensive, their lives get more expensive
+          with it — and they usually can't do much about it.
         </P>
         <P>
-          The Academy is here because the shape is new. It borrows vocabulary
-          from options, insurance, and DeFi liquidity pools, but it isn't
-          quite any of them. If a lesson leaves you with a clean mental
-          model, it's done its job.
+          They come here to <em>buy cover</em>. They pay a small fee up
+          front, and if the dollar gets sharply more expensive by a date
+          they choose, they get an automatic payout that offsets the damage.
+          If nothing bad happens, the fee is what it cost. Like a mobile
+          data bundle for currency risk.
+        </P>
+        <P>
+          The second group are people with dollars sitting still — in a
+          wallet, an exchange, a lending app earning a few percent. They
+          come here to <em>put those dollars to work</em>. They add them to
+          a pool that backs the cover the first group buys, and they earn a
+          share of every fee that flows in. In exchange, if a currency
+          actually falls hard, they help pay the covered users back.
+        </P>
+        <P>
+          BlockFinaX matches these two groups up on-chain, keeps a small
+          slice of the fees for running the system, and settles everything
+          automatically when the cover expires. Nobody has to trust anyone
+          personally — the pool always holds enough dollars to pay every
+          buyer's worst case, and the rate that decides who gets paid is
+          published publicly.
+        </P>
+        <P>
+          The lessons that follow show, in order: how the pieces fit
+          together, how the fees work, and — for readers who want the
+          foundations — the classical hedging and options theory the whole
+          thing is built on.
         </P>
       </section>
 
