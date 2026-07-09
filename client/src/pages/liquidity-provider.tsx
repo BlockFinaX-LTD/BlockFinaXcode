@@ -1243,23 +1243,23 @@ export default function LiquidityProviderPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="backtest" className="space-y-4">
+        <Tabs defaultValue="learn" className="space-y-4">
           <TabsList className="bg-white border border-gray-200 rounded-xl h-auto p-1 flex w-full sm:w-auto sm:inline-flex">
-            <TabsTrigger value="backtest" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
-              Backtest
-            </TabsTrigger>
             <TabsTrigger value="learn" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
               How it works
+            </TabsTrigger>
+            <TabsTrigger value="backtest" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
+              Backtest
             </TabsTrigger>
             <TabsTrigger value="currencies" className="rounded-lg flex-1 sm:flex-none data-[state=active]:bg-[#001F5C] data-[state=active]:text-white px-4 py-2 text-sm">
               Currencies
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="backtest" className="mt-4 space-y-4">
-            <BacktestTab />
-          </TabsContent>
           <TabsContent value="learn" className="mt-4">
             <HowItWorksTab />
+          </TabsContent>
+          <TabsContent value="backtest" className="mt-4 space-y-4">
+            <BacktestTab />
           </TabsContent>
           <TabsContent value="currencies" className="mt-4">
             <CurrencyReferenceTab />
