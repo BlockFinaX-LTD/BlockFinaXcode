@@ -3,7 +3,7 @@ import { Callout, CodeInline, Fig, H1, H3, KV, KVRow, Lead, LessonTag, OL, P, Pu
 export default function HowBlockFinaXWorks() {
   return (
     <>
-      <LessonTag>Lesson 05 · How BlockFinaX works</LessonTag>
+      <LessonTag>Lesson 02 · How BlockFinaX works</LessonTag>
       <H1>How BlockFinaX <em>works.</em></H1>
       <Lead>
         Four roles, one on-chain diamond, one lifecycle. This lesson stitches
@@ -144,9 +144,9 @@ export default function HowBlockFinaXWorks() {
       <Section n="05" id="not-position" title="Why the protocol takes no position">
         <P>
           The protocol earns fees on every event: a flat fee at creation,
-          a percentage of hedger premiums, a percentage of payouts, and a
-          percentage of LPs' realised premium income. All five streams are
-          detailed in lesson 08.
+          a slice of hedger premiums, a slice of payouts, and a slice of
+          LPs' realised premium income. All four streams are detailed in
+          lesson 05.
         </P>
         <Pull>
           <em>The protocol never bets against you. Every dollar it earns comes from a fee, and every fee is bounded.</em>

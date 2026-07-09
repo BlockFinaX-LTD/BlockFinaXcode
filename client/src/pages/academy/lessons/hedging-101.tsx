@@ -3,7 +3,7 @@ import { Callout, Fig, H1, H3, KV, KVRow, Lead, LessonTag, OL, P, Pull, Section,
 export default function Hedging101() {
   return (
     <>
-      <LessonTag>Lesson 02 · Fundamentals</LessonTag>
+      <LessonTag>Lesson 06 · Fundamentals</LessonTag>
       <H1>Hedging, <em>from first principles.</em></H1>
       <Lead>
         A hedge is not a bet, and it's not free. It's a purchase of certainty.

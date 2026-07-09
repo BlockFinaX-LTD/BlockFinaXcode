@@ -3,7 +3,7 @@ import { Callout, Fig, H1, H3, KV, KVRow, Lead, LessonTag, OL, P, Pull, Section,
 export default function Underwriting101() {
   return (
     <>
-      <LessonTag>Lesson 04 · Fundamentals</LessonTag>
+      <LessonTag>Lesson 08 · Fundamentals</LessonTag>
       <H1>Underwriting: <em>the other side of the trade.</em></H1>
       <Lead>
         For every hedger buying cover there is someone standing on the other

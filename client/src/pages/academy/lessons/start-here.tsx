@@ -9,8 +9,8 @@ import { P } from '../lesson-blocks';
  */
 export default function StartHere() {
   const groups = groupedCatalog();
-  const beginner = CATALOG.find((l) => l.slug === 'hedging-101')!;
-  const intermediate = CATALOG.find((l) => l.slug === 'how-blockfinax-works')!;
+  const beginner = CATALOG.find((l) => l.slug === 'how-blockfinax-works')!;
+  const intermediate = CATALOG.find((l) => l.slug === 'hedging-101')!;
   const advanced = CATALOG.find((l) => l.slug === 'lp-risk')!;
   const total = CATALOG.reduce((n, l) => n + l.readMin, 0);
 
@@ -18,11 +18,13 @@ export default function StartHere() {
     <>
       <div className="ac-hero">
         <div className="super">The Academy · Twelve lessons</div>
-        <h1>An honest handbook <em>for a novel kind of market.</em></h1>
+        <h1>Start with the product. <em>Learn the theory only if you want it.</em></h1>
         <p>
-          A course on parametric hedging, on-chain underwriting, and the
-          protocol behind BlockFinaX. No jargon smuggled past you. No form
-          to fill in.
+          A course on BlockFinaX — how it works, what it charges, and the
+          derivatives fundamentals behind it. The product overview comes
+          first; the classical hedging and options theory sits behind it,
+          for readers who want the foundations. No jargon smuggled past
+          you. No form to fill in.
         </p>
       </div>
 
@@ -32,14 +34,14 @@ export default function StartHere() {
             <div className="lvl">01 · Start</div>
             <BeginnerGlyph />
             <h3>Beginner</h3>
-            <p>You've heard the word "hedge" but couldn't say what one is. Begin here.</p>
+            <p>You want to know what BlockFinaX is and how it works. Start with the product overview.</p>
             <span className="arrow">Open lesson →</span>
           </Link>
           <Link href={`/learn/${intermediate.slug}`} className="ac-card">
             <div className="lvl">02 · Interior</div>
             <IntermediateGlyph />
             <h3>Intermediate</h3>
-            <p>You know options exist. You want to see how our protocol actually stitches together.</p>
+            <p>You've seen the product. Now go back to first principles — what hedging is, and how options price it.</p>
             <span className="arrow">Open lesson →</span>
           </Link>
           <Link href={`/learn/${advanced.slug}`} className="ac-card">
@@ -100,7 +102,7 @@ export default function StartHere() {
         <h3>The whole course, cover to cover.</h3>
         <p>About {Math.round(total / 5) * 5} minutes end-to-end. You can stop anywhere and pick up later — your position is preserved by URL.</p>
         <div className="actions">
-          <Link href={`/learn/${CATALOG[1].slug}`} className="ac-btn primary">Begin at lesson 01</Link>
+          <Link href={`/learn/${CATALOG[1].slug}`} className="ac-btn primary">Open lesson 02</Link>
           <Link href="/learn/cheatsheet" className="ac-btn ghost">Jump to the cheatsheet</Link>
         </div>
       </div>

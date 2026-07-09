@@ -3,7 +3,7 @@ import { Callout, CodeInline, Fig, H1, H3, KV, KVRow, Lead, LessonTag, OL, P, Pu
 export default function OptionsBasics() {
   return (
     <>
-      <LessonTag>Lesson 03 · Fundamentals</LessonTag>
+      <LessonTag>Lesson 07 · Fundamentals</LessonTag>
       <H1>Options, <em>in plain English.</em></H1>
       <Lead>
         An option is the simplest kind of contract in finance to describe and
@@ -128,7 +128,7 @@ export default function OptionsBasics() {
         <RangePayoffSVG />
         <Callout label="Why this matters here">
           If you understand a call spread's payoff, you already understand
-          most of the geometry of the BlockFinaX range product. Lesson 06
+          most of the geometry of the BlockFinaX range product. Lesson 03
           is the same picture, framed in the protocol's vocabulary.
         </Callout>
       </Section>

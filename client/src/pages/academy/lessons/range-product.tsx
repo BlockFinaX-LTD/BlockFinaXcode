@@ -3,7 +3,7 @@ import { Callout, CodeInline, Fig, H1, Lead, LessonTag, P, Pull, RangePayoffSVG,
 export default function RangeProduct() {
   return (
     <>
-      <LessonTag>Lesson 06 · How BlockFinaX works</LessonTag>
+      <LessonTag>Lesson 03 · How BlockFinaX works</LessonTag>
       <H1>The <em>range product.</em></H1>
       <Lead>
         BlockFinaX's default payoff isn't a digital yes/no. It's a call/put

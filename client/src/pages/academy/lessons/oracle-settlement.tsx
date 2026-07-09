@@ -3,7 +3,7 @@ import { Callout, CodeInline, Fig, H1, KV, KVRow, Lead, LessonTag, OL, P, Pull, 
 export default function OracleSettlement() {
   return (
     <>
-      <LessonTag>Lesson 07 · How BlockFinaX works</LessonTag>
+      <LessonTag>Lesson 04 · How BlockFinaX works</LessonTag>
       <H1>Oracle <em>&amp; settlement.</em></H1>
       <Lead>
         Settlement is the moment a pool answers the question "did the tail

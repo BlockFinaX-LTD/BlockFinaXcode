@@ -51,14 +51,15 @@ export default function Cheatsheet() {
       <Section n="03" id="numbers" title="Numbers that matter">
         <KV>
           <KVRow term="PRECISION">
-            <CodeInline>1e6</CodeInline>. Rate integer of <CodeInline>5000</CodeInline> = 0.5%.
+            <CodeInline>1e6</CodeInline>. Rate integer of <CodeInline>25000</CodeInline> = 2.5%.
           </KVRow>
           <KVRow term="Rate caps">
             Any single fee rate ≤ 10%. Creator loyalty ≤ 50%.
           </KVRow>
           <KVRow term="Default rates">
-            Hedger 0.5%, payout 1%, LP profit 1%, creator loyalty 5%.
-            Creation fee: $25 on Base, $2 on BSC.
+            Platform fee on premium 2.5%, payout 1%, LP profit 1%,
+            creator loyalty 5%. Creation fee: flat <em>$25</em> on every
+            supported chain.
           </KVRow>
           <KVRow term="Range width cap">
             <CodeInline>payoutCap − strike ≤ 10 × notional</CodeInline>.
