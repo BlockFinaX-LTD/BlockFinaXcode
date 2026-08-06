@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { DocumentView } from "@/components/loi/document-view";
 import { SignaturePad, type SigMethod } from "@/components/loi/signature-pad";
+import { BrandSignatureMark } from "@/components/loi/brand-signature";
 import {
   FileSignature, Plus, Search, ArrowLeft, Send, Download, Eye, Clock, CheckCircle2,
   AlertTriangle, RefreshCw, Trash2, MessageSquare, ChevronRight, Bell, PenLine,
@@ -268,6 +269,9 @@ function SignatureSettings({ token }: { token: string }) {
   const [name, setName] = useState("");
   const [pending, setPending] = useState<{ method: SigMethod; data: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // The brand mark is the default: a typeset block is what most companies
+  // actually put on a letter, and it needs nothing uploaded.
+  const [mode, setMode] = useState<"mark" | "hand">("mark");
 
   const { data, refetch } = useQuery({
     queryKey: ["brand-signature", token],
@@ -324,7 +328,7 @@ function SignatureSettings({ token }: { token: string }) {
           <>
             <img src={data.dataUrl} alt="Company signature" className="h-8 w-auto max-w-[140px] object-contain" />
             <span className="text-xs text-muted-foreground">
-              Signature on file{data.name ? ` — ${data.name}` : ""}. It appears on every letter you send.
+              Signature block on file{data.name ? ` — ${data.name}` : ""}. It appears on every letter you send.
             </span>
             <div className="ml-auto flex gap-2">
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpen(true)}>Replace</Button>
@@ -334,28 +338,65 @@ function SignatureSettings({ token }: { token: string }) {
         ) : (
           <>
             <span className="text-xs text-muted-foreground">
-              No signature on file. Add one and it appears in the sign-off of every letter you send.
+              No signature block yet. Add one and it appears in the sign-off of every letter you send.
             </span>
             <Button variant="outline" size="sm" className="ml-auto h-7 text-xs" onClick={() => setOpen(true)}>
-              Add signature
+              Add signature block
             </Button>
           </>
         )}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Company signature</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Signature block</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Draw it with a trackpad or phone, or upload a photo of your signature on white paper.
-              A transparent PNG looks best.
-            </p>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Name printed beneath it</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Anthony Kumako" />
+            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
+              {([
+                ["mark", "Brand mark"],
+                ["hand", "Draw or upload"],
+              ] as const).map(([k, lbl]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => { setMode(k); setPending(null); }}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    mode === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {lbl}
+                </button>
+              ))}
             </div>
-            <SignaturePad onChange={setPending} />
+
+            {mode === "mark" ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  A typeset sign-off built from your logo and details — no handwriting. Edit the fields and it
+                  updates live; what you see is exactly what gets saved.
+                </p>
+                <BrandSignatureMark
+                  initial={{ name: "Anthony Kumako", title: "Founder & CEO", company: "BlockFinaX", website: "blockfinax.com" }}
+                  onChange={(dataUrl, f) => {
+                    setPending(dataUrl ? { method: "uploaded", data: dataUrl } : null);
+                    setName(f.name);
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Draw it with a trackpad or phone, or upload a photo of your signature on white paper.
+                  A transparent PNG looks best.
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Name printed beneath it</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Anthony Kumako" />
+                </div>
+                <SignaturePad onChange={setPending} />
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>

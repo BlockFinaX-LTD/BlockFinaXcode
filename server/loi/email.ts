@@ -102,24 +102,33 @@ export async function emailLoiInvitation(loi: LoiDocument, token: string, origin
  * block on their own, which is why they are always rendered.
  */
 async function signOff(loi: LoiDocument, origin?: string): Promise<string> {
-  let img = "";
+  const identity = [loi.senderName, loi.senderPosition, loi.senderCompany].filter(Boolean).join(", ");
+
+  let sig: Awaited<ReturnType<typeof getSignature>> = null;
   try {
-    const sig = await getSignature();
-    if (sig) {
-      img = `<img src="${signatureUrl(origin)}" alt="" height="46"
-                  style="display:block;height:46px;width:auto;border:0;outline:none;margin-bottom:2px;" />`;
-    }
+    sig = await getSignature();
   } catch {
     // A missing signature must never stop the invitation going out.
   }
+
+  // The saved block already carries name, title and company, so printing them
+  // again underneath would read as a duplicate. When one exists it stands
+  // alone; the alt text covers clients that block remote images, which is the
+  // only case where the details would otherwise be lost.
+  const inner = sig
+    ? `<img src="${signatureUrl(origin)}" alt="${escapeHtml(identity)}" height="62"
+            style="display:block;height:62px;width:auto;border:0;outline:none;" />`
+    : `<p style="font-size:13px;font-weight:600;color:#0f1a2f;margin:0;">${escapeHtml(loi.senderName)}</p>
+       ${loi.senderPosition
+         ? `<p style="font-size:12px;color:#6b7280;margin:2px 0 0;">${escapeHtml(loi.senderPosition)}, ${escapeHtml(loi.senderCompany)}</p>`
+         : `<p style="font-size:12px;color:#6b7280;margin:2px 0 0;">${escapeHtml(loi.senderCompany)}</p>`}
+       <p style="font-size:12px;color:#6b7280;margin:2px 0 0;"><a href="mailto:${escapeHtml(loi.senderEmail)}" style="color:#1a4480;text-decoration:none;">${escapeHtml(loi.senderEmail)}</a></p>`;
+
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
       <tr><td>
-        <p style="font-size:13px;color:#0f1a2f;margin:0 0 8px;">Kind regards,</p>
-        ${img}
-        <p style="font-size:13px;font-weight:600;color:#0f1a2f;margin:0;">${escapeHtml(loi.senderName)}</p>
-        ${loi.senderPosition ? `<p style="font-size:12px;color:#6b7280;margin:2px 0 0;">${escapeHtml(loi.senderPosition)}, ${escapeHtml(loi.senderCompany)}</p>` : `<p style="font-size:12px;color:#6b7280;margin:2px 0 0;">${escapeHtml(loi.senderCompany)}</p>`}
-        <p style="font-size:12px;color:#6b7280;margin:2px 0 0;"><a href="mailto:${escapeHtml(loi.senderEmail)}" style="color:#1a4480;text-decoration:none;">${escapeHtml(loi.senderEmail)}</a></p>
+        <p style="font-size:13px;color:#0f1a2f;margin:0 0 10px;">Kind regards,</p>
+        ${inner}
       </td></tr>
     </table>`;
 }
