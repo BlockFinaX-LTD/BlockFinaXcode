@@ -18,9 +18,23 @@
 
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "../db";
-import { hedgeEvents, hedgeActivity, platformFees, userAccounts, wallets, articles } from "@shared/schema";
+import {
+  hedgeEvents, hedgeActivity, platformFees, userAccounts, wallets, articles,
+  hedgePositions, hedgeLpDeposits,
+} from "@shared/schema";
 import { loiDocuments } from "@shared/loi-schema";
 import type { AgentScope } from "@shared/agent-schema";
+
+/**
+ * Who the caller is, resolved by the auth layer.
+ *
+ * This never comes from the model. It is threaded from the verified session
+ * into the executor, which is the whole reason a customer cannot ask about
+ * somebody else's account: there is no parameter to put another wallet in.
+ */
+export interface Identity {
+  walletAddress?: string;
+}
 
 export interface ToolDef {
   name: string;
@@ -30,9 +44,10 @@ export interface ToolDef {
     properties: Record<string, unknown>;
     required?: string[];
   };
-  /** Which agent may call it. Public omissions are enforced here, not by prompt. */
+  /** Which agent may call it. Enforced in runTool, not by prompt. */
   scopes: AgentScope[];
-  run: (input: any) => Promise<unknown>;
+  /** `identity` is server-supplied. Customer tools must use it, never input. */
+  run: (input: any, identity: Identity) => Promise<unknown>;
 }
 
 const num = (v: unknown) => {
@@ -317,6 +332,131 @@ export const TOOLS: ToolDef[] = [
       }));
     },
   },
+
+
+  // ── Customer tools ──────────────────────────────────────────────────────
+  //
+  // Every one is scoped to the caller's own wallet, taken from the verified
+  // session. Note what these input schemas do NOT contain: an address, a user
+  // id, an email. There is deliberately no way to express "somebody else", so
+  // no instruction — however phrased, by whoever wrote it — reaches another
+  // customer's data.
+
+  {
+    name: "get_my_cover",
+    description:
+      "The signed-in customer's own protection positions: how much cover they bought, what they paid, " +
+      "the pool it sits in, and whether it has settled or paid out.",
+    input_schema: { type: "object", properties: {} },
+    scopes: ["customer"],
+    run: async (_input, identity) => {
+      if (!identity.walletAddress) return { error: "Not signed in." };
+      const rows = await db
+        .select()
+        .from(hedgePositions)
+        .where(sql`lower(${hedgePositions.hedgerWallet}) = ${identity.walletAddress.toLowerCase()}`);
+      const pools = await db.select().from(hedgeEvents);
+      return rows.map((r) => {
+        const pool = pools.find((e) => e.id === r.eventId);
+        return {
+          positionId: r.id,
+          pair: pool?.underlying ?? null,
+          poolName: pool?.name ?? null,
+          notionalUsd: r.notional,
+          premiumPaidUsd: r.premiumPaid,
+          maxPayoutUsd: r.maxPayout,
+          payoutReceivedUsd: r.payoutAmount,
+          claimed: r.claimed,
+          status: r.status,
+          expiryDate: pool?.expiryDate ?? null,
+          boughtAt: r.createdAt,
+        };
+      });
+    },
+  },
+
+  {
+    name: "get_my_deposits",
+    description:
+      "The signed-in customer's own liquidity deposits: how much they put in, premiums earned, " +
+      "and whether it has been withdrawn.",
+    input_schema: { type: "object", properties: {} },
+    scopes: ["customer"],
+    run: async (_input, identity) => {
+      if (!identity.walletAddress) return { error: "Not signed in." };
+      const rows = await db
+        .select()
+        .from(hedgeLpDeposits)
+        .where(sql`lower(${hedgeLpDeposits.lpWallet}) = ${identity.walletAddress.toLowerCase()}`);
+      const pools = await db.select().from(hedgeEvents);
+      return rows.map((r) => {
+        const pool = pools.find((e) => e.id === r.eventId);
+        return {
+          depositId: r.id,
+          pair: pool?.underlying ?? null,
+          poolName: pool?.name ?? null,
+          amountUsd: r.amount,
+          premiumsEarnedUsd: r.premiumsEarned,
+          premiumsWithdrawnUsd: r.premiumsWithdrawn,
+          withdrawn: r.withdrawn,
+          poolStatus: pool?.status ?? null,
+          expiryDate: pool?.expiryDate ?? null,
+          depositedAt: r.createdAt,
+        };
+      });
+    },
+  },
+
+  {
+    name: "get_my_activity",
+    description:
+      "The signed-in customer's own recent transactions, with hashes they can check on the explorer.",
+    input_schema: {
+      type: "object",
+      properties: { limit: { type: "number", description: "Default 20, max 50." } },
+    },
+    scopes: ["customer"],
+    run: async ({ limit }, identity) => {
+      if (!identity.walletAddress) return { error: "Not signed in." };
+      const take = Math.min(Math.max(Number(limit) || 20, 1), 50);
+      const rows = await db
+        .select()
+        .from(hedgeActivity)
+        .where(sql`lower(${hedgeActivity.walletAddress}) = ${identity.walletAddress.toLowerCase()}`)
+        .orderBy(desc(hedgeActivity.id))
+        .limit(take);
+      return rows.map((r) => ({
+        action: r.actionType,
+        amount: r.amount,
+        token: r.token,
+        txHash: r.txHash,
+        chainId: r.chainId,
+        status: r.status,
+        at: r.createdAt,
+      }));
+    },
+  },
+
+  {
+    name: "get_available_cover",
+    description:
+      "Pools currently open for buying protection, with pair, strike, premium rate and expiry. " +
+      "Answers 'what cover can I buy' — public product information, not anyone's account.",
+    input_schema: { type: "object", properties: {} },
+    scopes: ["customer", "public"],
+    run: async () => {
+      const rows = await db.select().from(hedgeEvents).where(eq(hedgeEvents.status, "open"));
+      return rows.map((r) => ({
+        pair: r.underlying,
+        poolName: r.name,
+        strike: r.strike,
+        premiumRatePercent: (num(r.premiumRate) * 100).toFixed(2),
+        payoutRatePercent: (num(r.payoutRate) * 100).toFixed(2),
+        expiryDate: r.expiryDate,
+        chainId: r.chainId,
+      }));
+    },
+  },
 ];
 
 /** Tools visible to a given agent. The public agent gets a strict subset. */
@@ -334,11 +474,21 @@ export function toolSchemasFor(scope: AgentScope) {
  * The scope check is here rather than at the call site so a future caller
  * cannot forget it.
  */
-export async function runTool(scope: AgentScope, name: string, input: unknown): Promise<unknown> {
+export async function runTool(
+  scope: AgentScope,
+  name: string,
+  input: unknown,
+  identity: Identity = {},
+): Promise<unknown> {
   const tool = toolsFor(scope).find((t) => t.name === name);
   if (!tool) return { error: `No tool named ${name} is available.` };
+  // Belt and braces: a customer tool without a resolved wallet must fail
+  // closed rather than fall through to an unfiltered query.
+  if (scope === "customer" && !identity.walletAddress) {
+    return { error: "Not signed in — no account is attached to this conversation." };
+  }
   try {
-    return await tool.run(input ?? {});
+    return await tool.run(input ?? {}, identity);
   } catch (err: any) {
     // Return the failure to the model rather than throwing: it can then tell
     // the user it couldn't read something, which beats a dead conversation.

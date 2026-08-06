@@ -18,8 +18,17 @@ import { z } from "zod";
 
 // ── Vocabulary ────────────────────────────────────────────────────────────
 
-/** Which agent a row belongs to. The two share code and nothing else. */
-export const AGENT_SCOPES = ["internal", "public"] as const;
+/**
+ * Which agent a row belongs to. They share code and nothing else.
+ *
+ *   public    anonymous website visitor — product information only
+ *   customer  signed-in user — their own account, and nobody else's
+ *   internal  admin — the whole business
+ *
+ * Separation is by tool set, not by instruction. A customer agent has no tool
+ * that can name another wallet, so no phrasing gets it to try.
+ */
+export const AGENT_SCOPES = ["internal", "public", "customer"] as const;
 export type AgentScope = (typeof AGENT_SCOPES)[number];
 
 /**
