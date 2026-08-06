@@ -17,11 +17,12 @@ import {
   Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
-  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send, FileSignature,
+  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send, FileSignature, Bot,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
 import { LoiSection } from "@/components/admin/loi-section";
+import { AgentSection } from "@/components/admin/agent-section";
 
 const AdminTokenContext = createContext<{ token: string; logout: () => void }>({ token: "", logout: () => {} });
 function useAdminToken() { return useContext(AdminTokenContext); }
@@ -36,10 +37,11 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "dashboard" | "agent" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { key: "agent", label: "Agent", icon: Bot },
   { key: "users", label: "Users", icon: Users },
   { key: "hedge", label: "Hedge", icon: Shield },
   { key: "revenue", label: "Revenue & Fees", icon: DollarSign },
@@ -2997,6 +2999,7 @@ function AdminLayout({
         {section === "analytics" && <AnalyticsSection />}
         {section === "content" && <ContentSection />}
         {section === "agreements" && <LoiSection token={adminToken} />}
+        {section === "agent" && <AgentSection token={adminToken} />}
         {section === "protocol" && <ProtocolSection />}
       </main>
     </div>

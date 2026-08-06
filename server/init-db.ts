@@ -530,6 +530,104 @@ export async function initializeDatabase() {
     console.error("Failed to create Letter of Intent tables:", error);
   }
 
+  // Mini-CEO agent. See docs/agent-design.md. Notably absent: any table that
+  // could record a signature, a transfer, or a contract change — the agent has
+  // no capability to produce one.
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agent_proposals (
+        id SERIAL PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        rationale TEXT NOT NULL DEFAULT '',
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        edited_payload JSONB,
+        status TEXT NOT NULL DEFAULT 'proposed',
+        priority TEXT NOT NULL DEFAULT 'normal',
+        source_type TEXT,
+        source_id INTEGER,
+        run_id INTEGER,
+        proposed_at TIMESTAMP DEFAULT NOW(),
+        decided_at TIMESTAMP,
+        decided_by TEXT,
+        executed_at TIMESTAMP,
+        error TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_decisions (
+        id SERIAL PRIMARY KEY,
+        proposal_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        original TEXT NOT NULL DEFAULT '',
+        final TEXT,
+        note TEXT,
+        decided_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_rules (
+        id SERIAL PRIMARY KEY,
+        scope TEXT NOT NULL DEFAULT 'internal',
+        rule TEXT NOT NULL,
+        origin TEXT NOT NULL DEFAULT 'manual',
+        evidence_count INTEGER NOT NULL DEFAULT 0,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_runs (
+        id SERIAL PRIMARY KEY,
+        scope TEXT NOT NULL DEFAULT 'internal',
+        trigger TEXT NOT NULL,
+        model TEXT,
+        tokens_in INTEGER NOT NULL DEFAULT 0,
+        tokens_out INTEGER NOT NULL DEFAULT 0,
+        cost_usd REAL NOT NULL DEFAULT 0,
+        tool_calls INTEGER NOT NULL DEFAULT 0,
+        proposals_created INTEGER NOT NULL DEFAULT 0,
+        started_at TIMESTAMP DEFAULT NOW(),
+        finished_at TIMESTAMP,
+        error TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_messages (
+        id SERIAL PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'internal',
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tool_calls JSONB,
+        run_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_facts (
+        id SERIAL PRIMARY KEY,
+        fact TEXT NOT NULL,
+        source_type TEXT,
+        source_id INTEGER,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        updated_by TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS agent_proposals_status_idx ON agent_proposals(status);
+      CREATE INDEX IF NOT EXISTS agent_proposals_kind_idx ON agent_proposals(kind);
+      CREATE INDEX IF NOT EXISTS agent_decisions_kind_idx ON agent_decisions(kind);
+      CREATE INDEX IF NOT EXISTS agent_messages_thread_idx ON agent_messages(thread_id);
+    `);
+  } catch (error) {
+    console.error("Failed to create agent tables:", error);
+  }
+
   for (const network of defaultNetworks) {
     try {
       const existing = await db

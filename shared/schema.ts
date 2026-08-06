@@ -14,6 +14,8 @@ export * from "./profile-schema";
 export * from "./referral-schema";
 // Smart Letter of Intent — agreement drafting, signing and audit trail
 export * from "./loi-schema";
+// Mini-CEO agent — proposals, decisions, learned rules, runs
+export * from "./agent-schema";
 
 // ── Auth: user accounts ───────────────────────────────────────────────────────
 export const userAccounts = pgTable("user_accounts", {
