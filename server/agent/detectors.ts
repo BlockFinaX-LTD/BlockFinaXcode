@@ -16,11 +16,11 @@
  *    suppressed for a cooling-off period.
  */
 
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { agentProposals, agentSettings, agentDecisions } from "@shared/agent-schema";
 import { loiDocuments } from "@shared/loi-schema";
-import { hedgeActivity, hedgeEvents } from "@shared/schema";
+import { readChainEvents } from "../hedge-reader";
 import { runAgent, fence } from "./runtime";
 
 const SETTINGS_KEY = "thresholds";
@@ -32,8 +32,8 @@ export interface Thresholds {
   reminderDays: number;
   /** Days a change request may sit unresolved. */
   staleChangesDays: number;
-  /** Cover-to-liquidity ratio above which a pool is flagged. */
-  liquidityRatio: number;
+  /** Fraction of a pool's liquidity reserved against payouts before it's flagged. */
+  capacityUtilisation: number;
   /** Days a rejected source stays suppressed. */
   rejectionCooldownDays: number;
 }
@@ -42,7 +42,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   followupDays: 7,
   reminderDays: 3,
   staleChangesDays: 4,
-  liquidityRatio: 1.0,
+  capacityUtilisation: 0.85,
   rejectionCooldownDays: 14,
 };
 
@@ -170,42 +170,61 @@ async function findStaleChangeRequests(t: Thresholds): Promise<Candidate[]> {
 }
 
 /**
- * Pools where cover sold outweighs the liquidity backing it.
+ * Pools that have run out of room to sell more cover.
  *
- * Internal alert only — this one never drafts an outward message, because the
- * right response is a decision about capital, not an email.
+ * A pool can never be under-collateralised: `buyProtection` reserves the
+ * worst-case payout against `totalLiquidity - totalMaxPayout` and reverts with
+ * "Insufficient pool liquidity for payout" if it doesn't fit. Solvency is a
+ * contract invariant, not something to monitor.
+ *
+ * What *is* worth knowing is the opposite problem — a pool whose free
+ * liquidity has been consumed is turning demand away. That is lost revenue,
+ * and the fix is to add liquidity or open another pool.
+ *
+ * Read from the chain rather than the activity log: totalMaxPayout is
+ * maintained by the contract, and reconstructing it from indexed events would
+ * be both harder and less trustworthy than asking.
  */
-async function findThinPools(t: Thresholds): Promise<Candidate[]> {
-  const pools = await db.select().from(hedgeEvents).where(eq(hedgeEvents.status, "open"));
-  if (!pools.length) return [];
+async function findPoolsAtCapacity(t: Thresholds): Promise<Candidate[]> {
+  let chainPools: Awaited<ReturnType<typeof readChainEvents>>;
+  try {
+    chainPools = await readChainEvents();
+  } catch {
+    // A flaky RPC must not fail the whole scan; the letter detectors are
+    // database-only and still worth running.
+    return [];
+  }
 
-  const activity = await db.select().from(hedgeActivity);
   const out: Candidate[] = [];
-
-  for (const p of pools) {
-    if (p.onChainEventId == null) continue;
-    const mine = activity.filter((a) => a.onChainEventId === p.onChainEventId && a.chainId === p.chainId);
-    const cover = mine
-      .filter((a) => a.actionType === "buy_protection")
-      .reduce((s, a) => s + (parseFloat(a.amount ?? "0") || 0), 0);
-    const liquidity = mine
-      .filter((a) => a.actionType === "deposit")
-      .reduce((s, a) => s + (parseFloat(a.amount ?? "0") || 0), 0);
-
-    if (cover <= 0) continue;
-    const maxPayout = cover * (parseFloat(p.payoutRate ?? "0") || 0);
-    if (liquidity > 0 && maxPayout / liquidity < t.liquidityRatio) continue;
+  for (const p of chainPools) {
+    if (p.status !== "open") continue;
+    const free = p.totalLiquidity - p.totalMaxPayout;
+    // Only interesting once capital is actually committed — a brand-new empty
+    // pool is at 0% used, not "full".
+    if (p.totalLiquidity <= 0) continue;
+    const utilisation = p.totalMaxPayout / p.totalLiquidity;
+    if (utilisation < t.capacityUtilisation) continue;
 
     out.push({
-      kind: "pool_low_liquidity",
-      title: `${p.underlying} pool may be under-collateralised`,
+      kind: "pool_at_capacity",
+      title: `${p.underlying} pool is ${Math.round(utilisation * 100)}% committed`,
       rationale:
-        `Cover sold is $${cover.toFixed(2)} with a maximum payout of $${maxPayout.toFixed(2)}, ` +
-        `against $${liquidity.toFixed(2)} of deposited liquidity.`,
+        `$${p.totalMaxPayout.toFixed(2)} of the pool's $${p.totalLiquidity.toFixed(2)} is reserved against ` +
+        `payouts, leaving $${free.toFixed(2)} free. Further purchases will be refused by the contract once ` +
+        `that runs out, so demand is being turned away rather than under-collateralised.`,
       sourceType: "pool",
       sourceId: p.id,
-      priority: "high" as const,
-      context: { pair: p.underlying, poolName: p.name, cover, maxPayout, liquidity, expiryDate: p.expiryDate },
+      priority: utilisation >= 0.95 ? ("high" as const) : ("normal" as const),
+      context: {
+        pair: p.underlying,
+        poolName: p.name,
+        totalLiquidity: p.totalLiquidity,
+        reservedForPayouts: p.totalMaxPayout,
+        freeLiquidity: free,
+        utilisationPercent: Math.round(utilisation * 100),
+        chain: p.chainName,
+        expiryDate: p.expiryDate,
+      },
     });
   }
   return out;
@@ -261,9 +280,11 @@ const DRAFT_INSTRUCTIONS: Record<string, string> = {
   loi_stale_changes:
     "Write a short note acknowledging that they asked for changes and that a revision is coming. Do not promise " +
     "specific terms — you do not know what was decided. Two or three sentences.",
-  pool_low_liquidity:
-    "Write two sentences to Anthony, internal only, stating the exposure plainly and what the options are. " +
-    "This is not going to a counterparty.",
+  pool_at_capacity:
+    "Write two sentences to Anthony, internal only. State how much of the pool is committed and what it means " +
+    "commercially — further purchases will be refused, so demand is being turned away. Do not describe this as " +
+    "a solvency or collateral risk; the contract reserves every payout at purchase, so the pool is always able " +
+    "to pay what it has sold. This is not going to a counterparty.",
 };
 
 /** Turns a candidate into a written draft. */
@@ -317,7 +338,7 @@ export async function runScan(): Promise<ScanResult> {
     ...(await findUnopenedLetters(t)),
     ...(await findExpiringLetters(t)),
     ...(await findStaleChangeRequests(t)),
-    ...(await findThinPools(t)),
+    ...(await findPoolsAtCapacity(t)),
   ];
 
   const fresh = await suppressKnown(found, t);
@@ -361,7 +382,7 @@ export async function dryRun(): Promise<{ candidates: Omit<Candidate, "context">
     ...(await findUnopenedLetters(t)),
     ...(await findExpiringLetters(t)),
     ...(await findStaleChangeRequests(t)),
-    ...(await findThinPools(t)),
+    ...(await findPoolsAtCapacity(t)),
   ];
   const fresh = await suppressKnown(found, t);
   return {

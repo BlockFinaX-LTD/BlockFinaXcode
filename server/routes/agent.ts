@@ -254,7 +254,7 @@ export function registerAgentRoutes(app: Express) {
 
   app.put("/api/agent/thresholds", requireApprover, async (req: Request, res: Response) => {
     const patch: Record<string, number> = {};
-    for (const k of ["followupDays", "reminderDays", "staleChangesDays", "liquidityRatio", "rejectionCooldownDays"]) {
+    for (const k of ["followupDays", "reminderDays", "staleChangesDays", "capacityUtilisation", "rejectionCooldownDays"]) {
       const v = Number(req.body?.[k]);
       if (Number.isFinite(v) && v > 0) patch[k] = v;
     }
