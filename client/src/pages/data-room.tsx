@@ -2332,6 +2332,15 @@ interface TractionData {
     chainFeeDetails: Record<string, { fees: number; source: string }>;
   };
   byPair: Array<{ pair: string; pools: number; liquidity: number; notional: number; premiums: number; hedgers: number }>;
+  agreements: {
+    signedCount: number;
+    outstandingCount: number;
+    byRelationship: Record<string, number>;
+    byCountry: Record<string, number>;
+    latestSignedAt: string | null;
+    /** Only counterparties who agreed to be named. */
+    named: Array<{ company: string; country: string | null; relationshipType: string; docType: string; signedAt: string | null }>;
+  };
   activityBackfill: { running: boolean; rows: number };
   recentActivity: Array<{
     txHash: string; chainId: number; chainName: string; actionType: string;
@@ -2346,6 +2355,14 @@ const usd = (n: string | number) =>
   "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 const shortAddr = (a: string) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
+
+/** Mirrors RELATIONSHIP_LABELS server-side; kept local so the data room
+ *  bundle doesn't pull in the whole agreements schema. */
+const RELATIONSHIP_LABEL: Record<string, string> = {
+  institutional_underwriter: "Institutional underwriter", liquidity_provider: "Liquidity provider",
+  sme: "SME", fintech_partner: "Fintech partner", strategic_partner: "Strategic partner",
+  investor: "Investor", broker: "Broker", other: "Other",
+};
 
 const ACTION_LABEL: Record<string, string> = {
   create_event: "Pool created", deposit: "LP deposit", withdraw: "LP withdrawal",
@@ -2488,6 +2505,64 @@ function LiveTractionDoc({ token }: { token: string }) {
           </tr>
         </tbody>
       </table>
+
+      {(d.agreements?.signedCount > 0 || d.agreements?.outstandingCount > 0) && (
+        <>
+          <h2 style={S.h2}>
+            Signed agreements
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "#64748b", marginLeft: "8px" }}>
+              Executed letters of intent, counted from the signing platform
+            </span>
+          </h2>
+          <p style={S.p}>
+            {d.agreements.signedCount} counterpart{d.agreements.signedCount === 1 ? "y has" : "ies have"} electronically
+            signed a letter of intent with BlockFinaX
+            {d.agreements.latestSignedAt
+              ? `, most recently on ${new Date(d.agreements.latestSignedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}`
+              : ""}
+            . {d.agreements.outstandingCount > 0
+              ? `A further ${d.agreements.outstandingCount} ${d.agreements.outstandingCount === 1 ? "is" : "are"} out for signature and not counted above.`
+              : ""}
+          </p>
+          {Object.keys(d.agreements.byRelationship).length > 0 && (
+            <table style={S.table}>
+              <thead><tr><th style={S.th}>Counterparty type</th><th style={S.th}>Signed</th></tr></thead>
+              <tbody>
+                {Object.entries(d.agreements.byRelationship)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([k, n]) => (
+                    <tr key={k}>
+                      <td style={{ ...S.td, fontWeight: 600, color: "#0f172a" }}>{RELATIONSHIP_LABEL[k] ?? k}</td>
+                      <td style={S.td}>{n}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
+          {d.agreements.named.length > 0 && (
+            <>
+              <h3 style={{ ...S.h2, fontSize: "15px", marginTop: "18px" }}>Named counterparties</h3>
+              <table style={S.table}>
+                <thead><tr><th style={S.th}>Counterparty</th><th style={S.th}>Type</th><th style={S.th}>Country</th><th style={S.th}>Signed</th></tr></thead>
+                <tbody>
+                  {d.agreements.named.map((a, i) => (
+                    <tr key={i}>
+                      <td style={{ ...S.td, fontWeight: 600, color: "#0f172a" }}>{a.company}</td>
+                      <td style={S.td}>{RELATIONSHIP_LABEL[a.relationshipType] ?? a.relationshipType}</td>
+                      <td style={S.td}>{a.country || "—"}</td>
+                      <td style={S.td}>{a.signedAt ? new Date(a.signedAt).toLocaleDateString() : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          <p style={{ ...S.p, color: "#94a3b8", fontSize: "12px" }}>
+            Counterparties are named only where they have agreed to be identified; the remainder are counted
+            anonymously because each letter of intent binds both parties to confidentiality.
+          </p>
+        </>
+      )}
 
       {d.byPair.length > 0 && (
         <>

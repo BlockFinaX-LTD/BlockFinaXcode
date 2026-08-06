@@ -28,6 +28,7 @@ import { registerRiftProxy } from "./routes/rift-proxy";
 import { registerMercuryoRoutes } from "./routes/mercuryo";
 import { registerPricingRoutes } from "./routes/pricing";
 import { registerGateRoutes } from "./routes/gate";
+import { registerLoiRoutes } from "./routes/loi";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ── Rate limiters ──────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMercuryoRoutes(app);
   registerPricingRoutes(app);
   registerGateRoutes(app);
+  registerLoiRoutes(app);
   await registerProtocolRoutes(app);
 
   // NOTE: The public/integrator REST API used to live at /api/v1 here.

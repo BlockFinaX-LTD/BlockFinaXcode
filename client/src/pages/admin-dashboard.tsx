@@ -17,10 +17,11 @@ import {
   Users, Activity, TrendingUp, Shield, Search, Copy, DollarSign,
   BarChart3, ListChecks, ArrowLeft, Wallet, MessageSquare, Clock,
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
-  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send,
+  FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send, FileSignature,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
+import { LoiSection } from "@/components/admin/loi-section";
 
 const AdminTokenContext = createContext<{ token: string; logout: () => void }>({ token: "", logout: () => {} });
 function useAdminToken() { return useContext(AdminTokenContext); }
@@ -35,7 +36,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "protocol";
+type Section = "dashboard" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -46,6 +47,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "payouts", label: "Reviews & Payouts", icon: Wallet },
   { key: "analytics", label: "Analytics", icon: Activity },
   { key: "content", label: "Content", icon: FileText },
+  { key: "agreements", label: "Agreements", icon: FileSignature },
   { key: "protocol", label: "Protocol", icon: Settings },
 ];
 
@@ -2994,6 +2996,7 @@ function AdminLayout({
         {section === "payouts" && <PayoutsSection />}
         {section === "analytics" && <AnalyticsSection />}
         {section === "content" && <ContentSection />}
+        {section === "agreements" && <LoiSection token={adminToken} />}
         {section === "protocol" && <ProtocolSection />}
       </main>
     </div>

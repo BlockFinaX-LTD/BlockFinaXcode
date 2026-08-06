@@ -26,6 +26,8 @@ interface SendArgs {
   subject: string;
   html: string;
   replyTo?: string;
+  /** Resend attachment shape: base64 content + filename. */
+  attachments?: { filename: string; content: string }[];
 }
 
 async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string }> {
@@ -41,6 +43,7 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
       subject: args.subject,
       html: args.html,
       replyTo: args.replyTo,
+      attachments: args.attachments,
     });
     if (error) {
       console.error('[email] Resend error:', error);
@@ -237,4 +240,4 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export { ADMIN_EMAILS, APP_URL };
+export { ADMIN_EMAILS, APP_URL, sendEmail, shell, escapeHtml };

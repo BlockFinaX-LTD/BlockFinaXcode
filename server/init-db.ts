@@ -406,6 +406,130 @@ export async function initializeDatabase() {
     console.error("Failed to apply chain log backfill migration:", error);
   }
 
+  // Smart Letter of Intent. Six tables: the document itself plus the four
+  // satellites that make a signature defensible (access tokens, one-time
+  // codes, signatures, audit events) and the collaboration layer (comments).
+  // Child tables cascade so deleting a draft leaves nothing orphaned.
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS loi_documents (
+        id SERIAL PRIMARY KEY,
+        public_id TEXT NOT NULL UNIQUE,
+        doc_type TEXT NOT NULL DEFAULT 'loi',
+        template_key TEXT NOT NULL DEFAULT 'loi_generic',
+        status TEXT NOT NULL DEFAULT 'draft',
+        sender_company TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        sender_position TEXT,
+        sender_email TEXT NOT NULL,
+        sender_phone TEXT,
+        recipient_company TEXT NOT NULL,
+        recipient_name TEXT NOT NULL,
+        recipient_position TEXT,
+        recipient_email TEXT NOT NULL,
+        recipient_country TEXT,
+        relationship_type TEXT NOT NULL DEFAULT 'other',
+        terms JSONB NOT NULL DEFAULT '{}'::jsonb,
+        body_markdown TEXT NOT NULL DEFAULT '',
+        custom_clauses JSONB NOT NULL DEFAULT '[]'::jsonb,
+        personal_message TEXT,
+        expires_at TIMESTAMP,
+        sent_at TIMESTAMP,
+        first_viewed_at TIMESTAMP,
+        signed_at TIMESTAMP,
+        declined_at TIMESTAMP,
+        decline_reason TEXT,
+        locked_at TIMESTAMP,
+        pdf_base64 TEXT,
+        created_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        last_activity_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loi_tokens (
+        id SERIAL PRIMARY KEY,
+        loi_id INTEGER NOT NULL REFERENCES loi_documents(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        revoked_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loi_otps (
+        id SERIAL PRIMARY KEY,
+        loi_id INTEGER NOT NULL REFERENCES loi_documents(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        expires_at TIMESTAMP NOT NULL,
+        consumed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loi_signatures (
+        id SERIAL PRIMARY KEY,
+        loi_id INTEGER NOT NULL REFERENCES loi_documents(id) ON DELETE CASCADE,
+        party TEXT NOT NULL,
+        signer_name TEXT NOT NULL,
+        signer_email TEXT NOT NULL,
+        signer_position TEXT,
+        method TEXT NOT NULL,
+        signature_data TEXT NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        browser TEXT,
+        device TEXT,
+        country TEXT,
+        signed_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loi_comments (
+        id SERIAL PRIMARY KEY,
+        loi_id INTEGER NOT NULL REFERENCES loi_documents(id) ON DELETE CASCADE,
+        party TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        anchor TEXT,
+        kind TEXT NOT NULL DEFAULT 'comment',
+        body TEXT NOT NULL,
+        suggested_text TEXT,
+        resolution TEXT,
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loi_events (
+        id SERIAL PRIMARY KEY,
+        loi_id INTEGER NOT NULL REFERENCES loi_documents(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        actor TEXT,
+        actor_email TEXT,
+        detail TEXT,
+        meta JSONB,
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS loi_documents_status_idx ON loi_documents(status);
+      CREATE INDEX IF NOT EXISTS loi_documents_recipient_idx ON loi_documents(recipient_email);
+      CREATE INDEX IF NOT EXISTS loi_tokens_loi_idx ON loi_tokens(loi_id);
+      CREATE INDEX IF NOT EXISTS loi_otps_loi_idx ON loi_otps(loi_id);
+      CREATE INDEX IF NOT EXISTS loi_signatures_loi_idx ON loi_signatures(loi_id);
+      CREATE INDEX IF NOT EXISTS loi_comments_loi_idx ON loi_comments(loi_id);
+      CREATE INDEX IF NOT EXISTS loi_events_loi_idx ON loi_events(loi_id);
+    `);
+    // Opt-in disclosure of a counterparty's identity in the investor data
+    // room. Added after the initial release, so existing rows need it too.
+    await db.execute(sql`
+      ALTER TABLE loi_documents
+        ADD COLUMN IF NOT EXISTS show_in_data_room BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+  } catch (error) {
+    console.error("Failed to create Letter of Intent tables:", error);
+  }
+
   for (const network of defaultNetworks) {
     try {
       const existing = await db

@@ -3,10 +3,10 @@ import { timingSafeEqual, randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { storage } from "../storage";
 import { db } from "../db";
-import { hedgeActivity, hedgeEvents, platformFees } from "@shared/schema";
+import { hedgeActivity, hedgeEvents, platformFees, loiDocuments } from "@shared/schema";
 import {
   readChainEvents,
   readChainPositionsByEvent,
@@ -371,6 +371,74 @@ export function registerInvestorRoutes(app: Express) {
         byPair[k].hedgers += p.hedgers;
       }
 
+      // ── Signed agreements ────────────────────────────────────────────
+      // Commercial traction that isn't on-chain: counterparties who have
+      // actually executed a letter of intent.
+      //
+      // Two deliberate constraints:
+      //  1. Only fully-signed documents count. A sent-but-unsigned LOI is a
+      //     pipeline item, not traction, and presenting it as one would not
+      //     survive diligence.
+      //  2. Counterparty identities appear only where showInDataRoom was
+      //     explicitly set. The LOI itself binds both sides to
+      //     confidentiality, so naming a signatory to investors without
+      //     their agreement would breach the document they just signed.
+      //     Everything else is published as anonymous aggregate.
+      const agreements = await (async () => {
+        try {
+          const signed = await db
+            .select({
+              relationshipType: loiDocuments.relationshipType,
+              docType: loiDocuments.docType,
+              country: loiDocuments.recipientCountry,
+              company: loiDocuments.recipientCompany,
+              signedAt: loiDocuments.signedAt,
+              showInDataRoom: loiDocuments.showInDataRoom,
+            })
+            .from(loiDocuments)
+            .where(eq(loiDocuments.status, "signed"));
+
+          const outstanding = await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(loiDocuments)
+            .where(sql`${loiDocuments.status} IN ('sent','viewed','changes_requested','awaiting_signature')`)
+            .then((r) => r[0]?.n ?? 0);
+
+          const tally = (key: "relationshipType" | "country") =>
+            signed.reduce<Record<string, number>>((acc, r) => {
+              const k = (r[key] || "Unspecified") as string;
+              acc[k] = (acc[k] ?? 0) + 1;
+              return acc;
+            }, {});
+
+          return {
+            signedCount: signed.length,
+            outstandingCount: outstanding,
+            byRelationship: tally("relationshipType"),
+            byCountry: tally("country"),
+            latestSignedAt:
+              signed
+                .map((s) => s.signedAt)
+                .filter(Boolean)
+                .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0] ?? null,
+            // Named only with explicit per-document consent.
+            named: signed
+              .filter((s) => s.showInDataRoom)
+              .map((s) => ({
+                company: s.company,
+                country: s.country,
+                relationshipType: s.relationshipType,
+                docType: s.docType,
+                signedAt: s.signedAt,
+              })),
+          };
+        } catch {
+          // The agreements module is additive — if its tables aren't ready
+          // yet, the on-chain traction figures must still render.
+          return { signedCount: 0, outstandingCount: 0, byRelationship: {}, byCountry: {}, latestSignedAt: null, named: [] };
+        }
+      })();
+
       res.json({
         generatedAt: new Date().toISOString(),
         chains: perChainFees.map((c) => ({ chainId: c.chainId, chainName: c.chainName, live: c.onChain })),
@@ -417,6 +485,7 @@ export function registerInvestorRoutes(app: Express) {
         byPair: Object.entries(byPair)
           .map(([pair, v]) => ({ pair, ...v }))
           .sort((a, b) => b.liquidity - a.liquidity),
+        agreements,
         activityBackfill: {
           running: isBackfillRunning(),
           rows: recentActivity.length,

@@ -54,6 +54,10 @@ import HedgerPage from "@/pages/hedger";
 import AcademyRoute from "@/pages/academy";
 import { DocsGate } from "@/components/docs-gate";
 
+// Counterparty signing portal. Public by design — authenticated by the
+// bearer token in the emailed link, not by a BlockFinaX account.
+import LoiSignPage from "@/pages/loi-sign";
+
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // White-label sign-in: the widget is served from our own subdomain so the
@@ -174,6 +178,11 @@ function Router() {
       <Route path="/docs/request" component={DocsRequestPage} />
       <Route path="/liquidity-provider" component={LiquidityProviderPage} />
       <Route path="/hedger" component={HedgerPage} />
+
+      {/* Agreement signing. Deliberately outside PROTECTED_ROUTES: the
+          counterparty has no BlockFinaX account and must never be asked for
+          one. The link's token is the credential. */}
+      <Route path="/sign/:publicId" component={LoiSignPage} />
 
       {/* Academy — public course pages under /learn. One dispatcher handles
           the root (Start here) and every /learn/:slug lesson from the catalog. */}
