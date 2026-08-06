@@ -163,6 +163,84 @@ function PoolCardSkeleton() {
     </div>
   );
 }
+/** Per-pool totals from /api/hedge/pool-stats, derived from the indexed event log. */
+interface PoolStatRow {
+  chainId: number;
+  poolId: number;
+  liquidity: string;
+  exposure: string;
+  premiums: string;
+  lpCount: number;
+  hedgerCount: number;
+}
+
+/** Row shape returned by /api/hedge/events/open (the ChainSync mirror of on-chain pools). */
+interface DbHedgeEvent {
+  onChainEventId: number;
+  chainId: number;
+  name?: string;
+  description?: string;
+  underlying: string;
+  strike: string | number;
+  premiumRate: string | number;
+  payoutRate?: string | number;
+  expiryDate: string;
+  status: string;
+  settlementPrice?: string | number | null;
+  triggered?: boolean | null;
+  poolOpen?: boolean | null;
+  allowExternalLp?: boolean | null;
+  createdBy: string;
+  creatorEarnings?: string | number | null;
+  createdAt?: string | null;
+  settledAt?: string | null;
+}
+
+/**
+ * Rebuild a HedgeEventData from the DB mirror for pools the Diamond refuses to
+ * return. Terms (strike, premium, expiry, status) are exact — they were synced
+ * from chain. Live pool balances are not mirrored, so liquidity/exposure/counts
+ * come back as 0 and `fromMirror` marks the row so the UI can be honest that
+ * those figures are unavailable rather than genuinely zero.
+ */
+function dbEventToHedgeEvent(e: DbHedgeEvent): HedgeEventData & { fromMirror: true } {
+  const n = (v: string | number | null | undefined) => (v == null ? 0 : typeof v === 'number' ? v : parseFloat(v) || 0);
+  const status = (['open', 'settled', 'expired'].includes(e.status) ? e.status : 'open') as 'open' | 'settled' | 'expired';
+  return {
+    id: e.onChainEventId,
+    creator: e.createdBy,
+    name: e.name || e.underlying,
+    underlying: e.underlying,
+    strike: n(e.strike),
+    premiumRate: n(e.premiumRate),
+    expiryDate: new Date(e.expiryDate),
+    status,
+    poolOpen: e.poolOpen ?? true,
+    allowExternalLp: e.allowExternalLp ?? true,
+    initialRate: 0,
+    strikeAbove: true,
+    settlementPrice: n(e.settlementPrice),
+    triggered: !!e.triggered,
+    creatorEarnings: n(e.creatorEarnings),
+    totalLiquidity: 0,
+    totalExposure: 0,
+    totalPremiums: 0,
+    totalMaxPayout: 0,
+    lpCount: 0,
+    hedgerCount: 0,
+    createdAt: e.createdAt ? new Date(e.createdAt) : null,
+    settledAt: e.settledAt ? new Date(e.settledAt) : null,
+    availableCapacity: 0,
+    utilization: 0,
+    // Fraction, not a percentage — consumers compute `notional * payoutPercent`.
+    // The DB stores payout_rate the same way (0.10 = 10%), so pass it straight through.
+    payoutPercent: n(e.payoutRate),
+    paymentToken: '',
+    description: e.description,
+    fromMirror: true,
+  };
+}
+
 function RowSkeleton() {
   return (
     <div className="row">
@@ -215,6 +293,10 @@ export default function Hedge() {
 
   const [selectedEvent, setSelectedEvent] = useState<HedgeEventData | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // Settled/expired cover opens a read-only breakdown. Previously these rows
+  // showed only a status badge, so a hedger could not see what they paid, what
+  // the strike was, or why a position expired without paying out.
+  const [posDetail, setPosDetail] = useState<HedgePositionData | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
   const [lpOpen, setLpOpen] = useState(false);
   // A deep-linked market (from search / share link) whose data is still loading.
@@ -353,11 +435,57 @@ export default function Hedge() {
       try {
         const dbRes = await fetch('/api/hedge/events/open');
         if (dbRes.ok) {
-          const dbEvents: Array<{ onChainEventId: number; chainId: number; description?: string }> = await dbRes.json();
-          const descMap = new Map(dbEvents.filter((e) => e.chainId === activeChainId && e.description).map((e) => [e.onChainEventId, e.description]));
+          const dbEvents: DbHedgeEvent[] = await dbRes.json();
+          const mine = dbEvents.filter((e) => e.chainId === activeChainId && e.onChainEventId != null);
+
+          const descMap = new Map(mine.filter((e) => e.description).map((e) => [e.onChainEventId, e.description]));
           data.forEach((e) => { if (descMap.has(e.id)) e.description = descMap.get(e.id); });
+
+          // Fill the gaps the contract could not answer. Several pools on the
+          // deployed Diamond revert on getHedgeEventCore/Stats, so reading only
+          // from chain silently drops them — including live ones — and the
+          // market looks empty. ChainSync mirrors every pool into the DB, so
+          // anything missing from the chain read is rebuilt from that mirror
+          // and flagged `fromMirror` so the UI can say the figures are not live.
+          const onChainIds = new Set(data.map((e) => e.id));
+          const missing = mine
+            .filter((e) => !onChainIds.has(e.onChainEventId))
+            .map(dbEventToHedgeEvent);
+          if (missing.length > 0) {
+            console.warn(`[Hedge] ${missing.length} pool(s) unreadable on chain — showing DB mirror: #${missing.map((m) => m.id).join(', #')}`);
+
+            // The mirror carries terms but not balances, so a mirrored pool
+            // would show $0 liquidity — which reads as "empty pool" to a buyer
+            // or underwriter. Fill the balances from the indexed event log,
+            // which matches the contract exactly where both are readable.
+            try {
+              const statsRes = await fetch('/api/hedge/pool-stats');
+              if (statsRes.ok) {
+                const stats: PoolStatRow[] = await statsRes.json();
+                const byPool = new Map(
+                  stats.filter((s) => s.chainId === activeChainId).map((s) => [s.poolId, s])
+                );
+                for (const ev of missing) {
+                  const s = byPool.get(ev.id);
+                  if (!s) continue;
+                  ev.totalLiquidity = parseFloat(s.liquidity) || 0;
+                  ev.totalExposure = parseFloat(s.exposure) || 0;
+                  ev.totalPremiums = parseFloat(s.premiums) || 0;
+                  ev.lpCount = s.lpCount;
+                  ev.hedgerCount = s.hedgerCount;
+                  ev.totalMaxPayout = ev.totalExposure * (ev.payoutPercent || 0);
+                  ev.availableCapacity = Math.max(0, ev.totalLiquidity - ev.totalMaxPayout);
+                  ev.utilization = ev.totalLiquidity > 0
+                    ? Math.min(1, ev.totalMaxPayout / ev.totalLiquidity)
+                    : 0;
+                }
+              }
+            } catch { /* balances stay 0 if the log index is unavailable */ }
+
+            data.push(...missing);
+          }
         }
-      } catch { /* description optional */ }
+      } catch { /* description + mirror are both best-effort */ }
       setEvents(data);
     } catch (error) {
       console.error('Failed to load events:', error);
@@ -366,16 +494,26 @@ export default function Hedge() {
     }
   };
 
-  const DEFAULT_FEE_CONFIG = { creationFee: 2, hedgerFeeRate: 0.005, hedgerPayoutFeeRate: 0.01, lpProfitFeeRate: 0.01, creatorLoyaltyRate: 0.005 };
+  // No hardcoded fee defaults. The rate differs per chain and is governable —
+  // Base currently charges 5% of notional while BSC charges 0.5% — so any
+  // constant here eventually quotes a fee the contract will not charge. The
+  // old default (0.5%) understated Base by 10x, and because the same figure
+  // feeds maxCost on the transaction, an under-quote also makes the buy revert.
+  // Better to show "unavailable" and block the purchase than to misquote it.
   const loadFeeConfig = async () => {
-    setFeeConfig(DEFAULT_FEE_CONFIG);
-    try {
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Fee config timeout')), 8000));
-      const config = await Promise.race([hedgeContract.getFeeConfig(), timeout]);
-      setFeeConfig(config);
-    } catch (error) {
-      console.warn('Fee config RPC call timed out; using defaults:', error);
+    setFeeConfig(null);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Fee config timeout')), 8000));
+        const config = await Promise.race([hedgeContract.getFeeConfig(), timeout]);
+        setFeeConfig(config);
+        return;
+      } catch (error) {
+        console.warn(`Fee config read failed (attempt ${attempt + 1}/3):`, error);
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
     }
+    console.error('[Hedge] Fee config unavailable — buy/quote disabled until it loads');
   };
   const loadPositions = async () => {
     if (!wallet?.address) return;
@@ -669,8 +807,10 @@ export default function Hedge() {
 
   // ── Derived for the buy/LP sheets ───────────────────────────────────────
   const premiumCalc = selectedEvent && notional ? parseFloat(notional) * selectedEvent.premiumRate : 0;
-  const hedgerFeeRate = feeConfig?.hedgerFeeRate || 0.005;
-  const hedgerFeeCalc = notional ? parseFloat(notional) * hedgerFeeRate : 0;
+  // null until the live on-chain rate loads — never assume a rate.
+  const hedgerFeeRate = feeConfig ? feeConfig.hedgerFeeRate : null;
+  const feeKnown = hedgerFeeRate !== null;
+  const hedgerFeeCalc = notional && feeKnown ? parseFloat(notional) * hedgerFeeRate : 0;
   const totalCostCalc = premiumCalc + hedgerFeeCalc;
   const currentRate = selectedEvent ? fxData?.rates[selectedEvent.underlying]?.rate || 0 : 0;
   const payoutPercent = selectedEvent ? selectedEvent.payoutPercent : 0;
@@ -816,14 +956,31 @@ export default function Hedge() {
         </div>
       </div>
 
-      {/* view tabs */}
+      {/* View tabs — three intents rather than five destinations.
+          Underwriting an existing pool and creating a new one are both
+          supply-side actions, and "my cover"/"my pools" are both portfolio,
+          so each pair shares a tab with a segmented control beneath it.
+          The underlying view names are unchanged so ?tab= deep links and the
+          post-creation redirect keep working. */}
       <div className="cv-tabs">
         <button className={view === 'buy' ? 'on' : ''} onClick={() => setView('buy')}><ShieldCheck /> Buy cover</button>
-        <button className={view === 'lp' ? 'on' : ''} onClick={() => setView('lp')}><Layers /> Underwrite</button>
-        <button className={view === 'create' ? 'on' : ''} onClick={() => setView('create')}><PlusCircle /> Create pool</button>
-        <button className={view === 'mypos' ? 'on' : ''} onClick={() => setView('mypos')}><Shield /> My cover</button>
-        <button className={view === 'mypools' ? 'on' : ''} onClick={() => setView('mypools')}><Award /> My pools</button>
+        <button className={view === 'lp' || view === 'create' ? 'on' : ''} onClick={() => setView('lp')}><Layers /> Underwrite</button>
+        <button className={view === 'mypos' || view === 'mypools' ? 'on' : ''} onClick={() => setView('mypos')}><Shield /> Portfolio</button>
       </div>
+
+      {(view === 'lp' || view === 'create') && (
+        <div className="assettog cv-sub">
+          <button className={view === 'lp' ? 'on' : ''} onClick={() => setView('lp')}><Layers /> Open pools</button>
+          <button className={view === 'create' ? 'on' : ''} onClick={() => setView('create')}><PlusCircle /> Create pool</button>
+        </div>
+      )}
+
+      {(view === 'mypos' || view === 'mypools') && (
+        <div className="assettog cv-sub">
+          <button className={view === 'mypos' ? 'on' : ''} onClick={() => setView('mypos')}><Shield /> My cover</button>
+          <button className={view === 'mypools' ? 'on' : ''} onClick={() => setView('mypools')}><Award /> My pools</button>
+        </div>
+      )}
 
       {/* ===== BUY ===== */}
       {view === 'buy' && (
@@ -847,7 +1004,7 @@ export default function Hedge() {
           <div className="mkt">
             <div className="mkt-scroll">
               <div className="mkt-h">
-                <span>Market</span><span>Direction</span><span>Strike</span><span>Premium</span><span className="last">Action</span>
+                <span>Market</span><span>Direction</span><span>Strike</span><span>Premium</span><span>Available</span><span className="last">Action</span>
               </div>
               <div>
                 {eventsLoading ? (
@@ -874,6 +1031,14 @@ export default function Hedge() {
                     <div className="mkt-col"><span className="k">Direction</span><span className="dir"><span className="da">{ev.strikeAbove ? <ArrowUpRight /> : <ArrowDownRight />}</span>{ev.strikeAbove ? 'Rises' : 'Falls'}</span></div>
                     <div className="mkt-col"><span className="k">Strike</span><span className="mkt-v">{ev.strike.toLocaleString()}</span></div>
                     <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{(ev.premiumRate * 100).toFixed(1)}%</span></div>
+                    {/* Capacity a buyer can actually draw on. Without this the
+                        table gave no indication whether a pool could fill the
+                        cover being requested. */}
+                    <div className="mkt-col">
+                      <span className="k">Available</span>
+                      <span className="mkt-v">{fmtK(ev.availableCapacity)}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--tx-4)', marginTop: 2 }}>of {fmtK(ev.totalLiquidity)} pool</span>
+                    </div>
                     <div className="mkt-act">
                       <button className="btn-sm2 primary" onClick={(e) => { e.stopPropagation(); openBuy(ev); }}>Buy cover</button>
                     </div>
@@ -1096,10 +1261,21 @@ export default function Hedge() {
                     const ev = events.find((e) => e.id === p.eventId);
                     const label = p.status === 'claimed' ? 'Claimed' : p.status === 'settled_win' ? 'Won' : 'Expired';
                     return (
-                      <div className="row" key={`h${p.id}`}>
+                      <div
+                        className="row"
+                        key={`h${p.id}`}
+                        style={{ cursor: 'pointer' }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setPosDetail(p)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPosDetail(p); } }}
+                      >
                         <MarketFlag pair={ev?.underlying || ''} />
                         <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="r2">Position #{p.id} · {fmtMoney(p.notional)} notional</div></div>
-                        <div className="r-side"><span className={`st ${p.status === 'expired' ? 'pend' : 'ok'}`}>{label}</span></div>
+                        <div className="r-side" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className={`st ${p.status === 'expired' ? 'pend' : 'ok'}`}>{label}</span>
+                          <ChevronRight style={{ width: 15, height: 15, color: 'var(--tx-4)', flex: '0 0 auto' }} />
+                        </div>
                       </div>
                     );
                   })}
@@ -1213,6 +1389,76 @@ export default function Hedge() {
       )}
 
       {/* ===== DETAILS SHEET ===== */}
+      {/* ===== SETTLED COVER DETAIL ===== */}
+      <div className={`sheet-scrim${posDetail ? ' on' : ''}`} onClick={() => setPosDetail(null)} />
+      <div className={`sheet${posDetail ? ' on' : ''}`}>
+        <div className="grab" />
+        <div className="sheet-h"><h3>Cover details</h3><button className="sheet-x" onClick={() => setPosDetail(null)}><X /></button></div>
+        {posDetail ? (() => {
+          const p = posDetail;
+          const ev = events.find((e) => e.id === p.eventId);
+          const totalCost = p.premiumPaid + p.platformFeePaid;
+          const maxPayout = ev ? p.notional * (ev.payoutPercent || 0) : 0;
+          const won = p.status === 'claimed' || p.status === 'settled_win';
+          const net = won ? p.payoutAmount - totalCost : -totalCost;
+          const label = p.status === 'claimed' ? 'Claimed' : p.status === 'settled_win' ? 'Won — unclaimed' : 'Expired';
+
+          // Plain-English outcome. An expired position paying nothing is the
+          // normal, correct result of a hedge that was not needed — say so
+          // rather than leaving a bare "Expired" badge to look like a failure.
+          const outcome = won
+            ? `The rate touched the strike before expiry, so this cover paid out ${fmtUsd2(p.payoutAmount)}.`
+            : ev
+              ? `The rate never ${ev.strikeAbove ? 'rose past' : 'fell below'} ${ev.strike.toLocaleString()} ${unitOf(ev.underlying)} before expiry, so no payout was due. The ${fmtUsd2(totalCost)} you paid was the cost of being protected.`
+              : `This cover expired without a payout. The ${fmtUsd2(totalCost)} you paid was the cost of being protected.`;
+
+          return (
+            <>
+              <div className="det-head">
+                <MarketFlag pair={ev?.underlying || ''} />
+                <div className="det-hn">
+                  <div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div>
+                  <div className="b">{ev?.name || `Event #${p.eventId}`} · Position #{p.id}</div>
+                </div>
+                <div className="det-apr">
+                  <div className="v" style={{ color: won ? 'var(--green)' : 'var(--tx-3)' }}>{won ? fmtUsd2(p.payoutAmount) : '—'}</div>
+                  <div className="l">{won ? 'Paid out' : 'No payout'}</div>
+                </div>
+              </div>
+
+              <p className="det-cond">{outcome}</p>
+
+              <div className="det-grid">
+                <div className="det-stat"><div className="l">Status</div><div className="v">{label}</div></div>
+                <div className="det-stat"><div className="l">Notional covered</div><div className="v">{fmtUsd2(p.notional)}</div></div>
+                <div className="det-stat"><div className="l">Premium paid</div><div className="v">{fmtUsd2(p.premiumPaid)}</div></div>
+                <div className="det-stat"><div className="l">Platform fee</div><div className="v">{fmtUsd2(p.platformFeePaid)}</div></div>
+                <div className="det-stat"><div className="l">Total cost</div><div className="v">{fmtUsd2(totalCost)}</div></div>
+                <div className="det-stat"><div className="l">Payout received</div><div className="v">{fmtUsd2(p.payoutAmount)}</div></div>
+                <div className="det-stat"><div className="l">Net result</div><div className="v" style={{ color: net >= 0 ? 'var(--green)' : 'var(--tx)' }}>{net >= 0 ? '+' : '−'}{fmtUsd2(Math.abs(net))}</div></div>
+                <div className="det-stat"><div className="l">Bought</div><div className="v">{p.createdAt ? p.createdAt.toLocaleDateString() : '—'}</div></div>
+                {ev && <>
+                  <div className="det-stat"><div className="l">Direction</div><div className="v">{ev.strikeAbove ? 'Rate rises' : 'Rate falls'}</div></div>
+                  <div className="det-stat"><div className="l">Strike</div><div className="v">{ev.strike.toLocaleString()} {unitOf(ev.underlying)}</div></div>
+                  <div className="det-stat"><div className="l">Expired</div><div className="v">{expiryLabel(ev.expiryDate)}</div></div>
+                  <div className="det-stat"><div className="l">Max payout</div><div className="v">{fmtUsd2(maxPayout)}</div></div>
+                  {ev.settlementPrice > 0 && (
+                    <div className="det-stat"><div className="l">Settlement rate</div><div className="v">{ev.settlementPrice.toLocaleString()} {unitOf(ev.underlying)}</div></div>
+                  )}
+                  <div className="det-stat"><div className="l">Triggered</div><div className="v">{ev.triggered ? 'Yes' : 'No'}</div></div>
+                </>}
+              </div>
+
+              {!ev && (
+                <p style={{ fontSize: 12, color: 'var(--tx-3)', marginTop: 12 }}>
+                  Pool #{p.eventId} could not be loaded, so strike and settlement details are unavailable for this position.
+                </p>
+              )}
+            </>
+          );
+        })() : null}
+      </div>
+
       <div className={`sheet-scrim${detailOpen ? ' on' : ''}`} onClick={() => setDetailOpen(false)} />
       <div className={`sheet${detailOpen ? ' on' : ''}`}>
         <div className="grab" />
@@ -1270,11 +1516,26 @@ export default function Hedge() {
             </div>
             <div className="brk">
               <div className="brk-line"><span className="l">Premium ({(selectedEvent.premiumRate * 100).toFixed(1)}% of notional)</span><span className="v">{fmtMoney(premiumCalc)}</span></div>
-              <div className="brk-line"><span className="l">Platform fee ({(hedgerFeeRate * 100).toFixed(1)}% of notional)</span><span className="v">{fmtMoney(hedgerFeeCalc)}</span></div>
+              {/* Show the fee against premium as well as notional. The contract
+                  charges on notional, but what matters commercially is the fee
+                  relative to the premium — at a 1% premium a 5% notional fee is
+                  500% of premium, which is invisible if only the notional basis
+                  is shown. */}
+              <div className="brk-line">
+                <span className="l">
+                  {hedgerFeeRate !== null ? `Platform fee (${(hedgerFeeRate * 100).toFixed(2)}% of notional)` : 'Platform fee'}
+                  {feeKnown && premiumCalc > 0 && (
+                    <span style={{ color: hedgerFeeCalc > premiumCalc ? 'var(--red)' : 'var(--tx-4)', marginLeft: 6, fontSize: 11.5 }}>
+                      = {((hedgerFeeCalc / premiumCalc) * 100).toFixed(0)}% of premium
+                    </span>
+                  )}
+                </span>
+                <span className="v">{feeKnown ? fmtMoney(hedgerFeeCalc) : 'unavailable'}</span>
+              </div>
               <div className="brk-line total"><span className="l">You pay</span><span className="v">{fmtMoney(totalCostCalc)}</span></div>
             </div>
             {tokenBalanceNum > 0 && <p className="hint" style={{ marginBottom: 12 }}>Balance {fmtMoney(tokenBalanceNum)} {eventTokenSymbol}</p>}
-            <button className="btn btn-primary" disabled={buyProtectionMutation.isPending || !notional || parseFloat(notional) < 10 || totalCostCalc > tokenBalanceNum} onClick={guardedBuyProtection}>
+            <button className="btn btn-primary" disabled={buyProtectionMutation.isPending || !notional || parseFloat(notional) < 10 || totalCostCalc > tokenBalanceNum || !feeKnown} onClick={guardedBuyProtection}>
               {buyProtectionMutation.isPending ? <><Loader2 className="spin" /> {txStep || 'Buying…'}</> : <><ShieldCheck /> Buy protection</>}
             </button>
           </>

@@ -7,6 +7,8 @@
  * Used by the admin dashboard and hedge marketplace API.
  */
 import { ethers } from 'ethers';
+import { sql } from 'drizzle-orm';
+import { db } from './db';
 
 const CHAINS = [
   {
@@ -27,12 +29,17 @@ const CHAINS = [
 
 const HEDGE_ABI = [
   'function getHedgeEventCore(uint256) view returns (uint256 id, address creator, string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, uint8 status, bool poolOpen, bool allowExternalLp, uint256 initialRate, bool strikeAbove)',
-  'function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 hedgerCount, uint256 lpCount, uint256 totalMaxPayout)',
+  // Field order verified against pool 9 on Base: index 7 = 1, index 8 = 0, and
+  // the event log shows that pool has 1 LP deposit and 0 protection purchases.
+  // So index 7 is lpCount, not hedgerCount — this ABI previously had the two
+  // transposed, which swapped those counts everywhere the reader is used.
+  'function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 lpCount, uint256 hedgerCount, uint256 totalMaxPayout)',
   'function getHedgePosition(uint256) view returns (uint256 id, uint256 eventId, address hedger, uint256 notional, uint256 premiumPaid, uint256 platformFeePaid, uint256 payoutAmount, uint8 status, bool claimed)',
   'function getHedgeLpDeposit(uint256) view returns (uint256 id, uint256 eventId, address lp, uint256 amount, uint256 shares, uint256 premiumsEarned, uint256 premiumsClaimed, bool withdrawn)',
   'function getEventPositionIds(uint256) view returns (uint256[])',
   'function getEventDepositIds(uint256) view returns (uint256[])',
   'function getHedgePlatformFees() view returns (uint256)',
+  'function getHedgeFeeConfig() view returns (uint256 creationFee, uint256 hedgerFeeRate, uint256 hedgerPayoutFeeRate, uint256 lpProfitFeeRate, uint256 creatorLoyaltyRate)',
   'function getTotalHedgeEvents() view returns (uint256)',
 ];
 
@@ -108,10 +115,31 @@ export interface ChainDeposit {
 let _cache: { events: ChainEvent[]; fetchedAt: number } | null = null;
 const CACHE_TTL = 30_000;
 
+/**
+ * Retry a single contract read. Public RPCs (mainnet.base.org, bsc-dataseed)
+ * throttle bursts and ethers reports the throttle as CALL_EXCEPTION, which
+ * reads exactly like a genuine revert. Retrying is what separates the two.
+ */
+async function readWithRetry<T>(call: () => Promise<T>, tries = 6): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await call();
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("contract read failed");
+}
+
 export async function readChainEvents(): Promise<ChainEvent[]> {
   if (_cache && Date.now() - _cache.fetchedAt < CACHE_TTL) return _cache.events;
 
   const allEvents: ChainEvent[] = [];
+  // Sum of getTotalHedgeEvents() across chains, so we can tell a complete read
+  // from a truncated one when deciding whether the result is safe to cache.
+  let _expectedTotal: number | null = null;
 
   await Promise.allSettled(
     CHAINS.map(async (chain) => {
@@ -143,6 +171,7 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
           return;
         }
         console.log(`[HedgeReader:${chain.name}] reading ${total} on-chain event(s)`);
+        _expectedTotal = (_expectedTotal ?? 0) + total;
 
         // Serialise per-event reads. Public RPCs (mainnet.base.org,
         // bsc-dataseed) throttle the burst of 1 + total*2 parallel calls
@@ -153,10 +182,12 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
         for (let i = 1; i <= total; i++) {
           const id = i;
           try {
-            const [core, stats] = await Promise.all([
-              contract.getHedgeEventCore(id),
-              contract.getHedgeEventStats(id),
-            ]);
+            // Retry each call. A throttled public RPC returns CALL_EXCEPTION
+            // "missing revert data", which is indistinguishable from a real
+            // revert — so a single attempt silently drops readable pools.
+            // Measured on Base: 3/9 pools without retries, 9/9 with.
+            const core = await readWithRetry(() => contract.getHedgeEventCore(id));
+            const stats = await readWithRetry(() => contract.getHedgeEventStats(id));
             const event: ChainEvent = {
               id,
               chainId: chain.id,
@@ -204,10 +235,16 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
     })
   );
 
-  // Only cache successful (non-empty) reads so a transient swallowed failure
-  // doesn't lock us into an empty result for the next CACHE_TTL.
+  // Only cache a COMPLETE read. Caching a partial one pins an under-reported
+  // book — missing pools, understated liquidity — for the whole TTL, and the
+  // next caller has no way to tell it got a truncated answer. A partial read
+  // is still returned to the caller, just not remembered.
   if (allEvents.length > 0) {
-    _cache = { events: allEvents, fetchedAt: Date.now() };
+    if (_expectedTotal !== null && allEvents.length < _expectedTotal) {
+      console.warn(`[HedgeReader] partial read (${allEvents.length}/${_expectedTotal}) — not cached, will retry on next call`);
+    } else {
+      _cache = { events: allEvents, fetchedAt: Date.now() };
+    }
   }
   return allEvents;
 }
@@ -394,6 +431,92 @@ export async function readPlatformFeesPerChain(): Promise<ChainFeeResult[]> {
     })
   );
   return results;
+}
+
+export interface ChainCreationFee {
+  chainId: number;
+  chainName: string;
+  /** Creation fee charged per pool, in USD. */
+  creationFee: number;
+  /** false = getHedgeFeeConfig() unreadable; creationFee is then 0. */
+  onChain: boolean;
+}
+
+/**
+ * Per-chain pool creation fee, read from getHedgeFeeConfig().
+ *
+ * Do not hardcode this. The fee differs by chain — Base charges $25 and BSC
+ * charges $2 — and it is governable, so a constant in the codebase drifts
+ * silently from reality and misstates revenue.
+ */
+/**
+ * Last successfully read creation fee per chain. The fee only changes by
+ * governance, but the public RPCs fail often enough that a single failed read
+ * would otherwise report $0 — which silently understates revenue far more
+ * dangerously than a slightly stale value would.
+ *
+ * Persisted to platform_settings as well as held in memory: an in-memory cache
+ * is empty after every restart, and a restart that coincides with a throttled
+ * RPC dropped reported revenue from $232 to $11.60 with no error shown.
+ */
+const _creationFeeCache = new Map<number, number>();
+
+async function rememberCreationFee(chainId: number, fee: number): Promise<void> {
+  _creationFeeCache.set(chainId, fee);
+  try {
+    await db.execute(sql`
+      INSERT INTO platform_settings (key, value, updated_at)
+      VALUES (${`creation_fee_${chainId}`}, ${String(fee)}, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = ${String(fee)}, updated_at = NOW()
+    `);
+  } catch { /* cache persistence is best-effort */ }
+}
+
+async function recallCreationFee(chainId: number): Promise<number | undefined> {
+  const mem = _creationFeeCache.get(chainId);
+  if (mem !== undefined) return mem;
+  try {
+    const r = await db.execute(
+      sql`SELECT value FROM platform_settings WHERE key = ${`creation_fee_${chainId}`}`
+    );
+    const rows = (r as any).rows ?? r;
+    const v = rows?.[0]?.value;
+    if (v != null) {
+      const n = parseFloat(String(v));
+      if (!Number.isNaN(n)) {
+        _creationFeeCache.set(chainId, n);
+        return n;
+      }
+    }
+  } catch { /* fall through to unknown */ }
+  return undefined;
+}
+
+export async function readCreationFeePerChain(): Promise<ChainCreationFee[]> {
+  return Promise.all(
+    CHAINS.map(async (chain): Promise<ChainCreationFee> => {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const provider = await getProvider(chain.rpcs);
+          const contract = new ethers.Contract(chain.diamond, HEDGE_ABI, provider);
+          const cfg = await contract.getHedgeFeeConfig();
+          const fee = toNum(cfg[0], chain.decimals);
+          await rememberCreationFee(chain.id, fee);
+          return { chainId: chain.id, chainName: chain.name, creationFee: fee, onChain: true };
+        } catch {
+          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        }
+      }
+      const cached = await recallCreationFee(chain.id);
+      return {
+        chainId: chain.id,
+        chainName: chain.name,
+        creationFee: cached ?? 0,
+        // Cached values still reflect a real on-chain read, just not this one.
+        onChain: cached !== undefined,
+      };
+    })
+  );
 }
 
 /** Convenience wrapper: returns total across all chains (best-effort). */

@@ -603,7 +603,18 @@ class HedgeContractManager {
   async getAllEvents(): Promise<HedgeEventData[]> {
     const contract = this.getReadContract();
     const MAX_SCAN = 500;
-    const [eventTimestamps] = await Promise.all([this.getEventTimestamps()]);
+    // Public Base RPCs throttle aggressively, and ethers surfaces a throttled
+    // response as CALL_EXCEPTION "missing revert data" — indistinguishable from
+    // a genuine revert. Reading 10 pools at once (30 calls) reliably trips it
+    // and silently drops pools from the market. Smaller batches plus retries
+    // read the full book; measured 3/9 pools before, 9/9 after.
+    const BATCH = 4;
+    const READ_RETRIES = 4;
+
+    // Timestamps are decoration on top of the event data, so they must not gate
+    // the reads — kick the request off now and join it at the end. Previously
+    // this was awaited first and cost ~600ms before a single event was fetched.
+    const timestampsPromise = this.getEventTimestamps().catch(() => new Map<number, Date>());
 
     // Try fast path first; fall back to scanning if getTotalHedgeEvents() is unavailable
     let count: number | null = null;
@@ -617,21 +628,68 @@ class HedgeContractManager {
       console.warn('[HedgeContract] getTotalHedgeEvents() unavailable — scanning upward');
     }
 
-    const events: HedgeEventData[] = [];
-    for (let i = 1; i <= (count ?? MAX_SCAN); i++) {
-      try {
-        const [core, stats, paymentToken] = await Promise.all([
-          contract.getHedgeEventCore(i),
-          contract.getHedgeEventStats(i),
-          contract.getEventPaymentToken(i).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
-        ]);
-        events.push(this.formatEvent(core, stats, eventTimestamps.get(i), paymentToken as string));
-      } catch (err) {
-        if (count === null) break; // scan mode: first revert = end of events
-        console.error(`[HedgeContract] Failed to load event #${i}:`, err);
+    type RawEvent = { id: number; core: unknown; stats: unknown; paymentToken: string };
+
+    /** Retry a single read; throttled responses look like reverts, so retry both. */
+    const readWithRetry = async <T>(call: () => Promise<T>): Promise<T | null> => {
+      for (let attempt = 0; attempt < READ_RETRIES; attempt++) {
+        try {
+          return await call();
+        } catch {
+          await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        }
+      }
+      return null;
+    };
+
+    const loadOne = async (i: number): Promise<RawEvent | null> => {
+      // Sequential rather than Promise.all: three concurrent calls per pool is
+      // what pushes the RPC over its limit in the first place.
+      const core = await readWithRetry(() => contract.getHedgeEventCore(i));
+      if (core === null) return null;
+      const stats = await readWithRetry(() => contract.getHedgeEventStats(i));
+      if (stats === null) return null;
+      const paymentToken =
+        (await readWithRetry(() => contract.getEventPaymentToken(i)))
+        ?? (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
+      return { id: i, core, stats, paymentToken: paymentToken as string };
+    };
+
+    const raw: RawEvent[] = [];
+
+    if (count === null) {
+      // Scan mode: without a count, a run of reverts is the only signal that
+      // the list has ended. Stopping at the *first* revert is wrong here —
+      // several live events revert on these getters (facet version skew) and
+      // the RPC reverts intermittently under load, either of which would
+      // truncate the book to nothing. Require consecutive misses instead.
+      const STOP_AFTER_CONSECUTIVE_MISSES = 3;
+      let misses = 0;
+      for (let i = 1; i <= MAX_SCAN && misses < STOP_AFTER_CONSECUTIVE_MISSES; i++) {
+        const r = await loadOne(i);
+        if (r) { raw.push(r); misses = 0; } else { misses++; }
+      }
+    } else {
+      // Known count: fetch in parallel batches. Several deployed events revert
+      // on these getters, and serially eating one round trip per failure is
+      // what made this page take seconds to appear. Batched rather than fully
+      // parallel so a large book doesn't hammer the public RPC in one burst.
+      let failed = 0;
+      for (let start = 1; start <= count; start += BATCH) {
+        const end = Math.min(start + BATCH - 1, count);
+        const batch: Array<Promise<RawEvent | null>> = [];
+        for (let i = start; i <= end; i++) batch.push(loadOne(i));
+        for (const r of await Promise.all(batch)) {
+          if (r) raw.push(r); else failed++;
+        }
+      }
+      if (failed > 0) {
+        console.warn(`[HedgeContract] ${failed}/${count} event(s) unreadable on chain ${this._chainId} — skipped`);
       }
     }
-    return events;
+
+    const eventTimestamps = await timestampsPromise;
+    return raw.map((r) => this.formatEvent(r.core, r.stats, eventTimestamps.get(r.id), r.paymentToken));
   }
 
   async getEvent(eventId: number): Promise<HedgeEventData> {

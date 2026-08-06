@@ -25,6 +25,31 @@ const AUTH_METHOD_KEY = 'bfx_rift_auth_method';    // {kind, email|phoneNumber|e
 
 const apiKey = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
+// Hosts that answer Rift API calls but send no Access-Control-Allow-Origin for
+// http://localhost. In dev these are rewritten through our own server (see
+// server/routes/rift-proxy.ts); in production they are called directly.
+const CORS_BLOCKED_HOSTS = ['payment.riftfi.xyz', 'api.riftfi.xyz', 'auth.riftfi.xyz'];
+
+/**
+ * In development, rewrite a Rift API URL to the same-origin dev proxy.
+ * Returns null when the URL should be left alone.
+ *
+ * Rift only allowlists the deployed origin, so the browser blocks these
+ * responses on localhost even though they return 200 — which surfaces as
+ * empty balances rather than an error. The proxy sidesteps that: CORS is a
+ * browser rule, and a server-to-server request isn't subject to it.
+ */
+function devProxyUrl(rawUrl: string): string | null {
+  if (!import.meta.env.DEV) return null;
+  try {
+    const u = new URL(rawUrl, window.location.origin);
+    if (!CORS_BLOCKED_HOSTS.includes(u.hostname)) return null;
+    return `${window.location.origin}/rift-proxy/${u.hostname}${u.pathname}${u.search}`;
+  } catch {
+    return null;
+  }
+}
+
 // ── Kill HTTP cache for Rift API requests ────────────────────────────────
 // The SDK doesn't set { cache: 'no-store' } and backend returns 304s that
 // browsers cache aggressively. Patch fetch globally (only for Rift hosts).
@@ -39,6 +64,13 @@ if (typeof window !== 'undefined' && !(window as any).__riftNoCachePatched) {
       url.includes('riftfi.xyz') ||
       url.includes('widget.blockfinax.com')
     ) {
+      const proxied = devProxyUrl(url);
+      if (proxied) {
+        // Preserve headers/body when the SDK passed a Request object.
+        const nextInput: RequestInfo | URL =
+          typeof input === 'string' || input instanceof URL ? proxied : new Request(proxied, input);
+        return origFetch(nextInput, { ...(init || {}), cache: 'no-store' });
+      }
       return origFetch(input, { ...(init || {}), cache: 'no-store' });
     }
     return origFetch(input, init);

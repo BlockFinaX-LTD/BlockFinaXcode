@@ -390,6 +390,22 @@ export async function initializeDatabase() {
     console.error("Failed to apply hedge_events column migration:", error);
   }
 
+  // Historical on-chain log backfill: hedge_activity gains a block number so
+  // the traction feed can order by chain position, and a cursor table records
+  // how far each chain has been scanned so restarts resume instead of rescanning.
+  try {
+    await db.execute(sql`ALTER TABLE hedge_activity ADD COLUMN IF NOT EXISTS block_number INTEGER`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS chain_log_cursors (
+        chain_id INTEGER PRIMARY KEY,
+        last_scanned_block INTEGER NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  } catch (error) {
+    console.error("Failed to apply chain log backfill migration:", error);
+  }
+
   for (const network of defaultNetworks) {
     try {
       const existing = await db

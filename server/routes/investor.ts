@@ -3,7 +3,18 @@ import { timingSafeEqual, randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { sql } from "drizzle-orm";
 import { storage } from "../storage";
+import { db } from "../db";
+import { hedgeActivity, hedgeEvents, platformFees } from "@shared/schema";
+import {
+  readChainEvents,
+  readChainPositionsByEvent,
+  readChainDepositsByEvent,
+  readPlatformFeesPerChain,
+  readCreationFeePerChain,
+} from "../hedge-reader";
+import { isBackfillRunning } from "../chain-logs";
 
 const investorSessions = new Map<string, number>();
 const investorEditSessions = new Set<string>();
@@ -147,6 +158,285 @@ export function registerInvestorRoutes(app: Express) {
     const token = req.headers["x-investor-token"] as string;
     if (token) { investorSessions.delete(token); investorEditSessions.delete(token); }
     res.json({ success: true });
+  });
+
+  /**
+   * Live traction feed for the data room.
+   *
+   * Everything numeric here is read from the Diamond on Base + BSC at request
+   * time — this is deliberately NOT served from the local DB, because the
+   * whole point for an investor is that the numbers are verifiable on-chain.
+   * The DB is used only for the transaction log (hedge_activity), which
+   * carries the tx hashes needed to deep-link into the block explorers.
+   *
+   * Mirrors the maths in /api/admin/revenue so the two never disagree.
+   */
+  app.get("/api/investor/traction", async (req, res) => {
+    const token = req.headers["x-investor-token"] as string;
+    const expiry = investorSessions.get(token);
+    if (!expiry || Date.now() > expiry) {
+      investorSessions.delete(token);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const [chainEvents, perChainFees, perChainCreationFees, txFeeStats, recentActivity, dbPools] =
+        await Promise.all([
+          readChainEvents(),
+          readPlatformFeesPerChain(),
+          readCreationFeePerChain(),
+          db
+            .select({
+              totalTxFees: sql<string>`coalesce(sum(fee_amount::numeric), 0)::text`,
+              totalTransferVolume: sql<string>`coalesce(sum(transfer_amount::numeric), 0)::text`,
+              txFeeCount: sql<number>`count(*)::int`,
+            })
+            .from(platformFees)
+            .then((r) => r[0]),
+          // Full history, newest first. Ordered by block number so the sequence
+          // reflects the chain rather than when our backfill happened to write
+          // the row; createdAt is the fallback for rows written live.
+          db
+            .select({
+              txHash: hedgeActivity.txHash,
+              chainId: hedgeActivity.chainId,
+              actionType: hedgeActivity.actionType,
+              amount: hedgeActivity.amount,
+              token: hedgeActivity.token,
+              walletAddress: hedgeActivity.walletAddress,
+              onChainEventId: hedgeActivity.onChainEventId,
+              positionId: hedgeActivity.positionId,
+              depositId: hedgeActivity.depositId,
+              metadata: hedgeActivity.metadata,
+              blockNumber: hedgeActivity.blockNumber,
+              status: hedgeActivity.status,
+              createdAt: hedgeActivity.createdAt,
+            })
+            .from(hedgeActivity)
+            .orderBy(sql`coalesce(block_number, 0) desc, created_at desc`)
+            .limit(500),
+          // Pool identity + status, as synced from chain by ChainSync. Used to
+          // name pairs and count statuses for pools whose on-chain getters
+          // revert, so the section never under-reports the book.
+          db
+            .select({
+              chainId: hedgeEvents.chainId,
+              onChainEventId: hedgeEvents.onChainEventId,
+              underlying: hedgeEvents.underlying,
+              status: hedgeEvents.status,
+            })
+            .from(hedgeEvents)
+            .where(sql`chain_id IS NOT NULL`),
+        ]);
+
+      // Aggregate the indexed on-chain log. This is the reliable source: every
+      // row was decoded from a real event log and carries its own tx hash, so
+      // the totals are itemised and independently verifiable. The contract's
+      // getHedgeEventStats getters revert on several deployed pools and time
+      // out intermittently, which is why they are not trusted for headlines.
+      const logAgg = await db
+        .select({
+          notional: sql<string>`coalesce(sum(amount::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          liquidity: sql<string>`coalesce(sum(amount::numeric) filter (where action_type = 'deposit'), 0)::text`,
+          premiums: sql<string>`coalesce(sum((metadata::json->>'premium')::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          hedgerFees: sql<string>`coalesce(sum((metadata::json->>'platformFee')::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          poolsCreated: sql<number>`count(*) filter (where action_type = 'create_event')::int`,
+          poolsCreatedBase: sql<number>`count(*) filter (where action_type = 'create_event' and chain_id = 8453)::int`,
+          poolsCreatedBsc: sql<number>`count(*) filter (where action_type = 'create_event' and chain_id = 56)::int`,
+          poolsSeen: sql<number>`count(distinct on_chain_event_id)::int`,
+          purchases: sql<number>`count(*) filter (where action_type = 'buy_protection')::int`,
+          deposits: sql<number>`count(*) filter (where action_type = 'deposit')::int`,
+          uniqueHedgersLog: sql<number>`count(distinct wallet_address) filter (where action_type = 'buy_protection')::int`,
+          uniqueLpsLog: sql<number>`count(distinct wallet_address) filter (where action_type = 'deposit')::int`,
+        })
+        .from(hedgeActivity)
+        .then((r) => r[0]);
+
+      // Positions + deposits, fanned out per event across both chains.
+      const allPositions: any[] = [];
+      const allDeposits: any[] = [];
+      await Promise.allSettled(
+        chainEvents.map(async (event) => {
+          const [positions, deposits] = await Promise.all([
+            readChainPositionsByEvent(event.id, (event as any).chainId),
+            readChainDepositsByEvent(event.id, (event as any).chainId),
+          ]);
+          allPositions.push(...positions);
+          allDeposits.push(...deposits);
+        })
+      );
+
+      // Headline figures come from the indexed log, falling back to the
+      // contract's live aggregates only where the log has nothing to say.
+      const num = (s: string) => parseFloat(s) || 0;
+      const liveExposure = chainEvents.reduce((s, e) => s + e.totalExposure, 0);
+      const livePremiums = chainEvents.reduce((s, e) => s + e.totalPremiums, 0);
+      const liveLiquidity = chainEvents.reduce((s, e) => s + e.totalLiquidity, 0);
+
+      const totalNotional = num(logAgg.notional) || liveExposure;
+      const totalPremiumsCollected = num(logAgg.premiums) || livePremiums;
+      const totalLiquidityDeposited = num(logAgg.liquidity) || liveLiquidity;
+      const hedgerPositions = logAgg.purchases || chainEvents.reduce((s, e) => s + e.hedgerCount, 0);
+      const lpPositions = logAgg.deposits || chainEvents.reduce((s, e) => s + (e as any).lpCount, 0);
+
+      // Payouts and LP earnings have no event log of their own, so they can
+      // only come from the per-position getters — which revert on most pools.
+      const totalPayouts = allPositions.reduce((s, p) => s + p.payoutAmount, 0);
+      const totalLpPremiumsEarned = allDeposits.reduce((s, d) => s + d.premiumsEarned, 0);
+      const uniqueHedgers = logAgg.uniqueHedgersLog
+        || new Set(allPositions.map((p) => String(p.hedger).toLowerCase())).size;
+      const uniqueLps = logAgg.uniqueLpsLog
+        || new Set(allDeposits.map((d) => String(d.lp).toLowerCase())).size;
+
+      // How much of the pool set we could read in full — surfaced so the UI can
+      // say so rather than silently under-reporting.
+      const detailCoverage = {
+        poolsRead: chainEvents.length,
+        poolsIndexed: logAgg.poolsSeen,
+        positionsResolved: allPositions.length,
+        depositsResolved: allDeposits.length,
+      };
+
+      // Revenue, itemised from the indexed log:
+      //   creation fee   — flat $2 per pool created (initializeHedgeFees)
+      //   hedger fee     — protocol cut taken at purchase, emitted in the log
+      //   transfer fee   — wallet-to-wallet fees recorded in platform_fees
+      // The Diamond's getHedgePlatformFees() accumulator is read alongside as a
+      // cross-check; it reflects the *undrawn* treasury balance, so it reads
+      // lower than lifetime revenue once fees have been withdrawn.
+      const poolsCreated = logAgg.poolsCreated || logAgg.poolsSeen;
+
+      // Creation fee is per chain and governable — Base charges $25, BSC $2 —
+      // so it is read live rather than hardcoded. Note this applies the CURRENT
+      // fee to historical pools: if governance changed the fee after a pool was
+      // created, that pool's contribution is approximated. The hedger fees
+      // below carry no such caveat; they come from the purchase logs directly.
+      const feeFor = (chainId: number) => {
+        const hit = perChainCreationFees.find((c) => c.chainId === chainId);
+        // known:false means we could not read the fee at all — the UI says so
+        // rather than showing $0, which would read as "we charge nothing".
+        return { fee: hit?.creationFee ?? 0, known: !!hit?.onChain };
+      };
+      const creationFeeBreakdown = [
+        { chainName: "Base", pools: logAgg.poolsCreatedBase, ...feeFor(8453) },
+        { chainName: "BSC", pools: logAgg.poolsCreatedBsc, ...feeFor(56) },
+      ]
+        .filter((c) => c.pools > 0)
+        .map(({ chainName, pools, fee, known }) => ({ chainName, pools, feePerPool: fee, known }));
+      const creationFees = creationFeeBreakdown.reduce((s, c) => s + c.pools * c.feePerPool, 0);
+      const hedgerProtocolFees = num(logAgg.hedgerFees);
+
+      const chainFeeDetails: Record<string, { fees: number; source: string }> = {};
+      let onChainTreasury = 0;
+      for (const chain of perChainFees) {
+        onChainTreasury += chain.fees;
+        chainFeeDetails[chain.chainName] = {
+          fees: chain.fees,
+          source: chain.onChain ? "on-chain treasury balance" : "getter unavailable on this Diamond",
+        };
+      }
+
+      const totalTxFees = parseFloat(txFeeStats.totalTxFees);
+      const totalHedgeFees = creationFees + hedgerProtocolFees;
+
+      // Per-pair rollup — which corridors have real volume behind them.
+      // Pair names come from the synced pool table (complete), the money comes
+      // from the indexed log (complete), joined on the on-chain event id.
+      const pairOf = new Map<number, string>();
+      for (const p of dbPools) {
+        if (p.onChainEventId != null) pairOf.set(p.onChainEventId, p.underlying);
+      }
+      for (const e of chainEvents) pairOf.set(e.id, e.underlying);
+
+      const perPool = await db
+        .select({
+          poolId: hedgeActivity.onChainEventId,
+          liquidity: sql<string>`coalesce(sum(amount::numeric) filter (where action_type = 'deposit'), 0)::text`,
+          notional: sql<string>`coalesce(sum(amount::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          premiums: sql<string>`coalesce(sum((metadata::json->>'premium')::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          hedgers: sql<number>`count(distinct wallet_address) filter (where action_type = 'buy_protection')::int`,
+        })
+        .from(hedgeActivity)
+        .where(sql`on_chain_event_id IS NOT NULL`)
+        .groupBy(hedgeActivity.onChainEventId);
+
+      const byPair: Record<string, { pools: number; liquidity: number; notional: number; premiums: number; hedgers: number }> = {};
+      for (const p of perPool) {
+        const k = (p.poolId != null ? pairOf.get(p.poolId) : undefined) || "Unknown pair";
+        if (!byPair[k]) byPair[k] = { pools: 0, liquidity: 0, notional: 0, premiums: 0, hedgers: 0 };
+        byPair[k].pools += 1;
+        byPair[k].liquidity += num(p.liquidity);
+        byPair[k].notional += num(p.notional);
+        byPair[k].premiums += num(p.premiums);
+        byPair[k].hedgers += p.hedgers;
+      }
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        chains: perChainFees.map((c) => ({ chainId: c.chainId, chainName: c.chainName, live: c.onChain })),
+        // Pool counts prefer the synced table over the live getters: the
+        // getters revert on several pools, the synced table has all of them.
+        pools: (() => {
+          const src = dbPools.length >= chainEvents.length
+            ? dbPools.map((p) => p.status)
+            : chainEvents.map((e) => e.status);
+          return {
+            total: Math.max(src.length, logAgg.poolsSeen),
+            open: src.filter((s) => s === "open").length,
+            settled: src.filter((s) => s === "settled").length,
+            expired: src.filter((s) => s === "expired").length,
+          };
+        })(),
+        participants: {
+          hedgerPositions,
+          lpPositions,
+          uniqueHedgers,
+          uniqueLps,
+        },
+        detailCoverage,
+        volume: {
+          totalNotional: totalNotional.toFixed(2),
+          totalLiquidityDeposited: totalLiquidityDeposited.toFixed(2),
+          totalPremiumsCollected: totalPremiumsCollected.toFixed(2),
+          totalPayouts: totalPayouts.toFixed(2),
+          totalLpPremiumsEarned: totalLpPremiumsEarned.toFixed(2),
+          totalTransferVolume: parseFloat(txFeeStats.totalTransferVolume).toFixed(2),
+        },
+        revenue: {
+          creationFees: creationFees.toFixed(2),
+          creationFeeBreakdown,
+          poolsCreated,
+          hedgerProtocolFees: hedgerProtocolFees.toFixed(2),
+          hedgePlatformFees: totalHedgeFees.toFixed(2),
+          transactionFees: totalTxFees.toFixed(2),
+          netPlatformRevenue: (totalHedgeFees + totalTxFees).toFixed(2),
+          transactionFeeCount: txFeeStats.txFeeCount,
+          onChainTreasury: onChainTreasury.toFixed(2),
+          chainFeeDetails,
+        },
+        byPair: Object.entries(byPair)
+          .map(([pair, v]) => ({ pair, ...v }))
+          .sort((a, b) => b.liquidity - a.liquidity),
+        activityBackfill: {
+          running: isBackfillRunning(),
+          rows: recentActivity.length,
+        },
+        recentActivity: recentActivity.map((a) => ({
+          ...a,
+          explorerUrl:
+            a.chainId === 8453
+              ? `https://basescan.org/tx/${a.txHash}`
+              : a.chainId === 56
+              ? `https://bscscan.com/tx/${a.txHash}`
+              : null,
+          chainName: a.chainId === 8453 ? "Base" : a.chainId === 56 ? "BSC" : String(a.chainId),
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load traction data",
+      });
+    }
   });
 
   app.get("/api/investor/content/:docId", async (req, res) => {

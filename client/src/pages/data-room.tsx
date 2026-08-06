@@ -7,7 +7,7 @@ import {
   Lock, LogOut, ExternalLink, FileText, BarChart2, Globe,
   PlayCircle, Beaker, ShieldCheck, BookOpen, ChevronRight,
   Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3, Calendar,
-  Users, PieChart
+  Users, PieChart, TrendingUp, Activity, RefreshCw, Paperclip, Trash2, Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,6 +172,14 @@ const CATEGORIES = [
     documents: [
       { id: "pitch-deck", title: "Pitch Deck", description: "10-slide interactive investor presentation with animated slides", href: "/pitch", type: "navigate" as const, badge: "Interactive", badgeColor: "bg-blue-100 text-blue-700", icon: FileText },
       { id: "exec-summary", title: "Executive Summary", description: "Company overview, problem, solution, traction and the ask in one page", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: BookOpen },
+    ],
+  },
+  {
+    id: "traction", label: "Traction", icon: TrendingUp,
+    color: "border-emerald-200 bg-emerald-50", iconColor: "text-emerald-600",
+    documents: [
+      { id: "live-traction", title: "Live Protocol Monitor", description: "Real-time revenue, notional, liquidity, pools and transactions read straight from the Diamond on Base and BSC", href: null, type: "modal" as const, badge: "Live", badgeColor: "bg-emerald-100 text-emerald-700", icon: Activity },
+      { id: "letters-of-intent", title: "Letters of Intent", description: "Signed and in-progress LOIs from counterparties — stated monthly FX exposure, status, and attached documents", href: null, type: "modal" as const, badge: "Confidential", badgeColor: "bg-indigo-100 text-indigo-700", icon: FileText },
     ],
   },
   {
@@ -2304,10 +2312,437 @@ function AdminNotesSection({ docId, token }: { docId: string; token: string }) {
   );
 }
 
+/* ─── TRACTION ─── */
+
+interface TractionData {
+  generatedAt: string;
+  chains: Array<{ chainId: number; chainName: string; live: boolean }>;
+  pools: { total: number; open: number; settled: number; expired: number };
+  participants: { hedgerPositions: number; lpPositions: number; uniqueHedgers: number; uniqueLps: number };
+  detailCoverage: { poolsRead: number; positionsResolved: number; depositsResolved: number };
+  volume: {
+    totalNotional: string; totalLiquidityDeposited: string; totalPremiumsCollected: string;
+    totalPayouts: string; totalLpPremiumsEarned: string; totalTransferVolume: string;
+  };
+  revenue: {
+    creationFees: string; poolsCreated: number; hedgerProtocolFees: string;
+    creationFeeBreakdown: Array<{ chainName: string; pools: number; feePerPool: number; known: boolean }>;
+    hedgePlatformFees: string; transactionFees: string; netPlatformRevenue: string;
+    transactionFeeCount: number; onChainTreasury: string;
+    chainFeeDetails: Record<string, { fees: number; source: string }>;
+  };
+  byPair: Array<{ pair: string; pools: number; liquidity: number; notional: number; premiums: number; hedgers: number }>;
+  activityBackfill: { running: boolean; rows: number };
+  recentActivity: Array<{
+    txHash: string; chainId: number; chainName: string; actionType: string;
+    amount: string | null; token: string | null; walletAddress: string;
+    onChainEventId: number | null; positionId: number | null; depositId: number | null;
+    metadata: string | null; blockNumber: number | null;
+    status: string; createdAt: string | null; explorerUrl: string | null;
+  }>;
+}
+
+const usd = (n: string | number) =>
+  "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+const shortAddr = (a: string) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
+
+const ACTION_LABEL: Record<string, string> = {
+  create_event: "Pool created", deposit: "LP deposit", withdraw: "LP withdrawal",
+  buy_protection: "Protection bought", claim: "Payout claimed",
+  claim_premiums: "Premiums claimed", settle: "Settled",
+};
+
+/**
+ * Live protocol monitor. Every figure is read from the Diamond on Base + BSC
+ * at request time, not from our database — that's the point of showing it to
+ * an investor. Polls every 30s while the modal is open.
+ */
+function LiveTractionDoc({ token }: { token: string }) {
+  const [d, setD] = useState<TractionData | null>(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/investor/traction", { headers: { "x-investor-token": token } });
+      if (!r.ok) throw new Error((await r.json()).error || "Failed to load");
+      setD(await r.json());
+      setErr("");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  if (loading && !d) return <p style={S.p}>Reading the chain…</p>;
+  if (err && !d) return <p style={{ ...S.p, color: "#dc2626" }}>{err}</p>;
+  if (!d) return null;
+
+  // Payout / LP-earning figures depend on the per-position getters, which
+  // revert on older Base pools. Show them only when we actually resolved some,
+  // rather than presenting a zero that reads as "nothing ever paid out".
+  const detailed = d.detailCoverage.positionsResolved > 0;
+
+  const stats: Array<[string, string, string]> = [
+    ["Protocol revenue", usd(d.revenue.netPlatformRevenue), "Platform fees + transaction fees"],
+    ["Notional protected", usd(d.volume.totalNotional), "Total exposure covered across pools"],
+    ["Liquidity underwritten", usd(d.volume.totalLiquidityDeposited), "Capital committed by LPs"],
+    ["Premiums collected", usd(d.volume.totalPremiumsCollected), "Paid by hedgers into pools"],
+    ["Hedger positions", String(d.participants.hedgerPositions), "Cover contracts bought"],
+    ["LP positions", String(d.participants.lpPositions), "Underwriting deposits made"],
+    ...(detailed
+      ? ([
+          ["Payouts settled", usd(d.volume.totalPayouts), "Returned to hedgers on trigger"],
+          ["LP earnings", usd(d.volume.totalLpPremiumsEarned), "Premium income accrued to LPs"],
+        ] as Array<[string, string, string]>)
+      : []),
+  ];
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
+        <span style={{ ...S.tag("green"), display: "inline-flex", alignItems: "center", gap: "5px" }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: "#16a34a", display: "inline-block" }} />
+          Live from chain
+        </span>
+        {d.chains.map(c => (
+          <span key={c.chainId} style={S.tag(c.live ? "blue" : "amber")}>
+            {c.chainName}{c.live ? "" : " (estimated fees)"}
+          </span>
+        ))}
+        <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "auto", display: "flex", alignItems: "center", gap: "5px" }}>
+          <RefreshCw style={{ width: 11, height: 11 }} />
+          {new Date(d.generatedAt).toLocaleTimeString()} · refreshes every 30s
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "10px" }}>
+        {stats.map(([label, val, hint]) => (
+          <div key={label} style={S.stat}>
+            <div style={S.statVal}>{val}</div>
+            <div style={S.statLbl}>{label}</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>{hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginTop: "10px" }}>
+        {([
+          ["Pools", d.pools.total], ["Open", d.pools.open], ["Settled", d.pools.settled],
+          ...(detailed
+            ? ([["Unique hedgers", d.participants.uniqueHedgers], ["Unique LPs", d.participants.uniqueLps]] as Array<[string, number]>)
+            : []),
+        ] as Array<[string, number]>).map(([l, v]) => (
+          <div key={l} style={S.stat}>
+            <div style={{ ...S.statVal, fontSize: "18px" }}>{v}</div>
+            <div style={S.statLbl}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <h2 style={S.h2}>Revenue, itemised from chain</h2>
+      <table style={S.table}>
+        <thead><tr><th style={S.th}>Source</th><th style={S.th}>Amount</th><th style={S.th}>Basis</th></tr></thead>
+        <tbody>
+          <tr>
+            <td style={S.td}>Pool creation fees</td>
+            <td style={S.td}>{usd(d.revenue.creationFees)}</td>
+            <td style={S.td}>
+              {d.revenue.creationFeeBreakdown?.length
+                ? d.revenue.creationFeeBreakdown.map(c => c.known
+                    ? `${c.chainName}: ${c.pools} × ${usd(c.feePerPool)}`
+                    : `${c.chainName}: ${c.pools} pools · fee unreadable on chain`).join(" · ")
+                : `${d.revenue.poolsCreated} pools`}
+            </td>
+          </tr>
+          <tr>
+            <td style={S.td}>Hedger protocol fees</td>
+            <td style={S.td}>{usd(d.revenue.hedgerProtocolFees)}</td>
+            <td style={S.td}>Taken at purchase, summed from {d.recentActivity.filter(a => a.actionType === "buy_protection").length} purchase logs</td>
+          </tr>
+          <tr>
+            <td style={S.td}>Transaction fees</td>
+            <td style={S.td}>{usd(d.revenue.transactionFees)}</td>
+            <td style={S.td}>{d.revenue.transactionFeeCount} transfers · {usd(d.volume.totalTransferVolume)} volume</td>
+          </tr>
+          <tr>
+            <td style={{ ...S.td, fontWeight: 700, color: "#0f172a" }}>Net platform revenue</td>
+            <td style={{ ...S.td, fontWeight: 700, color: "#0f172a" }}>{usd(d.revenue.netPlatformRevenue)}</td>
+            <td style={S.td} />
+          </tr>
+          <tr>
+            <td style={{ ...S.td, color: "#94a3b8" }}>Undrawn treasury balance</td>
+            <td style={{ ...S.td, color: "#94a3b8" }}>{usd(d.revenue.onChainTreasury)}</td>
+            <td style={{ ...S.td, color: "#94a3b8" }}>
+              Cross-check — reads lower than lifetime revenue once fees are withdrawn
+              {Object.entries(d.revenue.chainFeeDetails).map(([c, v]) => ` · ${c}: ${v.source}`).join("")}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {d.byPair.length > 0 && (
+        <>
+          <h2 style={S.h2}>By currency pair</h2>
+          <table style={S.table}>
+            <thead><tr><th style={S.th}>Pair</th><th style={S.th}>Pools</th><th style={S.th}>Liquidity</th><th style={S.th}>Notional</th><th style={S.th}>Premiums</th><th style={S.th}>Hedgers</th></tr></thead>
+            <tbody>
+              {d.byPair.map(p => (
+                <tr key={p.pair}>
+                  <td style={{ ...S.td, fontWeight: 600, color: "#0f172a" }}>{p.pair}</td>
+                  <td style={S.td}>{p.pools}</td>
+                  <td style={S.td}>{usd(p.liquidity)}</td>
+                  <td style={S.td}>{usd(p.notional)}</td>
+                  <td style={S.td}>{usd(p.premiums)}</td>
+                  <td style={S.td}>{p.hedgers}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <h2 style={S.h2}>
+        Transaction history
+        <span style={{ fontSize: "12px", fontWeight: 500, color: "#64748b", marginLeft: "8px" }}>
+          {d.recentActivity.length} on-chain transaction{d.recentActivity.length === 1 ? "" : "s"}
+        </span>
+      </h2>
+
+      {d.activityBackfill.running && (
+        <p style={{ ...S.p, color: "#d97706" }}>
+          Still reading historical logs from the chain — this list is incomplete
+          and will fill in over the next few minutes. It only happens once.
+        </p>
+      )}
+
+      {d.recentActivity.length === 0 ? (
+        <p style={S.p}>
+          {d.activityBackfill.running
+            ? "Scanning the chain now…"
+            : "No transactions indexed yet. The historical backfill runs shortly after the server starts."}
+        </p>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={S.table}>
+            <thead><tr>
+              <th style={S.th}>When</th><th style={S.th}>Action</th><th style={S.th}>Pool</th>
+              <th style={S.th}>Amount</th><th style={S.th}>Wallet</th><th style={S.th}>Block</th>
+              <th style={S.th}>Chain</th><th style={S.th}>Proof</th>
+            </tr></thead>
+            <tbody>
+              {d.recentActivity.map(a => {
+                let extra = "";
+                try {
+                  const m = a.metadata ? JSON.parse(a.metadata) : null;
+                  if (m?.premium) extra = `premium ${usd(m.premium)}`;
+                } catch { /* metadata is best-effort decoration */ }
+                return (
+                  <tr key={`${a.chainId}-${a.txHash}-${a.actionType}`}>
+                    <td style={S.td}>{a.createdAt ? new Date(a.createdAt).toLocaleDateString() : "—"}</td>
+                    <td style={S.td}>
+                      {ACTION_LABEL[a.actionType] || a.actionType}
+                      {extra && <div style={{ fontSize: "11px", color: "#94a3b8" }}>{extra}</div>}
+                    </td>
+                    <td style={S.td}>{a.onChainEventId != null ? `#${a.onChainEventId}` : "—"}</td>
+                    <td style={S.td}>{a.amount ? `${usd(a.amount)} ${a.token || ""}` : "—"}</td>
+                    <td style={{ ...S.td, fontFamily: "monospace", fontSize: "12px" }}>{shortAddr(a.walletAddress)}</td>
+                    <td style={{ ...S.td, fontFamily: "monospace", fontSize: "12px" }}>{a.blockNumber ?? "—"}</td>
+                    <td style={S.td}>{a.chainName}</td>
+                    <td style={S.td}>
+                      {a.explorerUrl ? (
+                        <a href={a.explorerUrl} target="_blank" rel="noopener noreferrer"
+                           style={{ color: "#2563eb", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          View <ExternalLink style={{ width: 11, height: 11 }} />
+                        </a>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "14px", lineHeight: 1.6 }}>
+        Pool, position and fee figures are read directly from the BlockFinaX Diamond
+        on Base and BSC each time this page loads. Every transaction above links to
+        its block-explorer record, so nothing here has to be taken on trust.
+        {!detailed && (
+          <> Payout and per-wallet breakdowns are unavailable for the currently
+          deployed pools — the position getters are not exposed by the facet
+          version on those events, so only pool-level aggregates are shown.</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/* ─── LETTERS OF INTENT ─── */
+
+interface LoiFile { filename: string; originalName: string; url: string }
+interface Loi {
+  id: string; counterparty: string; country: string; sector: string;
+  pair: string; monthlyVolume: string; status: string; date: string;
+  notes: string; files?: LoiFile[];
+}
+
+const LOI_D: { intro: string; items: Loi[] } = {
+  intro:
+    "Signed and in-progress letters of intent from businesses that have committed to hedging volume through BlockFinaX. Figures are counterparty-stated monthly FX exposure, not realised volume.",
+  items: [],
+};
+
+const LOI_STATUS = ["Signed", "Verbal", "In discussion", "Lapsed"];
+
+function LettersOfIntentDoc({ token }: { token: string }) {
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } =
+    useEditableDoc("letters-of-intent", token, LOI_D);
+  const [uploading, setUploading] = useState(false);
+  const { toast } = useToast();
+
+  const items = (editing ? draft.items : data.items) || [];
+  const setItems = (next: Loi[]) => setField("items", next);
+  const patch = (id: string, k: keyof Loi, v: unknown) =>
+    setItems(items.map(i => (i.id === id ? { ...i, [k]: v } : i)));
+
+  const addRow = () =>
+    setItems([...items, {
+      id: `loi_${Date.now()}`, counterparty: "", country: "", sector: "",
+      pair: "", monthlyVolume: "", status: "In discussion", date: "", notes: "", files: [],
+    }]);
+
+  const upload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const done: LoiFile[] = [];
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch("/api/investor/upload", { method: "POST", headers: { "x-investor-token": token }, body: fd });
+        if (!r.ok) throw new Error((await r.json()).error || "Upload failed");
+        done.push(await r.json());
+      }
+      patch(id, "files", [...(items.find(i => i.id === id)?.files || []), ...done]);
+      toast({ title: `${done.length} file${done.length > 1 ? "s" : ""} attached` });
+    } catch (e2: unknown) {
+      toast({ title: "Upload failed", description: e2 instanceof Error ? e2.message : "", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const signed = data.items?.filter(i => i.status === "Signed").length || 0;
+  const stated = (data.items || []).reduce((s, i) => s + (parseFloat(String(i.monthlyVolume).replace(/[^0-9.]/g, "")) || 0), 0);
+
+  return (
+    <div>
+      <DocEditBar editUnlocked={editUnlocked} editing={editing} saving={saving}
+        onEdit={() => (editUnlocked ? startEdit() : requestEdit(startEdit))}
+        onSave={save} onCancel={cancelEdit} />
+
+      {editing
+        ? <TxtF label="intro" value={draft.intro} onChange={v => setField("intro", v)} rows={3} />
+        : <p style={S.p}>{data.intro}</p>}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "10px", marginBottom: "8px" }}>
+        <div style={S.stat}><div style={S.statVal}>{data.items?.length || 0}</div><div style={S.statLbl}>Letters of intent</div></div>
+        <div style={S.stat}><div style={S.statVal}>{signed}</div><div style={S.statLbl}>Signed</div></div>
+        <div style={S.stat}><div style={S.statVal}>{usd(stated)}</div><div style={S.statLbl}>Stated monthly exposure</div></div>
+      </div>
+
+      {items.length === 0 && !editing && (
+        <p style={{ ...S.p, color: "#94a3b8" }}>No letters of intent recorded yet. Unlock editing to add the first one.</p>
+      )}
+
+      {items.map(i => (
+        <div key={i.id} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px", marginBottom: "10px", background: "white" }}>
+          {editing ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px", marginBottom: "8px" }}>
+                {(["counterparty", "country", "sector", "pair", "monthlyVolume", "date"] as Array<keyof Loi>).map(k => (
+                  <div key={String(k)}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px", textTransform: "capitalize" as const }}>
+                      {String(k).replace(/([A-Z])/g, " $1")}
+                    </label>
+                    <input value={String(i[k] ?? "")} onChange={e => patch(i.id, k, e.target.value)} style={EI} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", display: "block", marginBottom: "3px" }}>Status</label>
+                  <select value={i.status} onChange={e => patch(i.id, "status", e.target.value)} style={EI}>
+                    {LOI_STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <TxtF label="notes" value={i.notes} onChange={v => patch(i.id, "notes", v)} rows={2} />
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <label style={{ fontSize: "12px", color: "#2563eb", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                  <Paperclip style={{ width: 12, height: 12 }} />
+                  {uploading ? "Uploading…" : "Attach signed PDF"}
+                  <input type="file" multiple onChange={e => upload(i.id, e)} style={{ display: "none" }} />
+                </label>
+                <button onClick={() => setItems(items.filter(x => x.id !== i.id))}
+                  style={{ fontSize: "12px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <Trash2 style={{ width: 12, height: 12 }} /> Remove
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "6px" }}>
+                <strong style={{ fontSize: "14px", color: "#0f172a" }}>{i.counterparty || "Unnamed counterparty"}</strong>
+                <span style={S.tag(i.status === "Signed" ? "green" : i.status === "Lapsed" ? "red" : "amber")}>{i.status}</span>
+                {i.date && <span style={{ fontSize: "11px", color: "#94a3b8" }}>{i.date}</span>}
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginBottom: i.notes ? "6px" : 0 }}>
+                {[i.country, i.sector, i.pair, i.monthlyVolume && `${i.monthlyVolume}/mo`].filter(Boolean).join(" · ")}
+              </div>
+              {i.notes && <p style={{ ...S.p, marginBottom: 0 }}>{i.notes}</p>}
+            </>
+          )}
+
+          {(i.files || []).length > 0 && (
+            <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {(i.files || []).map(f => (
+                <a key={f.filename} href={f.url} target="_blank" rel="noopener noreferrer"
+                   style={{ fontSize: "12px", color: "#2563eb", display: "inline-flex", alignItems: "center", gap: "4px", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "3px 8px" }}>
+                  <Paperclip style={{ width: 11, height: 11 }} /> {f.originalName}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {editing && (
+        <button onClick={addRow}
+          style={{ fontSize: "12px", padding: "6px 14px", borderRadius: "6px", border: "1px dashed #cbd5e1", background: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+          <Plus style={{ width: 12, height: 12 }} /> Add letter of intent
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ─── MODAL CONTENT ROUTER ─── */
 function DocContent({ docId, token }: { docId: string; token: string }) {
   const meta: Record<string, { title: string; subtitle: string }> = {
     "exec-summary": { title: "Executive Summary", subtitle: "Company overview, problem, solution, and the ask" },
+    "live-traction": { title: "Live Protocol Monitor", subtitle: "Revenue, volume and transactions read from Base and BSC in real time" },
+    "letters-of-intent": { title: "Letters of Intent", subtitle: "Counterparty commitments, stated exposure, and signed documents" },
     "revenue-breakdown": { title: "Revenue Breakdown", subtitle: "Fee structure, projections, and unit economics" },
     "cost-breakdown":    { title: "Cost Breakdown",    subtitle: "Annual COGS & OpEx by category with efficiency metrics" },
     "oracle-strategy": { title: "Oracle Strategy", subtitle: "Architecture, limitations, and decentralisation roadmap" },
@@ -2334,6 +2769,8 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
         <p style={{ fontSize: "13px", color: "#64748b" }}>{m.subtitle}</p>
       </div>
       {docId === "exec-summary"           && <ExecSummary token={token} />}
+      {docId === "live-traction"          && <LiveTractionDoc token={token} />}
+      {docId === "letters-of-intent"      && <LettersOfIntentDoc token={token} />}
       {docId === "revenue-breakdown" && <RevenueBreakdown />}
       {docId === "cost-breakdown"    && <CostBreakdownDoc />}
       {docId === "oracle-strategy"        && <OracleStrategyDoc token={token} />}

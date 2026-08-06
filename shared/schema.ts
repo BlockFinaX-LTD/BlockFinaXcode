@@ -218,10 +218,23 @@ export const hedgeActivity = pgTable("hedge_activity", {
   token: text("token"),                         // 'USDC' | 'USDT' | etc.
   metadata: text("metadata"),                   // JSON-serialized extras (premium %, strike, pair name, settings, …)
   status: text("status").notNull().default("confirmed"), // pending | confirmed | failed
+  blockNumber: integer("block_number"),          // set by the historical log backfill; null for rows written live
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   uniqueIndex("hedge_activity_chain_tx_action_idx").on(table.chainId, table.txHash, table.actionType),
 ]);
+
+/**
+ * How far the historical log scanner has walked each chain. Without this every
+ * restart would re-scan millions of blocks; with it, only new blocks are read.
+ */
+export const chainLogCursors = pgTable("chain_log_cursors", {
+  chainId: integer("chain_id").primaryKey(),
+  lastScannedBlock: integer("last_scanned_block").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type ChainLogCursor = typeof chainLogCursors.$inferSelect;
 
 export const insertHedgeActivitySchema = createInsertSchema(hedgeActivity).omit({
   id: true,

@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { storage } from "../storage";
-import { eq } from "drizzle-orm";
-import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits } from "../../shared/schema";
+import { eq, sql } from "drizzle-orm";
+import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits, hedgeActivity } from "../../shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";
 import { requireRiftUser } from "../middleware/rift-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
@@ -393,6 +393,45 @@ export async function registerProtocolRoutes(app: Express) {
       res.json(eventsWithStats);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch hedge events" });
+    }
+  });
+
+  /**
+   * Per-pool totals derived from the indexed on-chain event log.
+   *
+   * The Diamond's getHedgeEventStats is the canonical source, but the public
+   * Base RPC throttles under load and ethers reports the throttle as a revert,
+   * so a page read commonly comes back missing pools — and those render as
+   * $0 liquidity, which an underwriter reads as an empty pool.
+   *
+   * hedge_activity holds every LiquidityDeposited / ProtectionPurchased log
+   * ever emitted, so these totals are computed from chain data without
+   * touching an RPC. Verified against the contract: pool 9 = $400 both ways,
+   * pool 5 = $210, pool 7 = $100.
+   *
+   * Caveat: withdrawals are not yet indexed, so liquidity is gross deposits.
+   * For pools with withdrawn capital this reads high — the client prefers the
+   * live contract figure whenever it has one and only falls back to this.
+   */
+  app.get("/api/hedge/pool-stats", async (_req, res) => {
+    try {
+      const rows = await db
+        .select({
+          chainId: hedgeActivity.chainId,
+          poolId: hedgeActivity.onChainEventId,
+          liquidity: sql<string>`coalesce(sum(amount::numeric) filter (where action_type = 'deposit'), 0)::text`,
+          exposure: sql<string>`coalesce(sum(amount::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          premiums: sql<string>`coalesce(sum((metadata::json->>'premium')::numeric) filter (where action_type = 'buy_protection'), 0)::text`,
+          lpCount: sql<number>`count(distinct wallet_address) filter (where action_type = 'deposit')::int`,
+          hedgerCount: sql<number>`count(distinct wallet_address) filter (where action_type = 'buy_protection')::int`,
+        })
+        .from(hedgeActivity)
+        .where(sql`on_chain_event_id IS NOT NULL`)
+        .groupBy(hedgeActivity.chainId, hedgeActivity.onChainEventId);
+
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch pool stats" });
     }
   });
 

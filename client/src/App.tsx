@@ -148,13 +148,17 @@ function RiftPostSigninSync() {
 // (AuthGuard redirects unauthenticated visitors to /auth) but the post
 // sign-in approval wall is gone.
 
-// Docs gate: the whitepaper, data room, and pitch deck only render once the
+// Docs gate: the whitepaper, docs index, and pitch deck only render once the
 // visitor has a valid magic-link token. The gate intercepts and shows a
 // "request access" form otherwise. Docs stay gated.
 const DocsIndexGated  = () => <DocsGate><DocsIndex /></DocsGate>;
 const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
 const WhitepaperGated = () => <DocsGate><Whitepaper /></DocsGate>;
-const DataRoomGated   = () => <DocsGate><DataRoom /></DocsGate>;
+
+// Data room is the exception: no magic link. It carries its own password
+// screen (PasswordGate in data-room.tsx), which authenticates against
+// INVESTOR_PASSWORD via /api/investor/auth. Share the password directly.
+const DataRoomGated   = () => <DataRoom />;
 
 function Router() {
   return (

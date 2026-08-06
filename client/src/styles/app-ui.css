@@ -412,6 +412,12 @@
 .bfx-app .cv-tabs button.on{color:var(--tx);background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.18);}
 .bfx-app .cv-view{display:none;}
 .bfx-app .cv-view.on{display:block;}
+/* Second-level switch under a tab (Underwrite: pools/create, Portfolio: cover/pools).
+   Reuses .assettog so it reads as a subordinate control, not a peer of .cv-tabs.
+   Negative top margin pulls it up into the tab row's 22px gap. */
+.bfx-app .cv-sub{margin-top:-12px;margin-bottom:20px;}
+.bfx-app .cv-sub button{display:inline-flex;align-items:center;gap:6px;}
+.bfx-app .cv-sub button svg{width:13px;height:13px;flex:0 0 auto;}
 /* filter bar */
 .bfx-app .filterbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
 .bfx-app .assettog{display:inline-flex;gap:2px;padding:3px;border-radius:9px;background:var(--film-2);}
@@ -431,14 +437,14 @@
 .bfx-app .mkt-scroll{overflow-x:auto;scrollbar-width:thin;}
 .bfx-app .mkt-scroll::-webkit-scrollbar{height:6px;}
 .bfx-app .mkt-scroll::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px;}
-.bfx-app .mkt-h{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(70px,0.9fr) minmax(72px,0.95fr) minmax(64px,0.8fr) minmax(196px,auto);gap:18px;padding:14px 24px;
+.bfx-app .mkt-h{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(70px,0.9fr) minmax(72px,0.95fr) minmax(64px,0.8fr) minmax(78px,0.9fr) minmax(196px,auto);gap:18px;padding:14px 24px;
   font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-4);
   border-bottom:1px solid var(--border);align-items:center;}
 .bfx-app .mkt-h .last{justify-self:end;}
 .bfx-app .mkt-h .sortable{cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:color .15s;}
 .bfx-app .mkt-h .sortable:hover{color:var(--tx-2);}
 .bfx-app .mkt-h .sortable i{width:11px;height:11px;}
-.bfx-app .mkt-row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(70px,0.9fr) minmax(72px,0.95fr) minmax(64px,0.8fr) minmax(196px,auto);gap:18px;align-items:center;padding:15px 24px;position:relative;transition:background .15s;cursor:pointer;}
+.bfx-app .mkt-row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(70px,0.9fr) minmax(72px,0.95fr) minmax(64px,0.8fr) minmax(78px,0.9fr) minmax(196px,auto);gap:18px;align-items:center;padding:15px 24px;position:relative;transition:background .15s;cursor:pointer;}
 .bfx-app .mkt-row+.mkt-row::before{content:"";position:absolute;top:0;left:24px;right:24px;height:1px;background:var(--border);}
 .bfx-app .mkt-row:hover{background:var(--card-h);}
 .bfx-app .mkt-mk{display:flex;align-items:center;gap:12px;min-width:0;}

@@ -15,7 +15,7 @@ import {
 // Rift API base — same host the wallet SDK uses internally.
 const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
 const RIFT_API_KEY = process.env.VITE_RIFT_API_KEY || process.env.RIFT_API_KEY || "";
-import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain, diagnoseChainReads } from "../hedge-reader";
+import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain, readCreationFeePerChain, diagnoseChainReads } from "../hedge-reader";
 
 export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   /**
@@ -334,12 +334,16 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
   app.get("/api/admin/revenue", async (_req, res) => {
     try {
-      const EVENT_CREATION_FEE_USD = 2; // must match on-chain initializeHedgeFees
+      // Creation fee is read per chain, never hardcoded: it differs by chain
+      // (Base $25, BSC $2) and is governable, so a constant drifts from reality.
+      // Falls back to $2 only when getHedgeFeeConfig() is unreadable.
+      const FALLBACK_CREATION_FEE_USD = 2;
 
       // Fetch chain data + position/deposit data + on-chain fees in parallel
-      const [chainEvents, perChainFees, txFeeStats] = await Promise.all([
+      const [chainEvents, perChainFees, perChainCreationFees, txFeeStats] = await Promise.all([
         readChainEvents(),
         readPlatformFeesPerChain(),
+        readCreationFeePerChain(),
         db.select({
           totalTxFees: sql<string>`coalesce(sum(fee_amount::numeric), 0)::text`,
           totalTransferVolume: sql<string>`coalesce(sum(transfer_amount::numeric), 0)::text`,
@@ -387,11 +391,14 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
           totalHedgeFees += chain.fees;
           chainFeeDetails[chain.chainName] = { fees: chain.fees, source: 'on-chain' };
         } else {
-          // Fallback: count events on this chain × $2 creation fee
+          // Fallback: events on this chain × that chain's live creation fee.
           const evtCount = chainFeeMap.get(chain.chainId) || 0;
-          const fallback = evtCount * EVENT_CREATION_FEE_USD;
+          const feePerPool =
+            perChainCreationFees.find((c) => c.chainId === chain.chainId)?.creationFee
+            || FALLBACK_CREATION_FEE_USD;
+          const fallback = evtCount * feePerPool;
           totalCreationFeeFallback += fallback;
-          chainFeeDetails[chain.chainName] = { fees: fallback, source: `fallback (${evtCount} events × $${EVENT_CREATION_FEE_USD})` };
+          chainFeeDetails[chain.chainName] = { fees: fallback, source: `fallback (${evtCount} events × $${feePerPool})` };
         }
       }
 

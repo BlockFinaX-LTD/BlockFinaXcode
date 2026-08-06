@@ -13,6 +13,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
 import { startAllOracleNodes } from "./multi-oracle/start-all";
 import { startupChainSync } from "./chain-sync";
+import { backfillChainLogs } from "./chain-logs";
 import { startDailyRefresh } from "./pricing/dailyRefresh";
 
 // Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
@@ -204,6 +205,26 @@ app.use((req, res, next) => {
 
   // Sync on-chain hedge events into the DB (non-blocking — runs in background)
   startupChainSync().catch((e) => console.error("[ChainSync] Startup sync error:", e?.message));
+
+  // Backfill the full on-chain transaction log into hedge_activity, which powers
+  // the data-room traction feed. First run walks the chain from the Diamond's
+  // deployment block and can take a few minutes; later runs resume from a cursor
+  // and finish in seconds. Deliberately started after chain sync so the two are
+  // not competing for the same rate-limited public RPCs.
+  //
+  // It then repeats on an interval. Running it only at startup meant any
+  // deposit or purchase made while the server was up stayed invisible to the
+  // traction feed until the next restart — a $9,000 cover purchase went
+  // unreported that way. Resumed runs are cheap (a handful of block chunks),
+  // so a short interval costs little and keeps the numbers honest.
+  const runBackfill = () =>
+    backfillChainLogs().catch((e: unknown) =>
+      console.error("[ChainLogs] Backfill error:", e instanceof Error ? e.message : e)
+    );
+  setTimeout(() => {
+    runBackfill();
+    setInterval(runBackfill, 5 * 60_000);
+  }, 20_000);
 
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
   // No-op if TWELVEDATA_API_KEY is not configured.
