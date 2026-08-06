@@ -10,6 +10,7 @@
 import { sendEmail, shell, escapeHtml, APP_URL, ADMIN_EMAILS } from "../email";
 import type { LoiDocument } from "@shared/loi-schema";
 import { DOC_TYPE_LABELS, type DocType } from "@shared/loi-schema";
+import { getSignature, signatureUrl } from "./brand";
 
 function docLabel(loi: LoiDocument): string {
   return DOC_TYPE_LABELS[loi.docType as DocType] ?? "Document";
@@ -58,18 +59,22 @@ function expiryLine(loi: LoiDocument): string {
 
 // ── To the recipient ─────────────────────────────────────────────────────
 
+/**
+ * The invitation reads as a short covering letter rather than a notification:
+ * a counterparty is being asked to sign something, so it closes with a real
+ * signature block the way a letter would.
+ */
 export async function emailLoiInvitation(loi: LoiDocument, token: string, origin?: string) {
   const label = docLabel(loi);
   const personal = loi.personalMessage?.trim()
     ? `<div style="margin:20px 0;padding:14px 16px;background:#f5f7fb;border-left:3px solid #1a4480;border-radius:8px;">
          <p style="font-size:13px;color:#0f1a2f;line-height:1.6;margin:0;white-space:pre-wrap;">${escapeHtml(loi.personalMessage.trim())}</p>
-         <p style="font-size:12px;color:#6b7280;margin:10px 0 0;">— ${escapeHtml(loi.senderName)}</p>
        </div>`
     : "";
 
   const body = `
     <h2 style="font-size:19px;margin:0 0 10px;font-weight:600;letter-spacing:-0.01em;">${escapeHtml(loi.senderCompany)} has sent you a ${escapeHtml(label)} to review and sign</h2>
-    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;margin:0;">Hi ${escapeHtml(loi.recipientName.split(" ")[0])}, ${escapeHtml(loi.senderName)}${loi.senderPosition ? ` (${escapeHtml(loi.senderPosition)})` : ""} at ${escapeHtml(loi.senderCompany)} has prepared a ${escapeHtml(label.toLowerCase())} for your review.</p>
+    <p style="font-size:14px;color:#0f1a2f;line-height:1.55;margin:0;">Dear ${escapeHtml(loi.recipientName.split(" ")[0])}, ${escapeHtml(loi.senderName)}${loi.senderPosition ? ` (${escapeHtml(loi.senderPosition)})` : ""} at ${escapeHtml(loi.senderCompany)} has prepared a ${escapeHtml(label.toLowerCase())} for your review.</p>
     ${personal}
     ${metaTable([
       ["Document", label],
@@ -79,13 +84,44 @@ export async function emailLoiInvitation(loi: LoiDocument, token: string, origin
     <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">You can read it in your browser, leave comments, propose changes, and sign electronically. Nothing to download or print.</p>
     <div style="margin:24px 0;">${btn(signUrl(loi, token, origin), `Review ${label}`)}</div>
     ${expiryLine(loi)}
+    ${await signOff(loi, origin)}
   `;
   return sendEmail({
     to: loi.recipientEmail,
     subject: `${loi.senderCompany} sent you a ${label} to sign`,
-    html: shell(`${label} for review`, body),
+    html: shell(`${label} for review`, body, { tag: "" }),
     replyTo: loi.senderEmail,
   });
+}
+
+/**
+ * Letter-style sign-off with the uploaded signature image.
+ *
+ * The image is fetched by URL, so a client with remote images turned off
+ * shows nothing where it sits — the printed name and title below it carry the
+ * block on their own, which is why they are always rendered.
+ */
+async function signOff(loi: LoiDocument, origin?: string): Promise<string> {
+  let img = "";
+  try {
+    const sig = await getSignature();
+    if (sig) {
+      img = `<img src="${signatureUrl(origin)}" alt="" height="46"
+                  style="display:block;height:46px;width:auto;border:0;outline:none;margin-bottom:2px;" />`;
+    }
+  } catch {
+    // A missing signature must never stop the invitation going out.
+  }
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
+      <tr><td>
+        <p style="font-size:13px;color:#0f1a2f;margin:0 0 8px;">Kind regards,</p>
+        ${img}
+        <p style="font-size:13px;font-weight:600;color:#0f1a2f;margin:0;">${escapeHtml(loi.senderName)}</p>
+        ${loi.senderPosition ? `<p style="font-size:12px;color:#6b7280;margin:2px 0 0;">${escapeHtml(loi.senderPosition)}, ${escapeHtml(loi.senderCompany)}</p>` : `<p style="font-size:12px;color:#6b7280;margin:2px 0 0;">${escapeHtml(loi.senderCompany)}</p>`}
+        <p style="font-size:12px;color:#6b7280;margin:2px 0 0;"><a href="mailto:${escapeHtml(loi.senderEmail)}" style="color:#1a4480;text-decoration:none;">${escapeHtml(loi.senderEmail)}</a></p>
+      </td></tr>
+    </table>`;
 }
 
 export async function emailLoiOtp(loi: LoiDocument, code: string) {
@@ -111,11 +147,12 @@ export async function emailLoiExpiryReminder(loi: LoiDocument, token: string, da
     <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">Hi ${escapeHtml(loi.recipientName.split(" ")[0])}, the ${escapeHtml(label.toLowerCase())} from ${escapeHtml(loi.senderCompany)} is still awaiting your signature.</p>
     <div style="margin:24px 0;">${btn(signUrl(loi, token, origin), `Review and sign`)}</div>
     ${expiryLine(loi)}
+    ${await signOff(loi, origin)}
   `;
   return sendEmail({
     to: loi.recipientEmail,
     subject: `Reminder: ${label} from ${loi.senderCompany} expires soon`,
-    html: shell("Signature reminder", body),
+    html: shell("Signature reminder", body, { tag: "" }),
     replyTo: loi.senderEmail,
   });
 }
@@ -126,11 +163,12 @@ export async function emailLoiRevisionAvailable(loi: LoiDocument, token: string,
     <h2 style="font-size:19px;margin:0 0 10px;font-weight:600;letter-spacing:-0.01em;">A new revision is ready for you</h2>
     <p style="font-size:14px;color:#0f1a2f;line-height:1.55;">${escapeHtml(loi.senderName)} has updated the ${escapeHtml(label.toLowerCase())} following your comments. Your previous link still works.</p>
     <div style="margin:24px 0;">${btn(signUrl(loi, token, origin), "Review the changes")}</div>
+    ${await signOff(loi, origin)}
   `;
   return sendEmail({
     to: loi.recipientEmail,
     subject: `Updated: ${label} from ${loi.senderCompany}`,
-    html: shell("New revision", body),
+    html: shell("New revision", body, { tag: "" }),
     replyTo: loi.senderEmail,
   });
 }

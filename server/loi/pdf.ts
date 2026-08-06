@@ -16,6 +16,7 @@
 import { jsPDF } from "jspdf";
 import type { LoiDocument, LoiSignature, LoiEvent } from "@shared/loi-schema";
 import { DOC_TYPE_LABELS, RELATIONSHIP_LABELS, type DocType, type RelationshipType } from "@shared/loi-schema";
+import { logoBase64 } from "./logo";
 
 const PAGE_W = 210; // A4 mm
 const PAGE_H = 297;
@@ -143,8 +144,23 @@ function reMark(marked: string, plainStart: number, plainLen: number): string {
   return out;
 }
 
+/**
+ * Letterhead: the mark centred above the document title, as on printed
+ * company stationery. Embedded from disk rather than fetched, so rendering
+ * never depends on the network.
+ */
 function h1(ctx: Ctx, text: string) {
-  ensure(ctx, 18);
+  ensure(ctx, 34);
+  const logo = logoBase64();
+  if (logo) {
+    try {
+      const size = 13;
+      ctx.doc.addImage(`data:image/png;base64,${logo}`, "PNG", PAGE_W / 2 - size / 2, ctx.y, size, size);
+      ctx.y += size + 5;
+    } catch {
+      // A bad image must not cost us the document.
+    }
+  }
   ctx.doc.setFont("times", "bold");
   ctx.doc.setFontSize(19);
   ctx.doc.setTextColor(NAVY.r, NAVY.g, NAVY.b);

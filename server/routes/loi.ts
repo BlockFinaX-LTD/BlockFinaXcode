@@ -19,7 +19,7 @@
 
 import type { Express, Request, Response } from "express";
 import crypto from "crypto";
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAdmin } from "../middleware/admin-auth";
 import { strictLimiter, generalApiLimiter } from "../middleware/rate-limiter";
@@ -27,13 +27,14 @@ import {
   loiDocuments, loiTokens, loiOtps, loiSignatures, loiComments, loiEvents,
   createLoiSchema, updateLoiSchema, signSchema, commentSchema,
   TERMINAL_STATUSES, DOC_TYPE_LABELS,
-  type LoiDocument, type LoiStatus, type DocType, type RelationshipType, type CustomClause,
+  type LoiDocument, type LoiStatus, type DocType, type RelationshipType,
 } from "@shared/loi-schema";
 import {
   generateDocument, withCustomClauses, templateKeyFor,
   detectMissingFields, flagRisks, type TemplateInput,
 } from "../loi/templates";
 import { generateSignedPdf } from "../loi/pdf";
+import { getSignature, setSignature, clearSignature, decodeDataUrl } from "../loi/brand";
 import {
   emailLoiInvitation, emailLoiOtp, emailSenderNotification,
   emailSignedCopy, emailLoiRevisionAvailable, emailLoiExpiryReminder,
@@ -255,6 +256,63 @@ async function finalise(loiId: number): Promise<void> {
 // ── Routes ───────────────────────────────────────────────────────────────
 
 export function registerLoiRoutes(app: Express) {
+  // ═══ BRAND ═════════════════════════════════════════════════════════════
+
+  /**
+   * The stored signature, as a real PNG.
+   *
+   * Public and unauthenticated by necessity: email clients fetch images
+   * anonymously, so anything behind auth simply doesn't render. What's
+   * exposed is a company signature that already appears on every letter we
+   * send — not a secret. It is never the thing that authorises anything;
+   * signatures are only accepted through the OTP-verified endpoints below.
+   */
+  app.get("/api/brand/signature.png", async (_req: Request, res: Response) => {
+    try {
+      const sig = await getSignature();
+      const decoded = sig ? decodeDataUrl(sig.dataUrl) : null;
+      if (!decoded) return res.status(404).end();
+      res.setHeader("Content-Type", decoded.mime);
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(decoded.buffer);
+    } catch {
+      res.status(404).end();
+    }
+  });
+
+  /** Whether a signature is on file, for the admin UI. */
+  app.get("/api/brand/signature", requireAdmin, async (_req: Request, res: Response) => {
+    const sig = await getSignature();
+    res.json({ present: !!sig, name: sig?.name ?? "", dataUrl: sig?.dataUrl ?? null });
+  });
+
+  /** Upload or replace the signature. */
+  app.put("/api/brand/signature", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const dataUrl = String(req.body?.dataUrl || "");
+      const name = String(req.body?.name || "").slice(0, 200);
+      const decoded = decodeDataUrl(dataUrl);
+      if (!decoded) {
+        return res.status(400).json({ message: "Send a PNG or JPEG image." });
+      }
+      // 1 MB ceiling: it is embedded in every PDF and fetched by every email
+      // client, so an oversized file is a real cost, not a theoretical one.
+      if (decoded.buffer.length > 1_000_000) {
+        return res.status(400).json({ message: "That image is too large. Keep it under 1 MB." });
+      }
+      await setSignature(dataUrl, name);
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[brand] signature save failed:", err?.message);
+      res.status(500).json({ message: "Failed to save the signature" });
+    }
+  });
+
+  app.delete("/api/brand/signature", requireAdmin, async (_req: Request, res: Response) => {
+    await clearSignature();
+    res.json({ ok: true });
+  });
+
   // ═══ ADMIN ═════════════════════════════════════════════════════════════
 
   /** Dashboard list. Supports search + status filter. */

@@ -57,18 +57,33 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
 }
 
 // ── Brand-consistent email shell ────────────────────────────────────────
-function shell(title: string, body: string): string {
+/**
+ * The logo is referenced as a hosted PNG rather than embedded. Gmail and
+ * Outlook both strip SVG and block data: URIs, so a real URL is the only
+ * thing that renders reliably. Clients that block remote images entirely
+ * still show the wordmark beside it, so the header never collapses to blank.
+ */
+function shell(title: string, body: string, opts: { tag?: string } = {}): string {
+  const tag = opts.tag ?? 'Private beta';
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${title}</title></head>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,Inter,Segoe UI,Helvetica,Arial,sans-serif;background:#f5f7fb;margin:0;padding:32px 16px;color:#0f1a2f;">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:32px;">
-    <div style="margin-bottom:24px;">
-      <span style="display:inline-block;font-weight:700;font-size:15px;letter-spacing:-0.01em;color:#1a4480;">BlockFinaX</span>
-      <span style="display:inline-block;margin-left:8px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">Private beta</span>
-    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:26px;">
+      <tr>
+        <td style="vertical-align:middle;padding-right:10px;">
+          <img src="${APP_URL}/assets/logo-mark.png" width="32" height="32" alt="BlockFinaX"
+               style="display:block;width:32px;height:32px;border:0;outline:none;text-decoration:none;" />
+        </td>
+        <td style="vertical-align:middle;">
+          <span style="display:block;font-weight:700;font-size:16px;letter-spacing:-0.02em;color:#0a2540;line-height:1.1;">BlockFinaX</span>
+          ${tag ? `<span style="display:block;margin-top:2px;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">${tag}</span>` : ''}
+        </td>
+      </tr>
+    </table>
     ${body}
     <hr style="border:none;border-top:1px solid #e6eaf2;margin:28px 0;" />
-    <p style="font-size:11px;color:#6b7280;margin:0;">BlockFinaX · P2P FX hedging &amp; cross-border payments<br/><a href="${APP_URL}" style="color:#1a4480;text-decoration:none;">${APP_URL.replace(/^https?:\/\//, '')}</a></p>
+    <p style="font-size:11px;color:#6b7280;margin:0;line-height:1.6;">BlockFinaX · P2P FX hedging &amp; cross-border payments<br/><a href="${APP_URL}" style="color:#1a4480;text-decoration:none;">${APP_URL.replace(/^https?:\/\//, '')}</a></p>
   </div>
 </body></html>`;
 }

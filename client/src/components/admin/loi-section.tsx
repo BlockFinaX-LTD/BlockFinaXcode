@@ -152,6 +152,8 @@ function LoiList({ token, onNew, onOpen }: { token: string; onNew: () => void; o
         </Button>
       </div>
 
+      <SignatureSettings token={token} />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MiniStat label="Total" value={stats?.total ?? 0} icon={FileSignature} />
         <MiniStat label="Outstanding" value={stats?.outstanding ?? 0} icon={Clock} tone="text-amber-600" />
@@ -249,6 +251,121 @@ function LoiList({ token, onNew, onOpen }: { token: string; onNew: () => void; o
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Company signature, uploaded once.
+ *
+ * Appears in the sign-off of every letter we email and is offered as the
+ * default when counter-signing, so the CEO doesn't redraw it per document.
+ * Collapsed to a single line once set — it is a one-time setup step, not
+ * something worth a permanent panel.
+ */
+function SignatureSettings({ token }: { token: string }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [pending, setPending] = useState<{ method: SigMethod; data: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const { data, refetch } = useQuery({
+    queryKey: ["brand-signature", token],
+    queryFn: () => api("/api/brand/signature", token),
+  });
+
+  const save = async () => {
+    if (!pending) return;
+    // A typed signature is plain text, which can't be embedded as an image.
+    // Only drawn or uploaded signatures make sense as a stored graphic.
+    if (!pending.data.startsWith("data:image/")) {
+      toast({
+        title: "Draw or upload your signature",
+        description: "A typed name can't be saved as an image. Use the Draw or Upload tab.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      await api("/api/brand/signature", token, {
+        method: "PUT",
+        body: JSON.stringify({ dataUrl: pending.data, name: name.trim() }),
+      });
+      toast({ title: "Signature saved", description: "It will appear on letters you send from now on." });
+      setOpen(false);
+      setPending(null);
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Couldn't save", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api("/api/brand/signature", token, { method: "DELETE" });
+      toast({ title: "Signature removed" });
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Couldn't remove", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+        <PenLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        {data?.present ? (
+          <>
+            <img src={data.dataUrl} alt="Company signature" className="h-8 w-auto max-w-[140px] object-contain" />
+            <span className="text-xs text-muted-foreground">
+              Signature on file{data.name ? ` — ${data.name}` : ""}. It appears on every letter you send.
+            </span>
+            <div className="ml-auto flex gap-2">
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpen(true)}>Replace</Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={remove} disabled={busy}>Remove</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="text-xs text-muted-foreground">
+              No signature on file. Add one and it appears in the sign-off of every letter you send.
+            </span>
+            <Button variant="outline" size="sm" className="ml-auto h-7 text-xs" onClick={() => setOpen(true)}>
+              Add signature
+            </Button>
+          </>
+        )}
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Company signature</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Draw it with a trackpad or phone, or upload a photo of your signature on white paper.
+              A transparent PNG looks best.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name printed beneath it</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Anthony Kumako" />
+            </div>
+            <SignaturePad onChange={setPending} />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={busy || !pending} className="gap-2">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save signature
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -649,6 +766,12 @@ function LoiDetail({ token, id, onBack }: { token: string; id: number; onBack: (
     queryKey: ["loi-detail", token, id],
     queryFn: () => api(`/api/loi/${id}`, token),
     refetchInterval: 30_000,
+  });
+
+  // Company signature on file, offered as the default when counter-signing.
+  const { data: storedSig } = useQuery({
+    queryKey: ["brand-signature", token],
+    queryFn: () => api("/api/brand/signature", token),
   });
 
   // Seed the editor once per document, and refresh it when the server's copy
@@ -1081,6 +1204,22 @@ function LoiDetail({ token, id, onBack }: { token: string; id: number; onBack: (
               You're signing as <strong className="text-foreground">{data.senderName}</strong>
               {data.senderPosition ? `, ${data.senderPosition}` : ""}. This is recorded with a timestamp and your IP address.
             </p>
+            {/* Offer the signature on file so it doesn't have to be redrawn
+                per document — the common case by far. */}
+            {storedSig?.present && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
+                <img src={storedSig.dataUrl} alt="Your signature" className="h-9 w-auto max-w-[150px] object-contain" />
+                <span className="text-xs text-muted-foreground">Your saved signature</span>
+                <Button
+                  size="sm"
+                  variant={sig?.data === storedSig.dataUrl ? "default" : "outline"}
+                  className="ml-auto h-7 gap-1.5 text-xs"
+                  onClick={() => setSig({ method: "uploaded", data: storedSig.dataUrl })}
+                >
+                  {sig?.data === storedSig.dataUrl ? <><Check className="h-3 w-3" /> Selected</> : "Use this"}
+                </Button>
+              </div>
+            )}
             <SignaturePad defaultName={data.senderName} onChange={setSig} />
           </div>
           <DialogFooter>
