@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   Bot, Send, Sparkles, Check, X, Pencil, Trash2, Loader2, AlertTriangle,
-  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck,
+  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -303,8 +303,56 @@ function QueueTab({ token, canApprove }: { token: string; canApprove: boolean })
     onError: (e: any) => toast({ title: "Couldn't record that", description: e.message, variant: "destructive" }),
   });
 
+  const { data: preview, refetch: refetchPreview } = useQuery({
+    queryKey: ["agent-scan-preview", token],
+    queryFn: () => api("/api/agent/scan/preview", token),
+  });
+
+  const scan = useMutation({
+    mutationFn: () => api("/api/agent/scan", token, { method: "POST" }),
+    onSuccess: (r: any) => {
+      toast({
+        title: r.created ? `Drafted ${r.created} proposal${r.created > 1 ? "s" : ""}` : "Nothing new to raise",
+        description: r.created
+          ? "Emailed to you as well."
+          : r.suppressed
+            ? `${r.suppressed} already in the queue or recently rejected.`
+            : "Everything looks up to date.",
+      });
+      refetch();
+      refetchPreview();
+      queryClient.invalidateQueries({ queryKey: ["agent-status"] });
+    },
+    onError: (e: any) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div className="space-y-4">
+      {/* Free preview: what the deterministic detectors see, with no model
+          call. Lets you sanity-check the thresholds before spending anything. */}
+      {canApprove && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <Radar className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <span className="flex-1 text-xs text-muted-foreground">
+            {preview
+              ? preview.candidates?.length
+                ? `${preview.candidates.length} thing${preview.candidates.length > 1 ? "s" : ""} worth raising: ${preview.candidates.map((c: any) => c.title).slice(0, 2).join(" · ")}${preview.candidates.length > 2 ? " …" : ""}`
+                : `Nothing to raise right now${preview.suppressed ? ` (${preview.suppressed} suppressed)` : ""}.`
+              : "Checking…"}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => scan.mutate()}
+            disabled={scan.isPending || !preview?.candidates?.length}
+          >
+            {scan.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            Draft them
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-1.5">
         {["proposed", "approved", "rejected", "all"].map((f) => (
           <button

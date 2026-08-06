@@ -24,6 +24,7 @@ import {
 import { runAgent, agentConfigured, MODEL } from "../agent/runtime";
 import { extractRules, recordDecision, decisionStats } from "../agent/learning";
 import { sendPendingDigest } from "../agent/notify";
+import { runScan, dryRun, getThresholds, setThresholds } from "../agent/detectors";
 
 const AUTONOMY_KEY = "autonomy";
 
@@ -219,6 +220,45 @@ export function registerAgentRoutes(app: Express) {
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Failed to send the digest" });
     }
+  });
+
+  // ═══ SCANNING ══════════════════════════════════════════════════════════
+
+  /** What the detectors would raise right now. No model call, so free. */
+  app.get("/api/agent/scan/preview", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      res.json({ ...(await dryRun()), thresholds: await getThresholds() });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Preview failed" });
+    }
+  });
+
+  /** Run the detectors and draft what they find. */
+  app.post("/api/agent/scan", requireApprover, strictLimiter, async (_req: Request, res: Response) => {
+    if (!agentConfigured()) return res.status(503).json({ message: "Set ANTHROPIC_API_KEY first." });
+    try {
+      const result = await runScan();
+      // Tell him straight away rather than waiting up to 30 minutes for the
+      // sweep — he asked for this scan and is watching.
+      if (result.created > 0) sendPendingDigest().catch(() => {});
+      res.json(result);
+    } catch (err: any) {
+      console.error("[agent] scan failed:", err?.message);
+      res.status(500).json({ message: err?.message || "Scan failed" });
+    }
+  });
+
+  app.get("/api/agent/thresholds", requireAdmin, async (_req: Request, res: Response) => {
+    res.json(await getThresholds());
+  });
+
+  app.put("/api/agent/thresholds", requireApprover, async (req: Request, res: Response) => {
+    const patch: Record<string, number> = {};
+    for (const k of ["followupDays", "reminderDays", "staleChangesDays", "liquidityRatio", "rejectionCooldownDays"]) {
+      const v = Number(req.body?.[k]);
+      if (Number.isFinite(v) && v > 0) patch[k] = v;
+    }
+    res.json(await setThresholds(patch));
   });
 
   // ═══ LEARNING ══════════════════════════════════════════════════════════
