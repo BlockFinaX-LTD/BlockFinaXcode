@@ -14,6 +14,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AgentMarkdown } from "@/components/agent-markdown";
 // Resolves a *fresh* JWT — the bridge handles silent refresh, so reading
 // storage directly would eventually send an expired token.
 import { getRiftAccessToken } from "@/lib/rift-token-bridge";
@@ -181,13 +182,16 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
               <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+                    "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
                     m.role === "user"
-                      ? "bg-[hsl(var(--navy))] text-white"
-                      : "border border-border bg-muted/50",
+                      ? "whitespace-pre-wrap bg-[hsl(var(--navy))] text-white"
+                      : "min-w-0 border border-border bg-muted/50",
                   )}
                 >
-                  {m.content}
+                  {/* Only Finax writes markdown. What a user typed is shown
+                      verbatim — rendering it would let a pasted asterisk
+                      silently change how their own message reads back. */}
+                  {m.role === "assistant" ? <AgentMarkdown>{m.content}</AgentMarkdown> : m.content}
                 </div>
               </div>
             ))}

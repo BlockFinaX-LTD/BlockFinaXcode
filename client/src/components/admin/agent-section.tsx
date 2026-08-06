@@ -27,6 +27,7 @@ import {
   BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AgentMarkdown } from "@/components/agent-markdown";
 import {
   CAPABILITIES, CAPABILITY_LABELS, AUTONOMY_LEVELS, PROPOSAL_KIND_LABELS,
   type Capability, type AutonomyLevel, type ProposalKind,
@@ -217,10 +218,12 @@ function ChatTab({ token, enabled }: { token: string; enabled: boolean }) {
                     "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                     m.role === "user"
                       ? "bg-primary text-primary-foreground"
-                      : "border border-border bg-muted/40",
+                      : "min-w-0 border border-border bg-muted/40",
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{m.content}</p>
+                  {m.role === "assistant"
+                    ? <AgentMarkdown>{m.content}</AgentMarkdown>
+                    : <p className="whitespace-pre-wrap">{m.content}</p>}
                 </div>
                 {/* Showing what it read is what makes the number believable. */}
                 {m.toolCalls?.length > 0 && (
