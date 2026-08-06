@@ -119,6 +119,8 @@ export const agentProposals = pgTable(
     sourceId: integer("source_id"),
 
     runId: integer("run_id"),
+    /** Set once included in a digest, so the next one doesn't repeat it. */
+    notifiedAt: timestamp("notified_at"),
     proposedAt: timestamp("proposed_at").defaultNow(),
     decidedAt: timestamp("decided_at"),
     decidedBy: text("decided_by"),

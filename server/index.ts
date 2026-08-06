@@ -15,6 +15,7 @@ import { startAllOracleNodes } from "./multi-oracle/start-all";
 import { startupChainSync } from "./chain-sync";
 import { backfillChainLogs } from "./chain-logs";
 import { startDailyRefresh } from "./pricing/dailyRefresh";
+import { startDigestSweep } from "./agent/notify";
 
 // Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
 const _originalExit = process.exit.bind(process);
@@ -224,6 +225,9 @@ app.use((req, res, next) => {
   setTimeout(() => {
     runBackfill();
     setInterval(runBackfill, 5 * 60_000);
+
+    // Batched digest of anything the agent is waiting on a decision for.
+    startDigestSweep();
   }, 20_000);
 
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).

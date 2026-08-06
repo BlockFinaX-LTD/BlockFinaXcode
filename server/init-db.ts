@@ -547,6 +547,7 @@ export async function initializeDatabase() {
         source_type TEXT,
         source_id INTEGER,
         run_id INTEGER,
+        notified_at TIMESTAMP,
         proposed_at TIMESTAMP DEFAULT NOW(),
         decided_at TIMESTAMP,
         decided_by TEXT,
@@ -623,6 +624,10 @@ export async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS agent_proposals_kind_idx ON agent_proposals(kind);
       CREATE INDEX IF NOT EXISTS agent_decisions_kind_idx ON agent_decisions(kind);
       CREATE INDEX IF NOT EXISTS agent_messages_thread_idx ON agent_messages(thread_id);
+    `);
+    // Added after the initial release, so existing rows need it too.
+    await db.execute(sql`
+      ALTER TABLE agent_proposals ADD COLUMN IF NOT EXISTS notified_at TIMESTAMP
     `);
   } catch (error) {
     console.error("Failed to create agent tables:", error);

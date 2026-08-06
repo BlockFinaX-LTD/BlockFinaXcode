@@ -23,6 +23,7 @@ import {
 } from "@shared/agent-schema";
 import { runAgent, agentConfigured, MODEL } from "../agent/runtime";
 import { extractRules, recordDecision, decisionStats } from "../agent/learning";
+import { sendPendingDigest } from "../agent/notify";
 
 const AUTONOMY_KEY = "autonomy";
 
@@ -208,6 +209,15 @@ export function registerAgentRoutes(app: Express) {
     } catch (err: any) {
       console.error("[agent] decide failed:", err?.message);
       res.status(500).json({ message: "Failed to record the decision" });
+    }
+  });
+
+  /** Send the digest now rather than waiting for the sweep. */
+  app.post("/api/agent/notify", requireApprover, strictLimiter, async (_req: Request, res: Response) => {
+    try {
+      res.json(await sendPendingDigest());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Failed to send the digest" });
     }
   });
 
