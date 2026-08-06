@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   Bot, Send, Sparkles, Check, X, Pencil, Trash2, Loader2, AlertTriangle,
-  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar,
+  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -613,8 +613,10 @@ function TrainingTab({ token, autonomy, canApprove }: { token: string; autonomy?
         </CardContent>
       </Card>
 
-      {/* Autonomy + memory */}
+      {/* Knowledge, autonomy, memory */}
       <div className="space-y-6">
+        <KnowledgeCard token={token} canApprove={canApprove} />
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -686,6 +688,134 @@ function TrainingTab({ token, autonomy, canApprove }: { token: string; autonomy?
         </Card>
       </div>
     </div>
+  );
+}
+
+/**
+ * Documents and images Finax learns from.
+ *
+ * Marked public or internal at upload: the website agent is only ever given
+ * public sources, so the pitch can go in without the P&L reaching a stranger.
+ */
+function KnowledgeCard({ token, canApprove }: { token: string; canApprove: boolean }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [visibility, setVisibility] = useState("internal");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const { data: sources = [], refetch } = useQuery({
+    queryKey: ["agent-sources", token],
+    queryFn: () => api("/api/agent/sources", token),
+  });
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error("Could not read that file"));
+        r.readAsDataURL(file);
+      });
+      const note = file.type.startsWith("image/")
+        ? window.prompt("What does this image show? Images have no text to search on, so this is how Finax finds it.") || ""
+        : "";
+      const res = await api("/api/agent/sources", token, {
+        method: "POST",
+        body: JSON.stringify({ title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, dataUrl, visibility, note }),
+      });
+      toast({
+        title: res.kind === "image" ? "Image saved" : `Saved — split into ${res.chunks} passage${res.chunks === 1 ? "" : "s"}`,
+        description: res.hint,
+      });
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Couldn't save that", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const remove = useMutation({
+    mutationFn: (id: number) => api(`/api/agent/sources/${id}`, token, { method: "DELETE" }),
+    onSuccess: () => refetch(),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <FileText className="h-4 w-4" /> What Finax has read
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Upload PDFs, text files, screenshots or diagrams. Finax reads images directly.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {canApprove && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={visibility} onValueChange={setVisibility}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="internal" className="text-xs">Internal only</SelectItem>
+                <SelectItem value="public" className="text-xs">Website too</SelectItem>
+                <SelectItem value="both" className="text-xs">Everywhere</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-xs"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Upload
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.txt,.md,.csv,.json,image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
+            />
+          </div>
+        )}
+
+        {sources.length === 0 ? (
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            Nothing uploaded yet. Anything you add here, Finax can quote from.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {sources.map((s: any) => (
+              <li key={s.id} className="flex items-start gap-2 rounded-md border border-border p-2.5">
+                <span className={cn(
+                  "mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                  s.kind === "image"
+                    ? "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                    : "bg-muted text-muted-foreground",
+                )}>
+                  {s.kind}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{s.title}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {s.visibility === "internal" ? "internal only" : s.visibility === "public" ? "website too" : "everywhere"}
+                    {s.chunks ? ` · ${s.chunks} passage${s.chunks === 1 ? "" : "s"}` : ""}
+                  </p>
+                </div>
+                {canApprove && (
+                  <button onClick={() => remove.mutate(s.id)} className="text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

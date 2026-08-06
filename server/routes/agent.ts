@@ -25,6 +25,7 @@ import { runAgent, agentConfigured, MODEL } from "../agent/runtime";
 import { extractRules, recordDecision, decisionStats } from "../agent/learning";
 import { sendPendingDigest } from "../agent/notify";
 import { runScan, dryRun, getThresholds, setThresholds } from "../agent/detectors";
+import { addTextSource, addImageSource, listSources, deleteSource, extractText } from "../agent/knowledge";
 
 const AUTONOMY_KEY = "autonomy";
 
@@ -122,6 +123,7 @@ export function registerAgentRoutes(app: Express) {
       const result = await runAgent({
         scope: "internal",
         trigger: "chat",
+        retrieveFor: message,
         messages: [
           ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
           { role: "user" as const, content: message },
@@ -301,6 +303,94 @@ export function registerAgentRoutes(app: Express) {
       console.error("[agent] extraction failed:", err?.message);
       res.status(500).json({ message: err?.message || "Extraction failed" });
     }
+  });
+
+  // ═══ KNOWLEDGE ═════════════════════════════════════════════════════════
+
+  app.get("/api/agent/sources", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      res.json(await listSources());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Failed to list sources" });
+    }
+  });
+
+  /**
+   * Upload something for Finax to learn from.
+   *
+   * Sent as a base64 data URL rather than multipart, so the same endpoint takes
+   * a PDF, a text file or a screenshot without branching on transport. Images
+   * are stored whole and handed to the model as images — describing a diagram
+   * into text first would only lose what makes it worth uploading.
+   */
+  app.post("/api/agent/sources", requireApprover, async (req: Request, res: Response) => {
+    try {
+      const title = String(req.body?.title || "").trim().slice(0, 300);
+      const dataUrl = String(req.body?.dataUrl || "");
+      const filename = String(req.body?.filename || "").slice(0, 300);
+      const note = String(req.body?.note || "").slice(0, 4000);
+      const visibility = ["public", "internal", "both"].includes(req.body?.visibility)
+        ? req.body.visibility
+        : "internal";
+
+      if (!title) return res.status(400).json({ message: "Give it a title." });
+
+      const m = /^data:([^;]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim());
+      if (!m) return res.status(400).json({ message: "Upload a file." });
+      const mime = m[1];
+      const buffer = Buffer.from(m[2], "base64");
+
+      // 8 MB: enough for a pitch deck or a photo, small enough that a stray
+      // upload can't fill the row or blow up a later model call.
+      if (buffer.length > 8 * 1024 * 1024) {
+        return res.status(400).json({ message: "That file is too large. Keep it under 8 MB." });
+      }
+
+      if (mime.startsWith("image/")) {
+        const row = await addImageSource({ title, dataUrl, visibility, filename, mime, note, addedBy: (req as any).adminEmail });
+        return res.status(201).json({
+          ...row,
+          kind: "image",
+          hint: note ? undefined : "Add a note describing what this shows — images have no text to search on.",
+        });
+      }
+
+      const text = extractText(buffer, mime, filename);
+      if (!text.trim()) {
+        // Better to refuse than to store a document that silently contributes
+        // nothing and looks like it worked.
+        return res.status(400).json({
+          message:
+            "No readable text could be extracted. Scanned PDFs and Word files aren't supported yet — " +
+            "paste the text directly, or export to plain text.",
+        });
+      }
+      const row = await addTextSource({ title, text, visibility, filename, mime, addedBy: (req as any).adminEmail });
+      res.status(201).json({ ...row, kind: "text" });
+    } catch (err: any) {
+      console.error("[agent] source upload failed:", err?.message);
+      res.status(500).json({ message: "Failed to save that" });
+    }
+  });
+
+  /** Paste text directly, without a file. */
+  app.post("/api/agent/sources/text", requireApprover, async (req: Request, res: Response) => {
+    try {
+      const title = String(req.body?.title || "").trim().slice(0, 300);
+      const text = String(req.body?.text || "").trim();
+      const visibility = ["public", "internal", "both"].includes(req.body?.visibility)
+        ? req.body.visibility
+        : "internal";
+      if (!title || !text) return res.status(400).json({ message: "Give it a title and some text." });
+      res.status(201).json({ ...(await addTextSource({ title, text, visibility, addedBy: (req as any).adminEmail })), kind: "text" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to save that" });
+    }
+  });
+
+  app.delete("/api/agent/sources/:id", requireApprover, async (req: Request, res: Response) => {
+    await deleteSource(parseInt(req.params.id, 10));
+    res.json({ ok: true });
   });
 
   // ═══ MEMORY & SETTINGS ═════════════════════════════════════════════════

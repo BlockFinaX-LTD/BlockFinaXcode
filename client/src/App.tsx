@@ -58,6 +58,10 @@ import { DocsGate } from "@/components/docs-gate";
 // bearer token in the emailed link, not by a BlockFinaX account.
 import LoiSignPage from "@/pages/loi-sign";
 
+// Finax — the chat assistant. Public scope on the marketing site, customer
+// scope inside the app where it can see the signed-in user's own account.
+import { FinaxChat } from "@/components/finax-chat";
+
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // White-label sign-in: the widget is served from our own subdomain so the
@@ -244,6 +248,26 @@ function RiftAuthMount() {
   );
 }
 
+/**
+ * Picks which Finax to show, and where to hide it.
+ *
+ * Signed-in app routes get the customer agent, which can read the caller's own
+ * cover and deposits. Everything else gets the public one. It stays out of the
+ * way on surfaces where a floating button would be wrong: the admin console
+ * has Finax as a full section already, the signing portal belongs to a
+ * counterparty who has no account, and /auth is mid-sign-in.
+ */
+function FinaxMount() {
+  const { isAuthenticated } = useRift();
+  const [location] = useLocation();
+
+  const hidden = ["/admin", "/auth", "/sign/"].some((p) => location.startsWith(p));
+  if (hidden) return null;
+
+  const inApp = PROTECTED_ROUTES.some((p) => location === p || location.startsWith(p + "/"));
+  return <FinaxChat scope={inApp && isAuthenticated ? "customer" : "public"} />;
+}
+
 function App() {
   return (
     // `persist` keeps the session in storage across reloads so signed-in users
@@ -259,6 +283,7 @@ function App() {
           <AuthGuard />
           <TxAuthDialog />
           <Router />
+          <FinaxMount />
         </TooltipProvider>
       </QueryClientProvider>
     </RiftProvider>

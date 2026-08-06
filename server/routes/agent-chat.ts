@@ -111,6 +111,7 @@ export function registerAgentChatRoutes(app: Express) {
         scope: "public",
         trigger: "chat",
         maxTokens: 1024,
+        retrieveFor: message,
         messages: [
           ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
           // A stranger's text is fenced as data, not folded into instructions.
@@ -180,6 +181,7 @@ export function registerAgentChatRoutes(app: Express) {
         trigger: "chat",
         maxTokens: 1024,
         identity: { walletAddress: wallet },
+        retrieveFor: message,
         messages: [
           ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
           { role: "user" as const, content: fence("customer", message) },

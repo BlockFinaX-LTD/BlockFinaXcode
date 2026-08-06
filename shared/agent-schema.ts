@@ -226,6 +226,37 @@ export const agentFacts = pgTable("agent_facts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+/**
+ * Documents and images Finax learns from.
+ *
+ * `visibility` is enforced in the retrieval query, not by ranking — an
+ * internal document must be unreachable from the public agent, not merely
+ * unlikely to surface.
+ */
+export const agentSources = pgTable(
+  "agent_sources",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull(),
+    kind: text("kind").notNull().default("text"), // text | image
+    /** public | internal | both */
+    visibility: text("visibility").notNull().default("internal"),
+    filename: text("filename"),
+    mime: text("mime"),
+    /** Extracted text, or for an image the note that makes it findable. */
+    content: text("content"),
+    /** Pre-split passages. Empty for images. */
+    chunks: jsonb("chunks").$type<string[]>().notNull().default([]),
+    /** Data URL, images only — the model reads pictures natively. */
+    imageData: text("image_data"),
+    addedBy: text("added_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ visibilityIdx: index("agent_sources_visibility_idx").on(t.visibility) }),
+);
+
+export type AgentSource = typeof agentSources.$inferSelect;
+
 /** Autonomy dial + editable system instructions. Key/value, versioned by row. */
 export const agentSettings = pgTable("agent_settings", {
   key: text("key").primaryKey(),

@@ -620,6 +620,21 @@ export async function initializeDatabase() {
         updated_by TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS agent_sources (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'text',
+        visibility TEXT NOT NULL DEFAULT 'internal',
+        filename TEXT,
+        mime TEXT,
+        content TEXT,
+        chunks JSONB NOT NULL DEFAULT '[]'::jsonb,
+        image_data TEXT,
+        added_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS agent_sources_visibility_idx ON agent_sources(visibility);
       CREATE INDEX IF NOT EXISTS agent_proposals_status_idx ON agent_proposals(status);
       CREATE INDEX IF NOT EXISTS agent_proposals_kind_idx ON agent_proposals(kind);
       CREATE INDEX IF NOT EXISTS agent_decisions_kind_idx ON agent_decisions(kind);
