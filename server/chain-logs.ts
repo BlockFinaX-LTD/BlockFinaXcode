@@ -35,22 +35,43 @@ interface ChainCfg {
   chunk: number;
 }
 
+/**
+ * A configured RPC is tried first. This matters: the free public endpoints cap
+ * eth_getLogs at a 10k block range AND throttle hard, so scanning ~5.3M blocks
+ * of Base history takes many passes. Pointing BASE_RPC_URL at a paid provider
+ * (Alchemy, QuickNode, drpc paid) lets the scan finish in one pass — set the
+ * env var and this picks it up automatically.
+ */
+function rpcList(envVar: string, fallbacks: string[]): string[] {
+  const configured = (process.env[envVar] || "").trim();
+  // Only put a configured URL first if it isn't just the free default again.
+  return configured && !fallbacks.includes(configured)
+    ? [configured, ...fallbacks]
+    : fallbacks;
+}
+
+/** Optional tuning: raise when a paid RPC allows bigger ranges / more parallelism. */
+const numEnv = (k: string, dflt: number) => {
+  const n = parseInt(process.env[k] || "", 10);
+  return Number.isFinite(n) && n > 0 ? n : dflt;
+};
+
 const CHAINS: ChainCfg[] = [
   {
     id: 8453,
     name: "Base",
     diamond: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
-    rpcs: ["https://mainnet.base.org", "https://base.drpc.org"],
+    rpcs: rpcList("BASE_RPC_URL", ["https://mainnet.base.org", "https://base.drpc.org"]),
     decimals: 6,
-    chunk: 10_000,
+    chunk: numEnv("CHAINLOGS_CHUNK_BASE", 10_000),
   },
   {
     id: 56,
     name: "BSC",
     diamond: process.env.BSC_DIAMOND_ADDRESS || "0xaC939C0897981Abc0711ec4e37527F13106180fc",
-    rpcs: ["https://bsc-dataseed.binance.org", "https://bsc.drpc.org"],
+    rpcs: rpcList("BSC_RPC_URL", ["https://bsc-dataseed.binance.org", "https://bsc.drpc.org"]),
     decimals: 18,
-    chunk: 5_000,
+    chunk: numEnv("CHAINLOGS_CHUNK_BSC", 5_000),
   },
 ];
 
@@ -60,8 +81,11 @@ const PROTECTION_PURCHASED = "0x4481909ec72817de979b2b76609a83284e6faacdfa261745
 
 const ALL_TOPICS = [EVENT_CREATED, LIQUIDITY_DEPOSITED, PROTECTION_PURCHASED];
 
-const CONCURRENCY = 6;
-const CHUNK_RETRIES = 3;
+// Raise CHAINLOGS_CONCURRENCY once a paid RPC is configured — the free
+// endpoints rate-limit above ~6 parallel getLogs calls and start returning
+// throttles that look like failures, which stalls the cursor.
+const CONCURRENCY = numEnv("CHAINLOGS_CONCURRENCY", 6);
+const CHUNK_RETRIES = numEnv("CHAINLOGS_RETRIES", 3);
 
 let running = false;
 
