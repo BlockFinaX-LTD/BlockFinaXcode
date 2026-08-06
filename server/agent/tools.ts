@@ -65,13 +65,16 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_revenue",
     description:
-      "Platform revenue: transaction fees collected, transfer volume, and the count of fee-bearing transfers. " +
-      "Figures come from the platform_fees ledger, which mirrors on-chain fee collection.",
+      "All platform revenue, in two streams that are collected quite differently:\n" +
+      "  · transfer fees — wallet-to-wallet sends, recorded in the platform_fees ledger\n" +
+      "  · protocol fees — a share of the premium paid on every protection purchase, collected on-chain\n" +
+      "Use this for any question about revenue, take rate, or what the platform has earned.",
     input_schema: { type: "object", properties: { period: PERIOD_PROP } },
     scopes: ["internal"],
     run: async ({ period }) => {
       const cutoff = since(period);
-      const rows = await db
+
+      const [transfers] = await db
         .select({
           totalFees: sql<string>`coalesce(sum(fee_amount::numeric), 0)::text`,
           totalVolume: sql<string>`coalesce(sum(transfer_amount::numeric), 0)::text`,
@@ -79,13 +82,49 @@ export const TOOLS: ToolDef[] = [
         })
         .from(platformFees)
         .where(cutoff ? gte(platformFees.createdAt, cutoff) : sql`true`);
-      const r = rows[0];
+
+      // Protocol fees never touch platform_fees — they are taken on-chain at
+      // purchase. Reconstructing them from the activity log and each pool's
+      // premium rate is what stops the agent reading a $0 transfer-fee total
+      // as "we earned nothing", which is a materially wrong conclusion.
+      const purchases = await db
+        .select()
+        .from(hedgeActivity)
+        .where(
+          and(
+            eq(hedgeActivity.actionType, "buy_protection"),
+            cutoff ? gte(hedgeActivity.createdAt, cutoff) : sql`true`,
+          ),
+        );
+      const pools = await db.select().from(hedgeEvents);
+
+      let notional = 0;
+      let premiums = 0;
+      for (const p of purchases) {
+        const amt = num(p.amount);
+        notional += amt;
+        const pool = pools.find(
+          (e) => e.onChainEventId === p.onChainEventId && e.chainId === p.chainId,
+        );
+        if (pool) premiums += amt * num(pool.premiumRate);
+      }
+      // The protocol takes 5% of premium (changed from a notional basis in
+      // August 2026 — see the HedgeFacet upgrade).
+      const protocolFees = premiums * 0.05;
+
       return {
         period: period ?? "all",
-        transactionFeesUsd: num(r.totalFees).toFixed(2),
-        transferVolumeUsd: num(r.totalVolume).toFixed(2),
-        feeBearingTransfers: r.count,
-        note: "Pool creation fees and hedger protocol fees are reported by get_traction.",
+        transferFeesUsd: num(transfers.totalFees).toFixed(2),
+        transferVolumeUsd: num(transfers.totalVolume).toFixed(2),
+        feeBearingTransfers: transfers.count,
+        protectionPurchases: purchases.length,
+        notionalProtectedUsd: notional.toFixed(2),
+        premiumsPaidUsd: premiums.toFixed(2),
+        protocolFeesUsd: protocolFees.toFixed(2),
+        totalRevenueUsd: (num(transfers.totalFees) + protocolFees).toFixed(2),
+        note:
+          "Protocol fees are derived from purchase amounts and each pool's premium rate at 5% of premium. " +
+          "Pool creation fees ($25 on Base, $2 on BSC per pool) are not included here.",
       };
     },
   },
