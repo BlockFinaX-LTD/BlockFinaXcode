@@ -123,8 +123,8 @@ export function AgentSection({ token }: { token: string }) {
       </div>
 
       {tab === "chat" && <ChatTab token={token} enabled={!!status?.configured} />}
-      {tab === "queue" && <QueueTab token={token} />}
-      {tab === "training" && <TrainingTab token={token} autonomy={status?.autonomy} />}
+      {tab === "queue" && <QueueTab token={token} canApprove={status?.canApprove !== false} />}
+      {tab === "training" && <TrainingTab token={token} autonomy={status?.autonomy} canApprove={status?.canApprove !== false} />}
       {tab === "activity" && <ActivityTab token={token} />}
     </div>
   );
@@ -270,7 +270,7 @@ function ChatTab({ token, enabled }: { token: string; enabled: boolean }) {
 
 // ── Queue ────────────────────────────────────────────────────────────────
 
-function QueueTab({ token }: { token: string }) {
+function QueueTab({ token, canApprove }: { token: string; canApprove: boolean }) {
   const { toast } = useToast();
   const [filter, setFilter] = useState("proposed");
   const [editing, setEditing] = useState<number | null>(null);
@@ -373,7 +373,13 @@ function QueueTab({ token }: { token: string }) {
                   body && <p className="whitespace-pre-wrap rounded-md bg-muted/30 p-3 text-sm">{body}</p>
                 )}
 
-                {p.status === "proposed" && (
+                {p.status === "proposed" && !canApprove && (
+                  <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Waiting on Anthony. Only he can approve or reject what the agent proposes.
+                  </p>
+                )}
+
+                {p.status === "proposed" && canApprove && (
                   <div className="flex flex-wrap gap-2">
                     {isEditing ? (
                       <>
@@ -428,7 +434,7 @@ function QueueTab({ token }: { token: string }) {
 
 // ── Training ─────────────────────────────────────────────────────────────
 
-function TrainingTab({ token, autonomy }: { token: string; autonomy?: Record<Capability, AutonomyLevel> }) {
+function TrainingTab({ token, autonomy, canApprove }: { token: string; autonomy?: Record<Capability, AutonomyLevel>; canApprove: boolean }) {
   const { toast } = useToast();
   const [newRule, setNewRule] = useState("");
   const [newFact, setNewFact] = useState("");
@@ -576,6 +582,7 @@ function TrainingTab({ token, autonomy }: { token: string; autonomy?: Record<Cap
                 <span className="text-xs">{CAPABILITY_LABELS[cap]}</span>
                 <Select
                   value={autonomy?.[cap] ?? "ask"}
+                  disabled={!canApprove}
                   onValueChange={(v) => setAutonomy.mutate({ [cap]: v })}
                 >
                   <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>

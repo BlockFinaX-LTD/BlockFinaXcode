@@ -13,7 +13,7 @@
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { requireAdmin } from "../middleware/admin-auth";
+import { requireAdmin, requireApprover, getApproverEmails } from "../middleware/admin-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
 import {
   agentProposals, agentMessages, agentRules, agentRuns, agentSettings, agentFacts,
@@ -47,7 +47,7 @@ function draftText(payload: Record<string, unknown> | null | undefined): string 
 
 export function registerAgentRoutes(app: Express) {
   /** Whether the agent can run at all, plus what it costs so far. */
-  app.get("/api/agent/status", requireAdmin, async (_req: Request, res: Response) => {
+  app.get("/api/agent/status", requireAdmin, async (req: Request, res: Response) => {
     try {
       const [spend] = await db
         .select({
@@ -62,9 +62,12 @@ export function registerAgentRoutes(app: Express) {
         .from(agentProposals)
         .where(eq(agentProposals.status, "proposed"));
 
+      const me = ((req as any).adminEmail || "").toLowerCase();
       res.json({
         configured: agentConfigured(),
         model: MODEL,
+        canApprove: getApproverEmails().includes(me),
+        approvers: getApproverEmails(),
         pendingProposals: pending?.n ?? 0,
         spend: {
           runs: spend?.runs ?? 0,
@@ -164,7 +167,7 @@ export function registerAgentRoutes(app: Express) {
    * an edit, because the diff is the most useful thing the agent can learn
    * from — treating it as a plain approval would throw that away.
    */
-  app.post("/api/agent/proposals/:id/decide", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/agent/proposals/:id/decide", requireApprover, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
       const parsed = decideSchema.safeParse(req.body);
@@ -185,7 +188,7 @@ export function registerAgentRoutes(app: Express) {
           status: decision,
           editedPayload: editedPayload ?? null,
           decidedAt: new Date(),
-          decidedBy: "admin",
+          decidedBy: (req as any).adminEmail ?? null,
         })
         .where(eq(agentProposals.id, id));
 
@@ -196,7 +199,7 @@ export function registerAgentRoutes(app: Express) {
         original: draftText(p.payload),
         final: edited ? draftText(editedPayload) : null,
         note,
-        decidedBy: "admin",
+        decidedBy: (req as any).adminEmail ?? null,
       });
 
       // Execution is phase 3 and will call the existing LOI routes rather than
@@ -269,7 +272,7 @@ export function registerAgentRoutes(app: Express) {
   });
 
   /** Set the autonomy dial. Unknown capabilities and levels are ignored. */
-  app.put("/api/agent/autonomy", requireAdmin, async (req: Request, res: Response) => {
+  app.put("/api/agent/autonomy", requireApprover, async (req: Request, res: Response) => {
     const incoming = req.body ?? {};
     const next: Record<string, AutonomyLevel> = { ...(await getAutonomy()) };
     for (const cap of CAPABILITIES) {

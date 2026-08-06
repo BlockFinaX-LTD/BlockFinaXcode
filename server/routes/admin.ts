@@ -84,7 +84,7 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       }
 
       const token = generateAdminToken();
-      adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
+      adminSessions.set(token, { expiresAt: Date.now() + ADMIN_SESSION_TTL_MS, email: email.toLowerCase() });
       res.json({
         token,
         email,
