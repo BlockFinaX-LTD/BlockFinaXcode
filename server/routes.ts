@@ -31,6 +31,7 @@ import { registerGateRoutes } from "./routes/gate";
 import { registerLoiRoutes } from "./routes/loi";
 import { registerAgentRoutes } from "./routes/agent";
 import { registerAgentChatRoutes } from "./routes/agent-chat";
+import { registerComplianceRoutes } from "./routes/compliance";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ── Rate limiters ──────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerLoiRoutes(app);
   registerAgentRoutes(app);
   registerAgentChatRoutes(app);
+  registerComplianceRoutes(app);
   await registerProtocolRoutes(app);
 
   // NOTE: The public/integrator REST API used to live at /api/v1 here.

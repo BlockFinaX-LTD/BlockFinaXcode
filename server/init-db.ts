@@ -648,6 +648,64 @@ export async function initializeDatabase() {
     console.error("Failed to create agent tables:", error);
   }
 
+  // AML/CFT. Thresholds live in shared/compliance-schema.ts and mirror
+  // docs/ops/compliance-aml-kyc-policy.md — if one changes, change both.
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS kyc_submissions (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        requested_tier INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'submitted',
+        entity_type TEXT NOT NULL DEFAULT 'individual',
+        full_name TEXT, date_of_birth TEXT, nationality TEXT, country TEXT,
+        address TEXT, phone TEXT, email TEXT, id_type TEXT, id_number TEXT,
+        company_name TEXT, registration_number TEXT, beneficial_owners TEXT,
+        source_of_funds TEXT, source_of_wealth TEXT, expected_monthly_volume TEXT,
+        is_pep BOOLEAN NOT NULL DEFAULT FALSE,
+        documents JSONB NOT NULL DEFAULT '[]'::jsonb,
+        reviewer_notes TEXT, reviewed_by TEXT, reviewed_at TIMESTAMP,
+        submitted_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS sanctions_screenings (
+        id SERIAL PRIMARY KEY,
+        subject_type TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        wallet_address TEXT,
+        submission_id INTEGER,
+        matched BOOLEAN NOT NULL DEFAULT FALSE,
+        top_score REAL NOT NULL DEFAULT 0,
+        matches JSONB NOT NULL DEFAULT '[]'::jsonb,
+        provider TEXT NOT NULL DEFAULT 'opensanctions',
+        error TEXT,
+        screened_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS compliance_alerts (
+        id SERIAL PRIMARY KEY,
+        kind TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'medium',
+        wallet_address TEXT,
+        title TEXT NOT NULL,
+        detail TEXT NOT NULL DEFAULT '',
+        meta JSONB,
+        status TEXT NOT NULL DEFAULT 'open',
+        resolution TEXT, resolved_by TEXT, resolved_at TIMESTAMP,
+        opened_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS kyc_submissions_wallet_idx ON kyc_submissions(wallet_address);
+      CREATE INDEX IF NOT EXISTS kyc_submissions_status_idx ON kyc_submissions(status);
+      CREATE INDEX IF NOT EXISTS sanctions_screenings_wallet_idx ON sanctions_screenings(wallet_address);
+      CREATE INDEX IF NOT EXISTS sanctions_screenings_matched_idx ON sanctions_screenings(matched);
+      CREATE INDEX IF NOT EXISTS compliance_alerts_status_idx ON compliance_alerts(status);
+      CREATE INDEX IF NOT EXISTS compliance_alerts_wallet_idx ON compliance_alerts(wallet_address);
+    `);
+  } catch (error) {
+    console.error("Failed to create compliance tables:", error);
+  }
+
   for (const network of defaultNetworks) {
     try {
       const existing = await db

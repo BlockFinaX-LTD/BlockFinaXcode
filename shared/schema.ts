@@ -16,6 +16,8 @@ export * from "./referral-schema";
 export * from "./loi-schema";
 // Mini-CEO agent — proposals, decisions, learned rules, runs
 export * from "./agent-schema";
+// AML/CFT — KYC tiers, limits, sanctions screening, compliance alerts
+export * from "./compliance-schema";
 
 // ── Auth: user accounts ───────────────────────────────────────────────────────
 export const userAccounts = pgTable("user_accounts", {
