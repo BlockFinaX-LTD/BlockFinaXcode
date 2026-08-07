@@ -25,6 +25,7 @@ import {
 import { walletStanding, checkTransaction, raiseAlert, MONITORING } from "../compliance/limits";
 import { screenName, screenWallet, rescreenApproved } from "../compliance/sanctions";
 import { emailKycReceived, emailKycApproved, emailKycRejected, emailUrgentReview } from "../compliance/notify";
+import { screenDeposit, sweepDeposits, traceDeposit } from "../compliance/wallet-watch";
 import { agentProposals } from "@shared/agent-schema";
 
 export function registerComplianceRoutes(app: Express) {
@@ -394,6 +395,30 @@ export function registerComplianceRoutes(app: Express) {
       );
     } catch (err: any) {
       res.status(500).json({ message: "Screening failed" });
+    }
+  });
+
+  /** Screen one deposit, tracing a hop back to whoever funded it. */
+  app.post("/api/admin/compliance/screen-deposit", requireAdmin, strictLimiter, async (req: Request, res: Response) => {
+    try {
+      const txHash = String(req.body?.txHash || "").trim();
+      const chainId = Number(req.body?.chainId) || 8453;
+      const walletAddress = String(req.body?.walletAddress || "").trim();
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+        return res.status(400).json({ message: "Give a transaction hash." });
+      }
+      res.json(await screenDeposit({ txHash, chainId, walletAddress: walletAddress || txHash }));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Deposit screening failed" });
+    }
+  });
+
+  /** Screen recent deposits that have not been checked yet. */
+  app.post("/api/admin/compliance/sweep-deposits", requireApprover, strictLimiter, async (_req: Request, res: Response) => {
+    try {
+      res.json(await sweepDeposits(25));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Sweep failed" });
     }
   });
 

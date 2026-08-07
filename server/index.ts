@@ -16,6 +16,7 @@ import { startupChainSync } from "./chain-sync";
 import { backfillChainLogs } from "./chain-logs";
 import { startDailyRefresh } from "./pricing/dailyRefresh";
 import { startDigestSweep } from "./agent/notify";
+import { startDepositSweep } from "./compliance/wallet-watch";
 
 // Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
 const _originalExit = process.exit.bind(process);
@@ -228,6 +229,10 @@ app.use((req, res, next) => {
 
     // Batched digest of anything the agent is waiting on a decision for.
     startDigestSweep();
+
+    // Screens deposits against designated addresses, tracing one hop back to
+    // whoever funded the depositing wallet.
+    startDepositSweep();
   }, 20_000);
 
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
