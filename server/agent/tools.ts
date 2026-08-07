@@ -23,6 +23,7 @@ import {
   hedgePositions, hedgeLpDeposits,
 } from "@shared/schema";
 import { loiDocuments } from "@shared/loi-schema";
+import { kycSubmissions, complianceAlerts, sanctionsScreenings } from "@shared/compliance-schema";
 import type { AgentScope } from "@shared/agent-schema";
 
 /**
@@ -247,6 +248,55 @@ export const TOOLS: ToolDef[] = [
         expiresAt: r.expiresAt,
         daysSinceSent: r.sentAt ? Math.floor((Date.now() - new Date(r.sentAt).getTime()) / 86_400_000) : null,
       }));
+    },
+  },
+
+  {
+    name: "get_compliance_queue",
+    description:
+      "Verification requests waiting for review, and open compliance alerts. Use for any question about " +
+      "whether there is a queue, what needs attention, or the state of KYC and sanctions screening. " +
+      "Alerts open more than 24 hours are overdue against the review window the AML policy commits to.",
+    input_schema: { type: "object", properties: {} },
+    scopes: ["internal"],
+    run: async () => {
+      const subs = await db.select().from(kycSubmissions);
+      const alerts = await db.select().from(complianceAlerts);
+      const screens = await db.select().from(sanctionsScreenings);
+
+      const waiting = subs.filter((s) => s.status === "submitted" || s.status === "in_review");
+      const open = alerts.filter((a) => a.status === "open");
+      const overdue = open.filter(
+        (a) => a.openedAt && Date.now() - new Date(a.openedAt).getTime() > 86_400_000,
+      );
+
+      const age = (d: Date | string | null) =>
+        d ? Math.floor((Date.now() - new Date(d).getTime()) / 3_600_000) : 0;
+
+      return {
+        verificationsWaiting: waiting.length,
+        oldestWaitingHours: waiting.length ? Math.max(...waiting.map((s) => age(s.submittedAt))) : 0,
+        waiting: waiting.slice(0, 10).map((s) => ({
+          name: s.fullName || s.companyName,
+          requestedTier: s.requestedTier,
+          entityType: s.entityType,
+          status: s.status,
+          isPep: s.isPep,
+          hoursWaiting: age(s.submittedAt),
+        })),
+        alertsOpen: open.length,
+        alertsOverdue: overdue.length,
+        alerts: open.slice(0, 10).map((a) => ({
+          kind: a.kind,
+          severity: a.severity,
+          title: a.title,
+          hoursOpen: age(a.openedAt),
+          overdue: age(a.openedAt) > 24,
+        })),
+        screeningsRun: screens.length,
+        screeningHits: screens.filter((s) => s.matched).length,
+        reviewWindowHours: 24,
+      };
     },
   },
 

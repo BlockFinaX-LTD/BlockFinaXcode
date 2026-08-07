@@ -91,6 +91,8 @@ export const PROPOSAL_KINDS = [
   "weekly_digest",
   "linkedin_draft",
   "meeting_action",
+  "compliance_backlog",
+  "compliance_overdue",
 ] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 
@@ -102,6 +104,8 @@ export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
   weekly_digest: "Weekly digest",
   linkedin_draft: "LinkedIn draft",
   meeting_action: "Meeting action item",
+  compliance_backlog: "Verifications waiting",
+  compliance_overdue: "Compliance review overdue",
 };
 
 // ── Tables ────────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ import { db } from "../db";
 import { agentProposals, agentSettings, agentDecisions } from "@shared/agent-schema";
 import { loiDocuments } from "@shared/loi-schema";
 import { readChainEvents } from "../hedge-reader";
+import { kycSubmissions, complianceAlerts } from "@shared/compliance-schema";
 import { runAgent, fence } from "./runtime";
 
 const SETTINGS_KEY = "thresholds";
@@ -36,6 +37,8 @@ export interface Thresholds {
   capacityUtilisation: number;
   /** Days a rejected source stays suppressed. */
   rejectionCooldownDays: number;
+  /** Hours a verification may wait before Finax raises it. */
+  kycWaitingHours: number;
 }
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -44,6 +47,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   staleChangesDays: 4,
   capacityUtilisation: 0.85,
   rejectionCooldownDays: 14,
+  kycWaitingHours: 12,
 };
 
 export async function getThresholds(): Promise<Thresholds> {
@@ -230,6 +234,80 @@ async function findPoolsAtCapacity(t: Thresholds): Promise<Candidate[]> {
   return out;
 }
 
+/**
+ * Compliance work sitting unattended.
+ *
+ * Two separate things, deliberately raised separately. A verification queue is
+ * a customer waiting — annoying, and it costs conversions. An alert open past
+ * twenty-four hours is a breach of the review window the AML policy commits to
+ * in writing, which is a different order of problem and says so.
+ */
+async function findComplianceBacklog(t: Thresholds): Promise<Candidate[]> {
+  const out: Candidate[] = [];
+  try {
+    const subs = await db
+      .select()
+      .from(kycSubmissions)
+      .where(sql`${kycSubmissions.status} IN ('submitted','in_review')`);
+
+    const hours = (d: Date | string | null) =>
+      d ? Math.floor((Date.now() - new Date(d).getTime()) / 3_600_000) : 0;
+
+    const waiting = subs.filter((s) => hours(s.submittedAt) >= t.kycWaitingHours);
+    if (waiting.length) {
+      const oldest = Math.max(...waiting.map((s) => hours(s.submittedAt)));
+      const held = waiting.filter((s) => s.status === "in_review").length;
+      out.push({
+        kind: "compliance_backlog",
+        title: `${waiting.length} verification${waiting.length === 1 ? "" : "s"} waiting for review`,
+        rationale:
+          `The oldest has been waiting ${oldest} hours` +
+          (held ? `, and ${held} ${held === 1 ? "is" : "are"} held by a screening result needing a decision` : "") +
+          `. Each one is a customer who cannot transact until it is cleared.`,
+        sourceType: "compliance",
+        // A single row keyed on the whole queue: suppression is per source, and
+        // one proposal per waiting customer would bury everything else.
+        sourceId: 0,
+        priority: oldest >= 48 ? ("high" as const) : ("normal" as const),
+        context: {
+          waiting: waiting.length,
+          oldestHours: oldest,
+          heldByScreening: held,
+          names: waiting.slice(0, 5).map((s) => s.fullName || s.companyName),
+        },
+      });
+    }
+
+    const alerts = await db
+      .select()
+      .from(complianceAlerts)
+      .where(eq(complianceAlerts.status, "open"));
+    const overdue = alerts.filter((a) => hours(a.openedAt) > 24);
+    if (overdue.length) {
+      out.push({
+        kind: "compliance_overdue",
+        title: `${overdue.length} compliance alert${overdue.length === 1 ? "" : "s"} past the 24-hour window`,
+        rationale:
+          `Section 4 of the AML policy commits to reviewing flagged activity within 24 hours. ` +
+          `${overdue.length} ${overdue.length === 1 ? "alert has" : "alerts have"} been open longer than that. ` +
+          `This is a documented commitment, so the gap is demonstrable to a supervisor.`,
+        sourceType: "compliance",
+        sourceId: 1,
+        priority: "high" as const,
+        context: {
+          overdue: overdue.length,
+          oldestHours: Math.max(...overdue.map((a) => hours(a.openedAt))),
+          kinds: overdue.map((a) => a.kind).filter((k, i, arr) => arr.indexOf(k) === i),
+        },
+      });
+    }
+  } catch {
+    // The compliance tables may not exist yet in a given environment; the
+    // other detectors are still worth running.
+  }
+  return out;
+}
+
 // ── Suppression ──────────────────────────────────────────────────────────
 
 /**
@@ -280,6 +358,13 @@ const DRAFT_INSTRUCTIONS: Record<string, string> = {
   loi_stale_changes:
     "Write a short note acknowledging that they asked for changes and that a revision is coming. Do not promise " +
     "specific terms — you do not know what was decided. Two or three sentences.",
+  compliance_backlog:
+    "Write two sentences to Anthony, internal only. Say how many are waiting and how long the oldest has " +
+    "been, and that each is a customer who cannot transact until cleared. Do not name anyone.",
+  compliance_overdue:
+    "Write two sentences to Anthony, internal only. State plainly that the 24-hour review window in the AML " +
+    "policy has been passed, how many alerts are affected, and that this is a written commitment a regulator " +
+    "could check. Do not soften it.",
   pool_at_capacity:
     "Write two sentences to Anthony, internal only. State how much of the pool is committed and what it means " +
     "commercially — further purchases will be refused, so demand is being turned away. Do not describe this as " +
@@ -339,6 +424,7 @@ export async function runScan(): Promise<ScanResult> {
     ...(await findExpiringLetters(t)),
     ...(await findStaleChangeRequests(t)),
     ...(await findPoolsAtCapacity(t)),
+    ...(await findComplianceBacklog(t)),
   ];
 
   const fresh = await suppressKnown(found, t);
@@ -383,6 +469,7 @@ export async function dryRun(): Promise<{ candidates: Omit<Candidate, "context">
     ...(await findExpiringLetters(t)),
     ...(await findStaleChangeRequests(t)),
     ...(await findPoolsAtCapacity(t)),
+    ...(await findComplianceBacklog(t)),
   ];
   const fresh = await suppressKnown(found, t);
   return {
