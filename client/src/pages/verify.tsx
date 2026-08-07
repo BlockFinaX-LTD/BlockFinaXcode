@@ -28,6 +28,7 @@ import {
   ShieldCheck, Check, Clock, X, Upload, Loader2, ArrowRight, Info, FileText, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AppShell } from "@/components/app-shell";
 
 async function api(url: string, options?: RequestInit) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -209,17 +210,12 @@ export default function VerifyPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-10 sm:px-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Verification</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            How much you can transact depends on how much we know about you.
-          </p>
-        </div>
-        {children}
-      </div>
-    </div>
+    <AppShell
+      active="profile"
+      greeting={{ title: "Verification", subtitle: "How much you can transact depends on how much we know about you" }}
+    >
+      <div className="mx-auto max-w-3xl space-y-6">{children}</div>
+    </AppShell>
   );
 }
 

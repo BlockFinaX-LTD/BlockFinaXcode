@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useRift } from '@rift-finance/react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Shield, TrendingUp, Search, Bell, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Shield, TrendingUp, Search, Bell, Moon, Sun, User } from 'lucide-react';
 // Same brand mark as the landing-page nav (served from /public).
 const logoPath = '/favicon.png';
 import { FlagSvg, CommoditySvg, KNOWN_FLAGS } from '@/components/app-glyphs';
@@ -75,7 +75,7 @@ type FXResponse = {
 type Market = { id?: number; pair: string; name: string; code: string; cls: 'fx' | 'cmd'; prem: number };
 
 interface AppShellProps {
-  active: 'home' | 'cover' | 'earn';
+  active: 'home' | 'cover' | 'earn' | 'profile';
   greeting?: { title: string; subtitle?: string };
   children: React.ReactNode;
 }
@@ -189,6 +189,7 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
             {navItem('home', '/home', 'Home', LayoutDashboard)}
             {navItem('cover', '/hedge', 'Cover', Shield)}
             {navItem('earn', '/tasks', 'Earn', TrendingUp)}
+            {navItem('profile', '/profile', 'Profile', User)}
           </nav>
         </aside>
 
@@ -201,13 +202,13 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
             </div>
 
             {user?.address && (
-              <div className="ab-acct" title={user.address}>
+              <Link href="/profile" className="ab-acct" title="Your profile">
                 <span className="ava" />
                 <span className="meta">
                   <span className="n">{firstNameFromUser(user)}</span>
                   <span className="a">{abbreviate(user.address)}</span>
                 </span>
-              </div>
+              </Link>
             )}
 
             <div className="ab-r">
@@ -279,6 +280,9 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
         </Link>
         <Link href="/tasks" className={`tab${active === 'earn' ? ' on' : ''}`}>
           <TrendingUp /><span className="tl">Earn</span>
+        </Link>
+        <Link href="/profile" className={`tab${active === 'profile' ? ' on' : ''}`}>
+          <User /><span className="tl">Profile</span>
         </Link>
       </nav>
     </div>

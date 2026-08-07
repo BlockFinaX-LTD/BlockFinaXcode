@@ -44,6 +44,8 @@ import {
   CheckCircle,
   Clock,
   ArrowLeft,
+  ChevronRight,
+  ShieldCheck,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -52,7 +54,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
 import { queryClient } from '@/lib/api-client';
-import { BottomNav } from '@/components/bottom-nav';
+import { AppShell } from '@/components/app-shell';
+import { getRiftAccessToken } from '@/lib/rift-token-bridge';
 import { Pill, shortAddr } from '@/components/ui/bfx';
 
 const profileSchema = z.object({
@@ -258,38 +261,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-32">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b border-border/60">
-        <div className="max-w-2xl mx-auto px-3 h-14 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setLocation('/home')}
-              className="h-9 w-9 rounded-full"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="bfx-display text-[17px] font-semibold tracking-tight">Profile</h1>
-          </div>
-          {profile && (
-            <Pill tone={profile.kycStatus === 'verified' ? 'success' : 'warning'} uppercase={false}>
-              {profile.kycStatus === 'verified' ? (
-                <>
-                  <CheckCircle className="h-3 w-3" /> Verified
-                </>
-              ) : (
-                <>
-                  <Clock className="h-3 w-3" /> Unverified
-                </>
-              )}
-            </Pill>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+    <AppShell active="profile" greeting={{ title: 'Profile', subtitle: 'Your account, verification and settings' }}>
+      <main className="max-w-2xl mx-auto space-y-4">
+        <VerificationCard />
         {/* Avatar hero */}
         <Card className="rounded-2xl bfx-hero-dark border-0 relative overflow-hidden">
           <CardContent className="p-5 flex items-center gap-4 relative">
@@ -748,8 +722,58 @@ export default function ProfilePage() {
           </form>
         </Form>
       </main>
+    </AppShell>
+  );
+}
 
-      <BottomNav />
-    </div>
+/**
+ * Verification status, and the way into /verify.
+ *
+ * Sits at the top of the profile because how much someone can transact is the
+ * thing they most often come here to find out — and until this existed there
+ * was no route to the verification page at all.
+ */
+function VerificationCard() {
+  const [, navigate] = useLocation();
+  const { data } = useQuery({
+    queryKey: ['compliance-me-profile'],
+    queryFn: async () => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try { headers.Authorization = `Bearer ${await getRiftAccessToken()}`; } catch { /* signed out */ }
+      const r = await fetch('/api/compliance/me', { headers });
+      if (!r.ok) return null;
+      return r.json();
+    },
+  });
+
+  if (!data) return null;
+  const tier = data.tierDef;
+  const verified = data.tier > 0;
+  const left = Math.max(0, (tier?.cashMovedUsd ?? 0) - (data.cashMovedUsd ?? 0));
+
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-4">
+        <button
+          onClick={() => navigate('/verify')}
+          className="flex w-full items-center gap-3 text-left"
+        >
+          <span className={`h-9 w-9 shrink-0 rounded-full inline-flex items-center justify-center ${verified ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+            {verified ? <ShieldCheck className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold tracking-tight">
+              {verified ? `${tier.name} verification` : 'Verify your identity'}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {verified
+                ? `$${left.toLocaleString()} left to transact this month`
+                : 'Required before you can buy cover or provide liquidity'}
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      </CardContent>
+    </Card>
   );
 }

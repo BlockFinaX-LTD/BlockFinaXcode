@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
-import { BottomNav } from '@/components/bottom-nav';
+import { AppShell } from '@/components/app-shell';
 import { Pill, Dot, shortAddr } from '@/components/ui/bfx';
 
 const CURRENCIES = [
@@ -150,24 +150,8 @@ export default function SettingsPage() {
   if (!isUnlocked) return null;
 
   return (
-    <div className="min-h-screen bg-background pb-28">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b border-border/60">
-        <div className="max-w-2xl mx-auto px-3 h-14 flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation('/home')}
-            className="h-9 w-9 rounded-full"
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="bfx-display text-[17px] font-semibold tracking-tight">Settings</h1>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4">
+    <AppShell active="profile" greeting={{ title: 'Settings', subtitle: 'Security, wallet and preferences' }}>
+      <main className="max-w-2xl mx-auto">
         {/* SECURITY */}
         <SectionHd title="Security" />
         <Card className="rounded-2xl overflow-hidden">
@@ -371,8 +355,6 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <BottomNav />
-    </div>
+    </AppShell>
   );
 }
