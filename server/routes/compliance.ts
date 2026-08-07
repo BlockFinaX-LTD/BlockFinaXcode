@@ -24,6 +24,8 @@ import {
 } from "@shared/compliance-schema";
 import { walletStanding, checkTransaction, raiseAlert, MONITORING } from "../compliance/limits";
 import { screenName, screenWallet, rescreenApproved } from "../compliance/sanctions";
+import { emailKycReceived, emailKycApproved, emailKycRejected, emailUrgentReview } from "../compliance/notify";
+import { agentProposals } from "@shared/agent-schema";
 
 export function registerComplianceRoutes(app: Express) {
   // ═══ CUSTOMER ══════════════════════════════════════════════════════════
@@ -186,7 +188,8 @@ export function registerComplianceRoutes(app: Express) {
       });
       await screenWallet(wallet);
 
-      if (screening.status === "hit" || screening.status === "inconclusive") {
+      const held = screening.status === "hit" || screening.status === "inconclusive";
+      if (held) {
         await db.update(kycSubmissions).set({ status: "in_review" }).where(eq(kycSubmissions.id, row.id));
       }
       if (d.isPep) {
@@ -198,6 +201,45 @@ export function registerComplianceRoutes(app: Express) {
           detail: "Policy §3.3 requires enhanced due diligence for politically exposed persons.",
           meta: { submissionId: row.id },
         });
+      }
+
+      // Confirm to the customer. Silence after uploading a passport is what
+      // makes people email support or give up.
+      emailKycReceived(row).catch((e) =>
+        console.error("[compliance] confirmation email failed:", e?.message),
+      );
+
+      // Put it in the queue Finax watches, so it appears in the digest and in
+      // any "is there anything waiting?" answer.
+      db.insert(agentProposals)
+        .values({
+          kind: "compliance_backlog",
+          title: `${d.fullName || d.companyName} applied for Tier ${d.requestedTier} verification`,
+          rationale: held
+            ? `Held for review — screening returned ${screening.status}. They cannot transact until it is cleared.`
+            : `Waiting for review. They cannot transact until it is approved.`,
+          payload: {
+            body:
+              `${d.fullName || d.companyName} has applied for Tier ${d.requestedTier} verification` +
+              `${d.country ? ` from ${d.country}` : ""}.` +
+              (held ? " It is held pending a screening decision." : ""),
+            submissionId: row.id,
+          },
+          priority: held || d.isPep ? "high" : "normal",
+          sourceType: "kyc_submission",
+          sourceId: row.id,
+        })
+        .catch((e) => console.error("[compliance] could not queue the submission:", e?.message));
+
+      // Only genuinely urgent things interrupt. Everything else waits for the
+      // digest — an inbox full of routine notices is one where the urgent
+      // message gets missed.
+      if (held || d.isPep) {
+        emailUrgentReview({
+          submission: row,
+          reason: screening.status === "hit" ? "sanctions" : d.isPep ? "pep" : "inconclusive",
+          screening,
+        }).catch((e) => console.error("[compliance] urgent email failed:", e?.message));
       }
 
       // The customer is told it is under review either way — a screening hit
@@ -286,6 +328,14 @@ export function registerComplianceRoutes(app: Express) {
             reviewerNotes: notes,
           },
         });
+
+      // Tell them the outcome. A rejection carries the reviewer's note so it
+      // is actionable; it never mentions screening, which is an internal
+      // finding and often a coincidence of spelling.
+      (decision === "approved"
+        ? emailKycApproved(row, tier)
+        : emailKycRejected(row, notes)
+      ).catch((e) => console.error("[compliance] decision email failed:", e?.message));
 
       res.json({ ok: true, status: decision, tier });
     } catch (err: any) {
