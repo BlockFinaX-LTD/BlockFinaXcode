@@ -4,7 +4,7 @@
 
 # PART 1: ANTI-MONEY LAUNDERING AND KNOW YOUR CUSTOMER POLICY
 
-**Version 1.0 | February 2026**
+**Version 1.1 | August 2026**
 
 ---
 
@@ -32,7 +32,22 @@ This policy has been developed in compliance with the following Ghanaian legisla
 
 ### 3.1 Onboarding Requirements
 
-Before any user may transact on the BlockFinaX platform, the following information must be collected and verified:
+Before any user may transact on the BlockFinaX platform, identity information must be collected and verified. Verification is tiered, and the tier determines how much a customer may transact. An unverified account may browse the platform but cannot buy protection or provide liquidity.
+
+| Tier | Verification | Value transacted (rolling 30 days) | Payout exposure held |
+|------|--------------|-----------------------------------|----------------------|
+| 0 — Unverified | None | Nil — cannot transact | Nil |
+| 1 — Basic | Name, phone, country, Ghana Card or passport number | Up to $1,000 | Up to $1,000 |
+| 2 — Verified | Tier 1 plus photo ID, proof of address, date of birth, source of funds | Up to $10,000 | Up to $10,000 |
+| 3 — Enhanced | Tier 2 plus incorporation documents, directors and shareholders register, beneficial ownership, source of wealth | Above $10,000 | Above $10,000 |
+
+**Basis of measurement.** Limits are applied to the value actually transferred — premiums paid, payouts received, liquidity deposited and withdrawn — and, separately, to the maximum aggregate payout a customer's open protection contracts could reach.
+
+Notional is deliberately not used. Notional is the size of the exposure a customer is protecting, not a sum that changes hands: a $100,000 position attracts a premium of between $70 and $2,000 depending on the pool, while carrying a maximum payout of $10,000. Measuring against premium alone would permit a $10,000 claim to be acquired for $70; measuring against notional would restrict a customer by reference to an amount that is never transferred. A $100,000 position therefore falls at the Tier 2 threshold, consistent with the enhanced due diligence trigger in section 3.3.
+
+Limits are cumulative across the rolling window rather than applied per transaction, so that a payment cannot be brought within a limit by dividing it.
+
+The following information is collected and verified:
 
 **For Individual Users:**
 - Full legal name
@@ -67,7 +82,9 @@ Enhanced due diligence will be applied to the following categories of users:
 
 ## 4. Transaction Monitoring
 
-BlockFinaX maintains automated and manual monitoring of all platform transactions. The following activity will trigger immediate review:
+BlockFinaX maintains automated and manual monitoring of all platform transactions. Tier limits are evaluated before a transaction is permitted; the thresholds below are evaluated after settlement and generate an alert for compliance review rather than blocking the transaction.
+
+The following activity will trigger immediate review:
 
 - Single transactions exceeding $5,000 equivalent
 - Cumulative transactions exceeding $10,000 equivalent within any 30-day period
@@ -83,12 +100,16 @@ All flagged transactions will be reviewed by the BlockFinaX compliance officer w
 
 All users and transaction counterparties are screened against the following lists at onboarding and on an ongoing basis:
 
-- United Nations Security Council Consolidated Sanctions List
-- United States Office of Foreign Assets Control (OFAC) list
-- European Union Consolidated Sanctions List
-- Ghana Financial Intelligence Centre designated entities list
+| List | Method |
+|------|--------|
+| United Nations Security Council Consolidated List | Automated, on submission and on re-screening |
+| United States Office of Foreign Assets Control (OFAC) SDN List | Automated, on submission and on re-screening, including designated digital currency addresses |
+| European Union Consolidated Sanctions List | Manual check by the Compliance Officer at review |
+| Ghana Financial Intelligence Centre designated entities list | Manual check by the Compliance Officer at review |
 
-Any match will result in immediate account suspension and notification to the relevant authority.
+Automated screening covers primary names, recorded aliases and designated wallet addresses. Where an automated list cannot be retrieved, the screening is recorded as inconclusive and the account is not approved until the check completes.
+
+A potential match does not itself result in suspension. Name screening produces false positives, and a match is reviewed by the Compliance Officer before any action is taken. Where a match is confirmed, the account is suspended immediately and the relevant authority notified. All screening results are retained, including those returning no match, as evidence of ongoing screening.
 
 ---
 
@@ -106,20 +127,40 @@ All KYC documentation, transaction records, and compliance reports will be retai
 
 ## 8. Compliance Officer
 
-BlockFinaX has designated a Compliance Officer responsible for the implementation and oversight of this policy. The Compliance Officer will conduct regular internal reviews, coordinate with the Bank of Ghana's Fintech and Innovation Office during the sandbox period, and ensure staff receive appropriate AML/CFT training.
+BlockFinaX will designate a Compliance Officer, responsible for the implementation and oversight of this policy, before commencing commercial operations. During the sandbox testing period these responsibilities are discharged by the Chief Executive Officer. The Compliance Officer will conduct regular internal reviews, coordinate with the Bank of Ghana's Fintech and Innovation Office during the sandbox period, and ensure staff receive appropriate AML/CFT training.
 
 ---
 
-## 9. Policy Review
+## 9. Implementation Status
+
+The following controls are implemented in the BlockFinaX platform as at August 2026:
+
+| Control | Status |
+|---------|--------|
+| Tiered verification with enforced transaction limits | Implemented — checked before every transaction |
+| Manual review of all submissions by compliance staff | Implemented |
+| Automated screening against OFAC SDN and the UN Consolidated List | Implemented, including aliases and digital currency addresses |
+| Screening against the EU and Ghana FIC lists | Manual at review |
+| Retention of all screening results, including negative results | Implemented |
+| Transaction monitoring against the section 4 thresholds | Implemented — generates compliance alerts |
+| Structuring detection | Implemented — repeated transactions below a threshold generate an alert |
+| Suspicious Transaction Report workflow | Manual |
+| Automated identity document verification | Not implemented — verification is manual during the sandbox period, per section 3.2 |
+
+---
+
+## 10. Policy Review
 
 This policy will be reviewed annually and updated as required to reflect changes in Ghanaian legislation, Bank of Ghana directives, or the operational activities of BlockFinaX.
+
+Where a threshold in this policy is changed, the corresponding value in the platform must be changed in the same revision. The thresholds in sections 3.1, 3.3 and 4 are enforced in code and must not diverge from this document.
 
 ---
 ---
 
 # PART 2: DATA PROTECTION AND PRIVACY POLICY
 
-**Version 1.0 | February 2026**
+**Version 1.1 | August 2026**
 
 ---
 

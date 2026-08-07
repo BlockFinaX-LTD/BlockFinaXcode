@@ -43,7 +43,19 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="3. Nature of the Protocol">
+          <Section title="3. Identity Verification and Transaction Limits">
+            <p>Access to certain functions is subject to identity verification. An unverified account may browse the interface but may not buy protection or provide liquidity. Verification is tiered, and the tier you hold determines how much you may transact.</p>
+            <ul>
+              <li><strong>Basic</strong> — name, phone number, country of residence and a government identity number. Up to $1,000 of value transacted in any rolling 30-day period.</li>
+              <li><strong>Verified</strong> — the above plus a photo identity document, proof of address, date of birth and a source of funds declaration. Up to $10,000.</li>
+              <li><strong>Enhanced</strong> — the above plus, for businesses, incorporation documents, a directors and shareholders register, a beneficial ownership declaration and a source of wealth declaration. Above $10,000.</li>
+            </ul>
+            <p>Limits are measured against value actually transferred — premiums paid, payouts received, and liquidity deposited or withdrawn — together with the maximum aggregate payout your open protection contracts could reach. They are cumulative across the period rather than applied to individual transactions.</p>
+            <p>We screen the details you provide against international sanctions lists, at verification and periodically thereafter, and we monitor transactions for activity requiring review. We may decline, suspend or limit an account where verification cannot be completed, where a sanctions match is confirmed, or where we are required to do so by law. Where we are legally prohibited from telling you the reason, we will not do so.</p>
+            <p>Information collected for this purpose is retained for six years, as required by the Anti-Money Laundering Act, 2020 (Act 1044), and is handled in accordance with our Privacy Policy.</p>
+          </Section>
+
+          <Section title="4. Nature of the Protocol">
             <p>The BlockFinaX protocol is non-custodial and decentralised. This means:</p>
             <ul>
               <li><strong>You control your funds.</strong> All assets are held in audited smart contracts on-chain, not by BlockFinaX.</li>
@@ -53,7 +65,7 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="4. Risk Disclosures">
+          <Section title="5. Risk Disclosures">
             <p>Use of the protocol involves significant risks. You acknowledge and accept the following:</p>
             <ul>
               <li><strong>Smart contract risk.</strong> Despite security audits, smart contracts may contain bugs or vulnerabilities that could result in the partial or total loss of funds.</li>
@@ -65,11 +77,11 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="5. No Financial Advice">
+          <Section title="6. No Financial Advice">
             <p>Nothing on the BlockFinaX interface or in any associated communication constitutes financial, investment, legal, or tax advice. You should conduct your own due diligence and consult qualified advisors before using the protocol.</p>
           </Section>
 
-          <Section title="6. Fees">
+          <Section title="7. Fees">
             <p>The protocol charges the following fees, which are applied automatically by smart contracts:</p>
             <ul>
               <li>Event creation fee: $2 flat</li>
@@ -82,7 +94,7 @@ export default function TermsPage() {
             <p>All fees are non-refundable once a transaction is submitted to the blockchain.</p>
           </Section>
 
-          <Section title="7. Prohibited Uses">
+          <Section title="8. Prohibited Uses">
             <p>You agree not to use the protocol to:</p>
             <ul>
               <li>Violate any applicable law or regulation.</li>
@@ -93,28 +105,28 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="8. Intellectual Property">
+          <Section title="9. Intellectual Property">
             <p>The BlockFinaX interface, branding, and non-smart-contract software are the intellectual property of BlockFinaX Ltd. The smart contracts are open-source and governed by their respective licences. You may not reproduce, redistribute, or create derivative works from the interface without prior written consent.</p>
           </Section>
 
-          <Section title="9. Limitation of Liability">
+          <Section title="10. Limitation of Liability">
             <p>To the maximum extent permitted by applicable law, BlockFinaX and its contributors shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of funds, profits, data, or goodwill, arising from your use of the protocol.</p>
             <p>Our total aggregate liability, if any, shall not exceed the protocol fees you paid in the 30 days preceding the event giving rise to the claim.</p>
           </Section>
 
-          <Section title="10. No Warranties">
+          <Section title="11. No Warranties">
             <p>The protocol is provided "as is" and "as available" without any warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, or non-infringement. We do not warrant that the protocol will be uninterrupted, error-free, or free of harmful components.</p>
           </Section>
 
-          <Section title="11. Amendments">
+          <Section title="12. Amendments">
             <p>We may update these Terms at any time. When we do, we will increment the version number and prompt existing users to re-accept. Continued use of the protocol after a new version is published constitutes acceptance of the updated Terms.</p>
           </Section>
 
-          <Section title="12. Governing Law">
+          <Section title="13. Governing Law">
             <p>These Terms shall be governed by and construed in accordance with applicable law. Any disputes arising under these Terms shall be resolved by binding arbitration, except where prohibited by law.</p>
           </Section>
 
-          <Section title="13. Contact">
+          <Section title="14. Contact">
             <p>For questions regarding these Terms, please contact us at <a href="mailto:anthonykumako8@gmail.com" className="text-primary underline">anthonykumako8@gmail.com</a>.</p>
           </Section>
 

@@ -62,6 +62,9 @@ import LoiSignPage from "@/pages/loi-sign";
 // scope inside the app where it can see the signed-in user's own account.
 import { FinaxChat } from "@/components/finax-chat";
 
+// AML/CFT verification — customers raise their own transacting limits here.
+import VerifyPage from "@/pages/verify";
+
 const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // White-label sign-in: the widget is served from our own subdomain so the
@@ -73,7 +76,7 @@ const RIFT_WIDGET_URL =
   (import.meta.env.VITE_RIFT_WIDGET_URL || 'https://widget.blockfinax.com').trim();
 
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
-const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards'];
+const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards', '/verify'];
 
 // True on first paint if the Rift provider has a persisted session in storage.
 // Used to suppress the /auth redirect during the brief window between mount
@@ -213,6 +216,7 @@ function Router() {
       <Route path="/tasks" component={TasksPage} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/verify" component={VerifyPage} />
 
       {/* Rewards & admin */}
       <Route path="/rewards" component={TasksPage} />
