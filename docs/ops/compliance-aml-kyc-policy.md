@@ -107,7 +107,9 @@ All users and transaction counterparties are screened against the following list
 | European Union Consolidated Sanctions List | Manual check by the Compliance Officer at review |
 | Ghana Financial Intelligence Centre designated entities list | Manual check by the Compliance Officer at review |
 
-Automated screening covers primary names, recorded aliases and designated wallet addresses. Where an automated list cannot be retrieved, the screening is recorded as inconclusive and the account is not approved until the check completes.
+Automated screening covers primary names, recorded aliases and designated wallet addresses. Deposits are additionally screened one transaction hop back: the funding source of a depositing wallet is identified from the transaction's token transfers and screened in its own right.
+
+Wallet screening covers addresses individually designated by OFAC, which at the time of writing includes state-attributed actors and several designated mixers and exchanges. It does not trace exposure through multiple intermediary hops, and it does not cover undesignated mixers or address clusters attributed to an actor without individual designation. That capability requires a blockchain analytics provider and is not in place. Where an automated list cannot be retrieved, the screening is recorded as inconclusive and the account is not approved until the check completes.
 
 A potential match does not itself result in suspension. Name screening produces false positives, and a match is reviewed by the Compliance Officer before any action is taken. Where a match is confirmed, the account is suspended immediately and the relevant authority notified. All screening results are retained, including those returning no match, as evidence of ongoing screening.
 

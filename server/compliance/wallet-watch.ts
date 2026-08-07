@@ -13,8 +13,11 @@
  *   - a deposit sent directly from an OFAC-designated address
  *   - a deposit from a wallet funded, in the same transaction, by a designated
  *     address
- *   - deposits from Tornado Cash and similar, because OFAC has designated
- *     those contract addresses and they are in the list already
+ *   - deposits from designated mixers and exchanges still on the list —
+ *     Blender.io, Sinbad.io and Garantex are present; Tornado Cash is NOT,
+ *     having been delisted by OFAC in 2025, so it is not caught
+ *   - addresses attributed to state actors, including Lazarus Group, which is
+ *     the designation that matters most in this sector
  *
  * Does NOT catch:
  *   - exposure two or more hops away
