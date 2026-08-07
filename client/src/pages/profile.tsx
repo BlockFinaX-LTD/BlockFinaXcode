@@ -126,7 +126,6 @@ export default function ProfilePage() {
   const { wallet, isUnlocked, walletExists, isLoading: walletLoading } = useWallet();
   const { toast } = useToast();
   const [showBusiness, setShowBusiness] = useState(false);
-  const [showIdentity, setShowIdentity] = useState(false);
 
   useEffect(() => {
     if (!walletLoading) {
@@ -201,7 +200,6 @@ export default function ProfilePage() {
         isPublic: profile.isPublic || false,
       });
       if (profile.companyName || profile.jobTitle || profile.taxId) setShowBusiness(true);
-      if (profile.idType || profile.idNumber) setShowIdentity(true);
     }
   }, [profile]);
 
@@ -595,86 +593,11 @@ export default function ProfilePage() {
             </Collapsible>
 
             {/* Identity (optional, collapsible) */}
-            <Collapsible open={showIdentity} onOpenChange={setShowIdentity}>
-              <Card className="rounded-2xl">
-                <CardContent className="p-4 space-y-4">
-                  <CollapsibleTrigger className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
-                      <span className="h-7 w-7 rounded-full bg-primary/10 text-primary inline-flex items-center justify-center">
-                        <Shield className="h-3.5 w-3.5" strokeWidth={1.9} />
-                      </span>
-                      Identity (KYC)
-                      <Pill tone="neutral" uppercase={false} className="ml-1">
-                        Optional
-                      </Pill>
-                    </div>
-                    {showIdentity ? (
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 pt-2">
-                    <FormField
-                      control={form.control}
-                      name="idType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                            ID type
-                          </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''}>
-                            <FormControl>
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue placeholder="Select ID type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="passport">Passport</SelectItem>
-                              <SelectItem value="driver_license">Driver's License</SelectItem>
-                              <SelectItem value="national_id">National ID</SelectItem>
-                              <SelectItem value="voter_id">Voter's ID</SelectItem>
-                              <SelectItem value="residence_permit">Residence Permit</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="idNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                            ID number
-                          </FormLabel>
-                          <FormControl>
-                            <Input placeholder="Document number" {...field} className="rounded-xl" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dateOfBirth"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                            Date of birth
-                          </FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} className="rounded-xl" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CollapsibleContent>
-                </CardContent>
-              </Card>
-            </Collapsible>
+            {/* Identity lives in verification, not here.
+                These fields are what a KYC decision is made on — freely
+                editable, they would let someone verify as one person and then
+                present as another. They are collected once, as a sequence, at
+                /verify, and shown read-only above once approved. */}
 
             {/* Public toggle */}
             <Card className="rounded-2xl">

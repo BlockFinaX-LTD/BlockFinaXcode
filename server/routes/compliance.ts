@@ -40,9 +40,47 @@ export function registerComplianceRoutes(app: Express) {
         .orderBy(desc(kycSubmissions.id))
         .limit(1);
 
+      // What we already know, so the sequence never asks twice. Asking a
+      // customer for their date of birth a second time is how they conclude
+      // nobody is reading what they send.
+      const [profile] = await db
+        .select()
+        .from(userProfiles)
+        .where(sql`lower(${userProfiles.walletAddress}) = ${wallet.toLowerCase()}`)
+        .limit(1);
+      const [priorSubmission] = await db
+        .select()
+        .from(kycSubmissions)
+        .where(
+          and(
+            sql`lower(${kycSubmissions.walletAddress}) = ${wallet.toLowerCase()}`,
+            eq(kycSubmissions.status, "approved"),
+          ),
+        )
+        .orderBy(desc(kycSubmissions.id))
+        .limit(1);
+
+      const prefill = {
+        fullName:
+          priorSubmission?.fullName ||
+          [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") ||
+          profile?.displayName ||
+          undefined,
+        dateOfBirth: priorSubmission?.dateOfBirth ?? profile?.dateOfBirth ?? undefined,
+        nationality: priorSubmission?.nationality ?? profile?.nationality ?? undefined,
+        country: priorSubmission?.country ?? profile?.country ?? undefined,
+        address: priorSubmission?.address ?? profile?.address ?? undefined,
+        phone: priorSubmission?.phone ?? profile?.phoneNumber ?? undefined,
+        email: priorSubmission?.email ?? profile?.email ?? undefined,
+        idType: priorSubmission?.idType ?? profile?.idType ?? undefined,
+        idNumber: priorSubmission?.idNumber ?? profile?.idNumber ?? undefined,
+        companyName: priorSubmission?.companyName ?? profile?.companyName ?? undefined,
+      };
+
       res.json({
         ...standing,
         tiers: KYC_TIERS,
+        prefill: Object.fromEntries(Object.entries(prefill).filter(([, v]) => v)),
         submission: submission
           ? {
               id: submission.id,
