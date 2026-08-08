@@ -1345,8 +1345,8 @@ function CostBreakdownDoc() {
 }
 
 const INCORP_D = {
-  intro: "BlockFinaX operates under a dual-entity structure: a primary operating company incorporated in Ghana, with a Delaware C-Corporation in progress to accommodate US institutional investors and standard venture capital term sheets.",
-  investor_note: "Series A investment will be structured through the Delaware C-Corp, enabling standard US venture term sheets, stock option pools, and SAFE/priced round mechanics. The Ghana entity continues as the operational subsidiary.",
+  intro: "BlockFinaX operates under a dual-entity structure: BlockFinaX Inc., a Delaware C-Corporation, is the primary operating entity and the contracting party for customers, with BlockFinaX Ltd incorporated in Ghana as the local subsidiary. The Delaware entity accommodates US institutional investors and standard venture capital term sheets.",
+  investor_note: "Series A investment will be structured through the Delaware C-Corp, enabling standard US venture term sheets, stock option pools, and SAFE/priced round mechanics. The Ghana entity operates as the local subsidiary.",
   ghana_rows: [
     { k: "Entity type",      v: "Company Limited by Shares (Private)"                          },
     { k: "Governing law",    v: "Companies Act, 2019 (Act 992) — Republic of Ghana"             },
@@ -1358,7 +1358,7 @@ const INCORP_D = {
   delaware_rows: [
     { k: "Entity type",   v: "Delaware C-Corporation"                                                    },
     { k: "Purpose",       v: "US investor vehicle, Series A/B term sheet compatibility, stock option pool" },
-    { k: "Timeline",      v: "Q1–Q2 2027 (ahead of Series A close)"                                       },
+    { k: "Status",        v: "Incorporated — 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801"     },
     { k: "Structure",     v: "Delaware parent holding 100% of Ghana operating subsidiary"                  },
     { k: "Legal counsel", v: "US counsel to be engaged on Series A raise"                                  },
   ],
@@ -1415,23 +1415,23 @@ function IncorporationDoc({ token }: { token: string }) {
     <div>
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
       <p style={S.p}>{data.intro}</p>
-      <h2 style={S.h2}>Ghana — Primary Operating Entity</h2>
+      <h2 style={S.h2}>Ghana — Local Subsidiary</h2>
       <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <span style={{ fontSize: "22px" }}>🇬🇭</span>
-          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#14532d" }}>BlockFinaX Limited</div><div style={{ fontSize: "13px", color: "#16a34a" }}>Incorporated · Active</div></div>
+          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#14532d" }}>BlockFinaX Ltd</div><div style={{ fontSize: "13px", color: "#16a34a" }}>Incorporated · Active</div></div>
           <span style={{ marginLeft: "auto", ...S.tag("green") }}>Active</span>
         </div>
         <table style={S.table}><tbody>{data.ghana_rows.map(r => (
           <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" as const }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
         ))}</tbody></table>
       </div>
-      <h2 style={S.h2}>Delaware — US Holding Entity (In Progress)</h2>
+      <h2 style={S.h2}>Delaware — Primary Operating Entity</h2>
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <span style={{ fontSize: "22px" }}>🇺🇸</span>
-          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>BlockFinaX Inc. (planned)</div><div style={{ fontSize: "13px", color: "#64748b" }}>Delaware C-Corporation — Formation in progress</div></div>
-          <span style={{ marginLeft: "auto", ...S.tag("amber") }}>In Progress</span>
+          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>BlockFinaX Inc.</div><div style={{ fontSize: "13px", color: "#64748b" }}>Delaware C-Corporation — Incorporated · Active</div></div>
+          <span style={{ marginLeft: "auto", ...S.tag("green") }}>Active</span>
         </div>
         <table style={S.table}><tbody>{data.delaware_rows.map(r => (
           <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" as const }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
@@ -1468,7 +1468,7 @@ const AGREE_D = {
     { doc: "Delaware Formation Counsel",     party: "US law firm (TBD)",          status: "Not Started",               color: "slate", note: "To be engaged Q4 2026 ahead of formation"            },
   ],
   ip_items: [
-    { title: "All source code owned by BlockFinaX Limited",          desc: "No third-party IP encumbrances on the core protocol",      status: "done"    },
+    { title: "All source code owned by BlockFinaX Inc.",          desc: "No third-party IP encumbrances on the core protocol",      status: "done"    },
     { title: "Smart contracts deployed from founder-controlled wallet", desc: "Full on-chain ownership of Diamond proxy",               status: "done"    },
     { title: "No open-source licence conflicts",                      desc: "Dependencies are MIT / Apache 2.0 compatible",            status: "done"    },
     { title: "IP assignment to Delaware holding company",             desc: "Planned on Delaware formation (Q2 2027)",                  status: "pending" },

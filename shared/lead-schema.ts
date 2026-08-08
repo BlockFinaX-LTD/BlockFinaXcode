@@ -10,11 +10,12 @@
  *
  * Sending unsolicited commercial email to an individual requires prior consent
  * in the EU and UK (ePrivacy Directive art. 13), in Nigeria (NDPA 2023), and
- * under Ghana's Data Protection Act 2012 (Act 843), which is BlockFinaX's home
- * law. The "soft opt-in" exception that lets a business email its existing
- * customers does not apply: a website visitor has bought nothing. The United
- * States (CAN-SPAM) would permit it, but the strictest applicable jurisdiction
- * governs the design, not the most permissive one.
+ * under Ghana's Data Protection Act 2012 (Act 843), which reaches the Ghanaian
+ * subsidiary. The "soft opt-in" exception that lets a business email its
+ * existing customers does not apply: a website visitor has bought nothing.
+ * BlockFinaX Inc. is a Delaware company, so CAN-SPAM governs directly and
+ * would permit more than this — but the strictest jurisdiction a recipient
+ * might sit in decides the design, not the one the sender sits in.
  *
  * So consent is not inferred from the conversation. It is a distinct act: the
  * visitor is shown a specific sentence, ticks a box, and presses a button.
@@ -40,6 +41,11 @@ import { createInsertSchema } from "drizzle-zod";
 /**
  * The only consent wording the server will accept.
  *
+ * Amended 8 August 2026: the operating entity is BlockFinaX Inc. (Delaware),
+ * not BlockFinaX Ltd (Ghana). Rows captured before that date keep the wording
+ * they were actually shown — which is the entire reason the literal text is
+ * stored on each record rather than a reference to this constant.
+ *
  * Written to satisfy the three things GDPR art. 13 requires at the point of
  * collection — who is processing, for what, and how to stop it — in language a
  * person will actually read. Changing this string is a change to a legal
@@ -47,7 +53,7 @@ import { createInsertSchema } from "drizzle-zod";
  * existing rows continue to mean what they meant.
  */
 export const CONSENT_WORDING =
-  "Email me about BlockFinaX. I understand BlockFinaX Ltd will use my name and " +
+  "Email me about BlockFinaX. I understand BlockFinaX Inc. will use my name and " +
   "email to send occasional updates about hedging cover and underwriting, that " +
   "I can unsubscribe from any message, and that this is not required to use the site.";
 

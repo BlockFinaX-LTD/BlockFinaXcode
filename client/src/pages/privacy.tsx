@@ -28,8 +28,8 @@ export default function PrivacyPage() {
           </div>
 
           <Section title="1. Who We Are">
-            <p>BlockFinaX Ltd ("BlockFinaX", "we", "us", "our") operates the BlockFinaX decentralised P2P hedging protocol and the interface accessible at this domain. This Privacy Policy applies to data collected through our interface and API. It does not apply to data recorded on public blockchains, which is inherently public and outside our control.</p>
-            <p className="mt-2">BlockFinaX Ltd is a United States company. Our registered address is 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA. We are the data controller for the personal data described in this policy.</p>
+            <p>BlockFinaX Inc. ("BlockFinaX", "we", "us", "our") operates the BlockFinaX decentralised P2P hedging protocol and the interface accessible at this domain. This Privacy Policy applies to data collected through our interface and API. It does not apply to data recorded on public blockchains, which is inherently public and outside our control.</p>
+            <p className="mt-2">BlockFinaX Inc. is a Delaware corporation. Our registered address is 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA. We are the data controller for the personal data described in this policy.</p>
           </Section>
 
           <Section title="2. Data We Collect">

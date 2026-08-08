@@ -30,7 +30,7 @@ export default function TermsPage() {
 
           <Section title="1. About the Protocol">
             <p>BlockFinaX is a decentralised peer-to-peer (P2P) hedging protocol built on Base and BNB Smart Chain. The protocol enables users to create, buy, and provide liquidity for one-touch FX and commodity protection contracts governed entirely by open-source smart contracts.</p>
-            <p>BlockFinaX Ltd and its contributors (collectively "BlockFinaX", "we", "us") develop and maintain the smart contract infrastructure and the interface at this domain. We do not operate as a counterparty, broker, exchange, or financial intermediary in any transaction executed through the protocol.</p>
+            <p>BlockFinaX Inc. and its contributors (collectively "BlockFinaX", "we", "us") develop and maintain the smart contract infrastructure and the interface at this domain. We do not operate as a counterparty, broker, exchange, or financial intermediary in any transaction executed through the protocol.</p>
           </Section>
 
           <Section title="2. Eligibility">
@@ -106,7 +106,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="9. Intellectual Property">
-            <p>The BlockFinaX interface, branding, and non-smart-contract software are the intellectual property of BlockFinaX Ltd. The smart contracts are open-source and governed by their respective licences. You may not reproduce, redistribute, or create derivative works from the interface without prior written consent.</p>
+            <p>The BlockFinaX interface, branding, and non-smart-contract software are the intellectual property of BlockFinaX Inc.. The smart contracts are open-source and governed by their respective licences. You may not reproduce, redistribute, or create derivative works from the interface without prior written consent.</p>
           </Section>
 
           <Section title="10. Limitation of Liability">

@@ -33,10 +33,10 @@ import type { Lead } from "@shared/lead-schema";
 import { isContactable } from "@shared/lead-schema";
 
 /**
- * BlockFinaX Ltd's registered postal address, for the footer.
+ * BlockFinaX Inc.'s registered postal address, for the footer.
  *
  * Set COMPANY_POSTAL_ADDRESS in the environment, e.g.
- *   COMPANY_POSTAL_ADDRESS="BlockFinaX Ltd, 12 Independence Ave, Accra, Ghana"
+ *   COMPANY_POSTAL_ADDRESS="BlockFinaX Inc., 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA"
  */
 const POSTAL_ADDRESS = (process.env.COMPANY_POSTAL_ADDRESS || "").trim();
 

@@ -1,24 +1,24 @@
-# BlockFinaX Limited — Compliance Policy Documents
+# BlockFinaX Inc. — Compliance Policy Documents
 
 ---
 
 > ## ⚠️ Jurisdiction note — read first
 >
-> **This document is written against Ghanaian law. The only entity that
-> currently exists is incorporated in Delaware, United States.**
+> **This document is written against Ghanaian law. The entity that operates the
+> platform and holds customer data is BlockFinaX Inc., incorporated in
+> Delaware, United States.**
 >
-> Every framework cited below — Act 1044, Act 843, Bank of Ghana directives,
-> the Financial Intelligence Centre — binds a Ghanaian entity. No Ghanaian
-> entity has been incorporated. Until one is, the obligations described here
-> are the standard BlockFinaX holds itself to, not obligations a regulator can
-> presently enforce against it, and the Ghanaian regulators named are not its
-> supervisors.
+> Two companies exist. BlockFinaX Ltd is incorporated in Ghana; BlockFinaX Inc.
+> is incorporated in Delaware and is the operating entity. Every framework
+> cited below — Act 1044, Act 843, Bank of Ghana directives, the Financial
+> Intelligence Centre — binds the Ghanaian company. Which obligations reach the
+> Delaware company, and on what basis, has not been determined.
 >
 > A United States entity offering foreign-exchange risk products raises a
-> different and largely unaddressed set of questions — money services business
-> registration with FinCEN, the status of these products under the Commodity
-> Exchange Act, and state money transmitter licensing. **None of that is
-> covered by this document.** It must be resolved with US counsel before
+> further set of questions this document does not address at all: money
+> services business registration with FinCEN, the status of these products
+> under the Commodity Exchange Act, and state money transmitter licensing.
+> **None of that is covered here.** It must be resolved with US counsel before
 > anything is offered to a US person, and the answers may change the product
 > rather than only the paperwork.
 >
@@ -35,7 +35,7 @@
 
 ## 1. Purpose and Scope
 
-BlockFinaX Limited is committed to preventing its platform from being used for money laundering, terrorist financing, or any other financial crime. This policy establishes the framework through which BlockFinaX identifies, assesses, and manages the risks associated with financial crime across all platform activities.
+BlockFinaX Inc. is committed to preventing its platform from being used for money laundering, terrorist financing, or any other financial crime. This policy establishes the framework through which BlockFinaX identifies, assesses, and manages the risks associated with financial crime across all platform activities.
 
 This policy applies to all users of the BlockFinaX platform, all employees and contractors of BlockFinaX, and all transactions processed through the platform during the sandbox testing period and beyond.
 
@@ -193,7 +193,7 @@ Where a threshold in this policy is changed, the corresponding value in the plat
 
 ## 1. Purpose
 
-BlockFinaX Limited is committed to protecting the personal data of all individuals who interact with its platform. This policy sets out how BlockFinaX collects, uses, stores, shares, and protects personal data in compliance with Ghana's Data Protection Act, 2012 (Act 843).
+BlockFinaX Inc. is committed to protecting the personal data of all individuals who interact with its platform. This policy sets out how BlockFinaX collects, uses, stores, shares, and protects personal data in compliance with Ghana's Data Protection Act, 2012 (Act 843).
 
 ---
 
@@ -205,7 +205,7 @@ This policy is governed by:
 - Data Protection Commission of Ghana regulations and guidelines
 - Article 18(2) of the Constitution of the Republic of Ghana, 1992 (right to privacy)
 
-BlockFinaX is **not currently registered** with the Data Protection Commission of Ghana. Registration will be completed if and when a Ghanaian operating entity is established — see the jurisdiction note at the head of this document.
+BlockFinaX is **not currently registered** with the Data Protection Commission of Ghana. Registration will be completed if the Ghanaian entity begins processing personal data — see the jurisdiction note at the head of this document.
 
 ---
 
