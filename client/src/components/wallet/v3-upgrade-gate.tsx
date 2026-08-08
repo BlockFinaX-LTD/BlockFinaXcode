@@ -19,7 +19,7 @@
 import { useEffect, useState } from "react";
 import { getRiftAccessToken } from "@/lib/rift-token-bridge";
 import { getMe } from "@/lib/rift-client";
-import { getV3Status, v3RolloutAllows, type WalletVersion } from "@/lib/rift-v3";
+import { getV3Status, v3RolloutAllows, wasMigratedLocally, type WalletVersion } from "@/lib/rift-v3";
 import { SigningUpgradePrompt } from "./signing-methods";
 
 export function V3UpgradeGate() {
@@ -44,8 +44,22 @@ export function V3UpgradeGate() {
         const email = (me as any)?.email ?? "";
         if (!live || !v3RolloutAllows(email)) return;
 
-        const { version } = await getV3Status(token);
-        if (!live || version === "v3") return;
+        // GET /wallet/v3-status is documented in Rift's migration guides and
+        // absent from their API reference, so it may simply 404. When it does,
+        // an account with no local migration record still needs a way to set
+        // this up — and Settings isn't in the app's navigation, so this prompt
+        // is the only route to it. migrate-to-v3 is idempotent, so offering it
+        // to someone already migrated costs one fingerprint touch.
+        let version: WalletVersion = null;
+        let statusKnown = true;
+        try {
+          version = (await getV3Status(token)).version;
+        } catch {
+          statusKnown = false;
+        }
+        if (!live) return;
+        if (statusKnown && version === "v3") return;
+        if (!statusKnown && wasMigratedLocally(null)) return;
 
         setState({ token, version, email, userId: (me as any)?.user ?? (me as any)?.id ?? email });
       } catch {
