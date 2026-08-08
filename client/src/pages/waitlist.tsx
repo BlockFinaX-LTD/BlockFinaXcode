@@ -75,7 +75,7 @@ export default function Waitlist() {
 
       <footer className="border-t border-border py-6 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
-          <p>BlockFinaX Inc. — Delaware, USA</p>
+          <p>BlockFinaX Inc. — Delaware, USA · BlockFinaX Ltd — Registered in Ghana</p>
         </div>
       </footer>
     </div>

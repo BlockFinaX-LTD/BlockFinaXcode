@@ -1345,7 +1345,7 @@ function CostBreakdownDoc() {
 }
 
 const INCORP_D = {
-  intro: "BlockFinaX operates under a dual-entity structure: BlockFinaX Inc., a Delaware C-Corporation, is the primary operating entity and the contracting party for customers, with BlockFinaX Ltd incorporated in Ghana as the local subsidiary. The Delaware entity accommodates US institutional investors and standard venture capital term sheets.",
+  intro: "BlockFinaX operates under a dual-entity structure: BlockFinaX Inc., a Delaware C-Corporation, is the parent company and the entity customers contract with; BlockFinaX Ltd, registered in Ghana, is its wholly-owned operating subsidiary. Both are incorporated and active. The Delaware parent accommodates US institutional investors and standard venture capital term sheets.",
   investor_note: "Series A investment will be structured through the Delaware C-Corp, enabling standard US venture term sheets, stock option pools, and SAFE/priced round mechanics. The Ghana entity operates as the local subsidiary.",
   ghana_rows: [
     { k: "Entity type",      v: "Company Limited by Shares (Private)"                          },
@@ -1415,7 +1415,7 @@ function IncorporationDoc({ token }: { token: string }) {
     <div>
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
       <p style={S.p}>{data.intro}</p>
-      <h2 style={S.h2}>Ghana — Local Subsidiary</h2>
+      <h2 style={S.h2}>Ghana — Operating Subsidiary</h2>
       <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <span style={{ fontSize: "22px" }}>🇬🇭</span>
@@ -1426,7 +1426,7 @@ function IncorporationDoc({ token }: { token: string }) {
           <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" as const }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
         ))}</tbody></table>
       </div>
-      <h2 style={S.h2}>Delaware — Primary Operating Entity</h2>
+      <h2 style={S.h2}>Delaware — Parent / Holding Company</h2>
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <span style={{ fontSize: "22px" }}>🇺🇸</span>

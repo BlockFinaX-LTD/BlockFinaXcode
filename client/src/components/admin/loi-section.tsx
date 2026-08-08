@@ -435,7 +435,7 @@ const STEPS = ["Recipient", "Relationship", "Details", "Review"] as const;
  * someone else signs.
  */
 const SENDER_DEFAULTS = {
-  senderCompany: "BlockFinaX",
+  senderCompany: "BlockFinaX Inc.",
   senderName: "Anthony Kumako",
   senderPosition: "Founder & CEO",
   senderEmail: "anthonykumako@blockfinax.com",

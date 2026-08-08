@@ -4,23 +4,26 @@
 
 > ## ⚠️ Jurisdiction note — read first
 >
-> **This document is written against Ghanaian law. The entity that operates the
-> platform and holds customer data is BlockFinaX Inc., incorporated in
-> Delaware, United States.**
+> **BlockFinaX operates through two companies.** BlockFinaX Inc. is a Delaware
+> corporation, the parent, and the entity customers contract with. BlockFinaX
+> Ltd is registered in Ghana and is its wholly-owned operating subsidiary.
 >
-> Two companies exist. BlockFinaX Ltd is incorporated in Ghana; BlockFinaX Inc.
-> is incorporated in Delaware and is the operating entity. Every framework
-> cited below — Act 1044, Act 843, Bank of Ghana directives, the Financial
-> Intelligence Centre — binds the Ghanaian company. Which obligations reach the
-> Delaware company, and on what basis, has not been determined.
+> The Ghanaian frameworks this document is built on — Act 1044, Act 843, Bank
+> of Ghana directives, the Financial Intelligence Centre — apply to the
+> Ghanaian subsidiary, so the substance of this policy is aimed correctly. Two
+> consequences follow that are recorded in the sections below rather than
+> assumed: registration with the Data Protection Commission is **required** of
+> the Ghanaian entity and has not been done, and the Bank of Ghana sandbox
+> referred to throughout is a route the Ghanaian entity must apply for on its
+> own account.
 >
-> A United States entity offering foreign-exchange risk products raises a
-> further set of questions this document does not address at all: money
-> services business registration with FinCEN, the status of these products
-> under the Commodity Exchange Act, and state money transmitter licensing.
-> **None of that is covered here.** It must be resolved with US counsel before
-> anything is offered to a US person, and the answers may change the product
-> rather than only the paperwork.
+> **What this document does not cover at all** is the Delaware parent. A United
+> States entity contracting with customers for foreign-exchange risk products
+> raises money services business registration with FinCEN, the status of these
+> products under the Commodity Exchange Act, and state money transmitter
+> licensing. None of that is addressed here. It must be resolved with US
+> counsel before anything is offered to a US person, and the answers may change
+> the product rather than only the paperwork.
 >
 > *Status as at 8 August 2026. Remove this note once the entity structure and
 > the applicable regime are settled.*
@@ -205,7 +208,7 @@ This policy is governed by:
 - Data Protection Commission of Ghana regulations and guidelines
 - Article 18(2) of the Constitution of the Republic of Ghana, 1992 (right to privacy)
 
-BlockFinaX is **not currently registered** with the Data Protection Commission of Ghana. Registration will be completed if the Ghanaian entity begins processing personal data — see the jurisdiction note at the head of this document.
+BlockFinaX Ltd is **not currently registered** with the Data Protection Commission of Ghana. As the Ghanaian operating subsidiary processes personal data, registration is required and outstanding; it will be completed before commercial operations begin.
 
 ---
 

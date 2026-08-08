@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Lock } from "lucide-react";
 
 const EFFECTIVE_DATE = "8 August 2026";
-const VERSION = "1.1";
+const VERSION = "1.2";
 
 export default function PrivacyPage() {
   const [, navigate] = useLocation();
@@ -29,7 +29,8 @@ export default function PrivacyPage() {
 
           <Section title="1. Who We Are">
             <p>BlockFinaX Inc. ("BlockFinaX", "we", "us", "our") operates the BlockFinaX decentralised P2P hedging protocol and the interface accessible at this domain. This Privacy Policy applies to data collected through our interface and API. It does not apply to data recorded on public blockchains, which is inherently public and outside our control.</p>
-            <p className="mt-2">BlockFinaX Inc. is a Delaware corporation. Our registered address is 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA. We are the data controller for the personal data described in this policy.</p>
+            <p className="mt-2"><strong>Our group.</strong> BlockFinaX Inc. is a corporation incorporated in the State of Delaware, United States, with its registered office at 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA. It is the parent company and the entity you contract with. BlockFinaX Ltd is a company registered in Ghana and is its wholly-owned operating subsidiary, through which operations in Ghana are carried out.</p>
+            <p className="mt-2"><strong>Who controls your data.</strong> BlockFinaX Inc. is the data controller for the personal data described in this policy. Your data may be accessed and processed by BlockFinaX Ltd as part of the same group, under arrangements requiring it to protect your data to the standard set out here. Wherever this policy says "BlockFinaX", it means both companies.</p>
           </Section>
 
           <Section title="2. Data We Collect">
@@ -79,6 +80,11 @@ export default function PrivacyPage() {
               <li><strong>Legal requirements.</strong> If required by applicable law, court order, or regulatory authority.</li>
               <li><strong>Business transfers.</strong> In the event of a merger, acquisition, or sale of assets, your data may be transferred as part of that transaction with equivalent privacy protections maintained.</li>
             </ul>
+          </Section>
+
+          <Section title="6a. International Transfers">
+            <p>BlockFinaX Inc. is established in the United States and BlockFinaX Ltd in Ghana. If you are in the European Economic Area or the United Kingdom, using our service therefore involves transferring your personal data outside that region, to countries which have not received an adequacy decision.</p>
+            <p>Where such a transfer takes place, it is made either with your explicit consent or because it is necessary to perform the contract you have entered into with us. We apply the same protections described in this policy to your data wherever it is held.</p>
           </Section>
 
           <Section title="7. Data Retention">
