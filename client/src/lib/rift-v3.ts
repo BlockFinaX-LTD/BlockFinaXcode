@@ -131,6 +131,51 @@ function bufToB64(buf: ArrayBuffer): string {
 }
 
 /**
+ * The COSE-encoded public key, pulled out of the authenticator data.
+ *
+ * `AuthenticatorAttestationResponse.getPublicKey()` looks like the obvious
+ * source and is the wrong one: it returns SubjectPublicKeyInfo DER. Rift's
+ * field is `cose_pubkey_b64` and the enclave parses COSE (ECDSA P-256, alg
+ * -7), so SPKI arrives as an unparseable blob and the migration is refused
+ * server-side with nothing useful visible in the browser.
+ *
+ * The layout, from the WebAuthn spec:
+ *
+ *     0..31   rpIdHash
+ *     32      flags        bit 6 (0x40) AT, bit 7 (0x80) ED
+ *     33..36  signCount
+ *     37..52  aaguid                 } only when AT is set
+ *     53..54  credentialIdLength     }
+ *     55..    credentialId           }
+ *     then    credentialPublicKey (COSE_Key, CBOR)
+ *     then    extensions (CBOR)      only when ED is set
+ *
+ * Everything after the credential id is the COSE key, provided no extensions
+ * follow it. This module requests none, so ED should never be set; if it is,
+ * finding where the key ends would need a CBOR walker and guessing would send
+ * a key with trailing bytes, so it raises instead.
+ */
+function coseKeyFromAuthData(authData: ArrayBuffer): ArrayBuffer {
+  const d = new Uint8Array(authData);
+  if (d.length < 55) {
+    throw new RiftV3Error("UNSUPPORTED", "The authenticator returned unexpectedly short data.");
+  }
+  const flags = d[32];
+  if ((flags & 0x40) === 0) {
+    throw new RiftV3Error("UNSUPPORTED", "The authenticator returned no credential data.");
+  }
+  if ((flags & 0x80) !== 0) {
+    throw new RiftV3Error("UNSUPPORTED", "This authenticator added extensions we can't parse.");
+  }
+  const credIdLen = (d[53] << 8) | d[54];
+  const start = 55 + credIdLen;
+  if (start >= d.length) {
+    throw new RiftV3Error("UNSUPPORTED", "The authenticator returned no public key.");
+  }
+  return d.slice(start).buffer;
+}
+
+/**
  * A hex hash becomes the raw challenge bytes.
  *
  * The enclave compares the challenge inside the signed clientDataJSON against
@@ -260,22 +305,35 @@ export async function createPasskey(userLabel: string, userId: string): Promise<
       },
     })) as PublicKeyCredential | null;
   } catch (err: any) {
+    // NotAllowedError is what a browser reports for a genuine cancellation and
+    // equally for a timeout, an insecure context, a mismatched relying-party
+    // id, or an in-app webview that quietly refuses WebAuthn. Treating them
+    // all as "the user said no" is why this failed silently on a phone with
+    // nothing on screen to explain it, so the original is kept for the UI.
+    const cancelled = err?.name === "NotAllowedError";
+    console.error("[rift-v3] passkey creation failed:", err?.name, err?.message);
     throw new RiftV3Error(
-      err?.name === "NotAllowedError" ? "CANCELLED" : "UNSUPPORTED",
-      err?.name === "NotAllowedError" ? "Cancelled." : String(err?.message || err),
+      cancelled ? "CANCELLED" : "UNSUPPORTED",
+      cancelled
+        ? "The passkey prompt closed without completing. If you didn't dismiss it, this browser may " +
+          "be blocking passkeys — open the site directly rather than inside another app."
+        : String(err?.message || err),
     );
   }
-  if (!cred) throw new RiftV3Error("CANCELLED", "Cancelled.");
+  if (!cred) throw new RiftV3Error("CANCELLED", "Your device didn't return a passkey.");
 
   const response = cred.response as AuthenticatorAttestationResponse;
-  const pub = response.getPublicKey?.();
-  if (!pub) {
-    throw new RiftV3Error("UNSUPPORTED", "This browser didn't return a public key for the passkey.");
+  const getAuthData = (response as any).getAuthenticatorData as undefined | (() => ArrayBuffer);
+  if (typeof getAuthData !== "function") {
+    throw new RiftV3Error(
+      "UNSUPPORTED",
+      "This browser is too old to enrol a passkey. Try an up-to-date Chrome or Safari.",
+    );
   }
   return {
     kind: "passkey",
     cred_id_b64: bufToB64(cred.rawId),
-    cose_pubkey_b64: bufToB64(pub),
+    cose_pubkey_b64: bufToB64(coseKeyFromAuthData(getAuthData.call(response))),
   };
 }
 

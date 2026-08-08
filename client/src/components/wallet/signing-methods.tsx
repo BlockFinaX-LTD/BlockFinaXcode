@@ -103,24 +103,30 @@ export function SigningUpgradePrompt({
     setBusy(true);
     try {
       const enrolled: EnrolledMethod[] = [];
+      let why: RiftV3Error | null = null;
 
-      if (passkeysSupported()) {
+      if (!passkeysSupported()) {
+        why = new RiftV3Error("UNSUPPORTED", "This browser doesn't support passkeys at all.");
+      } else {
         try {
           enrolled.push(await createPasskey(userLabel, userId));
         } catch (err) {
-          if (err instanceof RiftV3Error && err.code === "CANCELLED") {
-            setBusy(false);
-            return; // Their choice. No error state, no nagging.
-          }
-          // No platform authenticator — fall through and let them use Google.
+          why = err instanceof RiftV3Error ? err : new RiftV3Error("UNKNOWN", String(err));
         }
       }
 
+      // Previously a cancellation returned here in silence. On a phone that was
+      // indistinguishable from the button doing nothing — and iOS reports a
+      // blocked or timed-out prompt with the same error a real cancellation
+      // uses, so the silent path swallowed genuine failures too. Always say
+      // something; a dismissed prompt is the only case that isn't an error.
       if (!enrolled.length) {
         toast({
-          title: "This device can't do Touch ID",
+          title: why?.code === "CANCELLED" ? "Not completed" : "Couldn't set up Touch ID",
           description:
-            "You can still secure your wallet by linking a Google account from Settings → Signing methods.",
+            (why?.message ?? "Your device didn't provide a passkey.") +
+            " You can also secure the wallet by linking Google under Settings → Signing.",
+          variant: why?.code === "CANCELLED" ? undefined : "destructive",
         });
         setBusy(false);
         return;
@@ -136,9 +142,10 @@ export function SigningUpgradePrompt({
       });
       onDone();
     } catch (err: any) {
+      console.error("[rift-v3] migrate failed:", err);
       const msg =
         err instanceof RiftV3Error && err.code === "RESEAL_FAILED"
-          ? "That didn't go through. If your wallet has a password, check it and try again."
+          ? "Rift rejected the signing key. If your wallet has a password, check it and try again."
           : err?.message || "Something went wrong.";
       toast({ title: "Couldn't secure the wallet", description: msg, variant: "destructive" });
     } finally {
