@@ -213,7 +213,16 @@ export async function trySignWithV3(
   const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
 
   opts.onStep?.("Submitting…");
-  const res = await submitPrepared(accessToken, preview.ticketId, proof);
+  const res = await submitPrepared(accessToken, preview.ticketId, proof, async () => {
+    // The ticket is single-use, so a second attempt needs a fresh one — and a
+    // fresh hash means a fresh signature, hence a second prompt. This happens
+    // at most once per browser; the working alphabet is remembered.
+    const again = await previewUserOperation(accessToken, call);
+    return {
+      ticketId: again.ticketId,
+      authProof: await assertPasskey(again.userOpHashHex, await enrolledCredIds(accessToken)),
+    };
+  });
   const hash = res?.hash || res?.transactionHash;
   if (!hash) throw new RiftV3Error("UNKNOWN", "Rift returned no transaction hash.");
   return hash;
@@ -267,7 +276,13 @@ export async function trySendTokenWithV3(
   const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
 
   opts.onStep?.("Submitting…");
-  const res = await submitPrepared(accessToken, preview.ticketId, proof);
+  const res = await submitPrepared(accessToken, preview.ticketId, proof, async () => {
+    const again = await previewTransaction(accessToken, transfer);
+    return {
+      ticketId: again.ticketId,
+      authProof: await assertPasskey(again.userOpHashHex, await enrolledCredIds(accessToken)),
+    };
+  });
   const hash = res?.hash || res?.transactionHash;
   if (!hash) throw new RiftV3Error("UNKNOWN", "Rift returned no transaction hash.");
   return hash;

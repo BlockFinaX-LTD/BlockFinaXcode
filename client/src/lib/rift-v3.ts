@@ -752,15 +752,85 @@ export async function previewUserOperation(
   });
 }
 
+/**
+ * Which base64 alphabet the enclave accepts.
+ *
+ * Rift's schema names the fields cred_id_b64, client_data_json_b64,
+ * authenticator_data_b64 and signature_b64 without saying which base64 that
+ * is. It matters more than it looks: the front door is Node, whose decoder
+ * takes either alphabet happily, but the signing happens inside a Rust enclave
+ * — and Rust's base64 crate is strict, so a URL_SAFE decoder handed "+", "/"
+ * or "=" simply fails. The enclave then returns null and the API reports
+ * "consent factor missing/wrong", which is what came back.
+ *
+ * WebAuthn uses base64url throughout its own spec, so that is tried first.
+ * Whichever succeeds is remembered, so the second prompt happens at most once
+ * per browser.
+ */
+const ALPHABET_KEY = "bfx_v3_b64";
+type Alphabet = "url" | "std";
+
+function preferredAlphabet(): Alphabet {
+  try {
+    const v = localStorage.getItem(ALPHABET_KEY);
+    return v === "std" ? "std" : "url";
+  } catch {
+    return "url";
+  }
+}
+
+function rememberAlphabet(a: Alphabet): void {
+  try {
+    localStorage.setItem(ALPHABET_KEY, a);
+  } catch {
+    /* private mode — pay the retry each time */
+  }
+}
+
+function inAlphabet(p: AuthProof, a: Alphabet): AuthProof {
+  if (p.kind !== "passkey" || a === "std") return p;
+  return {
+    kind: "passkey",
+    cred_id_b64: toB64Url(p.cred_id_b64),
+    client_data_json_b64: toB64Url(p.client_data_json_b64),
+    authenticator_data_b64: toB64Url(p.authenticator_data_b64),
+    signature_b64: toB64Url(p.signature_b64),
+  };
+}
+
 export async function submitPrepared(
   accessToken: string,
   ticketId: string,
   authProof: AuthProof,
+  /** Called when the first alphabet is refused, to obtain a fresh ticket and
+   *  proof — the old ticket is single-use and cannot be replayed. */
+  reprepare?: () => Promise<{ ticketId: string; authProof: AuthProof }>,
 ): Promise<{ hash: string; transactionHash?: string; userOperationHash?: string; chainId?: number }> {
-  return call("/v1/wallet/user-operations/submit-prepared", accessToken, {
-    method: "POST",
-    body: { ticketId, authProof },
-  });
+  const path = "/v1/wallet/user-operations/submit-prepared";
+  const first = preferredAlphabet();
+
+  try {
+    const out = await call<any>(path, accessToken, {
+      method: "POST",
+      body: { ticketId, authProof: inAlphabet(authProof, first) },
+    });
+    rememberAlphabet(first);
+    return out;
+  } catch (err) {
+    const worthRetrying =
+      err instanceof RiftV3Error && err.status === 400 && !!reprepare && /consent factor|enclave sign/i.test(err.message);
+    if (!worthRetrying) throw err;
+
+    const other: Alphabet = first === "url" ? "std" : "url";
+    console.warn(`[rift-v3] enclave refused the ${first} alphabet; re-preparing and trying ${other}`);
+    const fresh = await reprepare!();
+    const out = await call<any>(path, accessToken, {
+      method: "POST",
+      body: { ticketId: fresh.ticketId, authProof: inAlphabet(fresh.authProof, other) },
+    });
+    rememberAlphabet(other);
+    return out;
+  }
 }
 
 export async function sendTransactionV3(
