@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Lock } from "lucide-react";
 
 const EFFECTIVE_DATE = "8 August 2026";
-const VERSION = "1.2";
+const VERSION = "1.3";
 
 export default function PrivacyPage() {
   const [, navigate] = useLocation();
@@ -112,7 +112,8 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="9. Security">
-            <p>Private keys are encrypted with AES-256 and stored only in your browser's local storage — they are never transmitted to or stored on our servers. We implement industry-standard security measures including rate limiting, HTTPS encryption, and session-based access controls. No method of transmission or storage is completely secure; you use the protocol at your own risk.</p>
+            <p><strong>Wallet keys.</strong> Wallets on this platform are created and held by our wallet infrastructure provider, Rift. The private key that controls your wallet is held by Rift under its own security arrangements. BlockFinaX never receives, transmits, or stores your private key, and cannot move funds from your wallet — a transaction happens only when you authorise it through Rift's authentication. If you imported an existing wallet, that key is encrypted and held in your browser's local storage and is never sent to our servers.</p>
+            <p className="mt-2">We implement industry-standard security measures including rate limiting, HTTPS encryption, and session-based access controls. No method of transmission or storage is completely secure; you use the protocol at your own risk.</p>
           </Section>
 
           <Section title="10. Children">
