@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/app-shell';
+import { V3UpgradeGate } from '@/components/wallet/v3-upgrade-gate';
 import { AppSendSheet, AppReceiveSheet } from '@/components/app-transfer-sheets';
 import { useWallet } from '@/hooks/use-wallet';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
@@ -230,6 +231,7 @@ export default function HomePage() {
 
   return (
     <AppShell active="home">
+      <V3UpgradeGate />
       {/* balance + side */}
       <div className="topgrid reveal in">
         <div className={`balance${hidden ? ' hidden' : ''}`}>

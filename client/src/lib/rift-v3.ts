@@ -38,6 +38,36 @@ const API_BASE = (import.meta.env.VITE_RIFT_API_BASE || "https://service.riftfi.
 const WALLET_PREFIX = (import.meta.env.VITE_RIFT_WALLET_PREFIX || "").replace(/\/$/, "");
 const API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || "").trim();
 
+/**
+ * Who is offered the upgrade.
+ *
+ * Migration is a one-way door. There is no endpoint to remove a signing
+ * method and no path from v3 back to v1, so a wallet enrolled against a
+ * passkey that turns out not to work is a support case at Rift rather than
+ * something this codebase can undo.
+ *
+ * That asymmetry is the whole reason this gate exists. It is not caution about
+ * the code — it is that the first real migration should happen on a wallet
+ * whose owner is sitting next to the person who can fix it. Set
+ * VITE_V3_ROLLOUT to a comma-separated list of emails to widen it, or to "all"
+ * once a migration has been done and a payment signed with the result.
+ */
+const ROLLOUT = (import.meta.env.VITE_V3_ROLLOUT || "anthonykumako@blockfinax.com,anthonykumako8@gmail.com")
+  .split(",")
+  .map((e: string) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+export function v3RolloutAllows(email: string | null | undefined): boolean {
+  if (ROLLOUT.includes("all")) return true;
+  if (!email) return false;
+  return ROLLOUT.includes(email.trim().toLowerCase());
+}
+
+/** For a status line in the UI, so the current scope is never a guess. */
+export function v3RolloutScope(): string {
+  return ROLLOUT.includes("all") ? "everyone" : `${ROLLOUT.length} allow-listed account(s)`;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type WalletVersion = "v1" | "v2" | "v3" | null;
@@ -309,6 +339,21 @@ export async function migrateToV3(
 ): Promise<MigrateResult> {
   if (!enrolledMethods.length) {
     throw new RiftV3Error("UNKNOWN", "At least one signing method is required.");
+  }
+
+  // A passkey is bound to the relying-party id that created it, and on a dev
+  // machine that is "localhost". Enrolling one against a production wallet
+  // would migrate it — irreversibly, since there is no remove-method endpoint
+  // — to a credential that only exists on this laptop and cannot be used from
+  // blockfinax.com. Refuse rather than let a real wallet be stranded.
+  const localCredential = relyingPartyId() === "localhost";
+  const productionWallet = /riftfi\.xyz|service\./.test(API_BASE);
+  if (localCredential && productionWallet) {
+    throw new RiftV3Error(
+      "UNSUPPORTED",
+      "Passkeys made on localhost only work on localhost. Run this on the live domain " +
+        "so the credential is bound to blockfinax.com — migration cannot be undone.",
+    );
   }
   return call(wallet("/migrate-to-v3"), accessToken, {
     method: "POST",
