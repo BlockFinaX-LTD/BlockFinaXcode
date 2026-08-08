@@ -5,7 +5,10 @@
  * Each group is a rounded card with divided rows. Value renders on the
  * right (mono if numeric/short, switch if boolean, chevron if drill-in).
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SigningMethods } from '@/components/wallet/signing-methods';
+import { getRiftAccessToken } from '@/lib/rift-token-bridge';
+import { getCachedUserSummary } from '@/lib/rift-client';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -149,9 +152,16 @@ export default function SettingsPage() {
 
   if (!isUnlocked) return null;
 
+
   return (
     <AppShell active="profile" greeting={{ title: 'Settings', subtitle: 'Security, wallet and preferences' }}>
       <main className="max-w-2xl mx-auto">
+        {/* SIGNING METHODS — what can authorise a payment from this wallet.
+            Renders nothing until the wallet API answers, so an unreachable
+            endpoint leaves the page exactly as it was rather than showing a
+            broken panel. */}
+        <SigningMethodsSection />
+
         {/* SECURITY */}
         <SectionHd title="Security" />
         <Card className="rounded-2xl overflow-hidden">
@@ -356,5 +366,45 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+
+/**
+ * Wraps the signing-methods panel with the token and identity it needs.
+ *
+ * Deliberately fails closed: if the token can't be fetched the panel is not
+ * rendered at all, because a security screen that half-loads is worse than one
+ * that waits.
+ */
+function SigningMethodsSection() {
+  const [token, setToken] = useState<string | null>(null);
+  const summary = getCachedUserSummary();
+
+  useEffect(() => {
+    let live = true;
+    getRiftAccessToken()
+      .then((t) => live && setToken(t || null))
+      .catch(() => live && setToken(null));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (!token || !summary) return null;
+
+  return (
+    <>
+      <SectionHd title="Signing" />
+      <Card className="rounded-2xl overflow-hidden">
+        <CardContent className="p-4">
+          <SigningMethods
+            accessToken={token}
+            userLabel={summary.user || 'BlockFinaX user'}
+            userId={summary.user || summary.address}
+          />
+        </CardContent>
+      </Card>
+    </>
   );
 }
