@@ -543,7 +543,7 @@ export async function createPasskey(userLabel: string, userId: string): Promise<
  * resolves which passkey to use — the guide recommends this where a user may
  * have several across devices.
  */
-export async function assertPasskey(hashHex: string): Promise<AuthProof> {
+export async function assertPasskey(hashHex: string, allowedCredIds?: string[]): Promise<AuthProof> {
   if (!passkeysSupported()) {
     throw new RiftV3Error("UNSUPPORTED", "This device can't use a passkey.");
   }
@@ -555,18 +555,25 @@ export async function assertPasskey(hashHex: string): Promise<AuthProof> {
         rpId: relyingPartyId(),
         userVerification: "required",
         timeout: 60_000,
-        // Only the credential Rift enrolled. Without this the browser may sign
-        // with an orphan left behind by an enrolment that failed server-side.
-        ...(enrolledCredential()
-          ? {
-              allowCredentials: [
-                {
-                  type: "public-key" as const,
-                  id: b64ToBytes(enrolledCredential()!),
-                },
-              ],
-            }
-          : {}),
+        // Restrict to the credentials Rift says are enrolled.
+        //
+        // GET /wallet/methods returns passkeyCredIds, and that is authoritative
+        // in a way nothing on this device is. Every failed migration still ran
+        // credentials.create() successfully — the passkey was written and only
+        // the server call afterwards failed — so this Mac carries several that
+        // Rift has never seen. Unconstrained, the browser is free to sign with
+        // one of them, and a proof from an unenrolled credential is refused
+        // with a bare 400.
+        //
+        // Falls back to a locally remembered id, then to no constraint at all,
+        // since the platform picker beats refusing to try.
+        ...(() => {
+          const ids = (allowedCredIds?.length ? allowedCredIds : [enrolledCredential()].filter(Boolean) as string[]);
+          if (!ids.length) return {};
+          return {
+            allowCredentials: ids.map((id) => ({ type: "public-key" as const, id: b64ToBytes(id) })),
+          };
+        })(),
       },
     })) as PublicKeyCredential | null;
   } catch (err: any) {
@@ -717,50 +724,17 @@ export async function previewUserOperation(
   });
 }
 
-/** The same proof with every base64 field in the URL alphabet. */
-function asB64Url(p: AuthProof): AuthProof {
-  if (p.kind !== "passkey") return p;
-  return {
-    kind: "passkey",
-    cred_id_b64: toB64Url(p.cred_id_b64),
-    client_data_json_b64: toB64Url(p.client_data_json_b64),
-    authenticator_data_b64: toB64Url(p.authenticator_data_b64),
-    signature_b64: toB64Url(p.signature_b64),
-  };
-}
-
 export async function submitPrepared(
   accessToken: string,
   ticketId: string,
   authProof: AuthProof,
 ): Promise<{ hash: string; transactionHash?: string; userOperationHash?: string; chainId?: number }> {
-  const path = "/v1/wallet/user-operations/submit-prepared";
-  try {
-    return await call(path, accessToken, { method: "POST", body: { ticketId, authProof } });
-  } catch (err) {
-    // The _b64 suffix in Rift's schema does not say which alphabet, and
-    // WebAuthn payloads are conventionally base64url while btoa emits the
-    // padded standard form. A 400 is what a decoder rejecting the wrong one
-    // looks like, so try the other before giving up. The ticket is single-use
-    // in principle; if this second attempt is refused for that reason the
-    // caller re-previews and asks again, which is the existing behaviour.
-    if (!(err instanceof RiftV3Error) || err.status !== 400) throw err;
-    console.warn("[rift-v3] submit-prepared rejected the proof; retrying in base64url:", err.message);
-    return await call(path, accessToken, {
-      method: "POST",
-      body: { ticketId, authProof: asB64Url(authProof) },
-    });
-  }
+  return call("/v1/wallet/user-operations/submit-prepared", accessToken, {
+    method: "POST",
+    body: { ticketId, authProof },
+  });
 }
 
-/**
- * Preview, consent, submit — with one silent retry.
- *
- * The ticket lives 60 seconds. A customer reading a confirmation screen, or
- * reaching for a phone to approve, will sometimes exceed that, and the guide is
- * clear this should not surface as an error: re-run the preview and ask again.
- * The retry is capped at one so a genuine failure still reaches the user.
- */
 export async function sendTransactionV3(
   accessToken: string,
   params: { token: string; chain: string; recipient: string; amount: string },

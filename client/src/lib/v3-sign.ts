@@ -102,6 +102,19 @@ export async function walletUsesDeviceSigning(): Promise<boolean> {
   }
 }
 
+/**
+ * The credential ids Rift reports as enrolled.
+ *
+ * Authoritative in a way nothing on the device is: passkeys created by
+ * migrations that failed server-side still exist locally and are
+ * indistinguishable to the browser from the one that succeeded.
+ */
+async function enrolledCredIds(accessToken: string): Promise<string[] | undefined> {
+  const state = await signingState(accessToken);
+  const ids = state?.passkeyCredIds;
+  return Array.isArray(ids) && ids.length ? ids : undefined;
+}
+
 // ── The confirmation prompt ───────────────────────────────────────────────
 
 export interface PendingSign {
@@ -196,7 +209,7 @@ export async function trySignWithV3(
   await askToApprove(opts.title ?? "Approve this transaction", opts.detail);
 
   opts.onStep?.("Waiting for your fingerprint…");
-  const proof = await assertPasskey(preview.userOpHashHex);
+  const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
 
   opts.onStep?.("Submitting…");
   const res = await submitPrepared(accessToken, preview.ticketId, proof);
@@ -250,7 +263,7 @@ export async function trySendTokenWithV3(
   );
 
   opts.onStep?.("Waiting for your fingerprint…");
-  const proof = await assertPasskey(preview.userOpHashHex);
+  const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
 
   opts.onStep?.("Submitting…");
   const res = await submitPrepared(accessToken, preview.ticketId, proof);
