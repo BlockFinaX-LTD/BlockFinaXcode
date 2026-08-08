@@ -25,6 +25,7 @@ import {
 import { loiDocuments } from "@shared/loi-schema";
 import { kycSubmissions, complianceAlerts, sanctionsScreenings } from "@shared/compliance-schema";
 import type { AgentScope } from "@shared/agent-schema";
+import { summarise, scenario, availablePairs } from "./fx";
 
 /**
  * Who the caller is, resolved by the auth layer.
@@ -505,6 +506,80 @@ export const TOOLS: ToolDef[] = [
         expiryDate: r.expiryDate,
         chainId: r.chainId,
       }));
+    },
+  },
+
+  // ── Currency data ───────────────────────────────────────────────────────
+  //
+  // Available to customers and to the public agent: none of it is anyone's
+  // personal information, and it is the material that makes cover
+  // understandable rather than abstract.
+
+  {
+    name: "get_currency",
+    description:
+      "How a currency pair has actually behaved: the live rate, moves over 30 days / 90 days / 1 year / " +
+      "3 years, the worst move over any 60-day window, annualised volatility, and whether the pair is " +
+      "stable, volatile or extreme. Use for any question about a currency's performance, whether cover is " +
+      "worth it, or how risky a pair is. Figures come from daily closes with feed errors removed.",
+    input_schema: {
+      type: "object",
+      properties: {
+        pair: { type: "string", description: 'Format "USD/GHS". Ask which pair if unclear.' },
+        years: { type: "number", description: "How far back to look. Default 5." },
+      },
+      required: ["pair"],
+    },
+    scopes: ["customer", "public"],
+    run: async ({ pair, years }) => {
+      const p = String(pair || "").toUpperCase().replace(/\s/g, "");
+      if (!/^[A-Z]{3}\/[A-Z]{3}$/.test(p)) {
+        return { error: `"${pair}" is not a pair. Use the form USD/GHS.`, availablePairs: (await availablePairs()).slice(0, 40) };
+      }
+      const s = await summarise(p, Math.min(Math.max(Number(years) || 5, 1), 20), 60);
+      if (!s.observations) {
+        return { error: `No usable history for ${p}.`, availablePairs: (await availablePairs()).slice(0, 40) };
+      }
+      return {
+        ...s,
+        reading:
+          `A rising ${p} means the ${p.split("/")[1]} is weakening — the direction an importer paying in ` +
+          `${p.split("/")[0]} is exposed to.`,
+      };
+    },
+  },
+
+  {
+    name: "explain_cover_scenario",
+    description:
+      "A worked example from real history: for a given pair, amount and period, how often a move of that " +
+      "size actually happened, what the premium would cost, and the worst historical outcome. Use when " +
+      "someone asks whether cover is worth it, what it would cost, or what could happen. Always prefer " +
+      "this to inventing an illustration.",
+    input_schema: {
+      type: "object",
+      properties: {
+        pair: { type: "string", description: 'e.g. "USD/GHS"' },
+        notionalUsd: { type: "number", description: "The exposure being protected, in USD." },
+        tenorDays: { type: "number", description: "Cover period in days. Default 60." },
+        premiumRatePercent: { type: "number", description: "Premium as a % of notional. Default 1." },
+        triggerPercent: { type: "number", description: "Move at which cover pays. Default 5." },
+      },
+      required: ["pair", "notionalUsd"],
+    },
+    scopes: ["customer", "public"],
+    run: async ({ pair, notionalUsd, tenorDays, premiumRatePercent, triggerPercent }) => {
+      const p = String(pair || "").toUpperCase().replace(/\s/g, "");
+      if (!/^[A-Z]{3}\/[A-Z]{3}$/.test(p)) return { error: "Use the form USD/GHS." };
+      const n = Number(notionalUsd);
+      if (!Number.isFinite(n) || n <= 0) return { error: "Give the amount being protected." };
+      return scenario({
+        pair: p,
+        notionalUsd: n,
+        tenorDays: Number(tenorDays) || 60,
+        premiumRatePercent: Number(premiumRatePercent) || 1,
+        triggerPercent: Number(triggerPercent) || 5,
+      });
     },
   },
 ];
