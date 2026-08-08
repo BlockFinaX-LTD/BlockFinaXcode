@@ -6,12 +6,13 @@
  * asked for. The findings that are not blockers go at the end, because burying
  * a blocker under a list of smaller complaints is how it gets deprioritised.
  *
- * Not sent automatically. The only sender address Resend currently accepts for
- * this account is admin@riftfi.xyz — Rift's own domain — and mail from it via
- * Resend fails SPF, since riftfi.xyz authorises Hostinger and not Amazon SES.
- * A message to Rift's founders, from an address inside their own company, that
- * fails SPF is a quarantine waiting to happen. Once blockfinax.com is verified
- * this can send itself; until then it goes out from a human mailbox.
+ * Sends from hello@blockfinax.com. That was briefly in doubt: an older Resend
+ * key lingering in the local environment belonged to an account where only
+ * riftfi.xyz existed, so sending as our own domain was refused and a fallback
+ * to admin@riftfi.xyz went out instead — a message to Rift's founders from an
+ * address inside their own company, which is both confusing and, failing SPF,
+ * likely to be quarantined. Production had been correct the whole time; only
+ * the local key was stale. Sent 8 August 2026.
  */
 
 import { sendEmail, shell } from "./email";
