@@ -198,6 +198,36 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   // Per-chain inspection of the chain reader. Returns only booleans, counts,
   // durations, and error strings — no event data, no addresses beyond the
   // Diamond contract itself. Safe to expose for debugging dashboard counts.
+  /**
+   * Which settings are configured, never what they are.
+   *
+   * Written after an hour spent guessing why queued follow-up emails were not
+   * going out: the code was right, the row was due, and the cause was a value
+   * missing from the deployment environment — which is invisible from here and
+   * from the logs unless you are watching at the moment a sweep runs. Reports
+   * presence only, so it can be read safely.
+   */
+  app.get("/api/admin/config-check", requireAdmin, async (_req, res) => {
+    const present = (k: string) => Boolean((process.env[k] || "").trim());
+    res.json({
+      email: {
+        RESEND_API_KEY: present("RESEND_API_KEY"),
+        // Without this, marketing follow-ups are held rather than sent — a
+        // commercial email must carry a postal address.
+        COMPANY_POSTAL_ADDRESS: present("COMPANY_POSTAL_ADDRESS"),
+        PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || "(unset — defaults to blockfinax.com)",
+      },
+      agent: { ANTHROPIC_API_KEY: present("ANTHROPIC_API_KEY") },
+      chain: {
+        DIAMOND_ADDRESS: present("DIAMOND_ADDRESS"),
+        BASE_RPC_URL: present("BASE_RPC_URL"),
+        BSC_RPC_URL: present("BSC_RPC_URL"),
+      },
+      pricing: { TWELVEDATA_API_KEY: present("TWELVEDATA_API_KEY") },
+      node: { NODE_ENV: process.env.NODE_ENV || "(unset)", NETWORK_MODE: process.env.NETWORK_MODE || "(unset)" },
+    });
+  });
+
   app.get("/api/admin/diagnose", requireAdmin, async (_req, res) => {
     try {
       const chains = await diagnoseChainReads();
