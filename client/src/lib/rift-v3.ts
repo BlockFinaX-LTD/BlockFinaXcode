@@ -175,6 +175,52 @@ function coseKeyFromAuthData(authData: ArrayBuffer): ArrayBuffer {
   return d.slice(start).buffer;
 }
 
+/** Standard base64 → base64url, for APIs that expect the URL alphabet. */
+export function toB64Url(b64: string): string {
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Base64 (either alphabet) → bytes, for allowCredentials. */
+function b64ToBytes(b64: string): Uint8Array {
+  const norm = b64.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(norm.padEnd(Math.ceil(norm.length / 4) * 4, "="));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/**
+ * The credential Rift actually enrolled.
+ *
+ * Every failed migration attempt still ran navigator.credentials.create()
+ * successfully — the passkey was written to the device and only the server
+ * call afterwards failed. Those orphans are indistinguishable to the browser
+ * from the one that worked, and with no allowCredentials it is free to sign
+ * with any of them. Rift then rejects a proof from a credential it never
+ * enrolled, which is a 400 on submit-prepared and nothing more descriptive.
+ *
+ * So the id that survived enrolment is recorded and used to constrain the
+ * assertion. Absent a record, the assertion stays unconstrained — the platform
+ * picker is still better than refusing to try.
+ */
+const CRED_KEY = "bfx_v3_cred";
+
+export function rememberEnrolledCredential(credIdB64: string): void {
+  try {
+    localStorage.setItem(CRED_KEY, credIdB64);
+  } catch {
+    /* private mode — fall back to an unconstrained assertion */
+  }
+}
+
+function enrolledCredential(): string | null {
+  try {
+    return localStorage.getItem(CRED_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A hex hash becomes the raw challenge bytes.
  *
@@ -235,6 +281,9 @@ async function call<T>(
   }
 
   if (!res.ok) {
+    // Rift's 400s have arrived with no message field, leaving only a status
+    // code to work from. Log the whole body so the reason is available.
+    console.warn(`[rift-v3] ${res.status} on ${path}:`, text.slice(0, 600));
     const code = (body?.code || body?.error) as string | undefined;
     const known: RiftV3ErrorCode[] = ["NOT_V3", "CHALLENGE_MISSING_OR_EXPIRED", "RESEAL_FAILED"];
     throw new RiftV3Error(
@@ -506,6 +555,18 @@ export async function assertPasskey(hashHex: string): Promise<AuthProof> {
         rpId: relyingPartyId(),
         userVerification: "required",
         timeout: 60_000,
+        // Only the credential Rift enrolled. Without this the browser may sign
+        // with an orphan left behind by an enrolment that failed server-side.
+        ...(enrolledCredential()
+          ? {
+              allowCredentials: [
+                {
+                  type: "public-key" as const,
+                  id: b64ToBytes(enrolledCredential()!),
+                },
+              ],
+            }
+          : {}),
       },
     })) as PublicKeyCredential | null;
   } catch (err: any) {
@@ -574,6 +635,16 @@ export async function migrateToV3(
     },
   });
   rememberMigrated(null);
+
+  // Only when this call actually enrolled it. A repeat returns
+  // alreadyMigrated and changes nothing server-side, so the passkey created
+  // moments earlier was never registered — recording it would constrain every
+  // future assertion to a credential Rift has never seen, turning an
+  // intermittent failure into a certain one.
+  const pk = enrolledMethods.find((m) => m.kind === "passkey");
+  if (!out?.alreadyMigrated && pk && "cred_id_b64" in pk) {
+    rememberEnrolledCredential(pk.cred_id_b64);
+  }
   return out;
 }
 
@@ -646,15 +717,40 @@ export async function previewUserOperation(
   });
 }
 
+/** The same proof with every base64 field in the URL alphabet. */
+function asB64Url(p: AuthProof): AuthProof {
+  if (p.kind !== "passkey") return p;
+  return {
+    kind: "passkey",
+    cred_id_b64: toB64Url(p.cred_id_b64),
+    client_data_json_b64: toB64Url(p.client_data_json_b64),
+    authenticator_data_b64: toB64Url(p.authenticator_data_b64),
+    signature_b64: toB64Url(p.signature_b64),
+  };
+}
+
 export async function submitPrepared(
   accessToken: string,
   ticketId: string,
   authProof: AuthProof,
 ): Promise<{ hash: string; transactionHash?: string; userOperationHash?: string; chainId?: number }> {
-  return call("/v1/wallet/user-operations/submit-prepared", accessToken, {
-    method: "POST",
-    body: { ticketId, authProof },
-  });
+  const path = "/v1/wallet/user-operations/submit-prepared";
+  try {
+    return await call(path, accessToken, { method: "POST", body: { ticketId, authProof } });
+  } catch (err) {
+    // The _b64 suffix in Rift's schema does not say which alphabet, and
+    // WebAuthn payloads are conventionally base64url while btoa emits the
+    // padded standard form. A 400 is what a decoder rejecting the wrong one
+    // looks like, so try the other before giving up. The ticket is single-use
+    // in principle; if this second attempt is refused for that reason the
+    // caller re-previews and asks again, which is the existing behaviour.
+    if (!(err instanceof RiftV3Error) || err.status !== 400) throw err;
+    console.warn("[rift-v3] submit-prepared rejected the proof; retrying in base64url:", err.message);
+    return await call(path, accessToken, {
+      method: "POST",
+      body: { ticketId, authProof: asB64Url(authProof) },
+    });
+  }
 }
 
 /**
