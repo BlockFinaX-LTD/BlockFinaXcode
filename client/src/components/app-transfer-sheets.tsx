@@ -154,7 +154,16 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
     if (isNaN(n) || n <= 0) { toast({ title: 'Invalid amount', variant: 'destructive' }); return; }
     if (n > available) { toast({ title: 'Insufficient balance', description: `You have ${available} ${token} on ${chain}`, variant: 'destructive' }); return; }
     setStep('authorize');
-    if (authMethod && authMethod.kind !== 'password' && !otpSent) sendFreshOtp();
+    // A migrated wallet approves on the device, so there is no code to send.
+    void (async () => {
+      try {
+        const { walletUsesDeviceSigning } = await import('@/lib/v3-sign');
+        if (await walletUsesDeviceSigning()) return;
+      } catch {
+        /* fall through to the code path */
+      }
+      if (authMethod && authMethod.kind !== 'password' && !otpSent) sendFreshOtp();
+    })();
   };
 
   const sendFreshOtp = async () => {
@@ -164,7 +173,13 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
       if (authMethod.kind === 'email') await sendOtp({ email: authMethod.email });
       else if (authMethod.kind === 'phone') await sendOtp({ phone: authMethod.phoneNumber });
       setOtpSent(true);
-      toast({ title: 'Code sent', description: 'Check your inbox to authorize the transfer.' });
+      toast({
+        title: 'Code sent',
+        description:
+          authMethod?.kind === 'phone'
+            ? 'Check your phone for the code to authorize the transfer.'
+            : 'Check your inbox to authorize the transfer. It may land in spam.',
+      });
     } catch (err: any) {
       toast({ title: 'Failed to send code', description: err?.message, variant: 'destructive' });
     } finally { setSendingOtp(false); }
@@ -174,6 +189,23 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
     if (!authMethod) { toast({ title: 'Not signed in', variant: 'destructive' }); return; }
     setSending(true);
     try {
+      // Device signing first. Returns null when the wallet hasn't migrated, in
+      // which case the credential path below runs exactly as it always has.
+      const { trySendTokenWithV3 } = await import('@/lib/v3-sign');
+      const v3Hash = await trySendTokenWithV3({
+        token,
+        chain: normalizeChain(chain) as string,
+        recipient: to,
+        amount,
+      });
+      if (v3Hash) {
+        setHash(v3Hash);
+        setStep('done');
+        refreshAll();
+        setSending(false);
+        return;
+      }
+
       let credentials: any;
       if (authMethod.kind === 'password') {
         if (!password) throw new Error('Password is required');
