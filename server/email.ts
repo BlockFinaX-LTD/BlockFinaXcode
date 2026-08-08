@@ -8,8 +8,34 @@
 import { Resend } from 'resend';
 
 const apiKey = (process.env.RESEND_API_KEY || '').trim();
+/**
+ * The sending identity.
+ *
+ * It must be a blockfinax.com address. The Resend account is verified for
+ * blockfinax.com — DKIM at resend._domainkey, and send.blockfinax.com carrying
+ * the SES return path and its own SPF — so a From on that domain aligns and
+ * authenticates. Sending as any other domain fails SPF, because no other
+ * domain's record authorises Amazon SES on our behalf, and mail that fails SPF
+ * lands in spam even when nothing else is wrong with it.
+ *
+ * This previously read admin@riftfi.xyz, left over from before BlockFinaX had
+ * its own Resend account. Besides failing SPF, it meant every message to a
+ * customer arrived from a partner's domain — which is what a phishing attempt
+ * looks like, on a message asking someone to secure their wallet.
+ *
+ * The resend.dev fallback is Resend's shared testing domain, used by thousands
+ * of projects and filtered accordingly. It exists so local development doesn't
+ * crash, and should never be what production resolves to.
+ */
 const FROM_ADDRESS =
-  process.env.SMTP_FROM?.trim() || 'BlockFinaX <onboarding@resend.dev>';
+  process.env.SMTP_FROM?.trim() || 'BlockFinaX <hello@blockfinax.com>';
+
+if (process.env.NODE_ENV === 'production' && !/@blockfinax\.com>?\s*$/.test(FROM_ADDRESS)) {
+  console.warn(
+    `[email] WARNING — sending as "${FROM_ADDRESS}". Only blockfinax.com is authenticated ` +
+      `in our Resend account; anything else fails SPF and will be filtered. Set SMTP_FROM.`,
+  );
+}
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'amschel@blockfinax.com,anthonykumako@blockfinax.com')
   .split(',')
