@@ -32,6 +32,7 @@ import {
   assertPasskey,
   isSigningReady,
   noteDeviceSigningDecline,
+  wasMigratedLocally,
   RiftV3Error,
   type MethodsResponse,
 } from "./rift-v3";
@@ -70,11 +71,23 @@ async function signingState(accessToken: string): Promise<MethodsResponse | null
  */
 async function declineReason(accessToken: string | null): Promise<string | null> {
   if (!accessToken) return "no access token — not signed in, or the token refresh failed";
+
   const state = await signingState(accessToken);
-  if (!state) return "wallet status unreadable — the /wallet/methods call did not return";
-  if (state.version !== "v3") return `wallet is ${state.version ?? "unknown"}, not v3 — it hasn't migrated`;
-  if (!state.enrolled.length) return "wallet is v3 but has no enrolled signing method";
-  return null;
+  if (state) {
+    if (state.version !== "v3") return `wallet is ${state.version ?? "unknown"}, not v3 — it hasn't migrated`;
+    if (!state.enrolled.length) return "wallet is v3 but has no enrolled signing method";
+    return null;
+  }
+
+  // No status to read. That is not evidence the wallet is un-migrated — the
+  // endpoint is absent from Rift's published API reference and may simply not
+  // exist. If migration succeeded on this browser we recorded it ourselves,
+  // and that is better evidence than a 404.
+  if (wasMigratedLocally(null)) {
+    console.info("[v3-sign] status endpoint unavailable; using the local migration record");
+    return null;
+  }
+  return "wallet status unreadable and no local migration record — falling back to a code";
 }
 
 /** Whether this wallet approves on the device, so no one-time code is needed. */

@@ -86,6 +86,10 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
   const [picker, setPicker] = useState<null | 'token' | 'chain'>(null);
 
   const [otpCode, setOtpCode] = useState('');
+  // Null until known. A migrated wallet is approved with a fingerprint, so the
+  // credential fields below are not just unnecessary — showing them says the
+  // upgrade did not take, which is how this has looked.
+  const [deviceSigning, setDeviceSigning] = useState<boolean | null>(null);
   const [password, setPassword] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -154,14 +158,16 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
     if (isNaN(n) || n <= 0) { toast({ title: 'Invalid amount', variant: 'destructive' }); return; }
     if (n > available) { toast({ title: 'Insufficient balance', description: `You have ${available} ${token} on ${chain}`, variant: 'destructive' }); return; }
     setStep('authorize');
-    // A migrated wallet approves on the device, so there is no code to send.
     void (async () => {
+      let onDevice = false;
       try {
         const { walletUsesDeviceSigning } = await import('@/lib/v3-sign');
-        if (await walletUsesDeviceSigning()) return;
+        onDevice = await walletUsesDeviceSigning();
       } catch {
-        /* fall through to the code path */
+        /* treat as unavailable */
       }
+      setDeviceSigning(onDevice);
+      if (onDevice) return; // No code to send, and no field to show.
       if (authMethod && authMethod.kind !== 'password' && !otpSent) sendFreshOtp();
     })();
   };
@@ -326,13 +332,21 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
               <div className="brk-line total"><span className="l">Gas</span><span className="v" style={{ color: 'var(--green)' }}>Sponsored</span></div>
             </div>
             {!authMethod && <p className="send-note"><Info /> Auth method unknown — please sign in again.</p>}
-            {authMethod?.kind === 'password' && (
+            {deviceSigning !== true && authMethod?.kind === 'password' && (
               <div className="field">
                 <label>Password</label>
                 <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
               </div>
             )}
-            {(authMethod?.kind === 'email' || authMethod?.kind === 'phone') && (
+            {deviceSigning === true && (
+              <div className="field">
+                <label>Approval</label>
+                <p style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.75, margin: 0 }}>
+                  You'll approve this with your fingerprint or face. No code needed.
+                </p>
+              </div>
+            )}
+            {deviceSigning !== true && (authMethod?.kind === 'email' || authMethod?.kind === 'phone') && (
               <div className="field">
                 <label>
                   {authMethod.kind === 'email' ? 'Email code' : 'SMS code'}{' '}

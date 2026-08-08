@@ -363,6 +363,42 @@ export async function diagnostics(): Promise<V3Diagnostics> {
   };
 }
 
+/**
+ * A local record that this wallet migrated.
+ *
+ * Device signing was gated on GET /wallet/methods, which appears in both
+ * migration guides and in neither of Rift's API references — the published
+ * endpoint list under /v1/wallet covers identity, signatures, chains and the
+ * two user-operation calls, and nothing else. When it 404s the status is
+ * unreadable, and an unreadable status was being treated as "not migrated",
+ * so a wallet that had successfully migrated kept being asked for a code.
+ *
+ * migrate-to-v3 returning success is first-hand evidence that does not depend
+ * on any other endpoint existing. It is written down here and used whenever
+ * the status call cannot answer. Keyed by address so a different account on
+ * the same browser does not inherit it.
+ */
+const MIGRATED_KEY = "bfx_v3_migrated";
+
+export function rememberMigrated(address: string | null | undefined): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(MIGRATED_KEY) || "{}");
+    all[(address || "self").toLowerCase()] = Date.now();
+    localStorage.setItem(MIGRATED_KEY, JSON.stringify(all));
+  } catch {
+    /* private mode, or storage full — the status endpoint may still answer */
+  }
+}
+
+export function wasMigratedLocally(address: string | null | undefined): boolean {
+  try {
+    const all = JSON.parse(localStorage.getItem(MIGRATED_KEY) || "{}");
+    return !!all[(address || "self").toLowerCase()];
+  } catch {
+    return false;
+  }
+}
+
 // ── Status ────────────────────────────────────────────────────────────────
 
 export async function getV3Status(accessToken: string): Promise<{ version: WalletVersion }> {
@@ -527,7 +563,7 @@ export async function migrateToV3(
         "so the credential is bound to blockfinax.com — migration cannot be undone.",
     );
   }
-  return callWallet("/migrate-to-v3", accessToken, {
+  const out = await callWallet<MigrateResult>("/migrate-to-v3", accessToken, {
     method: "POST",
     // enrolledMethods per the CEO's guide; enrolled_methods is what the COO's
     // note writes. Sending both costs nothing and one of them is right.
@@ -537,6 +573,8 @@ export async function migrateToV3(
       ...(oldPassword ? { oldPassword } : {}),
     },
   });
+  rememberMigrated(null);
+  return out;
 }
 
 // ── Adding a method to a wallet already on v3 ─────────────────────────────

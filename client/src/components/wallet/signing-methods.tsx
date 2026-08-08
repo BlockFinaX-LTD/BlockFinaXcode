@@ -27,6 +27,7 @@ import {
   diagnostics,
   getDeviceSigningDecline,
   getMethods,
+  wasMigratedLocally,
   migrateToV3,
   createPasskey,
   assertPasskey,
@@ -249,6 +250,15 @@ export function SigningMethods({
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
+  // Anyone who migrated before the local record existed has no record of it,
+  // and if the status endpoint is missing there is nothing left to prove they
+  // did. migrate-to-v3 is idempotent — it answers alreadyMigrated on a repeat
+  // and changes nothing — so re-running it is safe and writes the record that
+  // was missing. Without this button the fix cannot reach the one account that
+  // already migrated.
+  const statusUnknown = !methods;
+  const noLocalRecord = !wasMigratedLocally(null);
+
   const enrolled = methods?.enrolled ?? [];
   const onlyOne = enrolled.length === 1;
 
@@ -303,6 +313,38 @@ export function SigningMethods({
             takes a few seconds.
           </p>
         </div>
+      )}
+
+      {(statusUnknown || (!signingReady && noLocalRecord)) && (
+        <Button
+          size="sm"
+          className="w-full"
+          disabled={busy || !passkeysSupported()}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const method = await createPasskey(userLabel, userId);
+              const r: any = await migrateToV3(accessToken, [method]);
+              toast({
+                title: r?.alreadyMigrated ? "Already set up" : "Device signing enabled",
+                description: "Payments will now ask for your fingerprint instead of a code.",
+              });
+              await refresh();
+            } catch (err: any) {
+              if (!(err instanceof RiftV3Error && err.code === "CANCELLED")) {
+                toast({
+                  title: "Couldn't enable it",
+                  description: err?.message || "Something went wrong.",
+                  variant: "destructive",
+                });
+              }
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Enable device signing"}
+        </Button>
       )}
 
       <Button
