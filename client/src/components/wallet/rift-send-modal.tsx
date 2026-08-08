@@ -212,7 +212,13 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
       if (authMethod.kind === 'email') await sendOtp({ email: authMethod.email });
       else if (authMethod.kind === 'phone') await sendOtp({ phone: authMethod.phoneNumber });
       setOtpSent(true);
-      toast({ title: 'Code sent', description: 'Check your inbox to authorize the transfer.' });
+      toast({
+        title: 'Code sent',
+        description:
+          authMethod?.kind === 'phone'
+            ? 'Check your phone for the code to authorize the transfer.'
+            : 'Check your inbox to authorize the transfer. It may land in spam.',
+      });
     } catch (err: any) {
       toast({ title: 'Failed to send code', description: err?.message, variant: 'destructive' });
     } finally {

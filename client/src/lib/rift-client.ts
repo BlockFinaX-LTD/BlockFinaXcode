@@ -154,11 +154,19 @@ export async function getMe(): Promise<User | null> {
     const res = await rift.auth.getUser();
     const user = res?.user || null;
     if (user) {
-      // Persist a method preference so OTP-gated tx prompts work. Prefer
-      // email → phone → externalId.
+      // Persist a method preference so code-gated tx prompts work.
+      //
+      // Phone first, then email. An SMS has no spam folder, arrives in
+      // seconds, and does not depend on SPF, DKIM or a sending domain's
+      // reputation — all of which have to be right for a code sent by email to
+      // reach an inbox rather than a junk folder the customer never opens.
+      // Email remains the fallback for anyone with no number on file.
+      //
+      // This matters less than it used to: a wallet migrated to device signing
+      // never sees a code at all. It is here for the ones that haven't.
       const u = user as any;
-      if (u.email) setAuthMethod({ kind: 'email', email: u.email });
-      else if (u.phoneNumber) setAuthMethod({ kind: 'phone', phoneNumber: u.phoneNumber });
+      if (u.phoneNumber) setAuthMethod({ kind: 'phone', phoneNumber: u.phoneNumber });
+      else if (u.email) setAuthMethod({ kind: 'email', email: u.email });
       else if (u.externalId) setAuthMethod({ kind: 'password', externalId: u.externalId });
     }
     return user;
