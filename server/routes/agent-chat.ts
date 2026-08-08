@@ -20,6 +20,7 @@ import type { Express, Request, Response } from "express";
 import crypto from "crypto";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "../db";
+import { leads } from "@shared/lead-schema";
 import { requireRiftUser } from "../middleware/rift-auth";
 import { agentMessages, agentRuns, chatSchema } from "@shared/agent-schema";
 import { runAgent, agentConfigured, fence } from "../agent/runtime";
@@ -36,7 +37,7 @@ setInterval(() => {
   visitorHits.forEach((v, k) => { if (now > v.resetAt) visitorHits.delete(k); });
 }, 10 * 60_000);
 
-function visitorKey(req: Request): string {
+export function visitorKey(req: Request): string {
   const fwd = req.headers["x-forwarded-for"];
   const ip = typeof fwd === "string" && fwd ? fwd.split(",")[0].trim() : req.ip || "unknown";
   return crypto.createHash("sha256").update(ip).digest("hex").slice(0, 32);
@@ -128,7 +129,21 @@ export function registerAgentChatRoutes(app: Express) {
         })
         .returning();
 
-      res.json({ reply: saved.content, id: saved.id });
+      // The agent decides when offering a follow-up is natural; it never does
+      // the collecting. This flag puts the consent form on screen — and is
+      // suppressed once this visitor has already given their details, so the
+      // same person is never asked twice.
+      let offerFollowUp = false;
+      if ((result.toolCalls ?? []).some((t) => t.name === "offer_follow_up")) {
+        const [already] = await db
+          .select({ id: leads.id })
+          .from(leads)
+          .where(eq(leads.threadId, scopedThread))
+          .limit(1);
+        offerFollowUp = !already;
+      }
+
+      res.json({ reply: saved.content, id: saved.id, offerFollowUp });
     } catch (err: any) {
       console.error("[chat:public] failed:", err?.message);
       res.status(500).json({ message: "Something went wrong. Please try again." });

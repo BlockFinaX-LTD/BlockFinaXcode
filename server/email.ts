@@ -28,6 +28,12 @@ interface SendArgs {
   replyTo?: string;
   /** Resend attachment shape: base64 content + filename. */
   attachments?: { filename: string; content: string }[];
+  /**
+   * Extra SMTP headers. Used for List-Unsubscribe, which puts a native
+   * unsubscribe control in Gmail and Apple Mail — the one people actually
+   * press instead of reporting the message as spam.
+   */
+  headers?: Record<string, string>;
 }
 
 async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string }> {
@@ -44,6 +50,7 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
       html: args.html,
       replyTo: args.replyTo,
       attachments: args.attachments,
+      headers: args.headers,
     });
     if (error) {
       console.error('[email] Resend error:', error);

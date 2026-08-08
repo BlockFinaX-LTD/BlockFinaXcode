@@ -2,8 +2,8 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Lock } from "lucide-react";
 
-const EFFECTIVE_DATE = "1 July 2026";
-const VERSION = "1.0";
+const EFFECTIVE_DATE = "8 August 2026";
+const VERSION = "1.1";
 
 export default function PrivacyPage() {
   const [, navigate] = useLocation();
@@ -39,6 +39,8 @@ export default function PrivacyPage() {
               <li><strong>Usage data.</strong> Standard server logs including IP address, browser type, pages visited, and timestamps. Retained for up to 90 days for security and debugging purposes.</li>
               <li><strong>Terms acceptance record.</strong> When you accept our Terms of Use, we record your wallet address, the version accepted, and the timestamp as a legal audit trail.</li>
               <li><strong>Referral codes.</strong> If you use or generate a referral code, the association between referrer and referred wallet address is stored.</li>
+              <li><strong>Assistant conversations.</strong> Messages you exchange with Finax, our on-site assistant, are stored so the conversation persists across a page reload and so we can review answer quality. Public conversations are associated with a hashed browser identifier, not with your name or your IP address. Do not send personal or confidential information to the assistant.</li>
+              <li><strong>Contact details you volunteer (optional).</strong> If you complete the follow-up form the assistant may offer, we store the name and email you enter, the exact consent wording shown to you, and the time you agreed. We use this only to send you the follow-up described on that form. It is never collected from the text of a conversation, and providing it is never required.</li>
             </ul>
             <p>We do not collect government IDs, payment card details, or traditional KYC documentation. We do not run behavioural advertising or sell data to third parties.</p>
           </Section>
@@ -48,6 +50,8 @@ export default function PrivacyPage() {
               <li>To operate and secure the protocol interface.</li>
               <li>To record legally required consent (Terms of Use acceptance).</li>
               <li>To send protocol-related communications if you have provided an email address.</li>
+              <li>To send you information about our services, only where you have explicitly asked us to via the follow-up form, and only until you unsubscribe.</li>
+              <li>To operate and improve the on-site assistant.</li>
               <li>To detect and prevent fraud, abuse, and unauthorised access.</li>
               <li>To comply with applicable legal obligations.</li>
             </ul>
@@ -81,6 +85,8 @@ export default function PrivacyPage() {
               <li>Wallet and session data: retained for the duration of protocol operation and up to 3 years thereafter for legal compliance.</li>
               <li>Email addresses: retained until you request deletion or withdraw consent.</li>
               <li>Server logs: 90 days.</li>
+              <li>Assistant conversations: 12 months, then deleted.</li>
+              <li>Follow-up contact details: retained until you unsubscribe or ask us to delete them. The record that you consented, and the wording you agreed to, is kept for 6 years after that as proof that we had permission to contact you — this is the only part we keep, and it is kept because data protection law requires us to be able to demonstrate consent.</li>
               <li>Terms acceptance records: retained indefinitely as a legal audit trail.</li>
             </ul>
           </Section>
@@ -91,7 +97,8 @@ export default function PrivacyPage() {
               <li>Access the personal data we hold about you.</li>
               <li>Request correction of inaccurate data.</li>
               <li>Request deletion of your data (where not required for legal compliance).</li>
-              <li>Withdraw consent for email communications at any time.</li>
+              <li>Withdraw consent for email communications at any time — every marketing email we send carries a one-click unsubscribe link, and unsubscribing takes effect immediately without you needing to contact us.</li>
+              <li>Object to your data being used for direct marketing.</li>
               <li>Lodge a complaint with your local data protection authority.</li>
             </ul>
             <p>To exercise any of these rights, contact us at <a href="mailto:anthonykumako8@gmail.com" className="text-primary underline">anthonykumako8@gmail.com</a>.</p>

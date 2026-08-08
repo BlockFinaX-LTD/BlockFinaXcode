@@ -14,6 +14,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FinaxFollowUp } from "./finax-follow-up";
 import { AgentMarkdown } from "@/components/agent-markdown";
 // Resolves a *fresh* JWT — the bridge handles silent refresh, so reading
 // storage directly would eventually send an expired token.
@@ -57,6 +58,9 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only by the server, when Finax judged the moment right and this
+  // visitor has not already given their details.
+  const [followUp, setFollowUp] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -125,6 +129,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.message || "Something went wrong.");
       setMessages((m) => [...m, { id: body.id ?? `a${Date.now()}`, role: "assistant", content: body.reply }]);
+      if (body.offerFollowUp) setFollowUp(true);
     } catch (e: any) {
       setError(e.message || "Couldn't reach Finax. Please try again.");
     } finally {
@@ -206,6 +211,14 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
               <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 {error}
               </p>
+            )}
+
+            {followUp && !busy && (
+              <FinaxFollowUp
+                threadId={threadId}
+                onDone={() => setFollowUp(false)}
+                onDismiss={() => setFollowUp(false)}
+              />
             )}
 
             {messages.length === 0 && !busy && (

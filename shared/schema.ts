@@ -18,6 +18,7 @@ export * from "./loi-schema";
 export * from "./agent-schema";
 // AML/CFT — KYC tiers, limits, sanctions screening, compliance alerts
 export * from "./compliance-schema";
+export * from "./lead-schema";
 
 // ── Auth: user accounts ───────────────────────────────────────────────────────
 export const userAccounts = pgTable("user_accounts", {

@@ -604,6 +604,31 @@ export async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- Visitors who asked us to follow up. consent_text holds the literal
+      -- wording they agreed to, which is what answers a data-protection
+      -- complaint; a boolean would not.
+      CREATE TABLE IF NOT EXISTS leads (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        name TEXT,
+        company TEXT,
+        source TEXT NOT NULL DEFAULT 'chat',
+        thread_id TEXT,
+        consent_text TEXT NOT NULL,
+        consented_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        consent_visitor TEXT,
+        follow_up_due_at TIMESTAMP,
+        follow_up_sent_at TIMESTAMP,
+        unsubscribe_token TEXT NOT NULL UNIQUE,
+        unsubscribed_at TIMESTAMP,
+        erased_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS leads_email_idx ON leads(email);
+      CREATE INDEX IF NOT EXISTS leads_due_idx ON leads(follow_up_due_at);
+      CREATE INDEX IF NOT EXISTS leads_token_idx ON leads(unsubscribe_token);
+
       CREATE TABLE IF NOT EXISTS agent_facts (
         id SERIAL PRIMARY KEY,
         fact TEXT NOT NULL,

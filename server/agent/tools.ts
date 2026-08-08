@@ -582,6 +582,39 @@ export const TOOLS: ToolDef[] = [
       });
     },
   },
+
+  // ── Follow-up ───────────────────────────────────────────────────────────
+  //
+  // Public scope only. This tool does not collect anything — it puts a
+  // consent form on screen and stops. The distinction is the whole point: a
+  // model asked to gather email addresses will improvise a persuasive ask, and
+  // an improvised sentence is not a consent record. See shared/lead-schema.ts.
+
+  {
+    name: "offer_follow_up",
+    description:
+      "Show the visitor a short form offering to email them about BlockFinaX. Use once, and only when the " +
+      "conversation has been genuinely useful to them and is drawing to a close — after you have answered " +
+      "what they came to ask, never as an opening move and never in exchange for an answer. Do not ask for " +
+      "a name or an email address in your own words: this form is the only way to collect them. If the " +
+      "visitor declines, accept it and do not raise it again.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reason: {
+          type: "string",
+          description: "One short line on what they were interested in, shown to no one — kept for context.",
+        },
+      },
+    },
+    scopes: ["public"],
+    run: async () => ({
+      shown: true,
+      instruction:
+        "The form is now on screen. Say one short sentence inviting them to use it if they would like, " +
+        "and make clear it is optional. Do not ask for their details in text.",
+    }),
+  },
 ];
 
 /** Tools visible to a given agent. The public agent gets a strict subset. */
