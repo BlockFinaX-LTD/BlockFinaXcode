@@ -220,6 +220,12 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
         // commercial email must carry a postal address.
         COMPANY_POSTAL_ADDRESS: present("COMPANY_POSTAL_ADDRESS"),
         PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || "(unset — defaults to blockfinax.com)",
+        // Not a secret: it is in the From header of every message we send.
+        // Shown in full because the failure it causes is invisible otherwise —
+        // mail from a domain this Resend account hasn't verified is either
+        // refused outright or delivered failing SPF, and neither shows up here.
+        SMTP_FROM: process.env.SMTP_FROM?.trim() || "(unset — falls back to hello@blockfinax.com)",
+        SMTP_FROM_IS_OURS: /@blockfinax\.com>?\s*$/.test(process.env.SMTP_FROM?.trim() || "@blockfinax.com"),
       },
       agent: { ANTHROPIC_API_KEY: present("ANTHROPIC_API_KEY") },
       chain: {
