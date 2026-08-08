@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { subscribeV3Sign, type PendingSign } from "@/lib/v3-sign";
+import { biometricName } from "@/lib/rift-v3";
 
 export function V3SignDialog() {
   const [pending, setPending] = useState<PendingSign | null>(null);
@@ -40,7 +41,7 @@ export function V3SignDialog() {
           </div>
           <DialogTitle className="text-center">{pending.title}</DialogTitle>
           <DialogDescription className="text-center">
-            {pending.detail ?? "Your device will ask for your fingerprint or face."}
+            {pending.detail ?? `Your device will ask for ${biometricName()}.`}
           </DialogDescription>
         </DialogHeader>
 

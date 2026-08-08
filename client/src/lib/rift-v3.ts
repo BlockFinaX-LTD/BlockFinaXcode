@@ -339,6 +339,34 @@ async function callWallet<T>(
 }
 
 /**
+ * What this device actually calls its biometric check.
+ *
+ * Telling an iPhone owner to use Touch ID is wrong on every model since the
+ * X, and it reads as a screen written for somebody else's phone. The reverse
+ * is just as bad: a Mac has no Face ID, and an iPhone SE still has a button.
+ *
+ * iOS is therefore deliberately left as both. There is no reliable way to tell
+ * Face ID from Touch ID in a browser — the honest phrase covers every iPhone,
+ * and is shorter than being wrong.
+ */
+export function biometricName(): string {
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent || "";
+  const touch = typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
+  // iPadOS reports a Mac user agent; the touch points give it away.
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch)) return "Face ID or Touch ID";
+  if (/Macintosh|Mac OS X/.test(ua)) return "Touch ID";
+  if (/Android/.test(ua)) return "your fingerprint";
+  if (/Windows/.test(ua)) return "Windows Hello";
+  return "your fingerprint or face";
+}
+
+/** The same thing as an action, for progress lines. */
+export function biometricPrompt(): string {
+  const n = biometricName();
+  return n.startsWith("your") ? `Waiting for ${n}…` : `Waiting for ${n}…`;
+}
+
+/**
  * What this browser and this build actually resolved to.
  *
  * Written after several rounds of diagnosing a failure from a photograph of a

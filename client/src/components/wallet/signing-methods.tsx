@@ -35,6 +35,7 @@ import {
   passkeysSupported,
   isSigningReady,
   RiftV3Error,
+  biometricName,
   type MethodsResponse,
   type EnrolledMethod,
   type V3Diagnostics,
@@ -126,7 +127,7 @@ export function SigningUpgradePrompt({
       // something; a dismissed prompt is the only case that isn't an error.
       if (!enrolled.length) {
         toast({
-          title: why?.code === "CANCELLED" ? "Not completed" : "Couldn't set up Touch ID",
+          title: why?.code === "CANCELLED" ? "Not completed" : `Couldn't set up ${biometricName()}`,
           description:
             (why?.message ?? "Your device didn't provide a passkey.") +
             " You can also secure the wallet by linking Google under Settings → Signing.",
@@ -142,7 +143,7 @@ export function SigningUpgradePrompt({
 
       toast({
         title: "Wallet secured",
-        description: "Payments now need your fingerprint or face. Add a backup method next.",
+        description: `Payments now need ${biometricName()} on this device. Add a backup method next.`,
       });
       onDone();
     } catch (err: any) {
@@ -172,10 +173,10 @@ export function SigningUpgradePrompt({
           <Fingerprint className="h-5 w-5 text-[hsl(var(--navy))]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Secure your wallet with Touch ID</p>
+          <p className="text-sm font-semibold">Secure your wallet with {biometricName()}</p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Right now a password can move your money. Turn this on and every payment needs your
-            fingerprint or face on this device — so a stolen password isn't enough on its own.
+            Right now a password can move your money. Turn this on and every payment needs{" "}
+            {biometricName()} on this device — so a stolen password isn't enough on its own.
           </p>
 
           {version === "v2" && (
@@ -327,7 +328,7 @@ export function SigningMethods({
               const r: any = await migrateToV3(accessToken, [method]);
               toast({
                 title: r?.alreadyMigrated ? "Already set up" : "Device signing enabled",
-                description: "Payments will now ask for your fingerprint instead of a code.",
+                description: `Payments will now ask for ${biometricName()} instead of a code.`,
               });
               await refresh();
             } catch (err: any) {

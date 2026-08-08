@@ -31,6 +31,7 @@ import {
   submitPrepared,
   assertPasskey,
   isSigningReady,
+  biometricPrompt,
   noteDeviceSigningDecline,
   wasMigratedLocally,
   RiftV3Error,
@@ -208,7 +209,7 @@ export async function trySignWithV3(
 
   await askToApprove(opts.title ?? "Approve this transaction", opts.detail);
 
-  opts.onStep?.("Waiting for your fingerprint…");
+  opts.onStep?.(biometricPrompt());
   const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
 
   opts.onStep?.("Submitting…");
@@ -262,7 +263,7 @@ export async function trySendTokenWithV3(
     opts.detail ?? `To ${transfer.recipient.slice(0, 10)}…${transfer.recipient.slice(-4)} on ${transfer.chain}`,
   );
 
-  opts.onStep?.("Waiting for your fingerprint…");
+  opts.onStep?.(biometricPrompt());
   const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
 
   opts.onStep?.("Submitting…");

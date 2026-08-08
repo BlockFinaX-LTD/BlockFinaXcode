@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { biometricName } from '@/lib/rift-v3';
 import { useWallet } from '@/hooks/use-wallet';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
 import {
@@ -90,6 +91,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
   // credential fields below are not just unnecessary — showing them says the
   // upgrade did not take, which is how this has looked.
   const [deviceSigning, setDeviceSigning] = useState<boolean | null>(null);
+  const bioName = biometricName();
   const [password, setPassword] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -342,7 +344,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
               <div className="field">
                 <label>Approval</label>
                 <p style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.75, margin: 0 }}>
-                  You'll approve this with your fingerprint or face. No code needed.
+                  You'll approve this with {bioName}. No code needed.
                 </p>
               </div>
             )}
