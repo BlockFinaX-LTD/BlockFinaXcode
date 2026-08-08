@@ -277,8 +277,13 @@ async function callWallet<T>(
       return out;
     } catch (err) {
       last = err;
-      const notFound = err instanceof RiftV3Error && err.status === 404;
-      if (!notFound) throw err; // A real error is not a routing question.
+      // 404 is the obvious "wrong path", but a gateway that doesn't know the
+      // route can answer 400 or 405 just as easily. 401 and 403 are never
+      // routing — they mean the request arrived and was rejected, and retrying
+      // elsewhere would only hide that.
+      const routingShaped =
+        err instanceof RiftV3Error && (err.status === 404 || err.status === 400 || err.status === 405);
+      if (!routingShaped) throw err;
     }
   }
   throw last;
@@ -322,6 +327,16 @@ function detectInAppBrowser(): string | null {
   // flag alongside no recognised browser token is the usual tell.
   if (/iPhone|iPad/.test(ua) && !/Safari\//.test(ua)) return "an embedded browser";
   return null;
+}
+
+let lastDecline: string | null = null;
+
+/** Recorded by the signing path; surfaced in the diagnostics panel. */
+export function noteDeviceSigningDecline(reason: string | null): void {
+  lastDecline = reason;
+}
+export function getDeviceSigningDecline(): string | null {
+  return lastDecline;
 }
 
 export async function diagnostics(): Promise<V3Diagnostics> {

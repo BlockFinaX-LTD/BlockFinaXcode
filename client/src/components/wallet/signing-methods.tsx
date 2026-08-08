@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   diagnostics,
+  getDeviceSigningDecline,
   getMethods,
   migrateToV3,
   createPasskey,
@@ -357,6 +358,7 @@ function Diagnostics({ version, enrolled }: { version: string | null; enrolled: 
   const rows: [string, string][] = d
     ? [
         ["Wallet version", version ?? "unknown"],
+        ["Last signing attempt", getDeviceSigningDecline() ?? "device signing (or not tried yet)"],
         ["Methods enrolled", String(enrolled)],
         ["Passkeys in this browser", d.passkeysSupported ? "supported" : "NOT supported"],
         ["Fingerprint / face available", d.platformAuthenticator],

@@ -31,6 +31,7 @@ import {
   submitPrepared,
   assertPasskey,
   isSigningReady,
+  noteDeviceSigningDecline,
   RiftV3Error,
   type MethodsResponse,
 } from "./rift-v3";
@@ -53,9 +54,27 @@ async function signingState(accessToken: string): Promise<MethodsResponse | null
     const state = await getMethods(accessToken);
     cached = { at: Date.now(), state };
     return state;
-  } catch {
+  } catch (err) {
+    console.warn("[v3-sign] couldn't read wallet methods — falling back to a code:", err);
     return null;
   }
+}
+
+/**
+ * Why device signing was declined, or null if it wasn't.
+ *
+ * Every branch below used to return null in silence, which is correct
+ * behaviour and useless to diagnose: a wallet that never migrated and a wallet
+ * whose status call failed produce the same one-time-code prompt, and from the
+ * outside they are indistinguishable. Each now names itself.
+ */
+async function declineReason(accessToken: string | null): Promise<string | null> {
+  if (!accessToken) return "no access token — not signed in, or the token refresh failed";
+  const state = await signingState(accessToken);
+  if (!state) return "wallet status unreadable — the /wallet/methods call did not return";
+  if (state.version !== "v3") return `wallet is ${state.version ?? "unknown"}, not v3 — it hasn't migrated`;
+  if (!state.enrolled.length) return "wallet is v3 but has no enrolled signing method";
+  return null;
 }
 
 /** Whether this wallet approves on the device, so no one-time code is needed. */
@@ -131,16 +150,20 @@ export async function trySignWithV3(
   call: ContractCall,
   opts: { title?: string; detail?: string; onStep?: (s: string) => void } = {},
 ): Promise<string | null> {
-  let accessToken: string;
+  let accessToken = "";
   try {
     accessToken = await getRiftAccessToken();
-  } catch {
+  } catch (err) {
+    console.warn("[v3-sign] no access token:", err);
+  }
+
+  const reason = await declineReason(accessToken || null);
+  noteDeviceSigningDecline(reason);
+  if (reason) {
+    console.warn(`[v3-sign] using the one-time-code path — ${reason}`);
     return null;
   }
-  if (!accessToken) return null;
-
-  const state = await signingState(accessToken);
-  if (!state || !isSigningReady(state)) return null;
+  console.info("[v3-sign] signing on this device — no code will be sent");
 
   opts.onStep?.("Preparing transaction…");
   let preview;
@@ -187,16 +210,20 @@ export async function trySendTokenWithV3(
   transfer: TokenTransfer,
   opts: { detail?: string; onStep?: (s: string) => void } = {},
 ): Promise<string | null> {
-  let accessToken: string;
+  let accessToken = "";
   try {
     accessToken = await getRiftAccessToken();
-  } catch {
+  } catch (err) {
+    console.warn("[v3-sign] no access token:", err);
+  }
+
+  const reason = await declineReason(accessToken || null);
+  noteDeviceSigningDecline(reason);
+  if (reason) {
+    console.warn(`[v3-sign] using the one-time-code path — ${reason}`);
     return null;
   }
-  if (!accessToken) return null;
-
-  const state = await signingState(accessToken);
-  if (!state || !isSigningReady(state)) return null;
+  console.info("[v3-sign] signing on this device — no code will be sent");
 
   opts.onStep?.("Preparing transfer…");
   const preview = await previewTransaction(accessToken, transfer);
