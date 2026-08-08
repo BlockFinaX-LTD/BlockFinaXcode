@@ -16,7 +16,11 @@
 import type { Request, Response, NextFunction } from "express";
 
 const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
-const RIFT_API_KEY = process.env.VITE_RIFT_API_KEY || process.env.RIFT_API_KEY || "";
+/**
+ * Server-side key. Prefers RIFT_SECRET_KEY, which must never carry a VITE_
+ * prefix — that prefix is what puts a value into the public browser bundle.
+ */
+const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || process.env.VITE_RIFT_API_KEY || "";
 
 const CACHE_TTL_MS = 60_000; // 60s — short enough to honor revocations, long enough to absorb bursts
 const NEG_CACHE_TTL_MS = 5_000; // briefly cache rejections too so bad tokens don't pound Rift

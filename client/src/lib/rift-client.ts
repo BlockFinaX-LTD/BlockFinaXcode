@@ -23,7 +23,20 @@ import type {
 const USER_CACHE_KEY = 'bfx_rift_user';            // {user, address, btcAddress}
 const AUTH_METHOD_KEY = 'bfx_rift_auth_method';    // {kind, email|phoneNumber|externalId}
 
-const apiKey = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
+/**
+ * The browser must use a PUBLISHABLE key (pk_), never a secret one (sk_).
+ *
+ * Anything Vite sees prefixed VITE_ is inlined into the bundle it ships to
+ * every visitor, so a key placed here is public by construction. That is fine
+ * for a widget key — Rift's docs are explicit that the project key is meant to
+ * be public and the safety property is the origin allowlist — and it is not
+ * fine for a server key, which can enumerate and suspend users.
+ *
+ * Prefers VITE_RIFT_PUBLIC_KEY. The fallback keeps the app running until Rift
+ * issues a pk_; the moment they do, this becomes a config change and nothing
+ * else needs touching.
+ */
+const apiKey = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // Hosts that answer Rift API calls but send no Access-Control-Allow-Origin for
 // http://localhost. In dev these are rewritten through our own server (see

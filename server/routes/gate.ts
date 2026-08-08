@@ -27,7 +27,11 @@ import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
 import { mintInvestorSession } from './investor';
 
 const RIFT_API_BASE = process.env.RIFT_API_BASE || 'https://payment.riftfi.xyz';
-const RIFT_API_KEY = process.env.VITE_RIFT_API_KEY || process.env.RIFT_API_KEY || '';
+/**
+ * Server-side key. Prefers RIFT_SECRET_KEY, which must never carry a VITE_
+ * prefix — that prefix is what puts a value into the public browser bundle.
+ */
+const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || process.env.VITE_RIFT_API_KEY || '';
 import {
   emailAdminNewAccessRequest,
   emailUserAccessReceived,

@@ -65,7 +65,20 @@ import { FinaxChat } from "@/components/finax-chat";
 // AML/CFT verification — customers raise their own transacting limits here.
 import VerifyPage from "@/pages/verify";
 
-const RIFT_API_KEY = (import.meta.env.VITE_RIFT_API_KEY || '').trim();
+/**
+ * The browser must use a PUBLISHABLE key (pk_), never a secret one (sk_).
+ *
+ * Anything Vite sees prefixed VITE_ is inlined into the bundle it ships to
+ * every visitor, so a key placed here is public by construction. That is fine
+ * for a widget key — Rift's docs are explicit that the project key is meant to
+ * be public and the safety property is the origin allowlist — and it is not
+ * fine for a server key, which can enumerate and suspend users.
+ *
+ * Prefers VITE_RIFT_PUBLIC_KEY. The fallback keeps the app running until Rift
+ * issues a pk_; the moment they do, this becomes a config change and nothing
+ * else needs touching.
+ */
+const RIFT_API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || '').trim();
 
 // White-label sign-in: the widget is served from our own subdomain so the
 // Google sign-in screen reads "Sign in to BlockFinaX" instead of the partner
