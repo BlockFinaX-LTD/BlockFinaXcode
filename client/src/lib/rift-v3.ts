@@ -284,6 +284,70 @@ async function callWallet<T>(
   throw last;
 }
 
+/**
+ * What this browser and this build actually resolved to.
+ *
+ * Written after several rounds of diagnosing a failure from a photograph of a
+ * screen. Everything here is already knowable at runtime; the only reason it
+ * was hard was that none of it was visible.
+ */
+export interface V3Diagnostics {
+  apiBase: string;
+  walletPrefix: string;
+  apiKeyPrefix: string;
+  relyingPartyId: string;
+  passkeysSupported: boolean;
+  platformAuthenticator: "yes" | "no" | "unknown";
+  inIframe: boolean;
+  inAppBrowser: string | null;
+  secureContext: boolean;
+}
+
+/** Names the embedding app when the page is inside one, else null. */
+function detectInAppBrowser(): string | null {
+  const ua = navigator.userAgent || "";
+  const known: [RegExp, string][] = [
+    [/FBAN|FBAV|FB_IAB/, "Facebook"],
+    [/Instagram/, "Instagram"],
+    [/LinkedInApp/, "LinkedIn"],
+    [/Twitter/, "X / Twitter"],
+    [/WhatsApp/, "WhatsApp"],
+    [/Line\//, "LINE"],
+    [/MicroMessenger/, "WeChat"],
+    [/Snapchat/, "Snapchat"],
+    [/TikTok|BytedanceWebview/, "TikTok"],
+  ];
+  for (const [re, name] of known) if (re.test(ua)) return name;
+  // iOS in-app browsers are all WebKit and often unnamed. A missing standalone
+  // flag alongside no recognised browser token is the usual tell.
+  if (/iPhone|iPad/.test(ua) && !/Safari\//.test(ua)) return "an embedded browser";
+  return null;
+}
+
+export async function diagnostics(): Promise<V3Diagnostics> {
+  let platform: V3Diagnostics["platformAuthenticator"] = "unknown";
+  try {
+    if (window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable) {
+      platform = (await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())
+        ? "yes"
+        : "no";
+    }
+  } catch {
+    /* leave unknown */
+  }
+  return {
+    apiBase: API_BASE,
+    walletPrefix: walletPrefix === null ? "(not yet resolved)" : walletPrefix || "(none)",
+    apiKeyPrefix: API_KEY ? API_KEY.slice(0, 3) : "(unset)",
+    relyingPartyId: relyingPartyId(),
+    passkeysSupported: passkeysSupported(),
+    platformAuthenticator: platform,
+    inIframe: window.top !== window.self,
+    inAppBrowser: detectInAppBrowser(),
+    secureContext: window.isSecureContext,
+  };
+}
+
 // ── Status ────────────────────────────────────────────────────────────────
 
 export async function getV3Status(accessToken: string): Promise<{ version: WalletVersion }> {

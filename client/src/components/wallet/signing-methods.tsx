@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
+  diagnostics,
   getMethods,
   migrateToV3,
   createPasskey,
@@ -34,6 +35,7 @@ import {
   RiftV3Error,
   type MethodsResponse,
   type EnrolledMethod,
+  type V3Diagnostics,
 } from "@/lib/rift-v3";
 
 /** Dismissal is per session, deliberately — skipping should defer, not opt out. */
@@ -329,6 +331,81 @@ export function SigningMethods({
         <p className="text-[11px] text-muted-foreground">
           Your wallet keys never leave your device unencrypted, and BlockFinaX cannot move your funds.
         </p>
+      )}
+
+      <Diagnostics version={methods?.version ?? null} enrolled={enrolled.length} />
+    </div>
+  );
+}
+
+
+/**
+ * Everything the client resolved, on screen.
+ *
+ * Collapsed by default — a customer never needs it. It exists because the
+ * alternative was diagnosing a failure from a photograph of a laptop, and
+ * every value in here was already knowable, just invisible.
+ */
+function Diagnostics({ version, enrolled }: { version: string | null; enrolled: number }) {
+  const [open, setOpen] = useState(false);
+  const [d, setD] = useState<V3Diagnostics | null>(null);
+
+  useEffect(() => {
+    if (open && !d) void diagnostics().then(setD);
+  }, [open, d]);
+
+  const rows: [string, string][] = d
+    ? [
+        ["Wallet version", version ?? "unknown"],
+        ["Methods enrolled", String(enrolled)],
+        ["Passkeys in this browser", d.passkeysSupported ? "supported" : "NOT supported"],
+        ["Fingerprint / face available", d.platformAuthenticator],
+        ["Secure context (https)", d.secureContext ? "yes" : "NO"],
+        ["Inside an iframe", d.inIframe ? "YES — passkeys may be blocked" : "no"],
+        ["In-app browser", d.inAppBrowser ? `${d.inAppBrowser} — open in Safari or Chrome` : "no"],
+        ["Passkey domain", d.relyingPartyId],
+        ["API", d.apiBase],
+        ["Wallet path prefix", d.walletPrefix],
+        ["API key type", d.apiKeyPrefix === "pk_" ? "pk_ (publishable)" : `${d.apiKeyPrefix} — should be pk_`],
+      ]
+    : [];
+
+  return (
+    <div className="pt-1">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2"
+      >
+        {open ? "Hide technical details" : "Technical details"}
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-1 rounded-xl border border-border bg-muted/30 p-3">
+          {!d && <p className="text-[11px] text-muted-foreground">Checking…</p>}
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-start justify-between gap-3 text-[11px]">
+              <span className="shrink-0 text-muted-foreground">{k}</span>
+              <span
+                className={cn(
+                  "min-w-0 break-all text-right font-mono",
+                  /NOT|NO$|YES|should be/.test(v) && "text-amber-600",
+                )}
+              >
+                {v}
+              </span>
+            </div>
+          ))}
+          {d && (
+            <button
+              onClick={() =>
+                navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v}`).join("\n"))
+              }
+              className="mt-1 text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2"
+            >
+              Copy all
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
