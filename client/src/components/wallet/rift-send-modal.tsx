@@ -188,11 +188,20 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
     }
     setStep('authorize');
 
-    // If the user logged in via OTP, send a fresh code automatically so they
-    // don't have to click "Send code". Password users still get a form.
-    if (authMethod && authMethod.kind !== 'password' && !otpSent) {
-      handleSendOtp();
-    }
+    // A migrated wallet approves on the device, so there is no code to send.
+    // Checking first avoids emailing a one-time code the user will never need
+    // and never be asked for.
+    void (async () => {
+      try {
+        const { walletUsesDeviceSigning } = await import('@/lib/v3-sign');
+        if (await walletUsesDeviceSigning()) return;
+      } catch {
+        // Fall through to the code path below.
+      }
+      if (authMethod && authMethod.kind !== 'password' && !otpSent) {
+        handleSendOtp();
+      }
+    })();
   };
 
   // ── Send a fresh OTP for transaction authorization ─────────────────
@@ -220,6 +229,23 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
 
     setIsSending(true);
     try {
+      // Device signing first. Returns null when this wallet hasn't migrated,
+      // in which case the credential path below runs exactly as before.
+      const { trySendTokenWithV3 } = await import('@/lib/v3-sign');
+      const v3Hash = await trySendTokenWithV3({
+        token,
+        chain: normalizeChain(chain) as string,
+        recipient: to,
+        amount: amount,
+      });
+      if (v3Hash) {
+        setResultHash(v3Hash);
+        setStep('done');
+        refreshAll();
+        setIsSending(false);
+        return;
+      }
+
       let credentials: any;
       if (authMethod.kind === 'password') {
         if (!password) throw new Error('Password is required');

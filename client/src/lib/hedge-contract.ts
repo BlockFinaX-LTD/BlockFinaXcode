@@ -332,6 +332,17 @@ class HedgeContractManager {
       throw new Error(`Chain ${chainId} is not supported by Rift.`);
     }
 
+    // A migrated wallet signs on the device: the proof is bound to this exact
+    // operation, so nothing reusable is typed in and nothing reusable is
+    // cached. trySignWithV3 returns null when the wallet has not migrated,
+    // which is the only case that still needs a one-time code.
+    const { trySignWithV3 } = await import('./v3-sign');
+    const v3Hash = await trySignWithV3(
+      { chain: chainName, to, data: calldata, value: value.toString() },
+      { title: 'Approve this transaction', onStep },
+    );
+    if (v3Hash) return v3Hash;
+
     onStep?.('Authorizing transaction...');
     const auth = await requestTxAuth(
       'Authorize on-chain action',

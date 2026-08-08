@@ -461,6 +461,33 @@ export async function previewTransaction(
   return call("/v1/transactions/preview", accessToken, { method: "POST", body: params });
 }
 
+/**
+ * Preview for a raw contract call.
+ *
+ * The token-transfer preview only understands {token, chain, recipient,
+ * amount}; buying cover or depositing liquidity is a call to the Diamond with
+ * calldata, which is what this variant is for. Rift's guide names the endpoint
+ * but not its body, so the shape mirrors what the existing signer call already
+ * sends for the same operation.
+ */
+export async function previewUserOperation(
+  accessToken: string,
+  params: { chain: string; to: string; data?: string; value?: string },
+): Promise<PreviewResult> {
+  return call("/v1/wallet/user-operations/preview", accessToken, {
+    method: "POST",
+    body: {
+      chain: params.chain,
+      transactionData: { to: params.to, data: params.data || "0x", value: params.value || "0" },
+      // Sent flat as well: the guide does not state which shape this endpoint
+      // expects and an ignored extra field is cheaper than a failed call.
+      to: params.to,
+      data: params.data || "0x",
+      value: params.value || "0",
+    },
+  });
+}
+
 export async function submitPrepared(
   accessToken: string,
   ticketId: string,
