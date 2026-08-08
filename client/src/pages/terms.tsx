@@ -127,7 +127,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="14. Contact">
-            <p>For questions regarding these Terms, please contact us at <a href="mailto:anthonykumako8@gmail.com" className="text-primary underline">anthonykumako8@gmail.com</a>.</p>
+            <p>For questions regarding these Terms, please contact us at <a href="mailto:hello@blockfinax.com" className="text-primary underline">hello@blockfinax.com</a>.</p>
           </Section>
 
           <div className="border-t border-border pt-6 text-xs text-muted-foreground">

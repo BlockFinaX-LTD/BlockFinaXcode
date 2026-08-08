@@ -2,6 +2,31 @@
 
 ---
 
+> ## ⚠️ Jurisdiction note — read first
+>
+> **This document is written against Ghanaian law. The only entity that
+> currently exists is incorporated in Delaware, United States.**
+>
+> Every framework cited below — Act 1044, Act 843, Bank of Ghana directives,
+> the Financial Intelligence Centre — binds a Ghanaian entity. No Ghanaian
+> entity has been incorporated. Until one is, the obligations described here
+> are the standard BlockFinaX holds itself to, not obligations a regulator can
+> presently enforce against it, and the Ghanaian regulators named are not its
+> supervisors.
+>
+> A United States entity offering foreign-exchange risk products raises a
+> different and largely unaddressed set of questions — money services business
+> registration with FinCEN, the status of these products under the Commodity
+> Exchange Act, and state money transmitter licensing. **None of that is
+> covered by this document.** It must be resolved with US counsel before
+> anything is offered to a US person, and the answers may change the product
+> rather than only the paperwork.
+>
+> *Status as at 8 August 2026. Remove this note once the entity structure and
+> the applicable regime are settled.*
+
+---
+
 # PART 1: ANTI-MONEY LAUNDERING AND KNOW YOUR CUSTOMER POLICY
 
 **Version 1.1 | August 2026**
@@ -180,7 +205,7 @@ This policy is governed by:
 - Data Protection Commission of Ghana regulations and guidelines
 - Article 18(2) of the Constitution of the Republic of Ghana, 1992 (right to privacy)
 
-BlockFinaX is registered with the Data Protection Commission of Ghana as a data controller.
+BlockFinaX is **not currently registered** with the Data Protection Commission of Ghana. Registration will be completed if and when a Ghanaian operating entity is established — see the jurisdiction note at the head of this document.
 
 ---
 
@@ -276,7 +301,7 @@ Requests may be submitted to the BlockFinaX Data Protection Officer. BlockFinaX 
 
 ## 10. Data Protection Officer
 
-BlockFinaX has designated a Data Protection Officer responsible for overseeing compliance with this policy and acting as the point of contact for data subjects and the Data Protection Commission of Ghana.
+BlockFinaX **has not yet designated** a Data Protection Officer. One will be appointed before commercial operations begin. Until then these responsibilities are discharged by the Chief Executive Officer, who is the point of contact for data subjects. Requests should be sent to hello@blockfinax.com.
 
 ---
 
