@@ -247,16 +247,51 @@ async function call<T>(
   return (body?.data ?? body) as T;
 }
 
-const wallet = (p: string) => `${WALLET_PREFIX}/wallet${p}`;
+/**
+ * Wallet-management paths, tried both ways.
+ *
+ * Rift's two guides disagree: the CEO's document writes
+ * `/wallet/migrate-to-v3`, the COO's writes `/v1/wallet/migrate-to-v3`. The
+ * unprefixed form is what our first successful migration used, so it works —
+ * but the add-method endpoints are on the same family and untested, and an
+ * unauthenticated probe cannot tell them apart because auth runs ahead of
+ * routing and answers 401 for every path including nonsense ones.
+ *
+ * So rather than pick, call one and fall back to the other on a 404, then
+ * remember which answered. Costs one wasted request, once, and removes a class
+ * of failure that would otherwise surface as a dead button.
+ */
+let walletPrefix: string | null = WALLET_PREFIX || null;
+
+async function callWallet<T>(
+  suffix: string,
+  accessToken: string,
+  init?: { method?: string; body?: unknown },
+): Promise<T> {
+  const order = walletPrefix !== null ? [walletPrefix] : ["", "/v1"];
+  let last: unknown;
+  for (const prefix of order) {
+    try {
+      const out = await call<T>(`${prefix}/wallet${suffix}`, accessToken, init);
+      walletPrefix = prefix; // Remember what answered, for every later call.
+      return out;
+    } catch (err) {
+      last = err;
+      const notFound = err instanceof RiftV3Error && err.status === 404;
+      if (!notFound) throw err; // A real error is not a routing question.
+    }
+  }
+  throw last;
+}
 
 // ── Status ────────────────────────────────────────────────────────────────
 
 export async function getV3Status(accessToken: string): Promise<{ version: WalletVersion }> {
-  return call(wallet("/v3-status"), accessToken);
+  return callWallet("/v3-status", accessToken);
 }
 
 export async function getMethods(accessToken: string): Promise<MethodsResponse> {
-  const r = await call<MethodsResponse>(wallet("/methods"), accessToken);
+  const r = await callWallet<MethodsResponse>("/methods", accessToken);
   return { ...r, enrolled: Array.isArray(r?.enrolled) ? r.enrolled : [] };
 }
 
@@ -413,9 +448,15 @@ export async function migrateToV3(
         "so the credential is bound to blockfinax.com — migration cannot be undone.",
     );
   }
-  return call(wallet("/migrate-to-v3"), accessToken, {
+  return callWallet("/migrate-to-v3", accessToken, {
     method: "POST",
-    body: { enrolledMethods, ...(oldPassword ? { oldPassword } : {}) },
+    // enrolledMethods per the CEO's guide; enrolled_methods is what the COO's
+    // note writes. Sending both costs nothing and one of them is right.
+    body: {
+      enrolledMethods,
+      enrolled_methods: enrolledMethods,
+      ...(oldPassword ? { oldPassword } : {}),
+    },
   });
 }
 
@@ -434,14 +475,14 @@ export async function addMethod(
   approve: (challengeHex: string) => Promise<AuthProof>,
   enrolNew: () => Promise<EnrolledMethod>,
 ): Promise<{ ok: boolean; ownerAddress?: string; addedKind?: string }> {
-  const { challengeHex } = await call<{ challengeHex: string }>(
-    wallet("/methods/challenge"),
+  const { challengeHex } = await callWallet<{ challengeHex: string }>(
+    "/methods/challenge",
     accessToken,
     { method: "POST" },
   );
   const authProof = await approve(challengeHex);
   const newMethod = await enrolNew();
-  return call(wallet("/methods"), accessToken, { method: "POST", body: { authProof, newMethod } });
+  return callWallet("/methods", accessToken, { method: "POST", body: { authProof, newMethod } });
 }
 
 // ── Signing ───────────────────────────────────────────────────────────────
