@@ -8,6 +8,8 @@
  */
 import { useState, useEffect } from 'react';
 import { SigningSection } from '@/components/wallet/signing-section';
+import { SettingsRow, SettingsGroup } from '@/components/app-settings-row';
+import { clearLocalRiftState } from '@/lib/rift-client';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -51,6 +53,14 @@ import {
   ChevronUp,
   Copy,
   Loader2,
+  Bell,
+  Gift,
+  TrendingUp,
+  BadgeCheck,
+  Settings as SettingsIcon,
+  LogOut,
+  Wallet as WalletIcon,
+  Pencil,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
@@ -125,6 +135,10 @@ function SectionCard({
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
   const { wallet, isUnlocked, walletExists, isLoading: walletLoading } = useWallet();
+  // The form is a page in its own right, opened from the row rather than
+  // stacked below it — the list is the shape people scan.
+  const [showPersonal, setShowPersonal] = useState(false);
+  const [showSigning, setShowSigning] = useState(false);
   const { toast } = useToast();
   const [showBusiness, setShowBusiness] = useState(false);
 
@@ -261,33 +275,72 @@ export default function ProfilePage() {
 
   return (
     <AppShell active="profile" greeting={{ title: 'Profile', subtitle: 'Your account, verification and settings' }}>
-      <main className="max-w-2xl mx-auto space-y-4">
-        <VerificationCard />
-        {/* How payments from this wallet get approved. Renders nothing for
-            accounts outside the rollout, and nothing if the wallet API cannot
-            be reached — a security panel that half-loads is worse than none. */}
-        <SigningSection />
-        {/* Avatar hero */}
-        <Card className="rounded-2xl bfx-hero-dark border-0 relative overflow-hidden">
-          <CardContent className="p-5 flex items-center gap-4 relative">
-            <div className="h-14 w-14 rounded-full bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
-              <span className="bfx-display text-lg font-semibold text-white">{getInitials()}</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="bfx-display text-[18px] font-semibold text-white truncate">
-                {form.watch('displayName') || form.watch('firstName') || 'Set up your profile'}
-              </p>
-              <button
-                onClick={copyAddress}
-                className="mt-0.5 flex items-center gap-1 text-[11px] font-mono-data text-white/70 hover:text-white transition-colors"
-              >
-                {shortAddr(walletAddress)}
-                <Copy className="h-3 w-3" />
-              </button>
-            </div>
-          </CardContent>
-        </Card>
+      <main className="max-w-2xl mx-auto space-y-5 pb-10">
+        {/* Identity, then the list. The address sits under the name because it
+            is the thing people come here to copy. */}
+        <div className="flex items-center gap-3.5 px-1 pt-1">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <span className="bfx-display text-lg font-semibold text-primary">{getInitials()}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <button
+              onClick={() => setShowPersonal(true)}
+              className="flex items-center gap-1.5 text-left"
+            >
+              <span className="bfx-display truncate text-[19px] font-semibold tracking-tight">
+                {form.watch('displayName') || form.watch('firstName') || 'Set your name'}
+              </span>
+              <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </button>
+            <button
+              onClick={copyAddress}
+              className="mt-0.5 flex items-center gap-1 font-mono-data text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {shortAddr(walletAddress)}
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
 
+        <SettingsGroup title="Account">
+          <SettingsRow
+            icon={User}
+            label="Personal info"
+            sub={form.watch('displayName') || form.watch('firstName') ? 'Name, contact and business' : 'Not set up yet'}
+            onClick={() => setShowPersonal((v) => !v)}
+          />
+          <SettingsRow icon={WalletIcon} label="Withdrawal account" sub="Where payouts are sent" href="/settings" />
+          <SettingsRow icon={Bell} label="Notifications" sub="Manage alerts" href="/settings" />
+          <SettingsRow icon={Gift} label="Invite friends" sub="Share your referral link" href="/rewards" />
+          <SettingsRow icon={TrendingUp} label="Earn" sub="Tasks, points and rewards" href="/tasks" />
+          <SettingsRow
+            icon={ShieldCheck}
+            label="Signing methods"
+            sub="Passkeys and Google accounts that authorise payments"
+            onClick={() => setShowSigning((v) => !v)}
+          />
+        </SettingsGroup>
+
+        {showSigning && <SigningSection />}
+
+        <SettingsGroup title="Compliance">
+          <VerificationRow />
+        </SettingsGroup>
+
+        <SettingsGroup title="App">
+          <SettingsRow icon={SettingsIcon} label="Preferences" sub="Security, network and legal" href="/settings" />
+          <SettingsRow
+            icon={LogOut}
+            label="Log out"
+            tone="danger"
+            noChevron
+            onClick={() => { clearLocalRiftState(); window.location.href = '/'; }}
+          />
+        </SettingsGroup>
+
+        <p className="pb-2 text-center text-[11px] text-muted-foreground">BlockFinaX Inc.</p>
+
+        {showPersonal && (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Personal */}
@@ -649,6 +702,7 @@ export default function ProfilePage() {
             </div>
           </form>
         </Form>
+        )}
       </main>
     </AppShell>
   );
@@ -661,47 +715,43 @@ export default function ProfilePage() {
  * thing they most often come here to find out — and until this existed there
  * was no route to the verification page at all.
  */
-function VerificationCard() {
-  const [, navigate] = useLocation();
-  const { data } = useQuery({
+function VerificationRow() {
+  const { data } = useQuery<{ tier: number; status: string } | null>({
     queryKey: ['compliance-me-profile'],
     queryFn: async () => {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      try { headers.Authorization = `Bearer ${await getRiftAccessToken()}`; } catch { /* signed out */ }
-      const r = await fetch('/api/compliance/me', { headers });
-      if (!r.ok) return null;
-      return r.json();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        headers.Authorization = `Bearer ${await getRiftAccessToken()}`;
+      } catch {
+        /* signed out — the endpoint will simply answer for nobody */
+      }
+      try {
+        const r = await fetch("/api/compliance/me", { headers });
+        return r.ok ? await r.json() : null;
+      } catch {
+        return null;
+      }
     },
+    staleTime: 60_000,
   });
 
-  if (!data) return null;
-  const tier = data.tierDef;
-  const verified = data.tier > 0;
-  const left = Math.max(0, (tier?.cashMovedUsd ?? 0) - (data.cashMovedUsd ?? 0));
+  const status = data?.status ?? "unverified";
+  const verified = status === "approved";
+  const pending = status === "pending" || status === "submitted";
 
   return (
-    <Card className="rounded-2xl">
-      <CardContent className="p-4">
-        <button
-          onClick={() => navigate('/verify')}
-          className="flex w-full items-center gap-3 text-left"
-        >
-          <span className={`h-9 w-9 shrink-0 rounded-full inline-flex items-center justify-center ${verified ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
-            {verified ? <ShieldCheck className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-semibold tracking-tight">
-              {verified ? `${tier.name} verification` : 'Verify your identity'}
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              {verified
-                ? `$${left.toLocaleString()} left to transact this month`
-                : 'Required before you can buy cover or provide liquidity'}
-            </span>
-          </span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
-      </CardContent>
-    </Card>
+    <SettingsRow
+      icon={BadgeCheck}
+      label="Identity verification"
+      sub={
+        verified
+          ? `Verified${data?.tier ? ` — tier ${data.tier}` : ""}`
+          : pending
+            ? "Under review"
+            : "Required before you can buy cover or provide liquidity"
+      }
+      href="/verify"
+      tone={verified ? "success" : pending ? "default" : "warning"}
+    />
   );
 }

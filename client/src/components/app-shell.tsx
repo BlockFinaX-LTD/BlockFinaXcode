@@ -270,16 +270,17 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
         </main>
       </div>
 
-      {/* ===== BOTTOM TAB BAR (mobile) ===== */}
+      {/* ===== BOTTOM TAB BAR (mobile) =====
+           Three destinations, not four. Earn moved under Profile: it is a
+           place you visit occasionally, and it was taking a quarter of the
+           bar from Home, Cover and Profile, which are the daily ones. Its
+           route is unchanged, so any link to /tasks still lands. */}
       <nav className="tabbar">
         <Link href="/home" className={`tab${active === 'home' ? ' on' : ''}`}>
           <LayoutDashboard /><span className="tl">Home</span>
         </Link>
         <Link href="/hedge" className={`tab${active === 'cover' ? ' on' : ''}`}>
           <Shield /><span className="tl">Cover</span>
-        </Link>
-        <Link href="/tasks" className={`tab${active === 'earn' ? ' on' : ''}`}>
-          <TrendingUp /><span className="tl">Earn</span>
         </Link>
         <Link href="/profile" className={`tab${active === 'profile' ? ' on' : ''}`}>
           <User /><span className="tl">Profile</span>
