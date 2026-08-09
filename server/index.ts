@@ -40,10 +40,17 @@ app.use(helmet({
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'"],
+      // Google Identity Services (`accounts.google.com/gsi/client`) is
+      // dynamically injected as <script src=…> by the Rift v3 wallet
+      // helpers when the user links or signs with a Google account. Without
+      // this entry the script is CSP-blocked and enrolment / signing fails
+      // with "Failed to load Google Identity script".
+      scriptSrc:      ["'self'", "https://accounts.google.com", "https://apis.google.com"],
       // style-src needs Google Fonts because index.html loads Inter + Geist
       // Mono from fonts.googleapis.com. Without it the page renders with
       // system fonts and the stylesheet is blocked.
+      // GSI also injects inline styles for its popup button, hence 'unsafe-inline'
+      // is already permitted below.
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc:         [
         "'self'",
