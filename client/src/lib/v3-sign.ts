@@ -30,11 +30,16 @@ import {
   previewUserOperation,
   submitPrepared,
   assertPasskey,
+  assertGoogle,
+  googleSigningConfigured,
   isSigningReady,
   biometricPrompt,
   noteDeviceSigningDecline,
   wasMigratedLocally,
+  passkeysSupported,
   RiftV3Error,
+  type AuthProof,
+  type EnrolledEntry,
   type MethodsResponse,
 } from "./rift-v3";
 
@@ -157,6 +162,210 @@ function askToApprove(title: string, detail?: string): Promise<void> {
   });
 }
 
+// ── Method chooser ────────────────────────────────────────────────────────
+//
+// When a wallet has more than one enrolled method (passkey + Google, or
+// several Google accounts), signing needs to know which one to try. The
+// UI provides a modal via subscribeMethodChooser and resolves the promise
+// with the user's pick. Falls through to a passkey default if the chooser
+// is never registered (headless test contexts).
+
+export type MethodPick =
+  | { kind: "passkey" }
+  | { kind: "oidc"; sub?: string };
+
+export interface PendingChoice {
+  /** All eligible enrolled methods, so the modal can render one per entry. */
+  options: EnrolledEntry[];
+  /** Called by the modal after the user picks a method. */
+  pick: (choice: MethodPick) => void;
+  /** Called when the modal is dismissed without a pick. */
+  cancel: () => void;
+  /** True after `pick` fires — modal shows a spinner while sign is running. */
+  busy?: boolean;
+}
+
+let pendingChoice: PendingChoice | null = null;
+let chooserListener: ((p: PendingChoice | null) => void) | null = null;
+
+export function subscribeMethodChooser(cb: (p: PendingChoice | null) => void): () => void {
+  chooserListener = cb;
+  cb(pendingChoice);
+  return () => {
+    chooserListener = null;
+  };
+}
+
+function askForMethod(options: EnrolledEntry[]): Promise<MethodPick> {
+  return new Promise<MethodPick>((resolve, reject) => {
+    if (!chooserListener) {
+      // No UI mounted — fall back silently. Prefer passkey when it exists.
+      const hasPasskey = options.some((o) => o.kind === "passkey");
+      resolve(hasPasskey ? { kind: "passkey" } : { kind: "oidc" });
+      return;
+    }
+    pendingChoice = {
+      options,
+      pick: (choice) => {
+        pendingChoice = null;
+        chooserListener?.(null);
+        resolve(choice);
+      },
+      cancel: () => {
+        pendingChoice = null;
+        chooserListener?.(null);
+        reject(new RiftV3Error("CANCELLED", "Cancelled."));
+      },
+    };
+    chooserListener?.(pendingChoice);
+  });
+}
+
+// ── Preferred-method storage ─────────────────────────────────────────────
+//
+// A user who's picked their preferred method once shouldn't have to pick
+// again on every subsequent signature. Remembered per-user (indexed by
+// their Rift externalId / user id) so a shared-device scenario doesn't
+// pollute another user's preference. Cleared on explicit "change method".
+
+const PREF_KEY = "bfx_v3_preferred_method";
+
+interface PreferredMethods {
+  [userId: string]: MethodPick & { savedAt: number };
+}
+
+function readPreferences(): PreferredMethods {
+  try {
+    return JSON.parse(localStorage.getItem(PREF_KEY) || "{}") as PreferredMethods;
+  } catch {
+    return {};
+  }
+}
+
+export function getPreferredMethod(userId: string | null | undefined): MethodPick | null {
+  if (!userId) return null;
+  const all = readPreferences();
+  const saved = all[userId];
+  if (!saved) return null;
+  // 30-day TTL so a stale preference doesn't linger if the enrolled
+  // methods list has changed.
+  if (Date.now() - saved.savedAt > 30 * 24 * 60 * 60 * 1000) return null;
+  return { kind: saved.kind, ...(saved.kind === "oidc" && saved.sub ? { sub: saved.sub } : {}) } as MethodPick;
+}
+
+export function setPreferredMethod(userId: string | null | undefined, choice: MethodPick): void {
+  if (!userId) return;
+  try {
+    const all = readPreferences();
+    all[userId] = { ...choice, savedAt: Date.now() };
+    localStorage.setItem(PREF_KEY, JSON.stringify(all));
+  } catch {
+    /* private mode — pay the chooser each time */
+  }
+}
+
+export function forgetPreferredMethod(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    const all = readPreferences();
+    delete all[userId];
+    localStorage.setItem(PREF_KEY, JSON.stringify(all));
+  } catch {
+    /* ignore */
+  }
+}
+
+// ── Cascade: which auth proof to produce for a given hash ────────────────
+//
+// Follows Rift's `resolveAuthProof` shape:
+//   - preference "auto": if user has a saved preferred method, use it;
+//     if multiple methods enrolled, pop the chooser; else use the only one
+//   - preference "passkey" or "google": use that, throw if not enrolled
+// Passkey failures inside "auto" transparently cascade to Google when it's
+// also enrolled — saves a full transaction retry when the OS prompt hiccups.
+
+export type SigningPreference = "auto" | "passkey" | "google";
+
+async function produceAuthProof(
+  accessToken: string,
+  hashHex: string,
+  preference: SigningPreference,
+  userId: string | null,
+): Promise<AuthProof> {
+  const state = await signingState(accessToken);
+  const enrolled = state?.enrolled ?? [];
+  const hasPasskey = enrolled.some((e) => e.kind === "passkey");
+  const oidcOptions = enrolled.filter((e) => e.kind === "oidc");
+  const hasGoogle = oidcOptions.length > 0 && googleSigningConfigured();
+
+  const usePasskey = async (): Promise<AuthProof> =>
+    assertPasskey(hashHex, await enrolledCredIds(accessToken));
+  const useGoogle = async (): Promise<AuthProof> => assertGoogle(hashHex);
+
+  // Explicit overrides — the caller (or the chooser) has already decided.
+  if (preference === "passkey") {
+    if (!passkeysSupported() || !hasPasskey) {
+      throw new RiftV3Error("UNSUPPORTED", "No passkey enrolled for this wallet.");
+    }
+    return usePasskey();
+  }
+  if (preference === "google") {
+    if (!hasGoogle) {
+      throw new RiftV3Error("UNSUPPORTED", "No Google account linked to this wallet.");
+    }
+    try {
+      return await useGoogle();
+    } catch (googleErr) {
+      // If Google fails AND a passkey is also enrolled, transparently try
+      // that — saves a full transaction retry when the popup misbehaves.
+      if (hasPasskey && passkeysSupported()) {
+        console.warn("[v3-sign] Google failed, falling back to passkey");
+        return usePasskey();
+      }
+      throw googleErr;
+    }
+  }
+
+  // "auto" mode from here.
+  const saved = getPreferredMethod(userId);
+  if (saved) {
+    if (saved.kind === "passkey" && hasPasskey && passkeysSupported()) return usePasskey();
+    if (saved.kind === "oidc" && hasGoogle) return useGoogle();
+    // Saved preference is stale (method removed) — fall through to chooser.
+  }
+
+  // Only one usable method → don't ask, just sign.
+  if (hasPasskey && !hasGoogle) return usePasskey();
+  if (hasGoogle && !hasPasskey && oidcOptions.length === 1) return useGoogle();
+
+  // Multiple enrolled methods — pop the chooser.
+  const eligible: EnrolledEntry[] = [
+    ...(hasPasskey && passkeysSupported()
+      ? [{ kind: "passkey" as const, label: "This device" }]
+      : []),
+    ...(hasGoogle ? oidcOptions : []),
+  ];
+  if (eligible.length === 0) {
+    throw new RiftV3Error("UNSUPPORTED", "No enrolled method can sign on this browser.");
+  }
+  if (eligible.length === 1) {
+    // Passkey unsupported but multiple Google accounts, OR everything
+    // filtered to one option. Still no chooser needed.
+    return eligible[0].kind === "passkey" ? usePasskey() : useGoogle();
+  }
+  const pick = await askForMethod(eligible);
+  setPreferredMethod(userId, pick);
+  try {
+    if (pick.kind === "passkey") return await usePasskey();
+    return await useGoogle();
+  } catch (err) {
+    // The pick failed. Don't leave the stale preference behind — next attempt
+    // should re-ask so the user can pick the working method.
+    forgetPreferredMethod(userId);
+    throw err;
+  }
+}
+
 // ── The flow ──────────────────────────────────────────────────────────────
 
 export interface ContractCall {
@@ -175,7 +384,17 @@ export interface ContractCall {
  */
 export async function trySignWithV3(
   call: ContractCall,
-  opts: { title?: string; detail?: string; onStep?: (s: string) => void } = {},
+  opts: {
+    title?: string;
+    detail?: string;
+    onStep?: (s: string) => void;
+    /** Force a specific method for this signature. "auto" (default) uses the
+     *  saved preference or asks. Set from a "Sign with Google" fallback UI. */
+    preference?: SigningPreference;
+    /** Rift user id (externalId or Rift user id). Preference is stored per
+     *  user so a shared browser doesn't pollute another account's default. */
+    userId?: string | null;
+  } = {},
 ): Promise<string | null> {
   let accessToken = "";
   try {
@@ -210,7 +429,8 @@ export async function trySignWithV3(
   await askToApprove(opts.title ?? "Approve this transaction", opts.detail);
 
   opts.onStep?.(biometricPrompt());
-  const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
+  const preference: SigningPreference = opts.preference ?? "auto";
+  const proof = await produceAuthProof(accessToken, preview.userOpHashHex, preference, opts.userId ?? null);
 
   opts.onStep?.("Submitting…");
   const res = await submitPrepared(accessToken, preview.ticketId, proof, async () => {
@@ -220,7 +440,7 @@ export async function trySignWithV3(
     const again = await previewUserOperation(accessToken, call);
     return {
       ticketId: again.ticketId,
-      authProof: await assertPasskey(again.userOpHashHex, await enrolledCredIds(accessToken)),
+      authProof: await produceAuthProof(accessToken, again.userOpHashHex, preference, opts.userId ?? null),
     };
   });
   const hash = res?.hash || res?.transactionHash;
@@ -244,7 +464,12 @@ export interface TokenTransfer {
  */
 export async function trySendTokenWithV3(
   transfer: TokenTransfer,
-  opts: { detail?: string; onStep?: (s: string) => void } = {},
+  opts: {
+    detail?: string;
+    onStep?: (s: string) => void;
+    preference?: SigningPreference;
+    userId?: string | null;
+  } = {},
 ): Promise<string | null> {
   let accessToken = "";
   try {
@@ -273,14 +498,15 @@ export async function trySendTokenWithV3(
   );
 
   opts.onStep?.(biometricPrompt());
-  const proof = await assertPasskey(preview.userOpHashHex, await enrolledCredIds(accessToken));
+  const preference: SigningPreference = opts.preference ?? "auto";
+  const proof = await produceAuthProof(accessToken, preview.userOpHashHex, preference, opts.userId ?? null);
 
   opts.onStep?.("Submitting…");
   const res = await submitPrepared(accessToken, preview.ticketId, proof, async () => {
     const again = await previewTransaction(accessToken, transfer);
     return {
       ticketId: again.ticketId,
-      authProof: await assertPasskey(again.userOpHashHex, await enrolledCredIds(accessToken)),
+      authProof: await produceAuthProof(accessToken, again.userOpHashHex, preference, opts.userId ?? null),
     };
   });
   const hash = res?.hash || res?.transactionHash;

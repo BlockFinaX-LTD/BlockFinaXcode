@@ -18,6 +18,7 @@ import { RiftTokenBridge } from "@/lib/rift-token-bridge";
 import { getMe, setCachedUserSummary, clearLocalRiftState } from "@/lib/rift-client";
 import { TxAuthDialog } from "@/components/wallet/tx-auth-dialog";
 import { V3SignDialog } from "@/components/wallet/v3-sign-dialog";
+import { MethodChooser } from "@/components/wallet/method-chooser";
 import { useToast } from "@/hooks/use-toast";
 
 // Public pages
@@ -305,6 +306,7 @@ function App() {
           <AuthGuard />
           <TxAuthDialog />
           <V3SignDialog />
+          <MethodChooser />
           <Router />
           <FinaxMount />
         </TooltipProvider>

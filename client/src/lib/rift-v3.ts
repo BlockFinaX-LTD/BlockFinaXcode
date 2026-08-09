@@ -650,9 +650,16 @@ export async function migrateToV3(
   // would migrate it — irreversibly, since there is no remove-method endpoint
   // — to a credential that only exists on this laptop and cannot be used from
   // blockfinax.com. Refuse rather than let a real wallet be stranded.
+  //
+  // LOCAL-TEST OVERRIDE: set VITE_ALLOW_LOCALHOST_MIGRATION=true in .env to
+  // bypass this guard. Only use for throwaway test accounts on localhost;
+  // any account migrated this way will only sign from localhost afterwards.
   const localCredential = relyingPartyId() === "localhost";
   const productionWallet = /riftfi\.xyz|service\./.test(API_BASE);
-  if (localCredential && productionWallet) {
+  const allowLocalhostMigration = String(
+    import.meta.env.VITE_ALLOW_LOCALHOST_MIGRATION || "",
+  ).toLowerCase() === "true";
+  if (localCredential && productionWallet && !allowLocalhostMigration) {
     throw new RiftV3Error(
       "UNSUPPORTED",
       "Passkeys made on localhost only work on localhost. Run this on the live domain " +
@@ -853,4 +860,251 @@ export async function sendTransactionV3(
     }
   }
   throw new RiftV3Error("TICKET_EXPIRED", "That took a little too long — please try again.");
+}
+
+// ── OIDC (Google) signing ─────────────────────────────────────────────────
+//
+// A passkey is the primary method for a v3 wallet, but Google is the
+// account-recovery lever — if the phone is lost, the id_token from a
+// Google sign-in can produce a valid AuthProof because the enclave
+// verifies Google's signature and matches the id_token's `nonce` claim
+// against the user-operation hash.
+//
+// One Rift wallet can enrol many Google accounts. Each is a distinct
+// EnrolledMethod (kind: "oidc") with its own (iss, sub) pair, and each
+// can independently authorise a signature.
+
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || "").trim();
+
+/**
+ * Decode a Google id_token payload without verifying the signature.
+ * The enclave does the verify — we just need `iss` + `sub` for the
+ * enrolment payload and `email` for the settings display.
+ */
+export function decodeOidcMethodFromIdToken(
+  idToken: string,
+  fallbackIss = "https://accounts.google.com",
+): (EnrolledMethod & { email?: string }) | null {
+  try {
+    const [, payloadB64] = idToken.split(".");
+    if (!payloadB64) return null;
+    const normalized = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const json = atob(pad);
+    const payload = JSON.parse(json) as { iss?: string; sub?: string; email?: string };
+    if (!payload?.sub) return null;
+    return {
+      kind: "oidc",
+      iss: payload.iss || fallbackIss,
+      sub: payload.sub,
+      ...(payload.email ? { email: payload.email } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Load Google's gsi/client script once, cached across calls. */
+let gsiScriptPromise: Promise<void> | null = null;
+function loadGoogleIdentityScript(): Promise<void> {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
+  if ((window as any).google?.accounts?.id) return Promise.resolve();
+  if (gsiScriptPromise) return gsiScriptPromise;
+  gsiScriptPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-gsi-client]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () =>
+        reject(new Error("Failed to load Google Identity script")),
+      );
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.dataset.gsiClient = "1";
+    script.onload = () => resolve();
+    script.onerror = () =>
+      reject(new Error("Failed to load Google Identity script"));
+    document.head.appendChild(script);
+  });
+  return gsiScriptPromise;
+}
+
+/**
+ * Prompt the user with Google's One Tap; if that can't render (mobile
+ * Safari, in-app browsers, users not signed in to Google), fall back to
+ * the standard "Sign in with Google" button in an overlay. Either way
+ * returns a JWT whose `nonce` equals `hashHex` — the shape the enclave
+ * needs to verify against the user-operation hash.
+ *
+ * For signing: pass `hashHex` = user-operation hash.
+ * For enrolment: pass any 32 random bytes as hex — the enclave doesn't
+ * check nonce on the /methods enrol path.
+ */
+async function requestGoogleIdToken(hashHex: string, timeoutMs = 90_000): Promise<string> {
+  if (!GOOGLE_CLIENT_ID) {
+    throw new RiftV3Error("UNSUPPORTED", "Google sign-in isn't configured (VITE_GOOGLE_CLIENT_ID).");
+  }
+  await loadGoogleIdentityScript();
+  const google = (window as any).google;
+  if (!google?.accounts?.id) {
+    throw new RiftV3Error("UNSUPPORTED", "Google Identity Services failed to load.");
+  }
+  // Google's `nonce` claim is a string. The hex hash matches what the
+  // enclave normalises before comparing to user_op_hash bytes.
+  const nonce = hashHex.startsWith("0x") ? hashHex.slice(2) : hashHex;
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      try {
+        google.accounts.id.cancel();
+      } catch {
+        /* ignore */
+      }
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new RiftV3Error("CANCELLED", "Google sign-in timed out."));
+    }, timeoutMs);
+
+    try {
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        nonce,
+        use_fedcm_for_prompt: true,
+        callback: (resp: { credential?: string }) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          if (!resp?.credential) {
+            reject(new RiftV3Error("CANCELLED", "Google returned no credential."));
+            return;
+          }
+          resolve(resp.credential);
+        },
+      });
+      google.accounts.id.prompt(
+        (notification: {
+          isNotDisplayed?: () => boolean;
+          isSkippedMoment?: () => boolean;
+          isDismissedMoment?: () => boolean;
+        }) => {
+          if (settled) return;
+          if (
+            notification.isNotDisplayed?.() ||
+            notification.isSkippedMoment?.() ||
+            notification.isDismissedMoment?.()
+          ) {
+            showFallbackGoogleButton(google, GOOGLE_CLIENT_ID, nonce, (jwt, err) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              if (err) reject(err);
+              else if (jwt) resolve(jwt);
+              else reject(new RiftV3Error("CANCELLED", "Google sign-in returned no credential."));
+            });
+          }
+        },
+      );
+    } catch (e: any) {
+      settled = true;
+      clearTimeout(timer);
+      reject(new RiftV3Error("UNKNOWN", String(e?.message || e)));
+    }
+  });
+}
+
+function showFallbackGoogleButton(
+  google: any,
+  clientId: string,
+  nonce: string,
+  done: (jwt: string | null, err?: RiftV3Error) => void,
+): void {
+  const overlay = document.createElement("div");
+  overlay.setAttribute("data-bfx-gsi-fallback", "1");
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);";
+  const card = document.createElement("div");
+  card.style.cssText =
+    "background:#fff;border-radius:20px;padding:20px;max-width:340px;width:100%;box-shadow:0 8px 24px rgba(0,0,0,0.15);display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;";
+  const heading = document.createElement("p");
+  heading.textContent = "Continue with Google";
+  heading.style.cssText = "margin:0;font:600 15px/1.3 system-ui,-apple-system,sans-serif;color:#111;";
+  const sub = document.createElement("p");
+  sub.textContent = "Tap the button below to sign in.";
+  sub.style.cssText = "margin:0;font:400 12px/1.4 system-ui,-apple-system,sans-serif;color:#555;";
+  const btnHolder = document.createElement("div");
+  const cancel = document.createElement("button");
+  cancel.textContent = "Cancel";
+  cancel.style.cssText =
+    "background:transparent;border:0;color:#666;font:500 13px/1 system-ui,-apple-system,sans-serif;padding:8px;margin-top:4px;cursor:pointer;";
+  card.append(heading, sub, btnHolder, cancel);
+  overlay.append(card);
+  document.body.appendChild(overlay);
+
+  const cleanup = () => {
+    try {
+      overlay.remove();
+    } catch {
+      /* ignore */
+    }
+  };
+  cancel.onclick = () => {
+    cleanup();
+    done(null, new RiftV3Error("CANCELLED", "Google sign-in cancelled."));
+  };
+
+  try {
+    google.accounts.id.initialize({
+      client_id: clientId,
+      nonce,
+      use_fedcm_for_prompt: false,
+      callback: (resp: { credential?: string }) => {
+        cleanup();
+        if (resp?.credential) done(resp.credential);
+        else done(null, new RiftV3Error("CANCELLED", "Google returned no credential."));
+      },
+    });
+    google.accounts.id.renderButton(btnHolder, {
+      type: "standard",
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "pill",
+      logo_alignment: "left",
+    });
+  } catch (err: any) {
+    cleanup();
+    done(null, err instanceof RiftV3Error ? err : new RiftV3Error("UNKNOWN", String(err?.message || err)));
+  }
+}
+
+/** Enrol a Google account: prompts sign-in, returns the EnrolledMethod. */
+export async function enrolGoogle(): Promise<EnrolledMethod & { email?: string }> {
+  // Random challenge — enrolment doesn't bind to a specific op hash;
+  // Rift's /methods endpoint doesn't check nonce, it just extracts sub.
+  const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const idToken = await requestGoogleIdToken(randomHex);
+  const method = decodeOidcMethodFromIdToken(idToken);
+  if (!method) {
+    throw new RiftV3Error("UNKNOWN", "Google returned an unreadable token.");
+  }
+  return method;
+}
+
+/** Signs a user-operation hash with Google — the enclave verifies the JWT. */
+export async function assertGoogle(hashHex: string): Promise<AuthProof> {
+  const idToken = await requestGoogleIdToken(hashHex);
+  return { kind: "oidc", id_token: idToken };
+}
+
+export function googleSigningConfigured(): boolean {
+  return !!GOOGLE_CLIENT_ID;
 }
