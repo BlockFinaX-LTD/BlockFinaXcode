@@ -90,6 +90,16 @@ interface SendArgs {
   subject: string;
   html: string;
   /**
+   * Copied recipients.
+   *
+   * Absent until now, and absent silently: a caller passing cc got an email
+   * that reached only the To line, with nothing to say it had dropped half the
+   * recipients. That is the wrong way for an unsupported field to behave when
+   * the point of the field is a second person seeing the message.
+   */
+  cc?: string | string[];
+  bcc?: string | string[];
+  /**
    * Override the sender.
    *
    * A letter written in one person's voice should arrive from that person. The
@@ -122,6 +132,8 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
     const { error } = await resend.emails.send({
       from: args.from || FROM_ADDRESS,
       to: recipients,
+      ...(args.cc ? { cc: Array.isArray(args.cc) ? args.cc : [args.cc] } : {}),
+      ...(args.bcc ? { bcc: Array.isArray(args.bcc) ? args.bcc : [args.bcc] } : {}),
       subject: args.subject,
       html: args.html,
       text: args.text ?? htmlToText(args.html),
