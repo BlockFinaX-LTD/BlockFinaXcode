@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Copy,
   Loader2,
-  Bell,
   TrendingUp,
   BadgeCheck,
   LogOut,
@@ -268,7 +267,6 @@ export default function ProfilePage() {
               sub="Passkeys and Google accounts that authorise payments"
               href="/signing"
             />
-            <SettingsRow icon={Bell} label="Notifications" sub="Alerts for cover, payouts and verification" href="/settings" />
           </SettingsGroup>
         </div>
 
@@ -281,7 +279,7 @@ export default function ProfilePage() {
         </SettingsGroup>
 
         <SettingsGroup title="App">
-          <SettingsRow icon={SettingsIcon} label="Preferences" sub="Security, network and legal" href="/settings" />
+          <SettingsRow icon={SettingsIcon} label="Security and preferences" sub="Auto-lock, display currency, terms and privacy" href="/settings" />
           <SettingsRow
             icon={LogOut}
             label="Log out"
