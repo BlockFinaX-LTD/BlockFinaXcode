@@ -106,11 +106,6 @@ function body(): string {
     <p style="font-size:14px;color:#0f1a2f;line-height:1.6;margin:0 0 14px;">
       If anything is unclear, or the prompt doesn't appear, just reply to this email — it comes
       straight to me.
-    </p>
-
-    <p style="font-size:14px;color:#0f1a2f;line-height:1.6;margin:0;">
-      Anthony Kumako<br/>
-      <span style="color:#6b7280;font-size:13px;">Chief Executive Officer, BlockFinaX Inc.</span>
     </p>`;
 }
 
@@ -119,7 +114,8 @@ export async function sendUpgradeNotice(to: Recipient): Promise<{ ok: boolean; e
   return sendEmail({
     to: to.email,
     subject: "A security upgrade for your BlockFinaX wallet",
-    html: shell("Wallet security upgrade", body(), { tag: "" }),
+    from: "Anthony Kumako <anthonykumako@blockfinax.com>",
+    html: shell("Wallet security upgrade", body(), { tag: "", signOff: "kind", from: "Anthony Kumako <anthonykumako@blockfinax.com>" }),
     replyTo: "anthonykumako@blockfinax.com",
   });
 }

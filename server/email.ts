@@ -6,7 +6,7 @@
  * and falls back to logging when no key is configured (dev mode).
  */
 import { Resend } from 'resend';
-import { signatureFor, signatureHtml } from './brand';
+import { signatureFor, signatureHtml, signOffHtml, type SignOff } from './brand';
 
 const apiKey = (process.env.RESEND_API_KEY || '').trim();
 /**
@@ -89,6 +89,16 @@ interface SendArgs {
   to: string | string[];
   subject: string;
   html: string;
+  /**
+   * Override the sender.
+   *
+   * A letter written in one person's voice should arrive from that person. The
+   * upgrade notice says "Anthony here" and "reply and it comes straight to me";
+   * arriving from a Client Services address makes both of those slightly untrue
+   * and gives the reader a reason to trust it less. Any blockfinax.com address
+   * works — the domain is what is authenticated, not the mailbox.
+   */
+  from?: string;
   /** Derived from the HTML when not supplied. */
   text?: string;
   replyTo?: string;
@@ -110,7 +120,7 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
   }
   try {
     const { error } = await resend.emails.send({
-      from: FROM_ADDRESS,
+      from: args.from || FROM_ADDRESS,
       to: recipients,
       subject: args.subject,
       html: args.html,
@@ -137,7 +147,7 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
  * thing that renders reliably. Clients that block remote images entirely
  * still show the wordmark beside it, so the header never collapses to blank.
  */
-function shell(title: string, body: string, opts: { tag?: string; from?: string } = {}): string {
+function shell(title: string, body: string, opts: { tag?: string; from?: string; signOff?: SignOff } = {}): string {
   const tag = opts.tag ?? 'Private beta';
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
@@ -156,7 +166,8 @@ function shell(title: string, body: string, opts: { tag?: string; from?: string 
       </tr>
     </table>
     ${body}
-    <hr style="border:none;border-top:1px solid #e6eaf2;margin:28px 0;" />
+    ${signOffHtml(opts.signOff)}
+    <hr style="border:none;border-top:1px solid #e6eaf2;margin:${opts.signOff && opts.signOff !== 'none' ? '10px' : '28px'} 0 20px;" />
     ${signatureHtml(signatureFor(opts.from ?? FROM_ADDRESS))}
   </div>
 </body></html>`;

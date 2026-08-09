@@ -109,3 +109,33 @@ export function signatureFor(fromAddress: string | undefined): Person {
   if (addr.includes("anthonykumako")) return PEOPLE.anthony;
   return PEOPLE.hello;
 }
+
+
+/**
+ * The line before the signature.
+ *
+ * Not every message wants one. A verification-approved notice reading "Kind
+ * regards, Anthony" is odd — nobody wrote it, and pretending otherwise is a
+ * small untruth on a message about identity. So the default is none, and
+ * anything that reads as a letter opts in.
+ *
+ * "Kind regards" is the default where one is wanted. It is the ordinary
+ * register of business English in Ghana, Nigeria and Kenya — warmer than
+ * "Regards", which reads curt, and without the deference of "At your service",
+ * which belongs to hospitality rather than to two companies dealing as equals.
+ * A hedging counterparty is a peer.
+ */
+export type SignOff = "none" | "kind" | "best" | "warm" | "thanks" | "sincerely";
+
+const SIGN_OFFS: Record<Exclude<SignOff, "none">, string> = {
+  kind: "Kind regards,",
+  best: "Best regards,",
+  warm: "With warm regards,",
+  thanks: "Thank you,",
+  sincerely: "Yours sincerely,",
+};
+
+export function signOffHtml(kind: SignOff = "none"): string {
+  if (kind === "none") return "";
+  return `<p style="font-size:14px;color:#0f1a2f;line-height:1.6;margin:0 0 4px;">${SIGN_OFFS[kind]}</p>`;
+}

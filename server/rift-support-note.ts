@@ -65,12 +65,7 @@ export function body(): string {
     <h3 style="font-size:15px;margin:22px 0 8px;font-weight:600;">Unrelated, but affecting our users</h3>
     ${p("Transaction OTP emails sent from your side are landing in spam. <code>riftfi.com</code> publishes no SPF and no DMARC record at all — worth a look, since it affects every one of your integrators' users, not just ours.")}
 
-    ${p("Happy to jump on a call. The enclave error is the one thing holding up our rollout.")}
-
-    <p style="font-size:14px;color:#0f1a2f;line-height:1.6;margin:0;">
-      Anthony Kumako<br/>
-      <span style="color:#6b7280;font-size:13px;">Chief Executive Officer, BlockFinaX Inc.</span>
-    </p>`;
+    ${p("Happy to jump on a call. The enclave error is the one thing holding up our rollout.")}`;
 }
 
 /** Sends it. Only call once blockfinax.com is a verified sender. */
@@ -78,7 +73,8 @@ export async function sendRiftSupportNote(to: string[] = RIFT_CONTACTS) {
   return sendEmail({
     to,
     subject: SUBJECT,
-    html: shell("V3 signing", body(), { tag: "" }),
+    from: "Anthony Kumako <anthonykumako@blockfinax.com>",
+    html: shell("V3 signing", body(), { tag: "", signOff: "kind", from: "Anthony Kumako <anthonykumako@blockfinax.com>" }),
     replyTo: "anthonykumako@blockfinax.com",
   });
 }
