@@ -29,92 +29,9 @@
 
 import type { Express, Request, Response } from "express";
 
+import { signatureHtml, PEOPLE, type Person } from "../brand";
+
 const APP_URL = (process.env.PUBLIC_APP_URL || "https://www.blockfinax.com").replace(/\/$/, "");
-
-const NAVY = "#0a2540";
-const BLUE = "#1a4480";
-const MUTED = "#6b7280";
-const RULE = "#e6eaf2";
-
-export interface Person {
-  name: string;
-  title: string;
-  email: string;
-  phone?: string;
-}
-
-/**
- * The registered address, on one line.
- *
- * A signature is read in a preview pane, so the address earns its place by
- * being scannable rather than complete — it is the same address that appears
- * in the footer of every marketing email, where CAN-SPAM requires it, and
- * having the two agree matters more than either being elaborate.
- */
-const POSTAL = "1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA";
-
-/** The block itself. Tables and inline styles only — see the note above. */
-export function signatureHtml(p: Person): string {
-  const line = (label: string, value: string, href?: string) => `
-    <tr>
-      <td style="padding:1px 0;font-size:12px;color:${MUTED};font-family:Arial,Helvetica,sans-serif;">
-        ${label}${label ? "&nbsp;&nbsp;" : ""}${
-          href
-            ? `<a href="${href}" style="color:${BLUE};text-decoration:none;">${value}</a>`
-            : `<span style="color:${MUTED};">${value}</span>`
-        }
-      </td>
-    </tr>`;
-
-  return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
-  <tr>
-    <td style="padding:0 16px 0 0;vertical-align:top;">
-      <img src="${APP_URL}/assets/logo-mark.png" width="52" height="52" alt="BlockFinaX"
-           style="display:block;width:52px;height:52px;border:0;outline:none;text-decoration:none;" />
-    </td>
-    <td style="padding:0;vertical-align:top;border-left:2px solid ${RULE};padding-left:16px;">
-      <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-        <tr>
-          <td style="padding:0 0 1px;font-size:15px;font-weight:bold;color:${NAVY};font-family:Arial,Helvetica,sans-serif;letter-spacing:-0.2px;">
-            ${p.name}
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:0 0 6px;font-size:12px;color:${MUTED};font-family:Arial,Helvetica,sans-serif;">
-            ${p.title} &nbsp;·&nbsp; <span style="color:${NAVY};font-weight:bold;">BlockFinaX Inc.</span>
-          </td>
-        </tr>
-        ${line("", p.email, `mailto:${p.email}`)}
-        ${p.phone ? line("", p.phone, `tel:${p.phone.replace(/[^\d+]/g, "")}`) : ""}
-        ${line("", APP_URL.replace(/^https?:\/\//, ""), APP_URL)}
-        <tr>
-          <td style="padding:7px 0 0;font-size:11px;color:${MUTED};font-family:Arial,Helvetica,sans-serif;">
-            Foreign-exchange cover &amp; cross-border settlement
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:2px 0 0;font-size:11px;color:${MUTED};font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
-            ${POSTAL}
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>`;
-}
-
-const PEOPLE: Record<string, Person> = {
-  anthony: {
-    name: "Anthony Kumako",
-    title: "Chief Executive Officer",
-    email: "anthonykumako@blockfinax.com",
-  },
-  hello: {
-    name: "BlockFinaX",
-    title: "Client Services",
-    email: "hello@blockfinax.com",
-  },
-};
 
 export function registerSignatureRoutes(app: Express) {
   /**

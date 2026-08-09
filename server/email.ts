@@ -6,6 +6,7 @@
  * and falls back to logging when no key is configured (dev mode).
  */
 import { Resend } from 'resend';
+import { signatureFor, signatureHtml } from './brand';
 
 const apiKey = (process.env.RESEND_API_KEY || '').trim();
 /**
@@ -136,7 +137,7 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
  * thing that renders reliably. Clients that block remote images entirely
  * still show the wordmark beside it, so the header never collapses to blank.
  */
-function shell(title: string, body: string, opts: { tag?: string } = {}): string {
+function shell(title: string, body: string, opts: { tag?: string; from?: string } = {}): string {
   const tag = opts.tag ?? 'Private beta';
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
@@ -156,7 +157,7 @@ function shell(title: string, body: string, opts: { tag?: string } = {}): string
     </table>
     ${body}
     <hr style="border:none;border-top:1px solid #e6eaf2;margin:28px 0;" />
-    <p style="font-size:11px;color:#6b7280;margin:0;line-height:1.6;">BlockFinaX · P2P FX hedging &amp; cross-border payments<br/><a href="${APP_URL}" style="color:#1a4480;text-decoration:none;">${APP_URL.replace(/^https?:\/\//, '')}</a></p>
+    ${signatureHtml(signatureFor(opts.from ?? FROM_ADDRESS))}
   </div>
 </body></html>`;
 }
