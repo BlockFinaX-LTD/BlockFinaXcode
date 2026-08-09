@@ -732,3 +732,47 @@
 .bfx-app .t-right{flex-direction:row;width:100%;justify-content:space-between;align-items:center;margin-top:4px;}
 }
 
+
+/* ── Settings tiles ────────────────────────────────────────────────────
+   Deliberately not .list/.row. That pattern is a bordered container with
+   hairline dividers, which reads as a table — right for a rates feed or an
+   activity log, where the rows are one repeating kind of thing and the eye
+   scans a column. A settings screen is a set of unrelated destinations, and
+   ruling them together implies a relationship that isn't there.
+   Separate tiles with air between them say "these are separate places". */
+.bfx-app .st-group{display:flex;flex-direction:column;gap:9px;}
+.bfx-app .st-group + .st-group{margin-top:26px;}
+.bfx-app .st-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--tx-4);padding:0 4px 3px;}
+.bfx-app .st-tile{display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  padding:15px 17px;border-radius:15px;border:1px solid var(--border);background:var(--card);
+  transition:background .16s var(--ease),border-color .16s var(--ease),transform .16s var(--ease);}
+.bfx-app .st-tile:hover{background:var(--card-h);border-color:var(--border-2);}
+.bfx-app .st-tile:active{transform:scale(.988);}
+.bfx-app .st-ico{width:38px;height:38px;flex:0 0 38px;border-radius:12px;display:grid;place-items:center;
+  background:rgba(45,108,255,.11);color:var(--blue);}
+.bfx-app .st-ico svg{width:17px;height:17px;}
+.bfx-app .st-ico.ok{background:rgba(34,197,94,.11);color:#22c55e;}
+.bfx-app .st-ico.warn{background:rgba(245,158,11,.12);color:#f59e0b;}
+.bfx-app .st-ico.bad{background:rgba(239,68,68,.11);color:#ef4444;}
+.bfx-app .st-body{min-width:0;flex:1;}
+.bfx-app .st-t{font-size:14.5px;font-weight:600;letter-spacing:-.01em;color:var(--tx);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bfx-app .st-t.bad{color:#ef4444;}
+.bfx-app .st-s{font-size:12px;line-height:1.45;color:var(--tx-3);margin-top:2px;}
+.bfx-app .st-s.ok{color:#22c55e;} .bfx-app .st-s.warn{color:#f59e0b;}
+.bfx-app .st-go{flex:0 0 auto;color:var(--tx-4);}
+.bfx-app .st-go svg{width:16px;height:16px;}
+
+/* Identity block above the tiles. No card — the name is the heading of the
+   page, not another destination in the list. */
+.bfx-app .st-me{display:flex;align-items:center;gap:14px;padding:2px 4px 4px;}
+.bfx-app .st-av{width:56px;height:56px;flex:0 0 56px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(145deg,rgba(45,108,255,.22),rgba(45,108,255,.06));
+  border:1px solid rgba(45,108,255,.22);color:var(--blue);font-weight:700;font-size:18px;letter-spacing:-.02em;}
+.bfx-app .st-name{font-size:20px;font-weight:700;letter-spacing:-.03em;color:var(--tx);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bfx-app .st-addr{display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:11.5px;
+  color:var(--tx-3);font-family:ui-monospace,Menlo,monospace;transition:color .15s;}
+.bfx-app .st-addr:hover{color:var(--tx-2);}
+.bfx-app .st-addr svg{width:12px;height:12px;}
