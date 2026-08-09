@@ -7,6 +7,7 @@
  * the prior version (react-hook-form + Zod + TanStack mutations).
  */
 import { useState, useEffect } from 'react';
+import { SigningSection } from '@/components/wallet/signing-section';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -262,6 +263,10 @@ export default function ProfilePage() {
     <AppShell active="profile" greeting={{ title: 'Profile', subtitle: 'Your account, verification and settings' }}>
       <main className="max-w-2xl mx-auto space-y-4">
         <VerificationCard />
+        {/* How payments from this wallet get approved. Renders nothing for
+            accounts outside the rollout, and nothing if the wallet API cannot
+            be reached — a security panel that half-loads is worse than none. */}
+        <SigningSection />
         {/* Avatar hero */}
         <Card className="rounded-2xl bfx-hero-dark border-0 relative overflow-hidden">
           <CardContent className="p-5 flex items-center gap-4 relative">
