@@ -43,6 +43,16 @@ export interface Person {
   phone?: string;
 }
 
+/**
+ * The registered address, on one line.
+ *
+ * A signature is read in a preview pane, so the address earns its place by
+ * being scannable rather than complete — it is the same address that appears
+ * in the footer of every marketing email, where CAN-SPAM requires it, and
+ * having the two agree matters more than either being elaborate.
+ */
+const POSTAL = "1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA";
+
 /** The block itself. Tables and inline styles only — see the note above. */
 export function signatureHtml(p: Person): string {
   const line = (label: string, value: string, href?: string) => `
@@ -82,6 +92,11 @@ export function signatureHtml(p: Person): string {
             Foreign-exchange cover &amp; cross-border settlement
           </td>
         </tr>
+        <tr>
+          <td style="padding:2px 0 0;font-size:11px;color:${MUTED};font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
+            ${POSTAL}
+          </td>
+        </tr>
       </table>
     </td>
   </tr>
@@ -116,6 +131,7 @@ export function registerSignatureRoutes(app: Express) {
         <h2>${p.name}<span>${p.email}</span></h2>
         <div class="preview" id="sig-${key}">${signatureHtml(p)}</div>
         <button data-copy="sig-${key}">Copy this signature</button>
+        <p class="hint">If the button doesn't work, click it anyway — it selects the block, then press <b>Cmd-C</b>. Or drag across the signature yourself and copy.</p>
       </section>`;
 
     res.set("Content-Type", "text/html; charset=utf-8").send(`<!doctype html>
@@ -135,6 +151,9 @@ export function registerSignatureRoutes(app: Express) {
   button { margin-top:14px; background:#1a4480; color:#fff; border:0; border-radius:10px;
            padding:10px 18px; font-size:13px; font-weight:600; cursor:pointer; }
   button.done { background:#16a34a; }
+  button.warn { background:#d97706; }
+  .hint { font-size:12px; color:#6b7280; margin:10px 0 0; line-height:1.6; }
+  .preview::selection, .preview *::selection { background:#cfe0ff; }
   ol { font-size:13px; line-height:1.9; color:#0f1a2f; padding-left:20px; margin:8px 0 0; }
   .how { background:#fff; border:1px solid #e6eaf2; border-radius:14px; padding:22px; }
   .how h3 { font-size:13px; margin:0 0 4px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; }
@@ -176,26 +195,61 @@ export function registerSignatureRoutes(app: Express) {
   </div>
 
 <script>
-  document.querySelectorAll("button[data-copy]").forEach(function (b) {
-    b.addEventListener("click", async function () {
-      var el = document.getElementById(b.dataset.copy);
-      try {
-        // Rich HTML, so the mail client receives formatting rather than markup.
-        await navigator.clipboard.write([new ClipboardItem({
-          "text/html": new Blob([el.innerHTML], { type: "text/html" }),
-          "text/plain": new Blob([el.innerText], { type: "text/plain" }),
-        })]);
-      } catch (e) {
-        // Older browsers, and any context without clipboard permission:
-        // select it so ⌘C works.
-        var r = document.createRange(); r.selectNodeContents(el);
-        var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  /**
+   * Copy the rendered block, by whichever route this browser allows.
+   *
+   * The previous version used navigator.clipboard.write with a ClipboardItem.
+   * That is the modern API and it is also the one most likely to refuse:
+   * Safari rejects it unless the write is issued synchronously inside the
+   * gesture, and any context without clipboard-write permission fails
+   * silently — the button says nothing and nothing lands on the clipboard,
+   * which is exactly what happened.
+   *
+   * Selecting the node and calling execCommand("copy") is the old approach and
+   * works everywhere, including Safari, and it copies rich HTML rather than
+   * markup because the selection is of rendered content.
+   *
+   * The selection is deliberately left in place afterwards. If both routes
+   * fail, the block is highlighted on screen and Cmd-C finishes the job — the
+   * one path that cannot be refused by a permission prompt.
+   */
+  function selectBlock(el) {
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return sel;
+  }
+
+  document.querySelectorAll("button[data-copy]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var el = document.getElementById(btn.dataset.copy);
+      selectBlock(el);
+
+      var copied = false;
+      try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
+
+      if (!copied && navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+        try {
+          navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([el.innerHTML], { type: "text/html" }),
+            "text/plain": new Blob([el.innerText], { type: "text/plain" }),
+          })]).then(function () { flag(btn, true); }, function () { flag(btn, false); });
+          return;
+        } catch (e) { /* fall through to the message below */ }
       }
-      b.textContent = "Copied — now paste it into your mail client";
-      b.classList.add("done");
-      setTimeout(function () { b.textContent = "Copy this signature"; b.classList.remove("done"); }, 4000);
+      flag(btn, copied);
     });
   });
+
+  function flag(btn, copied) {
+    btn.textContent = copied
+      ? "Copied — now paste it into your mail client"
+      : "Selected — press Cmd-C (or Ctrl-C) to copy";
+    btn.className = copied ? "done" : "warn";
+    setTimeout(function () { btn.textContent = "Copy this signature"; btn.className = ""; }, 6000);
+  }
 </script>
 </body></html>`);
   });
