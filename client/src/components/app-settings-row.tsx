@@ -12,7 +12,7 @@
  */
 
 import { Link } from "wouter";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tone = "default" | "success" | "warning" | "danger";
@@ -25,7 +25,12 @@ const TONES: Record<Tone, { icon: string; text?: string }> = {
 };
 
 export interface RowProps {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  /**
+   * lucide's own type. Writing a narrower structural one here looks tidier and
+   * rejects every real icon: they are ForwardRefExoticComponent, which carries
+   * a ref the hand-written signature does not admit.
+   */
+  icon: LucideIcon;
   label: string;
   sub?: string;
   href?: string;
