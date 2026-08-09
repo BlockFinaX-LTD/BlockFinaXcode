@@ -126,13 +126,26 @@ export function registerSignatureRoutes(app: Express) {
    * it.
    */
   app.get("/signature", (_req: Request, res: Response) => {
-    const block = (key: string, p: Person) => `
+    const esc = (h: string) =>
+      h.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    const block = (key: string, p: Person) => {
+      const html = signatureHtml(p);
+      return `
       <section>
         <h2>${p.name}<span>${p.email}</span></h2>
-        <div class="preview" id="sig-${key}">${signatureHtml(p)}</div>
-        <button data-copy="sig-${key}">Copy this signature</button>
-        <p class="hint">If the button doesn't work, click it anyway — it selects the block, then press <b>Cmd-C</b>. Or drag across the signature yourself and copy.</p>
+
+        <p class="label">How it looks</p>
+        <div class="preview">${html}</div>
+
+        <p class="label">The source — paste this into the <code>&lt;&gt;</code> view</p>
+        <textarea class="src" id="src-${key}" readonly spellcheck="false">${esc(html)}</textarea>
+        <button data-copy="src-${key}">Copy the source</button>
+        <p class="hint">Plain text, so it copies reliably. Paste it into your editor's
+           <b>&lt;&gt;</b> (source code) button — not into the visual editor, which strips
+           the layout and the logo.</p>
       </section>`;
+    };
 
     res.set("Content-Type", "text/html; charset=utf-8").send(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
@@ -152,6 +165,12 @@ export function registerSignatureRoutes(app: Express) {
            padding:10px 18px; font-size:13px; font-weight:600; cursor:pointer; }
   button.done { background:#16a34a; }
   button.warn { background:#d97706; }
+  .label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; margin:16px 0 6px; }
+  .label:first-of-type { margin-top:0; }
+  .label code { font-family:ui-monospace,Menlo,monospace; text-transform:none; letter-spacing:0; }
+  .src { width:100%; height:150px; font-family:ui-monospace,Menlo,monospace; font-size:11px;
+         line-height:1.5; padding:12px; border:1px solid #e6eaf2; border-radius:10px;
+         background:#f7f8fa; color:#0f1a2f; resize:vertical; white-space:pre; overflow:auto; }
   .hint { font-size:12px; color:#6b7280; margin:10px 0 0; line-height:1.6; }
   .preview::selection, .preview *::selection { background:#cfe0ff; }
   ol { font-size:13px; line-height:1.9; color:#0f1a2f; padding-left:20px; margin:8px 0 0; }
@@ -162,6 +181,7 @@ export function registerSignatureRoutes(app: Express) {
     body { background:#0b1220; color:#e6ebf5; }
     section,.how { background:#111a2e; border-color:#1e2a44; }
     .preview { background:#fff; border-color:#1e2a44; }
+    .src { background:#0b1220; color:#e6ebf5; border-color:#1e2a44; }
     h2 span,.lede,.how h3 { color:#93a1bd; }
   }
 </style></head><body>
@@ -175,82 +195,38 @@ export function registerSignatureRoutes(app: Express) {
   <div class="how">
     <h3>Private Email (blockfinax.com)</h3>
     <ol>
-      <li>Copy a signature above.</li>
-      <li>privateemail.com → the <b>AA</b> avatar → <b>Settings</b>.</li>
-      <li><b>Mail → Signatures → Add new signature</b>.</li>
-      <li>Paste into the editor. Keep the formatting — don't use "paste as plain text".</li>
-      <li>Set it to apply to new messages <i>and</i> replies, then save.</li>
+      <li>Copy the source above.</li>
+      <li>privateemail.com → the <b>AA</b> avatar → <b>Settings</b> → <b>Mail → Signatures</b>.</li>
+      <li>Add a signature, then click the <b>&lt;&gt;</b> button in the editor toolbar —
+          it is on the right, past the font size.</li>
+      <li>Select everything already in that box and delete it, then paste the source.</li>
+      <li>Click <b>&lt;&gt;</b> again to come back to the visual view. The logo should appear.</li>
+      <li>Set <b>Signature Position</b> to <i>above quoted text</i>, then <b>Save</b>.</li>
     </ol>
   </div>
 
   <div class="how">
     <h3>Gmail</h3>
     <ol>
-      <li>Copy a signature above.</li>
-      <li>Gmail → gear icon → <b>See all settings</b>.</li>
-      <li>Scroll to <b>Signature</b> → <b>Create new</b>.</li>
-      <li>Paste. If the logo doesn't appear, allow images once and paste again.</li>
-      <li>Under "Signature defaults" pick it for both new mail and replies. Save at the bottom.</li>
+      <li>Gmail has no source view, so the rendered block is the only route there.</li>
+      <li>Select the signature under <b>How it looks</b> with your mouse, then press <b>Cmd-C</b>.</li>
+      <li>Gmail → gear → <b>See all settings</b> → <b>Signature</b> → <b>Create new</b>.</li>
+      <li>Paste. If the logo is missing, click it once in the preview above to load it, then copy again.</li>
+      <li>Under "Signature defaults" pick it for new mail and replies. <b>Save changes</b> at the bottom.</li>
     </ol>
   </div>
 
-<script>
-  /**
-   * Copy the rendered block, by whichever route this browser allows.
-   *
-   * The previous version used navigator.clipboard.write with a ClipboardItem.
-   * That is the modern API and it is also the one most likely to refuse:
-   * Safari rejects it unless the write is issued synchronously inside the
-   * gesture, and any context without clipboard-write permission fails
-   * silently — the button says nothing and nothing lands on the clipboard,
-   * which is exactly what happened.
-   *
-   * Selecting the node and calling execCommand("copy") is the old approach and
-   * works everywhere, including Safari, and it copies rich HTML rather than
-   * markup because the selection is of rendered content.
-   *
-   * The selection is deliberately left in place afterwards. If both routes
-   * fail, the block is highlighted on screen and Cmd-C finishes the job — the
-   * one path that cannot be refused by a permission prompt.
-   */
-  function selectBlock(el) {
-    var range = document.createRange();
-    range.selectNodeContents(el);
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-    return sel;
-  }
+  <div class="how">
+    <h3>Editing it yourself</h3>
+    <ol>
+      <li>The source is plain HTML — change the text in the textarea before copying if you want.</li>
+      <li>Keep the <code>&lt;table&gt;</code> structure. Outlook renders through Word, which ignores
+          flexbox, grid and external CSS; tables are the only layout that survives every client.</li>
+      <li>Leave the logo's <code>src</code> as a full <code>https://</code> address. A relative path
+          has nothing to resolve against once the signature sits in someone else's mailbox.</li>
+    </ol>
+  </div>
 
-  document.querySelectorAll("button[data-copy]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var el = document.getElementById(btn.dataset.copy);
-      selectBlock(el);
-
-      var copied = false;
-      try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
-
-      if (!copied && navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
-        try {
-          navigator.clipboard.write([new ClipboardItem({
-            "text/html": new Blob([el.innerHTML], { type: "text/html" }),
-            "text/plain": new Blob([el.innerText], { type: "text/plain" }),
-          })]).then(function () { flag(btn, true); }, function () { flag(btn, false); });
-          return;
-        } catch (e) { /* fall through to the message below */ }
-      }
-      flag(btn, copied);
-    });
-  });
-
-  function flag(btn, copied) {
-    btn.textContent = copied
-      ? "Copied — now paste it into your mail client"
-      : "Selected — press Cmd-C (or Ctrl-C) to copy";
-    btn.className = copied ? "done" : "warn";
-    setTimeout(function () { btn.textContent = "Copy this signature"; btn.className = ""; }, 6000);
-  }
-</script>
 </body></html>`);
   });
 }
