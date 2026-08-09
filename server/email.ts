@@ -42,15 +42,54 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'amschel@blockfinax.com,anthon
   .map((s) => s.trim())
   .filter(Boolean);
 
-const APP_URL = (process.env.PUBLIC_APP_URL || 'https://blockfinax.com').replace(/\/$/, '');
+/**
+ * The canonical host, used for links and for the logo in every email.
+ *
+ * Defaults to www rather than the apex on purpose. blockfinax.com has no
+ * certificate of its own — it serves *.up.railway.app and the handshake fails
+ * — so the apex resolves to nothing fetchable. An email whose logo is loaded
+ * from there shows a broken image in every client, and the fallback is silent:
+ * nothing errors, the mark is simply absent.
+ */
+const APP_URL = (process.env.PUBLIC_APP_URL || 'https://www.blockfinax.com').replace(/\/$/, '');
 const DOCS_URL = (process.env.PUBLIC_DOCS_URL || 'https://docs.blockfinax.com').replace(/\/$/, '');
 
 const resend = apiKey ? new Resend(apiKey) : null;
+
+/**
+ * A readable plain-text version of an HTML email.
+ *
+ * Sending HTML alone is a deliverability cost — filters treat a missing text
+ * alternative as a weak signal, and some clients render nothing useful without
+ * one. This is not a general HTML-to-text converter; it only has to handle the
+ * markup our own templates produce, which is headings, paragraphs, lists,
+ * tables and anchors.
+ */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<head[\s\S]*?<\/head>/gi, "")
+    // Keep the destination of a link, which is the whole point of a link.
+    .replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) =>
+      `${String(label).replace(/<[^>]+>/g, "").trim()} (${href})`)
+    .replace(/<li[^>]*>/gi, "\n  - ")
+    .replace(/<\/(p|div|tr|h[1-6]|li|ul|ol|table)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n").map((l) => l.trim()).join("\n")
+    .trim();
+}
 
 interface SendArgs {
   to: string | string[];
   subject: string;
   html: string;
+  /** Derived from the HTML when not supplied. */
+  text?: string;
   replyTo?: string;
   /** Resend attachment shape: base64 content + filename. */
   attachments?: { filename: string; content: string }[];
@@ -74,6 +113,7 @@ async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string 
       to: recipients,
       subject: args.subject,
       html: args.html,
+      text: args.text ?? htmlToText(args.html),
       replyTo: args.replyTo,
       attachments: args.attachments,
       headers: args.headers,
