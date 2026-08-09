@@ -352,12 +352,13 @@ async function callWallet<T>(
 export function biometricName(): string {
   const ua = typeof navigator === "undefined" ? "" : navigator.userAgent || "";
   const touch = typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
-  // iPadOS reports a Mac user agent; the touch points give it away.
-  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch)) return "Face ID or Touch ID";
+  // iPadOS reports a Mac user agent; touch points give it away.
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch)) return "Face ID / Touch ID";
   if (/Macintosh|Mac OS X/.test(ua)) return "Touch ID";
   if (/Android/.test(ua)) return "your fingerprint";
-  if (/Windows/.test(ua)) return "Windows Hello";
-  return "your fingerprint or face";
+  // Everyone else (Windows, Linux, Chromebook, unknown) reads the same
+  // brand-neutral copy — never surface OS chrome like "Windows Hello".
+  return "your device";
 }
 
 /** The same thing as an action, for progress lines. */
