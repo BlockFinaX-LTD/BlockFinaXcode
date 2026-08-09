@@ -363,6 +363,20 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
                   onChange={(e) => setOtpCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6))}
                   autoFocus
                 />
+                {/* The code is sent by Rift, our wallet provider, not by us —
+                    their domain publishes no SPF or DMARC, so it frequently
+                    lands in spam. We cannot send this one ourselves: Rift
+                    validates the code against its own store, so a code we
+                    generated would authorise nothing. Naming the sender is the
+                    part we can do, and it is most of what stops someone
+                    concluding the code never arrived. */}
+                {authMethod.kind === 'email' && (
+                  <p style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx-3)', marginTop: 8 }}>
+                    Sent by <strong style={{ color: 'var(--tx-2)' }}>Rift</strong>, our wallet
+                    provider — not from a BlockFinaX address. <strong style={{ color: 'var(--tx-2)' }}>Check
+                    your spam folder</strong> if it isn't in your inbox within a minute.
+                  </p>
+                )}
               </div>
             )}
             <div className="ctapair" style={{ marginTop: 8 }}>
