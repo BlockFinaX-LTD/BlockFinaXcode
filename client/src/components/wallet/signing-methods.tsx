@@ -219,7 +219,12 @@ export function SigningMethods({
 }) {
   const { methods, loading, refresh, signingReady } = useSigningState(accessToken);
   const [busy, setBusy] = useState(false);
+  const [platformAuth, setPlatformAuth] = useState<"yes" | "no" | "unknown">("unknown");
   const { toast } = useToast();
+
+  useEffect(() => {
+    void diagnostics().then((d) => setPlatformAuth(d.platformAuthenticator));
+  }, []);
 
   const addPasskey = async () => {
     setBusy(true);
@@ -275,6 +280,7 @@ export function SigningMethods({
 
   const enrolled = methods?.enrolled ?? [];
   const onlyOne = enrolled.length === 1;
+  const noBiometric = platformAuth === "no";
 
   return (
     <div className="space-y-3">
@@ -361,11 +367,29 @@ export function SigningMethods({
         </Button>
       )}
 
+      {/* isUserVerifyingPlatformAuthenticatorAvailable() answering "no" means
+          this device has no fingerprint or face reader the browser can use.
+          Offering to register it anyway produces a prompt that cannot be
+          satisfied, which is how this looked on the phone. */}
+      {noBiometric && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <p className="flex items-center gap-2 text-xs font-medium">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> No fingerprint or face
+            reader on this device
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            This browser reports no biometric it can use, so a passkey can't be created here. Check
+            that Face ID or the fingerprint unlock is set up in your device settings, and that you're
+            in Safari or Chrome rather than a browser inside another app.
+          </p>
+        </div>
+      )}
+
       <Button
         size="sm"
         variant="outline"
         onClick={addPasskey}
-        disabled={busy || !passkeysSupported()}
+        disabled={busy || !passkeysSupported() || noBiometric}
         className={cn("w-full", onlyOne && "border-amber-500/40")}
       >
         {busy ? (
