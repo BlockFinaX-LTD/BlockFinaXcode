@@ -31,6 +31,9 @@ import {
   migrateToV3,
   createPasskey,
   assertPasskey,
+  assertGoogle,
+  enrolGoogle,
+  googleSigningConfigured,
   addMethod,
   passkeysSupported,
   isSigningReady,
@@ -40,6 +43,7 @@ import {
   type EnrolledMethod,
   type V3Diagnostics,
 } from "@/lib/rift-v3";
+import { forgetPreferredMethod } from "@/lib/v3-sign";
 
 /** Dismissal is per session, deliberately — skipping should defer, not opt out. */
 const DISMISS_KEY = "bfx_v3_prompt_dismissed";
@@ -104,34 +108,48 @@ export function SigningUpgradePrompt({
     setDismissed(true);
   };
 
-  const run = async () => {
+  // Try to enrol BOTH passkey + Google in one migrate call — that gives the
+  // wallet a device-bound signer AND an account-recovery lever the moment
+  // it hits v3. Either one alone is fine; the migration only fails if BOTH
+  // do. Matches Rift's own V3EnrolmentBanner behaviour.
+  const runWith = async (want: { passkey: boolean; google: boolean }) => {
     setBusy(true);
     try {
       const enrolled: EnrolledMethod[] = [];
-      let why: RiftV3Error | null = null;
+      const failures: string[] = [];
 
-      if (!passkeysSupported()) {
-        why = new RiftV3Error("UNSUPPORTED", "This browser doesn't support passkeys at all.");
-      } else {
-        try {
-          enrolled.push(await createPasskey(userLabel, userId));
-        } catch (err) {
-          why = err instanceof RiftV3Error ? err : new RiftV3Error("UNKNOWN", String(err));
+      if (want.passkey) {
+        if (!passkeysSupported()) {
+          failures.push("Passkeys aren't supported in this browser.");
+        } else {
+          try {
+            enrolled.push(await createPasskey(userLabel, userId));
+          } catch (err) {
+            const msg = err instanceof RiftV3Error ? err.message : String(err);
+            failures.push(`Passkey: ${msg}`);
+          }
         }
       }
 
-      // Previously a cancellation returned here in silence. On a phone that was
-      // indistinguishable from the button doing nothing — and iOS reports a
-      // blocked or timed-out prompt with the same error a real cancellation
-      // uses, so the silent path swallowed genuine failures too. Always say
-      // something; a dismissed prompt is the only case that isn't an error.
+      if (want.google) {
+        if (!googleSigningConfigured()) {
+          failures.push("Google sign-in isn't configured on this deployment.");
+        } else {
+          try {
+            enrolled.push(await enrolGoogle());
+          } catch (err) {
+            const msg = err instanceof RiftV3Error ? err.message : String(err);
+            failures.push(`Google: ${msg}`);
+          }
+        }
+      }
+
       if (!enrolled.length) {
         toast({
-          title: why?.code === "CANCELLED" ? "Not completed" : `Couldn't set up ${biometricName()}`,
+          title: "Couldn't set up device signing",
           description:
-            (why?.message ?? "Your device didn't provide a passkey.") +
-            " You can also secure the wallet by linking Google under Settings → Signing.",
-          variant: why?.code === "CANCELLED" ? undefined : "destructive",
+            failures.join(" ") + " Nothing was changed — your wallet still works as before.",
+          variant: "destructive",
         });
         setBusy(false);
         return;
@@ -141,9 +159,10 @@ export function SigningUpgradePrompt({
       // reseal. v1 wallets have none and must not be asked for one.
       await migrateToV3(accessToken, enrolled, version === "v2" ? password : undefined);
 
+      const summary = enrolled.map((m) => (m.kind === "passkey" ? biometricName() : "Google")).join(" + ");
       toast({
         title: "Wallet secured",
-        description: `Payments now need ${biometricName()} on this device. Add a backup method next.`,
+        description: `Payments now need ${summary}. ${failures.length ? "Add other methods later under Settings → Signing." : ""}`,
       });
       onDone();
     } catch (err: any) {
@@ -157,6 +176,10 @@ export function SigningUpgradePrompt({
       setBusy(false);
     }
   };
+
+  const run = () => runWith({ passkey: true, google: googleSigningConfigured() });
+  const runPasskeyOnly = () => runWith({ passkey: true, google: false });
+  const runGoogleOnly = () => runWith({ passkey: false, google: true });
 
   return (
     <div className="relative rounded-2xl border border-border bg-muted/40 p-4">
@@ -192,14 +215,46 @@ export function SigningUpgradePrompt({
             </div>
           )}
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={run} disabled={busy || (version === "v2" && !password)}>
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Turn it on"}
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : googleSigningConfigured() ? (
+                `Use ${biometricName()} + Google`
+              ) : (
+                `Use ${biometricName()}`
+              )}
             </Button>
+            {googleSigningConfigured() && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={runGoogleOnly}
+                disabled={busy || (version === "v2" && !password)}
+              >
+                Continue with Google
+              </Button>
+            )}
+            {googleSigningConfigured() && passkeysSupported() && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={runPasskeyOnly}
+                disabled={busy || (version === "v2" && !password)}
+              >
+                {biometricName()} only
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={dismiss}>
               Not now
             </Button>
           </div>
+          {googleSigningConfigured() && (
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Enrolling {biometricName()} + Google together means you can still recover your
+              wallet from another device if you lose this one.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -226,43 +281,71 @@ export function SigningMethods({
     void diagnostics().then((d) => setPlatformAuth(d.platformAuthenticator));
   }, []);
 
+  // Pick which existing method authorises the add-method call. If the wallet
+  // has both passkey + Google enrolled, prefer whichever the user actually
+  // has active support for on this browser. addMethod calls this closure
+  // during the 4-step handshake.
+  const approveWithExisting = (challengeHex: string) => {
+    const enrolledIds = methods?.passkeyCredIds;
+    const hasPasskey = (methods?.enrolled ?? []).some((m) => m.kind === "passkey");
+    const hasOidc = (methods?.enrolled ?? []).some((m) => m.kind === "oidc");
+    if (hasPasskey && passkeysSupported()) return assertPasskey(challengeHex, enrolledIds);
+    if (hasOidc && googleSigningConfigured()) return assertGoogle(challengeHex);
+    if (hasPasskey) return assertPasskey(challengeHex, enrolledIds);
+    return assertGoogle(challengeHex);
+  };
+
   const addPasskey = async () => {
     setBusy(true);
     try {
-      // Approve with a credential Rift has actually enrolled.
-      //
-      // This was unconstrained, so the browser was free to sign the challenge
-      // with any passkey for this domain — including the orphans left by
-      // migrations that failed server-side, which exist on the device and are
-      // indistinguishable to the picker. A proof from a credential the enclave
-      // has never seen is exactly the "enclave rejected the authProof" branch
-      // of RESEAL_FAILED.
-      const enrolledIds = methods?.passkeyCredIds;
+      // Approve with a credential Rift has actually enrolled — see the note
+      // in enrolledCredential() for why an unconstrained assertion is unsafe.
       await addMethod(
         accessToken,
-        (challengeHex) => assertPasskey(challengeHex, enrolledIds),
+        approveWithExisting,
         () => createPasskey(userLabel, userId),
       );
+      // Any change to enrolled methods invalidates a saved preference —
+      // the user may want to pick fresh now that the options list changed.
+      forgetPreferredMethod(userId);
       toast({ title: "Added", description: "This device can now approve payments." });
       await refresh();
     } catch (err: any) {
-      if (!(err instanceof RiftV3Error && err.code === "CANCELLED")) {
-        const duplicate =
-          err instanceof RiftV3Error && /duplicate/i.test(err.message);
-        toast({
-          title: duplicate ? "Already added" : "Couldn't add it",
-          description:
-            err instanceof RiftV3Error && err.code === "CHALLENGE_MISSING_OR_EXPIRED"
-              ? "That took too long — please try again."
-              : duplicate
-                ? "This device is already registered. To add another, open the app on that device and press this there."
-                : err?.message || "Something went wrong.",
-          variant: duplicate ? undefined : "destructive",
-        });
-      }
+      handleAddError(err, "device");
     } finally {
       setBusy(false);
     }
+  };
+
+  const addGoogle = async () => {
+    setBusy(true);
+    try {
+      await addMethod(accessToken, approveWithExisting, () => enrolGoogle());
+      forgetPreferredMethod(userId);
+      toast({ title: "Added", description: "This Google account can now approve payments." });
+      await refresh();
+    } catch (err: any) {
+      handleAddError(err, "Google");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAddError = (err: any, what: "device" | "Google") => {
+    if (err instanceof RiftV3Error && err.code === "CANCELLED") return;
+    const duplicate = err instanceof RiftV3Error && /duplicate/i.test(err.message);
+    toast({
+      title: duplicate ? "Already added" : "Couldn't add it",
+      description:
+        err instanceof RiftV3Error && err.code === "CHALLENGE_MISSING_OR_EXPIRED"
+          ? "That took too long — please try again."
+          : duplicate
+            ? what === "device"
+              ? "This device is already registered. To add another, open the app on that device and press this there."
+              : "That Google account is already linked to this wallet."
+            : err?.message || "Something went wrong.",
+      variant: duplicate ? undefined : "destructive",
+    });
   };
 
   if (loading && !methods) {
@@ -302,21 +385,34 @@ export function SigningMethods({
         </div>
       ) : (
         <ul className="space-y-1.5">
-          {enrolled.map((m, i) => (
-            <li
-              key={i}
-              className="flex items-center gap-2.5 rounded-xl border border-border px-3 py-2.5 text-sm"
-            >
-              {m.kind === "passkey" ? (
-                <Fingerprint className="h-4 w-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
-              )}
-              <span className="min-w-0 truncate">
-                {m.label || (m.kind === "passkey" ? "This device" : "Google")}
-              </span>
-            </li>
-          ))}
+          {enrolled.map((m, i) => {
+            // For multi-Google display: derive a stable label from either the
+            // backend-supplied label, or the sub prefix as a distinguishable
+            // fallback so a wallet with two Google accounts doesn't show two
+            // identical rows.
+            const googleLabel = (() => {
+              if (m.label) return m.label;
+              if (m.kind !== "oidc") return null;
+              const totalGoogle = enrolled.filter((e) => e.kind === "oidc").length;
+              if (totalGoogle > 1 && m.sub) return `Google (${m.sub.slice(0, 6)}…)`;
+              return "Google";
+            })();
+            return (
+              <li
+                key={i}
+                className="flex items-center gap-2.5 rounded-xl border border-border px-3 py-2.5 text-sm"
+              >
+                {m.kind === "passkey" ? (
+                  <Fingerprint className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+                <span className="min-w-0 truncate">
+                  {m.kind === "passkey" ? (m.label || "This device") : googleLabel}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -385,26 +481,67 @@ export function SigningMethods({
         </div>
       )}
 
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={addPasskey}
-        disabled={busy || !passkeysSupported() || noBiometric}
-        className={cn("w-full", onlyOne && "border-amber-500/40")}
-      >
-        {busy ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Register this device
-          </>
-        )}
-      </Button>
+      {/* ── Add-method actions ────────────────────────────────────────
+          Anything already enrolled can be added again — Rift lets one
+          wallet carry many passkeys AND many Google accounts. Each is a
+          distinct signing/recovery lever. */}
+      <div className="space-y-1.5">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={addPasskey}
+          disabled={busy || !passkeysSupported() || noBiometric}
+          className={cn(
+            "w-full",
+            onlyOne && !enrolled.some((m) => m.kind === "passkey") && "border-amber-500/40",
+          )}
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              {enrolled.some((m) => m.kind === "passkey")
+                ? "Add another device's passkey"
+                : "Register this device"}
+            </>
+          )}
+        </Button>
 
-      {!passkeysSupported() && (
+        {googleSigningConfigured() && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={addGoogle}
+            disabled={busy}
+            className={cn(
+              "w-full",
+              onlyOne && !enrolled.some((m) => m.kind === "oidc") && "border-amber-500/40",
+            )}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                {enrolled.some((m) => m.kind === "oidc")
+                  ? "Link another Google account"
+                  : "Link a Google account"}
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {!passkeysSupported() && !googleSigningConfigured() && (
         <p className="text-xs text-muted-foreground">
           This browser doesn't support passkeys. Try Chrome or Safari on a phone with a fingerprint
           or face unlock.
+        </p>
+      )}
+      {!passkeysSupported() && googleSigningConfigured() && (
+        <p className="text-xs text-muted-foreground">
+          This browser can't create passkeys — Google is the option here.
         </p>
       )}
 
