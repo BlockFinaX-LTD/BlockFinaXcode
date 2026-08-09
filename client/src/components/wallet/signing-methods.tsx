@@ -224,22 +224,35 @@ export function SigningMethods({
   const addPasskey = async () => {
     setBusy(true);
     try {
+      // Approve with a credential Rift has actually enrolled.
+      //
+      // This was unconstrained, so the browser was free to sign the challenge
+      // with any passkey for this domain — including the orphans left by
+      // migrations that failed server-side, which exist on the device and are
+      // indistinguishable to the picker. A proof from a credential the enclave
+      // has never seen is exactly the "enclave rejected the authProof" branch
+      // of RESEAL_FAILED.
+      const enrolledIds = methods?.passkeyCredIds;
       await addMethod(
         accessToken,
-        (challengeHex) => assertPasskey(challengeHex),
+        (challengeHex) => assertPasskey(challengeHex, enrolledIds),
         () => createPasskey(userLabel, userId),
       );
       toast({ title: "Added", description: "This device can now approve payments." });
       await refresh();
     } catch (err: any) {
       if (!(err instanceof RiftV3Error && err.code === "CANCELLED")) {
+        const duplicate =
+          err instanceof RiftV3Error && /duplicate/i.test(err.message);
         toast({
-          title: "Couldn't add it",
+          title: duplicate ? "Already added" : "Couldn't add it",
           description:
             err instanceof RiftV3Error && err.code === "CHALLENGE_MISSING_OR_EXPIRED"
               ? "That took too long — please try again."
-              : err?.message || "Something went wrong.",
-          variant: "destructive",
+              : duplicate
+                ? "This device is already registered. To add another, open the app on that device and press this there."
+                : err?.message || "Something went wrong.",
+          variant: duplicate ? undefined : "destructive",
         });
       }
     } finally {
@@ -359,7 +372,7 @@ export function SigningMethods({
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : (
           <>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add this device
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Register this device
           </>
         )}
       </Button>
