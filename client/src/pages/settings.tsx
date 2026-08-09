@@ -6,9 +6,6 @@
  * right (mono if numeric/short, switch if boolean, chevron if drill-in).
  */
 import { useEffect, useState } from 'react';
-import { SigningMethods } from '@/components/wallet/signing-methods';
-import { getRiftAccessToken } from '@/lib/rift-token-bridge';
-import { getCachedUserSummary } from '@/lib/rift-client';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -160,8 +157,6 @@ export default function SettingsPage() {
             Renders nothing until the wallet API answers, so an unreachable
             endpoint leaves the page exactly as it was rather than showing a
             broken panel. */}
-        <SigningMethodsSection />
-
         {/* SECURITY */}
         <SectionHd title="Security" />
         <Card className="rounded-2xl overflow-hidden">
@@ -241,39 +236,6 @@ export default function SettingsPage() {
         </Card>
 
         {/* NETWORK */}
-        <SectionHd title="Network" />
-        <Card className="rounded-2xl overflow-hidden">
-          <CardContent className="p-0 divide-y divide-border/60">
-            <Row
-              icon={Globe}
-              label="Base Mainnet"
-              sub="Chain ID 8453 · Live network"
-              trailing={
-                <Pill tone="success" uppercase={false}>
-                  <Dot size={4} className="text-emerald-500" /> Live
-                </Pill>
-              }
-            />
-            <Row
-              icon={Globe}
-              label="BNB Smart Chain"
-              sub="Chain ID 56 · Live network"
-              trailing={
-                <Pill tone="success" uppercase={false}>
-                  <Dot size={4} className="text-emerald-500" /> Live
-                </Pill>
-              }
-            />
-            <Row
-              icon={ExternalLink}
-              label="Block explorer"
-              sub="View transactions on Basescan"
-              onClick={() => window.open('https://basescan.org', '_blank')}
-            />
-          </CardContent>
-        </Card>
-
-        {/* LEGAL */}
         <SectionHd title="Legal" />
         <Card className="rounded-2xl overflow-hidden">
           <CardContent className="p-0 divide-y divide-border/60">
@@ -370,41 +332,4 @@ export default function SettingsPage() {
 }
 
 
-/**
- * Wraps the signing-methods panel with the token and identity it needs.
- *
- * Deliberately fails closed: if the token can't be fetched the panel is not
- * rendered at all, because a security screen that half-loads is worse than one
- * that waits.
- */
-function SigningMethodsSection() {
-  const [token, setToken] = useState<string | null>(null);
-  const summary = getCachedUserSummary();
 
-  useEffect(() => {
-    let live = true;
-    getRiftAccessToken()
-      .then((t) => live && setToken(t || null))
-      .catch(() => live && setToken(null));
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  if (!token || !summary) return null;
-
-  return (
-    <>
-      <SectionHd title="Signing" />
-      <Card className="rounded-2xl overflow-hidden">
-        <CardContent className="p-4">
-          <SigningMethods
-            accessToken={token}
-            userLabel={summary.user || 'BlockFinaX user'}
-            userId={summary.user || summary.address}
-          />
-        </CardContent>
-      </Card>
-    </>
-  );
-}

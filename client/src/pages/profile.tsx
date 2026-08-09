@@ -26,7 +26,6 @@ import {
   TrendingUp,
   BadgeCheck,
   LogOut,
-  Wallet as WalletIcon,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/use-wallet';
@@ -263,7 +262,6 @@ export default function ProfilePage() {
 
         <div className="mt-6">
           <SettingsGroup title="Wallet">
-            <SettingsRow icon={WalletIcon} label="Withdrawal account" sub="Where payouts are sent" href="/settings" />
             <SettingsRow
               icon={ShieldCheck}
               label="Signing methods"

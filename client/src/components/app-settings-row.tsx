@@ -52,9 +52,23 @@ export function SettingsRow({
       <span className={`st-ico${t}`}>
         <Icon strokeWidth={1.9} />
       </span>
-      <span className="st-body">
-        <span className={`st-t${tone === "bad" ? " bad" : ""}`}>{label}</span>
-        {sub && <span className={`st-s${tone === "ok" ? " ok" : tone === "warn" ? " warn" : ""}`}>{sub}</span>}
+      {/* display:block is also set in app-ui.css. Repeated inline because a
+          span is inline by default, and if that stylesheet is stale or slow
+          the label and its subtitle render on the same line and run together
+          — which is a broken-looking screen caused by a cache, and not worth
+          risking twice. */}
+      <span className="st-body" style={{ display: "block" }}>
+        <span className={`st-t${tone === "bad" ? " bad" : ""}`} style={{ display: "block" }}>
+          {label}
+        </span>
+        {sub && (
+          <span
+            className={`st-s${tone === "ok" ? " ok" : tone === "warn" ? " warn" : ""}`}
+            style={{ display: "block" }}
+          >
+            {sub}
+          </span>
+        )}
       </span>
       {trailing ?? (!noChevron && (
         <span className="st-go">
