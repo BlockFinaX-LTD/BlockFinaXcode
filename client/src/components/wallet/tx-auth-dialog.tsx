@@ -25,6 +25,12 @@ export function TxAuthDialog() {
   const [password, setPassword] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  // Suppress rendering entirely while we probe device signing on first
+  // open. Otherwise the OTP <Input placeholder="Code will arrive shortly…"/>
+  // paints for ~150ms before the probe resolves and we auto-cancel — the
+  // "OTP flashes then goes to Approve popup" bug the user reported.
+  // null = probing; true = suppress this dialog entirely; false = show it.
+  const [suppressed, setSuppressed] = useState<boolean | null>(null);
 
   const authMethod = getAuthMethod();
 
@@ -33,18 +39,51 @@ export function TxAuthDialog() {
     return subscribeTxAuth(setPending);
   }, []);
 
-  // Auto-send OTP when the dialog opens for an OTP-based user
+  // When a request lands, first probe whether this wallet uses device
+  // signing. If yes, self-cancel — hedge-contract.ts's fallback to
+  // requestTxAuth is only meant for pre-v3 wallets; the check is fresh
+  // here so any race that opens TxAuthDialog for a v3 wallet is
+  // corrected before any UI paints.
   useEffect(() => {
     if (!pending) {
       // reset on close
       setOtpCode('');
       setPassword('');
       setOtpSent(false);
+      setSuppressed(null);
       return;
     }
-    if (authMethod && authMethod.kind !== 'password' && !otpSent) {
-      handleSendOtp();
-    }
+    let cancelled = false;
+    setSuppressed(null); // probing
+    void (async () => {
+      let onDevice = false;
+      try {
+        const { walletUsesDeviceSigning } = await import('@/lib/v3-sign');
+        onDevice = await walletUsesDeviceSigning();
+      } catch {
+        onDevice = false;
+      }
+      if (cancelled) return;
+      if (onDevice) {
+        // Device signing is active for this wallet. TxAuthDialog would
+        // ask for a code that will never be checked because the actual
+        // signature comes from a passkey / Google id_token, not an OTP.
+        // Reject the pending request so the caller can retry via the
+        // v3 path. hedge-contract.ts treats a cancel like any other
+        // failure and surfaces the error to the user.
+        setSuppressed(true);
+        pending.reject(new Error('Wallet uses device signing — retry via passkey / Google.'));
+        return;
+      }
+      setSuppressed(false);
+      if (authMethod && authMethod.kind !== 'password' && !otpSent) {
+        void handleSendOtp();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending]);
 
   const handleSendOtp = async () => {
@@ -90,7 +129,11 @@ export function TxAuthDialog() {
     pending?.reject(new Error('User cancelled authorization'));
   };
 
-  const open = !!pending;
+  // Only paint the dialog once the device-signing probe resolves AND
+  // says this wallet does NOT use device signing. While probing
+  // (suppressed === null) or when suppressed (=== true), nothing renders
+  // — no OTP flash before the caller re-tries via v3.
+  const open = !!pending && suppressed === false;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleCancel(); }}>
