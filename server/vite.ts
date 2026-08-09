@@ -94,13 +94,40 @@ export function serveStatic(app: Express) {
   // Override CORP to `cross-origin` for everything under the static-asset
   // tree — this is the standard posture for public images and JS bundles.
   app.use(express.static(distPath, {
-    setHeaders: (res) => {
+    // index.html is served explicitly below, never from here, so a stale copy
+    // cannot be handed out by the static middleware's own revalidation.
+    index: false,
+    setHeaders: (res, filePath) => {
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
+      // Vite fingerprints everything under /assets — index-CbAavqsA.js and so
+      // on — so the contents behind a given name can never change. Serving
+      // those with max-age=0 means a revalidation round-trip for every file on
+      // every load, which buys nothing. Cache them for a year.
+      if (/[.-][A-Za-z0-9_-]{8,}\.(js|css|woff2?|png|jpg|svg|webp|avif)$/.test(filePath)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
     },
   }));
 
-  // fall through to index.html if the file doesn't exist
+  /**
+   * index.html, always revalidated.
+   *
+   * It is the only file whose name never changes, so it is the only one whose
+   * cached copy can pin a browser to an old build — it names the fingerprinted
+   * bundle, and a stale copy names a stale bundle forever. That is not
+   * hypothetical: a browser here spent a day running code from a deploy two
+   * ahead of it, and every "hard refresh, it still fails" reported against
+   * that build was describing software that had already been replaced.
+   *
+   * no-store rather than no-cache because the weak ETag express generates is
+   * derived from size and mtime, and a rebuild that happens to produce the
+   * same length gives the same validator.
+   */
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.removeHeader("ETag");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

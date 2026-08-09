@@ -817,8 +817,11 @@ export async function submitPrepared(
     rememberAlphabet(first);
     return out;
   } catch (err) {
-    const worthRetrying =
-      err instanceof RiftV3Error && err.status === 400 && !!reprepare && /consent factor|enclave sign/i.test(err.message);
+    // Any 400 is worth one attempt in the other alphabet. Matching on the
+    // wording of the message was too clever: it keyed on "consent factor" and
+    // "enclave sign", and the moment Rift changed that text the retry stopped
+    // firing silently — so the second alphabet was never actually tried.
+    const worthRetrying = err instanceof RiftV3Error && err.status === 400 && !!reprepare;
     if (!worthRetrying) throw err;
 
     const other: Alphabet = first === "url" ? "std" : "url";
