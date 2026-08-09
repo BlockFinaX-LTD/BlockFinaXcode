@@ -755,11 +755,12 @@
 .bfx-app .st-ico.ok{background:rgba(34,197,94,.11);color:#22c55e;}
 .bfx-app .st-ico.warn{background:rgba(245,158,11,.12);color:#f59e0b;}
 .bfx-app .st-ico.bad{background:rgba(239,68,68,.11);color:#ef4444;}
-.bfx-app .st-body{min-width:0;flex:1;}
-.bfx-app .st-t{font-size:14.5px;font-weight:600;letter-spacing:-.01em;color:var(--tx);
+.bfx-app .st-body{display:block;min-width:0;flex:1;}
+.bfx-app .st-t{display:block;font-size:14.5px;font-weight:600;letter-spacing:-.01em;color:var(--tx);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .bfx-app .st-t.bad{color:#ef4444;}
-.bfx-app .st-s{font-size:12px;line-height:1.45;color:var(--tx-3);margin-top:2px;}
+.bfx-app .st-s{display:block;font-size:12px;line-height:1.45;color:var(--tx-3);margin-top:2px;
+  white-space:normal;}
 .bfx-app .st-s.ok{color:#22c55e;} .bfx-app .st-s.warn{color:#f59e0b;}
 .bfx-app .st-go{flex:0 0 auto;color:var(--tx-4);}
 .bfx-app .st-go svg{width:16px;height:16px;}

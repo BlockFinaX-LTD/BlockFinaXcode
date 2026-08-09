@@ -7,7 +7,6 @@
  * the prior version (react-hook-form + Zod + TanStack mutations).
  */
 import { useState, useEffect } from 'react';
-import { SigningSection } from '@/components/wallet/signing-section';
 import { SettingsRow, SettingsGroup } from '@/components/app-settings-row';
 import { clearLocalRiftState } from '@/lib/rift-client';
 import { useLocation } from 'wouter';
@@ -105,7 +104,6 @@ export default function ProfilePage() {
   // The form is a page in its own right, opened from the row rather than
   // stacked below it — the list is the shape people scan.
   const [showPersonal, setShowPersonal] = useState(false);
-  const [showSigning, setShowSigning] = useState(false);
   const { toast } = useToast();
   const [showBusiness, setShowBusiness] = useState(false);
 
@@ -227,7 +225,10 @@ export default function ProfilePage() {
     const dn = form.watch('displayName');
     if (fn && ln) return `${fn[0]}${ln[0]}`.toUpperCase();
     if (dn) return dn.slice(0, 2).toUpperCase();
-    return walletAddress ? walletAddress.slice(2, 4).toUpperCase() : 'U';
+    // No name yet. The old fallback took two characters off the address, which
+    // on 0x420e… renders as "42" — a number, not initials, and the first thing
+    // anyone sees on the page. A glyph is honest about there being no name.
+    return null;
   };
 
   if (walletLoading || !isUnlocked) return null;
@@ -248,7 +249,7 @@ export default function ProfilePage() {
             fill in, because the same details are already collected there and
             asking twice is how records disagree with each other. */}
         <div className="st-me">
-          <div className="st-av">{getInitials()}</div>
+          <div className="st-av">{getInitials() ?? <User className="h-6 w-6" strokeWidth={1.7} />}</div>
           <div className="min-w-0 flex-1">
             <div className="st-name">
               {form.watch('displayName') || form.watch('firstName') || 'Your account'}
@@ -267,13 +268,11 @@ export default function ProfilePage() {
               icon={ShieldCheck}
               label="Signing methods"
               sub="Passkeys and Google accounts that authorise payments"
-              onClick={() => setShowSigning((v) => !v)}
+              href="/signing"
             />
             <SettingsRow icon={Bell} label="Notifications" sub="Alerts for cover, payouts and verification" href="/settings" />
           </SettingsGroup>
         </div>
-
-        {showSigning && <div className="mt-3"><SigningSection /></div>}
 
         <SettingsGroup title="Compliance">
           <VerificationRow />
