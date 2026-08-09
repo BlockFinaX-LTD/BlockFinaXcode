@@ -76,6 +76,12 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
 
   const [isSending, setIsSending] = useState(false);
   const [resultHash, setResultHash] = useState<string | null>(null);
+  // `null` = not-yet-known; `true` = wallet approves on the device
+  // (skip the OTP UI entirely, don't flash it); `false` = fall through
+  // to the legacy code-based flow. Kept as tri-state so the first
+  // render of step='authorize' can decide correctly instead of
+  // painting the OTP fields optimistically.
+  const [deviceSigning, setDeviceSigning] = useState<boolean | null>(null);
 
   const authMethod = getAuthMethod();
 
@@ -186,20 +192,28 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
       toast({ title: 'Insufficient balance', description: `You have ${available} ${token} on ${chain}`, variant: 'destructive' });
       return;
     }
-    setStep('authorize');
-
-    // A migrated wallet approves on the device, so there is no code to send.
-    // Checking first avoids emailing a one-time code the user will never need
-    // and never be asked for.
+    // Probe FIRST, then advance. Advancing to 'authorize' before the
+    // probe resolves is what paints the OTP fields for a split second
+    // before V3SignDialog opens on top — the "flash" the user reported.
+    // Keep the button in a busy state during the probe (~200ms) so the
+    // UI never renders the wrong-mode 'authorize' screen.
+    setIsSendingOtp(true); // reuse existing spinner state for the probe
     void (async () => {
+      let usesDevice = false;
       try {
         const { walletUsesDeviceSigning } = await import('@/lib/v3-sign');
-        if (await walletUsesDeviceSigning()) return;
+        usesDevice = await walletUsesDeviceSigning();
       } catch {
-        // Fall through to the code path below.
+        usesDevice = false;
       }
-      if (authMethod && authMethod.kind !== 'password' && !otpSent) {
-        handleSendOtp();
+      setDeviceSigning(usesDevice);
+      setStep('authorize');
+      setIsSendingOtp(false);
+
+      // Only the legacy path needs an OTP mailed — device-signing users
+      // will approve inside V3SignDialog.
+      if (!usesDevice && authMethod && authMethod.kind !== 'password' && !otpSent) {
+        void handleSendOtp();
       }
     })();
   };
@@ -411,7 +425,19 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
               </div>
             )}
 
-            {authMethod?.kind === 'email' && (
+            {/* Device-signing wallets — no code needed, V3SignDialog
+                will drive the approval when Send is tapped. */}
+            {deviceSigning === true && authMethod?.kind !== 'password' && (
+              <p className="rounded-lg bg-muted/50 px-3 py-2.5 text-[13px] text-muted-foreground">
+                You'll approve this on your device. No code needed.
+              </p>
+            )}
+
+            {/* Legacy OTP path — only when the wallet is NOT on device
+                signing. Guarded by `deviceSigning === false` (not just
+                falsy) so we don't paint OTP fields while the probe is
+                still resolving. */}
+            {deviceSigning === false && authMethod?.kind === 'email' && (
               <>
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Email code (sent to {authMethod.email})</Label>
@@ -433,7 +459,7 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
               </>
             )}
 
-            {authMethod?.kind === 'phone' && (
+            {deviceSigning === false && authMethod?.kind === 'phone' && (
               <>
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">SMS code (sent to {authMethod.phoneNumber})</Label>
