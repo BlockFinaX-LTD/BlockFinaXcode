@@ -17,14 +17,13 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Loader2, Plus, X, ChevronRight } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, X } from "lucide-react";
 import { FiSmartphone } from "react-icons/fi";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   diagnostics,
-  getDeviceSigningDecline,
   getMethods,
   wasMigratedLocally,
   migrateToV3,
@@ -40,7 +39,6 @@ import {
   biometricName,
   type MethodsResponse,
   type EnrolledMethod,
-  type V3Diagnostics,
 } from "@/lib/rift-v3";
 import { forgetPreferredMethod } from "@/lib/v3-sign";
 
@@ -653,8 +651,6 @@ export function SigningMethods({
           Your wallet keys never leave your device unencrypted. BlockFinaX cannot move your funds.
         </p>
       )}
-
-      <Diagnostics version={methods?.version ?? null} enrolled={enrolled.length} />
     </div>
   );
 }
@@ -808,76 +804,3 @@ function EmptyState({ onEnable, busy }: { onEnable: () => void; busy: boolean })
   );
 }
 
-// ── Diagnostics (unchanged, collapsed styling refresh) ──────────────
-
-function Diagnostics({ version, enrolled }: { version: string | null; enrolled: number }) {
-  const [open, setOpen] = useState(false);
-  const [d, setD] = useState<V3Diagnostics | null>(null);
-
-  useEffect(() => {
-    if (open && !d) void diagnostics().then(setD);
-  }, [open, d]);
-
-  const rows: [string, string][] = d
-    ? [
-        ["Wallet version", version ?? "unknown"],
-        ["Last signing attempt", getDeviceSigningDecline() ?? "device signing (or not tried yet)"],
-        ["Methods enrolled", String(enrolled)],
-        ["Passkeys in this browser", d.passkeysSupported ? "supported" : "NOT supported"],
-        ["Fingerprint / face available", d.platformAuthenticator],
-        ["Secure context (https)", d.secureContext ? "yes" : "NO"],
-        ["Inside an iframe", d.inIframe ? "YES — passkeys may be blocked" : "no"],
-        ["In-app browser", d.inAppBrowser ? `${d.inAppBrowser} — open in Safari or Chrome` : "no"],
-        ["Passkey domain", d.relyingPartyId],
-        ["API", d.apiBase],
-        ["Wallet path prefix", d.walletPrefix],
-        ["API key type", d.apiKeyPrefix === "pk_" ? "pk_ (publishable)" : `${d.apiKeyPrefix} — should be pk_`],
-      ]
-    : [];
-
-  return (
-    <div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 text-[11px] font-medium text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
-      >
-        <ChevronRight
-          className={cn(
-            "h-3 w-3 transition-transform duration-150",
-            open && "rotate-90",
-          )}
-        />
-        {open ? "Hide technical details" : "Technical details"}
-      </button>
-
-      {open && (
-        <div className="mt-2 space-y-1 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/40 p-3">
-          {!d && <p className="text-[11px] text-neutral-500">Checking…</p>}
-          {rows.map(([k, v]) => (
-            <div key={k} className="flex items-start justify-between gap-3 text-[11px]">
-              <span className="shrink-0 text-neutral-500 dark:text-neutral-400">{k}</span>
-              <span
-                className={cn(
-                  "min-w-0 break-all text-right font-mono text-neutral-700 dark:text-neutral-300",
-                  /NOT|NO$|YES|should be/.test(v) && "text-amber-600 dark:text-amber-400",
-                )}
-              >
-                {v}
-              </span>
-            </div>
-          ))}
-          {d && (
-            <button
-              onClick={() =>
-                navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v}`).join("\n"))
-              }
-              className="mt-1 text-[11px] text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
-            >
-              Copy all
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
