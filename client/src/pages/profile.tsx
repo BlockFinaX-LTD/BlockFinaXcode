@@ -16,6 +16,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
+  Bell,
   Settings as SettingsIcon,
   User,
   Save,
@@ -266,6 +267,12 @@ export default function ProfilePage() {
               label="Signing methods"
               sub="Passkeys and Google accounts that authorise payments"
               href="/signing"
+            />
+            <SettingsRow
+              icon={Bell}
+              label="Notifications"
+              sub="Choose what we email you about"
+              href="/notifications"
             />
           </SettingsGroup>
         </div>

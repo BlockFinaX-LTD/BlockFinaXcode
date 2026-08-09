@@ -607,6 +607,21 @@ export async function initializeDatabase() {
       -- Visitors who asked us to follow up. consent_text holds the literal
       -- wording they agreed to, which is what answers a data-protection
       -- complaint; a boolean would not.
+      -- What a customer has agreed to hear about. No column for account
+      -- notices: those cannot be turned off, and storing a flag for them
+      -- would invite code that reads one.
+      CREATE TABLE IF NOT EXISTS notification_prefs (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT NOT NULL UNIQUE,
+        transactions BOOLEAN NOT NULL DEFAULT TRUE,
+        cover BOOLEAN NOT NULL DEFAULT TRUE,
+        product BOOLEAN NOT NULL DEFAULT TRUE,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS notification_prefs_wallet_idx ON notification_prefs(wallet_address);
+
       CREATE TABLE IF NOT EXISTS leads (
         id SERIAL PRIMARY KEY,
         email TEXT NOT NULL,

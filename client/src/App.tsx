@@ -66,6 +66,7 @@ import { FinaxChat } from "@/components/finax-chat";
 // AML/CFT verification — customers raise their own transacting limits here.
 import VerifyPage from "@/pages/verify";
 import SigningPage from "@/pages/signing";
+import NotificationsPage from "@/pages/notifications";
 
 /**
  * The browser must use a PUBLISHABLE key (pk_), never a secret one (sk_).
@@ -233,6 +234,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/verify" component={VerifyPage} />
       <Route path="/signing" component={SigningPage} />
+      <Route path="/notifications" component={NotificationsPage} />
 
       {/* Rewards & admin */}
       <Route path="/rewards" component={TasksPage} />

@@ -14,6 +14,15 @@
  * passport is what makes people email support, or give up. So: a confirmation
  * on submission, and a decision either way with the reason if it is no.
  *
+ * ## Why none of these check notification preferences
+ *
+ * They are account notices. A customer cannot opt out of being told their
+ * identity check was refused, or that their limit changed — those decide
+ * whether they can move their own money, and a preference that silenced them
+ * would be a preference for losing access quietly. shared/notification-schema
+ * marks the "account" category as not optional for exactly this reason, and
+ * these three are it.
+ *
  * A rejection email deliberately does not say a sanctions screen matched. That
  * is not a fact to hand to its subject — it is an internal finding a human has
  * yet to confirm, and it is frequently a coincidence of spelling. The customer
