@@ -45,8 +45,17 @@ export const PEOPLE: Record<string, Person> = {
     title: "Chief Executive Officer",
     email: "anthonykumako@blockfinax.com",
   },
+  /**
+   * hello@ is client services, and Finax answers it.
+   *
+   * Named rather than left as a generic company address because that is what
+   * is true, and because a customer who has already met Finax in the chat
+   * widget should find the same name on the reply. A signature that says
+   * "BlockFinaX" where an assistant is answering is not false exactly, but it
+   * is vaguer than it needs to be about who a reply is coming from.
+   */
   hello: {
-    name: "BlockFinaX",
+    name: "Finax",
     title: "Client Services",
     email: "hello@blockfinax.com",
   },
@@ -100,9 +109,10 @@ export function signatureHtml(p: Person): string {
 /**
  * Which signature belongs on a message, decided by who it claims to be from.
  *
- * A notice from hello@ signing off as the CEO is a small dishonesty, and a
- * letter from Anthony signed "Client Services" is worse. The From address is
- * the only thing that actually knows.
+ * A notice from hello@ signing off as the chief executive is a small
+ * dishonesty, and a letter from Anthony signed as client services is worse.
+ * The From address is the only thing that actually knows: hello@ is Finax on
+ * client services, anthonykumako@ is Anthony.
  */
 export function signatureFor(fromAddress: string | undefined): Person {
   const addr = (fromAddress || "").toLowerCase();
