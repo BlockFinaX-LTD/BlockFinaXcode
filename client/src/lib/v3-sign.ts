@@ -196,6 +196,22 @@ export function subscribeMethodChooser(cb: (p: PendingChoice | null) => void): (
   };
 }
 
+/**
+ * Public wrapper — opens the method-chooser modal so callers outside
+ * the sign path can also ask the user which enrolled method to use.
+ *
+ * Two callers today:
+ *   1. produceAuthProof (internal — signing a transaction)
+ *   2. Settings > Signing add-method flow (external — approve adding a
+ *      new signing method with one of the existing methods). Without
+ *      this, addMethod always fell back to passkey and dead-ended on
+ *      the browser's cross-device QR when the passkey wasn't on this
+ *      device but Google WAS available.
+ */
+export function pickEnrolledMethod(options: EnrolledEntry[]): Promise<MethodPick> {
+  return askForMethod(options);
+}
+
 function askForMethod(options: EnrolledEntry[]): Promise<MethodPick> {
   return new Promise<MethodPick>((resolve, reject) => {
     if (!chooserListener) {

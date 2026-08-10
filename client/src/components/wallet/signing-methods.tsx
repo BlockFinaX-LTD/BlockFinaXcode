@@ -40,7 +40,7 @@ import {
   type MethodsResponse,
   type EnrolledMethod,
 } from "@/lib/rift-v3";
-import { forgetPreferredMethod } from "@/lib/v3-sign";
+import { forgetPreferredMethod, pickEnrolledMethod } from "@/lib/v3-sign";
 
 /** Session-scoped dismissal — skipping should defer, not opt out. */
 const DISMISS_KEY = "bfx_v3_prompt_dismissed";
@@ -441,14 +441,43 @@ export function SigningMethods({
     void diagnostics().then((d) => setPlatformAuth(d.platformAuthenticator));
   }, []);
 
-  const approveWithExisting = (challengeHex: string) => {
+  // Approve the add-method 4-step handshake with one of the wallet's
+  // ALREADY-enrolled methods. When 2+ options are available we hand
+  // off to the same MethodChooser modal the sign path uses — otherwise
+  // silently picking passkey traps users whose passkey lives on a
+  // different device (via iCloud Keychain / Google Password Manager
+  // sync) than the one they're currently on. The browser's cross-
+  // device QR fallback isn't a viable UX if they can't scan it with
+  // a device that has the passkey.
+  const approveWithExisting = async (challengeHex: string) => {
     const enrolledIds = methods?.passkeyCredIds;
-    const hasPasskey = (methods?.enrolled ?? []).some((m) => m.kind === "passkey");
-    const hasOidc = (methods?.enrolled ?? []).some((m) => m.kind === "oidc");
-    if (hasPasskey && passkeysSupported()) return assertPasskey(challengeHex, enrolledIds);
-    if (hasOidc && googleSigningConfigured()) return assertGoogle(challengeHex);
-    if (hasPasskey) return assertPasskey(challengeHex, enrolledIds);
-    return assertGoogle(challengeHex);
+    const enrolled = methods?.enrolled ?? [];
+    const passkeyOpts = enrolled.filter((m) => m.kind === "passkey");
+    const oidcOpts = enrolled.filter((m) => m.kind === "oidc");
+    const canPasskey = passkeyOpts.length > 0 && passkeysSupported();
+    const canOidc = oidcOpts.length > 0 && googleSigningConfigured();
+
+    // Multi-method: give the user the choice. Modal reuses the sign-
+    // path chooser so the visual affordance is identical.
+    if (canPasskey && canOidc) {
+      const options = [
+        ...(canPasskey ? [{ kind: "passkey" as const, label: biometricName() }] : []),
+        ...oidcOpts,
+      ];
+      const pick = await pickEnrolledMethod(options);
+      if (pick.kind === "passkey") return assertPasskey(challengeHex, enrolledIds);
+      return assertGoogle(challengeHex);
+    }
+
+    // Single method — no ambiguity.
+    if (canPasskey) return assertPasskey(challengeHex, enrolledIds);
+    if (canOidc) return assertGoogle(challengeHex);
+    // Neither works on this browser — force the caller to error out
+    // with a message the user can act on.
+    throw new RiftV3Error(
+      "UNSUPPORTED",
+      "No enrolled signing method is usable in this browser. Try Chrome or Safari on a device that has your passkey, or sign in with your linked Google account.",
+    );
   };
 
   const addPasskey = async () => {
