@@ -350,8 +350,31 @@ async function produceAuthProof(
   // "auto" mode from here.
   const saved = getPreferredMethod(userId);
   if (saved) {
-    if (saved.kind === "passkey" && canPasskey) return usePasskey();
-    if (saved.kind === "oidc" && hasGoogle) return useGoogle();
+    const usable =
+      (saved.kind === "passkey" && canPasskey) || (saved.kind === "oidc" && hasGoogle);
+    const alternatives = (canPasskey ? 1 : 0) + (hasGoogle ? oidcOptions.length : 0);
+    if (usable) {
+      try {
+        return await (saved.kind === "passkey" ? usePasskey() : useGoogle());
+      } catch (err) {
+        // A remembered choice that just failed must not stay remembered. It
+        // used to: the attempt was a bare return, so the throw ended the
+        // signing and left the preference behind to do exactly the same thing
+        // next time. For a passkey enrolled on another device that is a
+        // permanent trap — every payment opens a cross-device QR, cancelling
+        // it is the only way out, and the Google account on the same wallet is
+        // never reached.
+        //
+        // Forgetting on cancellation too, not just on error. Someone who
+        // dismisses a QR they cannot use has refused that method, not the
+        // payment, and the two are indistinguishable from here. The cost of
+        // being wrong is one extra tap on the chooser; the cost of the trap is
+        // a wallet nobody can spend from.
+        if (!alternatives || alternatives === 1) throw err;
+        forgetPreferredMethod(userId);
+        console.warn("[v3-sign] remembered method failed — asking again", err);
+      }
+    }
     // Saved preference is stale (method removed) — fall through to chooser.
   }
 
