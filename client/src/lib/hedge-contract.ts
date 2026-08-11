@@ -91,6 +91,7 @@ const HEDGE_ABI = [
   'function settleEvent(uint256 _eventId, uint256 _settlementPrice)',
   'function claimPayout(uint256 _positionId)',
   'function claimPremiums(uint256 _depositId)',
+  'function pendingPremiums(uint256) view returns (uint256)',
   'function withdrawCapital(uint256 _depositId)',
   'function withdrawCreatorEarnings(uint256 _eventId)',
   'function recoverExpiredPayouts(uint256 _eventId)',
@@ -173,6 +174,8 @@ export interface HedgeEventData {
   availableCapacity: number;
   utilization: number;
   payoutPercent: number;
+  /** Rate at which the payout stops growing. 0 if the Diamond has no range getter. */
+  payoutCap: number;
   /** ERC-20 token address used for all payments in this event (USDC or USDT). */
   paymentToken: string;
   /**
@@ -207,6 +210,19 @@ export interface HedgeLpDepositData {
   shares: string;
   premiumsEarned: number;
   premiumsClaimed: number;
+  /**
+   * What the contract will actually pay out on claimPremiums right now.
+   *
+   * Not the same as premiumsEarned − premiumsClaimed, and the difference is
+   * the whole point: premiumsEarned is only credited to the deposit record at
+   * settlement, while the contract lets an LP claim from the moment a hedger
+   * pays. A $400 deposit against a live event sat showing $0 earned while
+   * pendingPremiums reported the full $90 waiting.
+   *
+   * Null when the Diamond has no such getter, in which case the stored
+   * difference is the best available answer.
+   */
+  pendingPremiums: number | null;
   withdrawn: boolean;
   createdAt: Date | null;
 }
@@ -568,7 +584,7 @@ class HedgeContractManager {
     return ethers.formatUnits(allowance, this.tokenDecimals);
   }
 
-  private formatEvent(core: any, stats: any, createdAt?: Date | null, paymentToken?: string): HedgeEventData {
+  private formatEvent(core: any, stats: any, createdAt?: Date | null, paymentToken?: string, range?: any): HedgeEventData {
     const totalLiquidity = toNum(stats.totalLiquidity);
     const totalExposure = toNum(stats.totalExposure);
     const totalMaxPayout = toNum(stats.totalMaxPayout);
@@ -578,8 +594,21 @@ class HedgeContractManager {
     // Legacy events (before bidirectional support) have strikeAbove=false but strike > initialRate
     // Infer they are actually upward hedges to display and calculate correctly
     const strikeAbove = rawStrikeAbove || (!rawStrikeAbove && strike > initialRate);
-    const priceDelta = strikeAbove ? strike - initialRate : initialRate - strike;
-    const payoutPercent = initialRate > 0 ? priceDelta / initialRate : 0;
+    // What a position actually pays, per dollar of notional.
+    //
+    // This used to be (strike − initialRate) / initialRate — the gap between
+    // spot and the strike, which is not a payout at all. It showed a $9,000
+    // position as covering $129 when the contract had reserved $306.86 for it.
+    //
+    // The real product is a range: payout ramps from zero at the strike to its
+    // maximum at payoutCap, so the rate is the width of that range over the
+    // initial rate. getHedgeEventRange returns the cap and is live on both
+    // Diamonds; the old expression is kept only for a Diamond that lacks it.
+    const payoutCap = range ? toNum(range.payoutCap) : 0;
+    const rangeWidth = payoutCap > 0
+      ? (strikeAbove ? payoutCap - strike : strike - payoutCap)
+      : (strikeAbove ? strike - initialRate : initialRate - strike);
+    const payoutPercent = initialRate > 0 ? Math.max(0, rangeWidth) / initialRate : 0;
     return {
       id: Number(core.id),
       creator: core.creator,
@@ -607,6 +636,7 @@ class HedgeContractManager {
       availableCapacity: totalLiquidity - totalMaxPayout,
       utilization: totalLiquidity > 0 ? totalMaxPayout / totalLiquidity : 0,
       payoutPercent,
+      payoutCap,
       paymentToken: paymentToken || (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
     };
   }
@@ -639,7 +669,7 @@ class HedgeContractManager {
       console.warn('[HedgeContract] getTotalHedgeEvents() unavailable — scanning upward');
     }
 
-    type RawEvent = { id: number; core: unknown; stats: unknown; paymentToken: string };
+    type RawEvent = { id: number; core: unknown; stats: unknown; paymentToken: string; range: any };
 
     /** Retry a single read; throttled responses look like reverts, so retry both. */
     const readWithRetry = async <T>(call: () => Promise<T>): Promise<T | null> => {
@@ -663,7 +693,10 @@ class HedgeContractManager {
       const paymentToken =
         (await readWithRetry(() => contract.getEventPaymentToken(i)))
         ?? (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS);
-      return { id: i, core, stats, paymentToken: paymentToken as string };
+      // The payout cap. Worth the extra round trip: without it the payout rate
+      // has to be guessed from the strike, and that guess was wrong by 58%.
+      const range = await readWithRetry(() => contract.getHedgeEventRange(i));
+      return { id: i, core, stats, paymentToken: paymentToken as string, range };
     };
 
     const raw: RawEvent[] = [];
@@ -700,7 +733,7 @@ class HedgeContractManager {
     }
 
     const eventTimestamps = await timestampsPromise;
-    return raw.map((r) => this.formatEvent(r.core, r.stats, eventTimestamps.get(r.id), r.paymentToken));
+    return raw.map((r) => this.formatEvent(r.core, r.stats, eventTimestamps.get(r.id), r.paymentToken, r.range));
   }
 
   async getEvent(eventId: number): Promise<HedgeEventData> {
@@ -708,14 +741,15 @@ class HedgeContractManager {
     // getEventQuoteSigner is a v8 function — wrap in a catch so older Diamonds
     // (or in-flight upgrades) don't blow up the dialog. Returns ZeroAddress on
     // any error, which the UI interprets as "manually priced / unknown".
-    const [core, stats, eventTimestamps, paymentToken, quoteSigner] = await Promise.all([
+    const [core, stats, eventTimestamps, paymentToken, quoteSigner, range] = await Promise.all([
       contract.getHedgeEventCore(eventId),
       contract.getHedgeEventStats(eventId),
       this.getEventTimestamps(),
       contract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
       contract.getEventQuoteSigner(eventId).catch(() => ethers.ZeroAddress),
+      contract.getHedgeEventRange(eventId).catch(() => null),
     ]);
-    const ev = this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string);
+    const ev = this.formatEvent(core, stats, eventTimestamps.get(eventId), paymentToken as string, range);
     ev.quoteSigner = quoteSigner as string;
     return ev;
   }
@@ -777,6 +811,10 @@ class HedgeContractManager {
       try {
         const d = await contract.getHedgeLpDeposit(id);
         const depId = Number(d.id);
+        // Asked per deposit rather than derived, because the stored figures
+        // lag the contract's own answer until settlement.
+        let pending: number | null = null;
+        try { pending = toNum(await contract.pendingPremiums(id)); } catch { /* older facet */ }
         deposits.push({
           id: depId,
           eventId: Number(d.eventId),
@@ -785,6 +823,7 @@ class HedgeContractManager {
           shares: ethers.formatUnits(d.shares, 18),
           premiumsEarned: toNum(d.premiumsEarned),
           premiumsClaimed: toNum(d.premiumsClaimed),
+          pendingPremiums: pending,
           withdrawn: d.withdrawn,
           createdAt: timestamps.get(depId) || null,
         });
