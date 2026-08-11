@@ -336,17 +336,15 @@ async function produceAuthProof(
     if (!hasGoogle) {
       throw new RiftV3Error("UNSUPPORTED", "No Google account linked to this wallet.");
     }
-    try {
-      return await useGoogle();
-    } catch (googleErr) {
-      // If Google fails AND a passkey is also enrolled, transparently try
-      // that — saves a full transaction retry when the popup misbehaves.
-      if (canPasskey) {
-        console.warn("[v3-sign] Google failed, falling back to passkey");
-        return usePasskey();
-      }
-      throw googleErr;
-    }
+    // No passkey fallback here, deliberately. This branch is only reached when
+    // the user picked Google — from the chooser, or because the passkey is
+    // already known not to work. Quietly trying the passkey anyway means the
+    // answer to "Google didn't work" is a WebAuthn prompt, and when the
+    // credential lives on another device that prompt is a cross-device QR
+    // code: an unreadable answer to a question the user didn't ask, with the
+    // actual Google error swallowed on the way past. Whatever went wrong here
+    // needs to reach the user, because it is usually configuration.
+    return useGoogle();
   }
 
   // "auto" mode from here.

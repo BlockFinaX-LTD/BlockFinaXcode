@@ -975,7 +975,7 @@ function loadGoogleIdentityScript(): Promise<void> {
  * For enrolment: pass any 32 random bytes as hex — the enclave doesn't
  * check nonce on the /methods enrol path.
  */
-async function requestGoogleIdToken(hashHex: string, timeoutMs = 90_000): Promise<string> {
+async function requestGoogleIdToken(hashHex: string, timeoutMs = 45_000): Promise<string> {
   if (!GOOGLE_CLIENT_ID) {
     throw new RiftV3Error("UNSUPPORTED", "Google sign-in isn't configured (VITE_GOOGLE_CLIENT_ID).");
   }
@@ -1004,6 +1004,28 @@ async function requestGoogleIdToken(hashHex: string, timeoutMs = 90_000): Promis
       reject(new RiftV3Error("CANCELLED", "Google sign-in timed out."));
     }, timeoutMs);
 
+    // One Tap is an optimisation, not the mechanism. It declines to appear for
+    // many ordinary reasons — no Google session in this profile, third-party
+    // sign-in switched off, a recent dismissal — and under FedCM it cannot
+    // reliably tell us it has declined, so waiting to be told is waiting
+    // forever. The explicit button is the path that always works; One Tap just
+    // gets a couple of seconds to save the user a click first.
+    let fallbackShown = false;
+    const showButton = () => {
+      if (settled || fallbackShown) return;
+      fallbackShown = true;
+      showFallbackGoogleButton(google, GOOGLE_CLIENT_ID, nonce, (jwt, err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        clearTimeout(buttonTimer);
+        if (err) reject(err);
+        else if (jwt) resolve(jwt);
+        else reject(new RiftV3Error("CANCELLED", "Google sign-in returned no credential."));
+      });
+    };
+    const buttonTimer = setTimeout(showButton, 2_000);
+
     try {
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
@@ -1013,6 +1035,7 @@ async function requestGoogleIdToken(hashHex: string, timeoutMs = 90_000): Promis
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          clearTimeout(buttonTimer);
           if (!resp?.credential) {
             reject(new RiftV3Error("CANCELLED", "Google returned no credential."));
             return;
@@ -1027,23 +1050,29 @@ async function requestGoogleIdToken(hashHex: string, timeoutMs = 90_000): Promis
           isDismissedMoment?: () => boolean;
         }) => {
           if (settled) return;
-          if (
-            notification.isNotDisplayed?.() ||
-            notification.isSkippedMoment?.() ||
-            notification.isDismissedMoment?.()
-          ) {
-            showFallbackGoogleButton(google, GOOGLE_CLIENT_ID, nonce, (jwt, err) => {
-              if (settled) return;
-              settled = true;
-              clearTimeout(timer);
-              if (err) reject(err);
-              else if (jwt) resolve(jwt);
-              else reject(new RiftV3Error("CANCELLED", "Google sign-in returned no credential."));
-            });
+          // Deprecated under FedCM: these log an error, and in some builds
+          // throw. A throw here escapes into Google's own callback and takes
+          // the fallback with it, which is how this path used to hang until
+          // the timeout and then degrade to a passkey prompt. The timer above
+          // makes them redundant; they only ever make the button appear sooner.
+          let declined = false;
+          try {
+            declined = !!(
+              notification.isNotDisplayed?.() ||
+              notification.isSkippedMoment?.() ||
+              notification.isDismissedMoment?.()
+            );
+          } catch {
+            declined = true;
+          }
+          if (declined) {
+            clearTimeout(buttonTimer);
+            showButton();
           }
         },
       );
     } catch (e: any) {
+      clearTimeout(buttonTimer);
       settled = true;
       clearTimeout(timer);
       reject(new RiftV3Error("UNKNOWN", String(e?.message || e)));
@@ -1110,6 +1139,26 @@ function showFallbackGoogleButton(
       shape: "pill",
       logo_alignment: "left",
     });
+
+    // renderButton reports an unauthorised origin only to the console, and
+    // leaves the container empty. Untreated that is a card with a heading, a
+    // "tap the button below", and no button — indistinguishable from a slow
+    // network, and the reason is a setting nobody would think to check.
+    // An empty holder is the signal, so say what to do about it.
+    setTimeout(() => {
+      if (!document.body.contains(overlay)) return;
+      if (btnHolder.childElementCount > 0) return;
+      cleanup();
+      done(
+        null,
+        new RiftV3Error(
+          "UNSUPPORTED",
+          `Google wouldn't render its sign-in button for ${window.location.origin}. ` +
+            `That origin is usually missing from "Authorized JavaScript origins" on the ` +
+            `OAuth client in Google Cloud Console.`,
+        ),
+      );
+    }, 2_500);
   } catch (err: any) {
     cleanup();
     done(null, err instanceof RiftV3Error ? err : new RiftV3Error("UNKNOWN", String(err?.message || err)));
