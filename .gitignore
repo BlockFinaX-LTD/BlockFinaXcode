@@ -99,3 +99,6 @@ audit-report.html
 BlockFinaX-Audit-Report.pdf
 BlockFinaX-Audit-V2-Report.pdf
 BlockFinaX-Audit-V2-Report.html
+
+# stray probe scripts at repo root
+/*.mjs
