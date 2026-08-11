@@ -825,6 +825,21 @@ export default function Hedge() {
   const netPredeterminedPayout =
     predeterminedPayout > 0 ? predeterminedPayout * (1 - (payoutFeeRate ?? 0)) : 0;
 
+  // The pool has to be able to cover the payout it would owe, and the contract
+  // enforces that — reverting with "Insufficient pool liquidity for payout".
+  //
+  // This sheet quoted a premium, a fee and a total for any notional typed into
+  // it and never once asked whether the pool could take the position. On a pool
+  // with $93 of spare capacity a $10,000 notional looked entirely buyable, and
+  // stayed looking buyable through the token approval and the gas, until the
+  // simulation rejected it. The capacity was already on the event; nothing read
+  // it. The comparison is against the gross payout, since that is what the pool
+  // reserves — the claim fee is taken from the hedger's side of it.
+  const availableCapacity = selectedEvent ? selectedEvent.availableCapacity : 0;
+  const maxNotionalForPool =
+    selectedEvent && payoutPercent > 0 ? availableCapacity / payoutPercent : 0;
+  const exceedsCapacity = predeterminedPayout > availableCapacity;
+
   // ── Mainnet guard wrappers (unchanged) ──────────────────────────────────
   const guardedBuyProtection = () => {
     if (!selectedEvent) return;
@@ -1543,7 +1558,14 @@ export default function Hedge() {
               <div className="brk-line total"><span className="l">You pay</span><span className="v">{fmtMoney(totalCostCalc)}</span></div>
             </div>
             {tokenBalanceNum > 0 && <p className="hint" style={{ marginBottom: 12 }}>Balance {fmtMoney(tokenBalanceNum)} {eventTokenSymbol}</p>}
-            <button className="btn btn-primary" disabled={buyProtectionMutation.isPending || !notional || parseFloat(notional) < 10 || totalCostCalc > tokenBalanceNum || !feeKnown} onClick={guardedBuyProtection}>
+            {exceedsCapacity && notional && (
+              <p className="hint" style={{ marginBottom: 12, color: 'var(--red)' }}>
+                This pool can only cover {fmtMoney(availableCapacity)} of payout right now, and this
+                position would need {fmtMoney(predeterminedPayout)}. The most you can cover here is{' '}
+                {fmtMoney(Math.floor(maxNotionalForPool))}.
+              </p>
+            )}
+            <button className="btn btn-primary" disabled={buyProtectionMutation.isPending || !notional || parseFloat(notional) < 10 || totalCostCalc > tokenBalanceNum || !feeKnown || exceedsCapacity} onClick={guardedBuyProtection}>
               {buyProtectionMutation.isPending ? <><Loader2 className="spin" /> {txStep || 'Buying…'}</> : <><ShieldCheck /> Buy protection</>}
             </button>
           </>
