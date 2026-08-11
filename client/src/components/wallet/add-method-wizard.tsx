@@ -12,14 +12,24 @@
  *   Step 2 of 3 — "Add your new {method}"   → then OS popup #2
  *   Step 3 of 3 — "Linking to your wallet…" → server /methods call
  *
- * How it drives the raw addMethod primitive: addMethod takes two async
- * callbacks — `approve(challengeHex)` and `enrolNew()`. Rather than
- * splitting the primitive apart (which would need re-fetching challenges,
- * re-running approve, etc — see git history for the bad version), the
- * wizard hands addMethod callbacks that BLOCK until the user has clicked
- * "Continue" in the corresponding step AND the OS gesture has completed.
- * That way addMethod runs exactly once, exactly as designed, but with UI
- * framing between each of its internal steps.
+ * ── Popup-blocker constraint ───────────────────────────────────────────
+ *
+ * Browsers block `navigator.credentials.get()` and OAuth `window.open()`
+ * when they aren't invoked in the SAME task as a user gesture. That means:
+ *
+ *   ❌ click → resolve async gate → driver awaits → calls gesture   (blocked)
+ *   ✅ click → SYNC call to gesture, THEN await its promise         (allowed)
+ *
+ * So the wizard doesn't route clicks through Promise gates. Each step's
+ * "Continue" button synchronously invokes the gesture function; the
+ * wizard's state machine is a plain useState progression driven by
+ * .then() callbacks. The challenge is fetched on mount, ahead of step 1,
+ * so step 1's click has zero awaits before hitting the WebAuthn / OAuth
+ * call.
+ *
+ * The server /methods finalise call runs at the end via addMethod's own
+ * pass-through form — we hand it already-produced authProof and newMethod
+ * via callback stubs, so addMethod only really does the POST.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -30,6 +40,8 @@ import {
   addMethod,
   createPasskey,
   enrolGoogle,
+  fetchAddMethodChallenge,
+  preloadGoogleIdentityScript,
   RiftV3Error,
   biometricName,
   type AuthProof,
@@ -43,17 +55,17 @@ interface Props {
   open: boolean;
   /** Kind of method being added. */
   newMethodKind: NewMethodKind;
-  /** Rift API token — passed straight through to addMethod. */
+  /** Rift API token. */
   accessToken: string;
-  /** Display label for passkey enrolment (shown to the user's authenticator). */
+  /** Passkey userName presented to the platform authenticator. */
   userLabel: string;
   /** Rift user id — passkey rpUserId + preference key. */
   userId: string;
   /**
-   * Function that authenticates the user with an ALREADY-enrolled method.
-   * Same signature the raw addMethod flow uses. When multiple methods are
-   * enrolled this internally shows the pickEnrolledMethod chooser —
-   * that's fine, it renders on top of this wizard's step-1 card.
+   * Authenticates the user with an already-enrolled method. Same signature
+   * signing-methods.tsx uses today. May itself open a sub-picker when
+   * multiple methods are enrolled — that's fine, it renders on top of
+   * this wizard's step-1 card.
    */
   approveWithExisting: (challengeHex: string) => Promise<AuthProof>;
   onSuccess: () => void;
@@ -61,15 +73,17 @@ interface Props {
 }
 
 type Phase =
-  | "confirm"     // step 1: waiting for user to click "Continue"
+  | "loading"    // fetching the challenge — briefly, before step 1
+  | "confirm"    // step 1: waiting for click
   | "authing"    // step 1 in flight: OS popup #1 fired
-  | "enrol"      // step 2: waiting for user to click "Continue"
+  | "enrol"      // step 2: waiting for click
   | "enroling"   // step 2 in flight: OS popup #2 fired
   | "linking"    // step 3: server POST /methods
   | "done"
   | "error";
 
 const STEP_INDEX: Record<Phase, number> = {
+  loading: 0,
   confirm: 0,
   authing: 0,
   enrol: 1,
@@ -78,28 +92,6 @@ const STEP_INDEX: Record<Phase, number> = {
   done: 2,
   error: 0,
 };
-
-/**
- * Waits until the user clicks "Continue" in the current step, returning
- * their choice (`"go"` to fire the gesture, `"cancel"` to abandon the
- * whole flow). Implemented as a promise-per-step that useAddMethodFlow
- * resolves when the user's click handler fires.
- */
-interface Gate {
-  wait: () => Promise<"go" | "cancel">;
-  resolve: (v: "go" | "cancel") => void;
-}
-function makeGate(): Gate {
-  let resolve: (v: "go" | "cancel") => void = () => {};
-  const wait = () =>
-    new Promise<"go" | "cancel">((r) => {
-      resolve = r;
-    });
-  return {
-    wait,
-    resolve: (v) => resolve(v),
-  };
-}
 
 export function AddMethodWizard({
   open,
@@ -111,152 +103,183 @@ export function AddMethodWizard({
   onSuccess,
   onClose,
 }: Props) {
-  const [phase, setPhase] = useState<Phase>("confirm");
+  const [phase, setPhase] = useState<Phase>("loading");
   const [errorMsg, setErrorMsg] = useState<string>("");
-  const [errorRetryPhase, setErrorRetryPhase] = useState<Phase>("confirm");
-
-  // Gates the running addMethod call awaits at each step. Refs so click
-  // handlers can resolve them without triggering a re-render loop.
-  const confirmGateRef = useRef<Gate | null>(null);
-  const enrolGateRef = useRef<Gate | null>(null);
-  // Set to true when the wizard is intentionally closing (so the async
-  // addMethod driver knows to stop rather than surface a "cancelled" error).
-  const closingRef = useRef(false);
+  // Cached across steps: fetched on mount, consumed by step 1's click.
+  const challengeRef = useRef<string | null>(null);
+  // Filled by step 1's OS popup, consumed by step 3's finalise.
+  const authProofRef = useRef<AuthProof | null>(null);
+  // Filled by step 2's OS popup, consumed by step 3's finalise.
+  const newMethodRef = useRef<EnrolledMethod | null>(null);
+  // Guards against onSuccess/onClose firing after the wizard has been
+  // closed manually (avoids stale-callback races when the user hits X
+  // mid-flight).
+  const closedRef = useRef(false);
 
   const newMethodName = newMethodKind === "passkey" ? biometricName() : "Google";
 
-  const enterError = (msg: string, retryFrom: Phase) => {
-    setErrorMsg(msg);
-    setErrorRetryPhase(retryFrom);
-    setPhase("error");
+  // Pre-fetch the challenge on open so step 1's click can hit the OS
+  // popup with zero awaits between click and navigator.credentials.get().
+  // Also warm the Google Identity Services script so a Google gesture
+  // doesn't spend hundreds of ms fetching gsi/client under the user's
+  // click activation and lose it.
+  useEffect(() => {
+    if (!open) return;
+    closedRef.current = false;
+    challengeRef.current = null;
+    authProofRef.current = null;
+    newMethodRef.current = null;
+    setErrorMsg("");
+    setPhase("loading");
+    void preloadGoogleIdentityScript();
+    void (async () => {
+      try {
+        const ch = await fetchChallenge(accessToken);
+        if (closedRef.current) return;
+        challengeRef.current = ch;
+        setPhase("confirm");
+      } catch (err: any) {
+        if (closedRef.current) return;
+        setErrorMsg(err?.message || "Couldn't start. Try again.");
+        setPhase("error");
+      }
+    })();
+    return () => {
+      closedRef.current = true;
+    };
+  }, [open, accessToken]);
+
+  // ── Step 1 click — MUST call approveWithExisting synchronously ──────────
+  //
+  // Any await here between the click and the gesture call would lose user
+  // activation and get the popup blocked. `approveWithExisting` returns a
+  // Promise but the gesture call itself (navigator.credentials.get /
+  // google.accounts.oauth2.requestAccessToken) fires synchronously inside
+  // it — so calling this function from within the click handler is safe.
+  const onConfirmClick = () => {
+    const challenge = challengeRef.current;
+    if (!challenge) return; // shouldn't happen — button is disabled while loading
+    setPhase("authing");
+    approveWithExisting(challenge)
+      .then((proof) => {
+        if (closedRef.current) return;
+        authProofRef.current = proof;
+        setPhase("enrol");
+      })
+      .catch((err: any) => {
+        if (closedRef.current) return;
+        if (err instanceof RiftV3Error && err.code === "CANCELLED") {
+          setPhase("confirm");
+          return;
+        }
+        setErrorMsg(
+          err instanceof RiftV3Error && err.code === "CHALLENGE_MISSING_OR_EXPIRED"
+            ? "That took too long. Try again."
+            : err?.message || "Couldn't confirm it's you.",
+        );
+        setPhase("error");
+      });
   };
 
-  // Drives one full add-method attempt. Re-runnable — used both on first
-  // open and on Retry.
-  const drive = async () => {
-    setPhase("confirm");
-    setErrorMsg("");
-    confirmGateRef.current = makeGate();
-    enrolGateRef.current = makeGate();
-    closingRef.current = false;
+  // ── Step 2 click — MUST call createPasskey/enrolGoogle synchronously ────
+  const onEnrolClick = () => {
+    setPhase("enroling");
+    const enrolPromise =
+      newMethodKind === "passkey"
+        ? createPasskey(userLabel, userId)
+        : enrolGoogle();
+    enrolPromise
+      .then((method) => {
+        if (closedRef.current) return;
+        newMethodRef.current = method;
+        // Server finalise — no gesture, safe to run inline.
+        void runLink();
+      })
+      .catch((err: any) => {
+        if (closedRef.current) return;
+        if (err instanceof RiftV3Error && err.code === "CANCELLED") {
+          setPhase("enrol");
+          return;
+        }
+        setErrorMsg(err?.message || `Couldn't add ${newMethodName}.`);
+        setPhase("error");
+      });
+  };
 
+  const runLink = async () => {
+    const proof = authProofRef.current;
+    const method = newMethodRef.current;
+    if (!proof || !method) {
+      setErrorMsg("Lost track of the confirmation. Try again.");
+      setPhase("error");
+      return;
+    }
+    setPhase("linking");
     try {
+      // addMethod expects two callbacks; hand it the already-produced
+      // proof/method so it only really performs POST /methods. This
+      // reuses the SAME retry / error mapping / callWallet plumbing
+      // that the original inline call used.
       await addMethod(
         accessToken,
-        // approve — the "confirm it's you" leg
-        async (challengeHex) => {
-          const decision = await confirmGateRef.current!.wait();
-          if (decision === "cancel") throw new RiftV3Error("CANCELLED", "Cancelled.");
-          setPhase("authing");
-          try {
-            return await approveWithExisting(challengeHex);
-          } catch (err: any) {
-            if (err instanceof RiftV3Error && err.code === "CANCELLED") {
-              // User backed out of the OS popup. Reset step 1 so they can
-              // Retry from within the same wizard — don't blow up the whole flow.
-              setPhase("confirm");
-              confirmGateRef.current = makeGate();
-              // Recurse via a fresh await: throw a sentinel here would
-              // cascade to error UI, but re-awaiting the gate keeps us
-              // in step 1 until the user either retries or cancels.
-              const retryDecision = await confirmGateRef.current!.wait();
-              if (retryDecision === "cancel") throw new RiftV3Error("CANCELLED", "Cancelled.");
-              setPhase("authing");
-              return await approveWithExisting(challengeHex);
-            }
-            throw err;
-          }
-        },
-        // enrolNew — the "add new method" leg
-        async () => {
-          setPhase("enrol");
-          enrolGateRef.current = makeGate();
-          const decision = await enrolGateRef.current.wait();
-          if (decision === "cancel") throw new RiftV3Error("CANCELLED", "Cancelled.");
-          setPhase("enroling");
-          try {
-            return newMethodKind === "passkey"
-              ? await createPasskey(userLabel, userId)
-              : await enrolGoogle();
-          } catch (err: any) {
-            if (err instanceof RiftV3Error && err.code === "CANCELLED") {
-              setPhase("enrol");
-              enrolGateRef.current = makeGate();
-              const retryDecision = await enrolGateRef.current.wait();
-              if (retryDecision === "cancel") throw new RiftV3Error("CANCELLED", "Cancelled.");
-              setPhase("enroling");
-              return newMethodKind === "passkey"
-                ? await createPasskey(userLabel, userId)
-                : await enrolGoogle();
-            }
-            throw err;
-          }
-        },
+        async () => proof,
+        async () => method,
       );
-      // addMethod's third leg (POST /methods) runs synchronously right
-      // after enrolNew resolves — from our perspective that's step 3.
-      // Show the "linking" spinner briefly so the flow doesn't jump
-      // straight from OS popup to success without acknowledgement.
-      setPhase("linking");
-      // Small buffer so the linking phase is perceivable — the actual
-      // POST inside addMethod has already resolved by the time we get here.
-      await new Promise((r) => setTimeout(r, 250));
+      if (closedRef.current) return;
       setPhase("done");
       setTimeout(() => {
-        if (!closingRef.current) {
-          onSuccess();
-          onClose();
-        }
+        if (closedRef.current) return;
+        onSuccess();
+        onClose();
       }, 900);
     } catch (err: any) {
-      if (closingRef.current) return;
-      if (err instanceof RiftV3Error && err.code === "CANCELLED") {
-        onClose();
-        return;
-      }
+      if (closedRef.current) return;
       const duplicate = err instanceof RiftV3Error && /duplicate/i.test(err.message);
-      enterError(
+      setErrorMsg(
         duplicate
           ? newMethodKind === "passkey"
             ? "This device's passkey is already linked. Open BlockFinaX on the other device and add it there."
             : "This Google account is already linked to your wallet."
           : err instanceof RiftV3Error && err.code === "CHALLENGE_MISSING_OR_EXPIRED"
-          ? "That took too long. Try again."
-          : err?.message || `Couldn't add ${newMethodName}.`,
-        // Reset from step 1 since the challenge is now stale.
-        "confirm",
+          ? "That took too long. Try again from step 1."
+          : err?.message || `Couldn't link ${newMethodName}. Try again.`,
       );
+      setPhase("error");
     }
   };
 
-  // Kick the driver every time the wizard opens fresh.
-  useEffect(() => {
-    if (open) {
-      void drive();
-    } else {
-      // Closing — stop any in-flight gate so drive() unblocks cleanly.
-      closingRef.current = true;
-      confirmGateRef.current?.resolve("cancel");
-      enrolGateRef.current?.resolve("cancel");
-    }
-    // Intentionally deps: [open]. drive() closes over the callback props
-    // but we accept the trade-off — reopening always resets to step 1.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Retry re-runs from step 1 with a fresh challenge (addMethod's
+  // /methods call rejects a re-used challenge, and the auth-proof is
+  // bound to it, so once step 3 errors we need to redo everything).
+  const onRetry = () => {
+    challengeRef.current = null;
+    authProofRef.current = null;
+    newMethodRef.current = null;
+    setErrorMsg("");
+    setPhase("loading");
+    void (async () => {
+      try {
+        const ch = await fetchChallenge(accessToken);
+        if (closedRef.current) return;
+        challengeRef.current = ch;
+        setPhase("confirm");
+      } catch (err: any) {
+        if (closedRef.current) return;
+        setErrorMsg(err?.message || "Couldn't start. Try again.");
+        setPhase("error");
+      }
+    })();
+  };
+
+  const doClose = () => {
+    closedRef.current = true;
+    onClose();
+  };
 
   if (!open) return null;
 
   const stepIdx = STEP_INDEX[phase];
   const canClose = phase !== "authing" && phase !== "enroling" && phase !== "linking";
-  const cancelViaGate = () => {
-    // Any pending gate: resolving "cancel" lets drive() unwind and call
-    // onClose. Belt & braces: also flip closingRef so the catch block
-    // doesn't try to show an error.
-    closingRef.current = true;
-    confirmGateRef.current?.resolve("cancel");
-    enrolGateRef.current?.resolve("cancel");
-    onClose();
-  };
 
   return (
     <AnimatePresence>
@@ -269,7 +292,7 @@ export function AddMethodWizard({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          if (canClose) cancelViaGate();
+          if (canClose) doClose();
         }}
       >
         <div
@@ -308,7 +331,7 @@ export function AddMethodWizard({
               {canClose && (
                 <button
                   aria-label="Close"
-                  onClick={cancelViaGate}
+                  onClick={doClose}
                   className="rounded-lg p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800"
                 >
                   <X className="h-4 w-4" />
@@ -323,6 +346,15 @@ export function AddMethodWizard({
 
           {/* Body — switches per phase */}
           <div className="px-6 pb-6 pt-4">
+            {phase === "loading" && (
+              <div className="flex flex-col items-center py-8 text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+                <p className="mt-3 text-[12px] text-neutral-500 dark:text-neutral-400">
+                  Getting ready…
+                </p>
+              </div>
+            )}
+
             {(phase === "confirm" || phase === "authing") && (
               <StepBody
                 stepLabel="Step 1 of 3"
@@ -337,8 +369,8 @@ export function AddMethodWizard({
                 cta="Continue"
                 ctaBusy={phase === "authing"}
                 ctaBusyLabel="Waiting for confirmation…"
-                onCta={() => confirmGateRef.current?.resolve("go")}
-                onCancel={cancelViaGate}
+                onCta={onConfirmClick}
+                onCancel={doClose}
               />
             )}
 
@@ -373,8 +405,8 @@ export function AddMethodWizard({
                     ? `Waiting for ${biometricName()}…`
                     : "Waiting for Google…"
                 }
-                onCta={() => enrolGateRef.current?.resolve("go")}
-                onCancel={cancelViaGate}
+                onCta={onEnrolClick}
+                onCancel={doClose}
               />
             )}
 
@@ -422,15 +454,7 @@ export function AddMethodWizard({
                 <div className="mt-6 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      // Kick a fresh drive from scratch. Old gates are
-                      // stale — drive() creates new ones.
-                      void drive();
-                      // Local variable so the closure captures the intended
-                      // retry point (not currently used but reserved for
-                      // more granular retry-from-step-N in future).
-                      void errorRetryPhase;
-                    }}
+                    onClick={onRetry}
                     className={cn(
                       "flex-1 rounded-2xl bg-[hsl(var(--navy))] px-4 py-3",
                       "text-[14px] font-semibold text-white",
@@ -441,7 +465,7 @@ export function AddMethodWizard({
                   </button>
                   <button
                     type="button"
-                    onClick={cancelViaGate}
+                    onClick={doClose}
                     className={cn(
                       "rounded-2xl border border-neutral-200 dark:border-neutral-800 px-4 py-3",
                       "text-[14px] font-medium text-neutral-600 dark:text-neutral-400",
@@ -572,3 +596,7 @@ function GoogleGlyph({ className }: { className?: string }) {
     </svg>
   );
 }
+
+// Challenge fetch lives in rift-v3.ts (fetchAddMethodChallenge) so it
+// reuses the same callWallet base+prefix plumbing as every other call.
+const fetchChallenge = fetchAddMethodChallenge;
