@@ -716,6 +716,25 @@ export async function addMethod(
   return callWallet("/methods", accessToken, { method: "POST", body: { authProof, newMethod } });
 }
 
+/**
+ * Standalone challenge fetch — used by the AddMethodWizard so it can
+ * pre-fetch the challenge on open (before showing step 1). That way step
+ * 1's "Continue" click can call approveWithExisting synchronously, without
+ * an intervening network round-trip that would lose the browser's user-
+ * activation grant and get the WebAuthn / OAuth popup blocked.
+ *
+ * Same call as addMethod's first step — reuses callWallet so it inherits
+ * the same VITE_RIFT_API_BASE + walletPrefix fallback plumbing.
+ */
+export async function fetchAddMethodChallenge(accessToken: string): Promise<string> {
+  const { challengeHex } = await callWallet<{ challengeHex: string }>(
+    "/methods/challenge",
+    accessToken,
+    { method: "POST" },
+  );
+  return challengeHex;
+}
+
 // ── Signing ───────────────────────────────────────────────────────────────
 
 export interface PreviewResult {
@@ -907,6 +926,20 @@ export function decodeOidcMethodFromIdToken(
 
 /** Load Google's gsi/client script once, cached across calls. */
 let gsiScriptPromise: Promise<void> | null = null;
+/**
+ * Preload the Google Identity Services script so the first prompt() call
+ * doesn't spend hundreds of ms fetching accounts.google.com/gsi/client.
+ * Callers (AddMethodWizard, upgrade prompt) invoke this on mount so by
+ * the time the user clicks "Continue" the script is ready and the
+ * click-to-prompt path has zero awaits.
+ */
+export function preloadGoogleIdentityScript(): Promise<void> {
+  if (!googleSigningConfigured()) return Promise.resolve();
+  return loadGoogleIdentityScript().catch(() => {
+    /* preload is best-effort; the real call will re-attempt & surface any error */
+  });
+}
+
 function loadGoogleIdentityScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("no window"));
   if ((window as any).google?.accounts?.id) return Promise.resolve();
@@ -1028,8 +1061,13 @@ function showFallbackGoogleButton(
 ): void {
   const overlay = document.createElement("div");
   overlay.setAttribute("data-bfx-gsi-fallback", "1");
+  // z-index has to sit ABOVE every modal in the app — the AddMethodWizard
+  // is at z-[9998] and MethodChooser at z-[9999], so anything under 10000
+  // renders behind them and the user can never click the Sign-In button.
+  // 2000 (previous) hid the fallback behind the wizard, producing an
+  // apparent "Waiting for Google…" hang on step 2.
   overlay.style.cssText =
-    "position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);";
+    "position:fixed;inset:0;z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);";
   const card = document.createElement("div");
   card.style.cssText =
     "background:#fff;border-radius:20px;padding:20px;max-width:340px;width:100%;box-shadow:0 8px 24px rgba(0,0,0,0.15);display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;";
