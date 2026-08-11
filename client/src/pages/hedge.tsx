@@ -815,7 +815,27 @@ export default function Hedge() {
   const hedgerFeeCalc = notional && feeKnown ? premiumCalc * hedgerFeeRate : 0;
   const totalCostCalc = premiumCalc + hedgerFeeCalc;
   const currentRate = selectedEvent ? fxData?.rates[selectedEvent.underlying]?.rate || 0 : 0;
-  const payoutPercent = selectedEvent ? selectedEvent.payoutPercent : 0;
+  // The payout rate, recovered from the chain rather than from the strike.
+  //
+  // payoutPercent is (strike − initialRate) / initialRate: how far the strike
+  // sits from spot. That is not what a position pays. The contract pays on the
+  // distance from the strike to the pool's payoutCap, and payoutCap is set at
+  // createEvent and exposed by no getter — so it cannot be read directly.
+  //
+  // It can be recovered. totalExposure is the sum of notionals written against
+  // the event and totalMaxPayout is what the pool has reserved for them, so
+  // their ratio is the rate the contract applied. On event 9 that gives
+  // 3.4096%, matching position #7's own payoutAmount/notional exactly, against
+  // the 1.436% payoutPercent would have implied.
+  //
+  // An event with no positions yet has no ratio to recover, and falls back —
+  // the quote is then only as good as payoutPercent, and the contract remains
+  // the thing that decides. Exposing payoutCap would remove the guesswork.
+  const chainPayoutRate =
+    selectedEvent && selectedEvent.totalExposure > 0 && selectedEvent.totalMaxPayout > 0
+      ? selectedEvent.totalMaxPayout / selectedEvent.totalExposure
+      : null;
+  const payoutPercent = chainPayoutRate ?? (selectedEvent ? selectedEvent.payoutPercent : 0);
   const predeterminedPayout = selectedEvent && notional ? parseFloat(notional) * payoutPercent : 0;
   // The claim fee, from the chain rather than a literal. This was × 0.99 — a 1%
   // deduction — while the deployed config charges 2% on Base, so the headline
@@ -1267,7 +1287,7 @@ export default function Hedge() {
                         <PayoutScenarios
                           notional={p.notional}
                           totalCost={p.premiumPaid + p.platformFeePaid}
-                          maxPayout={p.notional * (ev.payoutPercent || 0)}
+                          maxPayout={p.payoutAmount}
                           strike={ev.strike}
                           initialRate={ev.initialRate}
                           strikeAbove={ev.strikeAbove}
@@ -1422,7 +1442,17 @@ export default function Hedge() {
           const p = posDetail;
           const ev = events.find((e) => e.id === p.eventId);
           const totalCost = p.premiumPaid + p.platformFeePaid;
-          const maxPayout = ev ? p.notional * (ev.payoutPercent || 0) : 0;
+          // The contract's own reserved figure, not a re-derivation.
+          //
+          // This was notional × payoutPercent, and payoutPercent is
+          // (strike − initialRate) / initialRate — the distance from spot to
+          // strike, which is not a payout rate and does not involve the cap.
+          // On position #7 it showed $129 against the $306.86 the contract
+          // actually reserved and would pay: the hedger was told they held
+          // 58% less protection than they had bought. payoutAmount is read
+          // from the chain into every position already and is authoritative;
+          // nothing needed computing.
+          const maxPayout = p.payoutAmount;
           const won = p.status === 'claimed' || p.status === 'settled_win';
           const net = won ? p.payoutAmount - totalCost : -totalCost;
           const label = p.status === 'claimed' ? 'Claimed' : p.status === 'settled_win' ? 'Won — unclaimed' : 'Expired';
