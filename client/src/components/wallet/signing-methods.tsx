@@ -32,7 +32,6 @@ import {
   assertGoogle,
   enrolGoogle,
   googleSigningConfigured,
-  addMethod,
   passkeysSupported,
   isSigningReady,
   RiftV3Error,
@@ -41,6 +40,7 @@ import {
   type EnrolledMethod,
 } from "@/lib/rift-v3";
 import { forgetPreferredMethod, pickEnrolledMethod } from "@/lib/v3-sign";
+import { AddMethodWizard, type NewMethodKind } from "./add-method-wizard";
 
 /** Session-scoped dismissal — skipping should defer, not opt out. */
 const DISMISS_KEY = "bfx_v3_prompt_dismissed";
@@ -142,6 +142,10 @@ export function SigningUpgradePrompt({
   const [dismissed, setDismissed] = useState(
     () => sessionStorage.getItem(DISMISS_KEY) === "1",
   );
+  // Default the user into the "both methods" flow — one CTA, less choice
+  // paralysis. Advanced users click "Set up one method at a time" to see
+  // the two individual options.
+  const [showIndividual, setShowIndividual] = useState(false);
   const { toast } = useToast();
 
   if (dismissed) return null;
@@ -288,19 +292,39 @@ export function SigningUpgradePrompt({
       )}
 
       <div className="mt-5 space-y-2">
-        {/* Primary: whichever combination this browser can offer */}
-        {canPasskey && canGoogle ? (
+        {/* Default: one primary CTA. Combined-both when both are available,
+            otherwise the single available method. The "one at a time" link
+            below reveals the individual buttons for the rare user who wants
+            to enrol one method and skip the other. */}
+        {canPasskey && canGoogle && !showIndividual ? (
           <PrimaryCTA
             icon={<LockGlyph className="h-4 w-4" />}
-            label={`Use ${biometricName()} + Google`}
+            label={`Set up ${biometricName()} + Google`}
             busy={busy === "both"}
             disabled={isBusy || needsPassword}
             onClick={() => runWith("both", { passkey: true, google: true })}
           />
+        ) : canPasskey && canGoogle && showIndividual ? (
+          <div className="space-y-2">
+            <PrimaryCTA
+              icon={<FiSmartphone className="h-4 w-4" />}
+              label={`Set up ${biometricName()}`}
+              busy={busy === "passkey"}
+              disabled={isBusy || needsPassword}
+              onClick={() => runWith("passkey", { passkey: true, google: false })}
+            />
+            <PrimaryCTA
+              icon={<GoogleGlyph className="h-4 w-4" />}
+              label="Set up Google"
+              busy={busy === "google"}
+              disabled={isBusy || needsPassword}
+              onClick={() => runWith("google", { passkey: false, google: true })}
+            />
+          </div>
         ) : canPasskey ? (
           <PrimaryCTA
             icon={<FiSmartphone className="h-4 w-4" />}
-            label={`Use ${biometricName()}`}
+            label={`Set up ${biometricName()}`}
             busy={busy === "passkey"}
             disabled={isBusy || needsPassword}
             onClick={() => runWith("passkey", { passkey: true, google: false })}
@@ -315,24 +339,21 @@ export function SigningUpgradePrompt({
           />
         )}
 
-        {/* Alternates only when the primary is the combined option */}
+        {/* Toggle only when both methods are available — otherwise there's
+            nothing to reveal. */}
         {canPasskey && canGoogle && (
-          <div className="flex gap-2">
-            <SecondaryCTA
-              icon={<GoogleGlyph className="h-4 w-4" />}
-              label="Google only"
-              busy={busy === "google"}
-              disabled={isBusy || needsPassword}
-              onClick={() => runWith("google", { passkey: false, google: true })}
-            />
-            <SecondaryCTA
-              icon={<FiSmartphone className="h-4 w-4" />}
-              label={`${biometricName()} only`}
-              busy={busy === "passkey"}
-              disabled={isBusy || needsPassword}
-              onClick={() => runWith("passkey", { passkey: true, google: false })}
-            />
-          </div>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => setShowIndividual((v) => !v)}
+            className={cn(
+              "w-full rounded-xl py-2 text-[12px] font-medium",
+              "text-[hsl(var(--navy))] hover:underline",
+              "disabled:opacity-40 disabled:cursor-not-allowed",
+            )}
+          >
+            {showIndividual ? "Set up both together" : "Set up one method at a time"}
+          </button>
         )}
       </div>
 
@@ -384,41 +405,6 @@ function PrimaryCTA({
   );
 }
 
-function SecondaryCTA({
-  icon,
-  label,
-  busy,
-  disabled,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  busy: boolean;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex flex-1 items-center justify-center gap-1.5",
-        "rounded-2xl border border-neutral-200 dark:border-neutral-800",
-        "bg-white dark:bg-neutral-900",
-        "px-3 py-2.5",
-        "text-[12px] font-medium text-neutral-700 dark:text-neutral-300",
-        "transition-colors duration-150",
-        "hover:bg-neutral-50 dark:hover:bg-neutral-800/50",
-        "disabled:opacity-40 disabled:cursor-not-allowed",
-      )}
-    >
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
-      <span className="truncate">{busy ? "…" : label}</span>
-    </button>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // SigningMethods — the Settings → Signing surface (full page section)
 // ═══════════════════════════════════════════════════════════════════════
@@ -435,6 +421,11 @@ export function SigningMethods({
   const { methods, loading, refresh, signingReady } = useSigningState(accessToken);
   const [busy, setBusy] = useState<"passkey" | "google" | "enable" | null>(null);
   const [platformAuth, setPlatformAuth] = useState<"yes" | "no" | "unknown">("unknown");
+  // The 3-step wizard for adding a new signing method. Opens when the
+  // user clicks "Add passkey" / "Link Google" on the settings screen.
+  // Null when closed. See add-method-wizard.tsx for the full state
+  // machine — this component just owns the open/close state.
+  const [wizardKind, setWizardKind] = useState<NewMethodKind | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -480,50 +471,12 @@ export function SigningMethods({
     );
   };
 
-  const addPasskey = async () => {
-    setBusy("passkey");
-    try {
-      await addMethod(accessToken, approveWithExisting, () => createPasskey(userLabel, userId));
-      forgetPreferredMethod(userId);
-      toast({ title: "Device added", description: "This device can now approve payments." });
-      await refresh();
-    } catch (err: any) {
-      handleAddError(err, "device");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const addGoogle = async () => {
-    setBusy("google");
-    try {
-      await addMethod(accessToken, approveWithExisting, () => enrolGoogle());
-      forgetPreferredMethod(userId);
-      toast({ title: "Google linked", description: "This account can now approve payments." });
-      await refresh();
-    } catch (err: any) {
-      handleAddError(err, "Google");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleAddError = (err: any, what: "device" | "Google") => {
-    if (err instanceof RiftV3Error && err.code === "CANCELLED") return;
-    const duplicate = err instanceof RiftV3Error && /duplicate/i.test(err.message);
-    toast({
-      title: duplicate ? "Already added" : "Couldn't add it",
-      description:
-        err instanceof RiftV3Error && err.code === "CHALLENGE_MISSING_OR_EXPIRED"
-          ? "That took too long — please try again."
-          : duplicate
-          ? what === "device"
-            ? "This device's passkey is already linked. Open BlockFinaX on the other device and add it there."
-            : "This Google account is already linked to your wallet."
-          : err?.message || "Something went wrong.",
-      variant: duplicate ? undefined : "destructive",
-    });
-  };
+  // Open the 3-step wizard rather than firing addMethod inline. The wizard
+  // owns the two-gesture choreography end-to-end — see add-method-wizard.tsx.
+  // These handlers stay so the "Add another" buttons keep their existing
+  // hookup shape.
+  const addPasskey = () => setWizardKind("passkey");
+  const addGoogle = () => setWizardKind("oidc");
 
   if (loading && !methods) {
     return (
@@ -680,6 +633,27 @@ export function SigningMethods({
           Your wallet keys never leave your device unencrypted. BlockFinaX cannot move your funds.
         </p>
       )}
+
+      <AddMethodWizard
+        open={wizardKind !== null}
+        newMethodKind={wizardKind ?? "passkey"}
+        accessToken={accessToken}
+        userLabel={userLabel}
+        userId={userId}
+        approveWithExisting={approveWithExisting}
+        onSuccess={() => {
+          forgetPreferredMethod(userId);
+          void refresh();
+          toast({
+            title: wizardKind === "passkey" ? "Device added" : "Google linked",
+            description:
+              wizardKind === "passkey"
+                ? "This device can now approve payments."
+                : "This account can now approve payments.",
+          });
+        }}
+        onClose={() => setWizardKind(null)}
+      />
     </div>
   );
 }
