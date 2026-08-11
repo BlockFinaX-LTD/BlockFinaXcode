@@ -571,8 +571,23 @@ export async function registerProtocolRoutes(app: Express) {
       const premiumPaid = notionalNum * parseFloat(event.premiumRate);
       const payoutRate = parseFloat(event.payoutRate) || 0.30;
       const maxPayout = notionalNum * payoutRate;
-      const HEDGER_FEE_RATE = 0.005;
-      const hedgerPlatformFee = notionalNum * HEDGER_FEE_RATE;
+      // 5% of the premium, not of the notional.
+      //
+      // The basis matters more than the number. A fee on notional is charged on
+      // the amount being protected, so it does not move with the price of the
+      // protection: on a 1% premium it is a tenth of what the hedger pays, and
+      // on a cheap pool it can exceed the premium several times over. A fee on
+      // premium is a share of the transaction, which is what it is meant to be.
+      //
+      // Base's deployed contract still charges 5% of notional and cannot be
+      // changed — initializeHedgeFees is one-shot and already spent — so an
+      // on-chain purchase there is billed on a different basis than this path.
+      // That divergence is real and is not resolvable from here; see the fee
+      // audit. The on-chain quote in hedge.tsx reads the chain and must keep
+      // doing so, because the same figure feeds maxCost and an under-quote
+      // makes the transaction revert.
+      const HEDGER_FEE_RATE = 0.05;
+      const hedgerPlatformFee = premiumPaid * HEDGER_FEE_RATE;
       const totalCost = premiumPaid + hedgerPlatformFee;
 
       const positions = await storage.getHedgePositionsByEvent(event.id);
@@ -611,7 +626,7 @@ export async function registerProtocolRoutes(app: Express) {
       await storage.updateHedgeEvent(event.id, { creatorEarnings: fromMicro(currentCreatorMicro + creatorRewardMicro) });
 
       const creatorReward = Number(creatorRewardMicro) / 1_000_000;
-      console.log(`[Hedge Fee] Notional: $${notionalNum} | MaxPayout: $${maxPayout.toFixed(2)} (${(payoutRate * 100).toFixed(0)}%) | Premium: $${premiumPaid.toFixed(4)} | Hedger fee (0.5%): $${hedgerPlatformFee.toFixed(4)} | Creator reward (5%): $${creatorReward.toFixed(4)} | Event: ${event.name}`);
+      console.log(`[Hedge Fee] Notional: $${notionalNum} | MaxPayout: $${maxPayout.toFixed(2)} (${(payoutRate * 100).toFixed(0)}%) | Premium: $${premiumPaid.toFixed(4)} | Hedger fee (5% of premium): $${hedgerPlatformFee.toFixed(4)} | Creator reward (5%): $${creatorReward.toFixed(4)} | Event: ${event.name}`);
 
       res.status(201).json({
         ...position, premiumPaid, hedgerPlatformFee, creatorReward, totalCost, maxPayout,

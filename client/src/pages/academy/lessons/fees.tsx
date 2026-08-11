@@ -23,12 +23,12 @@ export default function Fees() {
             A flat fee in the pool&apos;s payment token, charged when
             <CodeInline>createEvent</CodeInline> is called. Sized to
             discourage spam pools without gating serious ones.
-            <strong> Flat $25</strong>, applied uniformly on every
-            supported chain.
+            <strong> $25 on Base</strong>, <strong>$2 on BSC</strong> — set
+            per chain, not uniformly.
           </KVRow>
           <KVRow term="Platform fee on premium">
             The primary revenue stream. When a hedger buys cover, the
-            protocol takes <strong>2.5% of the premium paid</strong>. The
+            protocol takes <strong>5% of the premium paid</strong>. The
             remainder flows into the pool as LP income.
           </KVRow>
           <KVRow term="Payout fee">
@@ -58,7 +58,7 @@ export default function Fees() {
         <P>
           All rates use a fixed-point precision of
           <CodeInline>1e6</CodeInline> on-chain (so
-          <CodeInline>25000</CodeInline> means 2.5%). The rate caps
+          <CodeInline>50000</CodeInline> means 5%). The rate caps
           enforced by the contract are strict. No single rate above 10%.
           Loyalty share not above 50%.
         </P>
@@ -68,23 +68,23 @@ export default function Fees() {
         <P>
           Say a hedger buys $100,000 of notional cover on a pool whose
           pricing engine quotes a 1% premium. Their premium is $1,000.
-          The protocol takes 2.5% of that, which is $25, as its platform
-          fee. The remaining $975 lands in the pool as LP income and is
+          The protocol takes 5% of that, which is $50, as its platform
+          fee. The remaining $950 lands in the pool as LP income and is
           distributed proportionally to underwriters.
         </P>
-        <Fig label="Fig. 05·1" caption="A $1,000 premium at 2.5%. LPs receive $975. The platform keeps $25, from which the creator earns $1.25 loyalty.">
+        <Fig label="Fig. 05·1" caption="A $1,000 premium at 5%. LPs receive $950. The platform keeps $50, from which the creator earns $2.50 loyalty.">
           <svg viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet">
             <text x="20" y="24" className="lbl-major">$1,000 premium on a $100,000 notional at 1%</text>
 
-            <text x="20" y="60">$975 to LPs</text>
-            <text x="580" y="60" textAnchor="end" style={{ fill: 'var(--ac-accent)' }}>$25 platform</text>
+            <text x="20" y="60">$950 to LPs</text>
+            <text x="580" y="60" textAnchor="end" style={{ fill: 'var(--ac-accent)' }}>$50 platform</text>
 
-            <rect x="20" y="72" width="565.5" height="28" fill="var(--ac-accent-soft)" stroke="var(--ac-accent)" />
-            <rect x="585.5" y="72" width="14.5" height="28" fill="var(--ac-accent)" opacity="0.55" stroke="var(--ac-accent)" />
+            <rect x="20" y="72" width="551" height="28" fill="var(--ac-accent-soft)" stroke="var(--ac-accent)" />
+            <rect x="571" y="72" width="29" height="28" fill="var(--ac-accent)" opacity="0.55" stroke="var(--ac-accent)" />
 
-            <text x="20" y="128" style={{ fill: 'var(--ac-tx-3)' }}>Of the $25 platform take</text>
-            <text x="20" y="156">$23.75 protocol</text>
-            <text x="580" y="156" textAnchor="end">$1.25 creator loyalty (5%)</text>
+            <text x="20" y="128" style={{ fill: 'var(--ac-tx-3)' }}>Of the $50 platform take</text>
+            <text x="20" y="156">$47.50 protocol</text>
+            <text x="580" y="156" textAnchor="end">$2.50 creator loyalty (5%)</text>
 
             <line x1="20" y1="168" x2="580" y2="168" className="stroke-2" />
             <line x1="20" y1="168" x2="551" y2="168" className="accent" strokeWidth="4" />

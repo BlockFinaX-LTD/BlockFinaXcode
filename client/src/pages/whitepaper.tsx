@@ -1037,8 +1037,8 @@ export default function Whitepaper() {
           <DataTable
             headers={["Fee", "Rate", "Charged to", "Distribution"]}
             rows={[
-              ["Event creation fee", "$2 USDC", "Pool creator at deployment", "100% to protocol treasury"],
-              ["Protection entry fee", "0.5% of notional", "Hedger at position entry", "95% treasury · 5% pool creator loyalty"],
+              ["Event creation fee", "$25 on Base · $2 on BSC", "Pool creator at deployment", "100% to protocol treasury"],
+              ["Protection entry fee", "5% of premium paid", "Hedger at position entry", "95% treasury · 5% pool creator loyalty"],
               ["Payout claim fee", "1% of payout amount", "Hedger at payout claim", "95% treasury · 5% pool creator loyalty"],
               ["LP premium claim fee", "1% of premiums claimed", "LP at premium claim", "95% treasury · 5% pool creator loyalty"],
               ["Stablecoin transfer fee", "0.3% (min $0.50)", "Sender per wallet transfer", "100% to protocol treasury"],
