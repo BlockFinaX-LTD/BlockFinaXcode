@@ -37,6 +37,7 @@ import {
   noteDeviceSigningDecline,
   wasMigratedLocally,
   passkeysSupported,
+  platformAuthenticatorUsable,
   RiftV3Error,
   type AuthProof,
   type EnrolledEntry,
@@ -314,6 +315,12 @@ async function produceAuthProof(
   const oidcOptions = enrolled.filter((e) => e.kind === "oidc");
   const hasGoogle = oidcOptions.length > 0 && googleSigningConfigured();
 
+  // Whether the passkey can actually be presented here, not just whether the
+  // browser has the API. Only meaningful when there is somewhere else to go:
+  // with no Google linked we attempt the passkey regardless, because a failed
+  // attempt at the only enrolled method beats refusing to try it.
+  const canPasskey = hasPasskey && (!hasGoogle || (await platformAuthenticatorUsable()));
+
   const usePasskey = async (): Promise<AuthProof> =>
     assertPasskey(hashHex, await enrolledCredIds(accessToken));
   const useGoogle = async (): Promise<AuthProof> => assertGoogle(hashHex);
@@ -334,7 +341,7 @@ async function produceAuthProof(
     } catch (googleErr) {
       // If Google fails AND a passkey is also enrolled, transparently try
       // that — saves a full transaction retry when the popup misbehaves.
-      if (hasPasskey && passkeysSupported()) {
+      if (canPasskey) {
         console.warn("[v3-sign] Google failed, falling back to passkey");
         return usePasskey();
       }
@@ -345,7 +352,7 @@ async function produceAuthProof(
   // "auto" mode from here.
   const saved = getPreferredMethod(userId);
   if (saved) {
-    if (saved.kind === "passkey" && hasPasskey && passkeysSupported()) return usePasskey();
+    if (saved.kind === "passkey" && canPasskey) return usePasskey();
     if (saved.kind === "oidc" && hasGoogle) return useGoogle();
     // Saved preference is stale (method removed) — fall through to chooser.
   }
@@ -356,9 +363,7 @@ async function produceAuthProof(
 
   // Multiple enrolled methods — pop the chooser.
   const eligible: EnrolledEntry[] = [
-    ...(hasPasskey && passkeysSupported()
-      ? [{ kind: "passkey" as const, label: "This device" }]
-      : []),
+    ...(canPasskey ? [{ kind: "passkey" as const, label: "This device" }] : []),
     ...(hasGoogle ? oidcOptions : []),
   ];
   if (eligible.length === 0) {

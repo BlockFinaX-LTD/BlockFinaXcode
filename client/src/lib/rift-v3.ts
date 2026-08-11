@@ -255,6 +255,37 @@ export function passkeysSupported(): boolean {
   return typeof window !== "undefined" && !!window.PublicKeyCredential && !!navigator.credentials;
 }
 
+/**
+ * Whether this device can actually present a passkey — not merely whether the
+ * browser exposes the API.
+ *
+ * These are different claims and the gap between them is not hypothetical: a
+ * desktop Chrome with no Touch ID, no Windows Hello and no paired phone still
+ * reports `window.PublicKeyCredential`, so `passkeysSupported()` says yes. An
+ * account here had a passkey enrolled and Google linked, on a machine in
+ * exactly that state, and the wallet went to the passkey every time because
+ * "enrolled" and "usable" were being treated as the same fact. There was money
+ * in it.
+ *
+ * Answering it costs a promise, which is why the sync check still exists for
+ * render-time decisions. Anything that is about to *ask the user to sign*
+ * should await this instead.
+ *
+ * Unknown counts as usable. Older Safari lacks the probe entirely, and refusing
+ * to try a passkey there would strand devices that can sign perfectly well —
+ * a failed attempt falls through to Google, whereas a skipped one cannot.
+ */
+export async function platformAuthenticatorUsable(): Promise<boolean> {
+  if (!passkeysSupported()) return false;
+  try {
+    const probe = window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable;
+    if (typeof probe !== "function") return true;
+    return await probe.call(window.PublicKeyCredential);
+  } catch {
+    return true;
+  }
+}
+
 // ── HTTP ──────────────────────────────────────────────────────────────────
 
 async function call<T>(
