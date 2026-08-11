@@ -766,6 +766,28 @@ export async function fetchAddMethodChallenge(accessToken: string): Promise<stri
   return challengeHex;
 }
 
+/**
+ * Finalise add-method with an ALREADY-produced authProof + newMethod.
+ * Pairs with fetchAddMethodChallenge above — the wizard calls this after
+ * step 2 to POST /methods without re-fetching a challenge.
+ *
+ * DO NOT call addMethod() with `async () => cachedProof` as the approve
+ * callback: addMethod fetches a FRESH challenge internally, and the
+ * server verifies authProof against that new challenge — the cached
+ * proof (bound to the original wizard-open challenge) will not match
+ * and the enclave rejects with RESEAL_FAILED.
+ */
+export async function finaliseAddMethod(
+  accessToken: string,
+  authProof: AuthProof,
+  newMethod: EnrolledMethod,
+): Promise<{ ok: boolean; ownerAddress?: string; addedKind?: string }> {
+  return callWallet("/methods", accessToken, {
+    method: "POST",
+    body: { authProof, newMethod },
+  });
+}
+
 // ── Signing ───────────────────────────────────────────────────────────────
 
 export interface PreviewResult {

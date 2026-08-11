@@ -37,10 +37,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Check, X, AlertCircle, ShieldCheck } from "lucide-react";
 import { FiSmartphone } from "react-icons/fi";
 import {
-  addMethod,
   createPasskey,
   enrolGoogle,
   fetchAddMethodChallenge,
+  finaliseAddMethod,
   preloadGoogleIdentityScript,
   RiftV3Error,
   biometricName,
@@ -216,15 +216,12 @@ export function AddMethodWizard({
     }
     setPhase("linking");
     try {
-      // addMethod expects two callbacks; hand it the already-produced
-      // proof/method so it only really performs POST /methods. This
-      // reuses the SAME retry / error mapping / callWallet plumbing
-      // that the original inline call used.
-      await addMethod(
-        accessToken,
-        async () => proof,
-        async () => method,
-      );
+      // POST /methods directly with the already-produced proof + method.
+      // Using addMethod() here would re-fetch a fresh challenge, and the
+      // server would verify our authProof (bound to the wizard-open
+      // challenge) against the new challenge — mismatch → RESEAL_FAILED.
+      // finaliseAddMethod hits /methods without a challenge fetch.
+      await finaliseAddMethod(accessToken, proof, method);
       if (closedRef.current) return;
       setPhase("done");
       setTimeout(() => {
