@@ -234,7 +234,7 @@ async function downloadExcel(
     [''],
     ['FEE ARCHITECTURE'],
     ['Fee Type', 'Rate', 'Minimum', 'Recipient', 'Notes'],
-    ['Hedger Premium Fee', '0.5%', '—', 'Treasury', 'Charged at position purchase'],
+    ['Hedger Premium Fee', '5% of premium', '—', 'Treasury', 'Charged at position purchase'],
     ['LP Payout Fee', '1.0%', '—', 'Treasury', 'Charged on LP payout event'],
     ['Creator Loyalty Fee', '5.0%', '—', 'Creator', 'Paid to event creator wallet'],
     ['Wallet Transfer Fee', '0.3%', '$0.50', 'Treasury', 'On every USDC wallet transfer'],
@@ -556,8 +556,8 @@ export default function FinancialModel() {
                   <tbody>
                     <tr><td colSpan={slice.length + 1} className={secCls}>Operating Metrics</td></tr>
                     {[
-                      { label: 'Hedge Events',       tip: 'Number of P2P protection contracts written this month. Each event = one hedger buying downside protection from the LP pool. Revenue = Events × Notional × 0.7%.', vals: slice.map(r => num(r.events)),      neutral: true },
-                      { label: 'Avg Notional ($)',    tip: 'Average contract size in USD. Hedge fees = Events × Avg Notional × 0.7%. Larger notional = higher fees collected per event.', vals: slice.map(r => fmt(r.avgNotional)), neutral: true },
+                      { label: 'Hedge Events',       tip: 'Number of P2P protection contracts written this month. Each event = one hedger buying downside protection from the LP pool. Revenue = Events × Notional × the blended yield (~0.225%).', vals: slice.map(r => num(r.events)),      neutral: true },
+                      { label: 'Avg Notional ($)',    tip: 'Average contract size in USD. Hedge fees = Events × Avg Notional × the blended yield (~0.225%). Larger notional = higher fees collected per event.', vals: slice.map(r => fmt(r.avgNotional)), neutral: true },
                       { label: 'New Wallets',        tip: 'New users onboarding this month. Gasless UX — platform sponsors $3 in gas per wallet on Base L2. Wallet transfer fees scale with the cumulative wallet base, not just new wallets.', vals: slice.map(r => num(r.newWallets)),   neutral: true },
                       { label: 'Cumulative Wallets', tip: 'Total registered wallets since Jul 2026 launch. Used to compute LTV and platform network effects.', vals: slice.map(r => num(r.cumWallets)),   neutral: true },
                       { label: 'Headcount',          tip: 'Full-time equivalents. Lean Africa-based team. Salary/FTE is editable per month in the Inputs tab — starting ~$4,500/FTE in H2 2026, rising to ~$6,800/FTE by Dec 2030. Blended average reflects seniority mix.', vals: slice.map(r => num(r.headcount)),    neutral: true },
@@ -572,7 +572,7 @@ export default function FinancialModel() {
 
                     <tr><td colSpan={slice.length + 1} className={secCls}>Revenue</td></tr>
                     {[
-                      { label: 'Hedge Protocol Fees',   tip: 'Primary revenue stream. Formula: Events × Avg Notional × 0.7%. The 0.7% blends the 0.5% hedger premium fee and the ~0.2% LP payout fee (1% applied to LP deposits ≈ 20% of notional).', vals: slice.map(r => r.hedgeFees), cellTips: undefined as string[] | undefined },
+                      { label: 'Hedge Protocol Fees',   tip: 'Primary revenue stream. Formula: Events × Avg Notional × blended yield. The yield is derived from the deployed fee schedule — 5% of premium at entry, 2% of premium on LP claims, 2% of payout on claims — not set as a constant. At a 1.5% average premium that is ~0.225% of notional.', vals: slice.map(r => r.hedgeFees), cellTips: undefined as string[] | undefined },
                       { label: 'Event Creation Fees',   tip: 'Flat $2 charged to the event creator every time a new hedge event is published on-chain. Collected at creation alongside the initial LP deposit. At ~74,300 events/month (Dec 2030) this contributes ~$1.86M/month.', vals: slice.map(r => r.eventCreationFees), cellTips: undefined as string[] | undefined },
                       { label: 'Wallet Transfer Fees',  tip: '0.3% fee on USDC cross-border transfers. Revenue = cumulative wallets × active wallet % × avg monthly transfer × 0.3%. Scales directly with the growing wallet base — more wallets means more transfer volume and more fee revenue.', vals: slice.map(r => r.walletFees), cellTips: undefined as string[] | undefined },
                       { label: 'Total Revenue',         tip: 'Hedge protocol fees + event creation fees + wallet transfer fees. Hover each cell to see the split for that month.', vals: slice.map(r => r.totalRevenue), bold: true, cellTips: slice.map(r => r.totalRevenue > 0 ? `Hedge: ${fmt(r.hedgeFees)} (${Math.round((r.hedgeFees/r.totalRevenue)*100)}%) · Creation: ${fmt(r.eventCreationFees)} (${Math.round((r.eventCreationFees/r.totalRevenue)*100)}%) · Wallet: ${fmt(r.walletFees)} (${Math.round((r.walletFees/r.totalRevenue)*100)}%)` : 'No revenue') },
@@ -1160,10 +1160,10 @@ export default function FinancialModel() {
                     <div className="bg-slate-50 rounded-lg p-3">
                       <p className="font-semibold text-blue-700 mb-1">1. Hedge Protocol Fees (dominant, ~75–80% of revenue at scale)</p>
                       <code className="block bg-white rounded px-3 py-2 font-mono text-[11px] border border-slate-200">
-                        Hedge Fees = Events × Avg Notional × Hedge Yield (0.7%)
+                        Hedge Fees = Events × Avg Notional × Hedge Yield (~0.225%)
                       </code>
                       <p className="mt-2 text-slate-500">
-                        The 0.7% (70 bps) blends: 0.5% hedger entry premium + ~0.2% LP payout fee (1% payout fee × ~20% of notional paid out on average). This is conservative — the full blended yield including conditional settlement fees is closer to 1.1%.
+                        The blended yield is computed from the fee schedule the Base Diamond actually applies: 5% of the premium at entry, 2% of premium income when an LP claims it, and 2% of the gross payout on a triggered claim. At a 1.5% average premium, a 30% payout rate and a 20% trigger rate that comes to ~0.225% of notional (22.5 bps). It replaces a flat 0.7% that assumed a 0.5%-of-notional entry fee the contract stopped charging at the August 2026 HedgeFacet upgrade.
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
@@ -1269,7 +1269,7 @@ export default function FinancialModel() {
                   <p className="font-semibold text-slate-800 mb-2 uppercase tracking-wide text-[10px]">F · Key Assumptions & Known Conservatisms</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[
-                      { label: 'Hedge Yield (0.7%)', note: 'Blends 0.5% hedger premium + ~0.2% LP payout fee. The full blended yield if all settlement fees are counted is ~1.1%. Model uses 0.7% — conservative.' },
+                      { label: 'Hedge Yield (~0.225%)', note: 'Derived from the deployed fee schedule rather than assumed: 5% of premium at entry + 2% of premium on LP claims + 2% of payout on triggered claims. Linear in the average premium rate, so it rises to ~0.365% at a 3.5% premium.' },
                       { label: 'LP Ratio Not Modelled', note: 'The model assumes every hedge event is fully funded by LPs. LP shortfall risk is not modelled. Protocol design ensures LP deposits precede hedger buys.' },
                       { label: 'Gas Costs (Base L2)', note: 'Base is an OP Stack L2. Gas costs are ~50× lower than Ethereum mainnet. $3/wallet and $0.05/event are based on current L2 gas at ~$0.008/txn.' },
                       { label: 'Avg Monthly Transfer $500', note: 'Conservative estimate for active wallet transfer volume. Many African SMEs move $1,000–$5,000/month for trade settlement. Adjustable in constants.' },

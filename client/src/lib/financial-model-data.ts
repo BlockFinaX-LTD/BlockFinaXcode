@@ -81,10 +81,55 @@ export const MONTH_LABELS = [
   'Jul 2030','Aug 2030','Sep 2030','Oct 2030','Nov 2030','Dec 2030',
 ];
 
+// ── The deployed fee schedule ─────────────────────────────────────────────────
+//
+// Read from the Base Diamond (getHedgeFeeConfig, 1e6 precision). These are the
+// rates the contract actually applies, not the ones the whitepaper used to
+// state — the model previously projected on 0.5% of notional, which stopped
+// being the entry basis at the August 2026 HedgeFacet upgrade.
+//
+// The rates are certain. Two of the bases are not equally certain: the entry
+// fee is confirmed against a real position (#7 paid $4.50 on a $90 premium),
+// while the payout and LP fees are read from field names and the whitepaper,
+// because no claim on Base is separable from its transfers. Treated as stated.
+export const ONCHAIN_FEES = {
+  /** 5% of the premium the hedger pays. */
+  entryOnPremium: 0.05,
+  /** 2% of the gross payout, deducted at claim. */
+  payoutOnPayout: 0.02,
+  /** 2% of premium income, deducted when an LP claims it. */
+  lpProfitOnPremium: 0.02,
+  /** Flat, per pool, charged to the creator. Base. */
+  creationFeeUsd: 25,
+} as const;
+
+/**
+ * Blended protocol revenue per dollar of notional.
+ *
+ * The model needs one number, but the fee schedule is three fees on three
+ * different quantities, so the conversion has to name its assumptions rather
+ * than bury them in a constant. The old 0.007 was such a constant and it
+ * outlived the fee basis it was derived from by four months.
+ *
+ * avgPremiumRate — what pools charge. Live pools span 0.07% to 2%; the
+ *   whitepaper's worked example uses 3.5%. 1.5% is a deliberately
+ *   unflattering midpoint, since revenue here is linear in it.
+ * payoutRate — cover pays this share of notional when triggered.
+ * triggerRate — share of positions that end in a claim.
+ */
+export function blendedHedgeYield(a = { avgPremiumRate: 0.015, payoutRate: 0.30, triggerRate: 0.20 }): number {
+  const entry = ONCHAIN_FEES.entryOnPremium * a.avgPremiumRate;
+  const lp = ONCHAIN_FEES.lpProfitOnPremium * a.avgPremiumRate;
+  const payout = ONCHAIN_FEES.payoutOnPayout * a.payoutRate * a.triggerRate;
+  return entry + lp + payout;
+}
+
 // ── Default constants ─────────────────────────────────────────────────────────
 export const INITIAL_CONSTANTS: Constants = {
-  hedgeYield: 0.007,
-  eventCreationFee: 2,
+  // ~0.225% of notional, derived above. Was 0.007, which assumed an entry fee
+  // of 0.5% of notional that the contract no longer charges.
+  hedgeYield: blendedHedgeYield(),
+  eventCreationFee: ONCHAIN_FEES.creationFeeUsd,
   gasPerEvent: 0.05,            // Base (OP Stack L2): ~6 txns × ~$0.008 per txn = ~$0.05
   gasPerWallet: 3,
   kycPerWallet: 1.50,

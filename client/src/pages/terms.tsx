@@ -87,8 +87,8 @@ export default function TermsPage() {
             <ul>
               <li>Event creation fee: $25 on Base, $2 on BSC</li>
               <li>Hedger entry fee: 5% of the premium paid</li>
-              <li>Payout fee: 1% deducted at claim</li>
-              <li>Liquidity provider profit fee: 1% deducted at claim</li>
+              <li>Payout fee: 2% deducted at claim</li>
+              <li>Liquidity provider profit fee: 2% deducted at claim</li>
               <li>Creator loyalty fee: 5% share of all protocol fees on their event</li>
               <li>Wallet transfer fee: 0.3% (minimum $0.50)</li>
             </ul>

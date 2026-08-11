@@ -853,7 +853,7 @@ export default function Whitepaper() {
             <div className="rounded-lg border border-border bg-muted/20 p-4">
               <CheckCircle2 className="h-4 w-4 text-primary mb-2" />
               <p className="text-sm font-semibold text-foreground mb-1">Strike Reached (Triggered)</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">Protection buyers receive their predetermined payout from the LP pool. Protocol fees (1% of payouts) are collected. Remaining pool capital is returned to LPs proportionally.</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">Protection buyers receive their predetermined payout from the LP pool. Protocol fees (2% of payouts) are collected. Remaining pool capital is returned to LPs proportionally.</p>
             </div>
             <div className="rounded-lg border border-muted-foreground/20 bg-muted/20 p-4">
               <RefreshCw className="h-4 w-4 text-muted-foreground mb-2" />
@@ -1039,8 +1039,8 @@ export default function Whitepaper() {
             rows={[
               ["Event creation fee", "$25 on Base · $2 on BSC", "Pool creator at deployment", "100% to protocol treasury"],
               ["Protection entry fee", "5% of premium paid", "Hedger at position entry", "95% treasury · 5% pool creator loyalty"],
-              ["Payout claim fee", "1% of payout amount", "Hedger at payout claim", "95% treasury · 5% pool creator loyalty"],
-              ["LP premium claim fee", "1% of premiums claimed", "LP at premium claim", "95% treasury · 5% pool creator loyalty"],
+              ["Payout claim fee", "2% of payout amount", "Hedger at payout claim", "95% treasury · 5% pool creator loyalty"],
+              ["LP premium claim fee", "2% of premiums claimed", "LP at premium claim", "95% treasury · 5% pool creator loyalty"],
               ["Stablecoin transfer fee", "0.3% (min $0.50)", "Sender per wallet transfer", "100% to protocol treasury"],
             ]}
           />
@@ -1058,8 +1058,8 @@ export default function Whitepaper() {
           <H3>9.2 Revenue Model</H3>
           <P>
             BlockFinaX generates revenue from three primary streams: hedge protocol fees (comprising
-            the entry, payout, and LP claim fees across all events), a flat $2 event creation fee
-            charged per hedge event deployed, and wallet transfer fees.
+            the entry, payout, and LP claim fees across all events), an event creation fee charged
+            per hedge event deployed ($25 on Base, $2 on BSC), and wallet transfer fees.
             The protocol treasury accumulates all net fees after creator loyalty distributions.
           </P>
 
@@ -1074,7 +1074,7 @@ export default function Whitepaper() {
             ]}
           />
           <p className="text-[11px] text-muted-foreground/60 -mt-4 mb-6">
-            Revenue projections are illustrative estimates based on a blended fee rate of 0.7% across all transaction types, plus a flat $2 event creation fee per hedge event.
+            Revenue projections are illustrative estimates based on a blended fee rate of approximately 0.225% across all transaction types — derived from the deployed fee schedule at a 1.5% average premium — plus the $25 event creation fee per hedge event on Base.
             Actual outcomes will depend on market conditions, regulatory developments, and adoption rates.
             These figures do not constitute a financial forecast or investment guarantee.
           </p>

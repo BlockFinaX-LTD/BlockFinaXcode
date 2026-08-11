@@ -353,7 +353,7 @@ function RevenueBreakdown() {
       <table style={S.table}>
         <thead><tr><th style={S.th}>Fee Type</th><th style={S.th}>Rate</th><th style={S.th}>Paid By</th><th style={S.th}>Trigger</th></tr></thead>
         <tbody>
-          <tr><td style={S.td}>Hedger premium fee</td><td style={S.td}><strong>0.5%</strong></td><td style={S.td}>Hedger</td><td style={S.td}>At purchase, on position notional</td></tr>
+          <tr><td style={S.td}>Hedger premium fee</td><td style={S.td}><strong>5%</strong></td><td style={S.td}>Hedger</td><td style={S.td}>At purchase, on the premium paid</td></tr>
           <tr><td style={S.td}>Payout / LP fee</td><td style={S.td}><strong>1.0%</strong></td><td style={S.td}>Winning party</td><td style={S.td}>At claim, on payout amount</td></tr>
           <tr><td style={S.td}>Creator loyalty fee</td><td style={S.td}><strong>5%</strong></td><td style={S.td}>Platform fee pool</td><td style={S.td}>At settlement, to event creator</td></tr>
           <tr><td style={S.td}>Wallet transfer fee</td><td style={S.td}><strong>0.3%</strong> (min $0.50)</td><td style={S.td}>Sender</td><td style={S.td}>Per USDC transfer</td></tr>

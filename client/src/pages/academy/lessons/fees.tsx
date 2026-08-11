@@ -33,12 +33,12 @@ export default function Fees() {
           </KVRow>
           <KVRow term="Payout fee">
             When a winning hedger claims, the protocol takes a
-            percentage of the gross payout. Default: <strong>1.0%</strong>.
+            percentage of the gross payout. Default: <strong>2.0%</strong>.
           </KVRow>
           <KVRow term="LP profit fee">
             When an LP claims accumulated premium income, the protocol
             takes a percentage of that claim. Default:
-            <strong> 1.0%</strong>. Only levied on realised income.
+            <strong> 2.0%</strong>. Only levied on realised income.
           </KVRow>
         </KV>
         <P>

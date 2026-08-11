@@ -817,7 +817,13 @@ export default function Hedge() {
   const currentRate = selectedEvent ? fxData?.rates[selectedEvent.underlying]?.rate || 0 : 0;
   const payoutPercent = selectedEvent ? selectedEvent.payoutPercent : 0;
   const predeterminedPayout = selectedEvent && notional ? parseFloat(notional) * payoutPercent : 0;
-  const netPredeterminedPayout = predeterminedPayout > 0 ? predeterminedPayout * 0.99 : 0;
+  // The claim fee, from the chain rather than a literal. This was × 0.99 — a 1%
+  // deduction — while the deployed config charges 2% on Base, so the headline
+  // "max payout if triggered" promised more than a claim would pay. Overstating
+  // a premium is a bad quote; overstating a payout is a bad promise.
+  const payoutFeeRate = feeConfig ? feeConfig.hedgerPayoutFeeRate : null;
+  const netPredeterminedPayout =
+    predeterminedPayout > 0 ? predeterminedPayout * (1 - (payoutFeeRate ?? 0)) : 0;
 
   // ── Mainnet guard wrappers (unchanged) ──────────────────────────────────
   const guardedBuyProtection = () => {
@@ -1220,7 +1226,8 @@ export default function Hedge() {
             <div className="pool-grid" style={{ gridTemplateColumns: '1fr' }}>
               {claimablePositions.map((p) => {
                 const ev = events.find((e) => e.id === p.eventId);
-                const gross = p.payoutAmount; const net = gross * 0.99;
+                // Same claim fee as the quote card, from the chain not a literal.
+                const gross = p.payoutAmount; const net = gross * (1 - (payoutFeeRate ?? 0));
                 return (
                   <div className="pool-card" key={`c${p.id}`} style={{ borderColor: 'color-mix(in oklab,var(--green) 35%,var(--border))' }}>
                     <div className="pool-top"><MarketFlag pair={ev?.underlying || ''} /><div className="pt-nm"><div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="b">Position #{p.id} · payout ready</div></div>
@@ -1514,7 +1521,11 @@ export default function Hedge() {
             <div className="payout-card">
               <div className="pc-l">Max payout if triggered</div>
               <div className="pc-v">{fmtMoney(netPredeterminedPayout)}</div>
-              <div className="pc-s">{notional ? 'Net of the 1% claim fee. Scales linearly from the strike toward the cap.' : 'Pays out when the rate moves from strike toward the cap.'}</div>
+              <div className="pc-s">{notional
+                ? payoutFeeRate !== null
+                  ? `Net of the ${(payoutFeeRate * 100).toFixed(1)}% claim fee. Scales linearly from the strike toward the cap.`
+                  : 'Scales linearly from the strike toward the cap.'
+                : 'Pays out when the rate moves from strike toward the cap.'}</div>
             </div>
             <div className="brk">
               <div className="brk-line"><span className="l">Premium ({(selectedEvent.premiumRate * 100).toFixed(1)}% of notional)</span><span className="v">{fmtMoney(premiumCalc)}</span></div>
