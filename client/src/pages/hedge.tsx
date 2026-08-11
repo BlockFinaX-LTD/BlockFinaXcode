@@ -1267,7 +1267,7 @@ export default function Hedge() {
                   <div className="pool-card" key={`c${p.id}`} style={{ borderColor: 'color-mix(in oklab,var(--green) 35%,var(--border))' }}>
                     <div className="pool-top"><MarketFlag pair={ev?.underlying || ''} /><div className="pt-nm"><div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="b">Position #{p.id} · payout ready</div></div>
                       <div className="pool-apr"><div className="v" style={{ color: 'var(--green)' }}>{fmtMoney(net)}</div><div className="l">Claimable</div></div></div>
-                    <div className="brk"><div className="brk-line"><span className="l">Gross payout</span><span className="v">{fmtMoney(gross)}</span></div><div className="brk-line"><span className="l">Claim fee (1%)</span><span className="v">-{fmtMoney(gross * 0.01)}</span></div></div>
+                    <div className="brk"><div className="brk-line"><span className="l">Gross payout</span><span className="v">{fmtMoney(gross)}</span></div><div className="brk-line"><span className="l">Claim fee{payoutFeeRate !== null ? ` (${(payoutFeeRate * 100).toFixed(1)}%)` : ''}</span><span className="v">-{fmtMoney(gross - net)}</span></div></div>
                     <button className="btn-sm2 primary" disabled={claimMutation.isPending} onClick={() => claimMutation.mutate(p.id)}>{claimMutation.isPending ? 'Claiming…' : `Claim ${fmtUsd2(net)}`}</button>
                   </div>
                 );
@@ -1280,7 +1280,7 @@ export default function Hedge() {
                       <div className="pool-apr"><div className="v">{fmtMoney(p.notional)}</div><div className="l">Notional</div></div></div>
                     <div className="pool-stats">
                       <div className="pool-stat"><div className="l">Premium paid</div><div className="v tnum">{fmtMoney(p.premiumPaid)}</div></div>
-                      <div className="pool-stat"><div className="l">Max payout</div><div className="v tnum">{fmtMoney(p.notional * (ev?.payoutPercent || 0))}</div></div>
+                      <div className="pool-stat"><div className="l">Max payout</div><div className="v tnum">{fmtMoney(p.payoutAmount)}</div></div>
                     </div>
                     {ev && (
                       <div style={{ marginTop: 8 }}>
