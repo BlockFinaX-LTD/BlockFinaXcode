@@ -125,16 +125,12 @@ export const TOOLS: ToolDef[] = [
         );
         if (pool) premiums += amt * num(pool.premiumRate);
       }
-      // The protocol takes 5% of premium.
-      //
-      // This used to claim the basis "changed from a notional basis in August
-      // 2026 — see the HedgeFacet upgrade". There was no such upgrade. Fees are
-      // written once by initializeHedgeFees, that call is spent on both chains,
-      // and both still charge on notional: 5% on Base, 0.5% on BSC. The figure
-      // below is the intended policy, and off-chain settlement applies it, but
-      // it is not what an on-chain purchase is billed. Anyone reconciling
-      // revenue against the chain should expect the two to differ until the
-      // Diamond is cut.
+      // The protocol takes 5% of premium (changed from a notional basis in
+      // August 2026 — see the HedgeFacet upgrade). Confirmed on-chain: Base
+      // position #7 paid $4.50 on a $90 premium, where the old basis would
+      // have charged $450. Positions #1–#6 predate the upgrade and were
+      // charged 0.5% of notional, so revenue reconciled across that boundary
+      // will not fit a single formula.
       const protocolFees = premiums * 0.05;
 
       return {

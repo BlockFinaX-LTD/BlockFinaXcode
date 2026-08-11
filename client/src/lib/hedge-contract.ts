@@ -1017,7 +1017,23 @@ class HedgeContractManager {
     const hedgerFeeRateBigInt = BigInt(Math.round(feeConfig.hedgerFeeRate * PRECISION));
 
     const premium = (notionalWei * premiumRate) / BigInt(PRECISION);
-    const fee = (notionalWei * hedgerFeeRateBigInt) / BigInt(PRECISION);
+    // The fee is a share of the premium, not of the notional.
+    //
+    // This multiplied by notionalWei, which is what put "Platform fee (5.00%
+    // of notional) $500" on a $10,000 quote whose real fee is $5. The chain
+    // settles the question: position #7 on Base paid $4.50 on a $90 premium
+    // against a $9,000 notional, and getHedgeFeeConfig reports 50000. At the
+    // 1e6 precision that makes creatorLoyaltyRate the documented 5%, only the
+    // premium basis reproduces $4.50 — the notional basis gives $450. The six
+    // older positions were charged on notional at 0.5%, which is the facet
+    // this quote was written against and no longer the one deployed.
+    //
+    // The overstatement did not revert anything, since maxCost is an upper
+    // bound. It did something quieter: the pre-flight balance check and the
+    // ERC-20 approval are both drawn from totalCost, so a hedger holding
+    // plenty was told they were short, and anyone who got through approved
+    // roughly a hundred times the spend.
+    const fee = (premium * hedgerFeeRateBigInt) / BigInt(PRECISION);
     const totalCost = premium + fee;
 
     const activeUsdc = (CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS).toLowerCase();

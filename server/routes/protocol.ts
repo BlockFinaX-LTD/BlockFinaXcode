@@ -579,13 +579,10 @@ export async function registerProtocolRoutes(app: Express) {
       // on a cheap pool it can exceed the premium several times over. A fee on
       // premium is a share of the transaction, which is what it is meant to be.
       //
-      // Base's deployed contract still charges 5% of notional and cannot be
-      // changed — initializeHedgeFees is one-shot and already spent — so an
-      // on-chain purchase there is billed on a different basis than this path.
-      // That divergence is real and is not resolvable from here; see the fee
-      // audit. The on-chain quote in hedge.tsx reads the chain and must keep
-      // doing so, because the same figure feeds maxCost and an under-quote
-      // makes the transaction revert.
+      // This matches the deployed HedgeFacet on Base, which was upgraded to
+      // the premium basis: position #7 paid $4.50 on a $90 premium. Positions
+      // #1–#6 predate that and were charged 0.5% of notional, so this path and
+      // the chain agree going forward but not retrospectively.
       const HEDGER_FEE_RATE = 0.05;
       const hedgerPlatformFee = premiumPaid * HEDGER_FEE_RATE;
       const totalCost = premiumPaid + hedgerPlatformFee;

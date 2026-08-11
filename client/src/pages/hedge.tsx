@@ -810,7 +810,9 @@ export default function Hedge() {
   // null until the live on-chain rate loads — never assume a rate.
   const hedgerFeeRate = feeConfig ? feeConfig.hedgerFeeRate : null;
   const feeKnown = hedgerFeeRate !== null;
-  const hedgerFeeCalc = notional && feeKnown ? parseFloat(notional) * hedgerFeeRate : 0;
+  // On the premium, matching the deployed facet and hedge-contract.ts. Charging
+  // this against the notional is what quoted $500 on a $10,000 cover.
+  const hedgerFeeCalc = notional && feeKnown ? premiumCalc * hedgerFeeRate : 0;
   const totalCostCalc = premiumCalc + hedgerFeeCalc;
   const currentRate = selectedEvent ? fxData?.rates[selectedEvent.underlying]?.rate || 0 : 0;
   const payoutPercent = selectedEvent ? selectedEvent.payoutPercent : 0;
@@ -1516,19 +1518,14 @@ export default function Hedge() {
             </div>
             <div className="brk">
               <div className="brk-line"><span className="l">Premium ({(selectedEvent.premiumRate * 100).toFixed(1)}% of notional)</span><span className="v">{fmtMoney(premiumCalc)}</span></div>
-              {/* Show the fee against premium as well as notional. The contract
-                  charges on notional, but what matters commercially is the fee
-                  relative to the premium — at a 1% premium a 5% notional fee is
-                  500% of premium, which is invisible if only the notional basis
-                  is shown. */}
+              {/* The second figure used to restate the fee as a share of the
+                  premium, because the fee was being quoted on notional and at a
+                  1% premium that made it 500% of what it was a fee on. Now that
+                  the basis is the premium, the label says so and the restatement
+                  has nothing left to reveal. */}
               <div className="brk-line">
                 <span className="l">
-                  {hedgerFeeRate !== null ? `Platform fee (${(hedgerFeeRate * 100).toFixed(2)}% of notional)` : 'Platform fee'}
-                  {feeKnown && premiumCalc > 0 && (
-                    <span style={{ color: hedgerFeeCalc > premiumCalc ? 'var(--red)' : 'var(--tx-4)', marginLeft: 6, fontSize: 11.5 }}>
-                      = {((hedgerFeeCalc / premiumCalc) * 100).toFixed(0)}% of premium
-                    </span>
-                  )}
+                  {hedgerFeeRate !== null ? `Platform fee (${(hedgerFeeRate * 100).toFixed(2)}% of premium)` : 'Platform fee'}
                 </span>
                 <span className="v">{feeKnown ? fmtMoney(hedgerFeeCalc) : 'unavailable'}</span>
               </div>
