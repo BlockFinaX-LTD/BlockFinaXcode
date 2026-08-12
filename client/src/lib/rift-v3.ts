@@ -502,11 +502,45 @@ export function isSigningReady(m: Pick<MethodsResponse, "version" | "enrolled">)
 // ── Enrolment on the device ───────────────────────────────────────────────
 
 /** Creates a passkey and returns it in the shape Rift enrols. */
-export async function createPasskey(userLabel: string, userId: string): Promise<EnrolledMethod> {
+export async function createPasskey(
+  userLabel: string,
+  userId: string,
+  opts?: {
+    /**
+     * base64 cred_ids the browser MUST NOT reuse. Pass every passkey already
+     * enrolled for this wallet so the browser knows a fresh registration
+     * on the same authenticator would collide — that's what surfaces the
+     * "use another device" (QR) option on Chrome/Edge and the "use nearby
+     * device" flow on Safari. Without this, a user tapping "Add device"
+     * on a phone that already holds a passkey silently re-registers the
+     * same one, the server rejects as duplicate, and the tap loops.
+     */
+    excludeCredIds?: string[];
+    /**
+     * When true, forces the WebAuthn ceremony to pick a cross-platform
+     * authenticator (another phone via QR, a hardware security key).
+     * Leave undefined to let the browser present both platform and
+     * cross-platform choices — that's the right default for "add another
+     * device" so users can also register the current device if the
+     * exclude list happens to be stale.
+     */
+    forceCrossPlatform?: boolean;
+  },
+): Promise<EnrolledMethod> {
   if (!passkeysSupported()) {
     throw new RiftV3Error("UNSUPPORTED", "This device can't create a passkey.");
   }
   const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const excludeCredentials = (opts?.excludeCredIds ?? [])
+    .map((s) => {
+      try {
+        return { type: "public-key" as const, id: b64ToBytes(s).buffer };
+      } catch {
+        return null;
+      }
+    })
+    .filter((v): v is { type: "public-key"; id: ArrayBuffer } => v !== null);
+
   let cred: PublicKeyCredential | null;
   try {
     cred = (await navigator.credentials.create({
@@ -525,10 +559,17 @@ export async function createPasskey(userLabel: string, userId: string): Promise<
           { type: "public-key", alg: -257 },
         ],
         authenticatorSelection: {
-          authenticatorAttachment: "platform",
+          // authenticatorAttachment is deliberately undefined unless the
+          // caller forced cross-platform — leaving it open lets the browser
+          // offer both "this device" and "another device (QR)" from the
+          // same ceremony, which is exactly what "add device" flows want.
+          ...(opts?.forceCrossPlatform
+            ? { authenticatorAttachment: "cross-platform" as const }
+            : {}),
           userVerification: "required",
           residentKey: "preferred",
         },
+        excludeCredentials: excludeCredentials.length ? excludeCredentials : undefined,
         timeout: 60_000,
       },
     })) as PublicKeyCredential | null;

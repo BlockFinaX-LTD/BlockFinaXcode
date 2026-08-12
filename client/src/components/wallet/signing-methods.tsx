@@ -640,6 +640,7 @@ export function SigningMethods({
         accessToken={accessToken}
         userLabel={userLabel}
         userId={userId}
+        existingPasskeyCredIds={methods?.passkeyCredIds ?? []}
         approveWithExisting={approveWithExisting}
         onSuccess={() => {
           forgetPreferredMethod(userId);
