@@ -62,6 +62,13 @@ interface Props {
   /** Rift user id — passkey rpUserId + preference key. */
   userId: string;
   /**
+   * Every passkey cred_id already enrolled for this wallet. Passed to
+   * navigator.credentials.create as excludeCredentials so the browser
+   * surfaces "use another device" (QR) instead of silently reusing the
+   * current authenticator and looping on duplicate registration.
+   */
+  existingPasskeyCredIds?: string[];
+  /**
    * Authenticates the user with an already-enrolled method. Same signature
    * signing-methods.tsx uses today. May itself open a sub-picker when
    * multiple methods are enrolled — that's fine, it renders on top of
@@ -99,6 +106,7 @@ export function AddMethodWizard({
   accessToken,
   userLabel,
   userId,
+  existingPasskeyCredIds,
   approveWithExisting,
   onSuccess,
   onClose,
@@ -186,7 +194,12 @@ export function AddMethodWizard({
     setPhase("enroling");
     const enrolPromise =
       newMethodKind === "passkey"
-        ? createPasskey(userLabel, userId)
+        ? createPasskey(userLabel, userId, {
+            // Pass every enrolled cred_id so the browser knows to surface
+            // "use another device" (QR) rather than silently re-registering
+            // the current authenticator and looping on duplicate errors.
+            excludeCredIds: existingPasskeyCredIds ?? [],
+          })
         : enrolGoogle();
     enrolPromise
       .then((method) => {
@@ -384,10 +397,18 @@ export function AddMethodWizard({
                 }
                 body={
                   newMethodKind === "passkey" ? (
-                    <>
-                      Your browser will ask for {biometricName()} to create a passkey on this
-                      device. Follow the next prompt.
-                    </>
+                    (existingPasskeyCredIds?.length ?? 0) > 0 ? (
+                      <>
+                        Your browser will ask you to add a passkey. Use {biometricName()} on
+                        this device, or pick "use another device" / "use a phone" to scan a
+                        QR code with a different phone.
+                      </>
+                    ) : (
+                      <>
+                        Your browser will ask for {biometricName()} to create a passkey on
+                        this device. Follow the next prompt.
+                      </>
+                    )
                   ) : (
                     <>
                       Your browser will open a Google account chooser. Pick the account you want
