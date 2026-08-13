@@ -22,6 +22,7 @@ import {
   Landmark, Smartphone, Info, Copy, Check, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChain } from '@/components/app-glyphs';
+import { explainTxError } from '@/lib/tx-errors';
 
 const CHAIN_LABELS: Record<string, string> = {
   BASE: 'Base', POLYGON: 'Polygon', ARBITRUM: 'Arbitrum', ETHEREUM: 'Ethereum',
@@ -189,7 +190,11 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
             : 'Check your inbox to authorize the transfer. It may land in spam.',
       });
     } catch (err: any) {
-      toast({ title: 'Failed to send code', description: err?.message, variant: 'destructive' });
+      // err?.message here was frequently undefined, which renders an empty
+      // toast — a red box that says nothing at all.
+      const e = explainTxError(err);
+      console.error('[transfer] send code:', e.detail, err);
+      toast({ title: e.title, description: e.message, variant: 'destructive' });
     } finally { setSendingOtp(false); }
   };
 
@@ -230,7 +235,12 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
       setStep('done');
       refreshAll();
     } catch (err: any) {
-      toast({ title: 'Transfer failed', description: err?.message || 'Please verify your credentials and try again', variant: 'destructive' });
+      // "Please verify your credentials" was the fallback for every failure,
+      // including the ones that had nothing to do with credentials — an
+      // expired session, a rate limit, an enclave that could not sign.
+      const e = explainTxError(err);
+      console.error('[transfer] send:', e.detail, err);
+      toast({ title: e.title, description: e.message, variant: 'destructive' });
     } finally { setSending(false); }
   };
 

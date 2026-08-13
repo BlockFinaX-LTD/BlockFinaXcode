@@ -34,6 +34,7 @@ import {
 import { walletManager } from '@/lib/wallet';
 import { ethers } from 'ethers';
 import { mainnetGuard } from '@/lib/mainnet-guard';
+import { explainTxError } from '@/lib/tx-errors';
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from '@/lib/networks';
 import { PayoutScenarios } from '@/components/hedge/payout-scenarios';
 import { FlagSvg, CommoditySvg, CoinSvg, KNOWN_FLAGS } from '@/components/app-glyphs';
@@ -410,23 +411,18 @@ export default function Hedge() {
   const [eventsLoading, setEventsLoading] = useState(true);
   const [txStep, setTxStep] = useState('');
 
-  const friendlyError = (error: any): string => {
-    const raw: string = error?.reason || error?.data?.message || error?.message || 'Transaction failed';
-    if (raw.includes('replacement fee too low')) return 'A previous transaction is still pending. Retrying automatically...';
-    if (raw.includes('insufficient funds')) return 'Not enough ETH (gas) in your wallet to pay network fees.';
-    if (raw.includes('user rejected') || raw.includes('User denied')) return 'Transaction was cancelled.';
-    if (raw.includes('nonce too low') || raw.includes('nonce has already been used')) return 'Nonce conflict — please wait a moment and try again.';
-    if (raw.toLowerCase().includes('allowance') || raw.toLowerCase().includes('exceeds allowance') || raw.toLowerCase().includes('transfer amount exceeds')) return 'Token approval not yet confirmed on-chain. Please wait a moment and try again.';
-    const isRevert = raw.includes('execution reverted') || raw.includes('transaction would revert') || raw.includes('Contract simulation failed');
-    if (raw.includes('Pool closed')) return 'This event pool is currently closed to new hedgers.';
-    if (raw.includes('Insufficient liquidity')) return 'Not enough liquidity in this pool for that notional amount.';
-    if (raw.includes('Event expired')) return 'This event has already expired.';
-    if (raw.includes('Event not found')) return 'Event not found on-chain. It may have been created on a different network.';
-    if (raw.includes('Fees not initialized')) return 'Contract fees not yet configured. Please try again shortly.';
-    if (raw.includes('Payment token not whitelisted')) return 'This chain only accepts USDT as payment. Please select USDT and try again.';
-    if (isRevert) return 'The contract rejected the transaction. Check your inputs and try again.';
-    return raw;
+  /**
+   * Report a failure the way it should be reported: a specific title, a next
+   * step, and the raw text in the console for support rather than on screen.
+   * Every mutation below used the same "Transaction Failed" heading, which
+   * told the customer only that something they already knew had happened.
+   */
+  const toastTxError = (error: unknown) => {
+    const { title, message, detail } = explainTxError(error);
+    if (detail) console.error(`[hedge] ${title}:`, detail, error);
+    toast({ title, description: message, variant: 'destructive' });
   };
+
 
   const [feeConfig, setFeeConfig] = useState<HedgeFeeConfig | null>(null);
   const [myPositions, setMyPositions] = useState<HedgePositionData[]>([]);
@@ -665,7 +661,7 @@ export default function Hedge() {
       toast({ title: 'Protection Purchased', description: `Notional: $${parseFloat(notional).toLocaleString()} — on-chain transaction confirmed` });
       setBuyOpen(false); setNotional('');
     },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   const depositMutation = useMutation({
@@ -686,7 +682,7 @@ export default function Hedge() {
       toast({ title: 'Liquidity Deposited', description: `$${parseFloat(depositAmount).toLocaleString()} ${eventTokenSymbol} deposited on-chain` });
       setLpOpen(false); setDepositAmount('');
     },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   const createEventMutation = useMutation({
@@ -738,7 +734,7 @@ export default function Hedge() {
       setView('mypools');
       setNewEvent({ name: '', description: '', assetClass: 'fx', underlying: 'USD/GHS', strike: '', payoutCap: '', premiumRate: '', expiryHours: '720', initialLiquidity: '', poolOpen: true, allowExternalLp: true, direction: 'up', paymentCurrency: 'USDC', overrideAcknowledged: false, selfPriced: false });
     },
-    onError: (error: any) => { setTxStep(''); console.error('[createEvent] Failed:', error); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); console.error('[createEvent] Failed:', error); toastTxError(error); },
   });
 
   const togglePoolMutation = useMutation({
@@ -752,7 +748,7 @@ export default function Hedge() {
       await recordActivity({ actionType: 'toggle_pool', txHash, onChainEventId: eventId, metadata: { eventName: event?.name, poolOpen: nextPoolOpen, allowExternalLp: nextAllowLp } });
     },
     onSuccess: async () => { setTxStep(''); await loadEvents(); toast({ title: 'Updated', description: 'Pool settings changed' }); },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   const claimMutation = useMutation({
@@ -765,7 +761,7 @@ export default function Hedge() {
       await recordActivity({ actionType: 'claim_payout', txHash, onChainEventId: position?.eventId ?? null, amount: position?.payoutAmount ?? null, token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT', metadata: { positionId, eventName: event?.name, underlying: event?.underlying } });
     },
     onSuccess: async () => { setTxStep(''); await loadPositions(); toast({ title: 'Payout Claimed', description: 'Funds have been sent to your wallet' }); },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   const withdrawMutation = useMutation({
@@ -778,7 +774,7 @@ export default function Hedge() {
       await recordActivity({ actionType: 'withdraw_lp', txHash, onChainEventId: dep?.eventId ?? null, amount: dep?.amount ?? null, token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT', metadata: { depositId, eventName: event?.name, underlying: event?.underlying } });
     },
     onSuccess: async () => { setTxStep(''); await loadDeposits(); await loadEvents(); toast({ title: 'Liquidity Withdrawn', description: 'Funds returned to your wallet' }); },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   const claimPremiumsMutation = useMutation({
@@ -792,7 +788,7 @@ export default function Hedge() {
       await recordActivity({ actionType: 'claim_premiums', txHash, onChainEventId: dep?.eventId ?? null, amount: claimable, token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT', metadata: { depositId, eventName: event?.name, underlying: event?.underlying } });
     },
     onSuccess: async () => { setTxStep(''); await loadDeposits(); toast({ title: 'Premiums Claimed', description: 'Premiums sent to your wallet' }); },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   // Creator loyalty earnings (separate from LP premiums) — withdrawable by the
@@ -806,7 +802,7 @@ export default function Hedge() {
       await recordActivity({ actionType: 'claim_premiums', txHash, onChainEventId: eventId, amount: event?.creatorEarnings ?? null, token: event?.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT', metadata: { eventName: event?.name, underlying: event?.underlying, kind: 'creator_earnings' } });
     },
     onSuccess: async () => { setTxStep(''); await loadEvents(); toast({ title: 'Earnings Claimed', description: 'Creator earnings sent to your wallet' }); },
-    onError: (error: any) => { setTxStep(''); toast({ title: 'Transaction Failed', description: friendlyError(error), variant: 'destructive' }); },
+    onError: (error: any) => { setTxStep(''); toastTxError(error); },
   });
 
   // ── Derived for the buy/LP sheets ───────────────────────────────────────
