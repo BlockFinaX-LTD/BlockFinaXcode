@@ -451,6 +451,49 @@ async function settleChain(
   const readContract = new ethers.Contract(chain.diamondAddress, HEDGE_ABI, provider);
   const writeContract = new ethers.Contract(chain.diamondAddress, HEDGE_ABI, signer);
 
+  // Can this account still pay for a settlement?
+  //
+  // Everything downstream assumes it can, and when it cannot the failure is
+  // the worst shape available: settleEvent reverts with "insufficient funds",
+  // the event stays open, and every LP in that pool has their capital locked
+  // behind a wallet that is short a fraction of a cent. It happened — the
+  // settler fell to 0.00000055 ETH on Base against a ~0.0000027 ETH
+  // settlement, and a pool with $630 in it sat unsettled while the reason was
+  // discovered on every pass and reported to nobody.
+  //
+  // A settlement is cheap, so a working balance is thousands of them and a
+  // failing one is unmistakable. Checked once per chain per cycle rather than
+  // per event, and it warns rather than returning: the estimate is a guess at
+  // gas price, and refusing to try on the strength of a guess would be its
+  // own kind of outage.
+  try {
+    const balance = await provider.getBalance(signer.address);
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice ?? BigInt(0);
+    // A settlement measured at ~242k gas; rounded up for headroom.
+    // BigInt(...) rather than a 300_000n literal: this file targets ES5,
+    // where BigInt literals do not compile.
+    const perSettlement = gasPrice * BigInt(300_000);
+    if (perSettlement > BigInt(0)) {
+      const remaining = balance / perSettlement;
+      if (remaining < BigInt(20)) {
+        console.warn(
+          `${tag} SETTLER LOW ON GAS — ${signer.address} holds ` +
+            `${ethers.formatEther(balance)} ETH, about ${remaining} more settlement(s). ` +
+            `Top it up: at zero, expired events stop settling and LP capital cannot be withdrawn.`,
+        );
+      }
+      if (remaining === BigInt(0)) {
+        errors.push(
+          `${tag} Settler ${signer.address} cannot afford a settlement ` +
+            `(${ethers.formatEther(balance)} ETH). Expired events will not settle until it is funded.`,
+        );
+      }
+    }
+  } catch {
+    /* balance check is diagnostic — never let it stop a settlement attempt */
+  }
+
   // getTotalHedgeEvents() may be absent on older Diamond deployments (Base/BSC).
   // If it fails, scan event IDs 1, 2, 3... and stop at first revert — no contract upgrade needed.
   const MAX_SCAN = 10_000;
