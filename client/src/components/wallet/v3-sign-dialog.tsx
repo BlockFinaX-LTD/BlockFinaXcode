@@ -72,7 +72,7 @@ export function V3SignDialog() {
     <AnimatePresence>
       {pending && (
         <motion.div
-          className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[210] flex items-end justify-center p-0 sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

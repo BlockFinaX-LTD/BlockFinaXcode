@@ -1190,7 +1190,11 @@ function showFallbackGoogleButton(
   // 2000 (previous) hid the fallback behind the wizard, producing an
   // apparent "Waiting for Google…" hang on step 2.
   overlay.style.cssText =
-    "position:fixed;inset:0;z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);";
+    // 240 — above the sign dialog (210) and the method chooser (220) it is
+    // opened from, below contextual menus (250) and toasts (300). See the
+    // layer scale in app-ui.css. Was 10001, which cleared everything by being
+    // arbitrarily large; that works until two things both do it.
+    "position:fixed;inset:0;z-index:240;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);";
   const card = document.createElement("div");
   card.style.cssText =
     "background:#fff;border-radius:20px;padding:20px;max-width:340px;width:100%;box-shadow:0 8px 24px rgba(0,0,0,0.15);display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;";

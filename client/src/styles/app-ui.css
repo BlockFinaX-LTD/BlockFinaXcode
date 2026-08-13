@@ -271,6 +271,32 @@
 .bfx-app .tab:not(.on):hover{color:var(--tx-2);}
 /* ============================================================
    SHEETS / MODALS
+
+   The layer scale. Every overlay in the app belongs to one of these
+   bands, and the order is the order things happen in:
+
+      80 / 81   app sheet scrim / panel   (.sheet-scrim, .sheet)
+        200     modal dialogs             (dialog, alert-dialog, drawer,
+                                           ui/sheet)
+        210     the signing dialog        (v3-sign-dialog)
+        220     opened from signing       (method-chooser,
+                                           add-method-wizard)
+        240     Google's fallback button  (rift-v3.ts)
+        250     contextual overlays       (popover, dropdown-menu,
+                                           select, tooltip)
+        300     toasts
+
+   Two rules explain the ordering. Modal layers sit above 81 because
+   they are opened *from* an app sheet and the sheet stays mounted
+   underneath — alert-dialog sat at 50 and the "Confirm Transaction"
+   step rendered behind the Underwrite sheet that had just launched it.
+   Contextual layers sit above the modals because a select or a menu is
+   always opened from whatever is currently on top, so it has to clear
+   that too.
+
+   Anything new goes in a band. Reaching for 9999 works exactly until
+   something else does the same, and then the order is decided by
+   whichever number was typed more recently.
    ============================================================ */
 .bfx-app .sheet-scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .28s var(--ease);}
 .bfx-app .sheet-scrim.on{opacity:1;pointer-events:auto;}

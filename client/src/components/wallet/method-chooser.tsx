@@ -79,7 +79,7 @@ export function MethodChooser() {
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-[9999] flex items-end justify-center p-0 sm:items-center sm:p-4"
+        className="fixed inset-0 z-[220] flex items-end justify-center p-0 sm:items-center sm:p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
