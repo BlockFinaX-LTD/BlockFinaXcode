@@ -594,37 +594,70 @@ export async function checkExpiredEvents(): Promise<{ settled: number; errors: s
 }
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let cycleRunning = false;
+
+/**
+ * One settlement pass: refresh rates, settle whatever is ready, report.
+ *
+ * Reports on every outcome, including the boring one. The version of this that
+ * only spoke when it had settled something was indistinguishable, in the logs,
+ * from a poller that had died — and that ambiguity cost three and a half hours
+ * with LP capital locked, because there was no way to tell whether it was
+ * failing or simply had nothing to do.
+ */
+async function runSettlementCycle(reason: string): Promise<void> {
+  // A cycle can outlive its interval when an RPC is slow. Overlapping passes
+  // would send two settleEvent calls for the same event from one key, and the
+  // loser reverts on a nonce it never needed to spend.
+  if (cycleRunning) {
+    console.log(`[Oracle] ${reason} cycle skipped — previous one still running`);
+    return;
+  }
+  cycleRunning = true;
+  try {
+    await fetchAllRates();
+    const result = await checkAndSettleEvents();
+    if (result.settled > 0) {
+      console.log(
+        `[Oracle] ${reason}: settled ${result.settled} (${result.oneTouchSettled} one-touch, ${result.expirySettled} expiry)`,
+      );
+    } else {
+      console.log(`[Oracle] ${reason}: nothing ready to settle`);
+    }
+    if (result.errors.length) {
+      console.warn(
+        `[Oracle] ${reason} reported ${result.errors.length} problem(s):\n  ` +
+          result.errors.join("\n  "),
+      );
+    }
+  } catch (error) {
+    // Was an empty block. A throw here kills the whole cycle, which is the one
+    // case where silence is least affordable.
+    console.error(`[Oracle] ${reason} threw:`, error);
+  } finally {
+    cycleRunning = false;
+  }
+}
 
 export function startOraclePoller(intervalMs: number = 5 * 60 * 1000) {
+  // Idempotent. Called from route registration, which runs once in production
+  // and more than once under a hot reload; without this each call left another
+  // interval running against the same signing key.
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
   fetchAllRates();
+  console.log(`[Oracle] Started — settlement cycle every ${intervalMs / 1000}s, first pass in 30s`);
 
-  console.log(`[Oracle] One-touch oracle started — polling every ${intervalMs / 1000}s`);
+  // setInterval alone means the first settlement is one full interval after
+  // boot. A service that restarts more often than the interval would then
+  // never settle anything, and would look perfectly healthy doing it. An early
+  // pass makes a restart cost 30 seconds instead of the whole window.
+  setTimeout(() => { void runSettlementCycle("startup"); }, 30_000);
 
-  intervalId = setInterval(async () => {
-    try {
-      await fetchAllRates();
-      const result = await checkAndSettleEvents();
-      if (result.settled > 0) {
-        console.log(`[Oracle] Settlement cycle: ${result.oneTouchSettled} one-touch, ${result.expirySettled} expiry`);
-      }
-      // Errors were collected here and thrown away. Only a successful cycle
-      // ever printed anything, so a poller that settled nothing looked
-      // identical to one that had no work to do — and an event sat expired
-      // for hours with LP capital locked behind it while the reason (a
-      // missing DEPLOYER_PRIVATE_KEY, an unavailable rate, a reverting call)
-      // was known to this function on every pass and told to nobody.
-      if (result.errors.length) {
-        console.warn(
-          `[Oracle] Settlement cycle reported ${result.errors.length} problem(s):\n  ` +
-            result.errors.join("\n  "),
-        );
-      }
-    } catch (error) {
-      // Was an empty block. A throw here kills the whole cycle, which is the
-      // one case where silence is least affordable.
-      console.error("[Oracle] Settlement cycle threw:", error);
-    }
-  }, intervalMs);
+  intervalId = setInterval(() => { void runSettlementCycle("cycle"); }, intervalMs);
 }
 
 export function stopOraclePoller() {
