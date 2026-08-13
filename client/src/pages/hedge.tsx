@@ -1403,10 +1403,30 @@ export default function Hedge() {
                       // settlement completes, so we trust the on-chain status only.
                       const settledOnChain = ev ? (ev.status === 'settled' || ev.status === 'expired') : false;
                       const pendingSettlement = ev ? (ev.status === 'open' && ev.expiryDate.getTime() <= Date.now()) : false;
+                      // How long it has actually been waiting.
+                      //
+                      // "settling…" was shown for the whole window between expiry and
+                      // settlement, however long that ran. It describes a process that is
+                      // under way, and the settler had in fact done nothing for hours —
+                      // so the one word standing between an LP and their capital was
+                      // reassuring them that it was in hand. Past an hour it says what is
+                      // true instead, and that the money is not at risk, because the next
+                      // thought after "this is stuck" is "is it gone".
+                      const hoursWaiting = ev && pendingSettlement
+                        ? (Date.now() - ev.expiryDate.getTime()) / 3_600_000
+                        : 0;
+                      const settlementOverdue = pendingSettlement && hoursWaiting >= 1;
                       return (
                         <div className="row" key={d.id}>
                           <span className="coin"><CoinSvg token="usdc" /></span>
-                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable >= CLAIM_DUST ? ` · ${fmtUsd2(claimable)} premium ready` : ''}{settledOnChain ? ' · ready to withdraw' : pendingSettlement ? ' · settling…' : ''}</div></div>
+                          <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${d.eventId}`)}</div><div className="r2">{fmtMoney(d.amount)} deposited{claimable >= CLAIM_DUST ? ` · ${fmtUsd2(claimable)} premium ready` : ''}{settledOnChain ? ' · ready to withdraw' : settlementOverdue ? ` · awaiting settlement (${Math.floor(hoursWaiting)}h)` : pendingSettlement ? ' · settling…' : ''}</div>
+                            {settlementOverdue && (
+                              <div className="r2" style={{ color: 'var(--amber)' }}>
+                                Expired, but not settled on-chain yet — your {fmtMoney(d.amount)} is safe and
+                                becomes withdrawable the moment it settles. We've been alerted.
+                              </div>
+                            )}
+                          </div>
                           <div className="r-side" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             {claimable >= CLAIM_DUST && <button className="btn-sm2 primary" disabled={claimPremiumsMutation.isPending} onClick={() => claimPremiumsMutation.mutate(d.id)}>Claim {fmtUsd2(claimable)}</button>}
                             {settledOnChain && <button className="btn-sm2 ghost" disabled={withdrawMutation.isPending} onClick={() => withdrawMutation.mutate(d.id)}>Withdraw</button>}

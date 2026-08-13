@@ -564,7 +564,22 @@ export function startOraclePoller(intervalMs: number = 5 * 60 * 1000) {
       if (result.settled > 0) {
         console.log(`[Oracle] Settlement cycle: ${result.oneTouchSettled} one-touch, ${result.expirySettled} expiry`);
       }
+      // Errors were collected here and thrown away. Only a successful cycle
+      // ever printed anything, so a poller that settled nothing looked
+      // identical to one that had no work to do — and an event sat expired
+      // for hours with LP capital locked behind it while the reason (a
+      // missing DEPLOYER_PRIVATE_KEY, an unavailable rate, a reverting call)
+      // was known to this function on every pass and told to nobody.
+      if (result.errors.length) {
+        console.warn(
+          `[Oracle] Settlement cycle reported ${result.errors.length} problem(s):\n  ` +
+            result.errors.join("\n  "),
+        );
+      }
     } catch (error) {
+      // Was an empty block. A throw here kills the whole cycle, which is the
+      // one case where silence is least affordable.
+      console.error("[Oracle] Settlement cycle threw:", error);
     }
   }, intervalMs);
 }
