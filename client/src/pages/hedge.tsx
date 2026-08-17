@@ -409,6 +409,17 @@ export default function Hedge() {
 
   const [events, setEvents] = useState<HedgeEventData[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  /**
+   * What the load is doing, in words.
+   *
+   * Skeletons say something is happening and nothing about what, so a slow
+   * network and a broken one look identical — you wait, and then decide the app
+   * is broken. Naming the stage costs nothing and turns a blank wait into a
+   * report. loadSlow follows it: past six seconds the wait is no longer normal,
+   * and saying so is better than leaving someone to conclude it themselves.
+   */
+  const [loadStage, setLoadStage] = useState('');
+  const [loadSlow, setLoadSlow] = useState(false);
   const [txStep, setTxStep] = useState('');
 
   /**
@@ -429,9 +440,14 @@ export default function Hedge() {
   const [myDeposits, setMyDeposits] = useState<HedgeLpDepositData[]>([]);
 
   const loadEvents = async () => {
+    let slowTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       setEventsLoading(true);
+      setLoadSlow(false);
+      setLoadStage(`Reading pools from ${selectedNetwork.name}\u2026`);
+      slowTimer = setTimeout(() => setLoadSlow(true), 6000);
       const data = await hedgeContract.getAllEvents();
+      setLoadStage('Checking pool balances\u2026');
       try {
         const dbRes = await fetch('/api/hedge/events/open');
         if (dbRes.ok) {
@@ -490,7 +506,10 @@ export default function Hedge() {
     } catch (error) {
       console.error('Failed to load events:', error);
     } finally {
+      if (slowTimer) clearTimeout(slowTimer);
       setEventsLoading(false);
+      setLoadStage('');
+      setLoadSlow(false);
     }
   };
 
@@ -995,6 +1014,16 @@ export default function Hedge() {
         <button className={view === 'lp' || view === 'create' ? 'on' : ''} onClick={() => setView('lp')}><Layers /> Underwrite</button>
         <button className={view === 'mypos' || view === 'mypools' ? 'on' : ''} onClick={() => setView('mypos')}><Shield /> Portfolio</button>
       </div>
+
+      {eventsLoading && loadStage && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 2px', fontSize: 13, color: 'var(--tx-3)' }}>
+          <Loader2 className="spin" style={{ width: 14, height: 14 }} />
+          <span>{loadStage}</span>
+          {loadSlow && (
+            <span style={{ color: 'var(--amber)' }}>· slower than usual, the network is taking its time</span>
+          )}
+        </div>
+      )}
 
       {(view === 'lp' || view === 'create') && (
         <div className="assettog cv-sub">
