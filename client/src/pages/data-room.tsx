@@ -197,7 +197,7 @@ const CATEGORIES = [
     documents: [
       { id: "whitepaper", title: "Whitepaper", description: "Technical deep-dive: Diamond Standard, HedgeFacet, USDC flows, settlement logic", href: "/whitepaper", type: "navigate" as const, badge: "Technical", badgeColor: "bg-purple-100 text-purple-700", icon: BookOpen },
       { id: "oracle-strategy", title: "Oracle Strategy", description: "Current oracle architecture, known limitations, and 4-phase decentralization roadmap", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Globe },
-      { id: "security-audit", title: "Security Audit", description: "Pre-audit scan results (70.94/100), findings, fixes applied, and pre-mainnet checklist", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
+      { id: "security-audit", title: "Security Audit", description: "April 2026 Diamond audit — 19 findings across all facets, 2 critical open, 9 fixed, and the remediation checklist", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
     ],
   },
   {
@@ -475,27 +475,41 @@ function OracleStrategyDoc({ token }: { token: string }) {
 }
 
 const AUDIT_D = {
-  intro: "Pre-audit scan conducted Q1 2026 using SmartLock automated analysis + manual review of all HedgeFacet functions. A formal third-party audit (Certik or Trail of Bits) is scheduled for Q2 2026 ahead of mainnet launch.",
+  intro:
+    "Full security review of the EIP-2535 Diamond system and all facets, April 2026. Nineteen findings: 2 critical, 3 high, 5 medium, 5 low, 4 informational. The auditor's conclusion was that there is no single catastrophic flaw and that CEI ordering, nonReentrant, SafeERC20 and fee snapshots are applied correctly throughout — but that several issues compound, and should be closed before liquidity is scaled. Nine findings are fixed, four accepted, six remain open, including both critical items. Scope note: the report was performed against the Lisk deployment (0x3eDfA00a1E3C158A591097de2FA1756aCD66860D). Lisk has since been retired and production now runs on Base and BNB Smart Chain, so equivalence of the deployed bytecode to the audited source is being confirmed with the auditor.",
   findings: [
-    { sev: "High",   sevColor: "red",   issue: "Reentrancy vulnerability in claimPayout() — malicious LP could trigger recursive withdrawal",  status: "Fixed — ReentrancyGuard added",  statusColor: "green" },
-    { sev: "Medium", sevColor: "amber", issue: "Access control: settleEvent() callable by any address on testnet",                               status: "Mitigated — admin-only modifier", statusColor: "amber" },
-    { sev: "Medium", sevColor: "amber", issue: "Integer overflow risk in premium calculation for large notional values",                         status: "Fixed — SafeMath checks added",  statusColor: "green" },
-    { sev: "Medium", sevColor: "amber", issue: "Event expiry boundary condition allows settlement 1 block after expiry",                         status: "Fixed — strict timestamp comparison", statusColor: "green" },
-    { sev: "Low",    sevColor: "blue",  issue: "Gas optimisation: redundant SLOAD in getLpBalance()",                                           status: "Fixed",                          statusColor: "green" },
-    { sev: "Low",    sevColor: "blue",  issue: "Missing event emission on LP withdrawal",                                                        status: "Fixed",                          statusColor: "green" },
-    { sev: "Low",    sevColor: "blue",  issue: "ERC-20 return value not checked in USDC transfer",                                              status: "Fixed — SafeERC20 used",         statusColor: "green" },
-    { sev: "Low",    sevColor: "blue",  issue: "Unchecked return value on internal fee transfer",                                               status: "Fixed",                          statusColor: "green" },
-    { sev: "Low",    sevColor: "blue",  issue: "Hardcoded USDC address — not upgradeable without DiamondCut",                                   status: "Accepted risk",                  statusColor: "blue"  },
+    { sev: "Critical", sevColor: "red",   issue: "C-01 · DiamondCutFacet is never replaced by TimelockCutFacet — both expose diamondCut, so routing is undefined if the original is not removed atomically",  status: "Open",         statusColor: "red"   },
+    { sev: "Critical", sevColor: "red",   issue: "C-02 · facetAddress() may return a corrupted address if LibDiamond stores a struct rather than an address",                                                   status: "Open",         statusColor: "red"   },
+    { sev: "High",     sevColor: "red",   issue: "H-01 · withdrawCapital does not block a subsequent claimPremiums",                                                                                            status: "Fixed",        statusColor: "green" },
+    { sev: "High",     sevColor: "red",   issue: "H-02 · recoverExpiredPayouts uses a stale totalLiquidity",                                                                                                    status: "Fixed",        statusColor: "green" },
+    { sev: "High",     sevColor: "red",   issue: "H-03 · Oracle RESUBMIT_COOLDOWN does not reset after consensus is cleared",                                                                                   status: "Fixed",        statusColor: "green" },
+    { sev: "Medium",   sevColor: "amber", issue: "M-01 · Misleading comment on the owner's ability to settle after activateOracleV2()",                                                                         status: "Fixed",        statusColor: "green" },
+    { sev: "Medium",   sevColor: "amber", issue: "M-02 · buyProtection accepted a user-supplied initialRate, which could inflate payouts",                                                                      status: "Fixed",        statusColor: "green" },
+    { sev: "Medium",   sevColor: "amber", issue: "M-03 · deposit() share calculation truncates to zero for small deposits",                                                                                     status: "Fixed",        statusColor: "green" },
+    { sev: "Medium",   sevColor: "amber", issue: "M-04 · Timelock proposal IDs can collide within the same block",                                                                                              status: "Fixed",        statusColor: "green" },
+    { sev: "Medium",   sevColor: "amber", issue: "M-05 · LP withdrawal fairness asymmetry between early and late withdrawers",                                                                                  status: "Accepted",     statusColor: "amber" },
+    { sev: "Low",      sevColor: "blue",  issue: "L-01 · getPendingCutIds() array grows unboundedly",                                                                                                           status: "Open",         statusColor: "amber" },
+    { sev: "Low",      sevColor: "blue",  issue: "L-02 · facets() has O(n·m) read complexity",                                                                                                                  status: "Accepted",     statusColor: "amber" },
+    { sev: "Low",      sevColor: "blue",  issue: "L-03 · rescueETH does not cap forwarded gas",                                                                                                                 status: "Fixed",        statusColor: "green" },
+    { sev: "Low",      sevColor: "blue",  issue: "L-04 · PayoutClaimed does not index eventId",                                                                                                                 status: "Open",         statusColor: "amber" },
+    { sev: "Low",      sevColor: "blue",  issue: "L-05 · setPoolSettings lacks nonReentrant",                                                                                                                   status: "Fixed",        statusColor: "green" },
+    { sev: "Info",     sevColor: "blue",  issue: "I-01 · Unused totalHedgeEvents storage slot",                                                                                                                 status: "Accepted",     statusColor: "blue"  },
+    { sev: "Info",     sevColor: "blue",  issue: "I-02 · Duplicated deposit logic in _createInitialDeposit",                                                                                                    status: "Open",         statusColor: "blue"  },
+    { sev: "Info",     sevColor: "blue",  issue: "I-03 · recoverExpiredPayouts may consume significant gas over many positions",                                                                                status: "Accepted",     statusColor: "blue"  },
+    { sev: "Info",     sevColor: "blue",  issue: "I-04 · _checkConsensus makes two passes over submitters",                                                                                                     status: "Open",         statusColor: "blue"  },
   ],
   checklist: [
-    { item: "Formal third-party audit (Certik / Trail of Bits)", timing: "Q2 2026",    status: "pending" },
-    { item: "Gnosis Safe multisig ownership transfer",           timing: "Post-launch", status: "pending" },
-    { item: "Timelock on Diamond upgrades (48h delay)",          timing: "Post-launch", status: "pending" },
-    { item: "Emergency pause mechanism on HedgeFacet",           timing: "Mainnet",     status: "complete" },
-    { item: "Multi-signer oracle relay (3-of-5)",                timing: "Mainnet",     status: "complete" },
-    { item: "ReentrancyGuard on all state-changing functions",   timing: "Done",        status: "done"    },
-    { item: "SafeERC20 for all USDC transfers",                  timing: "Done",        status: "done"    },
-    { item: "Contract verification on Blockscout",               timing: "Done",        status: "done"    },
+    { item: "Close C-01 — enforce the DiamondCut/Timelock transition as an atomic deployment invariant", timing: "Before scaling", status: "pending" },
+    { item: "Close C-02 — verify the LibDiamond selector mapping and fix facetAddress() if it stores a struct", timing: "Before scaling", status: "pending" },
+    { item: "Confirm audited source matches the deployed Base and BSC bytecode",  timing: "In progress",  status: "pending" },
+    { item: "Verify the live HedgeFacet implementation on BaseScan",              timing: "Before scaling", status: "pending" },
+    { item: "Formal third-party audit (Certik / Trail of Bits)",                  timing: "Pre-scale",    status: "pending" },
+    { item: "Gnosis Safe multisig ownership transfer",                            timing: "Post-launch",  status: "pending" },
+    { item: "Timelock on Diamond upgrades (48h delay)",                           timing: "Post-launch",  status: "pending" },
+    { item: "Emergency pause mechanism on HedgeFacet",                            timing: "Mainnet",      status: "done"    },
+    { item: "Multi-signer oracle relay (3-of-5)",                                 timing: "Mainnet",      status: "done"    },
+    { item: "ReentrancyGuard on all state-changing functions",                    timing: "Done",         status: "done"    },
+    { item: "SafeERC20 for all USDC transfers",                                   timing: "Done",         status: "done"    },
   ],
 };
 
@@ -536,10 +550,10 @@ function SecurityAuditDoc({ token }: { token: string }) {
     <div>
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "20px" }}>
-        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>70.94</div><div style={S.statLbl}>Audit score (out of 100)</div></div>
-        <div style={S.stat}><div style={{ ...S.statVal, color: "#dc2626" }}>0</div><div style={S.statLbl}>Critical findings</div></div>
-        <div style={S.stat}><div style={{ ...S.statVal, color: "#d97706" }}>1</div><div style={S.statLbl}>High severity (fixed)</div></div>
-        <div style={S.stat}><div style={S.statVal}>3</div><div style={S.statLbl}>Medium severity</div></div>
+        <div style={S.stat}><div style={S.statVal}>19</div><div style={S.statLbl}>Findings, April 2026</div></div>
+        <div style={{ ...S.stat, borderColor: "#fecaca" }}><div style={{ ...S.statVal, color: "#dc2626" }}>2</div><div style={S.statLbl}>Critical — both open</div></div>
+        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>9</div><div style={S.statLbl}>Fixed</div></div>
+        <div style={S.stat}><div style={{ ...S.statVal, color: "#d97706" }}>4</div><div style={S.statLbl}>Accepted risks</div></div>
       </div>
       <p style={S.p}>{data.intro}</p>
       <h2 style={S.h2}>Findings Summary</h2>
@@ -2825,7 +2839,7 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
     "revenue-breakdown": { title: "Revenue Breakdown", subtitle: "Fee structure, projections, and unit economics" },
     "cost-breakdown":    { title: "Cost Breakdown",    subtitle: "Annual COGS & OpEx by category with efficiency metrics" },
     "oracle-strategy": { title: "Oracle Strategy", subtitle: "Architecture, limitations, and decentralisation roadmap" },
-    "security-audit": { title: "Security Audit", subtitle: "Pre-audit scan results and pre-mainnet checklist" },
+    "security-audit": { title: "Security Audit", subtitle: "April 2026 Diamond audit — findings, status and remediation" },
     "demo-video": { title: "Product Demo Video", subtitle: "Video walkthrough of the Wallet and Hedge products" },
     "market-opportunity": { title: "Market Opportunity", subtitle: "TAM / SAM / SOM and growth drivers" },
     "competitive-landscape": { title: "Competitive Landscape", subtitle: "Side-by-side comparison across key dimensions" },
