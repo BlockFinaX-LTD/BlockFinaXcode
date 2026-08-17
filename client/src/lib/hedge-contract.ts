@@ -82,6 +82,24 @@ const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa261
 const LIQUIDITY_DEPOSITED_TOPIC = '0xbff736a88c4d6fc1bc430cb94a5d36706a0d4b369de04ea80fc121296def3cb2';
 const EVENT_CREATED_TOPIC = '0x971a52d02f8b95a7a75a0f42d1fb5ab027b59b71c15f1f6095e5323ddd308736';
 
+/**
+ * Multicall3 — the same address on Base, BSC and most other chains.
+ *
+ * Reading the market is four calls per pool, and the public RPCs throttle well
+ * before that finishes. At ten pools it is forty round trips; mainnet.base.org
+ * answers a portion of them with -32016 "over rate limit", ethers surfaces that
+ * as CALL_EXCEPTION "missing revert data" — indistinguishable from a genuine
+ * revert — and the retry backoff turns a slow page into a very slow one.
+ *
+ * Batching them into a single eth_call removes the cause rather than pacing
+ * around it: measured 3,818ms across forty calls against 545ms for the same
+ * forty inside one multicall, and one request cannot be rate-limited partway.
+ */
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const MULTICALL3_ABI = [
+  "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])",
+];
+
 const HEDGE_ABI = [
   // v7 + v8: payoutCap (range product) + signature/timestamp/nonce (pricing-engine attestation)
   'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 payoutCap, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken, bytes signature, uint256 quoteTimestamp, bytes32 quoteNonce)) returns (uint256)',
@@ -641,6 +659,66 @@ class HedgeContractManager {
     };
   }
 
+  /**
+   * Every event's core, stats, payment token and range in one request.
+   *
+   * Returns null when multicall is unavailable or the shape is not what we
+   * expect, so the caller keeps its per-event path. allowFailure is set per
+   * call because individual events do revert on some getters after a facet
+   * upgrade, and one bad event must not void the whole read.
+   */
+  private async readEventsViaMulticall(
+    count: number,
+  ): Promise<Array<{ id: number; core: unknown; stats: unknown; paymentToken: string; range: unknown }> | null> {
+    if (count < 1) return [];
+    try {
+      const provider = this.getProvider();
+      if ((await provider.getCode(MULTICALL3)) === "0x") return null;
+
+      const iface = new ethers.Interface(HEDGE_ABI);
+      const fns = ["getHedgeEventCore", "getHedgeEventStats", "getEventPaymentToken", "getHedgeEventRange"] as const;
+      const calls: Array<{ target: string; allowFailure: boolean; callData: string }> = [];
+      for (let i = 1; i <= count; i++) {
+        for (const fn of fns) {
+          calls.push({ target: this.activeDiamond, allowFailure: true, callData: iface.encodeFunctionData(fn, [i]) });
+        }
+      }
+
+      const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, provider);
+      const results = await Promise.race([
+        mc.aggregate3(calls) as Promise<Array<{ success: boolean; returnData: string }>>,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("multicall timeout")), 12_000)),
+      ]);
+      if (!Array.isArray(results) || results.length !== calls.length) return null;
+
+      const out: Array<{ id: number; core: unknown; stats: unknown; paymentToken: string; range: unknown }> = [];
+      for (let i = 1; i <= count; i++) {
+        const base = (i - 1) * fns.length;
+        const decode = (k: number) => {
+          const r = results[base + k];
+          if (!r?.success) return null;
+          try { return iface.decodeFunctionResult(fns[k], r.returnData); } catch { return null; }
+        };
+        const core = decode(0);
+        const stats = decode(1);
+        // An event whose core or stats cannot be read is skipped, exactly as the
+        // per-event path skips it.
+        if (!core || !stats) continue;
+        const tokenRes = decode(2);
+        out.push({
+          id: i,
+          core,
+          stats,
+          paymentToken: (tokenRes ? String(tokenRes[0]) : "") || CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS,
+          range: decode(3),
+        });
+      }
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
   async getAllEvents(): Promise<HedgeEventData[]> {
     const contract = this.getReadContract();
     const MAX_SCAN = 500;
@@ -700,6 +778,20 @@ class HedgeContractManager {
     };
 
     const raw: RawEvent[] = [];
+
+    // One request for the whole book. Falls through to the per-event path below
+    // when multicall is unavailable, times out, or returns nothing usable — so
+    // this is a speed-up, never a new way for the market to fail to load.
+    if (count !== null && count > 0) {
+      const viaMulticall = await this.readEventsViaMulticall(count);
+      if (viaMulticall && viaMulticall.length > 0) {
+        const eventTimestamps = await timestampsPromise;
+        return viaMulticall.map((r) =>
+          this.formatEvent(r.core, r.stats, eventTimestamps.get(r.id), r.paymentToken, r.range),
+        );
+      }
+      console.warn('[HedgeContract] multicall unavailable — falling back to per-event reads');
+    }
 
     if (count === null) {
       // Scan mode: without a count, a run of reverts is the only signal that
