@@ -180,6 +180,16 @@ export function TxAuthDialog() {
                 className="font-mono text-center tracking-[0.4em]"
                 autoFocus
               />
+              {/* Whose email to look for.
+                  The code is generated, sent and verified by Rift — POST /otp/send
+                  takes an address and nothing else, so there is no sender or
+                  branding field for us to set. Saying so is the part we control:
+                  without it, someone waits for a BlockFinaX email that is never
+                  coming, and eventually finds "Rift" in spam and distrusts it. */}
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                The code comes from <strong>riftfi.com</strong>, our wallet provider —
+                not from BlockFinaX. Check your spam folder if it hasn't arrived within a minute.
+              </p>
             </>
           )}
 
