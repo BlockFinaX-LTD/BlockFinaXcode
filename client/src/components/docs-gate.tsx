@@ -5,7 +5,16 @@
  *   1. URL hits with ?t=<raw-token> → POST verify → if valid, store the token
  *      in localStorage (per browser) → render the docs
  *   2. URL without ?t — check the stored token → if still valid, render
- *   3. Otherwise show the "Request access" wall with a button to /docs/request
+ *   3. A live data-room session also passes. The data room links out to
+ *      /whitepaper, so its own visitors were landing here and being asked to
+ *      request access by email for a document the data room had just offered
+ *      them. Anyone holding a verified investor token has already cleared a
+ *      gate the same operator set.
+ *   4. Signed-in admin → mint silently
+ *   5. Otherwise show the "Request access" wall with a button to /docs/request
+ *
+ * Access for everyone else is unchanged: with no docs token and no data-room
+ * session, /whitepaper still asks for a magic link exactly as before.
  */
 
 import { useEffect, useState } from 'react';
@@ -39,6 +48,37 @@ async function verify(token: string): Promise<{
 function persistInvestorToken(token: string | undefined) {
   if (!token) return;
   try { localStorage.setItem(INVESTOR_SESSION_KEY, token); } catch { /* ignore */ }
+}
+
+/**
+ * Does this visitor already hold a live data-room session?
+ *
+ * The data room links straight out to /whitepaper, and that link landed on this
+ * gate — so somebody who had just typed the data-room password was asked to
+ * request access by email to read a document the data room was offering them.
+ * Two gates, two credentials, for one audience.
+ *
+ * A docs token already grants the data room (verify hands back an investorToken
+ * and persistInvestorToken stores it, above). This is that relationship in the
+ * other direction, and both sides read the same localStorage key, so there is
+ * nothing new to issue — only the existing session to check.
+ *
+ * The server decides, not the browser: an investor token sitting in
+ * localStorage means nothing until /api/investor/verify says it is live, which
+ * is the same call the data room itself makes on load.
+ */
+async function hasDataRoomSession(): Promise<boolean> {
+  let stored: string | null = null;
+  try { stored = localStorage.getItem(INVESTOR_SESSION_KEY); } catch { return false; }
+  if (!stored) return false;
+  try {
+    const res = await fetch('/api/investor/verify', { headers: { 'x-investor-token': stored } });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data?.valid;
+  } catch {
+    return false;
+  }
 }
 
 async function adminBypass(accessToken: string): Promise<{ token: string; expiresAt: string } | null> {
@@ -163,7 +203,14 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
         // expired/revoked on the server — clear and continue
         localStorage.removeItem(STORAGE_KEY);
       }
-      // 3) Signed-in admin? Mint a token for them silently and proceed.
+      // 3) Already inside the data room? That is the same audience, already
+      //    admitted by the same operator — don't ask them to prove it twice.
+      if (await hasDataRoomSession()) {
+        if (cancelled) return;
+        setPhase('allowed');
+        return;
+      }
+      // 4) Signed-in admin? Mint a token for them silently and proceed.
       //    Server validates the Rift session and checks ADMIN_EMAILS — if the
       //    email isn't on the allowlist this returns null and we fall through.
       if (isAuthenticated) {
