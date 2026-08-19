@@ -17,10 +17,30 @@ export const SEED_RETURNS = 20;         // first N returns seed EWMA via unweigh
 export const VOL_FLOOR = 0.05;          // 5% annualized
 export const VOL_CEILING = 3.00;        // 300% annualized — raised because crypto can spike here
 
-// Freshness check: of the last FRESHNESS_WINDOW_DAYS calendar days, we must
-// have at least MIN_RECENT_CLOSES closes.
+// Freshness check.
+//
+// This used to demand 60 closes within 90 *calendar* days. FX settles on
+// weekdays only, and 90 calendar days hold about 64 weekdays — so the gate
+// required 94% coverage and tolerated four missing days. Public holidays across
+// the US and the quote currencies exceed that in most quarters, and the result
+// was an engine that quoted nothing: USD/GHS 56, USD/NGN 56, USD/KES 52,
+// EUR/GHS 48, every live pair rejected, every pool priced by hand instead.
+//
+// The count was never wrong so much as measured in the wrong unit. Coverage is
+// now a fraction of the weekdays the window actually contains, so the bar moves
+// with the calendar instead of assuming a seven-day trading week.
 export const FRESHNESS_WINDOW_DAYS = 90;
-export const MIN_RECENT_CLOSES = 60;
+/** Share of the window's weekdays that must have a close. */
+export const MIN_WEEKDAY_COVERAGE = 0.70;
+/**
+ * How old the most recent close may be, in calendar days.
+ *
+ * Coverage alone does not mean current: sixty closes all sitting between days
+ * 30 and 90 would have passed the old check while the feed had in fact been
+ * dead for a month. Eight days admits a long weekend plus a holiday and little
+ * else.
+ */
+export const MAX_NEWEST_CLOSE_AGE_DAYS = 8;
 
 // Per-tier σ floors (post-markup). Same idea as PEGGED_VOL_FLOOR — when EWMA on
 // recent quiet days reads abnormally low for a tier known to have hidden jump
@@ -78,17 +98,41 @@ export function checkFreshness(
   today: Date = new Date(),
 ): string | null {
   const cutoffMs = today.getTime() - FRESHNESS_WINDOW_DAYS * 86_400_000;
-  const recent = rows.filter(r => {
+  const recent: number[] = [];
+  for (const r of rows) {
     const d = Date.parse(r.date + "T00:00:00Z");
-    return Number.isFinite(d) && d >= cutoffMs;
-  });
-  if (recent.length < MIN_RECENT_CLOSES) {
+    if (Number.isFinite(d) && d >= cutoffMs) recent.push(d);
+  }
+
+  // The most a weekday-only feed could possibly have supplied in this window.
+  const weekdays = countWeekdays(cutoffMs, today.getTime());
+  const required = Math.max(MIN_CLOSES, Math.ceil(weekdays * MIN_WEEKDAY_COVERAGE));
+
+  if (recent.length < required) {
     return (
-      `Stale or sparse history: only ${recent.length} closes in the last ` +
-      `${FRESHNESS_WINDOW_DAYS} days (need ≥${MIN_RECENT_CLOSES})`
+      `Sparse history: ${recent.length} closes in the last ${FRESHNESS_WINDOW_DAYS} days, ` +
+      `need ≥${required} (${Math.round(MIN_WEEKDAY_COVERAGE * 100)}% of the ${weekdays} weekdays in the window)`
+    );
+  }
+
+  const newestAgeDays = (today.getTime() - Math.max(...recent)) / 86_400_000;
+  if (newestAgeDays > MAX_NEWEST_CLOSE_AGE_DAYS) {
+    return (
+      `Stale history: newest close is ${Math.floor(newestAgeDays)} days old ` +
+      `(max ${MAX_NEWEST_CLOSE_AGE_DAYS})`
     );
   }
   return null;
+}
+
+/** Weekdays between two instants — the ceiling on what an FX feed can deliver. */
+export function countWeekdays(fromMs: number, toMs: number): number {
+  let n = 0;
+  for (let t = fromMs; t <= toMs; t += 86_400_000) {
+    const day = new Date(t).getUTCDay();
+    if (day !== 0 && day !== 6) n++;
+  }
+  return n;
 }
 
 /** Compute annualized realized volatility from a series of closing prices, oldest-first. */

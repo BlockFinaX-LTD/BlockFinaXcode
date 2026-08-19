@@ -34,6 +34,25 @@ function lastNDays(n: number, end: Date = new Date("2026-05-06T00:00:00Z")): str
   return out;
 }
 
+/**
+ * The last `n` weekday dates ending at `end`, oldest-first.
+ *
+ * What an FX feed can actually supply — lastNDays hands back Saturdays and
+ * Sundays, which no close ever lands on, and building the freshness fixtures
+ * from it is what made the old calendar-day threshold look reachable.
+ */
+function weekdaysBack(n: number, end: Date = new Date("2026-05-06T00:00:00Z")): string[] {
+  const out: string[] = [];
+  let t = end.getTime();
+  while (out.length < n) {
+    const d = new Date(t);
+    const day = d.getUTCDay();
+    if (day !== 0 && day !== 6) out.push(d.toISOString().slice(0, 10));
+    t -= 86_400_000;
+  }
+  return out.reverse();
+}
+
 describe("computeRealizedVol", () => {
   it("rejects too-short series", () => {
     assert.throws(() => computeRealizedVol([1, 2, 3]));
@@ -155,7 +174,7 @@ describe("checkFreshness", () => {
     const oldEnd = new Date(today.getTime() - 100 * 86_400_000);
     const rows = lastNDays(90, oldEnd).map(date => ({ date }));
     const reason = checkFreshness(rows, today);
-    assert.match(reason ?? "", /Stale or sparse history/);
+    assert.match(reason ?? "", /Sparse history|Stale history/);
   });
 
   it("rejects sparse data: only 30 closes in last 90 days", () => {
@@ -163,6 +182,36 @@ describe("checkFreshness", () => {
     const rows = lastNDays(30, today).map(date => ({ date }));
     const reason = checkFreshness(rows, today);
     assert.match(reason ?? "", /30 closes/);
+  });
+
+  // The gate used to demand 60 closes in 90 *calendar* days. FX settles on
+  // weekdays only — the window holds about 64 — so it required 94% coverage and
+  // rejected every live pair. These pin the corrected unit.
+  it("accepts a weekday-only feed with ordinary holiday gaps", () => {
+    // The real observed coverage that was being turned away: 56, 52, 48.
+    for (const n of [56, 52, 48]) {
+      const rows = weekdaysBack(n, today).map(date => ({ date }));
+      assert.equal(checkFreshness(rows, today), null, `${n} weekday closes should pass`);
+    }
+  });
+
+  it("still rejects a feed that is genuinely broken", () => {
+    const rows = weekdaysBack(40, today).map(date => ({ date }));
+    assert.match(checkFreshness(rows, today) ?? "", /Sparse history/);
+  });
+
+  it("rejects a feed that stopped, even with enough closes in the window", () => {
+    // Coverage alone is not currency: these all sit inside the 90 days, but the
+    // newest is a fortnight old. The old check had no bound on this at all.
+    const stopped = new Date(today.getTime() - 14 * 86_400_000);
+    const rows = weekdaysBack(50, stopped).map(date => ({ date }));
+    assert.match(checkFreshness(rows, today) ?? "", /Stale history/);
+  });
+
+  it("tolerates a long weekend plus a holiday", () => {
+    const paused = new Date(today.getTime() - 5 * 86_400_000);
+    const rows = weekdaysBack(50, paused).map(date => ({ date }));
+    assert.equal(checkFreshness(rows, today), null);
   });
 
   it("ignores rows older than the freshness window", () => {
