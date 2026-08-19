@@ -1,99 +1,127 @@
+/**
+ * whitepaper.tsx — the protocol's design document.
+ *
+ * Rebuilt from scratch. The previous version was a marketing brochure that
+ * described the product incorrectly in three separate places: it called
+ * settlement "binary" with "no partial settlements" when the payout is
+ * continuous between the strike and the cap; it described one-touch settlement
+ * that has since been removed for destroying the payout it triggered; and it
+ * borrowed the regulatory validation of binary outcome contracts through an
+ * equivalence that does not hold.
+ *
+ * This one is organised around decisions rather than features. Each significant
+ * choice states what was chosen, what was rejected, and why — including the
+ * cases where the first answer was wrong and what it cost. A protocol document
+ * that only records the destination is not much use to anyone deciding whether
+ * to trust it.
+ *
+ * Figures are computed in-page rather than drawn, so no diagram can drift from
+ * the numbers it illustrates. They use the Garman–Kohlhagen kernel without the
+ * Merton jump overlay — enough for shape and magnitude, and stated as such in
+ * the captions rather than passed off as the full model.
+ */
+
 import { useState, useEffect, useRef } from "react";
-import {
-  ArrowLeft, ChevronRight, Shield, Globe, Zap, Lock,
-  BarChart3, BookOpen, Layers, CircleDollarSign, AlertTriangle,
-  CheckCircle2, ArrowUpRight, ArrowDownRight, Cpu, FileText, Scale,
-  Landmark, Coins, Wheat, RefreshCw, Activity, Info, Download
-} from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import logoPath from "@/assets/logo.png";
+
+const VERSION = "2.0";
+const DATE = "August 2026";
 
 const PRINT_STYLES = `
 @media print {
   @page { margin: 18mm 16mm; size: A4; }
   body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .no-print { display: none !important; }
-  .print-break-before { break-before: page; }
-  nav, aside, header .no-print { display: none !important; }
-  #wp-sidebar { display: none !important; }
-  #wp-topbar { position: static !important; box-shadow: none !important; border-bottom: 1px solid #e5e7eb; }
-  .sticky { position: static !important; }
-  a[href]:after { content: none !important; }
-  main { max-width: 100% !important; padding: 0 !important; }
-  h2 { page-break-after: avoid; }
-  table { page-break-inside: avoid; }
-  .rounded-xl, .rounded-lg { border-radius: 4px !important; }
+  .wp-nav { display: none !important; }
+  .wp-body { max-width: none !important; }
+  h2, h3 { break-after: avoid; }
+  figure, table, .wp-decision, .wp-callout { break-inside: avoid; }
+  a { text-decoration: none !important; color: inherit !important; }
 }
 `;
 
-const sections = [
-  { id: "abstract",     label: "Abstract" },
-  { id: "intro",        label: "1. Introduction" },
-  { id: "problem",      label: "2. The Problem" },
-  { id: "market",       label: "3. Market Opportunity" },
-  { id: "solution",     label: "4. The Solution" },
-  { id: "assets",       label: "5. Asset Coverage" },
-  { id: "mechanics",    label: "6. Protocol Mechanics" },
-  { id: "settlement",   label: "7. Settlement Engine" },
-  { id: "lp",           label: "8. Liquidity Provider Model" },
-  { id: "technical",    label: "9. Technical Architecture" },
-  { id: "economics",    label: "10. Fee Structure" },
-  { id: "wallet",       label: "11. Wallet & Transfers" },
-  { id: "regulatory",   label: "12. Regulatory Framework" },
-  { id: "roadmap",      label: "13. Roadmap" },
-  { id: "risks",        label: "14. Risk Factors" },
-  { id: "conclusion",   label: "Conclusion" },
-  { id: "references",  label: "References" },
-];
+/* ─────────────────────────── building blocks ─────────────────────────── */
 
-function SectionTitle({ id, number, title, subtitle }: { id: string; number?: string; title: string; subtitle?: string }) {
+function SectionTitle({ id, n, title, sub }: { id: string; n: string; title: string; sub?: string }) {
   return (
-    <div id={id} className="mb-8 scroll-mt-20 pt-4">
-      {number && <p className="text-[10px] font-mono text-primary/60 uppercase tracking-widest mb-1">{number}</p>}
-      <h2 className="text-2xl font-bold text-foreground mb-2">{title}</h2>
-      {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
-      <div className="mt-3 h-px bg-gradient-to-r from-primary/40 to-transparent" />
+    <div id={id} className="scroll-mt-24 mb-6 mt-16 first:mt-0">
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{n}</p>
+      <h2 className="text-2xl font-bold leading-tight text-foreground" style={{ textWrap: "balance" }}>{title}</h2>
+      {sub && <p className="mt-1.5 text-sm text-muted-foreground">{sub}</p>}
     </div>
   );
 }
 
-function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-base font-semibold text-foreground mb-3 mt-7">{children}</h3>;
+function H3({ id, children }: { id?: string; children: React.ReactNode }) {
+  return <h3 id={id} className="scroll-mt-24 mb-3 mt-9 text-base font-semibold text-foreground">{children}</h3>;
 }
 
-function P({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-sm leading-relaxed text-muted-foreground mb-4 ${className}`}>{children}</p>;
+function P({ children }: { children: React.ReactNode }) {
+  return <p className="mb-4 text-[15px] leading-[1.7] text-muted-foreground">{children}</p>;
 }
 
-function Callout({ icon: Icon, color, title, children }: { icon: any; color: string; title?: string; children: React.ReactNode }) {
+function Em({ children }: { children: React.ReactNode }) {
+  return <strong className="font-semibold text-foreground">{children}</strong>;
+}
+
+function Mono({ children }: { children: React.ReactNode }) {
+  return <code className="rounded border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">{children}</code>;
+}
+
+/** A design decision: what was chosen, what was rejected, and why. */
+function Decision({ id, title, chose, rejected, children }: {
+  id?: string; title: string; chose: string; rejected: string; children: React.ReactNode;
+}) {
   return (
-    <div className={`flex gap-3 p-4 rounded-lg border ${color} my-6`}>
-      <Icon className="h-5 w-5 mt-0.5 shrink-0" />
-      <div className="text-sm leading-relaxed">
-        {title && <strong className="block mb-1">{title}</strong>}
-        {children}
+    <div id={id} className="wp-decision scroll-mt-24 my-7 rounded-lg border border-border bg-muted/20 p-5">
+      <h3 className="mb-4 text-base font-semibold text-foreground">{title}</h3>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded border border-primary/30 bg-primary/5 p-3">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-primary">Chosen</p>
+          <p className="text-[13px] leading-snug text-foreground">{chose}</p>
+        </div>
+        <div className="rounded border border-border bg-background/60 p-3">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Rejected</p>
+          <p className="text-[13px] leading-snug text-muted-foreground">{rejected}</p>
+        </div>
       </div>
+      <div className="[&>p:last-child]:mb-0">{children}</div>
     </div>
   );
 }
 
-function DataTable({ headers, rows }: { headers: string[]; rows: (string | React.ReactNode)[][] }) {
+/** Something that went wrong, what it cost, and what fixed it. */
+function WentWrong({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto my-6 rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/60">
-          <tr>
+    <div className="wp-callout my-6 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-amber-600 dark:text-amber-400">
+        What went wrong
+      </p>
+      <p className="mb-2 text-sm font-semibold text-foreground">{title}</p>
+      <div className="text-[14px] leading-relaxed text-muted-foreground [&>p]:mb-2 [&>p:last-child]:mb-0">{children}</div>
+    </div>
+  );
+}
+
+function Table({ headers, rows, align }: { headers: string[]; rows: React.ReactNode[][]; align?: ("l" | "r")[] }) {
+  return (
+    <div className="my-6 overflow-x-auto rounded-lg border border-border">
+      <table className="w-full border-collapse text-[13px]">
+        <thead>
+          <tr className="bg-muted/40">
             {headers.map((h, i) => (
-              <th key={i} className="text-left px-4 py-2.5 font-semibold text-foreground text-xs uppercase tracking-wide">{h}</th>
+              <th key={i} className={`border-b border-border px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground ${align?.[i] === "r" ? "text-right" : "text-left"}`}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, ri) => (
-            <tr key={ri} className={ri % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-              {row.map((cell, ci) => (
-                <td key={ci} className="px-4 py-2.5 text-muted-foreground text-xs">{cell}</td>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-b border-border last:border-0">
+              {r.map((c, j) => (
+                <td key={j} className={`px-4 py-2.5 align-top text-muted-foreground ${align?.[j] === "r" ? "text-right font-mono tabular-nums" : ""}`}>{c}</td>
               ))}
             </tr>
           ))}
@@ -103,1385 +131,689 @@ function DataTable({ headers, rows }: { headers: string[]; rows: (string | React
   );
 }
 
-function BulletList({ items }: { items: { title: string; body: string }[] }) {
+function Figure({ caption, label, children }: { caption: string; label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3 mb-6">
-      {items.map(({ title, body }) => (
-        <div key={title} className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border">
-          <ChevronRight className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-foreground">{title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
-          </div>
-        </div>
-      ))}
+    <figure className="my-7">
+      <div className="overflow-x-auto rounded-lg border border-border bg-muted/10 p-5">{children}</div>
+      <figcaption className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
+        <span className="mr-2 font-mono text-[10px] uppercase tracking-[0.1em] text-primary">{label}</span>
+        {caption}
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Display equation. Hand-set — no maths library survives the CSP. */
+function Eq({ children, note }: { children: React.ReactNode; note?: string }) {
+  return (
+    <div className="my-5 overflow-x-auto rounded-lg border border-border border-l-2 border-l-primary bg-muted/20 px-6 py-5 text-center">
+      <div className="text-[16px] leading-loose text-foreground">{children}</div>
+      {note && <p className="mt-3 font-mono text-[11px] text-muted-foreground">{note}</p>}
     </div>
   );
 }
 
-function Ref({ n }: { n: number }) {
+function V({ children }: { children: React.ReactNode }) {
+  return <span className="italic">{children}</span>;
+}
+
+/* ───────────────────────────── the maths, for figures ───────────────────────────── */
+
+const erf = (x: number) => {
+  const s = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return s * y;
+};
+const N = (x: number) => 0.5 * (1 + erf(x / Math.SQRT2));
+const gkCall = (S: number, K: number, T: number, sig: number) => {
+  if (T <= 0 || sig <= 0) return Math.max(0, S - K);
+  const q = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + 0.5 * sig * sig * T) / (sig * q);
+  return S * N(d1) - K * N(d1 - sig * q);
+};
+const spread = (S: number, K: number, C: number, T: number, sig: number) =>
+  Math.max(0, gkCall(S, K, T, sig) - gkCall(S, C, T, sig));
+
+const NS = "http://www.w3.org/2000/svg";
+const mk = (n: string, a: Record<string, string | number>) => {
+  const e = document.createElementNS(NS, n);
+  for (const k in a) e.setAttribute(k, String(a[k]));
+  return e;
+};
+const poly = (pts: [number, number][]) => pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+
+/* ───────────────────────────── figures ───────────────────────────── */
+
+function PayoffFigure() {
+  const ref = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const svg = ref.current;
+    if (!svg) return;
+    svg.innerHTML = "";
+    const K = 11.9, C = 12.3, S0 = 11.731549, notional = 9000;
+    const ox = 78, oy = 26, W = 560, H = 150, lo = 11.7, hi = 12.5;
+    const pay = (s: number) => (notional * Math.max(0, Math.min(s, C) - K)) / S0;
+    const maxP = pay(C);
+    const X = (s: number) => ox + ((s - lo) / (hi - lo)) * W;
+    const Y = (p: number) => oy + H - (p / (maxP * 1.18)) * H;
+
+    svg.appendChild(mk("line", { x1: ox, y1: oy + H, x2: ox + W, y2: oy + H, stroke: "currentColor", "stroke-opacity": 0.28 }));
+    svg.appendChild(mk("line", { x1: ox, y1: oy, x2: ox, y2: oy + H, stroke: "currentColor", "stroke-opacity": 0.28 }));
+    svg.appendChild(mk("line", { x1: ox, y1: Y(maxP), x2: ox + W, y2: Y(maxP), stroke: "currentColor", "stroke-opacity": 0.13, "stroke-dasharray": "3 4" }));
+
+    const pts: [number, number][] = [];
+    for (let s = lo; s <= hi + 1e-9; s += 0.005) pts.push([X(s), Y(pay(s))]);
+    svg.appendChild(mk("path", { d: poly(pts), fill: "none", stroke: "hsl(var(--primary))", "stroke-width": 2.4, "stroke-linejoin": "round" }));
+
+    for (const [v, lab] of [[K, "K 11.90"], [C, "C 12.30"]] as [number, string][]) {
+      svg.appendChild(mk("line", { x1: X(v), y1: oy, x2: X(v), y2: oy + H, stroke: "currentColor", "stroke-opacity": 0.13, "stroke-dasharray": "3 4" }));
+      const t = mk("text", { x: X(v), y: oy + H + 17, "text-anchor": "middle", fill: "currentColor", "fill-opacity": 0.55, "font-size": 10.5, "font-family": "ui-monospace, monospace" });
+      t.textContent = lab;
+      svg.appendChild(t);
+    }
+    const labels: [number, number, string, string][] = [
+      [ox + W, Y(maxP) - 8, "end", "maximum = notional x (C - K) / S0"],
+      [ox - 8, oy + H + 4, "end", "$0"],
+      [ox + W, oy + H + 34, "end", "settlement rate at expiry"],
+      [X(11.76), Y(0) - 10, "start", "nothing below the strike"],
+    ];
+    for (const [x, y, anchor, text] of labels) {
+      const t = mk("text", { x, y, "text-anchor": anchor, fill: "currentColor", "fill-opacity": 0.55, "font-size": 11, "font-family": "ui-monospace, monospace" });
+      t.textContent = text;
+      svg.appendChild(t);
+    }
+  }, []);
+  return <svg ref={ref} viewBox="0 0 660 230" className="block h-auto w-full text-foreground" role="img" aria-label="Payout rising linearly from the strike to the cap, then flat" />;
+}
+
+function PremiumSurfaceFigure() {
+  const ref = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const svg = ref.current;
+    if (!svg) return;
+    svg.innerHTML = "";
+    const K = 11.9, C = 12.3, SIG = 0.4445;
+    const panel = (ox: number, title: string, sub: string, pts: [number, number][], xlab: string) => {
+      const W = 250, H = 150, oy = 52;
+      const t1 = mk("text", { x: ox, y: 22, fill: "hsl(var(--primary))", "font-size": 11, "font-family": "ui-monospace, monospace" });
+      t1.textContent = title;
+      svg.appendChild(t1);
+      const t2 = mk("text", { x: ox, y: 39, fill: "currentColor", "fill-opacity": 0.55, "font-size": 11.5 });
+      t2.textContent = sub;
+      svg.appendChild(t2);
+      for (let i = 0; i <= 3; i++) {
+        const y = oy + (H * i) / 3;
+        svg.appendChild(mk("line", { x1: ox, y1: y, x2: ox + W, y2: y, stroke: "currentColor", "stroke-opacity": i === 3 ? 0.28 : 0.1, ...(i === 3 ? {} : { "stroke-dasharray": "2 4" }) }));
+      }
+      svg.appendChild(mk("line", { x1: ox, y1: oy, x2: ox, y2: oy + H, stroke: "currentColor", "stroke-opacity": 0.28 }));
+      const max = Math.max(...pts.map(p => p[1])) * 1.15 || 1;
+      const xlo = pts[0][0], xhi = pts[pts.length - 1][0];
+      const scaled = pts.map(p => [ox + ((p[0] - xlo) / (xhi - xlo)) * W, oy + H - (p[1] / max) * H] as [number, number]);
+      svg.appendChild(mk("path", { d: poly(scaled), fill: "none", stroke: "hsl(var(--primary))", "stroke-width": 2.2 }));
+      const t3 = mk("text", { x: ox + W, y: oy + H + 18, "text-anchor": "end", fill: "currentColor", "fill-opacity": 0.5, "font-size": 10.5, "font-family": "ui-monospace, monospace" });
+      t3.textContent = xlab;
+      svg.appendChild(t3);
+    };
+    const decay: [number, number][] = [];
+    for (let d = 0.4; d <= 30; d += 0.4) decay.push([d, spread(11.731549, K, C, d / 365.25, SIG) / 11.731549]);
+    panel(52, "TIME", "spot fixed, expiry approaching", decay, "days remaining");
+
+    const money: [number, number][] = [];
+    for (let s = 11.45; s <= 12.05; s += 0.01) money.push([s, spread(s, K, C, 5 / 365.25, SIG) / s]);
+    panel(372, "MONEYNESS", "5 days fixed, spot rising to the strike", money, "spot to strike");
+  }, []);
+  return <svg ref={ref} viewBox="0 0 660 240" className="block h-auto w-full text-foreground" role="img" aria-label="Premium falling with time and rising with moneyness" />;
+}
+
+function ArchitectureFigure() {
   return (
-    <sup className="text-primary/70 text-[9px] font-semibold ml-0.5 hover:text-primary" title={`Reference ${n}`}>[{n}]</sup>
+    <svg viewBox="0 0 660 250" className="block h-auto w-full text-foreground" role="img" aria-label="Off-chain pricing engine signs a quote which the contract verifies">
+      <g fontFamily="ui-monospace, monospace" fontSize="11">
+        <rect x="16" y="30" width="185" height="86" rx="6" fill="none" stroke="currentColor" strokeOpacity="0.28" />
+        <text x="28" y="52" fill="hsl(var(--primary))" fontSize="10">OFF-CHAIN ENGINE</text>
+        <text x="28" y="72" fill="currentColor" fillOpacity="0.65">GARCH volatility</text>
+        <text x="28" y="88" fill="currentColor" fillOpacity="0.65">Garman–Kohlhagen</text>
+        <text x="28" y="104" fill="currentColor" fillOpacity="0.65">Merton jump overlay</text>
+
+        <rect x="238" y="30" width="185" height="86" rx="6" fill="none" stroke="currentColor" strokeOpacity="0.28" />
+        <text x="250" y="52" fill="hsl(var(--primary))" fontSize="10">SIGNED QUOTE</text>
+        <text x="250" y="72" fill="currentColor" fillOpacity="0.65">premium + nonce</text>
+        <text x="250" y="88" fill="currentColor" fillOpacity="0.65">valid 120 seconds</text>
+        <text x="250" y="104" fill="currentColor" fillOpacity="0.65">ECDSA signature</text>
+
+        <rect x="460" y="30" width="185" height="86" rx="6" fill="none" stroke="hsl(var(--primary))" strokeOpacity="0.5" />
+        <text x="472" y="52" fill="hsl(var(--primary))" fontSize="10">ON-CHAIN DIAMOND</text>
+        <text x="472" y="72" fill="currentColor" fillOpacity="0.65">ecrecover ~3,000 gas</text>
+        <text x="472" y="88" fill="currentColor" fillOpacity="0.65">freshness + nonce</text>
+        <text x="472" y="104" fill="currentColor" fillOpacity="0.65">charges the premium</text>
+
+        <path d="M201 73 L232 73" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.2" markerEnd="url(#ar)" />
+        <path d="M423 73 L454 73" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.2" markerEnd="url(#ar)" />
+        <defs>
+          <marker id="ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0 0 L7 3.5 L0 7 z" fill="currentColor" fillOpacity="0.4" />
+          </marker>
+        </defs>
+
+        <text x="16" y="160" fill="currentColor" fillOpacity="0.55" fontSize="11.5" fontFamily="inherit">
+          The model never runs on-chain. Pricing needs ln, exp and erf, a Poisson series, and
+        </text>
+        <text x="16" y="178" fill="currentColor" fillOpacity="0.55" fontSize="11.5" fontFamily="inherit">
+          sixty days of history — roughly 200,000 gas and precision loss, against ~3,000 gas
+        </text>
+        <text x="16" y="196" fill="currentColor" fillOpacity="0.55" fontSize="11.5" fontFamily="inherit">
+          to verify a signature with none. The chain checks the price; it does not compute it.
+        </text>
+        <text x="16" y="224" fill="hsl(var(--primary))" fontSize="10.5">
+          Fails closed: no valid signature, no sale.
+        </text>
+      </g>
+    </svg>
   );
 }
 
-function StepList({ steps }: { steps: { title: string; body: string }[] }) {
-  const bgClass = "bg-primary/15";
-  const textClass = "text-primary";
-  return (
-    <div className="space-y-3 mb-6">
-      {steps.map(({ title, body }, i) => (
-        <div key={title} className="flex gap-4 p-3 rounded-lg border border-border bg-muted/20">
-          <div className={`w-7 h-7 rounded-full ${bgClass} flex items-center justify-center shrink-0`}>
-            <span className={`text-xs font-bold ${textClass}`}>{i + 1}</span>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">{title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+/* ───────────────────────────── nav ───────────────────────────── */
+
+const SECTIONS = [
+  { id: "abstract", label: "Abstract" },
+  { id: "problem", label: "1. The problem" },
+  { id: "decisions", label: "2. Design decisions" },
+  { id: "mechanics", label: "3. Protocol mechanics" },
+  { id: "pricing", label: "4. Pricing" },
+  { id: "settlement", label: "5. Settlement" },
+  { id: "fees", label: "6. Fees" },
+  { id: "security", label: "7. Security" },
+  { id: "limits", label: "8. Limitations" },
+];
 
 export default function Whitepaper() {
-  const [activeSection, setActiveSection] = useState("abstract");
-  const mainRef = useRef<HTMLElement>(null);
+  const [active, setActive] = useState("abstract");
 
   useEffect(() => {
-    const style = document.createElement("style");
-    style.id = "wp-print-styles";
-    style.textContent = PRINT_STYLES;
-    document.head.appendChild(style);
-    return () => document.getElementById("wp-print-styles")?.remove();
-  }, []);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => { if (e.isIntersecting) setActiveSection(e.target.id); });
+    const obs = new IntersectionObserver(
+      entries => {
+        for (const e of entries) if (e.isIntersecting) setActive(e.target.id);
       },
-      { rootMargin: "-20% 0px -70% 0px" }
+      { rootMargin: "-80px 0px -70% 0px" },
     );
-    sections.forEach(({ id }) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+    for (const s of SECTIONS) {
+      const el = document.getElementById(s.id);
+      if (el) obs.observe(el);
+    }
+    return () => obs.disconnect();
   }, []);
-
-  function handleDownloadPdf() {
-    const title = document.title;
-    document.title = "BlockFinaX_Whitepaper_v1.2_August2026";
-    window.print();
-    setTimeout(() => { document.title = title; }, 2000);
-  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <div className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-            </Link>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <img src={logoPath} alt="BlockFinaX" className="h-5 w-5 object-contain" />
-              <span className="text-sm font-semibold">BlockFinaX</span>
-              <span className="text-xs text-muted-foreground font-mono">Whitepaper v1.2</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 no-print">
-            <span className="text-xs text-muted-foreground hidden md:block">August 2026</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadPdf}
-              className="gap-1.5 text-xs h-8"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download PDF
-            </Button>
-          </div>
+      <style dangerouslySetInnerHTML={{ __html: PRINT_STYLES }} />
+
+      <header className="no-print sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
+          <Link href="/data-room" className="flex items-center gap-2.5 no-underline">
+            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+            <img src={logoPath} alt="" className="h-6 w-6" />
+            <span className="text-sm font-semibold text-foreground">BlockFinaX</span>
+            <span className="ml-2 font-mono text-[11px] text-muted-foreground">Whitepaper v{VERSION}</span>
+          </Link>
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
+          </Button>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 flex gap-10">
-        {/* Sidebar TOC */}
-        <aside id="wp-sidebar" className="hidden lg:block w-52 shrink-0">
-          <div className="sticky top-20">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contents</p>
-            <nav className="space-y-0.5">
-              {sections.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                    activeSection === s.id
-                      ? "text-primary font-medium bg-primary/10"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {s.label}
-                </button>
+      <div className="mx-auto flex max-w-6xl gap-10 px-5 py-10">
+        <nav className="wp-nav no-print hidden w-52 shrink-0 lg:block">
+          <div className="sticky top-24">
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Contents</p>
+            <ul className="space-y-0.5 border-l border-border">
+              {SECTIONS.map(s => (
+                <li key={s.id}>
+                  <a
+                    href={`#${s.id}`}
+                    className={`-ml-px block border-l-2 py-1.5 pl-3 text-[13px] no-underline transition-colors ${
+                      active === s.id ? "border-l-primary font-medium text-foreground" : "border-l-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {s.label}
+                  </a>
+                </li>
               ))}
-            </nav>
+            </ul>
           </div>
-        </aside>
+        </nav>
 
-        {/* Main content */}
-        <main ref={mainRef} className="flex-1 max-w-3xl">
-
-          {/* Cover */}
-          <div className="mb-14 pb-10 border-b border-border">
-            <div className="flex items-center gap-4 mb-6">
-              <img src={logoPath} alt="BlockFinaX" className="h-14 w-14 object-contain" />
-              <div>
-                <h1 className="text-4xl font-bold tracking-tight">BlockFinaX</h1>
-                <p className="text-muted-foreground">P2P Parametric Protection Protocol</p>
-              </div>
-            </div>
-            <p className="text-base font-light text-muted-foreground leading-relaxed max-w-2xl mb-2">
-              A peer-to-peer on-chain marketplace for parametric risk protection across foreign exchange,
-              commodities, and digital assets — enabling businesses and individuals to manage market
-              volatility through transparent, predetermined settlement contracts.
+        <main className="wp-body min-w-0 max-w-[68ch] flex-1">
+          {/* ── masthead ── */}
+          <div className="mb-12 border-b border-border pb-8">
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Protocol design document
             </p>
-            <p className="text-sm text-muted-foreground/70 mb-6">
-              Designed for emerging market participants, institutional liquidity providers, and globally
-              dispersed traders who require accessible, structured, and auditable risk management tools.
+            <h1 className="mb-4 text-[38px] font-bold leading-[1.08] tracking-tight text-foreground" style={{ textWrap: "balance" }}>
+              Parametric FX cover, priced and settled on-chain
+            </h1>
+            <p className="mb-6 text-[17px] leading-relaxed text-muted-foreground">
+              How BlockFinaX writes currency protection for businesses that banks will not serve —
+              the decisions behind it, the mistakes found along the way, and what fixed them.
             </p>
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {["Version 1.2", "August 2026", "EVM Blockchain", "Mainnet Live", "Base & BSC"].map(t => (
-                <span key={t} className="px-2.5 py-1 rounded-full bg-muted border border-border">{t}</span>
-              ))}
+            <div className="flex flex-wrap gap-x-7 gap-y-2 font-mono text-[11px] text-muted-foreground">
+              <span>Version {VERSION}</span>
+              <span>{DATE}</span>
+              <span>Base 8453 · BNB Smart Chain 56</span>
+              <span>Live on mainnet</span>
             </div>
           </div>
 
-          {/* Abstract */}
-          <div id="abstract" className="mb-12 scroll-mt-20">
-            <p className="text-[10px] font-mono text-primary/60 uppercase tracking-widest mb-1">Abstract</p>
-            <div className="h-px bg-gradient-to-r from-primary/40 to-transparent mb-6" />
+          {/* ── abstract ── */}
+          <SectionTitle id="abstract" n="Abstract" title="What this protocol does" />
+          <P>
+            A Ghanaian importer with a $50,000 supplier payment due in thirty days carries currency
+            risk they did not choose and cannot price. Their bank will not write them a forward: the
+            ticket is too small, the credit assessment too expensive, the currency too thin. So they
+            absorb it, and a 6% move against them erases a quarter's margin.
+          </P>
+          <P>
+            BlockFinaX lets anyone with stablecoins underwrite that risk, and anyone exposed to it buy
+            protection, without either party knowing or trusting the other. An underwriter locks USDC
+            into a pool against a named currency pair, a strike and an expiry. A hedger pays a premium
+            for cover on a notional amount. At expiry an oracle posts the rate and the contract pays
+            out arithmetically — <Em>no claim, no assessor, no negotiation</Em>. Both sides know the
+            worst case before they commit.
+          </P>
+          <P>
+            The protocol runs as an EIP-2535 Diamond on Base and BNB Smart Chain. Pricing is a
+            Garman–Kohlhagen kernel with a Merton jump overlay and GARCH volatility, computed
+            off-chain and verified on-chain by signature. Everything below explains why each of those
+            choices was made, and what the alternatives cost.
+          </P>
 
+          {/* ── 1. problem ── */}
+          <SectionTitle id="problem" n="Section 01" title="The problem" sub="Why the risk exists and why nobody covers it" />
+          <P>
+            Frontier currencies do not drift — they hold, then step. The cedi lost roughly a fifth of
+            its value against the dollar across 2022; the naira was devalued twice inside a year;
+            Egypt moved 35% in a week. A business planning around a stable rate is planning around the
+            interval between steps, not the absence of them.
+          </P>
+          <P>
+            Conventional hedging does exist, and it is closed to them for structural reasons rather
+            than unwillingness:
+          </P>
+          <Table
+            headers={["Barrier", "Why it excludes the SME"]}
+            rows={[
+              [<Em key="a">Minimum ticket</Em>, "Bank FX forwards typically start around $250,000. An importer hedging $20,000 is below the floor at which a desk will quote."],
+              [<Em key="b">Credit assessment</Em>, "A forward is a credit exposure — the bank must be paid if the rate moves the customer's way. That underwriting costs more than the trade earns."],
+              [<Em key="c">Collateral</Em>, "Margin on an unfunded forward ties up working capital the business is hedging precisely because it does not have spare."],
+              [<Em key="d">Thin markets</Em>, "There is no deep forward market in cedi or kwacha. Even willing banks are warehousing risk they cannot lay off."],
+            ]}
+          />
+          <P>
+            Each of these is a consequence of the hedge being a <Em>promise</Em>. A promise requires
+            trust, trust requires assessment, and assessment has a fixed cost that small trades cannot
+            carry. The design below removes the promise: every obligation is pre-funded in a contract
+            before it is sold.
+          </P>
+
+          {/* ── 2. decisions ── */}
+          <SectionTitle id="decisions" n="Section 02" title="Design decisions" sub="What was chosen, what was rejected, and what the wrong answers cost" />
+          <P>
+            Six choices define the protocol. Each is stated with its alternative, because a decision
+            recorded without its alternative is indistinguishable from an accident.
+          </P>
+
+          <Decision
+            id="d1"
+            title="2.1 Cover is a capped range, not a binary bet"
+            chose="Payout rises in proportion to how far the rate travels past the strike, stopping at a cap fixed when the pool is created."
+            rejected="A fixed payout on any breach — simpler to explain, and what most on-chain outcome markets do."
+          >
             <P>
-              Price volatility is an inescapable feature of global markets. For importers and exporters
-              navigating fluctuating currency rates, commodity producers exposed to unpredictable input costs,
-              and digital asset holders managing the inherent volatility of crypto markets, unmanaged price risk
-              translates directly into balance sheet losses, margin compression, and operational uncertainty.
+              A binary pays the same whether the rate breaches by a hundredth or by twenty percent,
+              which is the wrong shape for hedging: an importer's loss scales with the size of the
+              move, so their cover should too. A proportional payout tracks the exposure it exists to
+              offset.
             </P>
             <P>
-              Structured risk management instruments — forwards, options, swaps — have long existed to address
-              these exposures. However, access to these instruments remains concentrated among large financial
-              institutions and well-capitalised corporations. Small and medium enterprises (SMEs), independent
-              commodity traders, diaspora workers, and retail participants are systematically excluded from
-              formal hedging markets due to minimum contract thresholds, credit requirements, counterparty
-              vetting processes, and the complexity of bilateral legal documentation.
+              The cap is what makes the pool underwritable. Without it an underwriter's loss is
+              unbounded and no amount of locked capital is provably sufficient. With it, the worst
+              case is <Mono>(C − K)</Mono> per unit of notional, known when the position is written,
+              so the contract can reserve exactly that and refuse anything it cannot cover. Solvency
+              becomes an invariant rather than a policy.
+            </P>
+          </Decision>
+
+          <Figure label="Figure 1" caption="Payout profile, computed from the deployed formula. Nothing below the strike; proportional between strike and cap; flat above it. Drawn with event 9's live terms — strike 11.90, cap 12.30, $9,000 notional — where the maximum evaluates to $306.864848 against the $306.864847 the contract reserved.">
+            <PayoffFigure />
+          </Figure>
+
+          <Decision
+            id="d2"
+            title="2.2 Settlement happens at expiry, not on first touch"
+            chose="One settlement, at expiry, on the rate prevailing then. A rate may cross the strike and return; what counts is where it finishes."
+            rejected="Settling the instant the rate touches the strike — intuitive, and what the protocol originally did."
+          >
+            <P>
+              The two halves have to agree. A payout measured as distance travelled past the strike
+              cannot be triggered at the moment of touching, because at that instant the distance is
+              zero. The original design paired a one-touch trigger with a proportional payout and the
+              combination annihilated itself.
+            </P>
+            <WentWrong title="Every triggered position paid almost nothing">
+              <p>
+                Two events triggered before this was found. Event 5, strike 11.70 with a cap at 13.00,
+                settled at 11.711956 — <Em>0.92% of its maximum</Em>. Position #4 in that pool put up
+                $1,000, paid $16.93 in premium and received <Em>$1.04</Em> on a position that won. Held
+                to expiry the same position would have paid $17 at 11.90 and $113.62 at the cap.
+              </p>
+              <p>
+                The trigger fired at the exact instant intrinsic value was zero and then froze it
+                there. The fix was to delete the trigger: settlement now reads the rate once, at
+                expiry. That also aligns settlement with the pricing engine, which had been quoting a
+                European spread all along.
+              </p>
+            </WentWrong>
+            <P>
+              The cost of this choice is real and worth stating plainly: a rate can now cross the
+              strike, deliver the loss the hedger feared, and retreat before expiry — leaving the
+              position worthless. That is what a European instrument is, and it is what the premium
+              buys. Covering the path rather than the endpoint is a barrier option, priced
+              differently, and is noted in Section 8 as future work rather than smuggled in here.
+            </P>
+          </Decision>
+
+          <Decision
+            id="d3"
+            title="2.3 Pricing runs off-chain and is verified on-chain"
+            chose="The engine prices and signs; the contract recovers the signature, checks freshness and nonce, and charges the signed premium."
+            rejected="Computing the option price in Solidity, so the chain is self-contained."
+          >
+            <P>
+              The model needs <Mono>ln</Mono>, <Mono>exp</Mono> and the error function, a Poisson
+              series over jump counts, and sixty days of price history. On-chain that is roughly
+              200,000 gas, meaningful precision loss in fixed-point arithmetic, and historical data
+              that cannot live there at any price. Verifying an ECDSA signature costs about 3,000 gas
+              and loses nothing.
             </P>
             <P>
-              BlockFinaX presents a parametric protection protocol built on an EVM-compatible blockchain network.
-              The protocol enables any participant to either purchase protection against adverse price movements
-              across 63 market pairs — spanning African FX, global commodities, and major digital assets —
-              or provide liquidity to earn premiums from protection buyers. Settlement is parametric and
-              predetermined: at expiry the protocol reads the market rate and pays in proportion to how
-              far it has moved beyond the strike, up to a capped maximum fixed when the pool is created.
-              If the rate finishes below the strike, liquidity providers retain the premiums. There is no
-              mark-to-market, no margin call, and no counterparty negotiation.
+              The trade is that pricing depends on a service. That is why it <Em>fails closed</Em>: no
+              valid signature, no sale. Selling mispriced cover is worse than briefly selling none,
+              and an underwriter is not harmed by a pause.
+            </P>
+          </Decision>
+
+          <Figure label="Figure 2" caption="The chain checks the price rather than computing it. The signature is bound to the chain, the diamond, the pool, the notional and a nonce, so a quote cannot be replayed across contexts or reused.">
+            <ArchitectureFigure />
+          </Figure>
+
+          <Decision
+            id="d4"
+            title="2.4 Jump-diffusion, not plain Black–Scholes"
+            chose="Garman–Kohlhagen with a Merton compound-Poisson jump overlay, and GARCH volatility over the remaining horizon."
+            rejected="Lognormal diffusion alone; or Monte Carlo; or a binomial lattice."
+          >
+            <P>
+              A pure diffusion model assumes returns arrive in small continuous increments. Frontier
+              currencies do not behave that way — they are stable for months and then gap. A diffusion
+              fitted to the quiet periods prices the gap at close to zero, which is exactly the risk
+              the hedger is buying and the underwriter is selling.
             </P>
             <P>
-              This paper outlines the problem BlockFinaX addresses, the design of the protocol, the
-              mechanics of settlement, the economic model for all participants, the technical architecture,
-              and the regulatory considerations that shape the product's design and go-to-market approach.
+              Monte Carlo was rejected for a reason specific to this design rather than cost: a signed
+              quote must be reproducible by whoever verifies it, and a simulation is not deterministic
+              unless seeded, at which point it is a slow approximation of a closed form we already
+              have. A binomial lattice adds nothing for a European payoff and introduces convergence
+              noise that breaks the same reproducibility.
             </P>
+          </Decision>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-              {[
-                { stat: "63", label: "Market pairs covered" },
-                { stat: "3", label: "Asset classes" },
-                { stat: "$0", label: "Minimum position size" },
-                { stat: "5 min", label: "Oracle settlement interval" },
-              ].map(({ stat, label }) => (
-                <div key={label} className="rounded-lg border border-border bg-muted/30 p-3 text-center">
-                  <p className="text-xl font-bold text-primary">{stat}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <Decision
+            id="d5"
+            title="2.5 An underwriter's premium is treated as a volatility view"
+            chose="Invert the model at pool creation to recover the volatility their premium implies, then quote against that for the pool's life."
+            rejected="Freezing the premium (what the protocol did); or re-quoting from live market volatility."
+          >
+            <P>
+              A single premium fixed at creation cannot be right for long. A hedger arriving on day 25
+              of a 30-day pool buys a fifth of the protection the day-one buyer did, and pays the same
+              for it. But re-pricing from market volatility alone discards the underwriter's judgement
+              entirely, and they are the party with capital at risk.
+            </P>
+            <P>
+              Their price <Em>is</Em> a volatility view. Recovering it — <V>σ</V>* — keeps their level
+              while letting the model supply the shape. On event 9 a 1.0% premium inverts to{" "}
+              <V>σ</V>* = 44.45% against a market reading 32%: a margin the underwriter chose, and one
+              a market re-quote would have silently deleted on day two.
+            </P>
+            <P>
+              This is also why a simple time discount was rejected. It only ever reduces the price,
+              and the correction is not one-directional — see Figure 3.
+            </P>
+          </Decision>
 
-          {/* Section 1 — Introduction */}
-          <SectionTitle id="intro" number="Section 01" title="Introduction" subtitle="The case for accessible parametric risk management" />
+          <Figure label="Figure 3" caption="The two effects pull against each other, drawn at σ* = 44.45% on event 9's terms. Time decay lowers the premium; spot approaching the strike raises it. With three days left, spot at 11.73 prices at $75 per $10,000 and spot at 11.95 at $125 — a time-only discount would have charged around $43 for the second. Curves use the diffusion kernel alone; the engine adds the jump overlay of 4.2, which lifts both by a few percent without changing the shape.">
+            <PremiumSurfaceFigure />
+          </Figure>
 
-          <P>
-            Price risk is universal. A Ghanaian cocoa exporter invoicing in US dollars, a Nigerian importer
-            sourcing goods priced in euros, a South African gold miner with USD-denominated production costs
-            and rand-denominated expenses, a commodities trader holding crude oil exposure, and a digital
-            asset fund managing Bitcoin volatility all share the same fundamental challenge: their operational
-            or financial outcomes are materially affected by price movements they cannot control.
-          </P>
-          <P>
-            The conventional response to this challenge is hedging — using financial instruments to offset
-            the risk of an adverse price move by securing a future price or establishing a payoff that
-            compensates for losses. In developed markets with deep capital markets, this is achievable
-            through forwards, futures, vanilla options, and swaps, all of which are well understood,
-            well regulated, and liquid.
-          </P>
-          <P>
-            In Africa and across many emerging markets, the same instruments exist in principle but not
-            in practice for the vast majority of participants. Regulatory frameworks that govern derivatives
-            are often designed with large financial institutions as the assumed user. The infrastructure
-            for credit assessment, collateral management, and trade confirmation is absent or prohibitively
-            expensive for smaller participants. The result is a large, persistent gap between the risk
-            management needs of emerging market businesses and the instruments available to them.
-          </P>
-          <P>
-            BlockFinaX is designed to close this gap. By implementing parametric protection contracts
-            on a public blockchain, the protocol creates a shared settlement infrastructure accessible
-            to any participant with a digital wallet. The structure of each contract is simple, transparent,
-            and legally unambiguous: a defined underlying asset, a strike price, an expiry date, and a
-            a payout scaled to the size of the move if the rate settles past the strike. No bilateral negotiation. No credit assessment.
-            No minimum contract size.
-          </P>
-          <P>
-            BlockFinaX brings structured risk management to the participants that existing markets have
-            consistently failed to reach. Where traditional hedging requires a bank relationship,
-            a credit facility, and a legal team, BlockFinaX requires only a digital wallet and an
-            internet connection. Where traditional settlement happens through opaque bilateral
-            agreements, BlockFinaX settles on a public ledger that any party — participant,
-            regulator, or auditor — can verify in real time. This is not a gap-filler.
-            It is a new market layer built for the participants the old one was never designed to serve.
-          </P>
+          <Decision
+            id="d6"
+            title="2.6 Sales stop on a leverage bound, not a price level"
+            chose="Quote only while 1.5 ≤ max payout ÷ premium ≤ 100."
+            rejected="Refusing to sell once spot passes the strike."
+          >
+            <P>
+              The instinct is to stop selling when a pool moves into the money. But for a capped
+              spread the premium converges on the maximum payout by itself — measured at strike 11.00
+              and cap 11.40, the ratio falls to 1.02 at spot 11.60 and reaches exactly 1.00 at 12.00.
+              No special rule is needed to make deep in-the-money cover expensive; the arithmetic
+              already does.
+            </P>
+            <P>
+              What is needed is a floor, because <Em>expensive</Em> becomes <Em>pointless</Em> before
+              it becomes impossible. Under the deployed fees a hedger breaks even at a ratio of
+              1.0714; below that they lose money even if the rate finishes at the cap. Stopping at 1.5
+              leaves a real margin and, unlike a price threshold, cannot be evaded by moving the
+              strike. The upper bound catches the opposite failure: a premium so cheap relative to the
+              payout that the model is plainly wrong.
+            </P>
+            <WentWrong title="A pool was created charging more than it could ever pay">
+              <p>
+                Event 10 was written at a 3.0% premium against a strike and cap worth 2.681% — a ratio
+                of 0.894. Every buyer lost money the moment they bought, whatever the rate did. Two
+                did, for <Em>$55.76</Em> between them.
+              </p>
+              <p>
+                The only check on the creation form caught premiums more than 10% <Em>below</Em> the
+                engine's suggestion. Nothing looked at the other direction. Pool creation now runs the
+                same three checks — a premium above the maximum payout, one leaving under 1.5x, one
+                implying a volatility the market cannot support — and refuses rather than warns,
+                because <Mono>premiumRate</Mono> is immutable once the pool exists.
+              </p>
+            </WentWrong>
+          </Decision>
 
-          {/* Section 2 — The Problem */}
-          <SectionTitle id="problem" number="Section 02" title="The Problem" subtitle="Three markets. Three volatility crises. One unserved population." />
-
-          <P>
-            The risk management gap that BlockFinaX addresses is not limited to foreign exchange.
-            It spans three distinct but equally important market segments, each with its own structural
-            failure in delivering accessible protection to the participants who need it most.
-          </P>
-
-          <H3>2.1 Foreign Exchange Volatility in Emerging Markets</H3>
-          <P>
-            Sub-Saharan Africa comprises 54 countries and a combined GDP of nearly $2 trillion,<Ref n={1} /> yet the
-            continent's intra-regional trade — which the African Continental Free Trade Area (AfCFTA)
-            aims to significantly expand<Ref n={2} /> — is denominated almost entirely in US dollars, euros, and British pounds.
-            African businesses transacting across borders are therefore exposed to both the volatility
-            of their domestic currency and the relative movement against the invoicing currency.
-          </P>
-          <P>
-            This exposure is significant and unpredictable. The Ghanaian cedi depreciated approximately
-            30% against the US dollar in 2022.<Ref n={3} /> The Nigerian naira moved more than 40% in the twelve
-            months following the 2023 unification of its official and parallel exchange rates.<Ref n={4} /> The
-            Egyptian pound lost over half its value against the dollar between 2022 and 2023.<Ref n={5} /> For a
-            business with USD payables and local currency revenues, these moves are not merely
-            accounting entries — they are direct, unrecoverable operating losses.
-          </P>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 my-5 py-3 border-y border-border">
-            {[
-              { stat: "30–50%", label: "annual volatility, major African FX pairs" },
-              { stat: "<3%", label: "African SMEs with formal FX hedging" },
-              { stat: "$1.5T+", label: "annual African cross-border trade" },
-            ].map(({ stat, label }, i, arr) => (
-              <div key={stat} className="flex items-baseline gap-2">
-                <span className="text-base font-bold text-primary">{stat}</span>
-                <span className="text-xs text-muted-foreground">{label}</span>
-                {i < arr.length - 1 && <span className="text-border ml-4">·</span>}
-              </div>
-            ))}
-          </div>
-
-          <P>
-            The barriers preventing SMEs from accessing bank-provided FX hedging products are structural.
-            Commercial banks require an existing credit relationship and an approved treasury limit before
-            offering a forward contract or option. Interbank minimum notional sizes — typically $100,000
-            or above — exceed the transaction values of most small businesses. ISDA master agreements
-            and credit support annexes require legal counsel and weeks of onboarding. And once set up,
-            the mark-to-market margining requirements of some instruments create operational burden that
-            small finance teams cannot manage.
-          </P>
-          <P>
-            The consequence is that the majority of African SMEs handle FX risk through two informal
-            mechanisms: conservative pricing (building buffer into invoice prices to absorb potential
-            rate moves) and natural hedging (attempting to match currency inflows and outflows). Both
-            approaches are inefficient and reduce the competitiveness of African businesses in
-            international trade.
-          </P>
-
-          <H3>2.2 Commodity Price Volatility</H3>
-          <P>
-            Africa's economic base is heavily tied to commodity production. Ghana and Côte d'Ivoire
-            together account for over 60% of global cocoa supply.<Ref n={6} /> Nigeria is the continent's largest
-            oil producer. South Africa, Ghana, Mali, and Burkina Faso are major gold producers.
-            Tanzania and Zambia are significant copper and gemstone producers. Ethiopia and Uganda
-            are major coffee exporters.
-          </P>
-          <P>
-            Each of these industries is exposed to commodity price movements that can be as dramatic
-            as currency fluctuations. Cocoa prices have ranged from $2,500 to over $10,000 per metric
-            tonne over the past decade.<Ref n={7} /> Crude oil has traded between $20 and $130 per barrel in the
-            same period.<Ref n={8} /> Gold, long considered a stable store of value, can move 15–25% in a calendar
-            year. For producers whose cost base is largely fixed in local currency, a sharp price
-            decline in their commodity can make an entire crop cycle or production run unprofitable.
-          </P>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 my-5 py-3 border-y border-border">
-            {[
-              { label: "Gold (XAU)", range: "±25%/yr" },
-              { label: "Crude Oil (XTI)", range: "±40%/yr" },
-              { label: "Natural Gas (XNG)", range: "±60%/yr" },
-              { label: "Cocoa (XCF)", range: "±35%/yr" },
-            ].map(({ label, range }, i, arr) => (
-              <div key={label} className="flex items-baseline gap-2">
-                <span className="text-base font-bold text-primary">{range}</span>
-                <span className="text-xs text-muted-foreground">{label}</span>
-                {i < arr.length - 1 && <span className="text-border ml-4">·</span>}
-              </div>
-            ))}
-          </div>
-
-          <P>
-            Commodity price risk management is even less accessible than FX hedging for African producers.
-            Commodity futures markets (Chicago Mercantile Exchange, Intercontinental Exchange) require
-            brokerage accounts with international firms, significant margin deposits, and the operational
-            sophistication to manage daily mark-to-market settlements. Over-the-counter commodity swaps
-            with banks are available only to large producers with established banking relationships.
-            Most small and medium commodity producers have no practical mechanism for locking in a
-            floor price or protecting against a price collapse.
-          </P>
-
-          <H3>2.3 Digital Asset Volatility</H3>
-          <P>
-            The digital asset market has matured substantially since Bitcoin's inception but remains
-            characterised by high volatility. Bitcoin experienced peak-to-trough drawdowns of 83% in
-            the 2018 bear market and 77% in the 2022 bear market.<Ref n={9} /> Ethereum, the second-largest digital asset by market
-            capitalisation, has shown similar patterns. Even over shorter timeframes — weeks or months —
-            double-digit percentage swings are common across major digital assets.
-          </P>
-          <P>
-            For institutional participants holding digital assets on behalf of clients, for crypto-native
-            businesses that pay operational costs in fiat while holding reserves in digital assets, and
-            for individual holders managing long-term savings in digital assets, this volatility creates
-            real financial exposure. Centralised exchange-based derivatives (perpetual swaps, futures,
-            options) exist for the largest digital assets but carry counterparty risk, require account
-            registration, and involve margining complexity that many participants wish to avoid.
-          </P>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 my-5 py-3 border-y border-border">
-            {[
-              { stat: "±77–83%", label: "BTC peak-to-trough drawdown, 2018 and 2022 bear markets" },
-              { stat: "~$200B", label: "average daily global crypto spot volume (2024)" },
-            ].map(({ stat, label }, i, arr) => (
-              <div key={stat} className="flex items-baseline gap-2">
-                <span className="text-base font-bold text-primary">{stat}</span>
-                <span className="text-xs text-muted-foreground">{label}</span>
-                {i < arr.length - 1 && <span className="text-border ml-4">·</span>}
-              </div>
-            ))}
-          </div>
-
-          <Callout icon={AlertTriangle} color="border-border bg-muted/40 text-muted-foreground" title="The common thread across all three markets:">
-            Volatility is measurable and predictable in its existence, if not its direction.
-            Structured protection instruments to manage this volatility are well established.
-            Yet for the majority of the world's market participants — particularly in emerging economies —
-            these instruments are inaccessible in practice. BlockFinaX addresses this access gap directly.
-          </Callout>
-
-          {/* Section 3 — Market Opportunity */}
-          <SectionTitle id="market" number="Section 03" title="Market Opportunity" subtitle="Trillions in unhedged exposure. No accessible instrument. Until now." />
-
-          <P>
-            BlockFinaX addresses three independently large and underserved markets: African FX risk
-            management, global commodity price exposure, and digital asset volatility. Taken together,
-            these markets represent trillions of dollars in annual unhedged exposure — and a near-total
-            absence of accessible, transparent instruments to manage it. Meanwhile, on-chain prediction
-            markets (Polymarket, Kalshi) have crossed $44 billion in annual volume trading election
-            and sports outcomes — proof that binary settlement infrastructure works at scale, but
-            applied entirely to speculation rather than the commercial risk that real businesses face.
-            The commercial risk management market dwarfs prediction markets by orders of magnitude:
-            Africa alone accounts for over $2 trillion in annual unhedged trade and commodity exposure,
-            a figure that excludes crypto volatility entirely. BlockFinaX applies the same oracle-settled,
-            self-executing infrastructure where the need — and the market — is largest, with a payout
-            that scales with the size of the move rather than a binary yes or no.
-          </P>
-
-          <H3>3.1 Addressable Market Size</H3>
-          <P>
-            The markets BlockFinaX addresses are not speculative projections. They represent
-            documented, ongoing financial exposures experienced by real businesses and individuals
-            every day — exposures that currently go unmanaged for lack of accessible instruments.
-          </P>
-
-          <DataTable
-            headers={["Market Segment", "Size", "Current Hedge Access", "BlockFinaX Opportunity"]}
+          {/* ── 3. mechanics ── */}
+          <SectionTitle id="mechanics" n="Section 03" title="Protocol mechanics" sub="Roles, lifecycle and capital flow" />
+          <H3>3.1 Participants</H3>
+          <Table
+            headers={["Role", "Commits", "Earns", "Worst case"]}
             rows={[
-              ["African cross-border trade", "$1.5 trillion/year", "<5% formally hedged", "FX protection for all 54 African countries"],
-              ["African SME FX exposure", "$400 billion/year", "<3% with bank access", "Primary addressable market at launch"],
-              ["African commodity production", "$500 billion/year", "<10% via banks/futures", "Commodity price protection, 11 pairs"],
-              ["Diaspora remittances (Africa)", "~$96 billion/year [13]", "0% hedge instruments", "Wallet + corridor FX protection"],
-              ["On-chain prediction markets (global)", "$44B+ annual vol. [14]", "Speculative only", "Commercial, regulated binary outcomes"],
-              ["Crypto digital asset market (global)", "~$200B avg. daily vol. [11]", "~8% via CeFi derivatives", "Digital asset protection, 6+ pairs"],
-              ["African digital asset market", "$50 billion/year (est.)", "<1% structured products", "Fastest-growing crypto audience globally"],
+              ["Underwriter (LP)", "Stablecoin capital locked to a pool", "Premiums from every hedger in the pool, pro rata", "Pays out up to (C − K) per unit of notional written"],
+              ["Hedger", "A premium, paid upfront", "A payout scaling with the move past the strike", "Loses the premium; nothing more"],
+              ["Pool creator", "A creation fee and initial liquidity", "5% of every protocol fee the pool generates", "Their own liquidity, as any underwriter"],
+              ["Oracle", "Gas to post the settlement rate", "—", "—"],
             ]}
           />
-
-          <H3>3.2 Why Now</H3>
-          <BulletList items={[
-            {
-              title: "AfCFTA is accelerating intra-African trade",
-              body: "The African Continental Free Trade Area, operational since 2021 and expanding, is projected to increase intra-African trade by 52.3% by 2025 (UN Africa Renewal, 2023).[2] More cross-border trade means more FX exposure — and more demand for the risk management instruments to go with it.",
-            },
-            {
-              title: "On-chain binary outcomes are legally and commercially validated",
-              body: "The Kalshi CFTC ruling and Polymarket's scale establish that oracle-settled, self-executing outcome contracts are legitimate, in demand and regulatorily viable. BlockFinaX shares that settlement infrastructure while differing in payoff: cover pays in proportion to the size of the move up to a cap, rather than a binary yes or no, which places it closer to a conventional option spread than to a prediction market.",
-            },
-            {
-              title: "Blockchain infrastructure has matured",
-              body: "EVM ecosystem Layer-2 transaction costs are over 90% lower than 2021 mainnet fees, with some L2s achieving 95%+ reductions following the Dencun upgrade (L2Beat, 2024).[15] Smart contract security tooling, stablecoin liquidity, and oracle infrastructure have all matured to a point where a protocol like BlockFinaX can operate reliably at low cost — which was not true five years ago.",
-            },
-            {
-              title: "African digital asset adoption is accelerating",
-              body: "Africa has the fastest-growing crypto adoption rate of any global region (Chainalysis, 2024 Geography of Cryptocurrency Report).[10] The infrastructure for on-chain participation — wallets, stablecoins, on-ramps — is reaching critical mass. BlockFinaX is positioned to capture this audience at the inflection point.",
-            },
-          ]} />
-
-          <H3>3.3 Go-to-Market Strategy</H3>
-          <BulletList items={[
-            {
-              title: "Community-first mainnet growth",
-              body: "A daily tasks and rewards system incentivises early adopter participation on mainnet. Participants earn points for on-chain actions (buying protection, providing liquidity), social engagement, and referrals — building a protocol-native community from day one.",
-            },
-            {
-              title: "B2B API for African fintechs",
-              body: "Integration with established African fintech platforms (payment gateways, neobanks, remittance providers) via an API layer that allows these platforms to offer their users parametric FX protection as an embedded financial service — without building the infrastructure themselves.",
-            },
-            {
-              title: "Institutional LP acquisition",
-              body: "Outreach to African impact funds, development finance institutions, fintech-focused family offices, and crypto treasury managers to deploy stablecoins as structured liquidity — generating yield while underwriting protection for African businesses.",
-            },
-            {
-              title: "Regulatory sandbox as market entry",
-              body: "Bank of Ghana sandbox participation provides formal regulatory visibility and serves as the template for entry into secondary African markets. Regulatory approval is a competitive moat, not just a compliance requirement.",
-            },
-          ]} />
-
-          {/* Section 4 — The Solution */}
-          <SectionTitle id="solution" number="Section 04" title="The Solution" subtitle="Parametric protection, open to all participants" />
-
-
-
           <P>
-            BlockFinaX implements a parametric protection marketplace on a public blockchain network.
-            The term "parametric" has a specific and important meaning: the payout is triggered
-            automatically when a predefined, objectively observable condition is met — in this case,
-            when a market price reaches a predetermined level before a predefined expiry date.
-            This distinguishes parametric contracts from indemnity-based contracts, where payout
-            depends on assessing actual loss.
-          </P>
-          <P>
-            Parametric structures are well-established in insurance markets (e.g., catastrophe bonds,
-            parametric crop insurance, flight delay insurance) and are increasingly recognised by
-            financial regulators as a distinct and transparent product category. The key regulatory
-            advantages of parametric structures are that payout conditions are unambiguous and
-            verifiable, settlement does not require claims assessment or adjudication, and the
-            full economic terms are known to all parties at inception.
+            A hedger's downside is bounded by construction: they cannot lose more than the premium,
+            there is no margin, and no position can be called. The asymmetry is deliberate — the party
+            least able to absorb a surprise is the one protected from it.
           </P>
 
-          <H3>3.1 Three Participant Roles</H3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
-            {[
-              {
-                role: "Protection Buyer (Hedger)",
-                icon: Shield,
-                desc: "Pays a premium to enter a protection contract against a defined price move. If the rate settles past the strike at expiry, receives a stablecoin payout proportional to the distance travelled, up to the pool's cap. Maximum loss is limited to the premium paid.",
-                color: "border-border bg-muted/20",
-              },
-              {
-                role: "Liquidity Provider (LP)",
-                icon: CircleDollarSign,
-                desc: "Deposits stablecoins into a protection pool to act as the capital backing for protection buyers. Earns premiums continuously. Capital is at risk only if the strike price is reached and payouts are triggered.",
-                color: "border-border bg-muted/20",
-              },
-              {
-                role: "Pool Creator",
-                icon: Layers,
-                desc: "Configures and deploys a new protection event by selecting the asset pair, strike price, direction, premium rate, initial liquidity, and expiry. Earns 5% of all protocol fees generated by the pool.",
-                color: "border-border bg-muted/20",
-              },
-            ].map(({ role, icon: Icon, desc, color }) => (
-              <div key={role} className={`rounded-lg border p-4 ${color}`}>
-                <Icon className="h-5 w-5 mb-2 text-foreground/80" />
-                <p className="text-sm font-semibold text-foreground mb-1">{role}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <H3>3.2 Why Blockchain Settlement?</H3>
-          <P>
-            Blockchain settlement is not chosen as a technological statement — it is chosen because
-            it solves three specific, practical problems that have historically prevented small participants
-            from accessing structured protection products:
-          </P>
-          <BulletList items={[
-            {
-              title: "Counterparty risk elimination",
-              body: "In a bilateral contract, each party is exposed to the other's default. In BlockFinaX, all funds are held in a self-executing smart contract. Neither party can withdraw funds outside of the protocol's defined settlement rules. Counterparty default risk is replaced by smart contract execution risk — which is publicly auditable and deterministic.",
-            },
-            {
-              title: "No minimum contract size",
-              body: "Traditional derivatives require minimum notional sizes that exclude most participants. A smart contract does not impose economic minimums — the protocol can process a $50 protection purchase with the same mechanism as a $500,000 one. This unlocks participation for SMEs, individual traders, and micro-businesses.",
-            },
-            {
-              title: "Transparent and auditable settlement",
-              body: "Every transaction — premium payment, pool deposit, payout claim — is recorded immutably on the blockchain and can be verified by any participant, regulator, or auditor at any time. There is no off-chain matching, no opaque pricing, and no hidden counterparty.",
-            },
-          ]} />
-
-          {/* Section 4 — Asset Coverage */}
-          <SectionTitle id="assets" number="Section 05" title="Asset Coverage" subtitle="63 pairs across FX, commodities, and digital assets" />
-
-          <P>
-            BlockFinaX covers 63 market pairs across three asset classes. Each asset class is served by
-            a dedicated rate feed from an established third-party data provider, with rates updated
-            continuously and independently verified by the oracle settlement engine.
-          </P>
-
-          <H3>4.1 Foreign Exchange — 42 African Currency Pairs</H3>
-          <P>
-            The FX module covers 42 African currency pairs, providing the broadest coverage of
-            African currencies available on any parametric platform. Pairs include both USD-denominated
-            rates and cross-currency pairs between African and major global currencies.
-          </P>
-
-          <DataTable
-            headers={["Region", "Key Pairs", "Count"]}
+          <H3>3.2 Lifecycle</H3>
+          <Table
+            headers={["Stage", "What happens"]}
             rows={[
-              ["West Africa", "USD/GHS, USD/NGN, USD/XOF (CFA), USD/XAF, USD/GMD, USD/SLL, USD/GNF, USD/LRD, USD/CVE, USD/MRU, EUR/GHS, GBP/NGN", "12"],
-              ["East Africa", "USD/KES, USD/UGX, USD/TZS, USD/ETB, USD/RWF, USD/SOS, USD/DJF, USD/ERN, USD/SSP", "9"],
-              ["Southern Africa", "USD/ZAR, USD/ZMW, USD/MWK, USD/MZN, USD/AOA, USD/BWP, USD/SZL, USD/LSL, USD/NAD", "9"],
-              ["Central Africa", "USD/CDF, USD/BIF, USD/KMF", "3"],
-              ["North Africa", "USD/EGP, USD/LYD, USD/TND, USD/MAD, USD/DZD, USD/SDG", "6"],
-              ["Indian Ocean", "USD/MUR, USD/SCR, USD/MGA", "3"],
+              [<Em key="1">Creation</Em>, "The creator sets pair, strike, cap, expiry and premium, and seeds liquidity. The premium is validated against the checks in 2.6 and refused if it cannot be sold honestly."],
+              [<Em key="2">Funding</Em>, "Underwriters deposit into the pool. Capacity is whatever remains after reserving the worst case of every position already written."],
+              [<Em key="3">Cover sold</Em>, "A hedger names a notional. The contract reserves that position's maximum payout against free capacity and refuses if it does not fit — solvency is enforced here, not monitored later."],
+              [<Em key="4">Expiry</Em>, "The oracle posts the prevailing rate. The contract computes each payout arithmetically."],
+              [<Em key="5">Claim</Em>, "Winning hedgers claim; underwriters withdraw remaining capital plus premiums; the creator draws loyalty fees."],
             ]}
           />
-
           <P>
-            All African FX rates are sourced from ExchangeRate-API, a commercial rate aggregator
-            that sources data from central bank publications, interbank market feeds, and financial
-            data providers. Rates are polled at five-minute intervals.
+            Capacity is the load-bearing invariant. Before a position is written the contract checks
+            that its worst case fits inside{" "}
+            <Mono>totalLiquidity − totalMaxPayout</Mono> and reverts if it does not. A pool can
+            therefore always pay every position it has sold, without monitoring, alerting or
+            discretion.
           </P>
 
-          <H3>4.2 Commodities — 11 Pairs</H3>
+          {/* ── 4. pricing ── */}
+          <SectionTitle id="pricing" n="Section 04" title="Pricing" sub="How a premium is derived" />
           <P>
-            The commodities module covers four precious metals, three energy commodities, and
-            four agricultural commodities — representing the primary commodity exposures of
-            African producers, traders, and processors.
+            Cover is a call spread — long at the strike, short at the cap — so its value is the
+            difference between two options on the same underlying. Writing the settlement rate{" "}
+            <V>S</V>, strike <V>K</V>, cap <V>C</V> and years remaining <V>τ</V>:
           </P>
-
-          <DataTable
-            headers={["Category", "Pair", "Underlying", "Relevance"]}
+          <H3>4.1 Volatility over the remaining horizon</H3>
+          <P>
+            Volatility is a forecast over the window that remains, not a constant. The engine uses the
+            GARCH(1,1) closed form, with <V>φ</V> the pair's persistence and{" "}
+            <V>V<sub>L</sub></V> its long-run variance:
+          </P>
+          <Eq note="N = round(252 τ) trading days remaining">
+            <V>V̄</V>(<V>τ</V>) = <V>V<sub>L</sub></V> + ( 1 − <V>φ</V><sup><V>N</V></sup> ) ÷ ({" "}
+            <V>N</V>(1 − <V>φ</V>) ) × ( <V>σ</V><sub>0</sub><sup>2</sup> − <V>V<sub>L</sub></V> )
+          </Eq>
+          <H3>4.2 The option kernel</H3>
+          <P>
+            Each leg is priced by Garman–Kohlhagen, then a Merton overlay weights that price across
+            the number of jumps that might occur before expiry — a Poisson series in which each term
+            carries its own drift and volatility:
+          </P>
+          <Eq note="w(n) = Poisson weight for n jumps; σ(n) and r(n) adjusted per leg">
+            <V>C</V><sub>M</sub>(<V>K</V>) = Σ <V>w</V><sub><V>n</V></sub> · <V>c</V>( <V>S</V>,{" "}
+            <V>K</V>, <V>τ</V> ; <V>r</V><sub><V>n</V></sub>, <V>σ</V><sub><V>n</V></sub> )
+          </Eq>
+          <Eq note="the short leg at the cap is what bounds the underwriter's loss">
+            <V>V</V><sub>spread</sub> = max( 0 , <V>C</V><sub>M</sub>(<V>K</V>) − <V>C</V><sub>M</sub>(<V>C</V>) )
+            &nbsp;&nbsp;&nbsp; <V>ρ</V> = <V>V</V><sub>spread</sub> ÷ <V>S</V>
+          </Eq>
+          <H3>4.3 What moves a live quote</H3>
+          <Table
+            headers={["Input", "Direction", "Why"]}
             rows={[
-              ["Precious Metals", "XAU/USD", "Gold spot", "Ghana, Mali, South Africa, Tanzania gold producers"],
-              ["Precious Metals", "XAG/USD", "Silver spot", "Industrial and jewellery sector exposure"],
-              ["Precious Metals", "XPT/USD", "Platinum spot", "South Africa — world's largest platinum producer"],
-              ["Precious Metals", "XPD/USD", "Palladium spot", "Automotive catalyst supply chain exposure"],
-              ["Energy", "XTI/USD", "WTI Crude Oil", "Nigeria, Angola, Gabon oil producers and refiners"],
-              ["Energy", "XBR/USD", "Brent Crude Oil", "East African and global crude benchmarking"],
-              ["Energy", "XNG/USD", "Natural Gas", "Tanzania, Mozambique, Egypt gas producers"],
-              ["Agriculture", "XCO/USD", "Corn", "East and Southern Africa grain traders"],
-              ["Agriculture", "XCF/USD", "Cocoa", "Ghana and Côte d'Ivoire cocoa exporters"],
-              ["Agriculture", "XWH/USD", "Wheat", "North Africa and food import hedging"],
-              ["Agriculture", "XSG/USD", "Sugar", "SADC sugar industry exposure"],
+              ["Time remaining", "Falls as expiry nears", "Less protection left to buy"],
+              ["Spot toward the strike", "Rises", "The payout becomes more likely"],
+              ["Pool utilisation", "Rises as capacity fills", "An underwriter's marginal risk is not linear in how full their pool is"],
             ]}
           />
-
           <P>
-            Commodity rates are sourced from Yahoo Finance market data feeds, which aggregate
-            exchange-traded futures prices from major commodity exchanges. Rates are denominated
-            in USD per standard unit (troy ounce for metals, barrel for energy, metric tonne
-            for agricultural commodities).
+            Utilisation is applied as a quadratic markup, so early buyers are barely affected and the
+            last of a pool's capacity is genuinely dear. An underwriter may also set a floor beneath
+            which they decline to write at all — necessary once quotes can fall, since a premium of
+            1.0% at seven days is worth a third of that with one day left.
           </P>
 
-          <H3>4.3 Digital Assets — 10 Pairs</H3>
+          {/* ── 5. settlement ── */}
+          <SectionTitle id="settlement" n="Section 05" title="Settlement" sub="One reading, at expiry, computed arithmetically" />
+          <Eq>
+            payout = notional × max( 0 , min( <V>S<sub>T</sub></V>, <V>C</V> ) − <V>K</V> ) ÷{" "}
+            <V>S</V><sub>0</sub>
+          </Eq>
           <P>
-            The digital asset module covers the six most liquid major digital assets by global
-            market capitalisation, plus four additional assets relevant to African digital
-            asset adoption patterns.
+            An oracle service polls rates every five minutes across all supported pairs and submits
+            the prevailing rate once an event's expiry has passed. Settlement is a single on-chain
+            transaction; the contract does the arithmetic. There is no assessor, no claim form and no
+            discretion, which is what makes the cover parametric rather than insurance.
           </P>
-
-          <DataTable
-            headers={["Asset", "Pair", "Market Cap Rank", "Notes"]}
-            rows={[
-              ["Bitcoin", "BTC/USD", "#1", "Primary reserve asset for digital asset funds"],
-              ["Ethereum", "ETH/USD", "#2", "Smart contract platform; widely held by DeFi participants"],
-              ["BNB", "BNB/USD", "#3", "Exchange-native token; widely traded in African CEX markets"],
-              ["Solana", "SOL/USD", "#5", "High-throughput L1; growing African adoption"],
-              ["XRP", "XRP/USD", "#6", "Cross-border payment token; remittance use cases"],
-              ["Cardano", "ADA/USD", "#8", "Active development focus on African markets and identity"],
-            ]}
-          />
-
-          <P>
-            Digital asset rates are sourced from CoinGecko, a leading digital asset data aggregator
-            that compiles volume-weighted average prices from over 1,000 exchanges globally.
-          </P>
-
-          {/* Section 5 — Mechanics */}
-          <SectionTitle id="mechanics" number="Section 06" title="Protocol Mechanics" subtitle="How parametric protection events are created, funded, and settled" />
-
-          <H3>5.1 Event Structure</H3>
-          <P>
-            Each protection event on BlockFinaX is defined by seven parameters, all set at creation
-            and immutable once the event is deployed:
-          </P>
-
-          <DataTable
-            headers={["Parameter", "Description", "Example"]}
-            rows={[
-              ["Underlying asset", "The market pair the event references", "XAU/USD (Gold)"],
-              ["Initial rate", "The market price of the underlying at event creation", "$2,150 per oz"],
-              ["Strike price", "The price level that triggers a payout if reached", "$2,300 per oz"],
-              ["Direction", "Whether the strike is above or below the initial rate", "Above (upward hedge)"],
-              ["Premium rate", "Percentage of notional charged as a premium per position", "3.5%"],
-              ["Expiry date", "The timestamp at which the event closes if strike not reached", "30 days from creation"],
-              ["Pool capacity", "Total stablecoin capital available to cover payouts", "$50,000"],
-            ]}
-          />
-
-          <H3>5.2 Payout Calculation</H3>
-          <P>
-            The payout for each protection position is calculated at the moment the position is
-            entered and is fixed for the life of the contract. There is no mark-to-market
-            revaluation. The hedger knows exactly what they will receive if the strike is
-            reached before entering the contract.
-          </P>
-
-          <div className="rounded-lg bg-muted/40 border border-border p-5 my-5 font-mono text-xs space-y-4">
-            <div>
-              <p className="text-muted-foreground/60 mb-1.5">{"// Upward protection — strike above initial rate"}</p>
-              <p className="text-foreground font-medium">Payout = Notional × (Strike − InitialRate) ÷ InitialRate</p>
-              <p className="text-muted-foreground/60 mt-2 text-[11px]">Example: Notional $10,000 · Gold at $2,150 · Strike $2,300</p>
-              <p className="text-primary text-[11px]">Payout = $10,000 × (2,300 − 2,150) ÷ 2,150 = $697.67 USDC</p>
-            </div>
-            <div className="border-t border-border/40 pt-4">
-              <p className="text-muted-foreground/60 mb-1.5">{"// Downward protection — strike below initial rate"}</p>
-              <p className="text-foreground font-medium">Payout = Notional × (InitialRate − Strike) ÷ InitialRate</p>
-              <p className="text-muted-foreground/60 mt-2 text-[11px]">Example: Notional $10,000 · BTC at $85,000 · Strike $72,000</p>
-              <p className="text-primary text-[11px]">Payout = $10,000 × (85,000 − 72,000) ÷ 85,000 = $1,529.41 USDC</p>
-            </div>
-            <div className="border-t border-border/40 pt-4">
-              <p className="text-muted-foreground/60 mb-1.5">{"// Trigger condition"}</p>
-              <p className="text-foreground">if strikeAbove: triggered when currentRate ≥ strike</p>
-              <p className="text-foreground">if strikeBelow: triggered when currentRate ≤ strike</p>
-            </div>
-          </div>
-
-          <H3>5.3 Bidirectional Protection</H3>
-          <P>
-            Every event on BlockFinaX has a defined direction. This means the protocol can serve
-            both sides of a market exposure simultaneously:
-          </P>
-
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <ArrowUpRight className="h-4 w-4 text-primary" />
-                <p className="text-sm font-medium text-foreground">Upward Protection</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">Strike is set above the current price. Triggered if price rises to or above the strike. Use cases: importers hedging against currency weakening; commodity buyers hedging against price increases; crypto holders hedging a short position.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <ArrowDownRight className="h-4 w-4 text-primary" />
-                <p className="text-sm font-medium text-foreground">Downward Protection</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">Strike is set below the current price. Triggered if price falls to or below the strike. Use cases: exporters hedging against currency strengthening; commodity producers hedging against price collapse; digital asset holders protecting downside.</p>
-            </div>
-          </div>
-
-          <H3>5.4 Protection Buyer Journey</H3>
-          <StepList steps={[
-            { title: "Browse active events", body: "Buyers view the marketplace filtered by asset class (FX, Commodities, Crypto), direction, time to expiry, premium rate, and available pool capacity. All parameters are displayed transparently before any transaction." },
-            { title: "Select notional and review terms", body: "The buyer enters a notional amount in their chosen stablecoin. The interface immediately displays the premium cost, the maximum payout if the rate reaches the cap, the platform fee, and the effective protection rate — all confirmed before signing." },
-            { title: "Approve and enter position", body: "A single blockchain transaction approves the premium transfer and registers the position. The buyer's position is immediately recorded on-chain and visible in their portfolio." },
-            { title: "Hold to expiry", body: "The buyer holds the position until expiry. The oracle engine tracks the market rate every five minutes, and the position is settled once, at expiry, on the rate prevailing then. A rate that crosses the strike and returns before expiry does not settle the event — what counts is where it finishes." },
-            { title: "Claim payout", body: "If the rate finished above the strike, the buyer claims directly from the smart contract in the pool's stablecoin. The amount scales with how far past the strike the rate settled, up to the cap. Claims are available immediately after settlement." },
-          ]} />
-
-          {/* Section 6 — Settlement Engine */}
-          <SectionTitle id="settlement" number="Section 07" title="Settlement Engine" subtitle="Automated, oracle-driven, on-chain settlement" />
-
-          <P>
-            Settlement is the most operationally critical component of any parametric protection
-            protocol. BlockFinaX's settlement engine is designed to be automatic, auditable,
-            and resistant to dispute.
-          </P>
-
-          <H3>6.1 Oracle Architecture</H3>
-          <P>
-            The oracle is a backend service that polls price feeds for all 63 pairs every five
-            minutes. Each event settles once, at expiry: the oracle submits the prevailing rate
-            on-chain and the smart contract computes the payout from it. The rate may cross the
-            strike and return during the coverage period — what determines the payout is where it
-            finishes, not the path it travelled.
-          </P>
-          <P>
-            An earlier design settled the moment the rate first touched the strike. That is
-            incompatible with the payout formula in Section 6.2, which measures distance travelled
-            beyond the strike: a settlement fired at the instant of touching records a distance of
-            approximately zero, so an event that triggered would pay approximately nothing. It has
-            been replaced by settlement at expiry.
-          </P>
-          <P>
-            Rate sources are separated by asset class to avoid single-point-of-failure risk:
-          </P>
-
-          <DataTable
-            headers={["Asset Class", "Primary Source", "Update Frequency", "Fallback Plan"]}
-            rows={[
-              ["FX — African pairs", "ExchangeRate-API (commercial tier)", "5 minutes", "Central bank published rates (daily)"],
-              ["Commodities (metals)", "Yahoo Finance market data", "5 minutes", "Exchange-published settlement prices"],
-              ["Commodities (energy/agri)", "Yahoo Finance market data", "5 minutes", "Bloomberg / Reuters API (v2)"],
-              ["Digital assets", "CoinGecko aggregated VWAP", "5 minutes", "Exchange-specific REST APIs"],
-            ]}
-          />
-
-          <H3>6.2 The Payout Function</H3>
-          <P>
-            Protection is a capped range, not a binary bet. Payout rises in proportion to how far the
-            settlement rate travels beyond the strike, and stops rising at the payout cap. Writing
-            the settlement rate as <em>S<sub>T</sub></em>, the strike as <em>K</em>, the cap
-            as <em>C</em> and the rate at pool creation as <em>S</em><sub>0</sub>:
-          </P>
-
-          <div className="rounded-lg border border-border bg-muted/20 p-4 mb-4 overflow-x-auto">
-            <p className="text-sm text-foreground font-mono">
-              payout = notional × max(0, min(<em>S<sub>T</sub></em>, <em>C</em>) − <em>K</em>) ÷ <em>S</em><sub>0</sub>
+          <WentWrong title="Settlement stopped silently for hours, and nothing said so">
+            <p>
+              An expired pool once sat unsettled with $630 of capital behind it because the account
+              that submits settlements had run out of gas — five times short of a fraction of a cent.
+              Every cycle failed, and the poller logged only its successes, so a service failing
+              forever looked identical to one with nothing to do.
             </p>
-          </div>
+            <p>
+              Both are now reported, and each cycle checks whether the settler can still afford to
+              work — warning while there is time to act rather than after capital is already locked.
+              The lesson generalises: a component whose failure is invisible will eventually fail
+              invisibly.
+            </p>
+          </WentWrong>
 
-          <P>
-            The short leg at the cap is what makes the pool underwritable: it bounds a liquidity
-            provider's worst case to (<em>C</em> − <em>K</em>) per unit by construction rather than
-            by policy, so the capital required to back a position is known when it is written.
-          </P>
-
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="rounded-lg border border-muted-foreground/20 bg-muted/20 p-4">
-              <RefreshCw className="h-4 w-4 text-muted-foreground mb-2" />
-              <p className="text-sm font-semibold text-foreground mb-1">Finishes below the strike</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">No payout. Premiums collected are distributed to LPs, full LP capital is returned, and the pool creator earns loyalty fees.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <CheckCircle2 className="h-4 w-4 text-primary mb-2" />
-              <p className="text-sm font-semibold text-foreground mb-1">Finishes between strike and cap</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">Payout is proportional to the distance travelled past the strike — a rate finishing halfway to the cap pays half the maximum. Protocol fees of 2% of the payout are collected.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <CheckCircle2 className="h-4 w-4 text-primary mb-2" />
-              <p className="text-sm font-semibold text-foreground mb-1">Finishes at or above the cap</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">The maximum payout, (<em>C</em> − <em>K</em>) per unit of notional. Movement beyond the cap adds nothing further, which is the bound LPs underwrite against.</p>
-            </div>
-          </div>
-
-          <P>
-            There are no disputed outcomes and no adjudication process — the rate at expiry
-            determines the payout arithmetically. There are, however, partial settlements: they are
-            the ordinary case rather than the exception, and an earlier description of settlement as
-            binary did not reflect the deployed contract.
-          </P>
-
-          <H3>6.3 Settlement Integrity</H3>
-          <P>
-            The settlement mechanism is designed to be tamper-resistant by construction. The smart
-            contract defines the payout formula, the fee distribution, and the settlement rules.
-            Once deployed, none of these parameters can be altered by any party — including the
-            protocol operators. Settlement is executed by the smart contract logic, not by any
-            human decision.
-          </P>
-          <P>
-            The oracle admin key — the credential used to call the settlement function — is the
-            only centralised component of the current architecture. This is disclosed transparently
-            as a risk factor (see Section 14). The v2 roadmap includes migration to a decentralised
-            oracle network with cryptographic price attestation, eliminating this remaining
-            centralisation point.
-          </P>
-
-          {/* Section 7 — LP Model */}
-          <SectionTitle id="lp" number="Section 08" title="Liquidity Provider Model" subtitle="Structured yield from parametric protection premiums" />
-
-          <P>
-            Liquidity providers are the capital counterpart to protection buyers. They deposit
-            stablecoins into protection pools and earn premiums in return for accepting the risk
-            that the strike price is reached and payouts are required. The LP model is designed
-            to be transparent, predictable, and manageable.
-          </P>
-
-          <H3>7.1 How LP Returns Are Generated</H3>
-          <P>
-            When a protection buyer enters a position, they pay a premium calculated as a percentage
-            of their notional amount. This premium is immediately distributed to the LP pool
-            proportionally to each LP's share of the pool. Premiums accrue continuously as new
-            positions are entered, and LPs can claim accrued premiums at any time without
-            withdrawing their principal.
-          </P>
-          <P>
-            The LP's yield is therefore determined by two factors: the premium rate set by the
-            pool creator (typically 2–8% of notional per event period), and the fill rate of the
-            pool (how much protection the pool sells relative to its capacity). A fully utilised
-            pool at a 5% premium rate delivers a 5% return on deployed capital for that event
-            period — regardless of whether the strike is reached, as long as it is not.
-          </P>
-
-          <H3>7.2 LP Risk Management</H3>
-          <P>
-            The primary risk for an LP is that the strike price is reached and payouts reduce
-            the pool's capital. The protocol manages this risk through several structural mechanisms:
-          </P>
-          <BulletList items={[
-            {
-              title: "Capacity reservation",
-              body: "When a protection buyer enters a position, the pool reserves capital equal to the maximum payout for that position. This means the pool can never be over-committed — the total reserved capacity at any time equals the total outstanding payout liability.",
-            },
-            {
-              title: "Transparent utilisation",
-              body: "LPs can see in real time how much of the pool is reserved versus available. A pool at 90% utilisation has 90% of its capital reserved against potential payouts — a risk level LPs can assess before depositing.",
-            },
-            {
-              title: "Event-level isolation",
-              body: "Each event is a separate pool. An LP's exposure is limited to the events they have deposited into. A triggered event in one pool does not affect an LP's capital in another pool.",
-            },
-            {
-              title: "Strike distance as a risk proxy",
-              body: "The distance between the initial rate and the strike price is a proxy for the probability of trigger. A pool with a 2% premium rate and a 15% strike distance has a very different risk profile from one with a 15% premium rate and a 5% strike distance. Both are visible to LPs before depositing.",
-            },
-          ]} />
-
-          <H3>7.3 LP Journey</H3>
-          <StepList steps={[
-            { title: "Browse pools by yield and risk", body: "LPs filter events by asset class, premium rate, utilisation level, strike distance, and time to expiry. Each pool displays its total capacity, current utilisation, accrued premiums, and implied yield." },
-            { title: "Deposit stablecoins", body: "LPs deposit any amount in a supported stablecoin. The deposit is recorded on-chain immediately. Premiums begin accruing from the moment of deposit, proportional to the LP's share of the pool." },
-            { title: "Claim premiums at any time", body: "Accrued premiums can be claimed at any time via a blockchain transaction, without withdrawing principal. This separates yield extraction from capital management." },
-            { title: "Monitor and manage", body: "LPs monitor pool utilisation and market rates. If the oracle detects a strike trigger, the pool settles automatically. LPs do not need to take any action — settlement is handled by the smart contract." },
-            { title: "Withdraw after settlement", body: "Once an event settles, LPs withdraw their remaining capital. In a triggered event, capital is reduced proportionally by the payouts distributed. In an expired event, full capital plus all remaining premiums is returned." },
-          ]} />
-
-          {/* Section 8 — Technical */}
-          <SectionTitle id="technical" number="Section 09" title="Technical Architecture" subtitle="Diamond Standard smart contracts with upgradeable facets" />
-
-          <H3>8.1 Smart Contract Design — EIP-2535 Diamond Standard</H3>
-          <P>
-            BlockFinaX uses the EIP-2535 Diamond Standard (also known as the Diamond Pattern) for
-            its on-chain architecture. This is a proxy contract pattern in which a single
-            "Diamond" contract address delegates function calls to multiple implementation
-            contracts called "facets." The Diamond Standard is chosen for three reasons:
-          </P>
-          <BulletList items={[
-            {
-              title: "Upgradeability without migration",
-              body: "New functionality can be added, and existing functionality can be updated, without changing the contract address that users interact with and without requiring funds to be migrated. This is critical for a protocol expected to evolve over multiple years.",
-            },
-            {
-              title: "Modular security surface",
-              body: "Each facet is a separate, independently auditable contract. Security audits can be scoped to individual facets rather than requiring full re-audits of the entire codebase with every upgrade.",
-            },
-            {
-              title: "Storage safety",
-              body: "The Diamond Standard enforces a structured approach to storage layout (AppStorage pattern) that prevents storage slot collisions between facets — a common source of bugs in upgradeable proxy patterns.",
-            },
-          ]} />
-
-          <H3>8.2 Current Facet Architecture</H3>
-          <DataTable
-            headers={["Facet", "Responsibility"]}
-            rows={[
-              ["DiamondCutFacet", "Protocol governance: adding, replacing, or removing facets via the diamondCut() function. Access-controlled to the protocol admin."],
-              ["DiamondLoupeFacet", "Introspection: allows any external observer to enumerate all facets and their function selectors. Supports EIP-165 interface detection."],
-              ["HedgeFacet", "Complete hedge protocol logic: event creation, LP deposits, hedger position entry, premium distribution, oracle settlement, payout claims, and fee collection. Contains all user-facing protocol functionality."],
-            ]}
-          />
-
-          <H3>8.3 Settlement Contract: HedgeFacet</H3>
-          <P>
-            The HedgeFacet contains the complete economic logic of the protocol. Key functions include:
-          </P>
-          <div className="rounded-lg bg-muted/40 border border-border p-5 my-5 font-mono text-xs space-y-2">
-            {[
-              ["createEvent()", "Deploy a new protection pool with all parameters set immutably"],
-              ["depositLiquidity()", "LP deposits stablecoins into a pool; updates pool capacity and LP share"],
-              ["buyProtection()", "Hedger pays premium; reserves payout capacity; mints position on-chain"],
-              ["settleEvent()", "Oracle-called; evaluates trigger condition; distributes payouts or premiums"],
-              ["claimPayout()", "Hedger claims predetermined payout after triggered settlement"],
-              ["claimPremiums()", "LP claims accrued premiums without withdrawing principal"],
-              ["withdrawLiquidity()", "LP withdraws capital after event settlement"],
-              ["collectProtocolFees()", "Treasury collection of accumulated platform fees"],
-            ].map(([fn, desc]) => (
-              <div key={fn} className="flex gap-4">
-                <span className="text-primary w-44 shrink-0">{fn}</span>
-                <span className="text-muted-foreground">{desc}</span>
-              </div>
-            ))}
-          </div>
-
-          <H3>8.4 Security Architecture</H3>
-          <div className="space-y-2 mb-6">
-            {[
-              { icon: Lock, text: "AES-256 client-side encryption for all private key storage — keys never transmitted to servers in unencrypted form" },
-              { icon: Shield, text: "Session-based wallet authentication with automatic timeout — wallet access requires password re-entry after inactivity" },
-              { icon: CheckCircle2, text: "EIP-191 cryptographic signature verification on sensitive API routes — prevents replay and impersonation attacks" },
-              { icon: Activity, text: "Tiered API rate limiting — prevents oracle manipulation attempts and protects backend infrastructure" },
-              { icon: Lock, text: "Pool capacity hard-reservation at position entry — the contract enforces that total reserved payouts never exceed pool capital" },
-              { icon: Shield, text: "No administrative withdrawal function — protocol operators cannot withdraw user funds; all capital movements are governed by contract logic" },
-            ].map(({ icon: Icon, text }, i) => (
-              <div key={i} className="flex gap-2.5 text-xs text-muted-foreground p-2.5 rounded-lg border border-border bg-muted/20">
-                <Icon className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                <span>{text}</span>
-              </div>
-            ))}
-          </div>
-
-          <H3>8.5 Settlement Currency: Regulated Stablecoins</H3>
-          <P>
-            All protocol operations — premiums, payouts, LP deposits, and fees — are denominated
-            in regulated, USD-pegged stablecoins. The initial deployment uses USDC (USD Coin),
-            a fully reserved stablecoin subject to monthly independent attestation and regulatory
-            oversight. The protocol is architecturally designed to support additional regulated
-            stablecoins over time, giving participants and liquidity providers the choice of
-            whichever instrument best suits their jurisdiction and operational requirements.
-            Stablecoins are admitted to the protocol based on reserve transparency, regulatory
-            standing, on-chain liquidity, and peg stability — not on any exclusive arrangement
-            with a single issuer.
-          </P>
-
-          {/* Section 9 — Economics */}
-          <SectionTitle id="economics" number="Section 10" title="Fee Structure & Economics" subtitle="Transparent, on-chain fees aligned with participant outcomes" />
-
-          <P>
-            All protocol fees are defined in the smart contract, collected on-chain, and distributed
-            automatically. There are no hidden fees, no variable spread charges, and no off-chain
-            fee adjustments. Every fee charged is visible to participants before they enter a
-            transaction.
-          </P>
-
-          <DataTable
+          {/* ── 6. fees ── */}
+          <SectionTitle id="fees" n="Section 06" title="Fees" sub="Charged by the contract, on-chain, at the moment of each event" />
+          <Table
             headers={["Fee", "Rate", "Charged to", "Distribution"]}
+            align={["l", "l", "l", "l"]}
             rows={[
-              ["Event creation fee", "$25 on Base · $2 on BSC", "Pool creator at deployment", "100% to protocol treasury"],
-              ["Protection entry fee", "5% of premium paid", "Hedger at position entry", "95% treasury · 5% pool creator loyalty"],
-              ["Payout claim fee", "2% of payout amount", "Hedger at payout claim", "95% treasury · 5% pool creator loyalty"],
-              ["LP premium claim fee", "2% of premiums claimed", "LP at premium claim", "95% treasury · 5% pool creator loyalty"],
-              ["Stablecoin transfer fee", "0.3% (min $0.50)", "Sender per wallet transfer", "100% to protocol treasury"],
+              ["Entry", "5% of the premium", "Hedger, at purchase", "95% treasury · 5% pool creator"],
+              ["Payout claim", "2% of the payout", "Hedger, at claim", "95% treasury · 5% pool creator"],
+              ["Underwriter profit", "2% of premium income", "LP, at claim", "95% treasury · 5% pool creator"],
+              ["Pool creation", "$25 on Base · $2 on BSC", "Creator, once", "100% treasury"],
+            ]}
+          />
+          <P>
+            The entry fee is charged on the <Em>premium</Em>, not the notional. That distinction is
+            not cosmetic: a fee on notional does not move with the price of the protection, so on a
+            cheap pool it can exceed the premium several times over. An earlier configuration charged
+            5% of notional, which on a 1% premium was five times the thing it was a fee on.
+          </P>
+
+          {/* ── 7. security ── */}
+          <SectionTitle id="security" n="Section 07" title="Security" sub="Architecture, audit status and the risks that remain" />
+          <P>
+            The protocol is an EIP-2535 Diamond: a routing contract that delegates each function to a
+            facet, so components can be replaced without migrating state. That upgradeability is a
+            capability and a risk, and the honest position is that it is both.
+          </P>
+          <H3>7.1 Audit</H3>
+          <P>
+            A full review of the Diamond and all facets in April 2026 returned nineteen findings —
+            two critical, three high, five medium, five low and four informational. Nine are fixed,
+            four accepted, six remain open <Em>including both critical items</Em>, which concern
+            upgrade safety rather than the pricing or settlement paths. The auditor's conclusion was
+            that no single catastrophic flaw exists and that CEI ordering, reentrancy guards and safe
+            token transfers are applied correctly throughout.
+          </P>
+          <H3>7.2 Risks that remain</H3>
+          <Table
+            headers={["Risk", "Status"]}
+            rows={[
+              [<Em key="a">Oracle centralisation</Em>, "A single key submits settlement rates. The largest remaining centralisation point; a multi-signer relay is the mitigation and is not yet the default."],
+              [<Em key="b">Upgrade authority</Em>, "One externally owned account can perform a diamondCut. A timelock facet exists but the transition to it is one of the open critical findings."],
+              [<Em key="c">Pricing dependency</Em>, "Quoted purchases require the engine to be reachable. It fails closed, so the failure mode is an inability to buy rather than a mispriced sale."],
+              [<Em key="d">Rate source</Em>, "Settlement depends on third-party FX data. Sources are separated by asset class, but a coordinated failure would delay settlement."],
             ]}
           />
 
-          <H3>9.1 Creator Loyalty Model</H3>
-          <P>
-            Pool creators receive 5% of every platform fee generated by their pools — spanning
-            protection entry fees, payout fees, and LP claim fees. This creates a sustainable
-            incentive for capable market participants to deploy well-structured pools with
-            competitive premium rates, which in turn attracts both hedgers and LPs to the protocol.
-            Creator loyalty fees are collected automatically by the smart contract and claimable
-            on-chain.
-          </P>
-
-          <H3>9.2 Revenue Model</H3>
-          <P>
-            BlockFinaX generates revenue from three primary streams: hedge protocol fees (comprising
-            the entry, payout, and LP claim fees across all events), an event creation fee charged
-            per hedge event deployed ($25 on Base, $2 on BSC), and wallet transfer fees.
-            The protocol treasury accumulates all net fees after creator loyalty distributions.
-          </P>
-
-          <DataTable
-            headers={["Year", "Projected Events", "Est. Total Notional", "Projected Net Revenue"]}
+          {/* ── 8. limits ── */}
+          <SectionTitle id="limits" n="Section 08" title="Limitations" sub="What this design does not do" />
+          <Table
+            headers={["Limitation", "Consequence"]}
             rows={[
-              ["2026 (H2 — mainnet launch)", "5,000", "$50M–$100M", "$475K–$825K"],
-              ["2027", "40,000+", "$400M–$700M", "$3.8M–$6M"],
-              ["2028", "150,000+", "$1.5B–$2.5B", "$14M–$21M"],
-              ["2029", "500,000+", "$5B–$8B", "$47M–$69M"],
-              ["2030 (target)", "1,500,000+", "$15B+", "$142M+"],
+              ["European settlement only", "A rate that spikes past the strike and returns before expiry pays nothing, even though the hedger's loss was real. Barrier-style cover is a different instrument and is not offered."],
+              ["Capital-inefficient by design", "Every payout is fully pre-funded. This is what removes counterparty risk, and it means an underwriter's capital is locked rather than margined."],
+              ["Liquidity-constrained", "Cover cannot exceed what underwriters have committed. Deep markets require underwriters before hedgers, which is the harder side to attract."],
+              ["Stablecoin-denominated", "Both sides transact in USDC or USDT. A business earning cedis still needs a route in and out of stablecoins, which is outside the protocol."],
+              ["No secondary market", "A position is held to expiry. There is no mechanism to sell cover on, so a hedger whose exposure disappears cannot recover the premium."],
             ]}
           />
-          <p className="text-[11px] text-muted-foreground/60 -mt-4 mb-6">
-            Revenue projections are illustrative estimates based on a blended fee rate of approximately 0.225% across all transaction types — derived from the deployed fee schedule at a 1.5% average premium — plus the $25 event creation fee per hedge event on Base.
-            Actual outcomes will depend on market conditions, regulatory developments, and adoption rates.
-            These figures do not constitute a financial forecast or investment guarantee.
-          </p>
-
-          {/* Section 10 — Wallet */}
-          <SectionTitle id="wallet" number="Section 11" title="Wallet & Cross-Border Transfers" subtitle="Non-custodial stablecoin wallet with integrated protection" />
-
           <P>
-            BlockFinaX includes an integrated non-custodial stablecoin wallet that serves as the
-            entry point for all protocol interactions. The wallet is designed to be accessible to users
-            who may be new to blockchain-based financial tools, while maintaining the security
-            standards appropriate for financial applications.
+            The last two are the binding constraints on adoption rather than on the design, and are
+            named here because a document that lists only what a protocol does is not a design
+            document.
           </P>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {[
-              { title: "Non-custodial key management", body: "Private keys are generated in the user's browser using cryptographically secure random number generation. Keys are encrypted with AES-256 using the user's password and stored locally. The platform operators never have access to unencrypted private keys.", icon: Lock },
-              { title: "Cross-border stablecoin transfers", body: "Users can send supported stablecoins to any EVM-compatible wallet address globally. The platform charges a 0.3% fee (minimum $0.50) per transfer, which is transparent and confirmed before signing. There are no correspondent banking delays or SWIFT processing windows.", icon: Globe },
-              { title: "Gas sponsorship", body: "The platform automatically sponsors a small amount of native gas token (0.0001 ETH / BNB equivalent) when a wallet's balance falls below the minimum threshold required for transactions. This removes the requirement for users to separately acquire gas tokens — a significant usability barrier for new blockchain users.", icon: Zap },
-              { title: "Real-time balance and history", body: "Live token balances are pulled directly from the blockchain at each page load. Transaction history, including all hedge protocol interactions, is displayed in full. No off-chain database is required for balance accuracy.", icon: BarChart3 },
-            ].map(({ title, body, icon: Icon }) => (
-              <div key={title} className="rounded-lg border border-border bg-muted/20 p-4">
-                <Icon className="h-5 w-5 text-primary mb-2" />
-                <p className="text-sm font-medium text-foreground mb-1">{title}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Section 11 — Regulatory */}
-          <SectionTitle id="regulatory" number="Section 12" title="Regulatory Framework & Compliance" subtitle="Designed for regulatory cooperation, not regulatory avoidance" />
-
-          <P>
-            BlockFinaX is designed with regulatory engagement as a core principle, not an afterthought.
-            The platform's founders recognise that financial innovation that creates consumer value
-            and financial innovation that operates responsibly within regulatory frameworks are not
-            in conflict — they are mutually reinforcing. A well-regulated parametric protection
-            platform builds institutional trust, attracts sophisticated LPs, and creates sustainable
-            market infrastructure. An unregulated one does not.
-          </P>
-
-          <H3>11.1 Product Classification: Parametric Protection</H3>
-          <P>
-            The instruments offered by BlockFinaX are classified internally and presented publicly
-            as parametric protection products, consistent with the parametric insurance and
-            structured protection categories recognised by financial regulators in multiple
-            jurisdictions.
-          </P>
-          <P>
-            The defining features of a parametric protection product — as distinct from a speculative
-            financial derivative — are as follows:
-          </P>
-          <BulletList items={[
-            {
-              title: "Predetermined, objective trigger conditions",
-              body: "The payout condition (strike price reached before expiry) is defined precisely at inception and is observable by all parties from publicly available market data. There is no subjectivity in determining whether a payout is triggered.",
-            },
-            {
-              title: "Fixed, predetermined payout",
-              body: "The payout amount is calculated and disclosed to the protection buyer at the moment they enter the contract. There is no mark-to-market valuation, no margining, and no uncertainty about the payout quantum.",
-            },
-            {
-              title: "Risk transfer, not risk creation",
-              body: "Protection buyers are managing a pre-existing commercial or financial exposure — currency risk, commodity price risk, or digital asset price risk. The contract transfers this risk to a willing liquidity provider rather than creating new leveraged risk.",
-            },
-            {
-              title: "No leverage",
-              body: "The maximum loss for a protection buyer is the premium paid. The maximum loss for an LP is the capital deposited. The protocol does not create notional exposures in excess of capital committed. There are no margin calls and no liquidation cascades.",
-            },
-          ]} />
-
-          <H3>11.2 Bank of Ghana Regulatory Sandbox</H3>
-          <P>
-            BlockFinaX is actively pursuing participation in the Bank of Ghana's Regulatory Sandbox
-            Programme — a structured framework that allows fintech innovators to test products and
-            services under regulatory supervision before seeking full licensing. The sandbox is
-            designed to enable regulators and innovators to develop appropriate regulatory
-            frameworks together, with real product experience as the basis for policy development.
-          </P>
-          <P>
-            The Bank of Ghana Regulatory Sandbox operates under guidelines issued by the Bank of
-            Ghana under its mandate to promote financial inclusion and innovation while maintaining
-            systemic financial stability. BlockFinaX's application positions the platform as a
-            financial inclusion instrument — specifically, as a mechanism for providing risk
-            management tools to Ghanaian and broader African businesses that currently have
-            no access to formal hedging markets.
-          </P>
-
-          <H3>11.3 Transparency and Auditability</H3>
-          <P>
-            BlockFinaX operates with a level of transparency that exceeds the reporting requirements
-            of most regulated financial entities. Every transaction is recorded immutably on a
-            public blockchain and can be inspected by any party at any time — including regulators,
-            auditors, journalists, and members of the public. There is no off-chain ledger, no
-            internal reconciliation process, and no information asymmetry between operators and
-            participants.
-          </P>
-          <P>
-            The protocol's fee collection, treasury balance, and all payout histories are publicly
-            verifiable on-chain. The platform additionally provides an admin dashboard with
-            aggregated analytics for authorised regulatory access requests.
-          </P>
-
-          <H3>11.4 Stablecoin Selection Criteria</H3>
-          <P>
-            The use of regulated stablecoins as the protocol's settlement layer is a deliberate
-            compliance choice. BlockFinaX supports stablecoins that meet defined criteria: full
-            reserve backing verified by independent attestation, regulatory standing in one or more
-            major jurisdictions, broad on-chain liquidity, and established track records of peg
-            stability. This approach ensures that the protocol's value flows are denominated in
-            instruments with transparent reserve structures — as opposed to native tokens, algorithmic
-            stablecoins, or instruments without regulatory oversight. As the regulatory landscape for
-            stablecoins evolves globally, the protocol's stablecoin selection will be reviewed and
-            updated in consultation with legal counsel and, where applicable, with the input of
-            relevant regulatory authorities.
-          </P>
-
-          <H3>11.5 Progressive Compliance Roadmap</H3>
-          <P>
-            BlockFinaX's compliance approach evolves with the protocol's scale and regulatory
-            environment:
-          </P>
-          <BulletList items={[
-            { title: "Phase 1 (Mainnet Foundation)", body: "Live protocol on Base and BSC Mainnet using real stablecoins (USDC and USDT). Data collection on usage patterns and user demographics to inform regulatory submissions. Smart contract audits (v5 + v6 patches) applied." },
-            { title: "Phase 2 (Mainnet launch, 2026)", body: "Launch with voluntary KYC/AML verification available for institutional LPs. Geofencing of high-risk jurisdictions where legal advice indicates regulatory prohibitions. Engagement with Bank of Ghana sandbox formally initiated." },
-            { title: "Phase 3 (Regulated operations, 2027)", body: "Full KYC/AML integration for all participants above defined thresholds, in jurisdictions requiring it. Formal licensing applications in Ghana and secondary markets as determined by regulatory engagement." },
-            { title: "Phase 4 (Pan-African regulatory framework)", body: "Work with AfCFTA financial services protocol development to advocate for a harmonised regulatory framework for parametric protection products across member states." },
-          ]} />
-
-          <Callout icon={Scale} color="border-border bg-muted/40 text-muted-foreground" title="Our position:">
-            BlockFinaX is not designed to operate in regulatory grey areas. We seek clear regulatory
-            frameworks, engage proactively with regulators, and design our products to comply with
-            the spirit as well as the letter of applicable law. Where regulations do not yet address
-            the specific structure of on-chain parametric protection, we actively participate in
-            policy development to create appropriate frameworks.
-          </Callout>
-
-          {/* Section 13 — Roadmap */}
-          <SectionTitle id="roadmap" number="Section 13" title="Roadmap" subtitle="Phased development from mainnet launch to regional financial infrastructure" />
-
-          <div className="space-y-5 mb-6">
-            {[
-              {
-                phase: "Phase 1", label: "Mainnet Foundation", timeline: "Q1–Q2 2026", status: "Complete",
-                color: "border-green-500/40 bg-green-500/5",
-                items: [
-                  "EVM mainnet deployment — live on Base and BSC",
-                  "63 pairs across FX (42), Commodities (11), Crypto (6, plus 4 planned)",
-                  "Bidirectional (upward + downward) parametric protection",
-                  "LP deposit, premium claim, and payout claim functionality",
-                  "Five-minute oracle settlement engine across all pairs",
-                  "Non-custodial wallet with gas sponsorship",
-                  "Daily tasks and community rewards system",
-                  "Admin dashboard with revenue, user, and pool analytics",
-                  "Bank of Ghana sandbox application preparation",
-                ],
-              },
-              {
-                phase: "Phase 2", label: "Mainnet Launch", timeline: "March 2026", status: "Live",
-                color: "border-primary/40 bg-primary/5",
-                items: [
-                  "Production blockchain mainnet deployment — complete",
-                  "Live settlement in USDC and USDT",
-                  "Multi-round smart contract audit patches applied (v5 + v6)",
-                  "Institutional LP onboarding programme",
-                  "Decentralised oracle integration (Chainlink or equivalent)",
-                  "Mobile-optimised progressive web application",
-                  "Optional KYC/AML verification for institutional participants",
-                  "Formal Bank of Ghana sandbox participation",
-                ],
-              },
-              {
-                phase: "Phase 3", label: "Scale & Partnerships", timeline: "H2 2026 – 2027", status: "Planned",
-                color: "border-border bg-muted/20",
-                items: [
-                  "B2B API for embedded parametric protection in third-party platforms",
-                  "Integration with African fintech payment platforms",
-                  "Accounting software plugins for automated FX protection documentation",
-                  "White-label pool infrastructure for licensed financial intermediaries",
-                  "Additional African currency pairs (20+ pairs in v2)",
-                  "Formal licensing applications in Ghana and secondary markets",
-                  "Treasury management dashboard for corporate clients",
-                ],
-              },
-              {
-                phase: "Phase 4", label: "Protocol Maturity", timeline: "2028+", status: "Vision",
-                color: "border-border bg-muted/20",
-                items: [
-                  "Multi-chain deployment across major EVM networks",
-                  "Decentralised governance for protocol parameters",
-                  "Cross-chain liquidity bridges for LP capital efficiency",
-                  "Institutional-grade risk management and reporting tools",
-                  "Pan-African regulatory framework advocacy through AfCFTA process",
-                  "Potential native governance token for protocol ownership distribution",
-                ],
-              },
-            ].map(({ phase, label, timeline, status, color, items }) => (
-              <div key={phase} className={`rounded-lg border p-5 ${color}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">{phase}</p>
-                    <p className="text-sm font-bold text-foreground">{label}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">{timeline}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-primary mt-0.5">{status}</p>
-                  </div>
-                </div>
-                <ul className="space-y-1">
-                  {items.map(item => (
-                    <li key={item} className="flex gap-2 text-xs text-muted-foreground">
-                      <ChevronRight className="h-3 w-3 text-primary/60 mt-0.5 shrink-0" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          {/* Section 14 — Risks */}
-          <SectionTitle id="risks" number="Section 14" title="Risk Factors" subtitle="Material risks that participants should understand before engaging with the protocol" />
-
-          <P>
-            BlockFinaX is committed to transparent disclosure of the risks associated with
-            participation in the protocol. The following risk factors are disclosed in good faith
-            and represent the team's honest assessment of material uncertainties.
-          </P>
-
-          <div className="space-y-3 mb-6">
-            {[
-              {
-                risk: "Smart contract risk",
-                detail: "The protocol's smart contracts have undergone multiple rounds of internal security review and audit patching (v5 and v6 fix sets applied pre-mainnet). Smart contracts are deployed on Base and BNB Smart Chain Mainnet and handle real value. A formal third-party audit is planned as a near-term priority. Smart contracts may still contain bugs or unintended behaviours and participants should size positions accordingly.",
-              },
-              {
-                risk: "Oracle and data source risk",
-                detail: "Settlement depends on rate data from third-party providers (ExchangeRate-API, Yahoo Finance, CoinGecko). If these sources provide incorrect, delayed, or manipulated data, settlements could be inaccurate. In the current architecture, the oracle admin key introduces a degree of centralisation. Decentralised oracle integration is planned for v2.",
-              },
-              {
-                risk: "Liquidity risk",
-                detail: "Protection pools may have insufficient capital to cover all payout liabilities if a large number of events trigger simultaneously. Pool utilisation is publicly visible and hard-capped by the capital reservation mechanism, but market correlation risk — where many pools trigger in the same direction — could create system-wide strain.",
-              },
-              {
-                risk: "Regulatory and legal risk",
-                detail: "The regulatory treatment of on-chain parametric protection instruments is not settled in most jurisdictions. Regulatory action, legislative changes, or adverse rulings could require the protocol to restrict access in certain markets, add compliance requirements, or modify product structures. BlockFinaX actively engages with regulators to mitigate this risk, but it cannot be eliminated.",
-              },
-              {
-                risk: "Stablecoin risk",
-                detail: "Protocol values are denominated in regulated stablecoins, initially USDC. While the protocol selects stablecoins based on reserve transparency and regulatory standing, all stablecoin instruments carry risks including reserve adequacy, regulatory action, or peg disruption. Participants should independently assess the risks of each supported stablecoin before participating.",
-              },
-              {
-                risk: "Technology and infrastructure risk",
-                detail: "The protocol depends on backend infrastructure for oracle settlement and wallet gas sponsorship. Infrastructure outages could delay or temporarily prevent settlement. The protocol is designed to handle expiry-based settlement as a fallback, and no user funds are at risk of loss due to infrastructure outages — but settlement timing could be affected.",
-              },
-              {
-                risk: "Centralisation risk (current phase)",
-                detail: "In the current architecture, the oracle admin key and the protocol treasury are controlled by the founding team. This is a transitional arrangement while decentralised governance is developed. This risk is disclosed transparently and is a planned remediation item in the v2 roadmap.",
-              },
-              {
-                risk: "Market risk for liquidity providers",
-                detail: "LPs take the risk that strike prices are reached and payouts reduce their deposited capital. Past performance of any market pair does not guarantee future behaviour. LPs should assess each pool's strike distance, premium rate, and utilisation level independently and manage their exposure across pools accordingly.",
-              },
-            ].map(({ risk, detail }) => (
-              <div key={risk} className="flex gap-3 p-3 rounded-lg border border-border bg-muted/20">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">{risk}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Conclusion */}
-          <SectionTitle id="conclusion" title="Conclusion" />
-
-          <P>
-            The gap between the risk management instruments available to large financial institutions
-            and those accessible to small and medium businesses is one of the most consequential
-            structural inequalities in global finance. It is particularly acute in Africa, where
-            currency volatility, commodity price swings, and digital asset exposure create real
-            operational risk for a large number of businesses and individuals with no practical
-            means of managing it.
-          </P>
-          <P>
-            BlockFinaX offers a carefully designed, transparent, and structurally sound response
-            to this gap. By implementing parametric protection contracts on a public blockchain,
-            the protocol creates settlement infrastructure that is accessible to any participant,
-            auditable by any observer, and governed by publicly verifiable code rather than
-            bilateral legal relationships.
-          </P>
-          <P>
-            The protocol covers 63 pairs across three asset classes — 42 African FX pairs, 11
-            commodity pairs, and 10 digital asset pairs — providing a unified risk management
-            interface for the diverse market exposures of African businesses, commodity producers,
-            and digital asset participants. The bidirectional structure of protection events means
-            the platform serves both those seeking protection against price rises and those
-            seeking protection against price declines.
-          </P>
-          <P>
-            BlockFinaX is not positioned as a technology in search of a problem. It is a
-            practical response to a documented, persistent market failure — one that regulators,
-            development finance institutions, and trade finance bodies across Africa have
-            acknowledged for decades. The protocol is designed to work with regulatory frameworks,
-            not around them, and to create the transparency and accountability that responsible
-            financial innovation requires.
-          </P>
-          <P>
-            BlockFinaX is live on Base and BNB Smart Chain Mainnet. We invite businesses, traders,
-            liquidity providers, regulators, and builders to engage with the protocol, explore its
-            mechanics, and contribute to the development of parametric protection infrastructure
-            that serves the full breadth of Africa's market participants.
-          </P>
-
-          {/* References */}
-          <SectionTitle id="references" title="References" />
-
-          <div className="space-y-2.5 mb-10">
-            {[
-              { n: 1,  citation: "World Bank. 'World Development Indicators: Sub-Saharan Africa.' GDP (current US$), 2024. data.worldbank.org/region/sub-saharan-africa" },
-              { n: 2,  citation: "United Nations Africa Renewal. 'AfCFTA: Trade in Africa — An Opportunity Not to Be Missed.' May 2023. un.org/africarenewal. Projected to boost intra-African trade by 52.3% by 2025 and increase Africa's income by up to $450 billion by 2035 (IMF estimate)." },
-              { n: 3,  citation: "Bank of Ghana. Annual Report 2022. Accra: Bank of Ghana, 2023. The Ghanaian cedi depreciated approximately 30% against the US dollar in 2022. bog.gov.gh" },
-              { n: 4,  citation: "Central Bank of Nigeria. CBN FX Market Unification Policy Statement, June 2023. The official NGN/USD rate moved from approximately NGN 464 to over NGN 760 per US dollar in the month following the FX policy change, a depreciation exceeding 40%. cbn.gov.ng" },
-              { n: 5,  citation: "International Monetary Fund. 'Arab Republic of Egypt: Article IV Consultation.' IMF Country Report No. 23/290, July 2023. The Egyptian pound lost approximately 50% of its value against the US dollar between March 2022 and mid-2023. imf.org" },
-              { n: 6,  citation: "International Cocoa Organization (ICCO). 'Quarterly Bulletin of Cocoa Statistics.' Volume L, No. 1, 2024. Ghana and Cote d'Ivoire account for approximately 60-65% of global cocoa production annually. icco.org" },
-              { n: 7,  citation: "International Cocoa Organization (ICCO). 'ICCO Monthly Averages of Daily Prices.' 2024. Cocoa futures prices reached a historic high above $10,000 per metric tonne in April 2024, having traded below $2,500 for most of the preceding decade. icco.org" },
-              { n: 8,  citation: "U.S. Energy Information Administration (EIA). 'Petroleum and Other Liquids: Spot Prices.' eia.gov. WTI crude oil reached a low of approximately $20/bbl in April 2020; Brent crude peaked at approximately $127/bbl in March 2022." },
-              { n: 9,  citation: "CoinMarketCap. 'Bitcoin Historical Price Data.' coinmarketcap.com. BTC peak-to-trough: December 2017 to December 2018 (-83%); November 2021 to November 2022 (-77%)." },
-              { n: 10, citation: "Chainalysis. '2024 Geography of Cryptocurrency Report.' October 2024. Sub-Saharan Africa identified as among the fastest-growing regions globally for on-chain cryptocurrency adoption, driven by financial inclusion use cases and currency instability. go.chainalysis.com" },
-              { n: 11, citation: "CoinGecko. '2024 Annual Crypto Industry Report.' January 2025. Global average daily spot crypto trading volume approximately $189-200 billion in 2024; full-year spot trading volume approximately $58.5 trillion. coingecko.com" },
-              { n: 12, citation: "Afreximbank. 'Africa Trade Report 2024.' Cairo: African Export-Import Bank, 2024. Total intra-African merchandise trade: $192.2 billion in 2023, representing 14.9% of total African trade. afreximbank.com" },
-              { n: 13, citation: "World Bank. 'Migration and Development Brief 41.' November 2024. Remittances to Africa estimated at approximately $96 billion in 2024. worldbank.org/en/topic/migrationremittancesdiasporaissues" },
-              { n: 14, citation: "The Block Research / Sacra. 'Polymarket and Kalshi 2025 Volume Analysis.' December 2025. Combined trading volumes exceeded $44 billion across 2025. Kalshi Series E valuation: $11 billion (December 2025). Polymarket valuation: $9 billion (October 2025). theblock.co; sacra.com" },
-              { n: 15, citation: "L2Beat. 'Layer-2 Ecosystem Data.' December 2024. EVM Layer-2 solutions achieve 90-95%+ transaction cost reductions versus Ethereum mainnet, accelerated by EIP-4844 (Dencun Upgrade, March 2024). l2beat.com" },
-              { n: 16, citation: "FSD Africa / World Bank Group. 'Access to Financial Services in Sub-Saharan Africa.' 2023. Surveys indicate fewer than 5% of African SMEs report access to formal FX risk management or hedging products through the banking sector. fsdafrica.org; ifc.org" },
-            ].map(({ n, citation }) => (
-              <div key={n} className="flex gap-3 text-xs text-muted-foreground leading-relaxed">
-                <span className="text-primary font-semibold shrink-0 w-6">[{n}]</span>
-                <span>{citation}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          <div className="border-t border-border pt-8 pb-12 mt-8">
-            <div className="flex items-center gap-2 mb-4">
-              <img src={logoPath} alt="BlockFinaX" className="h-6 w-6 object-contain" />
-              <span className="font-semibold">BlockFinaX</span>
-              <span className="text-xs text-muted-foreground">— P2P Parametric Protection Protocol</span>
-            </div>
-            <div className="space-y-2 text-xs text-muted-foreground/70 leading-relaxed max-w-2xl">
-              <p>
-                <strong className="text-muted-foreground">Disclaimer:</strong> This whitepaper is published for informational
-                purposes only. It does not constitute financial advice, investment advice, legal advice,
-                or any other form of professional advice. Nothing in this document should be construed
-                as an offer to sell or a solicitation of an offer to buy any security, financial
-                instrument, or investment product.
-              </p>
-              <p>
-                Participation in the BlockFinaX protocol involves significant risk, including the risk
-                of total loss of capital deployed as liquidity. Prospective participants should conduct
-                their own due diligence and seek independent professional advice appropriate to their
-                circumstances before engaging with the protocol.
-              </p>
-              <p>
-                Revenue projections and market size estimates contained in this document are
-                illustrative and do not represent guaranteed outcomes. Regulatory approvals referenced
-                as planned or in progress are subject to regulatory discretion and are not guaranteed.
-              </p>
-              <p className="text-muted-foreground/50">© 2026 BlockFinaX. All rights reserved. Whitepaper v1.2 — August 2026.</p>
-            </div>
+          <div className="mt-16 border-t border-border pt-6">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              BlockFinaX Inc. (Delaware) and BlockFinaX Ltd (Ghana). Whitepaper v{VERSION} — {DATE}.
+              Figures 1 and 3 are computed in-page rather than drawn. Figure 1 is exact; Figure 3 uses the diffusion kernel without the jump overlay, as its caption notes.
+              This document describes a protocol, not an offer, and is not financial advice.
+            </p>
           </div>
         </main>
       </div>
