@@ -126,6 +126,35 @@ export const hedgeEvents = pgTable("hedge_events", {
   // Chain provenance — set when event is synced or created from a specific chain
   chainId: integer("chain_id"),         // e.g. 8453 for Base
   onChainEventId: integer("on_chain_event_id"), // the contract's event ID (uint256 counter)
+
+  /**
+   * The volatility the LP's premium implied at creation.
+   *
+   * premiumRate above is a price, and a price is only correct at the moment it
+   * was set — a hedger arriving on day 5 of a 7-day pool is buying different
+   * protection to the one bought on day 0. This is the same judgement expressed
+   * as a rate of risk, which stays meaningful for the pool's whole life: quote
+   * against it and the premium moves with time and spot while the LP's own view
+   * of the risk stays fixed inside it.
+   *
+   * Recovered by inverting the pricing kernel at creation
+   * (server/pricing/implied-vol.ts). Null for pools created before this existed
+   * and for any pool whose premium admits no σ — those keep charging premiumRate
+   * flat, which is the behaviour they already had.
+   *
+   * Not on-chain. The contract verifies a signed premium; it does not need to
+   * know how the premium was reached, so createEvent is untouched.
+   */
+  impliedVol: decimal("implied_vol", { precision: 10, scale: 6 }),
+
+  /**
+   * Floor the LP may set beneath the quoted premium, as a fraction of notional.
+   *
+   * Re-quoting can take the price a long way down — 1.0% at seven days is
+   * $36.61 per $10,000 with one day left — and an LP may reasonably decline to
+   * write at any price. Null means no floor.
+   */
+  minPremiumRate: decimal("min_premium_rate", { precision: 10, scale: 6 }),
 }, (table) => [
   uniqueIndex("hedge_events_chain_id_on_chain_event_id_idx").on(table.chainId, table.onChainEventId),
 ]);
