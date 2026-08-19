@@ -173,7 +173,7 @@ export default function Whitepaper() {
 
   function handleDownloadPdf() {
     const title = document.title;
-    document.title = "BlockFinaX_Whitepaper_v1.1_April2026";
+    document.title = "BlockFinaX_Whitepaper_v1.2_August2026";
     window.print();
     setTimeout(() => { document.title = title; }, 2000);
   }
@@ -194,11 +194,11 @@ export default function Whitepaper() {
             <div className="flex items-center gap-2">
               <img src={logoPath} alt="BlockFinaX" className="h-5 w-5 object-contain" />
               <span className="text-sm font-semibold">BlockFinaX</span>
-              <span className="text-xs text-muted-foreground font-mono">Whitepaper v1.1</span>
+              <span className="text-xs text-muted-foreground font-mono">Whitepaper v1.2</span>
             </div>
           </div>
           <div className="flex items-center gap-3 no-print">
-            <span className="text-xs text-muted-foreground hidden md:block">March 2026</span>
+            <span className="text-xs text-muted-foreground hidden md:block">August 2026</span>
             <Button
               size="sm"
               variant="outline"
@@ -257,7 +257,7 @@ export default function Whitepaper() {
               dispersed traders who require accessible, structured, and auditable risk management tools.
             </p>
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {["Version 1.1", "March 2026", "EVM Blockchain", "Mainnet Live", "Base & BSC"].map(t => (
+              {["Version 1.2", "August 2026", "EVM Blockchain", "Mainnet Live", "Base & BSC"].map(t => (
                 <span key={t} className="px-2.5 py-1 rounded-full bg-muted border border-border">{t}</span>
               ))}
             </div>
@@ -286,10 +286,11 @@ export default function Whitepaper() {
               BlockFinaX presents a parametric protection protocol built on an EVM-compatible blockchain network.
               The protocol enables any participant to either purchase protection against adverse price movements
               across 63 market pairs — spanning African FX, global commodities, and major digital assets —
-              or provide liquidity to earn premiums from protection buyers. Settlement is binary and
-              predetermined: if a defined price level is reached before expiry, a fixed payout is made
-              automatically by the protocol. If the level is not reached, liquidity providers retain the
-              premiums. There is no mark-to-market, no margin call, and no counterparty negotiation.
+              or provide liquidity to earn premiums from protection buyers. Settlement is parametric and
+              predetermined: at expiry the protocol reads the market rate and pays in proportion to how
+              far it has moved beyond the strike, up to a capped maximum fixed when the pool is created.
+              If the rate finishes below the strike, liquidity providers retain the premiums. There is no
+              mark-to-market, no margin call, and no counterparty negotiation.
             </P>
             <P>
               This paper outlines the problem BlockFinaX addresses, the design of the protocol, the
@@ -342,7 +343,7 @@ export default function Whitepaper() {
             on a public blockchain, the protocol creates a shared settlement infrastructure accessible
             to any participant with a digital wallet. The structure of each contract is simple, transparent,
             and legally unambiguous: a defined underlying asset, a strike price, an expiry date, and a
-            predetermined payout if the strike is reached. No bilateral negotiation. No credit assessment.
+            a payout scaled to the size of the move if the rate settles past the strike. No bilateral negotiation. No credit assessment.
             No minimum contract size.
           </P>
           <P>
@@ -504,8 +505,9 @@ export default function Whitepaper() {
             applied entirely to speculation rather than the commercial risk that real businesses face.
             The commercial risk management market dwarfs prediction markets by orders of magnitude:
             Africa alone accounts for over $2 trillion in annual unhedged trade and commodity exposure,
-            a figure that excludes crypto volatility entirely. BlockFinaX is the first protocol to
-            apply proven binary settlement infrastructure where the need — and the market — is largest.
+            a figure that excludes crypto volatility entirely. BlockFinaX applies the same oracle-settled,
+            self-executing infrastructure where the need — and the market — is largest, with a payout
+            that scales with the size of the move rather than a binary yes or no.
           </P>
 
           <H3>3.1 Addressable Market Size</H3>
@@ -536,7 +538,7 @@ export default function Whitepaper() {
             },
             {
               title: "On-chain binary outcomes are legally and commercially validated",
-              body: "The Kalshi CFTC ruling and the Polymarket scale provide regulatory and market validation that binary outcome contracts — the same mechanism BlockFinaX uses — are legitimate, in-demand, and regulatorily viable. BlockFinaX applies this validation to commercial hedging for the first time.",
+              body: "The Kalshi CFTC ruling and Polymarket's scale establish that oracle-settled, self-executing outcome contracts are legitimate, in demand and regulatorily viable. BlockFinaX shares that settlement infrastructure while differing in payoff: cover pays in proportion to the size of the move up to a cap, rather than a binary yes or no, which places it closer to a conventional option spread than to a prediction market.",
             },
             {
               title: "Blockchain infrastructure has matured",
@@ -596,7 +598,7 @@ export default function Whitepaper() {
               {
                 role: "Protection Buyer (Hedger)",
                 icon: Shield,
-                desc: "Pays a premium to enter a protection contract against a defined price move. If the strike is reached before expiry, receives a predetermined stablecoin payout. Maximum loss is limited to the premium paid.",
+                desc: "Pays a premium to enter a protection contract against a defined price move. If the rate settles past the strike at expiry, receives a stablecoin payout proportional to the distance travelled, up to the pool's cap. Maximum loss is limited to the premium paid.",
                 color: "border-border bg-muted/20",
               },
               {
@@ -806,10 +808,10 @@ export default function Whitepaper() {
           <H3>5.4 Protection Buyer Journey</H3>
           <StepList steps={[
             { title: "Browse active events", body: "Buyers view the marketplace filtered by asset class (FX, Commodities, Crypto), direction, time to expiry, premium rate, and available pool capacity. All parameters are displayed transparently before any transaction." },
-            { title: "Select notional and review terms", body: "The buyer enters a notional amount in their chosen stablecoin. The interface immediately displays the premium cost, the predetermined payout amount if triggered, the platform fee, and the effective protection rate — all confirmed before signing." },
+            { title: "Select notional and review terms", body: "The buyer enters a notional amount in their chosen stablecoin. The interface immediately displays the premium cost, the maximum payout if the rate reaches the cap, the platform fee, and the effective protection rate — all confirmed before signing." },
             { title: "Approve and enter position", body: "A single blockchain transaction approves the premium transfer and registers the position. The buyer's position is immediately recorded on-chain and visible in their portfolio." },
-            { title: "Hold and monitor", body: "The buyer holds the position until expiry. The oracle engine monitors the market rate every five minutes. If the strike is reached, the event is automatically settled. If expiry passes without the strike being reached, the event closes and premiums are distributed to LPs." },
-            { title: "Claim payout", body: "If the event settled in the buyer's favour, they claim their predetermined payout directly from the smart contract in whichever stablecoin the pool is denominated in. Claim transactions are available immediately after settlement." },
+            { title: "Hold to expiry", body: "The buyer holds the position until expiry. The oracle engine tracks the market rate every five minutes, and the position is settled once, at expiry, on the rate prevailing then. A rate that crosses the strike and returns before expiry does not settle the event — what counts is where it finishes." },
+            { title: "Claim payout", body: "If the rate finished above the strike, the buyer claims directly from the smart contract in the pool's stablecoin. The amount scales with how far past the strike the rate settled, up to the cap. Claims are available immediately after settlement." },
           ]} />
 
           {/* Section 6 — Settlement Engine */}
@@ -824,10 +826,17 @@ export default function Whitepaper() {
           <H3>6.1 Oracle Architecture</H3>
           <P>
             The oracle is a backend service that polls price feeds for all 63 pairs every five
-            minutes. At each polling interval, the oracle compares the current market rate against
-            the strike price of every active event in the protocol. If a strike condition is met,
-            the oracle initiates a settlement transaction on-chain, which executes the payout
-            distribution defined in the smart contract.
+            minutes. Each event settles once, at expiry: the oracle submits the prevailing rate
+            on-chain and the smart contract computes the payout from it. The rate may cross the
+            strike and return during the coverage period — what determines the payout is where it
+            finishes, not the path it travelled.
+          </P>
+          <P>
+            An earlier design settled the moment the rate first touched the strike. That is
+            incompatible with the payout formula in Section 6.2, which measures distance travelled
+            beyond the strike: a settlement fired at the instant of touching records a distance of
+            approximately zero, so an event that triggered would pay approximately nothing. It has
+            been replaced by settlement at expiry.
           </P>
           <P>
             Rate sources are separated by asset class to avoid single-point-of-failure risk:
@@ -843,24 +852,50 @@ export default function Whitepaper() {
             ]}
           />
 
-          <H3>6.2 Settlement Outcomes</H3>
+          <H3>6.2 The Payout Function</H3>
           <P>
-            Every event has one of two possible settlement outcomes. There are no partial settlements,
-            no disputed outcomes, and no adjudication process:
+            Protection is a capped range, not a binary bet. Payout rises in proportion to how far the
+            settlement rate travels beyond the strike, and stops rising at the payout cap. Writing
+            the settlement rate as <em>S<sub>T</sub></em>, the strike as <em>K</em>, the cap
+            as <em>C</em> and the rate at pool creation as <em>S</em><sub>0</sub>:
           </P>
 
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <CheckCircle2 className="h-4 w-4 text-primary mb-2" />
-              <p className="text-sm font-semibold text-foreground mb-1">Strike Reached (Triggered)</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">Protection buyers receive their predetermined payout from the LP pool. Protocol fees (2% of payouts) are collected. Remaining pool capital is returned to LPs proportionally.</p>
-            </div>
+          <div className="rounded-lg border border-border bg-muted/20 p-4 mb-4 overflow-x-auto">
+            <p className="text-sm text-foreground font-mono">
+              payout = notional × max(0, min(<em>S<sub>T</sub></em>, <em>C</em>) − <em>K</em>) ÷ <em>S</em><sub>0</sub>
+            </p>
+          </div>
+
+          <P>
+            The short leg at the cap is what makes the pool underwritable: it bounds a liquidity
+            provider's worst case to (<em>C</em> − <em>K</em>) per unit by construction rather than
+            by policy, so the capital required to back a position is known when it is written.
+          </P>
+
+          <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="rounded-lg border border-muted-foreground/20 bg-muted/20 p-4">
               <RefreshCw className="h-4 w-4 text-muted-foreground mb-2" />
-              <p className="text-sm font-semibold text-foreground mb-1">Strike Not Reached (Expired)</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">The event closes at expiry with no payout. All premiums collected from protection buyers are distributed to LPs. Full LP capital is returned. Pool creator earns loyalty fees.</p>
+              <p className="text-sm font-semibold text-foreground mb-1">Finishes below the strike</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">No payout. Premiums collected are distributed to LPs, full LP capital is returned, and the pool creator earns loyalty fees.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <CheckCircle2 className="h-4 w-4 text-primary mb-2" />
+              <p className="text-sm font-semibold text-foreground mb-1">Finishes between strike and cap</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">Payout is proportional to the distance travelled past the strike — a rate finishing halfway to the cap pays half the maximum. Protocol fees of 2% of the payout are collected.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <CheckCircle2 className="h-4 w-4 text-primary mb-2" />
+              <p className="text-sm font-semibold text-foreground mb-1">Finishes at or above the cap</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">The maximum payout, (<em>C</em> − <em>K</em>) per unit of notional. Movement beyond the cap adds nothing further, which is the bound LPs underwrite against.</p>
             </div>
           </div>
+
+          <P>
+            There are no disputed outcomes and no adjudication process — the rate at expiry
+            determines the payout arithmetically. There are, however, partial settlements: they are
+            the ordinary case rather than the exception, and an earlier description of settlement as
+            binary did not reflect the deployed contract.
+          </P>
 
           <H3>6.3 Settlement Integrity</H3>
           <P>
@@ -1445,7 +1480,7 @@ export default function Whitepaper() {
                 illustrative and do not represent guaranteed outcomes. Regulatory approvals referenced
                 as planned or in progress are subject to regulatory discretion and are not guaranteed.
               </p>
-              <p className="text-muted-foreground/50">© 2026 BlockFinaX. All rights reserved. Whitepaper v1.1 — March 2026.</p>
+              <p className="text-muted-foreground/50">© 2026 BlockFinaX. All rights reserved. Whitepaper v1.2 — August 2026.</p>
             </div>
           </div>
         </main>
