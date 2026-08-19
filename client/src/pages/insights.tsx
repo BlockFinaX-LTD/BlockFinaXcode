@@ -88,7 +88,6 @@ function SiteNav({ insightsActive }: { insightsActive?: boolean }) {
                 </div>
               )}
             </div>
-            <Link href="/whitepaper" className="text-sm text-gray-500 hover:text-gray-900 transition-colors no-underline">Whitepaper</Link>
             <Link href="/insights" className={`text-sm transition-colors no-underline ${insightsActive ? 'text-[#1a4480] font-semibold' : 'text-gray-500 hover:text-gray-900'}`}>Insights</Link>
             <Link href="/home" className="no-underline">
               <Button size="sm" className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 text-sm font-medium">
@@ -116,7 +115,6 @@ function SiteNav({ insightsActive }: { insightsActive?: boolean }) {
                   </div>
                 )}
               </div>
-              <Link href="/whitepaper" onClick={() => setMobileMenuOpen(false)} className="block w-full text-left px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors no-underline">Whitepaper</Link>
               <Link href="/insights" onClick={() => setMobileMenuOpen(false)} className={`block w-full text-left px-3 py-2 text-sm rounded-lg transition-colors no-underline ${insightsActive ? 'text-[#1a4480] font-semibold bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>Insights</Link>
               <div className="px-3 pt-2">
                 <Link href="/home" className="no-underline">

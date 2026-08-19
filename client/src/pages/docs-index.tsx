@@ -9,16 +9,13 @@
 import { Link } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, FileText, Presentation, Folder, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Presentation, Folder, ChevronRight } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
+// The whitepaper is not listed here any more. It moved to the data room, and a
+// magic-link token no longer opens it — listing it would offer this audience a
+// link that bounces them to a password screen they have not been given.
 const DOCS = [
-  {
-    href: '/whitepaper',
-    icon: FileText,
-    title: 'Whitepaper',
-    sub: 'Protocol design, mechanics, and roadmap.',
-  },
   {
     href: '/pitch',
     icon: Presentation,

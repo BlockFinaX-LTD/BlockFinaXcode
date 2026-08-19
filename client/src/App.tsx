@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import Website from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
+import { InvestorGate } from "@/components/investor-gate";
 import DataRoom from "@/pages/data-room";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
@@ -181,7 +182,10 @@ function RiftPostSigninSync() {
 // "request access" form otherwise. Docs stay gated.
 const DocsIndexGated  = () => <DocsGate><DocsIndex /></DocsGate>;
 const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
-const WhitepaperGated = () => <DocsGate><Whitepaper /></DocsGate>;
+// The whitepaper is an investor document, not a marketing page. It sits under
+// /data-room and admits only a live data-room session — no magic link, no
+// admin bypass, and no entry from the public navigation.
+const WhitepaperGated = () => <InvestorGate><Whitepaper /></InvestorGate>;
 
 // Data room is the exception: no magic link. It carries its own password
 // screen (PasswordGate in data-room.tsx), which authenticates against
@@ -220,8 +224,11 @@ function Router() {
       {/* Docs — gated by per-request magic-link token */}
       <Route path="/docs" component={DocsIndexGated} />
       <Route path="/pitch" component={PitchGated} />
-      <Route path="/whitepaper" component={WhitepaperGated} />
       <Route path="/data-room" component={DataRoomGated} />
+      <Route path="/data-room/whitepaper" component={WhitepaperGated} />
+      {/* Old public path. Kept as a redirect so shared links and bookmarks
+          land in the data room rather than on a 404. */}
+      <Route path="/whitepaper"><Redirect to="/data-room/whitepaper" /></Route>
 
       {/* App routes — AuthGuard redirects unauthenticated visitors to /auth.
           No allowlist check after sign-in: anyone with a Rift session can
