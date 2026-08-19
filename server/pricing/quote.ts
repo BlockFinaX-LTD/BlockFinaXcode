@@ -34,6 +34,15 @@ import type { PairTier } from "./data/pairs";
 // pricing-model failure (σ stuck at floor on a tier with real jump risk).
 // See the leverage check below for the rationale.
 export const MAX_LEVERAGE_RATIO = 100;
+/**
+ * Floor on max_payout/premium — the point past which cover stops being worth buying.
+ *
+ * 1.0714 is the hard break-even under the deployed Base fees (5% on the premium
+ * in, 2% off the payout out): below it the hedger loses money even when the rate
+ * finishes at the cap. 1.5 leaves a real margin — at the floor the buyer is
+ * already paying two thirds of the most they could ever receive.
+ */
+export const MIN_LEVERAGE_RATIO = 1.5;
 
 export interface QuoteRequest {
   pair: string;            // e.g. "USD/GHS"
@@ -382,17 +391,58 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
   //   - ATM 30d call typically prices ~10–30× the premium when discounted
   //   - Even cheap deep-OTM lottery tickets rarely exceed ~50×
   //   - Anything beyond 100× indicates the model is undervaluing the leg
-  if (premiumUsd > 0) {
-    const leverage = maxPayoutUsd / premiumUsd;
-    if (leverage > MAX_LEVERAGE_RATIO) {
-      throw new Error(
-        `Quote rejected: max_payout/premium = ${leverage.toFixed(0)}× exceeds ` +
-        `safety cap of ${MAX_LEVERAGE_RATIO}×. This usually means σ for ${req.pair} ` +
-        `is at the engine floor and the option is mispriced. Move the strike closer ` +
-        `to spot, narrow the cap, or wait for the volatility floor for this tier ` +
-        `to be recalibrated.`,
-      );
-    }
+  // A premium of exactly zero is a free option, and it used to be signable.
+  //
+  // The leverage test below was guarded by `if (premiumUsd > 0)`, so a premium
+  // that reached zero skipped the check entirely rather than failing it — and
+  // premiumRateFixed6 rounds to 1e6, which truncates anything under half a
+  // basis point to 0. The two combined meant a deep out-of-the-money quote
+  // could be attested at no cost at all: the one case the leverage cap exists
+  // to catch was the one case it could not see, because dividing by zero is not
+  // "greater than 100".
+  //
+  // Checked against the fixed-point value the contract will actually receive,
+  // not the float, since that is what the signature commits to.
+  const premiumRateFixed6Check = Math.round(premiumRate * 1_000_000);
+  if (premiumUsd <= 0 || premiumRateFixed6Check <= 0) {
+    throw new Error(
+      `Quote rejected: premium rounds to zero at the contract's 1e-6 precision ` +
+      `(${premiumUsd.toFixed(10)} USD on ${req.notional} notional). This is a free ` +
+      `option — the strike is too far from spot for the tenor, or σ for ${req.pair} ` +
+      `is at the engine floor. Move the strike closer to spot or lengthen the tenor.`,
+    );
+  }
+
+  const leverage = maxPayoutUsd / premiumUsd;
+  if (leverage > MAX_LEVERAGE_RATIO) {
+    throw new Error(
+      `Quote rejected: max_payout/premium = ${leverage.toFixed(0)}× exceeds ` +
+      `safety cap of ${MAX_LEVERAGE_RATIO}×. This usually means σ for ${req.pair} ` +
+      `is at the engine floor and the option is mispriced. Move the strike closer ` +
+      `to spot, narrow the cap, or wait for the volatility floor for this tier ` +
+      `to be recalibrated.`,
+    );
+  }
+
+  // The other end of the same ratio: cover so expensive the buyer cannot win.
+  //
+  // For a capped spread the premium converges on the maximum payout as spot
+  // runs through the strike — measured at K=11.00/C=11.40, σ=12%, 5 days, the
+  // ratio falls to 1.02 at spot 11.60 and reaches exactly 1.00 at 12.00. With
+  // the deployed 5% entry and 2% payout fees, break-even sits at
+  // 1.05/0.98 = 1.0714, so below that a hedger cannot profit even if the rate
+  // finishes at the cap.
+  //
+  // This is what stops sales on an in-the-money pool, and it does so for an
+  // economic reason rather than an arbitrary spot threshold: at L = 1.5 the
+  // buyer would be paying two thirds of the most they could ever receive.
+  if (leverage < MIN_LEVERAGE_RATIO) {
+    throw new Error(
+      `Quote rejected: max_payout/premium = ${leverage.toFixed(2)}× is below the ` +
+      `floor of ${MIN_LEVERAGE_RATIO}×. Spot has moved so far through the strike that ` +
+      `the premium approaches the maximum payout — after fees the buyer cannot profit ` +
+      `even at the cap. This pool is no longer worth buying into.`,
+    );
   }
 
   // ── v8: convert quote inputs to the fixed-6 representation the contract verifies ──
