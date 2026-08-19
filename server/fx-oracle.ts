@@ -527,28 +527,33 @@ async function settleChain(
       }
 
       const strike = Number(ethers.formatUnits(core.strike, 6));
-      const initialRate = Number(ethers.formatUnits(core.initialRate, 6));
-      const strikeAbove = core.strikeAbove as boolean;
-      // Legacy events (strikeAbove=false but strike > initialRate) are upward hedges
-      const effectiveStrikeAbove = strikeAbove || (!strikeAbove && strike > initialRate);
       const expiryDate = Number(core.expiryDate);
-      const isExpired = expiryDate <= now;
-      const isTouched = effectiveStrikeAbove ? rate.rate >= strike : rate.rate <= strike;
 
-      if (!isExpired && !isTouched) continue;
+      // Settle at expiry only.
+      //
+      // This used to settle the moment spot touched the strike, at the touching
+      // rate. The payout is notional × (min(S_T, C) − K) / S₀, so a settlement
+      // fired at S_T ≈ K pays ≈ 0 — the trigger went off at the exact instant
+      // intrinsic value was zero and then froze it there.
+      //
+      // Both events that ever triggered did precisely that. Event 5 (K 11.70,
+      // cap 13.00) settled at 11.711956 and paid 0.92% of its maximum: position
+      // #4 put up $1,000, paid $16.93 in premium and received $1.04 on a
+      // position that won. Event 8 settled 0.011 past its strike and paid 11%.
+      //
+      // Cover is a call spread — it is worth the distance travelled from strike
+      // toward the cap, measured where the rate finishes. Stopping the clock on
+      // first touch destroys exactly the value the hedger paid for, and it is
+      // also the payoff the pricing engine has been quoting all along, so this
+      // aligns settlement with both the product and its price.
+      if (expiryDate > now) continue;
 
       const settlementPriceWei = ethers.parseUnits(rate.rate.toFixed(6), 6);
       const tx = await writeContract.settleEvent(i, settlementPriceWei);
       await tx.wait();
       settled++;
-
-      if (isTouched && !isExpired) {
-        oneTouchSettled++;
-        console.log(`${tag} ONE-TOUCH: Event #${i} (${underlying}) settled — rate ${rate.rate} touched strike ${strike}`);
-      } else {
-        expirySettled++;
-        console.log(`${tag} EXPIRY: Event #${i} (${underlying}) settled — rate ${rate.rate} (strike: ${strike})`);
-      }
+      expirySettled++;
+      console.log(`${tag} EXPIRY: Event #${i} (${underlying}) settled — rate ${rate.rate} (strike: ${strike})`);
     } catch (error) {
       errors.push(`${tag} Event #${i} settlement failed: ${error instanceof Error ? error.message : error}`);
     }
@@ -558,6 +563,9 @@ async function settleChain(
 }
 
 export async function checkAndSettleEvents(): Promise<{ settled: number; oneTouchSettled: number; expirySettled: number; errors: string[] }> {
+  // oneTouchSettled remains in the shape for the /api/fx/auto-settle response
+  // and is now always zero — settlement happens at expiry only. Kept rather
+  // than removed so the endpoint's contract does not change.
   let settled = 0, oneTouchSettled = 0, expirySettled = 0;
   const errors: string[] = [];
 
@@ -619,7 +627,7 @@ async function runSettlementCycle(reason: string): Promise<void> {
     const result = await checkAndSettleEvents();
     if (result.settled > 0) {
       console.log(
-        `[Oracle] ${reason}: settled ${result.settled} (${result.oneTouchSettled} one-touch, ${result.expirySettled} expiry)`,
+        `[Oracle] ${reason}: settled ${result.settled} at expiry`,
       );
     } else {
       console.log(`[Oracle] ${reason}: nothing ready to settle`);
