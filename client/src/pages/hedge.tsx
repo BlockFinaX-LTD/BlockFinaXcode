@@ -400,6 +400,7 @@ export default function Hedge() {
   const suggestedPctRate = pricingQuote ? pricingQuote.premiumRate * 100 : null;
   const isPremiumBelowSuggested = !!(suggestedPctRate !== null && Number.isFinite(userPremiumNum) && userPremiumNum > 0 && userPremiumNum < suggestedPctRate * 0.9);
 
+
   useEffect(() => {
     if (suggestedPctRate !== null && Number.isFinite(suggestedPctRate) && suggestedPctRate > 0) {
       const next = suggestedPctRate.toFixed(3);
@@ -566,6 +567,53 @@ export default function Hedge() {
     queryKey: ['/api/fx/rates'],
     refetchInterval: 5 * 60 * 1000,
   });
+  /**
+   * Is this a pool anyone should be allowed to sell?
+   *
+   * premiumRate is immutable on-chain — no setter exists — so a bad premium
+   * cannot be corrected after createEvent. The only check here caught premiums
+   * that were too *low*; event 10 was created at 3.0% against a strike and cap
+   * worth 2.681%, so it charged more than it could ever pay and both its
+   * hedgers lost money the moment they bought. Nothing looked at that direction.
+   *
+   * Server decides. The endpoint runs the same checks the engine would, and the
+   * form blocks on a refusal rather than warning about it, because there is no
+   * fixing it afterwards.
+   */
+  const [premiumCheck, setPremiumCheck] = useState<{ ok: boolean; reason?: string; warning?: string; leverage?: number } | null>(null);
+  useEffect(() => {
+    const strike = parseFloat(newEvent.strike);
+    const cap = parseFloat(newEvent.payoutCap);
+    const rate = parseFloat(newEvent.premiumRate) / 100;
+    const spot = fxData?.rates[newEvent.underlying]?.rate;
+    const hours = parseInt(newEvent.expiryHours, 10);
+    if (!Number.isFinite(strike) || !Number.isFinite(cap) || !Number.isFinite(rate) || rate <= 0 || !spot || !Number.isFinite(hours) || hours <= 0) {
+      setPremiumCheck(null);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/pricing/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pair: newEvent.underlying, premiumRate: rate, strike, payoutCap: cap, spot,
+            strikeAbove: strike > spot,
+            expiryUnixSeconds: Math.floor(Date.now() / 1000) + hours * 3600,
+          }),
+        });
+        const j = await res.json();
+        if (!cancelled) setPremiumCheck(res.ok ? j : null);
+      } catch {
+        // The engine being unreachable must not block pool creation — the
+        // on-chain guards still apply and an LP should not be stranded by our
+        // outage. It only means this particular check did not run.
+        if (!cancelled) setPremiumCheck(null);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [newEvent.strike, newEvent.payoutCap, newEvent.premiumRate, newEvent.underlying, newEvent.expiryHours, fxData]);
 
   const fetchEventDetails = async (id: number) => {
     const local = events.find((e) => e.id === id);
@@ -1212,6 +1260,14 @@ export default function Hedge() {
                   </div>
                   <div className="field"><label>Duration</label><button className="select" onClick={() => setDurationOpen(true)}><span className="lab">{durationLabel}</span><span className="chev"><ChevronDown /></span></button></div>
                 </div>
+                {premiumCheck?.ok === false && (
+                  <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--red)', background: 'color-mix(in oklab, var(--red) 8%, transparent)' }}>
+                    <p className="hint" style={{ color: 'var(--red)', margin: 0 }}>{premiumCheck.reason}</p>
+                  </div>
+                )}
+                {premiumCheck?.ok && premiumCheck.warning && (
+                  <p className="hint" style={{ marginTop: 10, color: 'var(--amber)' }}>{premiumCheck.warning}</p>
+                )}
                 {isPremiumBelowSuggested && (
                   <div style={{ marginTop: 10 }}>
                     <p className="hint" style={{ color: 'var(--amber)' }}>Your premium is more than 10% below the engine's suggested {suggestedPctRate?.toFixed(2)}%. You may be underwriting below fair value.</p>
@@ -1254,7 +1310,7 @@ export default function Hedge() {
               <div className="sum-line"><span className="l">Event creation fee</span><span className="v">${creationFee.toFixed(2)}</span></div>
               <div className="sum-line total"><span className="l">Total required</span><span className="v">{(seedNum + creationFee).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {newEvent.paymentCurrency}</span></div>
               <button className="btn btn-primary"
-                disabled={createEventMutation.isPending || seedNum < 10 || !newEvent.name.trim() || !newEvent.strike || !newEvent.payoutCap || !newEvent.premiumRate || (isPremiumBelowSuggested && !newEvent.overrideAcknowledged)}
+                disabled={createEventMutation.isPending || seedNum < 10 || !newEvent.name.trim() || !newEvent.strike || !newEvent.payoutCap || !newEvent.premiumRate || (isPremiumBelowSuggested && !newEvent.overrideAcknowledged) || premiumCheck?.ok === false}
                 onClick={() => createEventMutation.mutate()}>
                 {createEventMutation.isPending ? <><Loader2 className="spin" /> {txStep || 'Creating…'}</> : <><Check /> Create event</>}
               </button>

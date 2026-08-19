@@ -2,6 +2,7 @@
  * pricing.ts — REST endpoints for the pricing engine.
  *
  *   POST /api/pricing/quote     — get a fair-premium quote for a hedge event
+ *   POST /api/pricing/validate  — is this a premium anyone should be allowed to sell?
  *   GET  /api/pricing/health    — diagnostic: USD rate cache, last close per pair
  *
  * The quote endpoint is read-only and unsigned (no wallet signature required) —
@@ -11,6 +12,9 @@
 
 import type { Express } from "express";
 import { quote } from "../pricing/quote";
+import { validateLpPremium } from "../pricing/implied-vol";
+import { getPairJumpParams } from "../pricing/data/jump-params";
+import { getPricingVol } from "../pricing/data/vol";
 import { getUsdRateCache } from "../pricing/data/usdRate";
 import { getCloseCount } from "../pricing/data/historical";
 import { listAllClassifications } from "../pricing/data/classification";
@@ -69,6 +73,58 @@ export function registerPricingRoutes(app: Express): void {
       return res.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "internal pricing error";
+      return res.status(400).json({ error: msg });
+    }
+  });
+
+  // ── POST /api/pricing/validate ──────────────────────────────────────────
+  //
+  // Checked before a pool is created, because a bad premium cannot be undone
+  // afterwards: premiumRate is immutable on-chain and there is no setter.
+  //
+  // Event 10 on Base is what this exists for. It was created at a 3.0% premium
+  // against a strike and cap worth 2.681%, so the premium exceeded the maximum
+  // payout and every buyer lost money the moment they bought — two of them, for
+  // $55.76 between them, whatever the rate did. Nothing checked it. The only
+  // guard on the form catches premiums that are too *low*.
+  app.post("/api/pricing/validate", async (req, res) => {
+    try {
+      const { pair, premiumRate, strike, payoutCap, expiryUnixSeconds, spot, strikeAbove } = req.body ?? {};
+      for (const [k, v] of [["pair", pair], ["premiumRate", premiumRate], ["strike", strike],
+                            ["payoutCap", payoutCap], ["expiryUnixSeconds", expiryUnixSeconds],
+                            ["spot", spot]] as Array<[string, unknown]>) {
+        const bad = k === "pair" ? typeof v !== "string" || !v : typeof v !== "number" || !Number.isFinite(v);
+        if (bad) return res.status(400).json({ error: `${k} is required` });
+      }
+      const T = (expiryUnixSeconds - Math.floor(Date.now() / 1000)) / (365.25 * 24 * 3600);
+      if (T <= 0) return res.status(400).json({ error: "expiryUnixSeconds must be in the future" });
+
+      // Neither of these may take the endpoint down with them. The checks that
+      // matter most — a premium above the maximum payout, or leaving too little
+      // upside to be worth buying — are arithmetic on the strike, cap and spot,
+      // and need no market view at all. Only the σ band does. An unclassified
+      // pair or a cold vol cache should narrow what can be said, not refuse to
+      // say anything: the alternative is a 400 that reads to the LP as "your
+      // premium is fine".
+      const jump = await getPairJumpParams(pair).catch(() => ({
+        lambda: 2.0, jumpMean: 0.08, jumpStd: 0.12,   // frontierEM defaults
+      }));
+      let marketSigma: number | undefined;
+      try {
+        marketSigma = (await getPricingVol(pair)).sigma;
+      } catch {
+        marketSigma = undefined;
+      }
+
+      const result = validateLpPremium({
+        premiumRate, S: spot, strike, payoutCap, T,
+        strikeAbove: strikeAbove !== false,
+        ...jump,
+        marketSigma,
+      });
+      return res.json({ ...result, marketSigma: marketSigma ?? null });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "validation failed";
       return res.status(400).json({ error: msg });
     }
   });
