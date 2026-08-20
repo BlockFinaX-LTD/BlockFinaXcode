@@ -101,6 +101,132 @@ Hard rules:
 
 Output the message only. No preamble, no sign-off block, no quotation marks around it.`;
 
+const ACTOR = "harvestapi~linkedin-post-search";
+
+type RawItem = { text?: unknown; url?: unknown; name?: unknown; headline?: unknown };
+
+/**
+ * Normalise one Apify result into the shape draftBatch expects.
+ *
+ * Field names are tried against several candidates rather than read from one
+ * path. The actor's output schema is documented only as "post content, author
+ * details" — the exact keys are not published, and a scraper's payload shape
+ * follows LinkedIn's markup, so it moves. Reading one guessed path would fail
+ * silently and return zero results with no error; trying a handful degrades to
+ * a missing name instead of a missing post.
+ */
+function mapApifyPost(p: any): RawItem | null {
+  if (!p || typeof p !== "object") return null;
+  const text = p.content ?? p.text ?? p.postContent ?? p.description ?? "";
+  if (typeof text !== "string" || !text.trim()) return null;
+
+  const author = p.author ?? p.actor ?? p.poster ?? {};
+  const url =
+    p.url ?? p.postUrl ?? p.linkedinUrl ?? p.link ??
+    author.linkedinUrl ?? author.profileUrl ?? null;
+
+  return {
+    text: text.trim(),
+    url: typeof url === "string" ? url : null,
+    name: author.name ?? author.fullName ?? p.authorName ?? null,
+    headline: author.headline ?? author.position ?? author.occupation ?? p.authorHeadline ?? null,
+  };
+}
+
+/**
+ * Filter a batch of candidate posts, draft for the survivors, save them.
+ *
+ * Shared by the extension (/ingest) and the search provider (/search) so both
+ * paths apply the same relevance bar and the same dedupe. A post found twice by
+ * two different routes should not produce two drafts.
+ */
+async function draftBatch(
+  items: RawItem[],
+  kind: Intent,
+  threshold: number,
+): Promise<{ drafted: number; considered: number; relevant: number; drafts: unknown[] }> {
+  const seen = new Set(
+    (await db.select({ url: outreachDrafts.sourceUrl }).from(outreachDrafts))
+      .map(r => (r.url || "").trim())
+      .filter(Boolean),
+  );
+
+  const candidates: Array<{
+    text: string; url: string | null; name: string | null; headline: string | null; score: number;
+  }> = [];
+
+  for (const it of items.slice(0, 200)) {
+    const text = typeof it?.text === "string" ? it.text.trim() : "";
+    if (text.length < 60) continue;
+    const url = typeof it?.url === "string" && it.url.trim() ? it.url.trim() : null;
+    if (url && seen.has(url)) continue;
+    const score = relevanceScore(text);
+    if (score < threshold) continue;
+    candidates.push({
+      text,
+      url,
+      name: typeof it?.name === "string" ? it.name.trim() || null : null,
+      headline: typeof it?.headline === "string" ? it.headline.trim() || null : null,
+      score,
+    });
+    if (url) seen.add(url);
+  }
+
+  // Best first, so a generous batch drafts the ten most relevant rather than
+  // the ten that happened to arrive first.
+  candidates.sort((a, b) => b.score - a.score);
+  const chosen = candidates.slice(0, 10);
+  if (!chosen.length) {
+    return { drafted: 0, considered: items.length, relevant: 0, drafts: [] };
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const context = await liveContext();
+  const created: unknown[] = [];
+
+  for (const c of chosen) {
+    try {
+      const who = [c.name, c.headline].filter(Boolean).join(" — ") || "unknown";
+      const msg = await client.messages.create({
+        model: MODEL,
+        max_tokens: 700,
+        system: SYSTEM,
+        messages: [{
+          role: "user",
+          content:
+            `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""\n\n` +
+            `Who they are: ${who}\n\n` +
+            `Live BlockFinaX figures you may quote:\n${context}\n\n` +
+            `Draft a ${kind}. ${INTENT_RULES[kind]}`,
+        }],
+      });
+      const draft = msg.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map(b => b.text).join("").trim();
+      if (!draft) continue;
+      const [row] = await db.insert(outreachDrafts).values({
+        sourceUrl: c.url,
+        sourceText: c.text,
+        personName: c.name,
+        personHeadline: c.headline,
+        intent: kind,
+        draft,
+        originalDraft: draft,
+      }).returning();
+      created.push(row);
+    } catch {
+      /* one item failing must not lose the batch */
+    }
+  }
+
+  return {
+    drafted: created.length,
+    considered: items.length,
+    relevant: candidates.length,
+    drafts: created,
+  };
+}
+
 export function registerOutreachRoutes(app: Express): void {
   // ── POST /api/outreach/draft ────────────────────────────────────────────
   app.post("/api/outreach/draft", requireAdmin, async (req, res) => {
@@ -293,90 +419,100 @@ export function registerOutreachRoutes(app: Express): void {
       if (!Array.isArray(items) || !items.length) {
         return res.status(400).json({ error: "No items." });
       }
-      const kind: Intent = ["reply", "connect", "dm"].includes(intent) ? intent : "reply";
-      const threshold = typeof minScore === "number" ? minScore : 2;
-
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) return res.status(503).json({ error: "Drafting is not configured." });
-
-      const seen = new Set(
-        (await db.select({ url: outreachDrafts.sourceUrl }).from(outreachDrafts))
-          .map(r => (r.url || "").trim())
-          .filter(Boolean),
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(503).json({ error: "Drafting is not configured." });
+      }
+      const out = await draftBatch(
+        items,
+        ["reply", "connect", "dm"].includes(intent) ? intent : "reply",
+        typeof minScore === "number" ? minScore : 2,
       );
-
-      const candidates: Array<{ text: string; url: string | null; name: string | null; headline: string | null; score: number }> = [];
-      for (const it of items.slice(0, 200)) {
-        const text = typeof it?.text === "string" ? it.text.trim() : "";
-        if (text.length < 60) continue;
-        const url = typeof it?.url === "string" && it.url.trim() ? it.url.trim() : null;
-        if (url && seen.has(url)) continue;
-        const score = relevanceScore(text);
-        if (score < threshold) continue;
-        candidates.push({
-          text,
-          url,
-          name: typeof it?.name === "string" ? it.name.trim() || null : null,
-          headline: typeof it?.headline === "string" ? it.headline.trim() || null : null,
-          score,
-        });
-        if (url) seen.add(url);
-      }
-
-      // Best first, so a generous scroll still drafts the ten most relevant
-      // rather than the ten that happened to load first.
-      candidates.sort((a, b) => b.score - a.score);
-      const chosen = candidates.slice(0, 10);
-      if (!chosen.length) {
-        return res.json({ drafted: 0, considered: items.length, relevant: 0, drafts: [] });
-      }
-
-      const client = new Anthropic({ apiKey });
-      const context = await liveContext();
-      const created = [];
-      for (const c of chosen) {
-        try {
-          const who = [c.name, c.headline].filter(Boolean).join(" — ") || "unknown";
-          const msg = await client.messages.create({
-            model: MODEL,
-            max_tokens: 700,
-            system: SYSTEM,
-            messages: [{
-              role: "user",
-              content:
-                `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""\n\n` +
-                `Who they are: ${who}\n\n` +
-                `Live BlockFinaX figures you may quote:\n${context}\n\n` +
-                `Draft a ${kind}. ${INTENT_RULES[kind]}`,
-            }],
-          });
-          const draft = msg.content
-            .filter((b): b is Anthropic.TextBlock => b.type === "text")
-            .map(b => b.text).join("").trim();
-          if (!draft) continue;
-          const [row] = await db.insert(outreachDrafts).values({
-            sourceUrl: c.url,
-            sourceText: c.text,
-            personName: c.name,
-            personHeadline: c.headline,
-            intent: kind,
-            draft,
-            originalDraft: draft,
-          }).returning();
-          created.push(row);
-        } catch {
-          /* one item failing must not lose the batch */
-        }
-      }
-      return res.json({
-        drafted: created.length,
-        considered: items.length,
-        relevant: candidates.length,
-        drafts: created,
-      });
+      return res.json(out);
     } catch (err) {
-      const m = err instanceof Error ? err.message : "ingest failed";
-      return res.status(500).json({ error: m });
+      return res.status(500).json({ error: err instanceof Error ? err.message : "ingest failed" });
+    }
+  });
+
+  // ── POST /api/outreach/search ───────────────────────────────────────────
+  //
+  // Search LinkedIn without touching Anthony's account.
+  //
+  // LinkedIn's own API cannot do this. Sign-In and Share are the only
+  // self-serve products; post search and third-party profiles sit behind
+  // partner programmes that take months and are usually refused. So the search
+  // runs through Apify, which operates its own infrastructure and does not use
+  // his session or cookies. That is the real advantage over the extension: no
+  // account of ours is involved, so there is nothing of his to restrict.
+  //
+  // It costs money — roughly $1.50 per thousand posts — which is why maxPosts
+  // is capped and the query is required rather than defaulted. An accidental
+  // unbounded run should not be possible from a UI click.
+  app.post("/api/outreach/search", requireAdmin, async (req, res) => {
+    try {
+      const token = process.env.APIFY_TOKEN;
+      if (!token) {
+        return res.status(503).json({
+          error: "LinkedIn search is not configured. Set APIFY_TOKEN.",
+        });
+      }
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(503).json({ error: "Drafting is not configured." });
+      }
+
+      const { query, intent, maxPosts, postedLimit, sortBy, minScore } = req.body ?? {};
+      const q = typeof query === "string" ? query.trim() : "";
+      if (!q) return res.status(400).json({ error: "Give it something to search for." });
+
+      const cap = Math.min(Math.max(Number(maxPosts) || 50, 1), 200);
+      const kind: Intent = ["reply", "connect", "dm"].includes(intent) ? intent : "reply";
+
+      // Apify's sync endpoint returns the dataset directly, so there is no run
+      // to poll. It gives up at 300s; we stop earlier so the admin console gets
+      // an error rather than a hung request.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 120_000);
+      let raw: unknown;
+      try {
+        const r = await fetch(
+          `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              searchQueries: [q],
+              maxPosts: cap,
+              sortBy: sortBy === "relevance" ? "relevance" : "date",
+              postedLimit: ["1h", "24h", "week", "month"].includes(postedLimit) ? postedLimit : "month",
+            }),
+          },
+        );
+        if (!r.ok) {
+          const body = await r.text().catch(() => "");
+          return res.status(502).json({
+            error: `LinkedIn search failed (${r.status}). ${body.slice(0, 200)}`,
+          });
+        }
+        raw = await r.json();
+      } catch (e) {
+        const aborted = e instanceof Error && e.name === "AbortError";
+        return res.status(504).json({
+          error: aborted ? "LinkedIn search timed out." : "Could not reach the search provider.",
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      const posts = Array.isArray(raw) ? raw : [];
+      const items = posts.map(mapApifyPost).filter((x): x is RawItem => x !== null);
+      if (!items.length) {
+        return res.json({ drafted: 0, considered: posts.length, relevant: 0, drafts: [], query: q });
+      }
+
+      const out = await draftBatch(items, kind, typeof minScore === "number" ? minScore : 2);
+      return res.json({ ...out, query: q, fetched: posts.length });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "search failed" });
     }
   });
 

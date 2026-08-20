@@ -66,9 +66,16 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   const [personName, setPersonName] = useState("");
   const [personHeadline, setPersonHeadline] = useState("");
   const [intent, setIntent] = useState<Intent>("reply");
-  /** "one" = a single post. "scan" = a whole page pasted at once. */
-  const [mode, setMode] = useState<"one" | "scan">("one");
+  /**
+   * "one"    = a single post, pasted.
+   * "scan"   = a whole page pasted at once.
+   * "search" = Finax searches LinkedIn itself, through a provider that uses its
+   *            own infrastructure rather than your session.
+   */
+  const [mode, setMode] = useState<"one" | "scan" | "search">("one");
   const [blob, setBlob] = useState("");
+  const [query, setQuery] = useState("");
+  const [postedLimit, setPostedLimit] = useState("month");
   const [tab, setTab] = useState<Status>("waiting");
   const [copied, setCopied] = useState<number | null>(null);
 
@@ -111,6 +118,33 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
     onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
   });
 
+  const search = useMutation({
+    mutationFn: () =>
+      api("/api/outreach/search", token, {
+        method: "POST",
+        body: JSON.stringify({ query, intent, postedLimit, maxPosts: 50 }),
+      }),
+    onSuccess: (r: { drafted: number; relevant: number; considered: number; fetched?: number }) => {
+      setTab("waiting");
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      toast({
+        // Say what the search actually did at each stage. "Nothing to draft" on
+        // its own is indistinguishable from a broken search — the counts tell
+        // you whether LinkedIn had nothing or the filter rejected it all.
+        title: r.drafted
+          ? `${r.drafted} draft${r.drafted === 1 ? "" : "s"} ready`
+          : r.fetched
+            ? "Nothing relevant found"
+            : "LinkedIn returned nothing",
+        description: r.fetched
+          ? `${r.fetched} post${r.fetched === 1 ? "" : "s"} found · ${r.relevant} about currency risk`
+          : "Try a broader search, or a longer time window.",
+        variant: r.drafted ? undefined : "destructive",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Search failed", description: e.message, variant: "destructive" }),
+  });
+
   const update = useMutation({
     mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
       api(`/api/outreach/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
@@ -131,16 +165,17 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   return (
     <div className="space-y-6">
       <p className="max-w-[68ch] text-sm text-muted-foreground">
-        Paste a LinkedIn post and Finax drafts a reply against the live book — open pools, real
-        premiums, what has settled. Drafts wait here for you to copy.{" "}
-        <span className="text-foreground">Nothing is sent from here</span>: LinkedIn prohibits
+        Finax drafts LinkedIn replies against the live book — open pools, real premiums, what has
+        settled. Give it one post, paste a whole page, or let it search LinkedIn itself. Drafts wait
+        here for you to copy.{" "}
+        <span className="text-foreground">Nothing is ever posted from here</span>: LinkedIn prohibits
         automated posting, and the account is worth more than the keystrokes.
       </p>
 
       {/* ── compose ── */}
       <div className="rounded-lg border border-border bg-muted/20 p-4">
         <div className="mb-3 flex gap-1.5">
-          {([["one", "One post"], ["scan", "Scan a page"]] as const).map(([k, label]) => (
+          {([["one", "One post"], ["scan", "Scan a page"], ["search", "Search LinkedIn"]] as const).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setMode(k)}
@@ -158,11 +193,49 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
           <span className="ml-auto self-center text-[11.5px] text-muted-foreground">
             {mode === "one"
               ? "one reply, with who they are"
-              : "select a whole notifications page and paste — Finax separates it"}
+              : mode === "scan"
+                ? "select a whole notifications page and paste — Finax separates it"
+                : "Finax searches LinkedIn itself — your account is not used"}
           </span>
         </div>
 
-        {mode === "scan" ? (
+        {mode === "search" ? (
+          <>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && query.trim().length >= 3) search.mutate(); }}
+              placeholder="What to search for, e.g. cedi depreciation importers"
+              disabled={!enabled}
+              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+            />
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-[12px] text-muted-foreground">Posted within</span>
+              {([["24h", "a day"], ["week", "a week"], ["month", "a month"]] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setPostedLimit(k)}
+                  disabled={!enabled}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-50",
+                    postedLimit === k
+                      ? "border-primary bg-primary/10 font-medium text-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[12px] text-muted-foreground">
+              Searches up to 50 posts through an outside provider, keeps the ones about currency
+              risk, and drafts the ten strongest.{" "}
+              <span className="text-foreground">Your LinkedIn account is never used</span> — the
+              provider runs its own infrastructure, so there is nothing of yours to restrict.
+              Each search costs a few cents.
+            </p>
+          </>
+        ) : mode === "scan" ? (
           <>
             <textarea
               value={blob}
@@ -229,17 +302,26 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         </div>
 
         <Button
-          onClick={() => (mode === "scan" ? scan.mutate() : draftIt.mutate())}
+          onClick={() =>
+            mode === "search" ? search.mutate()
+            : mode === "scan" ? scan.mutate()
+            : draftIt.mutate()
+          }
           disabled={
-            !enabled || draftIt.isPending || scan.isPending ||
-            (mode === "scan" ? blob.trim().length < 60 : sourceText.trim().length < 20)
+            !enabled || draftIt.isPending || scan.isPending || search.isPending ||
+            (mode === "search" ? query.trim().length < 3
+             : mode === "scan" ? blob.trim().length < 60
+             : sourceText.trim().length < 20)
           }
           className="mt-3.5"
         >
-          {draftIt.isPending || scan.isPending
+          {draftIt.isPending || scan.isPending || search.isPending
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {scan.isPending ? "Finax is reading the page…" : "Finax is writing…"}</>
-            : <><Sparkles className="mr-2 h-4 w-4" /> {mode === "scan" ? "Scan and draft" : "Draft it"}</>}
+                {search.isPending ? "Finax is searching LinkedIn…"
+                 : scan.isPending ? "Finax is reading the page…"
+                 : "Finax is writing…"}</>
+            : <><Sparkles className="mr-2 h-4 w-4" />
+                {mode === "search" ? "Search and draft" : mode === "scan" ? "Scan and draft" : "Draft it"}</>}
         </Button>
         {mode === "one" && sourceText.trim().length > 0 && sourceText.trim().length < 20 && (
           <p className="mt-2 text-[12px] text-muted-foreground">
