@@ -39,7 +39,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db";
 import { outreachDrafts, outreachPeople, marketMemory } from "@shared/schema";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, randomBytes } from "node:crypto";
 import { requireAdmin } from "../middleware/admin-auth";
 import { relevanceScore } from "./outreach-relevance";
 import { briefForText, pairsMentioned, briefFor } from "../outreach/market-brief";
@@ -52,6 +52,10 @@ import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
 import { buildPrompt, type Candidate } from "../outreach/prompt";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
+import {
+  loadAuth, saveAuth, clearAuth, isExpired, authorizeUrl, exchangeCode,
+  redirectUri, activityUrnFrom, postComment,
+} from "../outreach/linkedin";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
 async function liveContext(): Promise<string> {
@@ -545,6 +549,133 @@ export function registerOutreachRoutes(app: Express): void {
       });
     } catch {
       return res.json({ lastScanAt: null, nextScanAt: null, intervalHours: 5, configured: false });
+    }
+  });
+
+
+  /* ── LinkedIn account, for sending ────────────────────────────────────────
+   *
+   * Discovery and sending reach LinkedIn by completely different routes, and
+   * that is not an accident. Reading third-party posts has no sanctioned path,
+   * so it goes through a provider. Writing does have one, so it goes through
+   * LinkedIn's own API on a token Anthony granted through their consent screen.
+   * Nothing here pretends to be a person using a browser.
+   */
+
+  // A short-lived nonce tying the LinkedIn redirect back to the admin who
+  // started it. The callback arrives as a plain browser navigation with no
+  // admin header on it, so without this anyone who guessed the URL could bind
+  // their own LinkedIn account to Anthony's console.
+  const oauthStates = new Map<string, { email: string; expires: number }>();
+
+  app.get("/api/outreach/linkedin/status", requireAdmin, async (_req, res) => {
+    try {
+      const auth = await loadAuth();
+      return res.json({
+        connected: !!auth && !isExpired(auth),
+        configured: !!(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET),
+        name: auth?.name ?? null,
+        expiresAt: auth ? new Date(auth.expiresAt).toISOString() : null,
+        expired: auth ? isExpired(auth) : false,
+        redirectUri: redirectUri(),
+      });
+    } catch {
+      return res.json({ connected: false, configured: false, name: null, expiresAt: null, expired: false });
+    }
+  });
+
+  app.post("/api/outreach/linkedin/connect", requireAdmin, async (req: any, res) => {
+    if (!process.env.LINKEDIN_CLIENT_ID || !process.env.LINKEDIN_CLIENT_SECRET) {
+      return res.status(503).json({ error: "Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET first." });
+    }
+    const state = randomBytes(24).toString("hex");
+    oauthStates.set(state, { email: req.adminEmail || "unknown", expires: Date.now() + 10 * 60_000 });
+    oauthStates.forEach((v, k) => { if (Date.now() > v.expires) oauthStates.delete(k); });
+    return res.json({ url: authorizeUrl(state) });
+  });
+
+  // Not behind requireAdmin: LinkedIn sends the browser here, and a redirect
+  // carries no header. The state nonce is what authenticates it.
+  app.get("/api/outreach/linkedin/callback", async (req, res) => {
+    const done = (msg: string, ok: boolean) =>
+      res.redirect(`/admin?linkedin=${ok ? "connected" : "failed"}&message=${encodeURIComponent(msg)}`);
+    try {
+      const { code, state, error, error_description } = req.query as Record<string, string>;
+      if (error) return done(error_description || error, false);
+      const pending = state ? oauthStates.get(state) : undefined;
+      if (!pending || Date.now() > pending.expires) {
+        return done("That link expired. Start again from the console.", false);
+      }
+      oauthStates.delete(state);
+      if (!code) return done("LinkedIn did not return a code.", false);
+
+      const auth = await exchangeCode(code);
+      auth.connectedBy = pending.email;
+      await saveAuth(auth, pending.email);
+      return done(`Connected as ${auth.name || "your LinkedIn account"}.`, true);
+    } catch (err) {
+      return done(err instanceof Error ? err.message : "Could not connect.", false);
+    }
+  });
+
+  app.post("/api/outreach/linkedin/disconnect", requireAdmin, async (_req, res) => {
+    try {
+      await clearAuth();
+      return res.json({ connected: false });
+    } catch {
+      return res.status(500).json({ error: "Could not disconnect." });
+    }
+  });
+
+  // ── POST /api/outreach/:id/post ─────────────────────────────────────────
+  //
+  // Publish one draft, as a comment, under Anthony's own name.
+  //
+  // One draft per call, never a batch. That is the safer pattern with LinkedIn,
+  // and the honest one: something posted in a founder's name should be
+  // something he decided to post, one at a time, having read it.
+  //
+  // The draft text is read from the database rather than taken from the request
+  // body, so what gets published is the version sitting in the console. A body
+  // field would let the two diverge, and the record of what was sent would stop
+  // matching what was actually sent.
+  app.post("/api/outreach/:id/post", requireAdmin, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+
+      const auth = await loadAuth();
+      if (!auth) return res.status(503).json({ error: "No LinkedIn account connected." });
+      if (isExpired(auth)) return res.status(401).json({ error: "The LinkedIn connection expired. Reconnect it." });
+
+      const [row] = await db.select().from(outreachDrafts).where(eq(outreachDrafts.id, id)).limit(1);
+      if (!row) return res.status(404).json({ error: "not found" });
+      if (row.commentUrn) {
+        return res.status(409).json({ error: "This was already posted.", commentUrn: row.commentUrn });
+      }
+      if (row.intent !== "comment" && row.intent !== "reply") {
+        return res.status(400).json({
+          error: "Only comments and replies can be posted. A connection note or direct message has to be sent by hand.",
+        });
+      }
+
+      const urn = activityUrnFrom(row.sourceUrl);
+      if (!urn) {
+        return res.status(400).json({
+          error: "No post to comment on. This draft has a profile link rather than a post link.",
+        });
+      }
+
+      const out = await postComment(auth, urn, row.draft);
+      if (!out.ok) return res.status(out.retryable ? 503 : 502).json({ error: out.error });
+
+      const [updated] = await db.update(outreachDrafts)
+        .set({ status: "sent", sentAt: new Date(), commentUrn: out.commentUrn ?? out.commentId ?? "posted" })
+        .where(eq(outreachDrafts.id, id))
+        .returning();
+      return res.json({ posted: true, commentUrn: out.commentUrn, draft: updated });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "Could not post that." });
     }
   });
 

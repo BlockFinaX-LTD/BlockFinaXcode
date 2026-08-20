@@ -1,0 +1,229 @@
+/**
+ * linkedin.ts, posting a comment through LinkedIn's own API.
+ *
+ * ## Why this is not the browser extension
+ *
+ * The extension reads. This writes, and writing is the line LinkedIn actually
+ * enforces. Driving a logged-in session to type into a comment box is the
+ * pattern their anti-automation systems are built to catch, and it is the
+ * fastest way to lose the account a founder's outbound runs through.
+ *
+ * The API route is the opposite. Anthony authorises a LinkedIn app through
+ * their own consent screen, LinkedIn issues a token, and every comment is a
+ * sanctioned API call that they can see, rate limit and revoke. Nothing is
+ * pretending to be a person. If LinkedIn ever objects, they turn off the token
+ * rather than the account.
+ *
+ * ## What the token can and cannot do
+ *
+ * w_member_social covers posting and commenting as the authorising member. It
+ * does not grant reading other people's content, which is why discovery still
+ * goes through a provider. The two halves of this feature reach LinkedIn by
+ * completely different routes, and that is not an accident: reading has no
+ * sanctioned path and writing does.
+ *
+ * ## Why the token lives in the database
+ *
+ * Access tokens last about two months and the process restarts on every deploy.
+ * Holding it in memory would mean re-authorising several times a week.
+ */
+
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { platformSettings } from "@shared/schema";
+
+const OAUTH_KEY = "linkedin_oauth";
+const API = "https://api.linkedin.com";
+/** Pinned rather than floating: LinkedIn sunsets versions, and a silent bump changes behaviour. */
+const LINKEDIN_VERSION = "202605";
+
+export interface LinkedInAuth {
+  accessToken: string;
+  /** urn:li:person:xxxx, the author every comment is attributed to. */
+  personUrn: string;
+  name: string | null;
+  expiresAt: number;
+  connectedAt: number;
+  connectedBy: string | null;
+}
+
+export async function loadAuth(): Promise<LinkedInAuth | null> {
+  try {
+    const [row] = await db.select().from(platformSettings)
+      .where(eq(platformSettings.key, OAUTH_KEY)).limit(1);
+    if (!row?.value) return null;
+    const a = JSON.parse(row.value) as LinkedInAuth;
+    return a?.accessToken && a?.personUrn ? a : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveAuth(a: LinkedInAuth, by: string | null): Promise<void> {
+  const value = JSON.stringify(a);
+  await db.insert(platformSettings)
+    .values({ key: OAUTH_KEY, value, updatedBy: by })
+    .onConflictDoUpdate({
+      target: platformSettings.key,
+      set: { value, updatedAt: new Date(), updatedBy: by },
+    });
+}
+
+export async function clearAuth(): Promise<void> {
+  await db.delete(platformSettings).where(eq(platformSettings.key, OAUTH_KEY));
+}
+
+export function isExpired(a: LinkedInAuth): boolean {
+  // A minute of slack, so a token that dies mid-request is reported as expired
+  // rather than as a mysterious 401.
+  return Date.now() > a.expiresAt - 60_000;
+}
+
+/* ── the OAuth dance ────────────────────────────────────────────────────── */
+
+export function redirectUri(): string {
+  const base = (process.env.PUBLIC_BASE_URL || "https://blockfinax.com").replace(/\/+$/, "");
+  return `${base}/api/outreach/linkedin/callback`;
+}
+
+/**
+ * Scopes.
+ *
+ * openid and profile identify who authorised, which is needed because a comment
+ * must name its author and the person URN comes from the userinfo endpoint.
+ * w_member_social is the one that does the work.
+ */
+const SCOPES = ["openid", "profile", "w_member_social"];
+
+export function authorizeUrl(state: string): string {
+  const p = new URLSearchParams({
+    response_type: "code",
+    client_id: process.env.LINKEDIN_CLIENT_ID || "",
+    redirect_uri: redirectUri(),
+    state,
+    scope: SCOPES.join(" "),
+  });
+  return `https://www.linkedin.com/oauth/v2/authorization?${p.toString()}`;
+}
+
+export async function exchangeCode(code: string): Promise<LinkedInAuth> {
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri(),
+    client_id: process.env.LINKEDIN_CLIENT_ID || "",
+    client_secret: process.env.LINKEDIN_CLIENT_SECRET || "",
+  });
+
+  const r = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const j: any = await r.json().catch(() => ({}));
+  if (!r.ok || !j?.access_token) {
+    throw new Error(j?.error_description || j?.error || `token exchange failed (${r.status})`);
+  }
+
+  // Who authorised. The person URN is required on every comment, so without
+  // this the token is useless and it is better to fail here than at send time.
+  const me = await fetch(`${API}/v2/userinfo`, {
+    headers: { Authorization: `Bearer ${j.access_token}` },
+  });
+  const info: any = await me.json().catch(() => ({}));
+  if (!me.ok || !info?.sub) {
+    throw new Error(info?.message || `could not read the LinkedIn profile (${me.status})`);
+  }
+
+  return {
+    accessToken: j.access_token,
+    personUrn: `urn:li:person:${info.sub}`,
+    name: info.name || null,
+    expiresAt: Date.now() + (Number(j.expires_in) || 60 * 86400) * 1000,
+    connectedAt: Date.now(),
+    connectedBy: null,
+  };
+}
+
+/* ── posting ────────────────────────────────────────────────────────────── */
+
+/**
+ * Pull the activity URN out of a post URL.
+ *
+ * A comment has to name the thing it is on, and LinkedIn identifies that by
+ * URN rather than by URL. Returns null rather than guessing when the URL is a
+ * profile or a search result, because posting a comment onto the wrong thread
+ * is not recoverable by editing.
+ */
+export function activityUrnFrom(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const direct = url.match(/urn:li:(activity|ugcPost|share):\d+/);
+  if (direct) return direct[0];
+  // Some permalinks carry the id without the urn prefix.
+  const bare = url.match(/\/feed\/update\/(?:urn%3Ali%3A)?(activity|ugcPost|share)[:%]3?A?(\d+)/i);
+  if (bare) return `urn:li:${bare[1]}:${bare[2]}`;
+  return null;
+}
+
+export interface PostResult {
+  ok: boolean;
+  commentUrn?: string;
+  commentId?: string;
+  error?: string;
+  /** True when the failure is worth retrying later rather than never. */
+  retryable?: boolean;
+}
+
+/**
+ * Publish one comment.
+ *
+ * Never batches. Every call is one comment that a person clicked to send, which
+ * is both the safer pattern with LinkedIn and the honest one: a comment posted
+ * under Anthony's name should be a thing Anthony decided to post.
+ */
+export async function postComment(
+  auth: LinkedInAuth,
+  activityUrn: string,
+  text: string,
+): Promise<PostResult> {
+  try {
+    const r = await fetch(`${API}/rest/socialActions/${activityUrn}/comments`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        "Linkedin-Version": LINKEDIN_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        actor: auth.personUrn,
+        object: activityUrn,
+        message: { text },
+      }),
+    });
+
+    if (r.ok) {
+      const id = r.headers.get("x-restli-id");
+      const body: any = await r.json().catch(() => ({}));
+      return {
+        ok: true,
+        commentId: id || body?.id,
+        commentUrn: body?.commentUrn || (id ? `urn:li:comment:(${activityUrn},${id})` : undefined),
+      };
+    }
+
+    const body = await r.text().catch(() => "");
+    // 429 is LinkedIn's per-member comment rate limit and clears on its own.
+    // 401 means the token died and re-authorising is the only fix. Saying which
+    // is which saves Anthony guessing why a send failed.
+    if (r.status === 429) {
+      return { ok: false, retryable: true, error: "LinkedIn is rate limiting comments. Wait a few minutes." };
+    }
+    if (r.status === 401 || r.status === 403) {
+      return { ok: false, error: `LinkedIn rejected the token (${r.status}). Reconnect the account. ${body.slice(0, 160)}` };
+    }
+    return { ok: false, error: `LinkedIn returned ${r.status}. ${body.slice(0, 200)}` };
+  } catch (e) {
+    return { ok: false, retryable: true, error: e instanceof Error ? e.message : "network error" };
+  }
+}

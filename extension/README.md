@@ -93,3 +93,87 @@ Nothing is ever posted to LinkedIn by this tool. It writes drafts; you send them
   in Railway, or that variable was never set.
 - **"Nothing relevant in 40 posts"** — working as intended. Search for something
   closer to the subject; a general feed rarely mentions currency risk.
+
+---
+
+# Giving Finax send power
+
+Finax can post comments to LinkedIn for you, through LinkedIn's own API. This is
+separate from the extension and does not use it.
+
+It is worth being clear about why this route and not the extension. The
+extension reads. Posting is the line LinkedIn actually enforces, and automating
+a browser to type into a comment box is the pattern they ban for. Going through
+their API means you grant permission on LinkedIn's own consent screen, they can
+see and rate limit every call, and if they ever object they revoke the token
+rather than your account.
+
+## Step 1 — create a LinkedIn app
+
+Go to https://www.linkedin.com/developers/apps and click **Create app**.
+
+- **App name**: BlockFinaX
+- **LinkedIn Page**: your BlockFinaX company page (you need one; create it first
+  if you have not)
+- **App logo**: any image
+- Tick the legal agreement, then **Create app**
+
+## Step 2 — verify the app
+
+On the app's **Settings** tab there is a **Verify** button. Click it, copy the
+link it gives you, and open that link yourself. It confirms you control the
+company page. This takes about a minute.
+
+## Step 3 — request the products
+
+Go to the **Products** tab and request:
+
+- **Sign In with LinkedIn using OpenID Connect**
+- **Share on LinkedIn**
+
+Both are self-serve and usually approve within a few minutes. "Share on
+LinkedIn" is the one that carries `w_member_social`, the permission that lets
+Finax comment as you.
+
+## Step 4 — set the redirect URL
+
+Go to the **Auth** tab. Under **OAuth 2.0 settings**, add this exact redirect URL:
+
+    https://blockfinax.com/api/outreach/linkedin/callback
+
+It must match character for character.
+
+## Step 5 — copy the keys into Railway
+
+Still on the **Auth** tab, copy the **Client ID** and **Client Secret**.
+
+In Railway, go to your service, then **Variables**, and add:
+
+- `LINKEDIN_CLIENT_ID` — the Client ID
+- `LINKEDIN_CLIENT_SECRET` — the Client Secret
+
+Railway redeploys itself.
+
+## Step 6 — connect the account
+
+Open your admin console, go to **Agent**, then **Outreach**. At the top there is
+a strip that now says "Connect LinkedIn". Click it. LinkedIn asks whether you
+allow BlockFinaX to post on your behalf. Say yes.
+
+The strip changes to "Finax can post as Anthony Kumako".
+
+## Step 7 — post a comment
+
+Each waiting draft now has a **Post to LinkedIn** button. Read the draft, edit
+it if you want, then click it. It asks you to confirm, then publishes.
+
+Once posted the draft is marked **posted by Finax** and cannot be posted twice.
+
+## What it will not do
+
+- It never posts on its own. Every comment is one button press by you.
+- It never posts in bulk. One draft, one click.
+- Connection notes and direct messages have no API route, so those still have to
+  be sent by hand. The button does not appear on them.
+- The token lasts about two months. When it expires the strip says so and you
+  click Connect again.

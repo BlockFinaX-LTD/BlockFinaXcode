@@ -48,6 +48,28 @@ interface Draft {
   createdAt: string | null;
   /** When the original post went up, as opposed to when we drafted. */
   postedAt: string | null;
+  /** Set once LinkedIn actually created the comment. Proof, not intent. */
+  commentUrn: string | null;
+}
+
+interface LinkedInStatus {
+  connected: boolean;
+  configured: boolean;
+  name: string | null;
+  expired: boolean;
+  redirectUri?: string;
+}
+
+/**
+ * Can this draft be published through the API?
+ *
+ * Only comments and replies, and only when we know which post to attach to.
+ * A connection note or a direct message has no API path, and a draft whose
+ * link is a profile rather than a post has nothing to comment on.
+ */
+function canPost(d: Draft): boolean {
+  if (d.intent !== "comment" && d.intent !== "reply") return false;
+  return !!d.sourceUrl && /urn(:|%3A)li(:|%3A)(activity|ugcPost|share)/i.test(d.sourceUrl);
 }
 
 /**
@@ -142,6 +164,34 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   /** Drafts, the people behind them, or what Finax knows. */
   const [section, setSection] = useState<"drafts" | "people" | "memory">("drafts");
   const [copied, setCopied] = useState<number | null>(null);
+
+  const { data: li } = useQuery<LinkedInStatus>({
+    queryKey: ["linkedin-status", token],
+    queryFn: () => api("/api/outreach/linkedin/status", token),
+  });
+
+  const connectLi = useMutation({
+    mutationFn: () => api("/api/outreach/linkedin/connect", token, { method: "POST" }),
+    onSuccess: (r: { url: string }) => { window.location.href = r.url; },
+    onError: (e: Error) => toast({ title: "Couldn't start", description: e.message, variant: "destructive" }),
+  });
+
+  const disconnectLi = useMutation({
+    mutationFn: () => api("/api/outreach/linkedin/disconnect", token, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["linkedin-status"] });
+      toast({ title: "Disconnected", description: "Finax can no longer post as you." });
+    },
+  });
+
+  const publish = useMutation({
+    mutationFn: (id: number) => api(`/api/outreach/${id}/post`, token, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      toast({ title: "Posted to LinkedIn", description: "It is live on the thread now." });
+    },
+    onError: (e: Error) => toast({ title: "Could not post", description: e.message, variant: "destructive" }),
+  });
 
   const { data: schedule } = useQuery<{
     lastScanAt: string | null; nextScanAt: string | null; intervalHours: number; configured: boolean;
@@ -297,6 +347,30 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         <span className="text-foreground">Nothing is ever posted from here</span>: LinkedIn prohibits
         automated posting, and the account is worth more than the keystrokes.
       </p>
+
+      {/* ── the account Finax posts as ── */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/20 px-4 py-3">
+        <Linkedin className="h-4 w-4 text-muted-foreground" />
+        <span className="text-[13px]">
+          {!li ? "Checking your LinkedIn connection…"
+            : !li.configured ? "Sending is not set up yet. Add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in Railway."
+            : li.connected ? <>Finax can post as <span className="font-medium">{li.name || "you"}</span>.</>
+            : li.expired ? "Your LinkedIn connection expired."
+            : "Finax cannot post yet. Connect your LinkedIn account to give it send power."}
+        </span>
+        {li?.configured && (
+          <div className="ml-auto flex gap-2">
+            {li.connected ? (
+              <Button size="sm" variant="ghost" onClick={() => disconnectLi.mutate()}>Disconnect</Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={connectLi.isPending} onClick={() => connectLi.mutate()}>
+                {connectLi.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                Connect LinkedIn
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── compose ── */}
       <div className="rounded-lg border border-border bg-muted/20 p-4">
@@ -551,6 +625,11 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
                     {isStale(d.postedAt) && <span className="font-medium">· thread is cold</span>}
                   </span>
                 )}
+                {d.commentUrn && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11.5px] text-emerald-600 dark:text-emerald-500">
+                    <Check className="h-3 w-3" /> posted by Finax
+                  </span>
+                )}
                 {d.sourceUrl && (
                   <a
                     href={d.sourceUrl}
@@ -589,6 +668,25 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
                 </Button>
                 {d.status === "waiting" ? (
                   <>
+                    {/* Posting is one draft at a time and always a deliberate
+                        click. Something published in Anthony's name should be
+                        something he decided to publish, having read it. */}
+                    {li?.connected && canPost(d) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={publish.isPending}
+                        onClick={() => {
+                          if (window.confirm("Post this comment to LinkedIn now, as you?\n\nIt goes out under your own name and cannot be unpublished from here.")) {
+                            publish.mutate(d.id);
+                          }
+                        }}
+                      >
+                        {publish.isPending && publish.variables === d.id
+                          ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Posting…</>
+                          : <><Linkedin className="mr-1.5 h-3.5 w-3.5" /> Post to LinkedIn</>}
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => update.mutate({ id: d.id, body: { status: "sent" } })}>
                       <Send className="mr-1.5 h-3.5 w-3.5" /> Mark sent
                     </Button>

@@ -616,6 +616,15 @@ export const outreachDrafts = pgTable("outreach_drafts", {
    */
   postedAt: timestamp("posted_at"),
 
+  /**
+   * The comment LinkedIn created, once this was actually published.
+   *
+   * Stored because it is the only proof the send worked. Without it, "sent"
+   * would mean "we pressed the button", which is not the same thing and is
+   * exactly the difference that matters when a comment does not appear.
+   */
+  commentUrn: text("comment_urn"),
+
   createdAt: timestamp("created_at").defaultNow(),
   sentAt: timestamp("sent_at"),
 }, (table) => [
