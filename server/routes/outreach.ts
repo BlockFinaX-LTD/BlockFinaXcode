@@ -50,6 +50,8 @@ const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
 import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
 import { buildPrompt, type Candidate } from "../outreach/prompt";
+import { searchLinkedIn, type RawItem } from "../outreach/provider";
+import { planSearches } from "../outreach/planner";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
 async function liveContext(): Promise<string> {
@@ -104,38 +106,6 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   const bb = Buffer.from(b);
   if (ab.length !== bb.length) return false;
   return timingSafeEqual(ab, bb);
-}
-
-const ACTOR = "harvestapi~linkedin-post-search";
-
-type RawItem = { text?: unknown; url?: unknown; name?: unknown; headline?: unknown };
-
-/**
- * Normalise one Apify result into the shape draftBatch expects.
- *
- * Field names are tried against several candidates rather than read from one
- * path. The actor's output schema is documented only as "post content, author
- * details" — the exact keys are not published, and a scraper's payload shape
- * follows LinkedIn's markup, so it moves. Reading one guessed path would fail
- * silently and return zero results with no error; trying a handful degrades to
- * a missing name instead of a missing post.
- */
-function mapApifyPost(p: any): RawItem | null {
-  if (!p || typeof p !== "object") return null;
-  const text = p.content ?? p.text ?? p.postContent ?? p.description ?? "";
-  if (typeof text !== "string" || !text.trim()) return null;
-
-  const author = p.author ?? p.actor ?? p.poster ?? {};
-  const url =
-    p.url ?? p.postUrl ?? p.linkedinUrl ?? p.link ??
-    author.linkedinUrl ?? author.profileUrl ?? null;
-
-  return {
-    text: text.trim(),
-    url: typeof url === "string" ? url : null,
-    name: author.name ?? author.fullName ?? p.authorName ?? null,
-    headline: author.headline ?? author.position ?? author.occupation ?? p.authorHeadline ?? null,
-  };
 }
 
 /**
@@ -497,69 +467,106 @@ export function registerOutreachRoutes(app: Express): void {
   app.post("/api/outreach/search", requireAdmin, async (req, res) => {
     try {
       const token = process.env.APIFY_TOKEN;
-      if (!token) {
-        return res.status(503).json({
-          error: "LinkedIn search is not configured. Set APIFY_TOKEN.",
-        });
-      }
-      if (!process.env.ANTHROPIC_API_KEY) {
-        return res.status(503).json({ error: "Drafting is not configured." });
-      }
+      if (!token) return res.status(503).json({ error: "LinkedIn search is not configured. Set APIFY_TOKEN." });
+      if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "Drafting is not configured." });
 
       const { query, intent, maxPosts, postedLimit, sortBy, minScore } = req.body ?? {};
       const q = typeof query === "string" ? query.trim() : "";
       if (!q) return res.status(400).json({ error: "Give it something to search for." });
 
-      const cap = Math.min(Math.max(Number(maxPosts) || 50, 1), 200);
-      const kind: Intent = ["reply", "connect", "dm"].includes(intent) ? intent : "reply";
-
-      // Apify's sync endpoint returns the dataset directly, so there is no run
-      // to poll. It gives up at 300s; we stop earlier so the admin console gets
-      // an error rather than a hung request.
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 120_000);
-      let raw: unknown;
-      try {
-        const r = await fetch(
-          `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            signal: controller.signal,
-            body: JSON.stringify({
-              searchQueries: [q],
-              maxPosts: cap,
-              sortBy: sortBy === "relevance" ? "relevance" : "date",
-              postedLimit: ["1h", "24h", "week", "month"].includes(postedLimit) ? postedLimit : "month",
-            }),
-          },
-        );
-        if (!r.ok) {
-          const body = await r.text().catch(() => "");
-          return res.status(502).json({
-            error: `LinkedIn search failed (${r.status}). ${body.slice(0, 200)}`,
-          });
-        }
-        raw = await r.json();
-      } catch (e) {
-        const aborted = e instanceof Error && e.name === "AbortError";
-        return res.status(504).json({
-          error: aborted ? "LinkedIn search timed out." : "Could not reach the search provider.",
-        });
-      } finally {
-        clearTimeout(timer);
+      const kind: Intent = ["reply", "comment", "connect", "dm"].includes(intent) ? intent : "comment";
+      const found = await searchLinkedIn(token, q, { maxPosts, postedLimit, sortBy });
+      if (found.error) return res.status(502).json({ error: `LinkedIn search failed: ${found.error}` });
+      if (!found.items.length) {
+        return res.json({ drafted: 0, considered: found.fetched, relevant: 0, drafts: [], query: q, fetched: found.fetched });
       }
 
-      const posts = Array.isArray(raw) ? raw : [];
-      const items = posts.map(mapApifyPost).filter((x): x is RawItem => x !== null);
-      if (!items.length) {
-        return res.json({ drafted: 0, considered: posts.length, relevant: 0, drafts: [], query: q });
-      }
-
-      const out = await draftBatch(items, kind, typeof minScore === "number" ? minScore : 2);
-      return res.json({ ...out, query: q, fetched: posts.length });
+      const out = await draftBatch(found.items, kind, typeof minScore === "number" ? minScore : 2);
+      return res.json({ ...out, query: q, fetched: found.fetched });
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "search failed" });
+    }
+  });
+
+  // ── POST /api/outreach/auto ─────────────────────────────────────────────
+  //
+  // Scan without being told what to look for.
+  //
+  // The planner reads what the currencies have actually done and decides which
+  // angles are worth hunting today. That is the judgement a senior marketer
+  // makes, and the search box was quietly leaving it to Anthony. A fixed
+  // keyword list would hunt the same ground forever; the interesting angle
+  // moves with the market.
+  //
+  // The searches run in parallel because they are independent and each provider
+  // call can take most of a minute. Four in sequence would push the request
+  // past any sensible timeout for no reason.
+  //
+  // The plan comes back with the drafts so the reasoning is auditable. A scan
+  // that spends money should be able to say what it spent it on.
+  app.post("/api/outreach/auto", requireAdmin, async (req, res) => {
+    try {
+      const token = process.env.APIFY_TOKEN;
+      if (!token) return res.status(503).json({ error: "LinkedIn search is not configured. Set APIFY_TOKEN." });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Drafting is not configured." });
+
+      const { intent, postedLimit, perQuery, minScore } = req.body ?? {};
+      const kind: Intent = ["reply", "comment", "connect", "dm"].includes(intent) ? intent : "comment";
+      // Modest per query, because the plan runs several. Four searches at 25
+      // posts costs about what one manual search at 100 does, and covers far
+      // more ground.
+      const cap = Math.min(Math.max(Number(perQuery) || 25, 5), 50);
+
+      const plan = await planSearches(apiKey, MODEL);
+
+      const outcomes = await Promise.all(
+        plan.searches.map(sq =>
+          searchLinkedIn(token, sq.query, {
+            maxPosts: cap,
+            postedLimit: ["24h", "week", "month"].includes(postedLimit) ? postedLimit : "week",
+            sortBy: "relevance",
+            timeoutMs: 100_000,
+          }),
+        ),
+      );
+
+      // Merge before drafting rather than drafting per query. Two angles will
+      // surface the same post, and draftBatch can only rank what it is shown at
+      // once. Ranking each query separately would draft the best of a weak
+      // query ahead of the second best of a strong one.
+      const merged: RawItem[] = [];
+      const seenUrl = new Set<string>();
+      for (const o of outcomes) {
+        for (const it of o.items) {
+          const u = typeof it.url === "string" ? it.url : "";
+          if (u && seenUrl.has(u)) continue;
+          if (u) seenUrl.add(u);
+          merged.push(it);
+        }
+      }
+
+      const fetched = outcomes.reduce((n, o) => n + o.fetched, 0);
+      const failed = outcomes.filter(o => o.error);
+      const searched = outcomes.map(o => ({ query: o.query, fetched: o.fetched, error: o.error }));
+
+      if (!merged.length) {
+        return res.json({
+          drafted: 0, relevant: 0, considered: 0, drafts: [], fetched,
+          plan: plan.searches, plannerFallback: plan.fallback, searched,
+          note: failed.length === outcomes.length
+            ? "Every search failed to reach the provider."
+            : "LinkedIn returned nothing for any of the planned searches.",
+        });
+      }
+
+      const out = await draftBatch(merged, kind, typeof minScore === "number" ? minScore : 2);
+      return res.json({
+        ...out, fetched,
+        plan: plan.searches, plannerFallback: plan.fallback, searched,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "scan failed" });
     }
   });
 

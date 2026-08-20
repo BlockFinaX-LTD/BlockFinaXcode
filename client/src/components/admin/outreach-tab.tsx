@@ -33,6 +33,9 @@ import { cn } from "@/lib/utils";
 type Intent = "reply" | "comment" | "connect" | "dm";
 type Status = "waiting" | "sent" | "discarded";
 
+interface PlannedSearch { query: string; angle: string; why: string }
+interface SearchOutcome { query: string; fetched: number; error: string | null }
+
 interface Draft {
   id: number;
   sourceUrl: string | null;
@@ -79,10 +82,13 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
    * "search" = Finax searches LinkedIn itself, through a provider that uses its
    *            own infrastructure rather than your session.
    */
-  const [mode, setMode] = useState<"one" | "scan" | "search">("one");
+  const [mode, setMode] = useState<"auto" | "one" | "scan" | "search">("auto");
   const [blob, setBlob] = useState("");
   const [query, setQuery] = useState("");
   const [postedLimit, setPostedLimit] = useState("month");
+  /** The plan from the last automatic scan, kept so the reasoning stays visible. */
+  const [plan, setPlan] = useState<PlannedSearch[] | null>(null);
+  const [searched, setSearched] = useState<SearchOutcome[] | null>(null);
   const [tab, setTab] = useState<Status>("waiting");
   /** Drafts, the people behind them, or what Finax knows. */
   const [section, setSection] = useState<"drafts" | "people" | "memory">("drafts");
@@ -154,6 +160,33 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
     onError: (e: Error) => toast({ title: "Search failed", description: e.message, variant: "destructive" }),
   });
 
+  const auto = useMutation({
+    mutationFn: () =>
+      api("/api/outreach/auto", token, {
+        method: "POST",
+        body: JSON.stringify({ intent, postedLimit: "week" }),
+      }),
+    onSuccess: (r: {
+      drafted: number; relevant: number; fetched: number;
+      plan: PlannedSearch[]; plannerFallback: boolean; searched: SearchOutcome[]; note?: string;
+    }) => {
+      setPlan(r.plan ?? null);
+      setSearched(r.searched ?? null);
+      setTab("waiting");
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      qc.invalidateQueries({ queryKey: ["outreach-people"] });
+      toast({
+        title: r.drafted
+          ? `${r.drafted} draft${r.drafted === 1 ? "" : "s"} ready`
+          : r.fetched ? "Nothing relevant found" : "LinkedIn returned nothing",
+        description: r.note
+          ?? `${r.searched?.length ?? 0} searches · ${r.fetched} posts · ${r.relevant} about currency risk`,
+        variant: r.drafted ? undefined : "destructive",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
+  });
+
   const update = useMutation({
     mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
       api(`/api/outreach/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
@@ -200,7 +233,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
        : (
       <>
       <p className="max-w-[68ch] text-sm text-muted-foreground">
-        Finax drafts LinkedIn replies against the live book — open pools, real premiums, what has
+        Finax finds posts worth answering and drafts against real market data — open pools, real premiums, what has
         settled. Give it one post, paste a whole page, or let it search LinkedIn itself. Drafts wait
         here for you to copy.{" "}
         <span className="text-foreground">Nothing is ever posted from here</span>: LinkedIn prohibits
@@ -210,7 +243,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
       {/* ── compose ── */}
       <div className="rounded-lg border border-border bg-muted/20 p-4">
         <div className="mb-3 flex gap-1.5">
-          {([["one", "One post"], ["scan", "Scan a page"], ["search", "Search LinkedIn"]] as const).map(([k, label]) => (
+          {([["auto", "Scan for me"], ["one", "One post"], ["scan", "Scan a page"], ["search", "Search LinkedIn"]] as const).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setMode(k)}
@@ -226,15 +259,46 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
             </button>
           ))}
           <span className="ml-auto self-center text-[11.5px] text-muted-foreground">
-            {mode === "one"
-              ? "one reply, with who they are"
-              : mode === "scan"
-                ? "select a whole notifications page and paste — Finax separates it"
-                : "Finax searches LinkedIn itself — your account is not used"}
+            {mode === "auto"
+              ? "Finax decides what to look for, from what the market is doing"
+              : mode === "one"
+                ? "one reply, with who they are"
+                : mode === "scan"
+                  ? "select a whole notifications page and paste, Finax separates it"
+                  : "you choose the words, Finax searches"}
           </span>
         </div>
 
-        {mode === "search" ? (
+        {mode === "auto" ? (
+          <>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              No search words needed. Finax reads what your currencies have actually done this
+              week, works out which angles are worth hunting, runs those searches, and drafts for
+              the strongest posts it finds. It shows you the plan so you can see the reasoning.
+            </p>
+            {plan && (
+              <div className="mt-3 space-y-2 rounded-md border border-border bg-background p-3">
+                <p className="text-[12px] font-medium text-foreground">What it went looking for</p>
+                {plan.map((p, i) => {
+                  const outcome = searched?.find(s2 => s2.query === p.query);
+                  return (
+                    <div key={i} className="border-l-2 border-border pl-2.5">
+                      <p className="text-[12.5px] font-medium">
+                        “{p.query}”
+                        {outcome && (
+                          <span className="ml-2 font-normal text-[11.5px] text-muted-foreground">
+                            {outcome.error ? `failed: ${outcome.error}` : `${outcome.fetched} posts`}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground">{p.why}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : mode === "search" ? (
           <>
             <input
               value={query}
@@ -338,25 +402,30 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
 
         <Button
           onClick={() =>
-            mode === "search" ? search.mutate()
+            mode === "auto" ? auto.mutate()
+            : mode === "search" ? search.mutate()
             : mode === "scan" ? scan.mutate()
             : draftIt.mutate()
           }
           disabled={
-            !enabled || draftIt.isPending || scan.isPending || search.isPending ||
-            (mode === "search" ? query.trim().length < 3
+            !enabled || draftIt.isPending || scan.isPending || search.isPending || auto.isPending ||
+            (mode === "auto" ? false
+             : mode === "search" ? query.trim().length < 3
              : mode === "scan" ? blob.trim().length < 60
              : sourceText.trim().length < 20)
           }
           className="mt-3.5"
         >
-          {draftIt.isPending || scan.isPending || search.isPending
+          {draftIt.isPending || scan.isPending || search.isPending || auto.isPending
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {search.isPending ? "Finax is searching LinkedIn…"
+                {auto.isPending ? "Reading the market, then searching…"
+                 : search.isPending ? "Finax is searching LinkedIn…"
                  : scan.isPending ? "Finax is reading the page…"
                  : "Finax is writing…"}</>
             : <><Sparkles className="mr-2 h-4 w-4" />
-                {mode === "search" ? "Search and draft" : mode === "scan" ? "Scan and draft" : "Draft it"}</>}
+                {mode === "auto" ? "Scan for me"
+                 : mode === "search" ? "Search and draft"
+                 : mode === "scan" ? "Scan and draft" : "Draft it"}</>}
         </Button>
         {mode === "one" && sourceText.trim().length > 0 && sourceText.trim().length < 20 && (
           <p className="mt-2 text-[12px] text-muted-foreground">
