@@ -52,6 +52,7 @@ interface Config {
     configured: boolean; lastRunAt: string | null; nextRunAt: string | null;
     position: number; total: number; seedsPerCycle: number;
     queueCap: number; waiting: number; paused: boolean;
+    lastResult: { at: string; inserted: number; drafted: number; lines: string[] } | null;
   };
   seeds: { queries: Record<string, string[]>; locations: string[] };
 }
@@ -201,6 +202,23 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
                 `Position ${cfg.schedule.position} of ${cfg.schedule.total} business types and cities. ` +
                 `${cfg.schedule.waiting} waiting for you.`}
         </p>
+      )}
+
+      {/* What the last automatic cycle actually did. A zero on its own cannot
+          distinguish a working search that found nothing from a broken one,
+          which is exactly the confusion this removes. */}
+      {cfg?.schedule?.lastResult && (
+        <details className="rounded-lg border border-border bg-muted/20 px-4 py-2.5">
+          <summary className="cursor-pointer text-[12px] text-muted-foreground">
+            Last automatic search: {cfg.schedule.lastResult.inserted} new,{" "}
+            {cfg.schedule.lastResult.drafted} drafted
+          </summary>
+          <div className="mt-2 space-y-1">
+            {cfg.schedule.lastResult.lines.map((l, i) => (
+              <p key={i} className="font-mono text-[11.5px] leading-relaxed text-muted-foreground">{l}</p>
+            ))}
+          </div>
+        </details>
       )}
 
       {/* ── sending health ──

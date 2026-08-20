@@ -37,6 +37,15 @@ import { researchAndWrite } from "./write";
 
 const CURSOR_KEY = "prospect_seed_cursor";
 const LAST_RUN_KEY = "prospect_last_discovery";
+/**
+ * What the last cycle actually did.
+ *
+ * The first live run searched three seeds, inserted nothing, and reported it
+ * only to a log nobody was reading. The console showed a zero, which is what a
+ * working pipeline with nothing to find looks like as well as a broken one.
+ * Storing the outcome makes the difference visible in the place people look.
+ */
+const LAST_RESULT_KEY = "prospect_last_result";
 
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
 const TICK_MS = 15 * 60 * 1000;
@@ -198,11 +207,21 @@ async function tick(intervalMs: number): Promise<void> {
     await writeValue(CURSOR_KEY, String(cursor));
     await writeValue(LAST_RUN_KEY, String(Date.now()));
 
+    await writeValue(LAST_RESULT_KEY, JSON.stringify({
+      at: new Date().toISOString(),
+      inserted, drafted, lines: lines.slice(0, 6),
+    }));
+
     console.log(
       `[Prospects] ${inserted} new businesses, ${drafted} drafted. ` +
       `Position ${cursor} of ${matrix.length}.\n  ${lines.join("\n  ")}`,
     );
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await writeValue(LAST_RESULT_KEY, JSON.stringify({
+      at: new Date().toISOString(), inserted: 0, drafted: 0,
+      lines: [`the cycle failed: ${message}`],
+    }));
     console.error("[Prospects] Scheduled discovery threw:", err);
     // Move the clock on regardless, so one bad seed does not retry every
     // fifteen minutes until someone notices.
@@ -228,10 +247,21 @@ export async function discoveryStatus(): Promise<{
   queueCap: number;
   waiting: number;
   paused: boolean;
+  lastResult: { at: string; inserted: number; drafted: number; lines: string[] } | null;
 }> {
   const matrix = seedMatrix();
   const last = await readNumber(LAST_RUN_KEY);
   const waiting = await awaitingPerson();
+
+  let lastResult: any = null;
+  try {
+    const [row] = await db.select().from(platformSettings)
+      .where(eq(platformSettings.key, LAST_RESULT_KEY)).limit(1);
+    if (row?.value) lastResult = JSON.parse(row.value);
+  } catch {
+    /* a missing or unreadable summary is not worth failing the status for */
+  }
+
   return {
     configured: !!(process.env.APIFY_TOKEN && process.env.ANTHROPIC_API_KEY),
     lastRunAt: last ? new Date(last).toISOString() : null,
@@ -242,6 +272,7 @@ export async function discoveryStatus(): Promise<{
     queueCap: QUEUE_BACKPRESSURE,
     waiting,
     paused: waiting >= QUEUE_BACKPRESSURE,
+    lastResult,
   };
 }
 

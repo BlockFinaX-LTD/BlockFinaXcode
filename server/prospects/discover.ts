@@ -41,6 +41,23 @@ export interface Business {
   country: string | null;
   industry: string | null;
   address: string | null;
+  /** Emails the places actor found on the business's own site, when asked. */
+  emails: string[];
+}
+
+/**
+ * Keep the addresses that belong to the business.
+ *
+ * A crawl of any real website picks up the addresses of whatever built it and
+ * whatever tracks it. Writing to sentry@ or a WordPress theme author is not
+ * outreach, it is noise that bounces and damages the sending domain.
+ */
+function cleanEmails(raw: unknown[]): string[] {
+  const out = raw
+    .map(e => String(e ?? "").trim().toLowerCase())
+    .filter(e => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e))
+    .filter(e => !/(sentry|wixpress|example\.|godaddy|wordpress|squarespace|shopify|cloudflare|\.png|\.jpg|@2x)/i.test(e));
+  return Array.from(new Set(out));
 }
 
 async function apify<T>(actor: string, token: string, input: unknown, timeoutMs = 240_000): Promise<T[]> {
@@ -95,18 +112,26 @@ export async function findBusinesses(
     maxCrawledPlacesPerSearch: Math.min(Math.max(limit, 1), 500),
     language: "en",
     skipClosedPlaces: true,
+    // Ask the places actor to read the business website for contact details in
+    // the same run. It does the job the separate contact crawl was doing, in
+    // one call rather than two, which is both cheaper and one less thing to
+    // fail. The second actor is kept as a fallback for the businesses this
+    // misses.
+    scrapeContacts: true,
   });
 
   const out: Business[] = [];
   for (const it of items) {
     const company = typeof it?.title === "string" ? it.title.trim() : "";
     if (!company) continue;
+    const raw = Array.isArray(it?.emails) ? it.emails : [];
     out.push({
       company,
       website: typeof it?.website === "string" && it.website.trim() ? it.website.trim() : null,
       country: countryCode(it?.countryCode ?? it?.country),
       industry: typeof it?.categoryName === "string" ? it.categoryName : null,
       address: typeof it?.address === "string" ? it.address : null,
+      emails: cleanEmails(raw),
     });
   }
   return out;
@@ -122,7 +147,12 @@ export async function findEmails(
     startUrls: urls.slice(0, 200).map(url => ({ url })),
     maxRequestsPerStartUrl: 4,   // home, contact, about, one more
     maxDepth: 2,
+    sameDomain: true,
     considerChildFrames: false,
+    // Required by this actor. Omitting it made every call fail, which is why
+    // the first live run found nothing at all: the places search worked and the
+    // contact crawl never ran.
+    proxyConfig: { useApifyProxy: true },
   });
 
   const byDomain = new Map<string, string[]>();
@@ -132,11 +162,7 @@ export async function findEmails(
     if (!emails.length || !from) continue;
     let host = "";
     try { host = new URL(from).hostname.replace(/^www\./, "").toLowerCase(); } catch { continue; }
-    const clean = emails
-      .map(e => String(e).trim().toLowerCase())
-      .filter(e => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e))
-      // Addresses belonging to the tooling on a site rather than the business.
-      .filter(e => !/(sentry|wixpress|example|sentry\.io|godaddy|wordpress|@2x|\.png|\.jpg)/i.test(e));
+    const clean = cleanEmails(emails);
     if (!clean.length) continue;
     byDomain.set(host, Array.from(new Set((byDomain.get(host) || []).concat(clean))));
   }
@@ -180,11 +206,27 @@ export async function discoverProspects(opts: {
   }
 
   const sites = businesses.filter(b => b.website);
-  let emailsByHost = new Map<string, string[]>();
-  try {
-    emailsByHost = await findEmails(opts.token, sites.map(b => b.website!) as string[]);
-  } catch (e) {
-    errors.push(e instanceof Error ? e.message : "contact crawl failed");
+
+  // The places run already returns contacts for most businesses. Only crawl the
+  // ones it missed, which is the expensive call avoided for the majority.
+  const emailsByHost = new Map<string, string[]>();
+  const stillMissing: string[] = [];
+  for (const b of sites) {
+    let host = "";
+    try { host = new URL(b.website!).hostname.replace(/^www\./, "").toLowerCase(); } catch { continue; }
+    if (b.emails.length) emailsByHost.set(host, b.emails);
+    else stillMissing.push(b.website!);
+  }
+
+  if (stillMissing.length) {
+    try {
+      const crawled = await findEmails(opts.token, stillMissing);
+      crawled.forEach((v, k) => { if (!emailsByHost.has(k)) emailsByHost.set(k, v); });
+    } catch (e) {
+      // Not fatal. Whatever the places run found is still usable, and saying so
+      // beats reporting zero when most of the work succeeded.
+      errors.push(`contact crawl failed: ${e instanceof Error ? e.message : "unknown"}`);
+    }
   }
 
   let inserted = 0, duplicates = 0, sendableCount = 0, withEmail = 0;
