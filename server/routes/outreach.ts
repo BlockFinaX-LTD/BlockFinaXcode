@@ -54,7 +54,7 @@ import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 import {
   loadAuth, saveAuth, clearAuth, isExpired, authorizeUrl, exchangeCode,
-  redirectUri, activityUrnFrom, postComment,
+  redirectUri, candidateRedirectUris, activityUrnFrom, postComment,
 } from "../outreach/linkedin";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
@@ -583,6 +583,7 @@ export function registerOutreachRoutes(app: Express): void {
         expiresAt: auth ? new Date(auth.expiresAt).toISOString() : null,
         expired: auth ? isExpired(auth) : false,
         redirectUri: redirectUri(),
+        redirectUris: candidateRedirectUris(),
       });
     } catch {
       return res.json({ connected: false, configured: false, name: null, expiresAt: null, expired: false });

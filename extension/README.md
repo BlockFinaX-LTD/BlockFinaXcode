@@ -137,11 +137,23 @@ Finax comment as you.
 
 ## Step 4 — set the redirect URL
 
-Go to the **Auth** tab. Under **OAuth 2.0 settings**, add this exact redirect URL:
+Go to the **Auth** tab. Under **OAuth 2.0 settings**, find **Authorized redirect
+URLs for your app** and add **both** of these:
 
     https://blockfinax.com/api/outreach/linkedin/callback
+    https://www.blockfinax.com/api/outreach/linkedin/callback
 
-It must match character for character.
+Click **Update**.
+
+LinkedIn matches these character for character. A missing `www`, an extra slash
+on the end, or `http` instead of `https` all fail with the same unhelpful
+message: *"The redirect_uri does not match the registered value"*. It does not
+tell you what it expected or what it received, which is why both forms are
+listed here.
+
+If it still fails, open the console strip and click **Connection failing?**. It
+shows the exact URL this server sends, with a copy button, so you can paste it
+into LinkedIn rather than retype it.
 
 ## Step 5 — copy the keys into Railway
 

@@ -87,6 +87,30 @@ export function redirectUri(): string {
 }
 
 /**
+ * Every redirect URL that could plausibly be needed, so the console can show
+ * them rather than leaving Anthony to read one out of a LinkedIn error page.
+ *
+ * LinkedIn matches this value character for character: scheme, host, port and
+ * path, with no allowance for a www prefix or a trailing slash. That is the
+ * single most common reason a connection fails, and the error it returns says
+ * only "does not match the registered value" without saying what it expected
+ * or what it received. Registering both the apex and the www form costs
+ * nothing and removes the entire class of problem.
+ */
+export function candidateRedirectUris(): string[] {
+  const primary = redirectUri();
+  const out = [primary];
+  try {
+    const u = new URL(primary);
+    const host = u.hostname.startsWith("www.") ? u.hostname.slice(4) : `www.${u.hostname}`;
+    out.push(`${u.protocol}//${host}${u.pathname}`);
+  } catch {
+    /* a malformed base is reported by the primary value alone */
+  }
+  return Array.from(new Set(out));
+}
+
+/**
  * Scopes.
  *
  * openid and profile identify who authorised, which is needed because a comment

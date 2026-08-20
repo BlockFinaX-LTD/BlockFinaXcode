@@ -58,6 +58,8 @@ interface LinkedInStatus {
   name: string | null;
   expired: boolean;
   redirectUri?: string;
+  /** Apex and www. LinkedIn matches exactly, so both are worth registering. */
+  redirectUris?: string[];
 }
 
 /**
@@ -169,6 +171,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   /** Drafts, the people behind them, or what Finax knows. */
   const [section, setSection] = useState<"drafts" | "people" | "memory">("drafts");
   const [copied, setCopied] = useState<number | null>(null);
+  const [showRedirect, setShowRedirect] = useState(false);
 
   const { data: li } = useQuery<LinkedInStatus>({
     queryKey: ["linkedin-status", token],
@@ -363,6 +366,14 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
             : li.expired ? "Your LinkedIn connection expired."
             : "Finax cannot post yet. Connect your LinkedIn account to give it send power."}
         </span>
+        {li?.configured && !li.connected && (
+          <button
+            onClick={() => setShowRedirect(v => !v)}
+            className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
+          >
+            {showRedirect ? "Hide setup" : "Connection failing?"}
+          </button>
+        )}
         {li?.configured && (
           <div className="ml-auto flex gap-2">
             {li.connected ? (
@@ -376,6 +387,47 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
           </div>
         )}
       </div>
+
+      {/* The redirect URL, shown rather than described.
+          "The redirect_uri does not match the registered value" is by far the
+          most common way this fails, and LinkedIn's error names neither what it
+          expected nor what it received. Showing the exact string, copyable,
+          turns a guessing game into a paste. */}
+      {showRedirect && li?.redirectUris?.length && (
+        <div className="rounded-lg border border-border bg-muted/20 p-4">
+          <p className="text-[13px]">
+            In your LinkedIn app, open the <span className="font-medium">Auth</span> tab and add
+            these under <span className="font-medium">Authorized redirect URLs</span>. Add both.
+            LinkedIn matches them character for character, so a missing <code>www</code> or an
+            extra slash is enough to fail.
+          </p>
+          <div className="mt-2.5 space-y-1.5">
+            {li.redirectUris.map(u => (
+              <div key={u} className="flex items-center gap-2">
+                <code className="flex-1 overflow-x-auto rounded border border-border bg-background px-2.5 py-1.5 text-[12px]">
+                  {u}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(u).then(
+                      () => toast({ title: "Copied" }),
+                      () => toast({ title: "Select it and copy manually", variant: "destructive" }),
+                    );
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2.5 text-[12px] text-muted-foreground">
+            Click <span className="text-foreground">Update</span> in LinkedIn afterwards, wait a
+            few seconds, then press Connect again.
+          </p>
+        </div>
+      )}
 
       {/* ── compose ── */}
       <div className="rounded-lg border border-border bg-muted/20 p-4">
