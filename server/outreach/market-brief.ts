@@ -35,6 +35,10 @@
  *                             the last year" is the empirical case for that.
  *
  * Nothing here is an opinion. The drafter is told to build the opinion.
+ *
+ * The rendered text avoids em dashes for the same reason persona.ts does: it
+ * goes straight into the prompt, and a model matches the punctuation it is
+ * shown far more reliably than it follows an instruction about punctuation.
  */
 
 import { sql } from "drizzle-orm";
@@ -223,7 +227,7 @@ function ordinal(n: number): string {
 /** Render one brief as lines the drafter can quote directly. */
 export function renderBrief(b: PairBrief): string {
   const L: string[] = [];
-  L.push(`${b.pair} — spot ${b.spot.toFixed(4)} as of ${b.asOf}`);
+  L.push(`${b.pair}: spot ${b.spot.toFixed(4)} as of ${b.asOf}`);
   L.push(
     `  moves: 30d ${signed(b.move30)}, 90d ${signed(b.move90)}, YTD ${signed(b.moveYtd)}, 1y ${signed(b.move1y)} ` +
     `(positive = local currency weaker against the base)`,
@@ -237,7 +241,7 @@ export function renderBrief(b: PairBrief): string {
               b.volPercentile >= 80 ? ", unusually disturbed"
               : b.volPercentile <= 20 ? ", unusually calm"
               : ", around normal";
-            return ` — ${ordinal(b.volPercentile)} percentile${span}${verdict}`;
+            return `, ${ordinal(b.volPercentile)} percentile${span}${verdict}`;
           })();
     L.push(`  realised volatility: 30d ${mag(b.vol30)}, 90d ${mag(b.vol90)}${where}`);
   }
@@ -247,10 +251,10 @@ export function renderBrief(b: PairBrief): string {
   if (b.jumpDays !== null) {
     L.push(
       `  days beyond 3 sigma in the last year: ${b.jumpDays}` +
-      (b.jumpDays >= 3 ? " — steps rather than drifts, which is why cover is priced with a jump model" : ""),
+      (b.jumpDays >= 3 ? ". Steps rather than drifts, which is why cover is priced with a jump model" : ""),
     );
   }
-  if (b.depth < 250) L.push(`  (only ${b.depth} closes available — do not quote the percentile)`);
+  if (b.depth < 250) L.push(`  (only ${b.depth} closes available, so do not quote the percentile)`);
   return L.join("\n");
 }
 

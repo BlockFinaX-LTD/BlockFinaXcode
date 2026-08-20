@@ -215,7 +215,7 @@ async function draftBatch(
       }
       if (recalled) {
         sections.push(
-          `What we know about why. Each carries its age — quote it with that age,\n` +
+          `What we know about why. Each carries its age. Quote it with that age,\n` +
           `never in the present tense:\n${recalled}`,
         );
       }
@@ -223,7 +223,7 @@ async function draftBatch(
       if (!brief && !recalled) {
         sections.push(
           `No market data matched this post. Write from mechanism alone and quote\n` +
-          `no figures — a comment with a good argument and no numbers is fine.`,
+          `no figures. A comment with a good argument and no numbers is fine.`,
         );
       }
       sections.push(`Draft a ${kind}. ${INTENT_RULES[kind]}`);
