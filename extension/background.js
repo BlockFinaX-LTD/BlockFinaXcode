@@ -10,7 +10,7 @@
  */
 
 chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
-  if (msg?.type !== "finax:ingest") return;
+  if (!msg?.type?.startsWith?.("finax:")) return;
 
   chrome.storage.local.get(["endpoint", "token", "intent"], async s => {
     const endpoint = (s.endpoint || "").replace(/\/+$/, "");
@@ -18,12 +18,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
       respond({ ok: false, error: "Server or token not set" });
       return;
     }
-    try {
-      const res = await fetch(`${endpoint}/api/outreach/ingest`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-admin-token": s.token },
-        body: JSON.stringify({ items: msg.items, intent: s.intent || "reply" }),
+    const call = (path, init) =>
+      fetch(`${endpoint}${path}`, {
+        ...init,
+        headers: { "content-type": "application/json", "x-admin-token": s.token, ...(init?.headers) },
       });
+
+    try {
+      const res =
+        msg.type === "finax:queued"  ? await call("/api/outreach/queued")
+      : msg.type === "finax:placed"  ? await call(`/api/outreach/${msg.id}/placed`, { method: "POST" })
+      : await call("/api/outreach/ingest", {
+          method: "POST",
+          body: JSON.stringify({ items: msg.items, intent: s.intent || "reply" }),
+        });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         respond({ ok: false, error: data.error || `Server said ${res.status}` });

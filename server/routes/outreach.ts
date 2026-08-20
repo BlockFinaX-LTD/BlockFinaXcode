@@ -36,7 +36,7 @@
 
 import type { Express } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { outreachDrafts, outreachPeople, marketMemory } from "@shared/schema";
 import { timingSafeEqual, randomBytes } from "node:crypto";
@@ -54,7 +54,7 @@ import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 import {
   loadAuth, saveAuth, clearAuth, isExpired, authorizeUrl, exchangeCode,
-  redirectUri, candidateRedirectUris, activityUrnFrom, postComment,
+  redirectUri, candidateRedirectUris, activityUrnFrom,
 } from "../outreach/linkedin";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
@@ -651,55 +651,90 @@ export function registerOutreachRoutes(app: Express): void {
     }
   });
 
-  // ── POST /api/outreach/:id/post ─────────────────────────────────────────
-  //
-  // Publish one draft, as a comment, under Anthony's own name.
-  //
-  // One draft per call, never a batch. That is the safer pattern with LinkedIn,
-  // and the honest one: something posted in a founder's name should be
-  // something he decided to post, one at a time, having read it.
-  //
-  // The draft text is read from the database rather than taken from the request
-  // body, so what gets published is the version sitting in the console. A body
-  // field would let the two diverge, and the record of what was sent would stop
-  // matching what was actually sent.
-  app.post("/api/outreach/:id/post", requireAdmin, async (req: any, res) => {
+  /* ── Sending, via the browser rather than the API ─────────────────────────
+   *
+   * LinkedIn's socialActions comment endpoint is enforced at
+   * partnerApiSocialAction, so a server cannot comment on a third party's post
+   * whatever scopes the token holds. Their permission table lists
+   * w_member_social against the Comments API; the endpoint disagrees, and the
+   * endpoint is the part that decides. Partner access takes an application and
+   * is rarely granted to a company this size.
+   *
+   * What remains is to carry the text to where the comment is written. Anthony
+   * queues a draft, the extension fills LinkedIn's comment box on the post, and
+   * he presses LinkedIn's own Post button. The submission stays a real click by
+   * a real person, which is the honest arrangement and the one nothing objects
+   * to: no automated posting, no session driving, just the typing removed.
+   */
+
+  // ── POST /api/outreach/:id/queue ────────────────────────────────────────
+  app.post("/api/outreach/:id/queue", requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
-
-      const auth = await loadAuth();
-      if (!auth) return res.status(503).json({ error: "No LinkedIn account connected." });
-      if (isExpired(auth)) return res.status(401).json({ error: "The LinkedIn connection expired. Reconnect it." });
-
       const [row] = await db.select().from(outreachDrafts).where(eq(outreachDrafts.id, id)).limit(1);
       if (!row) return res.status(404).json({ error: "not found" });
-      if (row.commentUrn) {
-        return res.status(409).json({ error: "This was already posted.", commentUrn: row.commentUrn });
+      if (!activityUrnFrom(row.sourceUrl)) {
+        return res.status(400).json({ error: "This draft has no post to comment on." });
       }
-      if (row.intent !== "comment" && row.intent !== "reply") {
-        return res.status(400).json({
-          error: "Only comments and replies can be posted. A connection note or direct message has to be sent by hand.",
-        });
-      }
-
-      const urn = activityUrnFrom(row.sourceUrl);
-      if (!urn) {
-        return res.status(400).json({
-          error: "No post to comment on. This draft has a profile link rather than a post link.",
-        });
-      }
-
-      const out = await postComment(auth, urn, row.draft);
-      if (!out.ok) return res.status(out.retryable ? 503 : 502).json({ error: out.error });
-
       const [updated] = await db.update(outreachDrafts)
-        .set({ status: "sent", sentAt: new Date(), commentUrn: out.commentUrn ?? out.commentId ?? "posted" })
-        .where(eq(outreachDrafts.id, id))
-        .returning();
-      return res.json({ posted: true, commentUrn: out.commentUrn, draft: updated });
-    } catch (err) {
-      return res.status(500).json({ error: err instanceof Error ? err.message : "Could not post that." });
+        .set({ queuedAt: new Date() }).where(eq(outreachDrafts.id, id)).returning();
+      return res.json({ queued: true, draft: updated, url: row.sourceUrl });
+    } catch {
+      return res.status(500).json({ error: "Could not queue that." });
+    }
+  });
+
+  app.post("/api/outreach/:id/unqueue", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const [updated] = await db.update(outreachDrafts)
+        .set({ queuedAt: null }).where(eq(outreachDrafts.id, id)).returning();
+      return res.json({ queued: false, draft: updated });
+    } catch {
+      return res.status(500).json({ error: "Could not unqueue that." });
+    }
+  });
+
+  // ── GET /api/outreach/queued ────────────────────────────────────────────
+  //
+  // What the extension asks for. Uses the ingest token rather than an admin
+  // session for the same reason /ingest does: an eight-hour session is the
+  // wrong credential to keep in a browser extension.
+  app.get("/api/outreach/queued", requireIngestAuth, async (_req, res) => {
+    try {
+      const rows = await db.select().from(outreachDrafts)
+        .where(and(eq(outreachDrafts.status, "waiting"), isNotNull(outreachDrafts.queuedAt)))
+        .orderBy(desc(outreachDrafts.queuedAt))
+        .limit(50);
+      return res.json({
+        queued: rows.map(r => ({
+          id: r.id,
+          url: r.sourceUrl,
+          urn: activityUrnFrom(r.sourceUrl),
+          draft: r.draft,
+        })).filter(x => x.urn),
+      });
+    } catch {
+      return res.json({ queued: [] });
+    }
+  });
+
+  // ── POST /api/outreach/:id/placed ───────────────────────────────────────
+  //
+  // The extension reports that the text reached the comment box. Deliberately
+  // not "sent": we cannot know whether Anthony pressed Post, and claiming we do
+  // would put a false record in the one place he checks to find out.
+  app.post("/api/outreach/:id/placed", requireIngestAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const [updated] = await db.update(outreachDrafts)
+        .set({ queuedAt: null }).where(eq(outreachDrafts.id, id)).returning();
+      return res.json({ ok: true, draft: updated });
+    } catch {
+      return res.status(500).json({ error: "could not update" });
     }
   });
 

@@ -625,6 +625,18 @@ export const outreachDrafts = pgTable("outreach_drafts", {
    */
   commentUrn: text("comment_urn"),
 
+  /**
+   * Set when this draft is waiting for the browser extension to place it.
+   *
+   * LinkedIn's comment endpoint is gated behind their partner programme, so a
+   * server cannot publish a comment on a third party's post no matter which
+   * scopes the token carries. What is left is to carry the text to the comment
+   * box and let Anthony press LinkedIn's own Post button. The submission stays
+   * a real click by a real person, which is both the honest arrangement and the
+   * one LinkedIn has no objection to.
+   */
+  queuedAt: timestamp("queued_at"),
+
   createdAt: timestamp("created_at").defaultNow(),
   sentAt: timestamp("sent_at"),
 }, (table) => [

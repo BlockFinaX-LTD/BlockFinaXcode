@@ -192,13 +192,24 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
     },
   });
 
-  const publish = useMutation({
-    mutationFn: (id: number) => api(`/api/outreach/${id}/post`, token, { method: "POST" }),
-    onSuccess: () => {
+  /**
+   * Queue a draft for the extension, then open the post.
+   *
+   * LinkedIn's comment endpoint is partner-gated, so nothing can publish a
+   * comment on someone else's post from here. The text is carried to the
+   * comment box instead and Anthony presses LinkedIn's own Post button.
+   */
+  const sendToBrowser = useMutation({
+    mutationFn: (id: number) => api(`/api/outreach/${id}/queue`, token, { method: "POST" }),
+    onSuccess: (r: { url: string }) => {
       qc.invalidateQueries({ queryKey: ["outreach"] });
-      toast({ title: "Posted to LinkedIn", description: "It is live on the thread now." });
+      if (r.url) window.open(r.url, "_blank", "noopener");
+      toast({
+        title: "Opening the post",
+        description: "Click into the comment box and Finax will fill it in. Then press Post.",
+      });
     },
-    onError: (e: Error) => toast({ title: "Could not post", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Could not queue that", description: e.message, variant: "destructive" }),
   });
 
   const { data: schedule } = useQuery<{
@@ -356,15 +367,19 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         automated posting, and the account is worth more than the keystrokes.
       </p>
 
-      {/* ── the account Finax posts as ── */}
+      {/* ── how a comment actually gets sent ──
+          LinkedIn enforces commenting at partnerApiSocialAction, so no server
+          can place a comment on a third party's post. The extension carries the
+          text to the box; the Post button stays a human click. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/20 px-4 py-3">
         <Linkedin className="h-4 w-4 text-muted-foreground" />
         <span className="text-[13px]">
-          {!li ? "Checking your LinkedIn connection…"
-            : !li.configured ? "Sending is not set up yet. Add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in Railway."
-            : li.connected ? <>Finax can post as <span className="font-medium">{li.name || "you"}</span>.</>
-            : li.expired ? "Your LinkedIn connection expired."
-            : "Finax cannot post yet. Connect your LinkedIn account to give it send power."}
+          <span className="font-medium">Open and fill in</span> opens the post and Finax types the
+          comment into LinkedIn's box. You read it and press Post.{" "}
+          <span className="text-muted-foreground">
+            Needs the browser extension. LinkedIn does not let any app post a comment on someone
+            else's post, so this is the closest there is.
+          </span>
         </span>
         {li?.configured && !li.connected && (
           <button
@@ -728,20 +743,15 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
                     {/* Posting is one draft at a time and always a deliberate
                         click. Something published in Anthony's name should be
                         something he decided to publish, having read it. */}
-                    {li?.connected && canPost(d) && (
+                    {canPost(d) && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        disabled={publish.isPending}
-                        onClick={() => {
-                          if (window.confirm("Post this comment to LinkedIn now, as you?\n\nIt goes out under your own name and cannot be unpublished from here.")) {
-                            publish.mutate(d.id);
-                          }
-                        }}
+                        disabled={sendToBrowser.isPending}
+                        onClick={() => sendToBrowser.mutate(d.id)}
                       >
-                        {publish.isPending && publish.variables === d.id
-                          ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Posting…</>
-                          : <><Linkedin className="mr-1.5 h-3.5 w-3.5" /> Post to LinkedIn</>}
+                        {sendToBrowser.isPending && sendToBrowser.variables === d.id
+                          ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Opening…</>
+                          : <><Linkedin className="mr-1.5 h-3.5 w-3.5" /> Open and fill in</>}
                       </Button>
                     )}
                     <Button size="sm" variant="outline" onClick={() => update.mutate({ id: d.id, body: { status: "sent" } })}>

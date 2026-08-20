@@ -96,96 +96,66 @@ Nothing is ever posted to LinkedIn by this tool. It writes drafts; you send them
 
 ---
 
-# Giving Finax send power
+# Sending a comment
 
-Finax can post comments to LinkedIn for you, through LinkedIn's own API. This is
-separate from the extension and does not use it.
+Finax carries the drafted comment to LinkedIn's comment box. You press Post.
 
-It is worth being clear about why this route and not the extension. The
-extension reads. Posting is the line LinkedIn actually enforces, and automating
-a browser to type into a comment box is the pattern they ban for. Going through
-their API means you grant permission on LinkedIn's own consent screen, they can
-see and rate limit every call, and if they ever object they revoke the token
-rather than your account.
+## Why it works this way
 
-## Step 1 — create a LinkedIn app
+LinkedIn does not let any application post a comment on someone else's post.
+Their permission table suggests otherwise, but the endpoint itself is enforced
+at `partnerApiSocialAction` and returns 403 ACCESS_DENIED unless your app is in
+their partner programme, which takes an application and is rarely granted to a
+small company. This is a wall, not a setting.
 
-Go to https://www.linkedin.com/developers/apps and click **Create app**.
+So the extension fills the box and you click Post. The submission stays a real
+click on LinkedIn's own button. Nothing is automated, nothing drives your
+session, and the typing is what gets removed.
 
-- **App name**: BlockFinaX
-- **LinkedIn Page**: your BlockFinaX company page (you need one; create it first
-  if you have not)
-- **App logo**: any image
-- Tick the legal agreement, then **Create app**
+Worth saying: even if the API route were open, a person between a draft and
+something published in their own name is a good arrangement rather than a
+compromise.
 
-## Step 2 — verify the app
+## How to use it
 
-On the app's **Settings** tab there is a **Verify** button. Click it, copy the
-link it gives you, and open that link yourself. It confirms you control the
-company page. This takes about a minute.
+**Step 1.** Make sure the extension is installed and your token is set. See the
+steps above.
 
-## Step 3 — request the products
+**Step 2.** In the admin console, go to **Agent**, then **Outreach**.
 
-Go to the **Products** tab and request:
+**Step 3.** Find a draft you want to send. Read it. Edit it if you want.
 
-- **Sign In with LinkedIn using OpenID Connect**
-- **Share on LinkedIn**
+**Step 4.** Click **Open and fill in**. The post opens in a new tab.
 
-Both are self-serve and usually approve within a few minutes. "Share on
-LinkedIn" is the one that carries `w_member_social`, the permission that lets
-Finax comment as you.
+**Step 5.** Click into LinkedIn's comment box on that post. Finax fills in the
+comment and a small bar says so at the bottom right.
 
-## Step 4 — set the redirect URL
-
-Go to the **Auth** tab. Under **OAuth 2.0 settings**, find **Authorized redirect
-URLs for your app** and add **both** of these:
-
-    https://blockfinax.com/api/outreach/linkedin/callback
-    https://www.blockfinax.com/api/outreach/linkedin/callback
-
-Click **Update**.
-
-LinkedIn matches these character for character. A missing `www`, an extra slash
-on the end, or `http` instead of `https` all fail with the same unhelpful
-message: *"The redirect_uri does not match the registered value"*. It does not
-tell you what it expected or what it received, which is why both forms are
-listed here.
-
-If it still fails, open the console strip and click **Connection failing?**. It
-shows the exact URL this server sends, with a copy button, so you can paste it
-into LinkedIn rather than retype it.
-
-## Step 5 — copy the keys into Railway
-
-Still on the **Auth** tab, copy the **Client ID** and **Client Secret**.
-
-In Railway, go to your service, then **Variables**, and add:
-
-- `LINKEDIN_CLIENT_ID` — the Client ID
-- `LINKEDIN_CLIENT_SECRET` — the Client Secret
-
-Railway redeploys itself.
-
-## Step 6 — connect the account
-
-Open your admin console, go to **Agent**, then **Outreach**. At the top there is
-a strip that now says "Connect LinkedIn". Click it. LinkedIn asks whether you
-allow BlockFinaX to post on your behalf. Say yes.
-
-The strip changes to "Finax can post as Anthony Kumako".
-
-## Step 7 — post a comment
-
-Each waiting draft now has a **Post to LinkedIn** button. Read the draft, edit
-it if you want, then click it. It asks you to confirm, then publishes.
-
-Once posted the draft is marked **posted by Finax** and cannot be posted twice.
+**Step 6.** Read it once more, then press LinkedIn's **Post** button.
 
 ## What it will not do
 
-- It never posts on its own. Every comment is one button press by you.
-- It never posts in bulk. One draft, one click.
-- Connection notes and direct messages have no API route, so those still have to
-  be sent by hand. The button does not appear on them.
-- The token lasts about two months. When it expires the strip says so and you
-  click Connect again.
+- It never presses Post. That is always you.
+- It only fills a box on a post you queued. Landing on any other post fills
+  nothing.
+- It never overwrites text you have already typed.
+- Once filled, the draft leaves the queue. It is marked as placed rather than
+  sent, because whether you pressed Post is not something this can know, and
+  recording a send it did not witness would put a false entry in the one place
+  you look to check.
+
+## If the box does not fill
+
+- **Nothing happens** — click directly into the comment box first. LinkedIn only
+  creates the editor when you click it.
+- **Wrong post** — the queue matches on the post id in the URL. If you navigated
+  somewhere else, go back to the post you queued.
+- **Still nothing** — LinkedIn renamed its editor classes again. Tell Claude and
+  the selectors in `compose.js` get updated.
+
+## About the LinkedIn app connection
+
+If you set up `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`, that connection
+still works and is still worth keeping, but not for comments. The permission it
+grants, `w_member_social`, covers publishing **your own** posts. If you ever want
+Finax to draft and publish original posts to your feed, that route is open and
+already authorised. Ask and it can be wired up.
