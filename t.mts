@@ -1,0 +1,31 @@
+import express from "express";
+import fs from "fs";
+import { registerOutreachRoutes } from "./server/routes/outreach";
+const app = express(); app.use(express.json());
+registerOutreachRoutes(app);
+const srv = app.listen(0);
+const port = (srv.address() as any).port;
+const ok=(c:boolean,m:string)=>console.log(`  ${c?"\x1b[32mPASS\x1b[0m":"\x1b[31mFAIL\x1b[0m"}  ${m}`);
+const call = async (m:string, p:string, b?:any) => {
+  const init: RequestInit = { method: m, headers: { "Content-Type": "application/json" } };
+  if (b && m !== "GET") init.body = JSON.stringify(b);
+  const r = await fetch(`http://127.0.0.1:${port}${p}`, init);
+  return r.status;
+};
+console.log("\x1b[1m── every endpoint refuses an unauthenticated caller ──\x1b[0m");
+ok(await call("GET","/api/outreach") >= 401, `GET   /api/outreach        -> ${await call("GET","/api/outreach")}`);
+ok(await call("GET","/api/outreach/stats") >= 401, `GET   /api/outreach/stats  -> ${await call("GET","/api/outreach/stats")}`);
+ok(await call("POST","/api/outreach/draft",{sourceText:"x".repeat(40)}) >= 401, `POST  /api/outreach/draft  -> ${await call("POST","/api/outreach/draft",{sourceText:"x".repeat(40)})}`);
+ok(await call("PATCH","/api/outreach/1",{draft:"hi"}) >= 401, `PATCH /api/outreach/1      -> ${await call("PATCH","/api/outreach/1",{draft:"hi"})}`);
+
+console.log("\n\x1b[1m── nothing in this feature can reach LinkedIn ──\x1b[0m");
+const server = fs.readFileSync("server/routes/outreach.ts","utf8");
+const client = fs.readFileSync("client/src/pages/outreach.tsx","utf8");
+const noComments = (s:string) => s.replace(/\/\*[\s\S]*?\*\//g,"").replace(/\/\/.*$/gm,"");
+ok(!/linkedin\.com/i.test(noComments(server)), "server: no linkedin.com anywhere outside comments");
+ok(!/linkedin/i.test(noComments(client).replace(/placeholder="[^"]*"/g,"")), "client: no LinkedIn call, only labels");
+ok(!/puppeteer|playwright|cheerio|selenium|jsdom/i.test(server), "no scraper or headless-browser dependency");
+ok(server.split("requireAdmin").length - 1 >= 5, "requireAdmin on every route");
+ok(/Never invent a number/.test(server), "drafting prompt forbids inventing figures");
+ok(/pre-licence|pre-licence/i.test(server), "prompt requires stating pre-licence status honestly");
+srv.close();

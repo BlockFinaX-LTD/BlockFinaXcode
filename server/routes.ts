@@ -23,6 +23,7 @@ import { registerAdminRoutes } from "./routes/admin";
 import { registerKycRoutes } from "./routes/kyc";
 import { registerWalletRoutes } from "./routes/wallet";
 import { registerProtocolRoutes } from "./routes/protocol";
+import { registerOutreachRoutes } from "./routes/outreach";
 import { registerCommunityRoutes } from "./routes/community";
 import { registerRiftProxy } from "./routes/rift-proxy";
 import { registerMercuryoRoutes } from "./routes/mercuryo";
@@ -73,6 +74,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerSignatureRoutes(app);
   registerNotificationRoutes(app);
   await registerProtocolRoutes(app);
+  registerOutreachRoutes(app);
 
   // NOTE: The public/integrator REST API used to live at /api/v1 here.
   // It now ships as a standalone repo deployed independently:

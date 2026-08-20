@@ -5,7 +5,7 @@
  * for the blockchain communication platform.
  */
 
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, unique, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, unique, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -564,3 +564,57 @@ export const signinTokens = pgTable("signin_tokens", {
 
 export type SigninToken = typeof signinTokens.$inferSelect;
 
+
+/**
+ * Outreach drafts — the waiting room.
+ *
+ * Finax does not touch LinkedIn. Its robots.txt prohibits automated access
+ * outright and /feed/ redirects any server request to a login wall, so
+ * scanning would mean driving Anthony's logged-in session, which their User
+ * Agreement §8.2 forbids and which they enforce with bans. For a founder whose
+ * outbound runs through that account, the feature is not worth the account.
+ *
+ * Reading a post was never the slow part anyway. Pasting one takes thirty
+ * seconds; writing a reply that says something true about FX cover takes ten
+ * minutes, and that is the half Finax can do — it already knows the live pools,
+ * the traction and the pricing.
+ *
+ * A row is a draft waiting to be copied. It keeps the source link so the reply
+ * can be posted where it belongs, and it is never sent from here: the sending
+ * stays manual, in Anthony's own hands and his own session.
+ */
+export const outreachDrafts = pgTable("outreach_drafts", {
+  id: serial("id").primaryKey(),
+
+  /** Where the post or comment lives, so the reply can be taken back to it. */
+  sourceUrl: text("source_url"),
+  /** What was pasted in — the post or comment being replied to. */
+  sourceText: text("source_text").notNull(),
+  /** Who wrote it, as far as we know. Free text; nothing is looked up. */
+  personName: text("person_name"),
+  personHeadline: text("person_headline"),
+
+  /** reply | connect | dm — shapes length and register, not just wording. */
+  intent: text("intent").notNull().default("reply"),
+
+  /** What Finax wrote. Edited in place before sending. */
+  draft: text("draft").notNull(),
+  /** The first version, kept so edits show what the model got wrong. */
+  originalDraft: text("original_draft").notNull(),
+
+  /** waiting | sent | discarded */
+  status: text("status").notNull().default("waiting"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+}, (table) => [
+  index("outreach_drafts_status_idx").on(table.status),
+]);
+
+export const insertOutreachDraftSchema = createInsertSchema(outreachDrafts).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+export type OutreachDraft = typeof outreachDrafts.$inferSelect;
+export type InsertOutreachDraft = z.infer<typeof insertOutreachDraftSchema>;
