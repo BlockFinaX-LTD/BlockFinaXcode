@@ -51,7 +51,7 @@ const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
 import { buildPrompt, type Candidate } from "../outreach/prompt";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
-import { planSearches } from "../outreach/planner";
+import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
 async function liveContext(): Promise<string> {
@@ -169,7 +169,7 @@ async function writeDraft(
   return out || null;
 }
 
-async function draftBatch(
+export async function draftBatch(
   items: RawItem[],
   kind: Intent,
   threshold: number,
@@ -180,9 +180,7 @@ async function draftBatch(
       .filter(Boolean),
   );
 
-  const candidates: Array<{
-    text: string; url: string | null; name: string | null; headline: string | null; score: number;
-  }> = [];
+  const candidates: Candidate[] = [];
 
   for (const it of items.slice(0, 200)) {
     const text = typeof it?.text === "string" ? it.text.trim() : "";
@@ -197,6 +195,7 @@ async function draftBatch(
       name: typeof it?.name === "string" ? it.name.trim() || null : null,
       headline: typeof it?.headline === "string" ? it.headline.trim() || null : null,
       score,
+      postedAt: typeof it?.postedAt === "string" ? it.postedAt : null,
     });
     if (url) seen.add(url);
   }
@@ -224,6 +223,7 @@ async function draftBatch(
         intent: kind,
         draft,
         originalDraft: draft,
+        postedAt: c.postedAt ? new Date(c.postedAt) : null,
       }).returning();
       created.push(row);
 
@@ -504,69 +504,47 @@ export function registerOutreachRoutes(app: Express): void {
   //
   // The plan comes back with the drafts so the reasoning is auditable. A scan
   // that spends money should be able to say what it spent it on.
-  app.post("/api/outreach/auto", requireAdmin, async (req, res) => {
+  app.post("/api/outreach/auto", requireAdmin, async (req: any, res) => {
     try {
-      const token = process.env.APIFY_TOKEN;
-      if (!token) return res.status(503).json({ error: "LinkedIn search is not configured. Set APIFY_TOKEN." });
+      const apifyToken = process.env.APIFY_TOKEN;
+      if (!apifyToken) return res.status(503).json({ error: "LinkedIn search is not configured. Set APIFY_TOKEN." });
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return res.status(503).json({ error: "Drafting is not configured." });
 
       const { intent, postedLimit, perQuery, minScore } = req.body ?? {};
-      const kind: Intent = ["reply", "comment", "connect", "dm"].includes(intent) ? intent : "comment";
-      // Modest per query, because the plan runs several. Four searches at 25
-      // posts costs about what one manual search at 100 does, and covers far
-      // more ground.
-      const cap = Math.min(Math.max(Number(perQuery) || 25, 5), 50);
-
-      const plan = await planSearches(apiKey, MODEL);
-
-      const outcomes = await Promise.all(
-        plan.searches.map(sq =>
-          searchLinkedIn(token, sq.query, {
-            maxPosts: cap,
-            postedLimit: ["24h", "week", "month"].includes(postedLimit) ? postedLimit : "week",
-            sortBy: "relevance",
-            timeoutMs: 100_000,
-          }),
-        ),
-      );
-
-      // Merge before drafting rather than drafting per query. Two angles will
-      // surface the same post, and draftBatch can only rank what it is shown at
-      // once. Ranking each query separately would draft the best of a weak
-      // query ahead of the second best of a strong one.
-      const merged: RawItem[] = [];
-      const seenUrl = new Set<string>();
-      for (const o of outcomes) {
-        for (const it of o.items) {
-          const u = typeof it.url === "string" ? it.url : "";
-          if (u && seenUrl.has(u)) continue;
-          if (u) seenUrl.add(u);
-          merged.push(it);
-        }
-      }
-
-      const fetched = outcomes.reduce((n, o) => n + o.fetched, 0);
-      const failed = outcomes.filter(o => o.error);
-      const searched = outcomes.map(o => ({ query: o.query, fetched: o.fetched, error: o.error }));
-
-      if (!merged.length) {
-        return res.json({
-          drafted: 0, relevant: 0, considered: 0, drafts: [], fetched,
-          plan: plan.searches, plannerFallback: plan.fallback, searched,
-          note: failed.length === outcomes.length
-            ? "Every search failed to reach the provider."
-            : "LinkedIn returned nothing for any of the planned searches.",
-        });
-      }
-
-      const out = await draftBatch(merged, kind, typeof minScore === "number" ? minScore : 2);
-      return res.json({
-        ...out, fetched,
-        plan: plan.searches, plannerFallback: plan.fallback, searched,
+      const result = await runAutoScan({
+        apifyToken,
+        apiKey,
+        model: MODEL,
+        intent: ["reply", "comment", "connect", "dm"].includes(intent) ? intent : "comment",
+        perQuery,
+        postedLimit,
+        minScore,
+        draft: draftBatch,
+        by: req.adminEmail || "console",
       });
+      return res.json(result);
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "scan failed" });
+    }
+  });
+
+  // ── GET /api/outreach/schedule ──────────────────────────────────────────
+  //
+  // When the automatic scan last ran and when it runs next, so the console can
+  // say so rather than leaving Anthony to guess whether it is working.
+  app.get("/api/outreach/schedule", requireAdmin, async (_req, res) => {
+    try {
+      const last = await lastScanAt();
+      const intervalMs = 5 * 60 * 60 * 1000;
+      return res.json({
+        lastScanAt: last ? last.toISOString() : null,
+        nextScanAt: last ? new Date(last.getTime() + intervalMs).toISOString() : null,
+        intervalHours: 5,
+        configured: !!(process.env.APIFY_TOKEN && process.env.ANTHROPIC_API_KEY),
+      });
+    } catch {
+      return res.json({ lastScanAt: null, nextScanAt: null, intervalHours: 5, configured: false });
     }
   });
 

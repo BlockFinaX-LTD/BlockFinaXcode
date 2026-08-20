@@ -24,6 +24,7 @@ const DDL = [
      sent_at         timestamp
    )`,
   `CREATE INDEX IF NOT EXISTS outreach_drafts_status_idx ON outreach_drafts (status)`,
+  `ALTER TABLE outreach_drafts ADD COLUMN IF NOT EXISTS posted_at timestamp`,
   `ALTER TABLE hedge_events ADD COLUMN IF NOT EXISTS implied_vol      numeric(10,6)`,
   `ALTER TABLE hedge_events ADD COLUMN IF NOT EXISTS min_premium_rate numeric(10,6)`,
 

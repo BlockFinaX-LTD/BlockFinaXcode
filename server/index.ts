@@ -273,6 +273,15 @@ app.use((req, res, next) => {
 
   const server = await registerRoutes(app);
 
+  // Outreach scans LinkedIn on its own every five hours. Started after the
+  // routes so draftBatch is loaded, and anchored to a timestamp in the database
+  // rather than to uptime, so a deploy does not buy another scan.
+  {
+    const { startOutreachScanner } = await import("./outreach/scheduler");
+    const { draftBatch } = await import("./routes/outreach");
+    startOutreachScanner({ draft: draftBatch });
+  }
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

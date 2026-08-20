@@ -14,6 +14,34 @@ export interface Candidate {
   name: string | null;
   headline: string | null;
   score: number;
+  /** When the post was published, ISO string, when the provider told us. */
+  postedAt?: string | null;
+}
+
+/**
+ * How long ago, in words.
+ *
+ * Shared by the prompt and the console so a draft cannot say one thing while
+ * the card beside it says another.
+ */
+export function howLongAgo(iso: string | null | undefined, now = Date.now()): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const mins = Math.floor((now - t) / 60_000);
+  if (mins < 0) return "just now";
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? "1 day ago" : `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (days < 30) return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  const months = Math.floor(days / 30);
+  if (days < 365) return months === 1 ? "1 month ago" : `${months} months ago`;
+  const years = Math.floor(days / 365);
+  return years === 1 ? "1 year ago" : `${years} years ago`;
 }
 
 /**
@@ -38,10 +66,25 @@ export function buildPrompt(
   context: string,
 ): string {
   const who = [c.name, c.headline].filter(Boolean).join(", ") || "unknown";
+  const age = howLongAgo(c.postedAt);
   const sections = [
     `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""`,
     `Who they are: ${who}`,
   ];
+
+  // Age changes what is worth writing, not just whether to send. A comment on a
+  // post from an hour ago can speak to a live thread. One on a post from last
+  // month is arriving after the conversation ended, so it has to stand entirely
+  // on its own rather than answering what others have said.
+  if (age) {
+    sections.push(
+      `Posted ${age}.` +
+      (/(week|month|year)/.test(age)
+        ? ` The thread is cold, so write something that stands on its own rather\n` +
+          `than replying to a live discussion. Do not refer to the post as recent.`
+        : ""),
+    );
+  }
 
   if (brief) {
     sections.push(

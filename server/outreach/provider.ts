@@ -19,6 +19,45 @@ export interface RawItem {
   url?: unknown;
   name?: unknown;
   headline?: unknown;
+  /** When the post was published, ISO string, if the provider said. */
+  postedAt?: unknown;
+}
+
+/**
+ * Read a publication date from whatever shape the provider used.
+ *
+ * Accepts an ISO string, a millisecond epoch, or a second epoch, because all
+ * three appear in scraper payloads and the difference between seconds and
+ * milliseconds is the difference between 2026 and 1970. Anything that lands
+ * outside a plausible window is discarded rather than stored, since a wrong
+ * date is worse than none: it would tell Anthony a stale thread is fresh.
+ */
+export function readPostedAt(p: any): string | null {
+  const raw =
+    p?.postedAt ?? p?.publishedAt ?? p?.postedDate ?? p?.datePublished ??
+    p?.date ?? p?.timestamp ?? p?.time ?? p?.createdAt ?? null;
+  if (raw == null) return null;
+
+  let d: Date | null = null;
+  if (typeof raw === "number") {
+    // Ten digits is seconds, thirteen is milliseconds.
+    d = new Date(raw < 1e12 ? raw * 1000 : raw);
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const n = Number(trimmed);
+      d = new Date(n < 1e12 ? n * 1000 : n);
+    } else {
+      d = new Date(trimmed);
+    }
+  }
+  if (!d || Number.isNaN(d.getTime())) return null;
+
+  const ms = d.getTime();
+  const now = Date.now();
+  // Nothing older than five years, and nothing more than a day in the future.
+  if (ms < now - 5 * 365 * 86400_000 || ms > now + 86400_000) return null;
+  return d.toISOString();
 }
 
 export interface SearchOutcome {
@@ -53,6 +92,7 @@ export function mapApifyPost(p: any): RawItem | null {
     url: typeof url === "string" ? url : null,
     name: author.name ?? author.fullName ?? p.authorName ?? null,
     headline: author.headline ?? author.position ?? author.occupation ?? p.authorHeadline ?? null,
+    postedAt: readPostedAt(p),
   };
 }
 

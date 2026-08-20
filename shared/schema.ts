@@ -605,6 +605,17 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   /** waiting | sent | discarded */
   status: text("status").notNull().default("waiting"),
 
+  /**
+   * When the original post was published, as opposed to when we drafted.
+   *
+   * Kept separate from createdAt because they answer different questions and
+   * the gap between them decides whether to send at all. Commenting on a
+   * three-week-old post reaches nobody: the thread is cold and the author has
+   * moved on. Without this column a draft written today looks equally fresh
+   * whether the post is an hour old or a month old.
+   */
+  postedAt: timestamp("posted_at"),
+
   createdAt: timestamp("created_at").defaultNow(),
   sentAt: timestamp("sent_at"),
 }, (table) => [

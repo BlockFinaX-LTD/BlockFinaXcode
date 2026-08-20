@@ -22,7 +22,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Loader2, Copy, Check, ExternalLink, Trash2, Send, Sparkles, Linkedin,
+  Loader2, Copy, Check, ExternalLink, Trash2, Send, Sparkles, Linkedin, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OutreachPeople } from "./outreach-people";
@@ -46,6 +46,55 @@ interface Draft {
   draft: string;
   status: Status;
   createdAt: string | null;
+  /** When the original post went up, as opposed to when we drafted. */
+  postedAt: string | null;
+}
+
+/**
+ * How long ago, in words.
+ *
+ * The same wording the drafter is given, so a card cannot say "2 days ago"
+ * while the draft it holds was written as though the thread were live.
+ */
+function howLongAgo(iso: string | null): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const mins = Math.floor((Date.now() - t) / 60_000);
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? "1 day ago" : `${days} days ago`;
+  if (days < 30) {
+    const w = Math.floor(days / 7);
+    return w === 1 ? "1 week ago" : `${w} weeks ago`;
+  }
+  if (days < 365) {
+    const m = Math.floor(days / 30);
+    return m === 1 ? "1 month ago" : `${m} months ago`;
+  }
+  const y = Math.floor(days / 365);
+  return y === 1 ? "1 year ago" : `${y} years ago`;
+}
+
+/** "about 3 hours", for the next scheduled run. */
+function minutesUntil(iso: string | null): string {
+  if (!iso) return "a while";
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return "a few minutes";
+  if (mins < 60) return `${mins} minutes`;
+  const h = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem >= 15 ? `${h}h ${rem}m` : `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+/** Past a week the thread is cold, and that changes whether it is worth sending. */
+function isStale(iso: string | null): boolean {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  return !Number.isNaN(t) && Date.now() - t > 7 * 86400_000;
 }
 
 const INTENTS: { key: Intent; label: string; hint: string }[] = [
@@ -93,6 +142,15 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   /** Drafts, the people behind them, or what Finax knows. */
   const [section, setSection] = useState<"drafts" | "people" | "memory">("drafts");
   const [copied, setCopied] = useState<number | null>(null);
+
+  const { data: schedule } = useQuery<{
+    lastScanAt: string | null; nextScanAt: string | null; intervalHours: number; configured: boolean;
+  }>({
+    queryKey: ["outreach-schedule", token],
+    queryFn: () => api("/api/outreach/schedule", token),
+    // The scan runs on the server, so the console has to ask rather than be told.
+    refetchInterval: 120_000,
+  });
 
   const { data: drafts = [], isLoading } = useQuery<Draft[]>({
     queryKey: ["outreach", tab, token],
@@ -275,6 +333,15 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
               No search words needed. Finax reads what your currencies have actually done this
               week, works out which angles are worth hunting, runs those searches, and drafts for
               the strongest posts it finds. It shows you the plan so you can see the reasoning.
+            </p>
+            <p className="mt-2 text-[12px] text-muted-foreground">
+              {!schedule
+                ? "Checking the schedule…"
+                : !schedule.configured
+                  ? "This also runs by itself every 5 hours, once APIFY_TOKEN is set in Railway."
+                  : schedule.lastScanAt
+                    ? `Runs by itself every 5 hours. Last run ${howLongAgo(schedule.lastScanAt)}, next in about ${minutesUntil(schedule.nextScanAt)}.`
+                    : "Runs by itself every 5 hours. No run recorded yet, the first is due within ten minutes."}
             </p>
             {plan && (
               <div className="mt-3 space-y-2 rounded-md border border-border bg-background p-3">
@@ -467,6 +534,23 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
                 </span>
                 {d.personName && <span className="text-[13px] font-medium">{d.personName}</span>}
                 {d.personHeadline && <span className="text-[12.5px] text-muted-foreground">{d.personHeadline}</span>}
+                {/* Age of the post, not of the draft. A comment on a three-week-old
+                    thread reaches nobody, so the cold ones are marked. */}
+                {howLongAgo(d.postedAt) && (
+                  <span
+                    title={new Date(d.postedAt!).toLocaleString()}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px]",
+                      isStale(d.postedAt)
+                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <Clock className="h-3 w-3" />
+                    posted {howLongAgo(d.postedAt)}
+                    {isStale(d.postedAt) && <span className="font-medium">· thread is cold</span>}
+                  </span>
+                )}
                 {d.sourceUrl && (
                   <a
                     href={d.sourceUrl}
