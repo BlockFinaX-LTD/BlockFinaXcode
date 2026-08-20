@@ -32,7 +32,6 @@ test("the same person normalises to one identity", () => {
  */
 test("post permalinks are refused as identities", () => {
   assert.equal(normaliseProfileUrl("https://www.linkedin.com/feed/update/urn:li:activity:12345/"), null);
-  assert.equal(normaliseProfileUrl("https://www.linkedin.com/company/acme"), null);
   assert.equal(normaliseProfileUrl("https://example.com/in/ada"), null);
   assert.equal(normaliseProfileUrl("not a url"), null);
   assert.equal(normaliseProfileUrl(""), null);
@@ -64,4 +63,33 @@ test("topics reflect what the post was actually about", () => {
   assert.ok(t.includes("trade"), `expected trade in ${t.join(",")}`);
   assert.ok(t.includes("frontier"), `expected frontier in ${t.join(",")}`);
   assert.deepEqual(matchedTopics("Happy birthday!"), []);
+});
+
+/**
+ * Half the accounts driving these threads are publications rather than people.
+ * The first live scan surfaced MarketForces Africa, TopStories Nigeria and The
+ * Journal Nigeria, and a list that silently drops all of them is missing the
+ * accounts with the most reach.
+ */
+test("company pages are tracked as well as people", () => {
+  assert.equal(
+    normaliseProfileUrl("https://www.linkedin.com/company/marketforcesafrica/"),
+    "https://www.linkedin.com/company/marketforcesafrica",
+  );
+  assert.equal(
+    normaliseProfileUrl("https://www.linkedin.com/company/MarketForcesAfrica?trk=abc"),
+    "https://www.linkedin.com/company/marketforcesafrica",
+  );
+});
+
+/**
+ * A post link must still never become an identity. The provider returns one for
+ * nearly every result, so if this ever passed, the people table would fill with
+ * one row per post instead of one per account.
+ */
+test("the public post link is still refused as an identity", () => {
+  assert.equal(
+    normaliseProfileUrl("https://www.linkedin.com/posts/marketforcesafrica_naira-weakens-activity-7496146729793261569-h3xB"),
+    null,
+  );
 });

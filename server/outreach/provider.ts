@@ -12,6 +12,8 @@
  * LinkedIn to restrict.
  */
 
+import { activityUrnFrom, postedAtFromUrn } from "./linkedin";
+
 const ACTOR = "harvestapi~linkedin-post-search";
 
 export interface RawItem {
@@ -21,6 +23,15 @@ export interface RawItem {
   headline?: unknown;
   /** When the post was published, ISO string, if the provider said. */
   postedAt?: unknown;
+  /**
+   * The author's own page, kept apart from the post link.
+   *
+   * These were collapsed into one field originally, and since the provider
+   * returns a post permalink for essentially every result, the author link was
+   * always the one that lost. The People list could therefore never fill: it
+   * keys on a profile URL and was only ever handed post URLs.
+   */
+  profileUrl?: unknown;
 }
 
 /**
@@ -87,12 +98,21 @@ export function mapApifyPost(p: any): RawItem | null {
     p.url ?? p.postUrl ?? p.linkedinUrl ?? p.link ??
     author.linkedinUrl ?? author.profileUrl ?? null;
 
+  const postUrl = typeof url === "string" ? url : null;
+  const profileUrl =
+    author.linkedinUrl ?? author.profileUrl ?? author.url ?? author.publicIdentifier ??
+    p.authorProfileUrl ?? p.authorUrl ?? null;
+
   return {
     text: text.trim(),
-    url: typeof url === "string" ? url : null,
+    url: postUrl,
+    profileUrl: typeof profileUrl === "string" ? profileUrl : null,
     name: author.name ?? author.fullName ?? p.authorName ?? null,
     headline: author.headline ?? author.position ?? author.occupation ?? p.authorHeadline ?? null,
-    postedAt: readPostedAt(p),
+    // The provider's date field, when there is one, and otherwise the date the
+    // post id encodes. The first real scan returned thirty posts and not one
+    // date, so the derived form is the one that actually runs.
+    postedAt: readPostedAt(p) ?? postedAtFromUrn(activityUrnFrom(postUrl)),
   };
 }
 

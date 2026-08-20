@@ -200,6 +200,7 @@ export async function draftBatch(
       headline: typeof it?.headline === "string" ? it.headline.trim() || null : null,
       score,
       postedAt: typeof it?.postedAt === "string" ? it.postedAt : null,
+      profileUrl: typeof it?.profileUrl === "string" ? it.profileUrl : null,
     });
     if (url) seen.add(url);
   }
@@ -233,9 +234,13 @@ export async function draftBatch(
 
       // The list of individuals is a by-product of drafting: anyone whose post
       // was worth answering is worth remembering.
-      if (c.url) {
+      // The author's own page, not the post link. These were the same field
+      // once, and since the provider returns a post permalink for nearly every
+      // result, the People list could never fill.
+      const who = c.profileUrl || c.url;
+      if (who) {
         await notePerson({
-          profileUrl: c.url,
+          profileUrl: who,
           name: c.name,
           headline: c.headline,
           postText: c.text,

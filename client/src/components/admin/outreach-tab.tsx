@@ -69,7 +69,12 @@ interface LinkedInStatus {
  */
 function canPost(d: Draft): boolean {
   if (d.intent !== "comment" && d.intent !== "reply") return false;
-  return !!d.sourceUrl && /urn(:|%3A)li(:|%3A)(activity|ugcPost|share)/i.test(d.sourceUrl);
+  if (!d.sourceUrl) return false;
+  // Both shapes LinkedIn uses: the feed permalink, and the public post link
+  // that carries the id as "-activity-{id}-{hash}". The provider returns the
+  // second for essentially everything.
+  return /urn(:|%3A)li(:|%3A)(activity|ugcPost|share)/i.test(d.sourceUrl)
+      || /-activity-\d{10,}/.test(d.sourceUrl);
 }
 
 /**
@@ -146,7 +151,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   const [sourceUrl, setSourceUrl] = useState("");
   const [personName, setPersonName] = useState("");
   const [personHeadline, setPersonHeadline] = useState("");
-  const [intent, setIntent] = useState<Intent>("reply");
+  const [intent, setIntent] = useState<Intent>("comment");
   /**
    * "one"    = a single post, pasted.
    * "scan"   = a whole page pasted at once.

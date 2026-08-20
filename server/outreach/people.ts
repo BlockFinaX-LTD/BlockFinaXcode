@@ -31,10 +31,12 @@ export interface Sighting {
  * Reduce a LinkedIn URL to the identity it names.
  *
  * Query strings on LinkedIn carry tracking that differs per view, so the same
- * person arrives with a different URL every time; without normalising, the list
- * fills with duplicates of one person. Post permalinks are rejected outright —
- * they identify an article, not a human, and storing one as a profile would
- * make the row unreachable and un-mergeable later.
+ * account arrives with a different URL every time. Without normalising, the
+ * list fills with duplicates of one person.
+ *
+ * Post permalinks are rejected outright. They identify an article rather than
+ * an account, and storing one here would create a row nobody can act on and
+ * that can never be merged with the real account when it turns up properly.
  */
 export function normaliseProfileUrl(raw: string): string | null {
   if (!raw) return null;
@@ -45,11 +47,22 @@ export function normaliseProfileUrl(raw: string): string | null {
     return null;
   }
   if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) return null;
-  const m = u.pathname.match(/\/in\/([^/]+)/i);
-  if (!m) return null;
-  const slug = decodeURIComponent(m[1]).toLowerCase().replace(/\/+$/, "");
-  if (!slug) return null;
-  return `https://www.linkedin.com/in/${slug}`;
+
+  // People and company pages both count. The first real scan surfaced
+  // MarketForces Africa, TopStories Nigeria and The Journal Nigeria alongside
+  // named individuals, and an outreach list that silently drops every
+  // publication is missing the accounts that actually drive these threads.
+  const person = u.pathname.match(/\/in\/([^/]+)/i);
+  if (person) {
+    const slug = decodeURIComponent(person[1]).toLowerCase().replace(/\/+$/, "");
+    return slug ? `https://www.linkedin.com/in/${slug}` : null;
+  }
+  const company = u.pathname.match(/\/company\/([^/]+)/i);
+  if (company) {
+    const slug = decodeURIComponent(company[1]).toLowerCase().replace(/\/+$/, "");
+    return slug ? `https://www.linkedin.com/company/${slug}` : null;
+  }
+  return null;
 }
 
 /** Company is often the tail of a headline: "CFO at Acme Foods". */

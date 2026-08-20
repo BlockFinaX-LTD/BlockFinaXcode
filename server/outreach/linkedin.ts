@@ -157,12 +157,54 @@ export async function exchangeCode(code: string): Promise<LinkedInAuth> {
  */
 export function activityUrnFrom(url: string | null | undefined): string | null {
   if (!url) return null;
-  const direct = url.match(/urn:li:(activity|ugcPost|share):\d+/);
-  if (direct) return direct[0];
-  // Some permalinks carry the id without the urn prefix.
-  const bare = url.match(/\/feed\/update\/(?:urn%3Ali%3A)?(activity|ugcPost|share)[:%]3?A?(\d+)/i);
-  if (bare) return `urn:li:${bare[1]}:${bare[2]}`;
+
+  // The plain permalink form.
+  const direct = url.match(/urn:li:(activity|ugcPost|share):(\d+)/);
+  if (direct) return `urn:li:${direct[1]}:${direct[2]}`;
+
+  // The same thing percent-encoded, which is how it arrives in a query string.
+  const encoded = url.match(/urn%3Ali%3A(activity|ugcPost|share)%3A(\d+)/i);
+  if (encoded) return `urn:li:${encoded[1]}:${encoded[2]}`;
+
+  // The share form LinkedIn actually uses in public post links:
+  //   /posts/marketforcesafrica_naira-weakens-activity-7496146729793261569-h3xB
+  // This is the shape the provider returns for essentially every result, so
+  // without it the send button never appears on anything.
+  const share = url.match(/-activity-(\d{10,})(?:-|\/|$|\?)/);
+  if (share) return `urn:li:activity:${share[1]}`;
+
   return null;
+}
+
+/**
+ * When was a post published, according to its own id?
+ *
+ * LinkedIn activity ids are snowflake-like: the high bits are a millisecond
+ * timestamp. Shifting right by 22 recovers it, which is checkable against
+ * known posts and lands within the search window every time.
+ *
+ * This matters because the provider does not reliably return a date field. All
+ * thirty drafts in the first real scan came back with no publication date at
+ * all, which left every card unable to say whether a thread was an hour old or
+ * a month old. The id is always present, because it is the identity of the
+ * post, so deriving from it is more dependable than reading a field that may
+ * not be there.
+ */
+export function postedAtFromUrn(urn: string | null): string | null {
+  if (!urn) return null;
+  const m = urn.match(/:(\d{10,})$/);
+  if (!m) return null;
+  try {
+    const ms = Number(BigInt(m[1]) >> BigInt(22));
+    if (!Number.isFinite(ms)) return null;
+    const now = Date.now();
+    // Same plausibility window as a provider-supplied date. LinkedIn changed id
+    // schemes once before, and a wrong date is worse than none.
+    if (ms < now - 5 * 365 * 86400_000 || ms > now + 86400_000) return null;
+    return new Date(ms).toISOString();
+  } catch {
+    return null;
+  }
 }
 
 export interface PostResult {

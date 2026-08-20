@@ -16,6 +16,8 @@ export interface Candidate {
   score: number;
   /** When the post was published, ISO string, when the provider told us. */
   postedAt?: string | null;
+  /** The author's own page, distinct from the post link. */
+  profileUrl?: string | null;
 }
 
 /**
