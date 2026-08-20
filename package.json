@@ -11,6 +11,7 @@
     "db:push": "drizzle-kit push",
     "pricing:test": "tsx --test server/pricing/__tests__/*.test.ts",
     "outreach:test": "tsx --test server/routes/__tests__/*.test.ts",
+    "outreach:migrate": "tsx --env-file-if-exists=.env server/scripts/migrate-outreach.ts",
     "pricing:price": "tsx --env-file-if-exists=.env server/pricing/scripts/price-cli.ts",
     "pricing:bootstrap": "tsx --env-file=.env server/pricing/scripts/bootstrap.ts",
     "pricing:backfill-30y": "tsx --env-file=.env server/pricing/scripts/backfill-30y.ts",

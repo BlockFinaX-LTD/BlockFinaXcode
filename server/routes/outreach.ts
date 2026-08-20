@@ -1,17 +1,25 @@
 /**
- * outreach.ts — Finax drafts a LinkedIn reply; Anthony sends it.
+ * outreach.ts — Finax finds LinkedIn posts worth answering and drafts the reply.
+ * Anthony sends it. Nothing here ever posts.
  *
- * ## Why nothing here touches LinkedIn
+ * ## Three ways a post gets here
  *
- * Their robots.txt prohibits automated access outright, and /feed/ redirects
- * any server request to a login wall — so "scanning" would mean driving a
- * logged-in session, which the User Agreement §8.2 forbids and which LinkedIn
- * enforces with bans. An account that carries a founder's outbound is worth
- * more than the convenience of not pasting.
+ *   /draft   one post, pasted by hand.
+ *   /ingest  from the browser extension, which reads the page Anthony is already
+ *            looking at. His session, his browser, his IP; it never navigates or
+ *            scrolls on its own, so it makes no requests LinkedIn could see.
+ *   /search  through an outside provider that runs its own infrastructure and
+ *            takes no cookies. This is the safest of the three, not the riskiest:
+ *            no account of ours is in the loop, so there is nothing to restrict.
  *
- * Reading a post was never the slow part. Pasting one takes thirty seconds;
- * writing a reply that says something true about FX cover takes ten minutes,
- * and that is the half worth automating.
+ * LinkedIn's own API cannot do this. Sign-In and Share are the only self-serve
+ * products; post search and third-party profiles sit behind partner programmes
+ * that take months and are usually refused. There is no endpoint to apply for,
+ * which is why /search goes through a provider instead.
+ *
+ * Reading the post was never the slow part. Finding one takes seconds; writing a
+ * reply that says something true about FX cover takes ten minutes, and that is
+ * the half worth automating.
  *
  * ## Why the draft is grounded in live data
  *
@@ -20,6 +28,10 @@
  * book: open pools, what cover actually costs, what has settled. A reply that
  * quotes a live premium is worth sending; one that says "we help businesses
  * manage FX volatility" is worth deleting, and reads to the recipient as a bot.
+ *
+ * The same instinct drives relevanceScore: most of a feed is not about currency,
+ * and drafting a hedging reply to a birthday post produces exactly the message
+ * this tool exists to avoid. Skipping is a feature.
  */
 
 import type { Express } from "express";
@@ -27,6 +39,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db";
 import { outreachDrafts } from "@shared/schema";
+import { timingSafeEqual } from "node:crypto";
 import { requireAdmin } from "../middleware/admin-auth";
 import { relevanceScore } from "./outreach-relevance";
 
@@ -100,6 +113,37 @@ Hard rules:
   draft rather than forcing a connection — a forced reply costs more than no reply.
 
 Output the message only. No preamble, no sign-off block, no quotation marks around it.`;
+
+/**
+ * Auth for the browser extension.
+ *
+ * Admin sessions are in-memory with an eight-hour TTL, issued by logging in
+ * through Rift. That is right for a console someone sits in front of, and wrong
+ * for an extension: Anthony would be re-pasting a token twice a day, and again
+ * after every redeploy, since a restart empties the map.
+ *
+ * So /ingest also accepts a static token from the environment. It is deliberately
+ * scoped to this one route. The worst an attacker can do with it is put unwanted
+ * drafts in the waiting room — it cannot read the book, approve anything, or
+ * reach any other admin endpoint. That is a proportionate amount of authority to
+ * put in a browser extension, where a session token never belonged.
+ *
+ * A real admin session is still accepted, so the console works unchanged.
+ */
+function requireIngestAuth(req: any, res: any, next: any) {
+  const configured = (process.env.OUTREACH_INGEST_TOKEN || "").trim();
+  const presented = (req.headers["x-admin-token"] || "").toString().trim();
+  if (configured && presented && timingSafeEqualStr(presented, configured)) return next();
+  return requireAdmin(req, res, next);
+}
+
+/** Constant-time compare, so a wrong token cannot be found a character at a time. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 const ACTOR = "harvestapi~linkedin-post-search";
 
@@ -413,7 +457,7 @@ export function registerOutreachRoutes(app: Express): void {
   // The relevance test is keyword-based on purpose. A model call per post would
   // cost more than the drafts themselves, and the judgement here is coarse —
   // does this mention money moving across a border — not subtle.
-  app.post("/api/outreach/ingest", requireAdmin, async (req, res) => {
+  app.post("/api/outreach/ingest", requireIngestAuth, async (req, res) => {
     try {
       const { items, intent, minScore } = req.body ?? {};
       if (!Array.isArray(items) || !items.length) {

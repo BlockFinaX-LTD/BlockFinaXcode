@@ -39,18 +39,34 @@ Select the `extension` folder itself — not a file inside it — and click **Se
 Click the puzzle-piece icon in Chrome's toolbar (top right), find "Finax for
 LinkedIn", and click the pin next to it. Its icon now sits in your toolbar.
 
-## Step 5 — set your server and token
+## Step 5 — create the extension's token
+
+The admin console issues 8-hour sessions, which would mean re-pasting a token
+into the extension twice a day. So the extension uses its own long-lived token
+instead.
+
+In Railway → your service → **Variables** → **New Variable**:
+
+- Name: `OUTREACH_INGEST_TOKEN`
+- Value: any long random string (40+ characters)
+
+Keep a copy — you need it in the next step. This token can only add drafts to
+your waiting room. It cannot read your book, approve anything, or reach any
+other admin endpoint, which is why it is safe to keep in a browser extension.
+
+## Step 6 — set your server and token
 
 Click the Finax icon. Fill in:
 
 - **BlockFinaX server** — `https://blockfinax.com`
-- **Admin token** — the same `ADMIN_TOKEN` you use for the admin console
+- **Admin token** — the value you set as `OUTREACH_INGEST_TOKEN` in Railway
+  (see below). Not your admin console login — that one expires every 8 hours.
 - **Draft as** — Reply, Connection request, or Direct message
 - Leave **Send automatically** unticked to start with
 
 Click **Save**.
 
-## Step 6 — use it
+## Step 7 — use it
 
 Go to LinkedIn. Scroll your feed, or search something like
 `cedi depreciation importers` and open the **Posts** tab.
@@ -61,7 +77,7 @@ When you have scrolled enough, click **Send to Finax**.
 It will tell you how many were relevant and how many drafts it made — most posts
 in a feed are not about currency, and those are skipped rather than drafted.
 
-## Step 7 — read the drafts
+## Step 8 — read the drafts
 
 Open your admin console → **Agent** → **Outreach**. Every draft is there with a
 link to the original post. Edit anything you want, copy it, and post it yourself.
@@ -72,7 +88,8 @@ Nothing is ever posted to LinkedIn by this tool. It writes drafts; you send them
 
 - **No bar at the bottom right** — LinkedIn renamed its CSS classes again.
   Tell Claude and the selectors in `content.js` get updated.
-- **"Server or token not set"** — go back to Step 5.
-- **"Server said 401"** — the admin token is wrong.
+- **"Server or token not set"** — go back to Step 6.
+- **"Server said 401"** — the token does not match `OUTREACH_INGEST_TOKEN`
+  in Railway, or that variable was never set.
 - **"Nothing relevant in 40 posts"** — working as intended. Search for something
   closer to the subject; a general feed rarely mentions currency risk.
