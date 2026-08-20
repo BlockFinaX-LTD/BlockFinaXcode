@@ -49,6 +49,7 @@ import { notePerson } from "../outreach/people";
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
 import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
+import { buildPrompt, type Candidate } from "../outreach/prompt";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
 async function liveContext(): Promise<string> {
@@ -144,6 +145,60 @@ function mapApifyPost(p: any): RawItem | null {
  * paths apply the same relevance bar and the same dedupe. A post found twice by
  * two different routes should not produce two drafts.
  */
+
+
+/**
+ * Write one message. The single drafting path, shared by every route.
+ *
+ * There used to be two: /draft built its own prompt and draftBatch built
+ * another. They drifted, as duplicated prompts always do, and the single-post
+ * path ended up with no market data, no memory, no access to the comment
+ * intent, and a line reading "Live BlockFinaX figures you may quote", which
+ * produced exactly the sales copy it invited. One function now, so a change to
+ * how Finax writes cannot reach one route and miss the other.
+ *
+ * ## Why the book is withheld from public writing
+ *
+ * The live pool figures go in only for a direct message or a connection note.
+ * A stranger reading a message is entitled to know who is writing and why, so
+ * naming the product there is honest. A public comment is different: the moment
+ * our own activity is in the context window, the model reaches for it as
+ * evidence, and "we have settled six pools on that basis" is a sales line
+ * wearing an analyst's jacket.
+ *
+ * Withholding it is structural rather than instructional on purpose. An
+ * instruction not to sell competes with tempting material sitting right there
+ * in the prompt, and loses often enough to matter. Removing the material wins
+ * every time.
+ */
+async function writeDraft(
+  client: Anthropic,
+  c: Candidate,
+  kind: Intent,
+): Promise<string | null> {
+  const pairs = pairsMentioned(c.text);
+  const [brief, recalled] = await Promise.all([
+    briefForText(c.text).catch(() => ""),
+    recallFor(c.text, pairs).catch(() => ""),
+  ]);
+
+  // The book is fetched only when the message is private. See buildPrompt.
+  const context = kind === "dm" || kind === "connect"
+    ? await liveContext().catch(() => "")
+    : "";
+
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: 900,
+    system: SYSTEM,
+    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context) }],
+  });
+  const out = msg.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map(b => b.text).join("").trim();
+  return out || null;
+}
+
 async function draftBatch(
   items: RawItem[],
   kind: Intent,
@@ -185,58 +240,11 @@ async function draftBatch(
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const context = await liveContext();
   const created: unknown[] = [];
 
   for (const c of chosen) {
     try {
-      const who = [c.name, c.headline].filter(Boolean).join(" — ") || "unknown";
-
-      // The two things that make a comment worth reading: what the currency has
-      // actually done, and what we know about why. Both are looked up per post
-      // rather than shared across the batch, because they depend on which pair
-      // the post is about.
-      const pairs = pairsMentioned(c.text);
-      const [brief, recalled] = await Promise.all([
-        briefForText(c.text).catch(() => ""),
-        recallFor(c.text, pairs).catch(() => ""),
-      ]);
-
-      const sections = [
-        `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""`,
-        `Who they are: ${who}`,
-      ];
-      if (brief) {
-        sections.push(
-          `Market data, computed from our own daily close history just now. These are\n` +
-          `the only figures you may quote about the currency. Where a statistic names\n` +
-          `its own window, quote that window and not a longer one:\n${brief}`,
-        );
-      }
-      if (recalled) {
-        sections.push(
-          `What we know about why. Each carries its age. Quote it with that age,\n` +
-          `never in the present tense:\n${recalled}`,
-        );
-      }
-      if (context) sections.push(`Live BlockFinaX book:\n${context}`);
-      if (!brief && !recalled) {
-        sections.push(
-          `No market data matched this post. Write from mechanism alone and quote\n` +
-          `no figures. A comment with a good argument and no numbers is fine.`,
-        );
-      }
-      sections.push(`Draft a ${kind}. ${INTENT_RULES[kind]}`);
-
-      const msg = await client.messages.create({
-        model: MODEL,
-        max_tokens: 900,
-        system: SYSTEM,
-        messages: [{ role: "user", content: sections.join("\n\n") }],
-      });
-      const draft = msg.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map(b => b.text).join("").trim();
+      const draft = await writeDraft(client, c, kind);
       if (!draft) continue;
       const [row] = await db.insert(outreachDrafts).values({
         sourceUrl: c.url,
@@ -282,30 +290,22 @@ export function registerOutreachRoutes(app: Express): void {
       if (typeof sourceText !== "string" || sourceText.trim().length < 20) {
         return res.status(400).json({ error: "Paste the post or comment you want to reply to." });
       }
-      const kind: Intent = ["reply", "connect", "dm"].includes(intent) ? intent : "reply";
+      const kind: Intent = ["reply", "comment", "connect", "dm"].includes(intent) ? intent : "reply";
 
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return res.status(503).json({ error: "Drafting is not configured (ANTHROPIC_API_KEY)." });
 
-      const who = [personName, personHeadline].filter(Boolean).join(" — ") || "unknown";
-      const prompt =
-        `They wrote:\n"""\n${sourceText.trim().slice(0, 4000)}\n"""\n\n` +
-        `Who they are: ${who}\n\n` +
-        `Live BlockFinaX figures you may quote:\n${await liveContext()}\n\n` +
-        `Draft a ${kind}. ${INTENT_RULES[kind]}`;
-
+      // Same writer as every other route. A pasted post skips the relevance
+      // filter, because Anthony choosing to paste it is the judgement the filter
+      // exists to approximate.
       const client = new Anthropic({ apiKey });
-      const msg = await client.messages.create({
-        model: MODEL,
-        max_tokens: 700,
-        system: SYSTEM,
-        messages: [{ role: "user", content: prompt }],
-      });
-      const draft = msg.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map(b => b.text)
-        .join("")
-        .trim();
+      const draft = await writeDraft(client, {
+        text: sourceText.trim(),
+        url: typeof sourceUrl === "string" && sourceUrl.trim() ? sourceUrl.trim() : null,
+        name: personName?.trim() || null,
+        headline: personHeadline?.trim() || null,
+        score: relevanceScore(sourceText),
+      }, kind);
       if (!draft) return res.status(502).json({ error: "The model returned nothing. Try again." });
 
       const [row] = await db
