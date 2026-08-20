@@ -1,18 +1,22 @@
 /**
  * outreach-tab.tsx — the waiting room, inside the agent console.
  *
- * Paste a LinkedIn post, Finax drafts a reply against the live book, the draft
- * waits here with its source link until it is copied and sent by hand.
+ * Four things live here behind one set of tabs:
+ *
+ *   Drafts   what Finax wrote, waiting to be copied and sent by hand.
+ *   People   everyone whose post was worth answering, accumulated from drafting.
+ *   Memory   the dated facts Finax may cite — policy, research, news.
+ *   Market   the computed picture, so a surprising number can be checked.
  *
  * Nothing here sends anything, and that is the design rather than a stage of
- * it. LinkedIn's robots.txt prohibits automated access and their User Agreement
- * forbids driving a logged-in session, so an integration that posted on
- * Anthony's behalf would put the account his outbound runs through at risk.
- * Copying takes a second; losing the account does not.
+ * it. LinkedIn's User Agreement forbids automated posting, so an integration
+ * that posted on Anthony's behalf would put the account his outbound runs
+ * through at risk. Copying takes a second; losing the account does not.
  *
- * It lives beside Chat, Queue and Training because it is the same thing those
- * are: work the agent prepares and a person decides on. Marking a draft sent
- * records what happened elsewhere — no code path here can post.
+ * The People list is built as a by-product rather than scraped separately: a
+ * person who has publicly written about currency risk is better qualified than
+ * one who merely holds the title, and the list improves every time the tool is
+ * used for its main job.
  */
 
 import { useState } from "react";
@@ -21,10 +25,12 @@ import {
   Loader2, Copy, Check, ExternalLink, Trash2, Send, Sparkles, Linkedin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OutreachPeople } from "./outreach-people";
+import { OutreachMemory } from "./outreach-memory";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type Intent = "reply" | "connect" | "dm";
+type Intent = "reply" | "comment" | "connect" | "dm";
 type Status = "waiting" | "sent" | "discarded";
 
 interface Draft {
@@ -40,6 +46,7 @@ interface Draft {
 }
 
 const INTENTS: { key: Intent; label: string; hint: string }[] = [
+  { key: "comment", label: "Insight comment", hint: "70–110 words — mechanism, a number, then the second-order effect" },
   { key: "reply", label: "Public reply", hint: "under 60 words — has to add something to the thread" },
   { key: "connect", label: "Connection note", hint: "under 300 characters, LinkedIn's limit" },
   { key: "dm", label: "Direct message", hint: "under 120 words, one question worth answering" },
@@ -77,6 +84,8 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   const [query, setQuery] = useState("");
   const [postedLimit, setPostedLimit] = useState("month");
   const [tab, setTab] = useState<Status>("waiting");
+  /** Drafts, the people behind them, or what Finax knows. */
+  const [section, setSection] = useState<"drafts" | "people" | "memory">("drafts");
   const [copied, setCopied] = useState<number | null>(null);
 
   const { data: drafts = [], isLoading } = useQuery<Draft[]>({
@@ -164,6 +173,32 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
 
   return (
     <div className="space-y-6">
+      {/* ── which of the three things you came here for ── */}
+      <div className="flex gap-1.5 border-b border-border pb-3">
+        {([
+          ["drafts", "Drafts"],
+          ["people", "People"],
+          ["memory", "What Finax knows"],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setSection(k)}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-[13px] transition-colors",
+              section === k
+                ? "bg-primary/10 font-medium text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === "people" ? <OutreachPeople token={token} />
+       : section === "memory" ? <OutreachMemory token={token} />
+       : (
+      <>
       <p className="max-w-[68ch] text-sm text-muted-foreground">
         Finax drafts LinkedIn replies against the live book — open pools, real premiums, what has
         settled. Give it one post, paste a whole page, or let it search LinkedIn itself. Drafts wait
@@ -417,6 +452,8 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
             </article>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );

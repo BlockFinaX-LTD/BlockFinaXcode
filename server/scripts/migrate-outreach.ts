@@ -26,6 +26,43 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS outreach_drafts_status_idx ON outreach_drafts (status)`,
   `ALTER TABLE hedge_events ADD COLUMN IF NOT EXISTS implied_vol      numeric(10,6)`,
   `ALTER TABLE hedge_events ADD COLUMN IF NOT EXISTS min_premium_rate numeric(10,6)`,
+
+  `CREATE TABLE IF NOT EXISTS outreach_people (
+     id             serial PRIMARY KEY,
+     profile_url    text NOT NULL UNIQUE,
+     name           text,
+     headline       text,
+     company        text,
+     location       text,
+     topics         text,
+     posts_seen     integer NOT NULL DEFAULT 1,
+     top_score      integer NOT NULL DEFAULT 0,
+     last_post_text text,
+     last_post_url  text,
+     status         text NOT NULL DEFAULT 'new',
+     notes          text,
+     first_seen     timestamp DEFAULT now(),
+     last_seen      timestamp DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS outreach_people_status_idx ON outreach_people (status)`,
+  `CREATE INDEX IF NOT EXISTS outreach_people_score_idx  ON outreach_people (top_score)`,
+
+  `CREATE TABLE IF NOT EXISTS market_memory (
+     id          serial PRIMARY KEY,
+     kind        text NOT NULL DEFAULT 'news',
+     title       text NOT NULL,
+     body        text NOT NULL,
+     source_name text,
+     source_url  text,
+     as_of       timestamp NOT NULL,
+     tags        text,
+     pair        text,
+     active      boolean NOT NULL DEFAULT true,
+     created_at  timestamp DEFAULT now(),
+     created_by  text
+   )`,
+  `CREATE INDEX IF NOT EXISTS market_memory_active_idx ON market_memory (active)`,
+  `CREATE INDEX IF NOT EXISTS market_memory_asof_idx   ON market_memory (as_of)`,
 ];
 
 (async () => {
@@ -36,9 +73,14 @@ const DDL = [
       await p.query(sql);
       console.log("  ok:", sql.trim().split("\n")[0].slice(0, 62));
     }
-    const t = (await p.query(`select 1 from information_schema.tables where table_name='outreach_drafts'`)).rows;
-    const c = (await p.query(`select column_name from information_schema.columns where table_name='hedge_events' and column_name in ('implied_vol','min_premium_rate')`)).rows;
-    console.log(`  => ${label}: outreach_drafts ${t.length ? "EXISTS" : "MISSING"}, pricing cols: ${c.map((r: any) => r.column_name).join(", ") || "NONE"}`);
+    const t = (await p.query(
+      `select table_name from information_schema.tables
+       where table_name in ('outreach_drafts','outreach_people','market_memory')`)).rows;
+    const c = (await p.query(
+      `select column_name from information_schema.columns
+       where table_name='hedge_events' and column_name in ('implied_vol','min_premium_rate')`)).rows;
+    console.log(`  => ${label}: tables [${t.map((r: any) => r.table_name).sort().join(", ")}]`);
+    console.log(`     pricing cols: ${c.map((r: any) => r.column_name).join(", ") || "NONE"}`);
   } catch (e: any) {
     console.log("  FAILED:", e.message);
     process.exitCode = 1;

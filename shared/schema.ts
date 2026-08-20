@@ -616,5 +616,110 @@ export const insertOutreachDraftSchema = createInsertSchema(outreachDrafts).omit
   createdAt: true,
   sentAt: true,
 });
+
+/**
+ * The people worth talking to.
+ *
+ * Built as a side effect of drafting rather than as a separate scrape. Every
+ * post that clears the relevance bar names someone; that person is upserted
+ * here with what they were seen writing about. So the list is a record of
+ * people who have actually said something about currency risk in public — which
+ * is a far better qualification than a title filter, and it accumulates without
+ * anyone maintaining it.
+ *
+ * Keyed on the profile URL because names collide and headlines change.
+ */
+export const outreachPeople = pgTable("outreach_people", {
+  id: serial("id").primaryKey(),
+
+  /** LinkedIn profile URL, normalised. The identity — everything else can change. */
+  profileUrl: text("profile_url").notNull().unique(),
+
+  name: text("name"),
+  headline: text("headline"),
+  company: text("company"),
+  location: text("location"),
+
+  /**
+   * What they post about, comma-separated, accumulated across sightings.
+   * Derived from which relevance signals their posts matched, so it says
+   * "cedi, importers" rather than a guess at their job.
+   */
+  topics: text("topics"),
+
+  /** How many qualifying posts we have seen from them. Interest, measured. */
+  postsSeen: integer("posts_seen").notNull().default(1),
+  /** Best relevance score any of their posts reached. */
+  topScore: integer("top_score").notNull().default(0),
+  /** The most recent thing they wrote, for context when drafting. */
+  lastPostText: text("last_post_text"),
+  lastPostUrl: text("last_post_url"),
+
+  /** new | drafted | contacted | replied | ignored */
+  status: text("status").notNull().default("new"),
+  /** Anthony's own notes. Never written by the model. */
+  notes: text("notes"),
+
+  firstSeen: timestamp("first_seen").defaultNow(),
+  lastSeen: timestamp("last_seen").defaultNow(),
+}, (table) => [
+  index("outreach_people_status_idx").on(table.status),
+  index("outreach_people_score_idx").on(table.topScore),
+]);
+
+/**
+ * What Finax knows about the world beyond the order book.
+ *
+ * The rate history answers "what has USD/GHS done"; it cannot answer "why", and
+ * a comment that cites a move without a mechanism reads as a bot with a
+ * calculator. This table holds the qualitative half — a policy decision, an IMF
+ * tranche, a research finding — each with a source and a date it was true.
+ *
+ * Dated on purpose. A fact about the Bank of Ghana's policy rate is worth
+ * quoting in March and wrong by September, and a drafting tool that cannot tell
+ * the difference will confidently post the stale one. Retrieval prefers recent
+ * facts and the prompt is told how old each one is.
+ */
+export const marketMemory = pgTable("market_memory", {
+  id: serial("id").primaryKey(),
+
+  /** news | policy | research | data | insight */
+  kind: text("kind").notNull().default("news"),
+
+  /** One line. What a reader would take away. */
+  title: text("title").notNull(),
+  /** The substance, in a few sentences. What makes it quotable. */
+  body: text("body").notNull(),
+
+  /** Where it came from. A fact with no source does not get quoted. */
+  sourceName: text("source_name"),
+  sourceUrl: text("source_url"),
+
+  /** When this was true — not when it was entered. Drives staleness. */
+  asOf: timestamp("as_of").notNull(),
+
+  /** Comma-separated, matched against post text at retrieval time. */
+  tags: text("tags"),
+  /** Set when the fact is about one pair, e.g. USD/GHS. */
+  pair: text("pair"),
+
+  /** Cleared rather than deleted, so a superseded fact keeps its history. */
+  active: boolean("active").notNull().default(true),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: text("created_by"),
+}, (table) => [
+  index("market_memory_active_idx").on(table.active),
+  index("market_memory_asof_idx").on(table.asOf),
+]);
+
+export const insertOutreachPersonSchema = createInsertSchema(outreachPeople).omit({
+  id: true, firstSeen: true, lastSeen: true,
+});
+export const insertMarketMemorySchema = createInsertSchema(marketMemory).omit({
+  id: true, createdAt: true,
+});
+export type OutreachPerson = typeof outreachPeople.$inferSelect;
+export type MarketMemory = typeof marketMemory.$inferSelect;
 export type OutreachDraft = typeof outreachDrafts.$inferSelect;
 export type InsertOutreachDraft = z.infer<typeof insertOutreachDraftSchema>;

@@ -38,30 +38,17 @@ import type { Express } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db";
-import { outreachDrafts } from "@shared/schema";
+import { outreachDrafts, outreachPeople, marketMemory } from "@shared/schema";
 import { timingSafeEqual } from "node:crypto";
 import { requireAdmin } from "../middleware/admin-auth";
 import { relevanceScore } from "./outreach-relevance";
+import { briefForText, pairsMentioned, briefFor } from "../outreach/market-brief";
+import { recallFor, listMemory } from "../outreach/memory";
+import { notePerson } from "../outreach/people";
 
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
-type Intent = "reply" | "connect" | "dm";
-
-const INTENT_RULES: Record<Intent, string> = {
-  reply:
-    "A public comment on their post. Under 60 words. It has to earn its place in a " +
-    "thread — add a number, a mechanism or a distinction they did not have. Never " +
-    "open by praising the post. No hashtags. No call to action; if the comment is " +
-    "good they will look you up.",
-  connect:
-    "A connection request note. Under 300 characters, LinkedIn's hard limit. Say why " +
-    "them specifically, in one line, referencing what they actually wrote. No pitch.",
-  dm:
-    "A direct message. Under 120 words. Assume they do not know who you are. Lead " +
-    "with the specific thing in their post that prompted the message, say what " +
-    "BlockFinaX does in one sentence, and ask one question worth answering. No " +
-    "attachments, no calendar links, no 'quick call'.",
-};
+import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
 
 /** What the drafter is allowed to assert. Facts, not adjectives. */
 async function liveContext(): Promise<string> {
@@ -86,33 +73,6 @@ async function liveContext(): Promise<string> {
   return lines.join("\n");
 }
 
-const SYSTEM = `You are drafting LinkedIn messages for Anthony Kumako, founder of BlockFinaX.
-
-BlockFinaX writes parametric FX cover for businesses in frontier markets — importers
-and exporters in Ghana, Nigeria and Kenya whose banks will not sell them a forward
-because the ticket is too small and the credit assessment costs more than the trade.
-Underwriters lock stablecoins into a pool against a currency pair, a strike and an
-expiry. A hedger pays a premium for cover on a notional amount. At expiry an oracle
-posts the rate and the contract pays out arithmetically — payout rises in proportion
-to how far the rate moved past the strike, capped at a level fixed when the pool was
-created. No claim, no assessor. It runs on Base and BNB Smart Chain.
-
-How Anthony writes:
-- Plain English. A CFO in Accra is the reader, not a crypto audience.
-- Specific over general. A number beats an adjective every time.
-- No hype, no emoji, no hashtags, no "excited to share", no "game-changing".
-- British spelling.
-- He is comfortable saying what the protocol does not do. It reads as confidence.
-
-Hard rules:
-- Never invent a number. Use only the live figures supplied, or none at all.
-- Never claim regulatory status. BlockFinaX is pre-licence and has a Bank of Ghana
-  sandbox application filed. If regulation comes up, say that plainly.
-- Never promise returns to an underwriter or protection against loss to a hedger.
-- If the post is unrelated to FX, trade, treasury or frontier markets, say so in the
-  draft rather than forcing a connection — a forced reply costs more than no reply.
-
-Output the message only. No preamble, no sign-off block, no quotation marks around it.`;
 
 /**
  * Auth for the browser extension.
@@ -231,18 +191,48 @@ async function draftBatch(
   for (const c of chosen) {
     try {
       const who = [c.name, c.headline].filter(Boolean).join(" — ") || "unknown";
+
+      // The two things that make a comment worth reading: what the currency has
+      // actually done, and what we know about why. Both are looked up per post
+      // rather than shared across the batch, because they depend on which pair
+      // the post is about.
+      const pairs = pairsMentioned(c.text);
+      const [brief, recalled] = await Promise.all([
+        briefForText(c.text).catch(() => ""),
+        recallFor(c.text, pairs).catch(() => ""),
+      ]);
+
+      const sections = [
+        `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""`,
+        `Who they are: ${who}`,
+      ];
+      if (brief) {
+        sections.push(
+          `Market data, computed from our own daily close history just now. These are\n` +
+          `the only figures you may quote about the currency. Where a statistic names\n` +
+          `its own window, quote that window and not a longer one:\n${brief}`,
+        );
+      }
+      if (recalled) {
+        sections.push(
+          `What we know about why. Each carries its age — quote it with that age,\n` +
+          `never in the present tense:\n${recalled}`,
+        );
+      }
+      if (context) sections.push(`Live BlockFinaX book:\n${context}`);
+      if (!brief && !recalled) {
+        sections.push(
+          `No market data matched this post. Write from mechanism alone and quote\n` +
+          `no figures — a comment with a good argument and no numbers is fine.`,
+        );
+      }
+      sections.push(`Draft a ${kind}. ${INTENT_RULES[kind]}`);
+
       const msg = await client.messages.create({
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: 900,
         system: SYSTEM,
-        messages: [{
-          role: "user",
-          content:
-            `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""\n\n` +
-            `Who they are: ${who}\n\n` +
-            `Live BlockFinaX figures you may quote:\n${context}\n\n` +
-            `Draft a ${kind}. ${INTENT_RULES[kind]}`,
-        }],
+        messages: [{ role: "user", content: sections.join("\n\n") }],
       });
       const draft = msg.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -258,6 +248,19 @@ async function draftBatch(
         originalDraft: draft,
       }).returning();
       created.push(row);
+
+      // The list of individuals is a by-product of drafting: anyone whose post
+      // was worth answering is worth remembering.
+      if (c.url) {
+        await notePerson({
+          profileUrl: c.url,
+          name: c.name,
+          headline: c.headline,
+          postText: c.text,
+          postUrl: c.url,
+          score: c.score,
+        });
+      }
     } catch {
       /* one item failing must not lose the batch */
     }
@@ -612,6 +615,146 @@ export function registerOutreachRoutes(app: Express): void {
       return res.json({ waiting: count("waiting"), sent: count("sent"), discarded: count("discarded") });
     } catch {
       return res.json({ waiting: 0, sent: 0, discarded: 0 });
+    }
+  });
+
+  // ── GET /api/outreach/people ────────────────────────────────────────────
+  //
+  // The list, built as a by-product of drafting. Ordered by best score then
+  // most recently seen, so the people who write the sharpest things about
+  // currency risk sit at the top rather than whoever posted last.
+  app.get("/api/outreach/people", requireAdmin, async (req, res) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : "";
+      const rows = await db.select().from(outreachPeople)
+        .orderBy(desc(outreachPeople.topScore), desc(outreachPeople.lastSeen))
+        .limit(500);
+      const filtered = status && status !== "all"
+        ? rows.filter(r => r.status === status)
+        : rows;
+      return res.json({
+        people: filtered,
+        counts: {
+          all: rows.length,
+          new: rows.filter(r => r.status === "new").length,
+          contacted: rows.filter(r => r.status === "contacted").length,
+          replied: rows.filter(r => r.status === "replied").length,
+          ignored: rows.filter(r => r.status === "ignored").length,
+        },
+      });
+    } catch {
+      return res.json({ people: [], counts: { all: 0, new: 0, contacted: 0, replied: 0, ignored: 0 } });
+    }
+  });
+
+  // ── PATCH /api/outreach/people/:id ──────────────────────────────────────
+  app.patch("/api/outreach/people/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const { status, notes } = req.body ?? {};
+      const patch: Record<string, unknown> = {};
+      if (["new", "drafted", "contacted", "replied", "ignored"].includes(status)) patch.status = status;
+      if (typeof notes === "string") patch.notes = notes;
+      if (!Object.keys(patch).length) return res.status(400).json({ error: "nothing to update" });
+      const [row] = await db.update(outreachPeople).set(patch)
+        .where(eq(outreachPeople.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "not found" });
+      return res.json(row);
+    } catch {
+      return res.status(500).json({ error: "Could not update that person." });
+    }
+  });
+
+  // ── GET /api/outreach/memory ────────────────────────────────────────────
+  app.get("/api/outreach/memory", requireAdmin, async (req, res) => {
+    try {
+      const all = req.query.all === "1";
+      return res.json({ memory: await listMemory(all) });
+    } catch {
+      return res.json({ memory: [] });
+    }
+  });
+
+  // ── POST /api/outreach/memory ───────────────────────────────────────────
+  //
+  // Curated by hand. A fact with no as-of date is refused rather than defaulted
+  // to today: the whole point of the store is that the drafter can say "as of
+  // March" instead of implying the present tense, and a wrong date silently
+  // destroys that.
+  app.post("/api/outreach/memory", requireAdmin, async (req: any, res) => {
+    try {
+      const { kind, title, body, sourceName, sourceUrl, asOf, tags, pair } = req.body ?? {};
+      const t = typeof title === "string" ? title.trim() : "";
+      const b = typeof body === "string" ? body.trim() : "";
+      if (t.length < 4) return res.status(400).json({ error: "Give it a title." });
+      if (b.length < 20) return res.status(400).json({ error: "Give it a few sentences of substance." });
+      const when = asOf ? new Date(asOf) : null;
+      if (!when || Number.isNaN(when.getTime())) {
+        return res.status(400).json({ error: "When was this true? A date is required." });
+      }
+      const [row] = await db.insert(marketMemory).values({
+        kind: ["news", "policy", "research", "data", "insight"].includes(kind) ? kind : "news",
+        title: t,
+        body: b,
+        sourceName: typeof sourceName === "string" ? sourceName.trim() || null : null,
+        sourceUrl: typeof sourceUrl === "string" ? sourceUrl.trim() || null : null,
+        asOf: when,
+        tags: typeof tags === "string" ? tags.trim() || null : null,
+        pair: typeof pair === "string" ? pair.trim().toUpperCase() || null : null,
+        createdBy: req.adminEmail || null,
+      }).returning();
+      return res.json(row);
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "Could not save that." });
+    }
+  });
+
+  // ── PATCH /api/outreach/memory/:id ──────────────────────────────────────
+  //
+  // Retiring a fact clears `active` rather than deleting the row, so a
+  // superseded policy rate stays on the record instead of vanishing.
+  app.patch("/api/outreach/memory/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const { active, title, body, tags, pair } = req.body ?? {};
+      const patch: Record<string, unknown> = {};
+      if (typeof active === "boolean") patch.active = active;
+      if (typeof title === "string" && title.trim()) patch.title = title.trim();
+      if (typeof body === "string" && body.trim()) patch.body = body.trim();
+      if (typeof tags === "string") patch.tags = tags.trim() || null;
+      if (typeof pair === "string") patch.pair = pair.trim().toUpperCase() || null;
+      if (!Object.keys(patch).length) return res.status(400).json({ error: "nothing to update" });
+      const [row] = await db.update(marketMemory).set(patch)
+        .where(eq(marketMemory.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "not found" });
+      return res.json(row);
+    } catch {
+      return res.status(500).json({ error: "Could not update that." });
+    }
+  });
+
+  // ── GET /api/outreach/brief ─────────────────────────────────────────────
+  //
+  // The computed market picture on its own, so Anthony can see exactly what the
+  // drafter was given. When a comment cites a surprising number, this is where
+  // he checks it before posting.
+  app.get("/api/outreach/brief", requireAdmin, async (req, res) => {
+    try {
+      const pair = typeof req.query.pair === "string" ? req.query.pair.trim().toUpperCase() : "";
+      if (pair) {
+        const b = await briefFor(pair);
+        return b ? res.json(b) : res.status(404).json({ error: `No history for ${pair}.` });
+      }
+      const wanted = ["USD/GHS", "USD/NGN", "USD/KES", "USD/ZAR"];
+      const out = [];
+      for (const p of wanted) {
+        try { const b = await briefFor(p); if (b) out.push(b); } catch { /* skip */ }
+      }
+      return res.json({ briefs: out });
+    } catch {
+      return res.status(500).json({ error: "Could not build the brief." });
     }
   });
 }
