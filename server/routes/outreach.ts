@@ -149,6 +149,7 @@ async function writeDraft(
   client: Anthropic,
   c: Candidate,
   kind: Intent,
+  recentDrafts: string[] = [],
 ): Promise<string | null> {
   const pairs = pairsMentioned(c.text);
   const [brief, recalled] = await Promise.all([
@@ -165,7 +166,7 @@ async function writeDraft(
     model: MODEL,
     max_tokens: 900,
     system: SYSTEM,
-    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context) }],
+    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context, recentDrafts) }],
   });
   const out = msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -216,10 +217,22 @@ export async function draftBatch(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const created: unknown[] = [];
 
+  // Seeded from what was written before, then extended as this batch goes, so a
+  // run of ten drafts does not converge on one shape halfway through.
+  const recent: string[] = [];
+  try {
+    const prior = await db.select({ draft: outreachDrafts.draft }).from(outreachDrafts)
+      .orderBy(desc(outreachDrafts.createdAt)).limit(4);
+    for (const r of prior) if (r.draft) recent.push(r.draft);
+  } catch {
+    /* variety is a quality, not a requirement */
+  }
+
   for (const c of chosen) {
     try {
-      const draft = await writeDraft(client, c, kind);
+      const draft = await writeDraft(client, c, kind, recent.slice(0, 4));
       if (!draft) continue;
+      recent.unshift(draft);
       const [row] = await db.insert(outreachDrafts).values({
         sourceUrl: c.url,
         sourceText: c.text,
@@ -278,13 +291,18 @@ export function registerOutreachRoutes(app: Express): void {
       // filter, because Anthony choosing to paste it is the judgement the filter
       // exists to approximate.
       const client = new Anthropic({ apiKey });
+      const priorDrafts = await db.select({ draft: outreachDrafts.draft }).from(outreachDrafts)
+        .orderBy(desc(outreachDrafts.createdAt)).limit(4)
+        .then(rows => rows.map(r => r.draft).filter(Boolean) as string[])
+        .catch(() => [] as string[]);
+
       const draft = await writeDraft(client, {
         text: sourceText.trim(),
         url: typeof sourceUrl === "string" && sourceUrl.trim() ? sourceUrl.trim() : null,
         name: personName?.trim() || null,
         headline: personHeadline?.trim() || null,
         score: relevanceScore(sourceText),
-      }, kind);
+      }, kind, priorDrafts);
       if (!draft) return res.status(502).json({ error: "The model returned nothing. Try again." });
 
       const [row] = await db

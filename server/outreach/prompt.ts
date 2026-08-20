@@ -66,6 +66,7 @@ export function buildPrompt(
   brief: string,
   recalled: string,
   context: string,
+  recentDrafts: string[] = [],
 ): string {
   const who = [c.name, c.headline].filter(Boolean).join(", ") || "unknown";
   const age = howLongAgo(c.postedAt);
@@ -120,6 +121,23 @@ export function buildPrompt(
       `This is public writing. Do not name BlockFinaX and do not cite anything it\n` +
       `has built or settled. The point has to stand on the mechanism and the\n` +
       `numbers above, exactly as it would under a stranger's name.`,
+    );
+  }
+
+  // What was written recently, so the same shape is not produced again.
+  //
+  // Telling a model not to repeat itself does not work when it cannot see what
+  // it said. Two live drafts came back with the identical skeleton, percentile
+  // then sigma then worst move, because each was written in isolation and that
+  // skeleton is the obvious one. Showing the previous openings turns an
+  // abstract instruction into a concrete constraint.
+  if (recentDrafts.length) {
+    sections.push(
+      `You recently wrote the comments below. Do not reuse their opening words,\n` +
+      `their running order, their closing turn, or any distinctive phrase from\n` +
+      `them. If one of them already used a figure, either lead somewhere else\n` +
+      `entirely or leave that figure out:\n` +
+      recentDrafts.map(d => `- "${d.slice(0, 220)}"`).join("\n"),
     );
   }
 

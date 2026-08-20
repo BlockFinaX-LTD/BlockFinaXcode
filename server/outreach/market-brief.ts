@@ -16,23 +16,38 @@
  *
  *   spot, 30d, 90d, YTD, 1y   the table stakes. Direction and magnitude.
  *
- *   realised vol (30d, 90d)   the number most people arguing about currencies
- *                             never cite, because it is the one that separates
- *                             "it moved" from "it moved unusually".
+ *   realised vol (30d, 90d)   what separates "it moved" from "it moved
+ *                             unusually", which most people arguing about
+ *                             currencies never distinguish.
  *
- *   vol percentile            the insight. 18% vol means nothing on its own;
- *                             18% in the 87th percentile of its own ten-year
- *                             history means the market is disturbed. This is the
- *                             single most quotable line the brief produces.
+ *   vol percentile            where today sits in the pair's own history. 18%
+ *                             means nothing alone; 18% at the 87th percentile
+ *                             means the market is disturbed.
  *
- *   worst 30-day move         what a business actually lost, last time. Concrete
- *                             where "volatility" is abstract.
+ *   worst 30-day move         what a business actually paid, last time.
  *
- *   jump days                 daily moves past three sigma. Frontier currencies
- *                             step rather than diffuse, which is why the pricing
- *                             engine runs Merton and not plain Black-Scholes.
- *                             Being able to say "this pair jumped nine times in
- *                             the last year" is the empirical case for that.
+ *   jump days                 days that moved far more than an ordinary day.
+ *                             Frontier currencies step rather than diffuse,
+ *                             which is why the pricing engine runs Merton
+ *                             rather than plain Black-Scholes.
+ *
+ * ## Why every figure is rendered twice
+ *
+ * The first drafts written against this brief were accurate and unreadable.
+ * Two comments in a row cited "the 7th percentile of its range since 2003" and
+ * "beyond 3 sigma", which is a phrase no importer has ever used about their own
+ * money. The numbers were right and said nothing to the person meant to read
+ * them.
+ *
+ * So each statistic is followed by a plain-English rendering and, where it
+ * applies, by what it meant in money on a reference invoice. Supplying the
+ * translation here rather than demanding it in the prompt means the drafter
+ * picks between ready-made phrasings instead of inventing one under pressure,
+ * which is where the jargon kept creeping back.
+ *
+ * The percentile is deliberately offered three ways. A single phrasing gets
+ * reused verbatim across comments, and a run of comments that all sound alike
+ * is what exposes a drafting tool.
  *
  * Nothing here is an opinion. The drafter is told to build the opinion.
  *
@@ -224,7 +239,29 @@ function ordinal(n: number): string {
   return `${n}${["th", "st", "nd", "rd"][n % 10] || "th"}`;
 }
 
-/** Render one brief as lines the drafter can quote directly. */
+/**
+ * A reference invoice, for turning a percentage into money.
+ *
+ * Percentages are the language of the person who computed them. "The worst
+ * 30-day move was +41.5%" is a fact about a series; "a $100,000 invoice would
+ * have needed $41,500 more naira to settle" is a fact about a business, and the
+ * second is the one a finance director recognises as their own problem.
+ */
+const REFERENCE_INVOICE = 100_000;
+
+/**
+ * Render one brief as lines the drafter can use.
+ *
+ * Every statistic is followed by what it means in plain terms, because the
+ * drafts that came back from the first live scan were accurate and unreadable:
+ * "the 7th percentile of its range since 2003" twice in two comments, plus
+ * "beyond 3 sigma", which is a phrase no importer has ever used. The numbers
+ * were right and said nothing to the person meant to read them.
+ *
+ * Supplying the translation here rather than asking for it in the prompt means
+ * the model is choosing between ready-made plain-English phrasings instead of
+ * inventing one under pressure, which is where the jargon crept back in.
+ */
 export function renderBrief(b: PairBrief): string {
   const L: string[] = [];
   L.push(`${b.pair}: spot ${b.spot.toFixed(4)} as of ${b.asOf}`);
@@ -232,28 +269,54 @@ export function renderBrief(b: PairBrief): string {
     `  moves: 30d ${signed(b.move30)}, 90d ${signed(b.move90)}, YTD ${signed(b.moveYtd)}, 1y ${signed(b.move1y)} ` +
     `(positive = local currency weaker against the base)`,
   );
+
   if (b.vol90 !== null) {
-    const where =
-      b.volPercentile === null ? ""
-        : (() => {
-            const span = b.volPercentileFrom ? ` measured since ${b.volPercentileFrom}` : "";
-            const verdict =
-              b.volPercentile >= 80 ? ", unusually disturbed"
-              : b.volPercentile <= 20 ? ", unusually calm"
-              : ", around normal";
-            return `, ${ordinal(b.volPercentile)} percentile${span}${verdict}`;
-          })();
-    L.push(`  realised volatility: 30d ${mag(b.vol30)}, 90d ${mag(b.vol90)}${where}`);
+    L.push(`  realised volatility: 30d ${mag(b.vol30)}, 90d ${mag(b.vol90)}`);
+    if (b.volPercentile !== null) {
+      const years = b.volPercentileFrom
+        ? new Date().getFullYear() - Number(b.volPercentileFrom)
+        : null;
+      const span = years && years > 1 ? `${years} years` : "the available history";
+      // Meaning, not wording. An earlier version supplied a finished sentence
+      // and three drafts in a row reproduced it almost verbatim, because a
+      // ready-made phrase is easier to copy than to rewrite. Stating the fact
+      // and withholding the phrasing forces the drafter to say it in its own
+      // words, which is the only thing that produces variety.
+      if (b.volPercentile <= 20) {
+        L.push(
+          `  meaning: only about ${b.volPercentile} stretches in every 100 across ${span} were ` +
+          `this quiet. Unusually still. Put this in your own words.`,
+        );
+      } else if (b.volPercentile >= 80) {
+        L.push(
+          `  meaning: rougher than about ${b.volPercentile} stretches in every 100 across ${span}. ` +
+          `Put this in your own words.`,
+        );
+      } else {
+        L.push(`  meaning: ordinary conditions for this pair. Put this in your own words.`);
+      }
+    }
   }
+
   if (b.worst30 !== null && b.worst30 > 0) {
-    L.push(`  worst 30-day move in 3 years: ${signed(b.worst30)} (to ${b.worst30Date})`);
-  }
-  if (b.jumpDays !== null) {
+    const cost = Math.round((b.worst30 / 100) * REFERENCE_INVOICE);
     L.push(
-      `  days beyond 3 sigma in the last year: ${b.jumpDays}` +
-      (b.jumpDays >= 3 ? ". Steps rather than drifts, which is why cover is priced with a jump model" : ""),
+      `  worst 30-day move in 3 years: ${signed(b.worst30)}, ending ${b.worst30Date}. ` +
+      `In money: a $${REFERENCE_INVOICE.toLocaleString()} invoice needed roughly ` +
+      `$${cost.toLocaleString()} more of local currency to settle, inside that one month. ` +
+      `Use whichever of those two framings suits the sentence.`,
     );
   }
+
+  if (b.jumpDays !== null && b.jumpDays > 0) {
+    // "3 sigma" is not a phrase any importer uses. Say what it describes.
+    L.push(
+      `  outsized single days in the last year: ${b.jumpDays}. Days that moved several times ` +
+      `further than a normal day, which a forecast built on averages never anticipates. ` +
+      `Describe this in your own words, and never as "sigma".`,
+    );
+  }
+
   if (b.depth < 250) L.push(`  (only ${b.depth} closes available, so do not quote the percentile)`);
   return L.join("\n");
 }
