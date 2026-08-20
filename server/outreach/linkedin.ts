@@ -247,49 +247,93 @@ export interface PostResult {
  * is both the safer pattern with LinkedIn and the honest one: a comment posted
  * under Anthony's name should be a thing Anthony decided to post.
  */
+export function commentEndpoint(activityUrn: string): string {
+  // Percent-encoded, because under X-Restli-Protocol-Version 2.0.0 the reserved
+  // characters in a path key must be escaped. The colons in
+  // urn:li:activity:123 become %3A. Sent raw, which is how LinkedIn's own
+  // documentation prints it, the call returns 400 ILLEGAL_ARGUMENT "exception
+  // in path variables", and their error table blames an invalid urn, which
+  // sends you looking at the urn instead of at the encoding.
+  return `${API}/rest/socialActions/${encodeURIComponent(activityUrn)}/comments`;
+}
+
+/**
+ * The urn forms worth trying for the same post.
+ *
+ * socialActions accepts a share, a ugcPost or an activity urn, but not
+ * interchangeably for every post: which one resolves depends on how the post
+ * was originally created, and nothing in the URL says which. LinkedIn's own
+ * guidance for ILLEGAL_ARGUMENT is literally "try again with a share or
+ * ugcPost URN".
+ *
+ * Retrying is safe because the only trigger is a 400 rejection, which means
+ * nothing was created. A failed call cannot leave a duplicate comment behind.
+ */
+export function urnVariants(activityUrn: string): string[] {
+  const m = activityUrn.match(/^urn:li:(activity|ugcPost|share):(\d+)$/);
+  if (!m) return [activityUrn];
+  const id = m[2];
+  const order = [m[1], "activity", "ugcPost", "share"];
+  return Array.from(new Set(order)).map(t => `urn:li:${t}:${id}`);
+}
+
 export async function postComment(
   auth: LinkedInAuth,
   activityUrn: string,
   text: string,
 ): Promise<PostResult> {
-  try {
-    const r = await fetch(`${API}/rest/socialActions/${activityUrn}/comments`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${auth.accessToken}`,
-        "Linkedin-Version": LINKEDIN_VERSION,
-        "X-Restli-Protocol-Version": "2.0.0",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        actor: auth.personUrn,
-        object: activityUrn,
-        message: { text },
-      }),
-    });
+  let lastBody = "";
+  let lastStatus = 0;
 
-    if (r.ok) {
-      const id = r.headers.get("x-restli-id");
-      const body: any = await r.json().catch(() => ({}));
-      return {
-        ok: true,
-        commentId: id || body?.id,
-        commentUrn: body?.commentUrn || (id ? `urn:li:comment:(${activityUrn},${id})` : undefined),
-      };
-    }
+  for (const urn of urnVariants(activityUrn)) {
+    try {
+      const r = await fetch(commentEndpoint(urn), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${auth.accessToken}`,
+          "Linkedin-Version": LINKEDIN_VERSION,
+          "X-Restli-Protocol-Version": "2.0.0",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ actor: auth.personUrn, object: urn, message: { text } }),
+      });
 
-    const body = await r.text().catch(() => "");
-    // 429 is LinkedIn's per-member comment rate limit and clears on its own.
-    // 401 means the token died and re-authorising is the only fix. Saying which
-    // is which saves Anthony guessing why a send failed.
-    if (r.status === 429) {
-      return { ok: false, retryable: true, error: "LinkedIn is rate limiting comments. Wait a few minutes." };
+      if (r.ok) {
+        const id = r.headers.get("x-restli-id");
+        const body: any = await r.json().catch(() => ({}));
+        return {
+          ok: true,
+          commentId: id || body?.id,
+          commentUrn: body?.commentUrn || (id ? `urn:li:comment:(${urn},${id})` : undefined),
+        };
+      }
+
+      lastStatus = r.status;
+      lastBody = await r.text().catch(() => "");
+
+      if (r.status === 429) {
+        return { ok: false, retryable: true, error: "LinkedIn is rate limiting comments. Wait a few minutes." };
+      }
+      if (r.status === 401 || r.status === 403) {
+        // A 403 here usually means the token is fine but the app was never
+        // granted w_member_social, which is a Products tab problem rather than
+        // a stale token. The two have different fixes, so they are separated.
+        const scopeIssue = /permission|scope|ACCESS_DENIED|not authorized/i.test(lastBody);
+        return {
+          ok: false,
+          error: scopeIssue
+            ? `LinkedIn refused the permission. The app needs w_member_social, which comes with ` +
+              `the "Share on LinkedIn" product. Check the Products tab. ${lastBody.slice(0, 160)}`
+            : `LinkedIn rejected the token (${r.status}). Reconnect the account. ${lastBody.slice(0, 160)}`,
+        };
+      }
+      // Only an ILLEGAL_ARGUMENT is worth another urn form. Anything else is a
+      // real failure and retrying would just repeat it.
+      if (!(r.status === 400 && /ILLEGAL_ARGUMENT|path variables/i.test(lastBody))) break;
+    } catch (e) {
+      return { ok: false, retryable: true, error: e instanceof Error ? e.message : "network error" };
     }
-    if (r.status === 401 || r.status === 403) {
-      return { ok: false, error: `LinkedIn rejected the token (${r.status}). Reconnect the account. ${body.slice(0, 160)}` };
-    }
-    return { ok: false, error: `LinkedIn returned ${r.status}. ${body.slice(0, 200)}` };
-  } catch (e) {
-    return { ok: false, retryable: true, error: e instanceof Error ? e.message : "network error" };
   }
+
+  return { ok: false, error: `LinkedIn returned ${lastStatus}. ${lastBody.slice(0, 240)}` };
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activityUrnFrom, isExpired, postedAtFromUrn } from "../../outreach/linkedin";
+import { activityUrnFrom, isExpired, postedAtFromUrn, commentEndpoint, urnVariants } from "../../outreach/linkedin";
 
 /**
  * A comment names the thing it is attached to by URN, and getting that wrong
@@ -82,4 +82,29 @@ test("an id that decodes to nonsense is refused", () => {
   assert.equal(postedAtFromUrn("urn:li:activity:1"), null);
   assert.equal(postedAtFromUrn("urn:li:activity:99999999999999999999"), null);
   assert.equal(postedAtFromUrn(null), null);
+});
+
+/**
+ * The path key must be percent-encoded.
+ *
+ * Under X-Restli-Protocol-Version 2.0.0 the reserved characters in a path key
+ * are escaped, so the colons become %3A. Sending the urn raw, exactly as
+ * LinkedIn's documentation prints it, returns 400 ILLEGAL_ARGUMENT "exception
+ * in path variables". Their error table blames an invalid urn, which points
+ * you at the urn rather than at the encoding, so this is worth pinning.
+ */
+test("the urn is percent-encoded into the request path", () => {
+  const url = commentEndpoint("urn:li:activity:7496146729793261569");
+  assert.ok(url.includes("urn%3Ali%3Aactivity%3A7496146729793261569"), url);
+  assert.ok(!url.includes("urn:li:activity"), "raw colons must not reach the path");
+  assert.ok(url.endsWith("/comments"));
+});
+
+test("falls back through the other urn forms, most likely first", () => {
+  assert.deepEqual(urnVariants("urn:li:activity:123"), [
+    "urn:li:activity:123", "urn:li:ugcPost:123", "urn:li:share:123",
+  ]);
+  // Whatever form arrived is tried first, since it is the one LinkedIn used.
+  assert.equal(urnVariants("urn:li:ugcPost:123")[0], "urn:li:ugcPost:123");
+  assert.deepEqual(urnVariants("nonsense"), ["nonsense"]);
 });
