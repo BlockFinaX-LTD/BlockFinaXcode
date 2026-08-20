@@ -1,43 +1,44 @@
 /**
- * send.ts, putting a cold email on the wire without damaging the domain that
- * carries the product.
+ * send.ts, putting a cold email on the wire.
  *
- * ## The failure nobody notices until it is expensive
+ * ## Sending from the main domain, and what that means
  *
- * blockfinax.com sends magic links, wallet notices and support mail through
- * Resend. Those are the messages a customer must receive to use the product at
- * all. Cold outreach is judged by recipients who did not ask for it, and a few
- * spam complaints per thousand is normal even for a good campaign. Send both
- * from the same domain and the complaints attach to the reputation the login
- * emails depend on.
+ * Cold outreach goes out as anthonykumako@blockfinax.com on the Resend account
+ * that already sends magic links. Anthony chose that over a separate subdomain,
+ * and with the domain already verified it works immediately.
  *
- * The result is not a bounce or an error. Magic links simply start landing in
- * spam, customers report that login is broken, and nothing in the logs connects
- * that to a marketing send from three weeks earlier. Recovering a burned
- * sending domain takes months.
+ * The exposure is real and worth stating once: complaints attach to a domain,
+ * not to a campaign, and blockfinax.com is the domain customer logins arrive
+ * on. If cold mail draws complaints, magic links are what starts landing in
+ * spam, and the symptom appears weeks later with nothing in the logs to connect
+ * it.
  *
- * So this refuses to send from the transactional domain. It is not advice in a
- * comment; the function returns an error and no mail leaves. A separate
- * subdomain, verified in Resend, keeps the two reputations apart, which is the
- * standard arrangement and costs one DNS record.
+ * So the protection moved rather than disappeared. A subdomain would have
+ * contained the damage after it happened; what actually prevents it is noticing
+ * fast and stopping. This module tracks bounces and complaints from Resend's
+ * webhook and halts sending automatically when either crosses the threshold
+ * mailbox providers judge on. Continuing to send after complaints start is what
+ * turns a bad week into a burned domain, and that is now impossible rather than
+ * merely discouraged.
  *
- * ## Why a postal address is required
+ * ## Why a postal address is still required
  *
  * A commercial email must carry the sender's physical address under CAN-SPAM,
  * and in substance under Ghana's Data Protection Act and the GDPR's
- * identification duties. This mirrors the rule already enforced for consented
- * follow-ups in server/leads/follow-up.ts: without the address configured,
- * nothing sends. A defective message to a real prospect is worse than none.
+ * identification duties. The same rule is already enforced for consented
+ * follow-ups in server/leads/follow-up.ts: without it configured, nothing
+ * sends, because a defective message to a real prospect is worse than none.
  */
 
 import { Resend } from "resend";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { prospects, emailSuppressions } from "@shared/prospect-schema";
+import { sendingHealth } from "./health";
 
 const APP_URL = (process.env.PUBLIC_APP_URL || "https://www.blockfinax.com").replace(/\/$/, "");
 
-/** The domain that must never be used for cold mail, because logins depend on it. */
+/** The domain the transactional mail goes out on. */
 function transactionalDomain(): string {
   const from = process.env.SMTP_FROM || "hello@blockfinax.com";
   const m = from.match(/@([^\s>]+)/);
@@ -47,51 +48,64 @@ function transactionalDomain(): string {
 export interface SendGuard {
   ok: boolean;
   reason?: string;
+  /** Non-blocking. Something worth knowing that does not stop the send. */
+  warning?: string;
   from?: string;
 }
 
 /**
- * Is outbound sending configured safely?
+ * The sending identity.
  *
- * Checked before a campaign rather than per message, so the console can say
- * plainly what is missing instead of failing one row at a time.
+ * Defaults to Anthony's own address on the verified domain, so the pipeline
+ * works with the infrastructure already in place and no new DNS. A real name
+ * also outperforms a role address on cold mail, which is the one thing that
+ * genuinely improves both response and complaint rates.
  */
-export function checkSendConfig(): SendGuard {
+function outreachFrom(): string {
+  const configured = (process.env.OUTREACH_FROM || "").trim();
+  if (configured) return configured;
+  return `Anthony Kumako <anthonykumako@${transactionalDomain()}>`;
+}
+
+/**
+ * Is outbound sending configured, and is it safe to continue right now?
+ *
+ * Two different questions. Configuration is static. Health is not: a campaign
+ * that was fine yesterday can be doing damage today, and the check that matters
+ * is the second one.
+ */
+export async function checkSendConfig(): Promise<SendGuard> {
   if (!process.env.RESEND_API_KEY) {
     return { ok: false, reason: "RESEND_API_KEY is not set." };
-  }
-  const from = (process.env.OUTREACH_FROM || "").trim();
-  if (!from) {
-    return {
-      ok: false,
-      reason:
-        "OUTREACH_FROM is not set. Cold email needs its own verified sending domain, " +
-        "separate from the one that sends magic links, so complaints cannot damage login delivery. " +
-        'Verify a subdomain in Resend and set something like "BlockFinaX <anthony@outreach.blockfinax.com>".',
-    };
-  }
-  const domain = (from.match(/@([^\s>]+)/)?.[1] || "").toLowerCase();
-  if (!domain) return { ok: false, reason: `OUTREACH_FROM is not a usable address: ${from}` };
-
-  if (domain === transactionalDomain()) {
-    return {
-      ok: false,
-      reason:
-        `OUTREACH_FROM uses ${domain}, the same domain that sends your magic links. ` +
-        `Cold email complaints would attach to the reputation your customer logins depend on, ` +
-        `and the symptom is logins landing in spam weeks later with nothing in the logs to explain it. ` +
-        `Use a separate subdomain such as outreach.${domain}.`,
-    };
   }
   if (!process.env.COMPANY_POSTAL_ADDRESS?.trim()) {
     return {
       ok: false,
       reason:
-        "COMPANY_POSTAL_ADDRESS is not set. A commercial email must carry a physical postal address, " +
-        "and sending one without is unlawful in the plainest way available.",
+        "COMPANY_POSTAL_ADDRESS is not set. A commercial email must carry a physical postal " +
+        "address, and sending one without is unlawful in the plainest way available.",
     };
   }
-  return { ok: true, from };
+
+  const from = outreachFrom();
+  const domain = (from.match(/@([^\s>]+)/)?.[1] || "").toLowerCase();
+  if (!domain) return { ok: false, reason: `OUTREACH_FROM is not a usable address: ${from}` };
+
+  // The circuit breaker. This is the check that stops a bad campaign becoming a
+  // burned domain, and it is deliberately a refusal rather than a warning.
+  const health = await sendingHealth();
+  if (health.halted) {
+    return { ok: false, reason: health.reason || "Sending is halted." };
+  }
+
+  const warning =
+    domain === transactionalDomain()
+      ? `Sending as ${from}, the same domain as your magic links. Complaints attach to the domain, ` +
+        `so watch the bounce and complaint rates below. Sending halts automatically if either crosses ` +
+        `the level mailbox providers act on.`
+      : undefined;
+
+  return { ok: true, from, warning };
 }
 
 /** Has this address asked never to be contacted? */
@@ -144,7 +158,7 @@ export interface SendOutcome {
  * writing something embarrassing to ten thousand strangers at once.
  */
 export async function sendProspectEmail(id: number): Promise<SendOutcome> {
-  const guard = checkSendConfig();
+  const guard = await checkSendConfig();
   if (!guard.ok) return { ok: false, error: guard.reason };
 
   const [p] = await db.select().from(prospects).where(eq(prospects.id, id)).limit(1);

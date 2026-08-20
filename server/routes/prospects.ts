@@ -21,6 +21,8 @@ import { requireAdmin } from "../middleware/admin-auth";
 import { discoverProspects, SEED_QUERIES, SEED_LOCATIONS } from "../prospects/discover";
 import { researchAndWrite } from "../prospects/write";
 import { checkSendConfig, sendProspectEmail, sentToday, DAILY_SEND_CAP, suppress } from "../prospects/send";
+import { sendingHealth, clearHalt, recordBounce, recordComplaint } from "../prospects/health";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
@@ -67,16 +69,86 @@ export function registerProspectRoutes(app: Express): void {
 
   // ── GET /api/prospects/config ───────────────────────────────────────────
   app.get("/api/prospects/config", requireAdmin, async (_req, res) => {
-    const guard = checkSendConfig();
+    const guard = await checkSendConfig();
     return res.json({
       canSend: guard.ok,
       reason: guard.reason ?? null,
+      warning: guard.warning ?? null,
       from: guard.from ?? null,
       discovery: !!process.env.APIFY_TOKEN,
       sentToday: await sentToday(),
       dailyCap: DAILY_SEND_CAP,
+      health: await sendingHealth(),
       seeds: { queries: SEED_QUERIES, locations: SEED_LOCATIONS },
     });
+  });
+
+  // ── POST /api/prospects/resume ──────────────────────────────────────────
+  //
+  // Clear an automatic halt. Deliberately a separate, named act: the breaker
+  // trips because something was wrong, and a button that quietly un-trips it as
+  // a side effect of sending would make it decorative.
+  app.post("/api/prospects/resume", requireAdmin, async (req: any, res) => {
+    try {
+      await clearHalt(req.adminEmail || "admin");
+      return res.json({ resumed: true, health: await sendingHealth() });
+    } catch {
+      return res.status(500).json({ error: "Could not resume." });
+    }
+  });
+
+  // ── POST /api/prospects/webhook/resend ──────────────────────────────────
+  //
+  // Bounces and complaints, straight from the provider. This is what makes the
+  // circuit breaker real: without it the rates stay at zero no matter how badly
+  // a campaign is going, because nothing else ever tells us.
+  //
+  // Public by necessity, since Resend cannot hold an admin session. When
+  // RESEND_WEBHOOK_SECRET is set the Svix signature is verified and anything
+  // unsigned is refused. Without the secret it accepts what arrives, which is
+  // the weaker position but still better than being blind: the worst an
+  // attacker achieves is suppressing an address or tripping a halt, and both
+  // fail safe.
+  app.post("/api/prospects/webhook/resend", async (req, res) => {
+    try {
+      const secret = (process.env.RESEND_WEBHOOK_SECRET || "").trim();
+      if (secret) {
+        const id = String(req.headers["svix-id"] || "");
+        const ts = String(req.headers["svix-timestamp"] || "");
+        const sigHeader = String(req.headers["svix-signature"] || "");
+        if (!id || !ts || !sigHeader) return res.status(401).json({ error: "unsigned" });
+
+        // Svix signs `${id}.${timestamp}.${rawBody}` with the base64 secret.
+        const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+        const payload = `${id}.${ts}.${JSON.stringify(req.body)}`;
+        const expected = createHmac("sha256", key).update(payload).digest("base64");
+        const provided = sigHeader.split(" ").map(v => v.split(",").pop() || "");
+        const match = provided.some(v => {
+          const a = Buffer.from(v);
+          const b = Buffer.from(expected);
+          return a.length === b.length && timingSafeEqual(a, b);
+        });
+        if (!match) return res.status(401).json({ error: "bad signature" });
+      }
+
+      const type = String(req.body?.type || "");
+      const to = req.body?.data?.to;
+      const email = Array.isArray(to) ? String(to[0] || "") : String(to || "");
+      if (!email) return res.json({ ok: true });
+
+      if (type === "email.bounced") {
+        await recordBounce(email);
+        await suppress(email, "bounced", "provider reported a bounce");
+      } else if (type === "email.complained") {
+        await recordComplaint(email);
+        await suppress(email, "complained", "recipient marked it as spam");
+      }
+      return res.json({ ok: true });
+    } catch {
+      // Always 200. A provider that gets an error retries, and a retry storm on
+      // a bounce we already recorded helps nobody.
+      return res.json({ ok: true });
+    }
   });
 
   // ── POST /api/prospects/discover ────────────────────────────────────────
@@ -218,7 +290,7 @@ export function registerProspectRoutes(app: Express): void {
   // a person has already read and marked; it cannot approve anything itself.
   app.post("/api/prospects/send-approved", requireAdmin, async (_req, res) => {
     try {
-      const guard = checkSendConfig();
+      const guard = await checkSendConfig();
       if (!guard.ok) return res.status(503).json({ error: guard.reason });
 
       const already = await sentToday();

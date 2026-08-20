@@ -38,9 +38,16 @@ interface Prospect {
   approvedAt: string | null; sentAt: string | null;
 }
 
+interface Health {
+  sent: number; bounced: number; complained: number;
+  bounceRate: number; complaintRate: number;
+  halted: boolean; reason: string | null; meaningful: boolean;
+}
+
 interface Config {
-  canSend: boolean; reason: string | null; from: string | null;
+  canSend: boolean; reason: string | null; warning: string | null; from: string | null;
   discovery: boolean; sentToday: number; dailyCap: number;
+  health: Health;
   seeds: { queries: Record<string, string[]>; locations: string[] };
 }
 
@@ -143,6 +150,14 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
     onError: (e: Error) => toast({ title: "Could not send", description: e.message, variant: "destructive" }),
   });
 
+  const resume = useMutation({
+    mutationFn: () => api("/api/prospects/resume", token, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prospects-config"] });
+      toast({ title: "Sending resumed" });
+    },
+  });
+
   const sendAll = useMutation({
     mutationFn: () => api("/api/prospects/send-approved", token, { method: "POST" }),
     onSuccess: (r: any) => {
@@ -169,14 +184,47 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
         it.
       </p>
 
-      {/* ── whether sending is safe to do at all ── */}
+      {/* ── sending health ──
+          The rates are shown whether or not anything is wrong. A number nobody
+          looks at until it matters is a number nobody knows the shape of, and
+          the point of a complaint rate is noticing it move. */}
       {cfg && !cfg.canSend && (
+        <div className="flex gap-3 rounded-lg border border-red-500/40 bg-red-500/[0.06] p-4">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
+          <div className="flex-1 text-[13px] leading-relaxed">
+            <p className="font-medium">Sending is stopped.</p>
+            <p className="mt-1 text-muted-foreground">{cfg.reason}</p>
+            {cfg.health?.halted && (
+              <Button size="sm" variant="outline" className="mt-2.5"
+                      disabled={resume.isPending} onClick={() => resume.mutate()}>
+                I have looked into it, resume sending
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {cfg?.canSend && cfg.warning && (
         <div className="flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-4">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
-          <div className="text-[13px] leading-relaxed">
-            <p className="font-medium">Sending is switched off.</p>
-            <p className="mt-1 text-muted-foreground">{cfg.reason}</p>
-          </div>
+          <p className="text-[12.5px] leading-relaxed text-muted-foreground">{cfg.warning}</p>
+        </div>
+      )}
+
+      {cfg?.health && cfg.health.sent > 0 && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-muted/20 px-4 py-3 text-[12.5px]">
+          <span><span className="tabular-nums font-medium">{cfg.health.sent}</span> sent</span>
+          <span className={cn(cfg.health.bounceRate > 0.04 && "text-red-600 dark:text-red-500")}>
+            <span className="tabular-nums font-medium">{(cfg.health.bounceRate * 100).toFixed(1)}%</span> bounced
+            <span className="ml-1 text-muted-foreground">({cfg.health.bounced}, stop at 4%)</span>
+          </span>
+          <span className={cn(cfg.health.complaintRate > 0.0025 && "text-red-600 dark:text-red-500")}>
+            <span className="tabular-nums font-medium">{(cfg.health.complaintRate * 100).toFixed(2)}%</span> marked spam
+            <span className="ml-1 text-muted-foreground">({cfg.health.complained}, stop at 0.25%)</span>
+          </span>
+          {!cfg.health.meaningful && (
+            <span className="text-muted-foreground">too few sent for these to mean much yet</span>
+          )}
         </div>
       )}
 
