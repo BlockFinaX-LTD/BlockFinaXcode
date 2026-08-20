@@ -19,6 +19,7 @@ import { db } from "../db";
 import { prospects, assessSendable, classifyAddress } from "@shared/prospect-schema";
 import { requireAdmin } from "../middleware/admin-auth";
 import { discoverProspects, SEED_QUERIES, SEED_LOCATIONS } from "../prospects/discover";
+import { discoveryStatus } from "../prospects/scheduler";
 import { researchAndWrite } from "../prospects/write";
 import { checkSendConfig, sendProspectEmail, sentToday, DAILY_SEND_CAP, suppress } from "../prospects/send";
 import { sendingHealth, clearHalt, recordBounce, recordComplaint } from "../prospects/health";
@@ -79,6 +80,7 @@ export function registerProspectRoutes(app: Express): void {
       sentToday: await sentToday(),
       dailyCap: DAILY_SEND_CAP,
       health: await sendingHealth(),
+      schedule: await discoveryStatus(),
       seeds: { queries: SEED_QUERIES, locations: SEED_LOCATIONS },
     });
   });

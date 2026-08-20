@@ -48,6 +48,11 @@ interface Config {
   canSend: boolean; reason: string | null; warning: string | null; from: string | null;
   discovery: boolean; sentToday: number; dailyCap: number;
   health: Health;
+  schedule: {
+    configured: boolean; lastRunAt: string | null; nextRunAt: string | null;
+    position: number; total: number; seedsPerCycle: number;
+    queueCap: number; waiting: number; paused: boolean;
+  };
   seeds: { queries: Record<string, string[]>; locations: string[] };
 }
 
@@ -180,9 +185,23 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
     <div className="space-y-5">
       <p className="max-w-[70ch] text-sm text-muted-foreground">
         Finax finds businesses that move money across a border, works out what they do and which
-        side they are on, and writes the first email. Nothing sends until you read it and approve
-        it.
+        side they are on, and writes the first email. It does that on its own every four hours.
+        You only need to read and approve.
       </p>
+
+      {/* Where the automatic search has got to. A background job nobody can see
+          the state of is one people assume is broken. */}
+      {cfg?.schedule && (
+        <p className="text-[12px] text-muted-foreground">
+          {!cfg.schedule.configured
+            ? "Automatic search is idle: APIFY_TOKEN is not set."
+            : cfg.schedule.paused
+              ? `Automatic search is paused. ${cfg.schedule.waiting} are waiting for you, and it resumes below ${cfg.schedule.queueCap}.`
+              : `Searching on its own, ${cfg.schedule.seedsPerCycle} at a time every 4 hours. ` +
+                `Position ${cfg.schedule.position} of ${cfg.schedule.total} business types and cities. ` +
+                `${cfg.schedule.waiting} waiting for you.`}
+        </p>
+      )}
 
       {/* ── sending health ──
           The rates are shown whether or not anything is wrong. A number nobody

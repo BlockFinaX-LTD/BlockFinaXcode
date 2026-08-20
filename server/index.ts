@@ -282,6 +282,13 @@ app.use((req, res, next) => {
     startOutreachScanner({ draft: draftBatch });
   }
 
+  // Prospect discovery and drafting run on their own too. Approving and sending
+  // stay manual, because a cold email goes out under Anthony's own name.
+  {
+    const { startProspectScheduler } = await import("./prospects/scheduler");
+    startProspectScheduler();
+  }
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
