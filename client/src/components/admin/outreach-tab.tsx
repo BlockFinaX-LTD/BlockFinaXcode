@@ -66,6 +66,9 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   const [personName, setPersonName] = useState("");
   const [personHeadline, setPersonHeadline] = useState("");
   const [intent, setIntent] = useState<Intent>("reply");
+  /** "one" = a single post. "scan" = a whole page pasted at once. */
+  const [mode, setMode] = useState<"one" | "scan">("one");
+  const [blob, setBlob] = useState("");
   const [tab, setTab] = useState<Status>("waiting");
   const [copied, setCopied] = useState<number | null>(null);
 
@@ -87,6 +90,25 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
       toast({ title: "Draft ready", description: "It's waiting below." });
     },
     onError: (e: Error) => toast({ title: "Couldn't draft that", description: e.message, variant: "destructive" }),
+  });
+
+  const scan = useMutation({
+    mutationFn: () =>
+      api("/api/outreach/scan", token, { method: "POST", body: JSON.stringify({ blob, intent }) }),
+    onSuccess: (r: { drafted: number; skipped: number; failed: number; note?: string }) => {
+      setBlob("");
+      setTab("waiting");
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      toast({
+        title: r.drafted ? `${r.drafted} draft${r.drafted === 1 ? "" : "s"} ready` : "Nothing to draft",
+        description:
+          r.note ??
+          ([r.skipped ? `${r.skipped} item${r.skipped === 1 ? "" : "s"} had no text worth replying to` : null,
+            r.failed ? `${r.failed} failed` : null].filter(Boolean).join(" · ") || undefined),
+        variant: r.drafted ? undefined : "destructive",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
   });
 
   const update = useMutation({
@@ -117,6 +139,47 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
 
       {/* ── compose ── */}
       <div className="rounded-lg border border-border bg-muted/20 p-4">
+        <div className="mb-3 flex gap-1.5">
+          {([["one", "One post"], ["scan", "Scan a page"]] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setMode(k)}
+              disabled={!enabled}
+              className={cn(
+                "rounded-md border px-3 py-1.5 text-[12.5px] transition-colors disabled:opacity-50",
+                mode === k
+                  ? "border-primary bg-primary/10 font-medium text-foreground"
+                  : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto self-center text-[11.5px] text-muted-foreground">
+            {mode === "one"
+              ? "one reply, with who they are"
+              : "select a whole notifications page and paste — Finax separates it"}
+          </span>
+        </div>
+
+        {mode === "scan" ? (
+          <>
+            <textarea
+              value={blob}
+              onChange={e => setBlob(e.target.value)}
+              placeholder={"Paste a page of LinkedIn notifications, a thread of comments, or a forwarded digest email…"}
+              rows={9}
+              disabled={!enabled}
+              className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 font-mono text-[12.5px] leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+            />
+            <p className="mt-2 text-[12px] text-muted-foreground">
+              Finax separates the items, drops LinkedIn's own chrome and anything you wrote yourself,
+              and drafts up to 15 at a time. Nothing leaves this server — the text is here because you
+              copied it from your screen.
+            </p>
+          </>
+        ) : (
+          <>
         <textarea
           value={sourceText}
           onChange={e => setSourceText(e.target.value)}
@@ -141,6 +204,8 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
             />
           ))}
         </div>
+        </>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {INTENTS.map(i => (
@@ -164,15 +229,19 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         </div>
 
         <Button
-          onClick={() => draftIt.mutate()}
-          disabled={!enabled || draftIt.isPending || sourceText.trim().length < 20}
+          onClick={() => (mode === "scan" ? scan.mutate() : draftIt.mutate())}
+          disabled={
+            !enabled || draftIt.isPending || scan.isPending ||
+            (mode === "scan" ? blob.trim().length < 60 : sourceText.trim().length < 20)
+          }
           className="mt-3.5"
         >
-          {draftIt.isPending
-            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finax is writing…</>
-            : <><Sparkles className="mr-2 h-4 w-4" /> Draft it</>}
+          {draftIt.isPending || scan.isPending
+            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {scan.isPending ? "Finax is reading the page…" : "Finax is writing…"}</>
+            : <><Sparkles className="mr-2 h-4 w-4" /> {mode === "scan" ? "Scan and draft" : "Draft it"}</>}
         </Button>
-        {sourceText.trim().length > 0 && sourceText.trim().length < 20 && (
+        {mode === "one" && sourceText.trim().length > 0 && sourceText.trim().length < 20 && (
           <p className="mt-2 text-[12px] text-muted-foreground">
             A bit more of the post — Finax needs the words to reply to.
           </p>

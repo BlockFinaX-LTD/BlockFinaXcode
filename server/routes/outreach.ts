@@ -153,6 +153,120 @@ export function registerOutreachRoutes(app: Express): void {
     }
   });
 
+  // ── POST /api/outreach/scan ─────────────────────────────────────────────
+  //
+  // One paste, many drafts.
+  //
+  // Pasting posts one at a time is the part that made the waiting room feel
+  // like work, and it is also the part that does not need a person: separating
+  // a page of notifications into distinct items is reading, not judgement.
+  // Select the whole LinkedIn notifications page, or a forwarded digest email,
+  // or a thread of comments, and paste the lot.
+  //
+  // This is still not scanning LinkedIn. The text arrives because Anthony
+  // copied it from his own screen, which is his to copy; nothing here reaches
+  // their servers, and nothing drives his session.
+  app.post("/api/outreach/scan", requireAdmin, async (req, res) => {
+    try {
+      const { blob, intent } = req.body ?? {};
+      if (typeof blob !== "string" || blob.trim().length < 60) {
+        return res.status(400).json({ error: "Paste a page of notifications, comments or a digest email." });
+      }
+      const kind: Intent = ["reply", "connect", "dm"].includes(intent) ? intent : "reply";
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Drafting is not configured (ANTHROPIC_API_KEY)." });
+
+      const client = new Anthropic({ apiKey });
+
+      // Step one: split the paste into items. Kept separate from drafting so a
+      // bad extraction is visible as a wrong item rather than a wrong reply,
+      // and so the model is doing one job at a time.
+      const extraction = await client.messages.create({
+        model: MODEL,
+        max_tokens: 2000,
+        system:
+          "You separate pasted LinkedIn content into distinct items. Output ONLY a JSON array, no prose. " +
+          'Each element: {"personName": string|null, "personHeadline": string|null, "sourceUrl": string|null, "text": string}. ' +
+          "`text` is what that person actually wrote — the post or comment, not the UI around it. " +
+          "Drop navigation, timestamps, reaction counts, 'See more', and LinkedIn's own chrome. " +
+          "Drop anything Anthony Kumako or BlockFinaX wrote; he is not replying to himself. " +
+          "If an item has no substantive text, omit it. If nothing usable is present, output [].",
+        messages: [{ role: "user", content: blob.trim().slice(0, 24000) }],
+      });
+      const raw = extraction.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map(b => b.text)
+        .join("")
+        .trim();
+
+      let items: Array<{ personName?: string; personHeadline?: string; sourceUrl?: string; text?: string }> = [];
+      try {
+        const match = raw.match(/\[[\s\S]*\]/);
+        items = match ? JSON.parse(match[0]) : [];
+      } catch {
+        return res.status(502).json({ error: "Couldn't separate that into items. Try a smaller selection." });
+      }
+      const usable = items.filter(i => typeof i?.text === "string" && i.text.trim().length >= 20).slice(0, 15);
+      if (!usable.length) {
+        return res.json({ drafted: 0, skipped: items.length, drafts: [], note: "Nothing in that paste had text worth replying to." });
+      }
+
+      // Step two: draft each. Sequential rather than parallel — this is a
+      // background chore, and fifteen concurrent calls is a rate limit waiting
+      // to happen for no gain in a flow nobody is watching.
+      const context = await liveContext();
+      const created = [];
+      const failed: string[] = [];
+      for (const item of usable) {
+        try {
+          const who = [item.personName, item.personHeadline].filter(Boolean).join(" — ") || "unknown";
+          const msg = await client.messages.create({
+            model: MODEL,
+            max_tokens: 700,
+            system: SYSTEM,
+            messages: [{
+              role: "user",
+              content:
+                `They wrote:\n"""\n${item.text!.trim().slice(0, 4000)}\n"""\n\n` +
+                `Who they are: ${who}\n\n` +
+                `Live BlockFinaX figures you may quote:\n${context}\n\n` +
+                `Draft a ${kind}. ${INTENT_RULES[kind]}`,
+            }],
+          });
+          const draft = msg.content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .map(b => b.text)
+            .join("")
+            .trim();
+          if (!draft) { failed.push(who); continue; }
+
+          const [row] = await db.insert(outreachDrafts).values({
+            sourceUrl: item.sourceUrl?.trim() || null,
+            sourceText: item.text!.trim(),
+            personName: item.personName?.trim() || null,
+            personHeadline: item.personHeadline?.trim() || null,
+            intent: kind,
+            draft,
+            originalDraft: draft,
+          }).returning();
+          created.push(row);
+        } catch {
+          failed.push(item.personName || "one item");
+        }
+      }
+
+      return res.json({
+        drafted: created.length,
+        skipped: items.length - usable.length,
+        failed: failed.length,
+        drafts: created,
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : "scan failed";
+      return res.status(500).json({ error: m });
+    }
+  });
+
   // ── GET /api/outreach ───────────────────────────────────────────────────
   app.get("/api/outreach", requireAdmin, async (req, res) => {
     try {
