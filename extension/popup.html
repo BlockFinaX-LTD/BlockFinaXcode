@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { width: 300px; margin: 0; padding: 16px;
+         font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         color: #0f172a; background: #fff; }
+  h1 { font-size: 14px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 14px; color: #64748b; font-size: 12px; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 12px; }
+  input[type=text], input[type=password], select {
+    width: 100%; box-sizing: border-box; padding: 7px 9px; font: inherit;
+    border: 1px solid #cbd5e1; border-radius: 6px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .row label { margin: 0; font-weight: 500; }
+  button { margin-top: 16px; width: 100%; padding: 9px; border: 0; border-radius: 6px;
+           background: #3b82f6; color: #fff; font: 600 13px/1 inherit; cursor: pointer; }
+  .saved { color: #16a34a; font-size: 12px; text-align: center; margin-top: 8px; height: 14px; }
+  .note { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+          color: #64748b; font-size: 11px; }
+</style>
+<h1>Finax for LinkedIn</h1>
+<p class="sub">Reads the LinkedIn page you are on and sends relevant posts to the waiting room.</p>
+
+<label for="endpoint">BlockFinaX server</label>
+<input id="endpoint" type="text" placeholder="https://blockfinax.com">
+
+<label for="token">Admin token</label>
+<input id="token" type="password" placeholder="your ADMIN_TOKEN">
+
+<label for="intent">Draft as</label>
+<select id="intent">
+  <option value="reply">Reply to their post</option>
+  <option value="connect">Connection request</option>
+  <option value="dm">Direct message</option>
+</select>
+
+<div class="row">
+  <input id="auto" type="checkbox">
+  <label for="auto">Send automatically once 8 have collected</label>
+</div>
+
+<button id="save">Save</button>
+<div class="saved" id="saved"></div>
+
+<p class="note">Only reads what is already on screen. Scroll LinkedIn as you normally
+would, then press the button that appears at the bottom right.</p>
+
+<script src="popup.js"></script>

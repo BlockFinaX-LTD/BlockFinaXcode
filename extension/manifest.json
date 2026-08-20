@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Finax for LinkedIn",
+  "version": "1.0.0",
+  "description": "Reads the LinkedIn page you are viewing, finds posts about currency risk, and sends them to the BlockFinaX waiting room for drafting.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "action": { "default_popup": "popup.html", "default_title": "Finax for LinkedIn" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": { "service_worker": "background.js" }
+}

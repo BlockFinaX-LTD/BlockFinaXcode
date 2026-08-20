@@ -28,6 +28,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db";
 import { outreachDrafts } from "@shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";
+import { relevanceScore } from "./outreach-relevance";
 
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
@@ -263,6 +264,118 @@ export function registerOutreachRoutes(app: Express): void {
       });
     } catch (err) {
       const m = err instanceof Error ? err.message : "scan failed";
+      return res.status(500).json({ error: m });
+    }
+  });
+
+  // ── POST /api/outreach/ingest ───────────────────────────────────────────
+  //
+  // The browser extension's endpoint. Items arrive already separated, because
+  // the DOM gives cleaner structure than asking a model to re-read a blob —
+  // author, headline, permalink and body are distinct fields on the page, so
+  // extracting them there costs nothing and is not a guess.
+  //
+  // Two filters run before anything is drafted. Neither is about politeness:
+  //
+  //   dedupe     — the same post appears on every scroll, and drafting it twice
+  //                wastes a call and puts a duplicate in front of Anthony.
+  //   relevance  — a feed is mostly not about currency risk. Drafting a reply
+  //                to a hiring post is worse than drafting nothing: it produces
+  //                exactly the kind of message that reads as a bot, which is the
+  //                thing this tool exists to avoid.
+  //
+  // The relevance test is keyword-based on purpose. A model call per post would
+  // cost more than the drafts themselves, and the judgement here is coarse —
+  // does this mention money moving across a border — not subtle.
+  app.post("/api/outreach/ingest", requireAdmin, async (req, res) => {
+    try {
+      const { items, intent, minScore } = req.body ?? {};
+      if (!Array.isArray(items) || !items.length) {
+        return res.status(400).json({ error: "No items." });
+      }
+      const kind: Intent = ["reply", "connect", "dm"].includes(intent) ? intent : "reply";
+      const threshold = typeof minScore === "number" ? minScore : 2;
+
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Drafting is not configured." });
+
+      const seen = new Set(
+        (await db.select({ url: outreachDrafts.sourceUrl }).from(outreachDrafts))
+          .map(r => (r.url || "").trim())
+          .filter(Boolean),
+      );
+
+      const candidates: Array<{ text: string; url: string | null; name: string | null; headline: string | null; score: number }> = [];
+      for (const it of items.slice(0, 200)) {
+        const text = typeof it?.text === "string" ? it.text.trim() : "";
+        if (text.length < 60) continue;
+        const url = typeof it?.url === "string" && it.url.trim() ? it.url.trim() : null;
+        if (url && seen.has(url)) continue;
+        const score = relevanceScore(text);
+        if (score < threshold) continue;
+        candidates.push({
+          text,
+          url,
+          name: typeof it?.name === "string" ? it.name.trim() || null : null,
+          headline: typeof it?.headline === "string" ? it.headline.trim() || null : null,
+          score,
+        });
+        if (url) seen.add(url);
+      }
+
+      // Best first, so a generous scroll still drafts the ten most relevant
+      // rather than the ten that happened to load first.
+      candidates.sort((a, b) => b.score - a.score);
+      const chosen = candidates.slice(0, 10);
+      if (!chosen.length) {
+        return res.json({ drafted: 0, considered: items.length, relevant: 0, drafts: [] });
+      }
+
+      const client = new Anthropic({ apiKey });
+      const context = await liveContext();
+      const created = [];
+      for (const c of chosen) {
+        try {
+          const who = [c.name, c.headline].filter(Boolean).join(" — ") || "unknown";
+          const msg = await client.messages.create({
+            model: MODEL,
+            max_tokens: 700,
+            system: SYSTEM,
+            messages: [{
+              role: "user",
+              content:
+                `They wrote:\n"""\n${c.text.slice(0, 4000)}\n"""\n\n` +
+                `Who they are: ${who}\n\n` +
+                `Live BlockFinaX figures you may quote:\n${context}\n\n` +
+                `Draft a ${kind}. ${INTENT_RULES[kind]}`,
+            }],
+          });
+          const draft = msg.content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .map(b => b.text).join("").trim();
+          if (!draft) continue;
+          const [row] = await db.insert(outreachDrafts).values({
+            sourceUrl: c.url,
+            sourceText: c.text,
+            personName: c.name,
+            personHeadline: c.headline,
+            intent: kind,
+            draft,
+            originalDraft: draft,
+          }).returning();
+          created.push(row);
+        } catch {
+          /* one item failing must not lose the batch */
+        }
+      }
+      return res.json({
+        drafted: created.length,
+        considered: items.length,
+        relevant: candidates.length,
+        drafts: created,
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : "ingest failed";
       return res.status(500).json({ error: m });
     }
   });
