@@ -26,7 +26,6 @@ import Website from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import { InvestorGate } from "@/components/investor-gate";
-import OutreachPage from "@/pages/outreach";
 import DataRoom from "@/pages/data-room";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
@@ -248,10 +247,6 @@ function Router() {
       {/* Rewards & admin */}
       <Route path="/rewards" component={TasksPage} />
       <Route path="/admin" component={AdminDashboard} />
-      {/* Finax outreach. Server-side every endpoint is requireAdmin, so the
-          route itself needs no gate of its own — an unauthorised visitor
-          reaches a page whose data never loads. */}
-      <Route path="/outreach" component={OutreachPage} />
       <Route path="/video" component={VideoPage} />
       <Route path="/financial-model" component={FinancialModel} />
 
