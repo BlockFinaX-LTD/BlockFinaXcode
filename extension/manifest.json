@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Finax for LinkedIn",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Reads the LinkedIn page you are viewing, finds posts about currency risk, and fills your drafted comment into LinkedIn's own comment box. You press Post.",
   "permissions": [
     "storage",
@@ -21,7 +21,8 @@
       ],
       "js": [
         "content.js",
-        "compose.js"
+        "compose.js",
+        "profile.js"
       ],
       "css": [
         "content.css"

@@ -4,7 +4,8 @@
  * Four things live here behind one set of tabs:
  *
  *   Drafts   what Finax wrote, waiting to be copied and sent by hand.
- *   People   everyone whose post was worth answering, accumulated from drafting.
+ *   Leads    everyone worth talking to, sorted by what they are and how we
+ *            relate to them, confirmed by a person rather than by the model.
  *   Memory   the dated facts Finax may cite — policy, research, news.
  *   Market   the computed picture, so a surprising number can be checked.
  *
@@ -337,7 +338,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
       <div className="flex gap-1.5 border-b border-border pb-3">
         {([
           ["drafts", "Drafts"],
-          ["people", "People"],
+          ["people", "Leads"],
           ["memory", "What Finax knows"],
         ] as const).map(([k, label]) => (
           <button

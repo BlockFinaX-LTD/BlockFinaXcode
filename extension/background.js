@@ -28,6 +28,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
       const res =
         msg.type === "finax:queued"  ? await call("/api/outreach/queued")
       : msg.type === "finax:placed"  ? await call(`/api/outreach/${msg.id}/placed`, { method: "POST" })
+      : msg.type === "finax:profile" ? await call("/api/outreach/profile", {
+          method: "POST", body: JSON.stringify(msg.profile),
+        })
       : await call("/api/outreach/ingest", {
           method: "POST",
           body: JSON.stringify({ items: msg.items, intent: s.intent || "reply" }),

@@ -49,6 +49,15 @@ const DDL = [
    )`,
   `CREATE INDEX IF NOT EXISTS outreach_people_status_idx ON outreach_people (status)`,
   `CREATE INDEX IF NOT EXISTS outreach_people_score_idx  ON outreach_people (top_score)`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS segment     text`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS fit         text`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS fit_score   integer`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS about       text`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS verified    boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS verified_at timestamp`,
+  `ALTER TABLE outreach_people ADD COLUMN IF NOT EXISTS verified_by text`,
+  `CREATE INDEX IF NOT EXISTS outreach_people_segment_idx ON outreach_people (segment)`,
+  `CREATE INDEX IF NOT EXISTS outreach_people_fit_idx     ON outreach_people (fit_score)`,
 
   `CREATE TABLE IF NOT EXISTS market_memory (
      id          serial PRIMARY KEY,

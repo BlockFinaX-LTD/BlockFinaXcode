@@ -692,6 +692,39 @@ export const outreachPeople = pgTable("outreach_people", {
   /** Anthony's own notes. Never written by the model. */
   notes: text("notes"),
 
+  /**
+   * What kind of lead this is, which decides what a good outcome looks like.
+   *
+   * buyer     runs currency exposure themselves. The actual customer.
+   * amplifier writes or broadcasts about it. Will never buy cover, but a good
+   *           comment on their post reaches the people who would. Treating
+   *           these as failed buyers is the mistake worth avoiding: a Nigerian
+   *           business title has more reach than any individual importer.
+   * partner   a bank, broker, fintech or association that could distribute.
+   * peer      building something adjacent. Useful to know, not to sell to.
+   * observer  interested but not exposed. Analysts, students, consultants.
+   */
+  segment: text("segment"),
+
+  /** How BlockFinaX relates to them specifically. Written by the model, in plain terms. */
+  fit: text("fit"),
+  /** 0 to 100. How worth Anthony's time this person is. */
+  fitScore: integer("fit_score"),
+  /** What their own profile says, when it has been read. */
+  about: text("about"),
+
+  /**
+   * Confirmed by a person.
+   *
+   * Deliberately not something the model can set. A qualification is a
+   * judgement about a stranger's business, and the model is guessing from a
+   * headline and a few posts. Anthony deciding it is right is what turns a
+   * guess into a lead, and the column records that a human looked.
+   */
+  verified: boolean("verified").notNull().default(false),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: text("verified_by"),
+
   firstSeen: timestamp("first_seen").defaultNow(),
   lastSeen: timestamp("last_seen").defaultNow(),
 }, (table) => [

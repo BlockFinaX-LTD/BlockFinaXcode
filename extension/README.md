@@ -159,3 +159,45 @@ still works and is still worth keeping, but not for comments. The permission it
 grants, `w_member_social`, covers publishing **your own** posts. If you ever want
 Finax to draft and publish original posts to your feed, that route is open and
 already authorised. Ask and it can be wired up.
+
+---
+
+# Leads
+
+Every account Finax sees ends up in **Agent → Outreach → Leads**, two ways:
+
+- someone posted something worth answering, or
+- you opened their profile with the extension running
+
+## Sorting
+
+Press **Sort the new ones**. Finax works out what each account is and writes one
+or two sentences on how BlockFinaX relates to them specifically.
+
+- **Buyers** carry the currency exposure themselves. The actual customers.
+- **Amplifiers** write about it. They will never buy cover, and they are often
+  the most valuable accounts on the list, because one good comment on their post
+  is read by hundreds of people who would. Do not dismiss them for not being
+  customers.
+- **Partners** are banks, brokers and associations that could distribute.
+- **Peers** are building something adjacent. Worth knowing, not worth selling to.
+- **Observers** are interested without being exposed.
+
+## Verifying
+
+The sorting is a guess from a headline and a couple of posts, and it guesses
+confidently either way. Press **Verify** on the ones you agree with. That is
+what turns a guess into a lead, and it records that you were the one who looked.
+
+Nothing marks itself verified. Finax cannot set it.
+
+## Reading profiles
+
+With the extension installed, opening anyone's LinkedIn profile records them.
+It reads only the page you are already looking at, the same as everything else
+in the extension. It does not open profiles, does not follow links, and does
+nothing on any page that is not a profile.
+
+Existing rows only gain missing fields. A headline captured next to a real post
+says more about what someone cares about than the one on their profile, so it is
+never overwritten.

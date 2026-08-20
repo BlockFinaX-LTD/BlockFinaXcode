@@ -36,7 +36,7 @@
 
 import type { Express } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import { eq, desc, and, isNotNull } from "drizzle-orm";
+import { eq, desc, and, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { outreachDrafts, outreachPeople, marketMemory } from "@shared/schema";
 import { timingSafeEqual, randomBytes } from "node:crypto";
@@ -44,7 +44,7 @@ import { requireAdmin } from "../middleware/admin-auth";
 import { relevanceScore } from "./outreach-relevance";
 import { briefForText, pairsMentioned, briefFor } from "../outreach/market-brief";
 import { recallFor, listMemory } from "../outreach/memory";
-import { notePerson } from "../outreach/people";
+import { notePerson, normaliseProfileUrl } from "../outreach/people";
 
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
@@ -52,6 +52,7 @@ import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
 import { buildPrompt, type Candidate } from "../outreach/prompt";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
+import { qualifyPerson } from "../outreach/qualify";
 import {
   loadAuth, saveAuth, clearAuth, isExpired, authorizeUrl, exchangeCode,
   redirectUri, candidateRedirectUris, activityUrnFrom,
@@ -173,6 +174,8 @@ async function writeDraft(
     .map(b => b.text).join("").trim();
   return out || null;
 }
+
+const sqlCount = () => sql<number>`count(*)::int`;
 
 export async function draftBatch(
   items: RawItem[],
@@ -838,6 +841,146 @@ export function registerOutreachRoutes(app: Express): void {
       return res.json(row);
     } catch {
       return res.status(500).json({ error: "Could not update that person." });
+    }
+  });
+
+  // ── POST /api/outreach/people/:id/qualify ───────────────────────────────
+  app.post("/api/outreach/people/:id/qualify", requireAdmin, async (req, res) => {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Qualifying is not configured." });
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+
+      const [p] = await db.select().from(outreachPeople).where(eq(outreachPeople.id, id)).limit(1);
+      if (!p) return res.status(404).json({ error: "not found" });
+
+      const q = await qualifyPerson(apiKey, MODEL, {
+        name: p.name, headline: p.headline, company: p.company,
+        about: p.about, topics: p.topics,
+        posts: [p.lastPostText].filter(Boolean) as string[],
+      });
+      if (!q) return res.status(502).json({ error: "Not enough to go on for this one." });
+
+      // Never touches `verified`. A qualification is a guess about a stranger's
+      // business; a person confirming it is what makes it a lead.
+      const [row] = await db.update(outreachPeople)
+        .set({ segment: q.segment, fit: q.fit, fitScore: q.fitScore })
+        .where(eq(outreachPeople.id, id)).returning();
+      return res.json(row);
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "could not qualify" });
+    }
+  });
+
+  // ── POST /api/outreach/people/qualify-all ───────────────────────────────
+  //
+  // Everyone not yet sorted. Capped, because each one is a model call and a
+  // list that has been scanning for a week could hold hundreds.
+  app.post("/api/outreach/people/qualify-all", requireAdmin, async (req, res) => {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Qualifying is not configured." });
+      const limit = Math.min(Math.max(Number(req.body?.limit) || 25, 1), 60);
+
+      const pending = await db.select().from(outreachPeople)
+        .where(isNull(outreachPeople.segment))
+        .orderBy(desc(outreachPeople.topScore))
+        .limit(limit);
+
+      let done = 0;
+      for (const p of pending) {
+        const q = await qualifyPerson(apiKey, MODEL, {
+          name: p.name, headline: p.headline, company: p.company,
+          about: p.about, topics: p.topics,
+          posts: [p.lastPostText].filter(Boolean) as string[],
+        });
+        if (!q) continue;
+        await db.update(outreachPeople)
+          .set({ segment: q.segment, fit: q.fit, fitScore: q.fitScore })
+          .where(eq(outreachPeople.id, p.id));
+        done++;
+      }
+      const [{ left }] = await db.select({ left: sqlCount() }).from(outreachPeople)
+        .where(isNull(outreachPeople.segment));
+      return res.json({ qualified: done, considered: pending.length, remaining: Number(left) || 0 });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "could not qualify" });
+    }
+  });
+
+  // ── POST /api/outreach/people/:id/verify ────────────────────────────────
+  //
+  // The step the model is not allowed to take. Records who looked, because
+  // "verified" with nobody's name against it is just another guess.
+  app.post("/api/outreach/people/:id/verify", requireAdmin, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const on = req.body?.verified !== false;
+      // `status` is left alone. Whether someone is a real lead and whether they
+      // have been contacted are separate facts, and collapsing them would make
+      // verifying a person quietly forget that he had already written to them.
+      const [row] = await db.update(outreachPeople)
+        .set({
+          verified: on,
+          verifiedAt: on ? new Date() : null,
+          verifiedBy: on ? (req.adminEmail || "admin") : null,
+        })
+        .where(eq(outreachPeople.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "not found" });
+      return res.json(row);
+    } catch {
+      return res.status(500).json({ error: "Could not verify that." });
+    }
+  });
+
+  // ── POST /api/outreach/profile ──────────────────────────────────────────
+  //
+  // A profile the extension read while Anthony was looking at it. Enriches an
+  // existing row or creates one, because a person worth opening is a person
+  // worth remembering, whether or not they have posted anything we caught.
+  app.post("/api/outreach/profile", requireIngestAuth, async (req, res) => {
+    try {
+      const { profileUrl, name, headline, about, location, company } = req.body ?? {};
+      const url = typeof profileUrl === "string" ? normaliseProfileUrl(profileUrl) : null;
+      if (!url) return res.status(400).json({ error: "Not a profile." });
+
+      const clean = (v: unknown, max = 4000) =>
+        typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
+
+      const [existing] = await db.select().from(outreachPeople)
+        .where(eq(outreachPeople.profileUrl, url)).limit(1);
+
+      if (existing) {
+        // Only fill gaps. A profile page carries less about what someone cares
+        // about than their posts do, and overwriting a headline captured beside
+        // a real post with a stale one from a profile loses information.
+        const [row] = await db.update(outreachPeople).set({
+          name: existing.name ?? clean(name, 200),
+          headline: existing.headline ?? clean(headline, 400),
+          company: existing.company ?? clean(company, 200),
+          location: existing.location ?? clean(location, 200),
+          about: clean(about) ?? existing.about,
+          lastSeen: new Date(),
+        }).where(eq(outreachPeople.id, existing.id)).returning();
+        return res.json({ person: row, created: false });
+      }
+
+      const [row] = await db.insert(outreachPeople).values({
+        profileUrl: url,
+        name: clean(name, 200),
+        headline: clean(headline, 400),
+        company: clean(company, 200),
+        location: clean(location, 200),
+        about: clean(about),
+        postsSeen: 0,
+        topScore: 0,
+        status: "new",
+      }).returning();
+      return res.json({ person: row, created: true });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "could not save" });
     }
   });
 
