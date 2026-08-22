@@ -162,8 +162,12 @@ const SETTLEMENT_CHAINS = [
     diamondAddress: process.env.BASE_DIAMOND_ADDRESS || '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',
     rpcUrls: [
       process.env.BASE_RPC_URL || 'https://mainnet.base.org',
-      'https://base.llamarpc.com',
+      // base.llamarpc.com was here and has been answering 521 for some time. A
+      // dead entry costs a timeout on every failover, at the moment failover is
+      // most needed. Checked: these three answer eth_blockNumber with 200.
       'https://base-rpc.publicnode.com',
+      'https://base.drpc.org',
+      'https://1rpc.io/base',
     ],
   },
   {
@@ -177,6 +181,23 @@ const SETTLEMENT_CHAINS = [
     ],
   },
 ].filter(c => !!c.diamondAddress);
+
+/**
+ * Multicall3, at the same address on every chain that has it.
+ *
+ * The settlement scan used to read each event with its own eth_call in a tight
+ * loop. Public RPCs rate limit that, and the failures land on the calls made
+ * last, which are the highest event ids. Those are the newest events, which are
+ * the only ones that ever need settling: the scan reliably succeeded on every
+ * event that did not matter and failed on the ones that did.
+ *
+ * The same trick already fixed this in server/pricing/quote-purchase.ts. One
+ * aggregate call reads the whole book, so there is nothing left to throttle.
+ */
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const MULTICALL3_ABI = [
+  "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])",
+];
 
 const HEDGE_ABI = [
   'function settleEvent(uint256 _eventId, uint256 _settlementPrice)',
@@ -505,15 +526,81 @@ async function settleChain(
     console.log(`${tag} getTotalHedgeEvents() unavailable — scanning event IDs upward`);
   }
 
-  for (let i = 1; i <= (knownTotal ?? MAX_SCAN); i++) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let core: any = null;
+  /**
+   * Read every event in one call.
+   *
+   * allowFailure is on per call, so a single bad id cannot lose the batch, and
+   * a failed read is now counted and reported rather than skipped in silence.
+   * The silence is what let event 11 sit expired and unsettled for two days
+   * while every cycle logged "nothing ready to settle".
+   */
+  const cores = new Map<number, any>();
+  const unreadable: number[] = [];
+  const iface = new ethers.Interface(HEDGE_ABI);
+  const total = knownTotal ?? 0;
+
+  if (total > 0) {
     try {
-      core = await readContract.getHedgeEventCore(i);
-    } catch {
-      if (knownTotal === null) break; // scan mode: no more events
-      continue; // known-total mode: skip bad ID
+      const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, provider);
+      const ids = Array.from({ length: total }, (_, k) => k + 1);
+      // Chunked, because aggregate3 is one call but still one response, and a
+      // very long book would make it large enough for a provider to reject.
+      const CHUNK = 100;
+      for (let start = 0; start < ids.length; start += CHUNK) {
+        const slice = ids.slice(start, start + CHUNK);
+        const res: Array<{ success: boolean; returnData: string }> = await mc.aggregate3(
+          slice.map(id => ({
+            target: chain.diamondAddress,
+            allowFailure: true,
+            callData: iface.encodeFunctionData("getHedgeEventCore", [id]),
+          })),
+        );
+        res.forEach((r, k) => {
+          const id = slice[k];
+          if (!r.success) { unreadable.push(id); return; }
+          try {
+            cores.set(id, iface.decodeFunctionResult("getHedgeEventCore", r.returnData));
+          } catch {
+            unreadable.push(id);
+          }
+        });
+      }
+    } catch (e) {
+      // Multicall unavailable on this chain, or the call itself failed. Fall
+      // back to reading one at a time, spaced, which is slow but not throttled.
+      console.warn(`${tag} Multicall failed, falling back to spaced reads: ${e instanceof Error ? e.message : e}`);
+      for (let i = 1; i <= total; i++) {
+        try {
+          cores.set(i, await readContract.getHedgeEventCore(i));
+        } catch {
+          unreadable.push(i);
+        }
+        await new Promise(r => setTimeout(r, 250));
+      }
     }
+  } else {
+    // No total available: scan upward and stop at the first gap, spaced so the
+    // provider does not start refusing partway through.
+    for (let i = 1; i <= MAX_SCAN; i++) {
+      try {
+        cores.set(i, await readContract.getHedgeEventCore(i));
+      } catch {
+        break;
+      }
+      await new Promise(r => setTimeout(r, 250));
+    }
+  }
+
+  if (unreadable.length) {
+    // Never silent. An event that cannot be read is an event that cannot be
+    // settled, and LP capital stays locked behind it.
+    errors.push(
+      `${tag} Could not read event(s) ${unreadable.join(", ")}. ` +
+      `An unreadable event cannot settle, and its pool stays locked.`,
+    );
+  }
+
+  for (const [i, core] of Array.from(cores.entries())) {
     if (!core) continue;
     try {
       const status = Number(core.status);
@@ -529,23 +616,6 @@ async function settleChain(
       const strike = Number(ethers.formatUnits(core.strike, 6));
       const expiryDate = Number(core.expiryDate);
 
-      // Settle at expiry only.
-      //
-      // This used to settle the moment spot touched the strike, at the touching
-      // rate. The payout is notional × (min(S_T, C) − K) / S₀, so a settlement
-      // fired at S_T ≈ K pays ≈ 0 — the trigger went off at the exact instant
-      // intrinsic value was zero and then froze it there.
-      //
-      // Both events that ever triggered did precisely that. Event 5 (K 11.70,
-      // cap 13.00) settled at 11.711956 and paid 0.92% of its maximum: position
-      // #4 put up $1,000, paid $16.93 in premium and received $1.04 on a
-      // position that won. Event 8 settled 0.011 past its strike and paid 11%.
-      //
-      // Cover is a call spread — it is worth the distance travelled from strike
-      // toward the cap, measured where the rate finishes. Stopping the clock on
-      // first touch destroys exactly the value the hedger paid for, and it is
-      // also the payoff the pricing engine has been quoting all along, so this
-      // aligns settlement with both the product and its price.
       if (expiryDate > now) continue;
 
       const settlementPriceWei = ethers.parseUnits(rate.rate.toFixed(6), 6);
