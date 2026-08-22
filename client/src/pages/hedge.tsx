@@ -97,6 +97,39 @@ function MarketFlag({ pair, className = '' }: { pair: string; className?: string
 function daysToExpiry(d: Date): number {
   return Math.max(0.01, (d.getTime() - Date.now()) / 86400000);
 }
+/**
+ * The line under a pool's pair, when there is anything worth saying.
+ *
+ * Pools carry a free-text name typed at creation, and it is shown directly
+ * beneath the pair the pool actually settles on. Most of the time it just
+ * repeats the pair, which is noise. Occasionally it contradicts it: event #2 is
+ * a USD/GHS pool someone named "USD/KES", so the card read as Ghana cedi on one
+ * line and Kenyan shilling on the next.
+ *
+ * That is worse than noise. An underwriter scanning the list could believe they
+ * are taking shilling exposure on a pool that settles on the cedi, and the name
+ * is the part they would remember.
+ *
+ * So a name that names any pair other than the real one is dropped, and a name
+ * that merely repeats the pair is dropped as redundant. What survives is the
+ * part that was actually informative, like "7 Days" or "POOL". The underlying
+ * is the truth here and it is already on the line above.
+ */
+function poolSubtitle(name: string | null | undefined, underlying: string): string | null {
+  const raw = (name ?? "").trim();
+  if (!raw) return null;
+
+  const claimed = raw.match(/\b[A-Z]{3}\s*\/\s*[A-Z]{3}\b/);
+  if (claimed && claimed[0].replace(/\s/g, "") !== underlying.replace(/\s/g, "")) return null;
+
+  // Strip the pair itself and any leftover separators, leaving the note.
+  const rest = raw
+    .replace(/\b[A-Z]{3}\s*\/\s*[A-Z]{3}\b/g, "")
+    .replace(/^[\s\-–—:,.]+|[\s\-–—:,.]+$/g, "")
+    .trim();
+  return rest || null;
+}
+
 function expiryLabel(d: Date): string {
   const days = daysToExpiry(d);
   if (days < 1) return `${Math.max(1, Math.round(days * 24))}H`;
@@ -1432,7 +1465,7 @@ export default function Hedge() {
                           const live2 = isLive(ev);
                           return (
                             <div className="pool-card" key={ev.id}>
-                              <div className="pool-top"><MarketFlag pair={ev.underlying} /><div className="pt-nm"><div className="a">{pairLabel(ev.underlying)}</div><div className="b">{ev.name}</div></div>
+                              <div className="pool-top"><MarketFlag pair={ev.underlying} /><div className="pt-nm"><div className="a">{pairLabel(ev.underlying)}</div>{poolSubtitle(ev.name, ev.underlying) && <div className="b">{poolSubtitle(ev.name, ev.underlying)}</div>}</div>
                                 <div className="pool-apr"><div className="v">{(ev.premiumRate * 100).toFixed(1)}%</div><div className="l">Premium</div></div></div>
                               <div className="pool-stats">
                                 <div className="pool-stat"><div className="l">Pool size</div><div className="v tnum">{fmtK(ev.totalLiquidity)}</div></div>
