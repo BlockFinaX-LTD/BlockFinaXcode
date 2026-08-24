@@ -52,6 +52,58 @@ export interface Business {
  * whatever tracks it. Writing to sentry@ or a WordPress theme author is not
  * outreach, it is noise that bounces and damages the sending domain.
  */
+/**
+ * Real top-level domains, near enough for this purpose.
+ *
+ * A crawl glues an address to whatever text follows it, and the result still
+ * looks like an address: sales@booze.ngliquorstore passes any pattern check,
+ * because "ngliquorstore" is letters after a dot. Only knowing what endings
+ * actually exist catches it. One of these went out before this existed.
+ */
+const KNOWN_TLDS = new Set([
+  "com","net","org","io","co","info","biz","app","dev","ai","xyz","online","site",
+  "global","digital","travel","int","edu","gov","mil","tech","store","shop","group",
+  "ng","gh","ke","za","ug","tz","zm","eg","ci","sn","cm","et","rw","mw","bw","na",
+  "uk","ie","de","fr","nl","es","it","se","dk","fi","no","pl","be","at","pt","ch",
+  "us","ca","au","nz","in","cn","sg","hk","ae","sa","jp","kr","br","mx","tr","il",
+  "eu","africa","asia",
+]);
+
+/**
+ * Fix an address the crawl mangled, or reject it.
+ *
+ * The repair works because the concatenation has a signature: the email's
+ * domain begins with the business's real website domain and then continues into
+ * page text. booze.ngliquorstore starts with booze.ng, so truncating there
+ * recovers the address rather than discarding a real lead.
+ *
+ * Where there is nothing to check against, an unrecognised ending is refused
+ * outright. A bounce costs more than a lead: bounces are what mark a sender as
+ * working from a scraped list, and this domain also carries the magic links.
+ */
+export function repairEmail(email: string, website: string | null): string | null {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return null;
+  const local = email.slice(0, at);
+  let domain = email.slice(at + 1).toLowerCase();
+
+  let siteHost = "";
+  if (website) {
+    try { siteHost = new URL(website).hostname.replace(/^www\./, "").toLowerCase(); } catch { /* ignore */ }
+  }
+
+  // The concatenation case: repair rather than discard.
+  if (siteHost && domain !== siteHost && domain.startsWith(siteHost)) {
+    domain = siteHost;
+  }
+
+  const tld = domain.split(".").pop() || "";
+  if (!KNOWN_TLDS.has(tld)) return null;
+  if (domain.length > 60) return null;
+
+  return `${local}@${domain}`;
+}
+
 function cleanEmails(raw: unknown[]): string[] {
   const out = raw
     .map(e => String(e ?? "").trim().toLowerCase())
@@ -243,8 +295,14 @@ export async function discoverProspects(opts: {
     // same company is one message arriving twice, which reads as spam even when
     // it is not. Role inboxes are preferred because they are the ones that can
     // lawfully be written to.
-    const role = found.find(e => classifyAddress(e) === "role");
-    const email = role ?? found[0];
+    // Repair or drop anything the crawl mangled, before choosing.
+    const usable = found
+      .map(e => repairEmail(e, b.website))
+      .filter((e): e is string => !!e);
+    if (!usable.length) continue;
+
+    const role = usable.find(e => classifyAddress(e) === "role");
+    const email = role ?? usable[0];
 
     const kind = classifyAddress(email);
     const verdict = assessSendable({ email, country: b.country, addressKind: kind });

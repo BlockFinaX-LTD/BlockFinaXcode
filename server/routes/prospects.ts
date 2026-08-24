@@ -76,6 +76,8 @@ export function registerProspectRoutes(app: Express): void {
       reason: guard.reason ?? null,
       warning: guard.warning ?? null,
       from: guard.from ?? null,
+      bcc: guard.bcc ?? null,
+      replyTo: guard.replyTo ?? null,
       discovery: !!process.env.APIFY_TOKEN,
       sentToday: await sentToday(),
       dailyCap: DAILY_SEND_CAP,

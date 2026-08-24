@@ -36,6 +36,8 @@ interface Prospect {
   sendable: boolean; sendableReason: string | null;
   status: string; draftSubject: string | null; draftBody: string | null;
   approvedAt: string | null; sentAt: string | null;
+  /** Resend's own id. The only proof the message actually left. */
+  providerMessageId: string | null;
 }
 
 interface Health {
@@ -46,6 +48,7 @@ interface Health {
 
 interface Config {
   canSend: boolean; reason: string | null; warning: string | null; from: string | null;
+  bcc: string | null; replyTo: string | null;
   discovery: boolean; sentToday: number; dailyCap: number;
   health: Health;
   schedule: {
@@ -351,6 +354,11 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
             <span className="self-center text-[11.5px] text-muted-foreground">
               {cfg.sentToday} of {cfg.dailyCap} sent today
               {cfg.from ? ` · from ${cfg.from}` : ""}
+              {/* Whether a copy is being kept somewhere readable. Mail sent
+                  through Resend never appears in a Sent folder, so without this
+                  there is no way to tell from a mailbox that anything went. */}
+              {cfg.bcc ? ` · copied to ${cfg.bcc}` : " · no copy kept, set OUTREACH_BCC"}
+              {cfg.replyTo ? ` · replies to ${cfg.replyTo}` : ""}
             </span>
           )}
         </div>
@@ -441,8 +449,20 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
                     )}
                     {p.country && <span className="text-[11px] text-muted-foreground">{p.country}</span>}
                     {p.sentAt && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-600 dark:text-emerald-500">
+                      <span
+                        // The provider id is the only evidence the message left
+                        // our side. "Sent" without it would just mean we tried.
+                        title={p.providerMessageId
+                          ? `Resend id ${p.providerMessageId}\nSent ${new Date(p.sentAt).toLocaleString()}`
+                          : `Sent ${new Date(p.sentAt).toLocaleString()}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-600 dark:text-emerald-500"
+                      >
                         <Check className="h-3 w-3" /> sent
+                        {p.providerMessageId && (
+                          <span className="font-mono opacity-70">
+                            {p.providerMessageId.slice(0, 8)}
+                          </span>
+                        )}
                       </span>
                     )}
                     {p.website && (

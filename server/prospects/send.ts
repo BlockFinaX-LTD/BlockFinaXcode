@@ -51,6 +51,10 @@ export interface SendGuard {
   /** Non-blocking. Something worth knowing that does not stop the send. */
   warning?: string;
   from?: string;
+  /** Where a blind copy goes, so the console can say whether one is being kept. */
+  bcc?: string;
+  /** Where replies land. */
+  replyTo?: string;
 }
 
 /**
@@ -61,6 +65,40 @@ export interface SendGuard {
  * also outperforms a role address on cold mail, which is the one thing that
  * genuinely improves both response and complaint rates.
  */
+/**
+ * A blind copy of everything sent, so there is a record in a human inbox.
+ *
+ * Mail sent through Resend never touches Gmail, so it does not appear in a Sent
+ * folder and there is nothing to search for. The provider dashboard has it, but
+ * that is a place you have to remember to go and it is not where replies will
+ * arrive.
+ *
+ * Blind rather than copied: a visible CC to a personal address tells the
+ * recipient the founder is watching a mailbox he is not writing from, which
+ * reads oddly on a first contact and is nobody's business but ours.
+ *
+ * Worth knowing at volume. A blind copy of two hundred a day is two hundred
+ * messages a day, so this is a verification tool for the early period rather
+ * than something to leave on forever. Unset it once the console is trusted.
+ */
+function outreachBcc(): string | undefined {
+  const v = (process.env.OUTREACH_BCC || "").trim();
+  return v || undefined;
+}
+
+/**
+ * Where a reply should land.
+ *
+ * Without this, a reply goes to whatever address the mail was sent from, which
+ * is only correct if somebody reads that mailbox. Set it to the inbox actually
+ * being watched, and the recipient sees nothing unusual: Reply-To is ordinary
+ * and every mail client honours it silently.
+ */
+function outreachReplyTo(): string | undefined {
+  const v = (process.env.OUTREACH_REPLY_TO || "").trim();
+  return v || undefined;
+}
+
 function outreachFrom(): string {
   const configured = (process.env.OUTREACH_FROM || "").trim();
   if (configured) return configured;
@@ -105,7 +143,7 @@ export async function checkSendConfig(): Promise<SendGuard> {
         `the level mailbox providers act on.`
       : undefined;
 
-  return { ok: true, from, warning };
+  return { ok: true, from, warning, bcc: outreachBcc(), replyTo: outreachReplyTo() };
 }
 
 /** Has this address asked never to be contacted? */
@@ -179,9 +217,14 @@ export async function sendProspectEmail(id: number): Promise<SendOutcome> {
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY!);
+    const bcc = outreachBcc();
+    const replyTo = outreachReplyTo();
+
     const { data, error } = await resend.emails.send({
       from: guard.from!,
       to: p.email,
+      ...(bcc ? { bcc } : {}),
+      ...(replyTo ? { replyTo } : {}),
       subject: p.draftSubject,
       html: wrap(p.draftBody, unsubscribeUrl),
       text: `${p.draftBody.trim()}\n\n---\nUnsubscribe: ${unsubscribeUrl}\n${process.env.COMPANY_POSTAL_ADDRESS || ""}`,
