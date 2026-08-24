@@ -168,6 +168,20 @@ export const insertHedgeEventSchema = createInsertSchema(hedgeEvents).omit({
 });
 
 export type InsertHedgeEvent = z.infer<typeof insertHedgeEventSchema>;
+
+/**
+ * What a chain sync can write, which is more than a user-created event can.
+ *
+ * The insert schema deliberately omits the settlement fields, because a person
+ * creating a pool has no business setting how it settled. A sync reading the
+ * chain is the opposite case: those values are facts it has just read, and
+ * omitting them is why every settled row in the mirror carried a null price.
+ */
+export type ChainSyncedHedgeEvent = InsertHedgeEvent & {
+  settlementPrice?: string | null;
+  settledAt?: Date | null;
+  triggered?: boolean | null;
+};
 export type HedgeEvent = typeof hedgeEvents.$inferSelect;
 
 // P2P Hedge Positions - hedger (importer) protection positions

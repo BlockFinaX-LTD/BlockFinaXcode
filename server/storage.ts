@@ -30,6 +30,7 @@ import {
   hedgeEvents,
   type HedgeEvent,
   type InsertHedgeEvent,
+  type ChainSyncedHedgeEvent,
   hedgePositions,
   type HedgePosition,
   type InsertHedgePosition,
@@ -120,7 +121,7 @@ export interface IStorage {
   getAllHedgeEvents(): Promise<HedgeEvent[]>;
   getOpenHedgeEvents(): Promise<HedgeEvent[]>;
   updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined>;
-  upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }>;
+  upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: ChainSyncedHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }>;
   setHedgeEventDescription(chainId: number, onChainEventId: number, description: string): Promise<void>;
 
   // Hedge Position operations
@@ -455,7 +456,7 @@ export class MemStorage implements IStorage {
   async getAllHedgeEvents(): Promise<HedgeEvent[]> { return []; }
   async getOpenHedgeEvents(): Promise<HedgeEvent[]> { return []; }
   async updateHedgeEvent(id: number, updates: Partial<HedgeEvent>): Promise<HedgeEvent | undefined> { return undefined; }
-  async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> { throw new Error("MemStorage: not implemented"); }
+  async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: ChainSyncedHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> { throw new Error("MemStorage: not implemented"); }
   async setHedgeEventDescription(_chainId: number, _onChainEventId: number, _description: string): Promise<void> { /* no-op in mem storage */ }
   async createHedgePosition(position: InsertHedgePosition): Promise<HedgePosition> { throw new Error("MemStorage: Hedge not implemented - use DatabaseStorage"); }
   async getHedgePosition(id: number): Promise<HedgePosition | undefined> { return undefined; }
@@ -733,11 +734,30 @@ export class DatabaseStorage implements IStorage {
     return event;
   }
 
-  async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: InsertHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> {
+  async upsertHedgeEventFromChain(chainId: number, onChainEventId: number, event: ChainSyncedHedgeEvent): Promise<{ event: HedgeEvent; created: boolean }> {
     const existing = await this.getHedgeEventByChain(chainId, onChainEventId);
     if (existing) {
+      // Settlement facts are written too, and only when the chain has them.
+      //
+      // This used to set status, expiry and poolOpen and nothing else, so every
+      // settled row in the mirror carried a null settlement price. The app could
+      // say an event had settled but not at what rate, and the rate is the whole
+      // basis of what a hedger was paid. It mattered whenever a chain read
+      // failed and the app fell back to the mirror.
+      //
+      // Written conditionally so a sync that could not read the stats leaves
+      // what is already stored rather than overwriting a real price with a null.
+      const patch: Record<string, unknown> = {
+        status: event.status,
+        expiryDate: event.expiryDate,
+        poolOpen: event.poolOpen,
+      };
+      if (event.settlementPrice != null) patch.settlementPrice = event.settlementPrice;
+      if (event.settledAt != null) patch.settledAt = event.settledAt;
+      if (event.triggered != null) patch.triggered = event.triggered;
+
       const [updated] = await db.update(hedgeEvents)
-        .set({ status: event.status, expiryDate: event.expiryDate, poolOpen: event.poolOpen })
+        .set(patch)
         .where(eq(hedgeEvents.id, existing.id))
         .returning();
       return { event: updated, created: false };

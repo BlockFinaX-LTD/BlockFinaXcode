@@ -36,6 +36,12 @@ function formatUnits6(val: bigint): string {
   return parseFloat(ethers.formatUnits(val, 6)).toFixed(6);
 }
 
+/** Same address on every chain that has it. One call instead of hundreds. */
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const MULTICALL3_ABI = [
+  "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])",
+];
+
 interface ChainConfig {
   label: string;
   chainId: number;
@@ -110,14 +116,75 @@ export async function syncChainEvents(chainId?: number): Promise<SyncChainResult
       result.totalOnChain = total;
       console.log(`${tag} ${total} on-chain event(s) found`);
 
-      for (let i = 1; i <= total; i++) {
+      /**
+       * Read the whole book in one call.
+       *
+       * This loop used to make two eth_calls per event in sequence. Public RPCs
+       * rate limit that, and the throttling lands on the calls made last, which
+       * are the highest ids and therefore the newest events. The oracle had the
+       * identical bug and it left an expired event unsettled for four days
+       * while every cycle reported success.
+       *
+       * Here the consequence is quieter and lasts longer: the mirror silently
+       * stops updating exactly the events people are currently looking at, and
+       * the app falls back to stale rows without anything looking wrong.
+       */
+      const iface = new ethers.Interface(chain.abi);
+      const ids = Array.from({ length: total }, (_, k) => k + 1);
+      const cores = new Map<number, any>();
+      const stats = new Map<number, any>();
+
+      const readAll = async (fn: string, into: Map<number, any>) => {
         try {
-          const core = await contract.getHedgeEventCore(i);
+          const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, provider);
+          const CHUNK = 100;
+          for (let start = 0; start < ids.length; start += CHUNK) {
+            const slice = ids.slice(start, start + CHUNK);
+            const res: Array<{ success: boolean; returnData: string }> = await mc.aggregate3(
+              slice.map(id => ({
+                target: chain.diamond,
+                allowFailure: true,
+                callData: iface.encodeFunctionData(fn, [id]),
+              })),
+            );
+            res.forEach((r, k) => {
+              if (!r.success) return;
+              try { into.set(slice[k], iface.decodeFunctionResult(fn, r.returnData)); } catch { /* skip */ }
+            });
+          }
+        } catch {
+          // No Multicall3 on this chain, or it refused. Spaced reads instead:
+          // slow, but not throttled, which is the property that matters.
+          for (const id of ids) {
+            try { into.set(id, await (contract as any)[fn](id)); } catch { /* skip */ }
+            await new Promise(r => setTimeout(r, 200));
+          }
+        }
+      };
+
+      await readAll("getHedgeEventCore", cores);
+      // Stats carry the settlement price and time. Never read before, which is
+      // why every settled row in the mirror has a null price: the app could say
+      // an event had settled but not at what rate, and the rate is the entire
+      // basis of what a hedger was paid.
+      if (chain.abi.some((f: string) => f.includes("getHedgeEventStats"))) {
+        await readAll("getHedgeEventStats", stats);
+      }
+
+      const missing = ids.filter(id => !cores.has(id));
+      if (missing.length) {
+        const msg = `Could not read event(s) ${missing.join(", ")}`;
+        result.errors.push(msg);
+        console.warn(`${tag} ${msg}`);
+      }
+
+      for (const [i, core] of Array.from(cores.entries())) {
+        try {
           const onChainId = Number(core.id);
           const status = chain.statusMap[Number(core.status)] ?? "open";
           const expiryDate = new Date(Number(core.expiryDate) * 1000);
           // Compact ABI has strikePrice, expanded has strike
-          const strikeRaw: bigint = core.strike ?? core.strikePrice ?? 0n;
+          const strikeRaw: bigint = core.strike ?? core.strikePrice ?? BigInt(0);
           const strike = formatUnits6(strikeRaw);
           const premiumRate = formatUnits6(core.premiumRate);
           // Compact ABI has no separate 'underlying' field — use 'name' as the underlying pair
@@ -127,6 +194,9 @@ export async function syncChainEvents(chainId?: number): Promise<SyncChainResult
           // If this chain doesn't support buyProtection, force poolOpen=false so
           // the UI never shows a "Buy Protection" button for these events.
           const poolOpen = chain.supportsBuy ? Boolean(core.poolOpen) : false;
+
+          const st = stats.get(i);
+          const settledSecs = st ? Number(st.settledAt ?? 0) : 0;
 
           const { created } = await storage.upsertHedgeEventFromChain(chain.chainId, onChainId, {
             name: core.name || `Event #${onChainId}`,
@@ -141,6 +211,10 @@ export async function syncChainEvents(chainId?: number): Promise<SyncChainResult
             poolOpen,
             allowExternalLp: Boolean(core.allowExternalLp),
             createdBy: core.creator,
+            settlementPrice: st && Number(st.settlementPrice ?? 0) > 0
+              ? formatUnits6(st.settlementPrice) : null,
+            settledAt: settledSecs > 0 ? new Date(settledSecs * 1000) : null,
+            triggered: st ? Boolean(st.triggered) : null,
           });
 
           if (created) {
