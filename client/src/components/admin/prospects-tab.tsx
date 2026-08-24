@@ -178,6 +178,26 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
     onError: (e: Error) => toast({ title: "Could not send", description: e.message, variant: "destructive" }),
   });
 
+  const bulk = useMutation({
+    mutationFn: ({ action }: { action: "rewrite" | "discard" }) =>
+      api("/api/prospects/bulk", token, {
+        method: "POST",
+        body: JSON.stringify({ action, status }),
+      }),
+    onSuccess: (r: { action: string; affected: number }) => {
+      qc.invalidateQueries({ queryKey: ["prospects"] });
+      toast({
+        title: r.action === "rewrite"
+          ? `${r.affected} queued to be written again`
+          : `${r.affected} discarded`,
+        description: r.action === "rewrite"
+          ? "Press Research and draft to write them with the current wording."
+          : undefined,
+      });
+    },
+    onError: (e: Error) => toast({ title: "Could not do that", description: e.message, variant: "destructive" }),
+  });
+
   const rows = data?.prospects ?? [];
   const counts = data?.counts ?? {};
   const busy = discover.isPending || write.isPending || sendAll.isPending;
@@ -351,6 +371,46 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
           {counts.sendable ?? 0} contactable · {counts.blocked ?? 0} need consent
         </span>
       </div>
+
+      {/* Clearing the queue. Rewrite is first and is nearly always the one
+          wanted after the wording changes: the businesses cost money to find
+          and are still good, only the words are stale. Discard throws the
+          research away too, which is why it is the quieter button. */}
+      {(counts.all ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm" variant="outline" disabled={!enabled || bulk.isPending}
+            onClick={() => {
+              const n = counts[status] ?? counts.all ?? 0;
+              if (window.confirm(
+                `Write ${n} email${n === 1 ? "" : "s"} again with the current wording?\n\n` +
+                `The businesses are kept. Only the drafted text is cleared, and anything ` +
+                `already sent is untouched.`,
+              )) bulk.mutate({ action: "rewrite" });
+            }}
+          >
+            {bulk.isPending && bulk.variables?.action === "rewrite"
+              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Clearing…</>
+              : <><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Rewrite all</>}
+          </Button>
+          <Button
+            size="sm" variant="ghost" disabled={!enabled || bulk.isPending}
+            onClick={() => {
+              const n = counts[status] ?? counts.all ?? 0;
+              if (window.confirm(
+                `Discard ${n} prospect${n === 1 ? "" : "s"}?\n\n` +
+                `This throws away the businesses too, not just the emails. If you only ` +
+                `want new wording, use Rewrite all instead.`,
+              )) bulk.mutate({ action: "discard" });
+            }}
+          >
+            Discard all
+          </Button>
+          <span className="text-[11.5px] text-muted-foreground">
+            {status === "all" ? "everything not yet sent" : `everything showing as ${status}`}
+          </span>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">

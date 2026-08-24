@@ -785,6 +785,28 @@ export function registerOutreachRoutes(app: Express): void {
     }
   });
 
+  // ── POST /api/outreach/bulk ─────────────────────────────────────────────
+  //
+  // Clear the waiting room. Used mostly after the drafting prompt changes,
+  // when everything already written is in the old voice.
+  //
+  // Only touches drafts still waiting. One already marked sent records
+  // something that happened on LinkedIn, and a bulk action that rewrote that
+  // would destroy the only record of what went out.
+  app.post("/api/outreach/bulk", requireAdmin, async (req, res) => {
+    try {
+      const action = req.body?.action;
+      if (action !== "discard") return res.status(400).json({ error: "action must be discard" });
+      const rows = await db.update(outreachDrafts)
+        .set({ status: "discarded", queuedAt: null })
+        .where(eq(outreachDrafts.status, "waiting"))
+        .returning({ id: outreachDrafts.id });
+      return res.json({ action, affected: rows.length });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "bulk action failed" });
+    }
+  });
+
   // ── GET /api/outreach/stats ─────────────────────────────────────────────
   app.get("/api/outreach/stats", requireAdmin, async (_req, res) => {
     try {

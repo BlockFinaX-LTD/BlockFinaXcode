@@ -315,6 +315,17 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
     onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
   });
 
+  const discardAll = useMutation({
+    mutationFn: () => api("/api/outreach/bulk", token, {
+      method: "POST", body: JSON.stringify({ action: "discard" }),
+    }),
+    onSuccess: (r: { affected: number }) => {
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      toast({ title: `${r.affected} discarded` });
+    },
+    onError: (e: Error) => toast({ title: "Could not clear them", description: e.message, variant: "destructive" }),
+  });
+
   const update = useMutation({
     mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
       api(`/api/outreach/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
@@ -663,6 +674,25 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
             {tab === s && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />}
           </button>
         ))}
+
+        {/* Clearing the waiting room, mostly after the drafting voice changes
+            and everything already written is in the old one. Only offered on
+            the waiting tab: a draft marked sent records something that happened
+            on LinkedIn, and there is no undo for that. */}
+        {tab === "waiting" && drafts.length > 0 && (
+          <button
+            onClick={() => {
+              if (window.confirm(
+                `Discard all ${drafts.length} waiting draft${drafts.length === 1 ? "" : "s"}?\n\n` +
+                `Anything already sent is untouched.`,
+              )) discardAll.mutate();
+            }}
+            disabled={discardAll.isPending}
+            className="ml-auto self-center text-[12px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            {discardAll.isPending ? "Clearing…" : `Discard all ${drafts.length}`}
+          </button>
+        )}
       </div>
 
       {isLoading ? (

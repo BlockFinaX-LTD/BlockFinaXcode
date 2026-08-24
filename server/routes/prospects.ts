@@ -243,6 +243,57 @@ export function registerProspectRoutes(app: Express): void {
     }
   });
 
+  // ── POST /api/prospects/bulk ────────────────────────────────────────────
+  //
+  // Two actions, and the difference matters more than it looks.
+  //
+  // "rewrite" clears the drafted text and puts the row back to new, so the
+  // drafter writes it again with the current prompt. The business, its website,
+  // its country and everything discovery paid to find are kept. This is what is
+  // usually wanted after the prompt changes: the research is still good, only
+  // the words are stale.
+  //
+  // "discard" rejects the row outright. Use it for businesses that should not
+  // be written to at all.
+  //
+  // Neither touches anything already sent. A sent email cannot be unsent, and a
+  // bulk action that quietly rewrote the record of what went out would make the
+  // history a lie.
+  app.post("/api/prospects/bulk", requireAdmin, async (req, res) => {
+    try {
+      const action = req.body?.action;
+      if (!["rewrite", "discard"].includes(action)) {
+        return res.status(400).json({ error: "action must be rewrite or discard" });
+      }
+      const scope = typeof req.body?.status === "string" ? req.body.status : "all";
+
+      // Never sent, and never already rejected: re-rejecting is a no-op that
+      // inflates the count and makes the confirmation dialogue lie.
+      const base = sql`${prospects.sentAt} is null and ${prospects.status} <> 'rejected'`;
+      const where = scope === "all" ? base : and(base, eq(prospects.status, scope));
+
+      const rows = action === "rewrite"
+        ? await db.update(prospects).set({
+            status: "new",
+            draftSubject: null,
+            draftBody: null,
+            approvedAt: null,
+            approvedBy: null,
+            updatedAt: new Date(),
+          }).where(where).returning({ id: prospects.id })
+        : await db.update(prospects).set({
+            status: "rejected",
+            approvedAt: null,
+            approvedBy: null,
+            updatedAt: new Date(),
+          }).where(where).returning({ id: prospects.id });
+
+      return res.json({ action, scope, affected: rows.length });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "bulk action failed" });
+    }
+  });
+
   // ── POST /api/prospects/:id/approve ─────────────────────────────────────
   app.post("/api/prospects/:id/approve", requireAdmin, async (req: any, res) => {
     try {
