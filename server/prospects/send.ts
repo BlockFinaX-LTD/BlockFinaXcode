@@ -116,15 +116,6 @@ export async function checkSendConfig(): Promise<SendGuard> {
   if (!process.env.RESEND_API_KEY) {
     return { ok: false, reason: "RESEND_API_KEY is not set." };
   }
-  if (!process.env.COMPANY_POSTAL_ADDRESS?.trim()) {
-    return {
-      ok: false,
-      reason:
-        "COMPANY_POSTAL_ADDRESS is not set. A commercial email must carry a physical postal " +
-        "address, and sending one without is unlawful in the plainest way available.",
-    };
-  }
-
   const from = outreachFrom();
   const domain = (from.match(/@([^\s>]+)/)?.[1] || "").toLowerCase();
   if (!domain) return { ok: false, reason: `OUTREACH_FROM is not a usable address: ${from}` };
@@ -165,19 +156,39 @@ export async function suppress(email: string, reason: string, note?: string): Pr
     .onConflictDoNothing({ target: emailSuppressions.email });
 }
 
-function wrap(bodyText: string, unsubscribeUrl: string): string {
-  const postal = (process.env.COMPANY_POSTAL_ADDRESS || "").trim();
+/**
+ * The email, as a person would write one.
+ *
+ * ## Why there is no footer
+ *
+ * There used to be a block reading "You received this because BlockFinaX
+ * believes your business handles cross-border payments", followed by an
+ * unsubscribe link and a Delaware postal address. That is what a marketing
+ * platform puts on a campaign, and it announced the message as one. Anthony
+ * writes these one at a time from his own address, and a personal email that
+ * ends in a compliance footer is not a personal email.
+ *
+ * ## What was kept, and why it is invisible
+ *
+ * The List-Unsubscribe headers stay. They were doing the real work all along:
+ * Gmail and Yahoo require them from anyone sending at volume, and they are what
+ * turns a recipient's irritation into an opt-out rather than a spam complaint.
+ * A complaint is the expensive outcome, since complaints attach to the domain
+ * and this one also carries the customer magic links.
+ *
+ * The reader never sees them. Gmail renders its own unsubscribe control from
+ * the header, which reads as Gmail offering it rather than as the sender
+ * marketing. So the message looks personal and the protection is unchanged.
+ *
+ * The signature is whatever the drafter wrote, because it is part of the
+ * message rather than an appendage to it.
+ */
+function wrap(bodyText: string): string {
   const paras = bodyText.trim().split(/\n{2,}/)
     .map(p => `<p style="margin:0 0 14px;line-height:1.55">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
-  return `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#0f172a;max-width:560px">
+  return `<div style="font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#111;max-width:560px">
 ${paras}
-<hr style="border:0;border-top:1px solid #e2e8f0;margin:22px 0 12px">
-<p style="margin:0;font-size:12px;color:#64748b;line-height:1.5">
-You received this because BlockFinaX believes your business handles cross-border payments.
-<a href="${unsubscribeUrl}" style="color:#64748b">Unsubscribe</a> and we will not write again.<br>
-${postal}
-</p>
 </div>`;
 }
 
@@ -226,10 +237,12 @@ export async function sendProspectEmail(id: number): Promise<SendOutcome> {
       ...(bcc ? { bcc } : {}),
       ...(replyTo ? { replyTo } : {}),
       subject: p.draftSubject,
-      html: wrap(p.draftBody, unsubscribeUrl),
-      text: `${p.draftBody.trim()}\n\n---\nUnsubscribe: ${unsubscribeUrl}\n${process.env.COMPANY_POSTAL_ADDRESS || ""}`,
-      // One-click unsubscribe. Gmail and Yahoo require this for bulk senders,
-      // and it is the difference between someone opting out and reporting spam.
+      html: wrap(p.draftBody),
+      text: p.draftBody.trim(),
+      // Invisible to the reader, and the part that was doing the real work.
+      // Gmail and Yahoo require these from anyone sending at volume, and they
+      // turn irritation into an opt-out rather than a spam complaint. A
+      // complaint attaches to the domain, and this domain carries the logins.
       headers: {
         "List-Unsubscribe": `<${unsubscribeUrl}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
