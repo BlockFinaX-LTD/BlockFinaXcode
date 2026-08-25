@@ -34,6 +34,31 @@ const app = express();
 // any 304 Not Modified revalidation across the app.
 app.set('etag', false);
 
+/**
+ * Trust exactly one proxy hop.
+ *
+ * Railway terminates TLS and forwards, so without this every request arrives
+ * looking like it came from the proxy. Express then reports that one address as
+ * req.ip for everybody, and the rate limiter keys on req.ip.
+ *
+ * Two things follow, and they pull in opposite directions. Every anonymous
+ * visitor shares a single bucket, so a handful of real users can exhaust a
+ * limit meant to be per-person. And the limiter's own defence is defeated: the
+ * key generator appends x-wallet-address specifically so that "rotating wallet
+ * address headers cannot bypass limits", but that only holds if the IP half is
+ * genuinely per-client. With a constant IP, rotating the header hands out a
+ * fresh bucket every request.
+ *
+ * Measured before this was set: three identical requests each reported 99 of
+ * 100 remaining, so nothing was accumulating at all.
+ *
+ * The value is 1 rather than true. `true` trusts the whole X-Forwarded-For
+ * chain, which a client can prepend to at will, so it would let anyone claim
+ * any address and pick their own bucket. One hop means the last proxy, which is
+ * Railway, and that is the only hop we actually control.
+ */
+app.set('trust proxy', 1);
+
 // Security headers — must be applied before any routes
 const isProd = process.env.NODE_ENV === 'production';
 app.use(helmet({

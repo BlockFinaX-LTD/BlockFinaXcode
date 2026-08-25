@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { WebSocketServer } from "ws";
+import { timingSafeEqual } from "node:crypto";
 import { db } from "../db";
 import { storage } from "../storage";
 import { eq, desc, sql } from "drizzle-orm";
@@ -109,9 +110,18 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
   // Key-protected hedge-events clear — no wallet auth needed, uses SAFE_OWNER_KEY_1 as bearer
   app.post("/api/admin/clear-hedge-events", async (req, res) => {
+    // Constant-time compare. This endpoint truncates three tables, and a plain
+    // !== leaks how much of the key matched through response timing. The
+    // difference is small over a network and the cost of closing it is nothing.
     const secret = process.env.SAFE_OWNER_KEY_1;
     const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
-    if (!secret || bearer !== secret) {
+    const keyOk = (() => {
+      if (!secret || !bearer) return false;
+      const a = Buffer.from(bearer);
+      const b = Buffer.from(secret);
+      return a.length === b.length && timingSafeEqual(a, b);
+    })();
+    if (!keyOk) {
       return res.status(403).json({ message: "Forbidden" });
     }
     try {
