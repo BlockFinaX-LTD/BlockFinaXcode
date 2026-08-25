@@ -22,6 +22,7 @@ import { discoverProspects, SEED_QUERIES, SEED_LOCATIONS } from "../prospects/di
 import { discoveryStatus } from "../prospects/scheduler";
 import { researchAndWrite } from "../prospects/write";
 import { writeInvestorEmail, currentTraction } from "../investors/write";
+import { scanInvestors, INVESTOR_QUERIES, INVESTOR_LOCATIONS, INVESTOR_TITLES } from "../investors/scan";
 import { checkSendConfig, sendProspectEmail, sentToday, DAILY_SEND_CAP, suppress } from "../prospects/send";
 import { sendingHealth, clearHalt, recordBounce, recordComplaint } from "../prospects/health";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -266,6 +267,40 @@ export function registerProspectRoutes(app: Express): void {
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "could not add" });
     }
+  });
+
+  // ── POST /api/prospects/investors/scan ──────────────────────────────────
+  //
+  // Find investors instead of typing them.
+  //
+  // The results go into the leads list rather than the email queue, because a
+  // profile search returns people and not addresses, and that is the better
+  // shape anyway: an investor emailed cold is one of forty that morning, while
+  // one reached after a comment on their own post has already seen the name.
+  app.post("/api/prospects/investors/scan", requireAdmin, async (req, res) => {
+    try {
+      const token = process.env.APIFY_TOKEN;
+      if (!token) return res.status(503).json({ error: "Scanning needs APIFY_TOKEN." });
+
+      const { query, location, maxItems } = req.body ?? {};
+      const q = typeof query === "string" && query.trim() ? query.trim() : INVESTOR_QUERIES[0];
+      const loc = typeof location === "string" && location.trim() ? location.trim() : INVESTOR_LOCATIONS[0];
+
+      const out = await scanInvestors({ token, query: q, location: loc, maxItems });
+      return res.json({ ...out, query: q, location: loc });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "scan failed" });
+    }
+  });
+
+  // ── GET /api/prospects/investors/seeds ──────────────────────────────────
+  app.get("/api/prospects/investors/seeds", requireAdmin, async (_req, res) => {
+    return res.json({
+      queries: INVESTOR_QUERIES,
+      locations: INVESTOR_LOCATIONS,
+      titles: INVESTOR_TITLES,
+      configured: !!process.env.APIFY_TOKEN,
+    });
   });
 
   // ── POST /api/prospects/investors/write ─────────────────────────────────

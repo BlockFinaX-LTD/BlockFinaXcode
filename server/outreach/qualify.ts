@@ -30,7 +30,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-export type Segment = "buyer" | "amplifier" | "partner" | "peer" | "observer";
+export type Segment = "buyer" | "amplifier" | "partner" | "peer" | "investor" | "observer";
 
 export interface Qualification {
   segment: Segment;
@@ -76,6 +76,11 @@ could distribute or complement the product.
 peer: building something adjacent, including other FX or trade finance startups.
 Worth knowing about. Not worth selling to.
 
+investor: backs companies rather than buying from them. A partner, principal or
+angel at a fund. They are not a customer and never will be, and scoring them
+against customer fit is meaningless. Judge them on whether they invest at
+pre-seed, in Africa, and in fintech or adjacent infrastructure.
+
 observer: interested in the subject without being exposed to it. Consultants,
 academics, students, general commentators.
 
@@ -104,7 +109,7 @@ const SCHEMA = {
   input_schema: {
     type: "object" as const,
     properties: {
-      segment: { type: "string", enum: ["buyer", "amplifier", "partner", "peer", "observer"] },
+      segment: { type: "string", enum: ["buyer", "amplifier", "partner", "peer", "investor", "observer"] },
       fit: { type: "string", description: "one or two concrete sentences" },
       fitScore: { type: "integer", minimum: 0, maximum: 100 },
     },
@@ -145,7 +150,7 @@ export async function qualifyPerson(
     const out = call.input as any;
 
     const segment: Segment =
-      ["buyer", "amplifier", "partner", "peer", "observer"].includes(out?.segment)
+      ["buyer", "amplifier", "partner", "peer", "investor", "observer"].includes(out?.segment)
         ? out.segment
         : "observer";
     const fit = typeof out?.fit === "string" ? out.fit.trim() : "";

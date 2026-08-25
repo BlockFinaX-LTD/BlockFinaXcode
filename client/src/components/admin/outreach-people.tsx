@@ -64,6 +64,7 @@ const SEGMENTS: Record<string, { label: string; hint: string; tone: string }> = 
   buyer:     { label: "Buyers",     hint: "carry the exposure themselves",            tone: "text-emerald-600 dark:text-emerald-500" },
   amplifier: { label: "Amplifiers", hint: "reach the people who do",                  tone: "text-blue-600 dark:text-blue-400" },
   partner:   { label: "Partners",   hint: "banks, brokers, could distribute",         tone: "text-violet-600 dark:text-violet-400" },
+  investor:  { label: "Investors",  hint: "back the company, not a pool",             tone: "text-pink-600 dark:text-pink-400" },
   peer:      { label: "Peers",      hint: "building something adjacent",              tone: "text-amber-600 dark:text-amber-500" },
   observer:  { label: "Observers",  hint: "interested, not exposed",                  tone: "text-muted-foreground" },
 };
@@ -76,7 +77,7 @@ const STATUSES = [
   { key: "ignored", label: "Ignored" },
 ] as const;
 
-const SEGMENT_ORDER = ["buyer", "partner", "amplifier", "peer", "observer"];
+const SEGMENT_ORDER = ["buyer", "investor", "partner", "amplifier", "peer", "observer"];
 
 async function api(url: string, token: string, options?: RequestInit) {
   const res = await fetch(url, {
