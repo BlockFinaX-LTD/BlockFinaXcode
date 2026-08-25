@@ -1,0 +1,22 @@
+# BlockFinaX
+#
+# There was no robots.txt at all. A request for it fell through to the single
+# page app, so crawlers asking for crawl rules received the React shell with a
+# 200 instead. Most treat that as "no rules" and carry on, but it also meant
+# there was nowhere to point them at a sitemap.
+
+User-agent: *
+Allow: /
+
+# Signed-in and single-use areas. Nothing here is secret, it is simply not
+# useful in a search result and spends crawl budget that the public pages want.
+Disallow: /admin
+Disallow: /profile
+Disallow: /settings
+Disallow: /notifications
+Disallow: /auth
+Disallow: /verify
+Disallow: /signing
+Disallow: /api/
+
+Sitemap: https://www.blockfinax.com/sitemap.xml
