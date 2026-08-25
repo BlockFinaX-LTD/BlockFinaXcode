@@ -314,6 +314,13 @@ app.use((req, res, next) => {
     startProspectScheduler();
   }
 
+  // The morning reading. Fetch and brief once a day, not on an interval, so it
+  // stays in the morning rather than drifting round the clock.
+  {
+    const { startResearchDigest } = await import("./research/scheduler");
+    startResearchDigest();
+  }
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

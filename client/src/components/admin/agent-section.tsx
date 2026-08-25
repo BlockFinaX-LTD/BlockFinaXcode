@@ -26,9 +26,11 @@ import {
   Bot, Send, Sparkles, Check, X, Pencil, Trash2, Loader2, AlertTriangle,
   BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText,
   Mail,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProspectsTab } from "./prospects-tab";
+import { ResearchTab } from "./research-tab";
 import { OutreachTab } from "@/components/admin/outreach-tab";
 import { AgentMarkdown } from "@/components/agent-markdown";
 import {
@@ -50,7 +52,7 @@ async function api(url: string, token: string, options?: RequestInit) {
 
 const kindLabel = (k: string) => PROPOSAL_KIND_LABELS[k as ProposalKind] ?? k;
 
-type Tab = "chat" | "queue" | "outreach" | "prospects" | "training" | "activity";
+type Tab = "chat" | "queue" | "outreach" | "prospects" | "research" | "training" | "activity";
 
 export function AgentSection({ token }: { token: string }) {
   const [tab, setTab] = useState<Tab>("chat");
@@ -105,6 +107,7 @@ export function AgentSection({ token }: { token: string }) {
           ["queue", "Queue", Inbox],
           ["outreach", "Outreach", Send],
           ["prospects", "Email", Mail],
+          ["research", "Research", BookOpen],
           ["training", "Training", BrainCircuit],
           ["activity", "Activity", Activity],
         ] as const).map(([k, label, Icon]) => (
@@ -132,6 +135,7 @@ export function AgentSection({ token }: { token: string }) {
       {tab === "queue" && <QueueTab token={token} canApprove={status?.canApprove !== false} />}
       {tab === "outreach" && <OutreachTab token={token} enabled={!!status?.configured} />}
       {tab === "prospects" && <ProspectsTab token={token} enabled={!!status?.configured} />}
+      {tab === "research" && <ResearchTab token={token} enabled={!!status?.configured} />}
       {tab === "training" && <TrainingTab token={token} autonomy={status?.autonomy} canApprove={status?.canApprove !== false} />}
       {tab === "activity" && <ActivityTab token={token} />}
     </div>

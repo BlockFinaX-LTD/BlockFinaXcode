@@ -821,6 +821,62 @@ export const marketMemory = pgTable("market_memory", {
   index("market_memory_asof_idx").on(table.asOf),
 ]);
 
+/**
+ * The morning reading.
+ *
+ * Fetched from feeds each morning, filtered, and given a line on why it matters
+ * to BlockFinaX specifically. The links are the cheap part. Forty headlines is
+ * noise, and the reason a piece is worth ten minutes is the thing no feed
+ * reader supplies.
+ *
+ * Deliberately connected to market_memory rather than standing alone. A piece
+ * worth keeping is saved there, and from there the outreach drafter can cite it
+ * with its date. Research that only ever gets read changes nothing.
+ */
+export const researchItems = pgTable("research_items", {
+  id: serial("id").primaryKey(),
+
+  title: text("title").notNull(),
+  /** Canonical link. Unique, because feeds repeat and several carry the same wire story. */
+  url: text("url").notNull().unique(),
+  /** Where it came from, for judging how much weight to give it. */
+  source: text("source").notNull(),
+  /** news | research | policy | analysis */
+  kind: text("kind").notNull().default("news"),
+
+  /** The feed's own summary, before anything is done to it. */
+  summary: text("summary"),
+  /** When the publication says it was published, not when we found it. */
+  publishedAt: timestamp("published_at"),
+
+  /** Keyword score, used to decide what is worth a model call. */
+  score: integer("score").notNull().default(0),
+
+  /**
+   * Why this matters to BlockFinaX, in one or two sentences.
+   *
+   * Written only for items that clear the bar, because this is the expensive
+   * part and most of a feed is not about currency. Null means it was collected
+   * but never judged worth the call.
+   */
+  relevance: text("relevance"),
+  /** 0 to 100. What it deserves of a morning. */
+  importance: integer("importance"),
+
+  /** unread | read | saved | dismissed */
+  status: text("status").notNull().default("unread"),
+  /** Set once it has been pushed into market_memory, so it cannot be saved twice. */
+  savedToMemoryAt: timestamp("saved_to_memory_at"),
+
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+}, (table) => [
+  index("research_items_status_idx").on(table.status),
+  index("research_items_published_idx").on(table.publishedAt),
+  index("research_items_importance_idx").on(table.importance),
+]);
+
+export type ResearchItem = typeof researchItems.$inferSelect;
+
 export const insertOutreachPersonSchema = createInsertSchema(outreachPeople).omit({
   id: true, firstSeen: true, lastSeen: true,
 });

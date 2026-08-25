@@ -81,6 +81,25 @@ const DDL = [
    )`,
   `CREATE INDEX IF NOT EXISTS market_memory_active_idx ON market_memory (active)`,
   `CREATE INDEX IF NOT EXISTS market_memory_asof_idx   ON market_memory (as_of)`,
+
+  `CREATE TABLE IF NOT EXISTS research_items (
+     id                  serial PRIMARY KEY,
+     title               text NOT NULL,
+     url                 text NOT NULL UNIQUE,
+     source              text NOT NULL,
+     kind                text NOT NULL DEFAULT 'news',
+     summary             text,
+     published_at        timestamp,
+     score               integer NOT NULL DEFAULT 0,
+     relevance           text,
+     importance          integer,
+     status              text NOT NULL DEFAULT 'unread',
+     saved_to_memory_at  timestamp,
+     fetched_at          timestamp DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS research_items_status_idx     ON research_items (status)`,
+  `CREATE INDEX IF NOT EXISTS research_items_published_idx  ON research_items (published_at)`,
+  `CREATE INDEX IF NOT EXISTS research_items_importance_idx ON research_items (importance)`,
 ];
 
 (async () => {
