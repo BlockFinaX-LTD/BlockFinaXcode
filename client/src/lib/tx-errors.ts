@@ -148,6 +148,23 @@ const RULES: Rule[] = [
   // token has, produced by taking a balance through a float. That is fixed at
   // source in send-amount.ts, but the same 400 covers several other refusals,
   // so it needs a sentence that points somewhere useful either way.
+  // The wallet provider simulated the transfer and it reverted.
+  //
+  // Their message arrives as a viem dump: the revert, then the whole
+  // UserOperation with calldata, gas limits and a dummy signature. None of that
+  // belongs on screen, and the generic fallback catches it only because the
+  // string is long enough to look unusable, which is luck rather than handling.
+  //
+  // The batch they build carries more than the user's own transfer. One
+  // decoded from a real failure contained a second USDC transfer to a fee
+  // address alongside it, which is the likeliest reason sending an exact
+  // balance fails: nothing is left to pay the fee with.
+  {
+    when: has("transfer failed", "the contract function", "reverted", "useroperation"),
+    title: "The transfer was refused",
+    message:
+      "This usually means the whole balance was sent with nothing left for the network fee. Try sending slightly less than the full amount.",
+  },
   {
     when: has("transactions/preview", "/v1/transactions"),
     title: "That amount was refused",
