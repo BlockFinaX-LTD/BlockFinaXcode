@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ProspectsTab } from "./prospects-tab";
 import { ResearchTab } from "./research-tab";
+import { InvestorsTab } from "./investors-tab";
 import { OutreachTab } from "@/components/admin/outreach-tab";
 import { AgentMarkdown } from "@/components/agent-markdown";
 import {
@@ -52,7 +53,7 @@ async function api(url: string, token: string, options?: RequestInit) {
 
 const kindLabel = (k: string) => PROPOSAL_KIND_LABELS[k as ProposalKind] ?? k;
 
-type Tab = "chat" | "queue" | "outreach" | "prospects" | "research" | "training" | "activity";
+type Tab = "chat" | "queue" | "outreach" | "prospects" | "research" | "investors" | "training" | "activity";
 
 export function AgentSection({ token }: { token: string }) {
   const [tab, setTab] = useState<Tab>("chat");
@@ -108,6 +109,7 @@ export function AgentSection({ token }: { token: string }) {
           ["outreach", "Outreach", Send],
           ["prospects", "Email", Mail],
           ["research", "Research", BookOpen],
+          ["investors", "Investors", DollarSign],
           ["training", "Training", BrainCircuit],
           ["activity", "Activity", Activity],
         ] as const).map(([k, label, Icon]) => (
@@ -136,6 +138,7 @@ export function AgentSection({ token }: { token: string }) {
       {tab === "outreach" && <OutreachTab token={token} enabled={!!status?.configured} />}
       {tab === "prospects" && <ProspectsTab token={token} enabled={!!status?.configured} />}
       {tab === "research" && <ResearchTab token={token} enabled={!!status?.configured} />}
+      {tab === "investors" && <InvestorsTab token={token} enabled={!!status?.configured} />}
       {tab === "training" && <TrainingTab token={token} autonomy={status?.autonomy} canApprove={status?.canApprove !== false} />}
       {tab === "activity" && <ActivityTab token={token} />}
     </div>

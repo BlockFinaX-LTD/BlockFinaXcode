@@ -21,6 +21,7 @@ import { requireAdmin } from "../middleware/admin-auth";
 import { discoverProspects, SEED_QUERIES, SEED_LOCATIONS } from "../prospects/discover";
 import { discoveryStatus } from "../prospects/scheduler";
 import { researchAndWrite } from "../prospects/write";
+import { writeInvestorEmail, currentTraction } from "../investors/write";
 import { checkSendConfig, sendProspectEmail, sentToday, DAILY_SEND_CAP, suppress } from "../prospects/send";
 import { sendingHealth, clearHalt, recordBounce, recordComplaint } from "../prospects/health";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -168,7 +169,7 @@ export function registerProspectRoutes(app: Express): void {
 
       const out = await discoverProspects({
         token, query: q, location: loc,
-        segment: ["hedger", "underwriter", "psp", "bank"].includes(segment) ? segment : "unknown",
+        segment: ["hedger", "underwriter", "psp", "bank", "investor"].includes(segment) ? segment : "unknown",
         limit: Math.min(Math.max(Number(limit) || 60, 1), 300),
       });
       return res.json(out);
@@ -216,6 +217,99 @@ export function registerProspectRoutes(app: Express): void {
     }
   });
 
+  // ── POST /api/prospects/investors/add ───────────────────────────────────
+  //
+  // Investors are added by hand rather than discovered.
+  //
+  // A places search finds firms with an office and a website, which is how you
+  // find importers and is not how you find the fund that leads African fintech
+  // pre-seed. Those are known by name, from a list, an introduction or an
+  // article, and Anthony will always have a better list than a crawl would
+  // produce. So this takes what he already has.
+  app.post("/api/prospects/investors/add", requireAdmin, async (req, res) => {
+    try {
+      const rows = Array.isArray(req.body?.investors) ? req.body.investors : [];
+      if (!rows.length) return res.status(400).json({ error: "Nothing to add." });
+
+      let added = 0, skipped = 0;
+      for (const r of rows.slice(0, 200)) {
+        const email = typeof r?.email === "string" ? r.email.trim().toLowerCase() : "";
+        const firm = typeof r?.firm === "string" ? r.firm.trim() : "";
+        if (!email || !firm) { skipped++; continue; }
+
+        const kind = classifyAddress(email);
+        const verdict = assessSendable({ email, country: r?.country ?? null, addressKind: kind });
+        try {
+          const out = await db.insert(prospects).values({
+            company: firm,
+            website: typeof r?.website === "string" ? r.website.trim() || null : null,
+            country: typeof r?.country === "string" ? r.country.trim().toUpperCase().slice(0, 2) || null : null,
+            industry: "Investor",
+            evidence: typeof r?.focus === "string" ? r.focus.trim() || null : null,
+            email,
+            addressKind: kind,
+            contactName: typeof r?.name === "string" ? r.name.trim() || null : null,
+            contactTitle: typeof r?.title === "string" ? r.title.trim() || null : null,
+            source: "manual",
+            sourceQuery: "investor list",
+            segment: "investor",
+            sendable: verdict.sendable,
+            sendableReason: verdict.reason,
+            unsubscribeToken: randomBytes(24).toString("hex"),
+          }).onConflictDoNothing({ target: prospects.email }).returning({ id: prospects.id });
+          if (out.length) added++; else skipped++;
+        } catch {
+          skipped++;
+        }
+      }
+      return res.json({ added, skipped, considered: rows.length });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "could not add" });
+    }
+  });
+
+  // ── POST /api/prospects/investors/write ─────────────────────────────────
+  //
+  // A different writer, because it is a different email. The business pipeline
+  // asks about someone's FX exposure; this one has to say what is built and be
+  // exact about how little that is.
+  app.post("/api/prospects/investors/write", requireAdmin, async (req, res) => {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Drafting is not configured." });
+      const limit = Math.min(Math.max(Number(req.body?.limit) || 10, 1), 30);
+
+      const pending = await db.select().from(prospects)
+        .where(and(eq(prospects.segment, "investor"), isNull(prospects.draftBody)))
+        .limit(limit);
+
+      // Read once for the batch. These are facts about us, not about them.
+      const traction = await currentTraction();
+
+      let written = 0;
+      for (const p of pending) {
+        const d = await writeInvestorEmail(apiKey, MODEL, {
+          firm: p.company, website: p.website, country: p.country,
+          focus: p.evidence, contactName: p.contactName, contactTitle: p.contactTitle,
+          addressKind: p.addressKind,
+        }, traction);
+        if (!d) continue;
+        await db.update(prospects).set({
+          fit: d.fit, fitScore: d.fitScore,
+          draftSubject: d.subject, draftBody: d.body,
+          status: "drafted", updatedAt: new Date(),
+        }).where(eq(prospects.id, p.id));
+        written++;
+      }
+
+      const [{ left }] = await db.select({ left: sql<number>`count(*)::int` }).from(prospects)
+        .where(and(eq(prospects.segment, "investor"), isNull(prospects.draftBody)));
+      return res.json({ written, considered: pending.length, remaining: Number(left) || 0, traction });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "drafting failed" });
+    }
+  });
+
   // ── PATCH /api/prospects/:id ────────────────────────────────────────────
   app.patch("/api/prospects/:id", requireAdmin, async (req, res) => {
     try {
@@ -226,7 +320,7 @@ export function registerProspectRoutes(app: Express): void {
       if (typeof draftSubject === "string" && draftSubject.trim()) patch.draftSubject = draftSubject.trim();
       if (typeof draftBody === "string" && draftBody.trim()) patch.draftBody = draftBody.trim();
       if (["new", "drafted", "approved", "rejected", "replied"].includes(status)) patch.status = status;
-      if (["hedger", "underwriter", "psp", "bank", "unknown"].includes(segment)) patch.segment = segment;
+      if (["hedger", "underwriter", "psp", "bank", "investor", "unknown"].includes(segment)) patch.segment = segment;
       if (typeof notes === "string") patch.notes = notes;
 
       // Editing the message un-approves it. An approval is a person saying they

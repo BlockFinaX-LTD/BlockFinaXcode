@@ -48,6 +48,7 @@ export type ProspectSegment =
   | "underwriter"  // has capital to put behind a pool. The LP side.
   | "psp"          // payment provider, could distribute or integrate
   | "bank"         // could partner or refer what it cannot underwrite
+  | "investor"     // backs the company rather than a pool. Pre-seed funds and angels.
   | "unknown";
 
 export const prospects = pgTable(
