@@ -23,6 +23,8 @@ import {
   type ChainName, type TokenSymbol,
 } from '@/lib/rift-client';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
+import { maxSendable, checkAmount } from '@/lib/send-amount';
+import { explainTxError } from '@/lib/tx-errors';
 
 type Step = 'form' | 'authorize' | 'done';
 
@@ -171,10 +173,7 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
 
   const isValid = (): boolean => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(to)) return false;
-    const num = parseFloat(amount);
-    if (isNaN(num) || num <= 0) return false;
-    if (num > available) return false;
-    return true;
+    return checkAmount(amount, available, token).ok;
   };
 
   // ── Step 1 → Step 2: validate then move to authorization ────────────
@@ -183,13 +182,9 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
       toast({ title: 'Invalid address', description: 'Recipient must be a 0x… address', variant: 'destructive' });
       return;
     }
-    const num = parseFloat(amount);
-    if (isNaN(num) || num <= 0) {
-      toast({ title: 'Invalid amount', variant: 'destructive' });
-      return;
-    }
-    if (num > available) {
-      toast({ title: 'Insufficient balance', description: `You have ${available} ${token} on ${chain}`, variant: 'destructive' });
+    const check = checkAmount(amount, available, token);
+    if (!check.ok) {
+      toast({ title: 'Check the amount', description: check.reason, variant: 'destructive' });
       return;
     }
     // Probe FIRST, then advance. Advancing to 'authorize' before the
@@ -234,7 +229,8 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
             : 'Check your inbox to authorize the transfer. It may land in spam.',
       });
     } catch (err: any) {
-      toast({ title: 'Failed to send code', description: err?.message, variant: 'destructive' });
+      const e = explainTxError(err);
+      toast({ title: 'Could not send the code', description: e.message, variant: 'destructive' });
     } finally {
       setIsSendingOtp(false);
     }
@@ -292,9 +288,13 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
       setStep('done');
       refreshAll();
     } catch (err: any) {
+      // "Please verify your credentials" was shown for every failure, including
+      // the many that had nothing to do with credentials.
+      const e = explainTxError(err);
+      console.error('[rift-send] transfer:', e.detail, err);
       toast({
-        title: 'Transfer failed',
-        description: err?.message || 'Please verify your credentials and try again',
+        title: e.title,
+        description: e.message,
         variant: 'destructive',
       });
     } finally {
@@ -371,7 +371,7 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
                 <Label className="text-xs">Amount</Label>
                 <button
                   type="button"
-                  onClick={() => setAmount(String(available))}
+                  onClick={() => setAmount(maxSendable(available, token))}
                   className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
                   disabled={isLoadingBalances}
                 >

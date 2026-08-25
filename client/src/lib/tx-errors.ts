@@ -138,6 +138,28 @@ const has =
     needles.some((n) => t.includes(n));
 
 const RULES: Rule[] = [
+  // ── the wallet API refused the transfer ──
+  //
+  // Rift's 400s often carry no message, so the thrown error is the status and
+  // the path and nothing else. A user pressing MAX saw "400 on
+  // /v1/transactions/preview" and could do nothing with it.
+  //
+  // The cause in practice was an amount with more decimal places than the
+  // token has, produced by taking a balance through a float. That is fixed at
+  // source in send-amount.ts, but the same 400 covers several other refusals,
+  // so it needs a sentence that points somewhere useful either way.
+  {
+    when: has("transactions/preview", "/v1/transactions"),
+    title: "That amount was refused",
+    message:
+      "Usually the amount is a fraction above the balance, or has more decimal places than the token allows. Press MAX to fill in exactly what can be sent.",
+  },
+  {
+    when: has("insufficient funds", "insufficient balance", "exceeds balance", "transfer amount exceeds"),
+    title: "Not enough to cover that",
+    message: "The amount is above what this wallet holds. Press MAX to fill in the exact balance.",
+  },
+
   // ── the customer chose to stop ──
   {
     when: has("user rejected", "user denied", "cancelled", "canceled", "notallowederror"),

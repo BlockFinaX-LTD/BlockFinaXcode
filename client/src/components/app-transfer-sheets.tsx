@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { biometricName } from '@/lib/rift-v3';
 import { useWallet } from '@/hooks/use-wallet';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
+import { maxSendable, checkAmount } from '@/lib/send-amount';
 import {
   sendCrypto, sendOtp, getAuthMethod,
   type ChainName, type TokenSymbol,
@@ -153,13 +154,17 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
     }
   }, [chain, tokensForChain.join(',')]);
 
-  const valid = /^0x[a-fA-F0-9]{40}$/.test(to) && parseFloat(amount) > 0 && parseFloat(amount) <= available;
+  // Compared in base units rather than as floats. A balance and an amount that
+  // are the same money can differ in the last bits of a double, which is how a
+  // MAX that filled in the whole balance still failed validation.
+  const valid = /^0x[a-fA-F0-9]{40}$/.test(to) && checkAmount(amount, available, token).ok;
 
   const review = () => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(to)) { toast({ title: 'Invalid address', description: 'Recipient must be a 0x… address', variant: 'destructive' }); return; }
     const n = parseFloat(amount);
     if (isNaN(n) || n <= 0) { toast({ title: 'Invalid amount', variant: 'destructive' }); return; }
-    if (n > available) { toast({ title: 'Insufficient balance', description: `You have ${available} ${token} on ${chain}`, variant: 'destructive' }); return; }
+    const check = checkAmount(amount, available, token);
+    if (!check.ok) { toast({ title: 'Check the amount', description: check.reason, variant: 'destructive' }); return; }
     setStep('authorize');
     void (async () => {
       let onDevice = false;
@@ -281,7 +286,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
                   <div className="amount">
                     <div className="arow">
                       <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                      <button className="max" onClick={() => setAmount(String(available))}>MAX</button>
+                      <button className="max" onClick={() => setAmount(maxSendable(available, token))}>MAX</button>
                     </div>
                     <div className="abot">
                       <span className="usd">≈ ${(parseFloat(amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
