@@ -129,6 +129,10 @@ export function buildPrompt(
   context: string,
   recentDrafts: string[] = [],
   winners: string[] = [],
+  relevance?: {
+    strategy: string; reason: string; evidence: string;
+    problem: string; relevanceScore: number;
+  } | null,
 ): string {
   const who = [c.name, c.headline].filter(Boolean).join(", ") || "unknown";
   const age = howLongAgo(c.postedAt);
@@ -203,6 +207,29 @@ export function buildPrompt(
     );
   }
 
+  // The verdict from stage one, handed over as a decision rather than a
+  // suggestion. Stage two does not get to reconsider it.
+  if (relevance) {
+    const rule =
+      relevance.strategy === "insight_blockfinax"
+        // Expected, not merely permitted. Stage one already refused every post
+        // that did not clear the bar, so by the time this fires the case has
+        // been made twice. "May" left the mention to a second judgement that
+        // had no new information and declined by default.
+        ? "This post cleared the bar. Mention BlockFinaX once, near the end, as an example " +
+          "rather than the subject, after the insight has landed. Leave it out only if the " +
+          "sentence genuinely weakens the comment."
+        : relevance.strategy === "insight_experience"
+          ? "Do NOT name BlockFinaX. You may speak from what conversations with importers and treasurers have shown."
+          : "Do NOT mention BlockFinaX at all, and do not allude to it. Write only the insight.";
+    sections.push(
+      `Strategy for this post: ${relevance.strategy}. ${rule}\n` +
+      (relevance.problem ? `The problem being discussed: ${relevance.problem}\n` : "") +
+      (relevance.reason ? `Why: ${relevance.reason}\n` : "") +
+      (relevance.evidence ? `They wrote: "${relevance.evidence}"` : ""),
+    );
+  }
+
   // Comments that earned a reply, as evidence of what lands rather than as
   // templates. Copying one is how a channel stops working: what earned the
   // reply was that it was written for that post, and reproducing its shape
@@ -217,15 +244,5 @@ export function buildPrompt(
 
   sections.push(`Draft a ${kind}. ${INTENT_RULES[kind]}`);
 
-  // The demand judgement is returned alongside the draft rather than inferred
-  // from it afterwards. Asking for the quote in the same breath as the comment
-  // is what keeps the two honest: a model that has to produce the evidence
-  // before it writes the line will more often find that it cannot.
-  sections.push(
-    `Before the message, on their own lines, output:\n` +
-    `DEMAND: stated | implied | none\n` +
-    `EVIDENCE: the exact words from their post that make it stated, on one line, or none\n` +
-    `Then a blank line, then the message itself and nothing else.`,
-  );
   return sections.join("\n\n");
 }

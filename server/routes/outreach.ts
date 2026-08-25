@@ -49,7 +49,8 @@ import { notePerson, normaliseProfileUrl } from "../outreach/people";
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
 import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
-import { buildPrompt, splitDemand, type Candidate } from "../outreach/prompt";
+import { buildPrompt, type Candidate } from "../outreach/prompt";
+import { assessRelevance, type Relevance } from "../outreach/relevance";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 import { qualifyPerson } from "../outreach/qualify";
@@ -152,6 +153,7 @@ async function writeDraft(
   kind: Intent,
   recentDrafts: string[] = [],
   winners: string[] = [],
+  relevance?: Relevance | null,
 ): Promise<string | null> {
   const pairs = pairsMentioned(c.text);
   const [brief, recalled] = await Promise.all([
@@ -168,7 +170,7 @@ async function writeDraft(
     model: MODEL,
     max_tokens: 900,
     system: SYSTEM,
-    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context, recentDrafts, winners) }],
+    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context, recentDrafts, winners, relevance) }],
   });
   const out = msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -265,9 +267,16 @@ export async function draftBatch(
 
   for (const c of chosen) {
     try {
-      const written = await writeDraft(client, c, kind, recent.slice(0, 4), winners);
+      // Stage one decides, cold, before any comment exists to justify.
+      // Only comments and replies are gated; a direct message is already a
+      // deliberate approach to one person, so the question does not arise.
+      const relevance = (kind === "comment" || kind === "reply")
+        ? await assessRelevance(process.env.ANTHROPIC_API_KEY!, MODEL, c.text, c.name)
+        : null;
+
+      const written = await writeDraft(client, c, kind, recent.slice(0, 4), winners, relevance);
       if (!written) continue;
-      const { draft, demandLevel, demandEvidence } = splitDemand(written);
+      const draft = written.trim();
       if (!draft) continue;
       recent.unshift(draft);
       const [row] = await db.insert(outreachDrafts).values({
@@ -279,8 +288,13 @@ export async function draftBatch(
         draft,
         originalDraft: draft,
         postedAt: c.postedAt ? new Date(c.postedAt) : null,
-        demandLevel,
-        demandEvidence,
+        // demandLevel now carries the strategy stage one chose, which is the
+        // same question asked more precisely: what this post earns.
+        demandLevel: relevance?.strategy ?? null,
+        demandEvidence: relevance
+          ? [relevance.evidence, relevance.reason && `(${relevance.reason})`]
+              .filter(Boolean).join(" ") || null
+          : null,
       }).returning();
       created.push(row);
 
@@ -326,10 +340,17 @@ export function registerOutreachRoutes(app: Express): void {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return res.status(503).json({ error: "Drafting is not configured (ANTHROPIC_API_KEY)." });
 
-      // Same writer as every other route. A pasted post skips the relevance
-      // filter, because Anthony choosing to paste it is the judgement the filter
-      // exists to approximate.
+      // Same writer as every other route.
       const client = new Anthropic({ apiKey });
+
+      // Stage one runs here too. A pasted post is Anthony's judgement that the
+      // post is worth answering, which is not the same question as whether it
+      // earns a mention of the company, and that second question is the one
+      // that goes wrong quietly.
+      const singleRelevance = (kind === "comment" || kind === "reply")
+        ? await assessRelevance(apiKey, MODEL, sourceText.trim(), personName)
+        : null;
+
       const priorDrafts = await db.select({ draft: outreachDrafts.draft }).from(outreachDrafts)
         .orderBy(desc(outreachDrafts.createdAt)).limit(4)
         .then(rows => rows.map(r => r.draft).filter(Boolean) as string[])
@@ -341,9 +362,8 @@ export function registerOutreachRoutes(app: Express): void {
         name: personName?.trim() || null,
         headline: personHeadline?.trim() || null,
         score: relevanceScore(sourceText),
-      }, kind, priorDrafts);
+      }, kind, priorDrafts, [], singleRelevance);
       if (!draft) return res.status(502).json({ error: "The model returned nothing. Try again." });
-      const parsed = splitDemand(draft);
 
       const [row] = await db
         .insert(outreachDrafts)
@@ -353,10 +373,13 @@ export function registerOutreachRoutes(app: Express): void {
           personName: personName?.trim() || null,
           personHeadline: personHeadline?.trim() || null,
           intent: kind,
-          draft: parsed.draft,
-          originalDraft: parsed.draft,
-          demandLevel: parsed.demandLevel,
-          demandEvidence: parsed.demandEvidence,
+          draft: draft.trim(),
+          originalDraft: draft.trim(),
+          demandLevel: singleRelevance?.strategy ?? null,
+          demandEvidence: singleRelevance
+            ? [singleRelevance.evidence, singleRelevance.reason && `(${singleRelevance.reason})`]
+                .filter(Boolean).join(" ") || null
+            : null,
         })
         .returning();
       return res.json(row);

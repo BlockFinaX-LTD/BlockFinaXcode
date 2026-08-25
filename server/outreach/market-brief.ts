@@ -265,9 +265,31 @@ const REFERENCE_INVOICE = 100_000;
 export function renderBrief(b: PairBrief): string {
   const L: string[] = [];
   L.push(`${b.pair}: spot ${b.spot.toFixed(4)} as of ${b.asOf}`);
+  // Direction in words, not as a sign convention.
+  //
+  // This line used to print "30d -4.9%" with "(positive = local currency
+  // weaker)" appended, and left the model to work out what a negative number
+  // meant for an importer. It got it backwards in a live draft: the cedi had
+  // strengthened nearly 5% and the comment told a Ghanaian CFO her orders were
+  // arriving $4,900 more expensive. She would have known instantly.
+  //
+  // A parenthetical legend is an inference step, and inference steps are where
+  // this fails. Saying "strengthened, so imports cost less" removes the step.
+  const local = b.pair.split("/")[1] ?? "the local currency";
+  const direction = (v: number | null): string => {
+    if (v === null) return "no data";
+    if (Math.abs(v) < 0.05) return "flat";
+    return v > 0
+      ? `${local} weaker by ${Math.abs(v).toFixed(1)}%, so imports cost more`
+      : `${local} stronger by ${Math.abs(v).toFixed(1)}%, so imports cost less`;
+  };
+  L.push(`  last 30 days: ${direction(b.move30)}`);
+  L.push(`  last 90 days: ${direction(b.move90)}`);
+  L.push(`  year to date: ${direction(b.moveYtd)}`);
+  if (b.move1y !== null) L.push(`  last 12 months: ${direction(b.move1y)}`);
   L.push(
-    `  moves: 30d ${signed(b.move30)}, 90d ${signed(b.move90)}, YTD ${signed(b.moveYtd)}, 1y ${signed(b.move1y)} ` +
-    `(positive = local currency weaker against the base)`,
+    `  Say the direction as written above. Do not infer it from a sign, and never ` +
+    `describe a strengthening currency as costing an importer more.`,
   );
 
   if (b.vol90 !== null) {
