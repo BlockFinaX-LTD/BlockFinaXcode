@@ -22,10 +22,14 @@
          and it looks at /favicon.ico by default. The site had a single 500x500
          png, which is square but not a multiple of 48, and nothing at all at
          /favicon.ico: that path fell through to the React app and returned
-         HTML. Hence the generic globe in search results rather than the mark. -->
+         HTML. Hence the generic globe in search results rather than the mark.
+
+         favicon.svg is deliberately not linked. It is a 200x60 banner in a
+         different blue, not the hexagon mark, and a non-square icon fails the
+         requirement outright. Linked as an icon it would also be preferred by
+         clients that like svg, replacing a correct mark with the wrong one. -->
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="192x192" href="/favicon-192.png" />
 
