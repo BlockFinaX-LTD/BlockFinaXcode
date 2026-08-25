@@ -1,20 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Only pages a stranger can actually open.
-
-  Anything behind sign-in is left out on purpose: listing a page that returns a
-  login screen teaches the crawler that the site answers requests with a wall,
-  and those pages cannot rank for anything anyway.
--->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://www.blockfinax.com/</loc><priority>1.0</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/hedger</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/liquidity-provider</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/hedge</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/predict</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/learn</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/blog</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/apply</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/privacy</loc><priority>0.3</priority><changefreq>yearly</changefreq></url>
-  <url><loc>https://www.blockfinax.com/terms</loc><priority>0.3</priority><changefreq>yearly</changefreq></url>
+  <url><loc>https://www.blockfinax.com/</loc></url>
+  <url><loc>https://www.blockfinax.com/hedger</loc></url>
+  <url><loc>https://www.blockfinax.com/liquidity-provider</loc></url>
+  <url><loc>https://www.blockfinax.com/hedge</loc></url>
+  <url><loc>https://www.blockfinax.com/predict</loc></url>
+  <url><loc>https://www.blockfinax.com/learn</loc></url>
+  <url><loc>https://www.blockfinax.com/blog</loc></url>
+  <url><loc>https://www.blockfinax.com/apply</loc></url>
+  <url><loc>https://www.blockfinax.com/privacy</loc></url>
+  <url><loc>https://www.blockfinax.com/terms</loc></url>
 </urlset>
