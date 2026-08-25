@@ -115,6 +115,24 @@ export function OutreachPeople({ token }: { token: string }) {
     onError: (e: Error) => toast({ title: "Could not sort", description: e.message, variant: "destructive" }),
   });
 
+  const draftMessages = useMutation({
+    mutationFn: () => api("/api/outreach/people/draft-messages", token, {
+      method: "POST", body: JSON.stringify({ limit: 10 }),
+    }),
+    onSuccess: (r: { drafted: number; considered: number; note?: string }) => {
+      qc.invalidateQueries({ queryKey: ["outreach-people"] });
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      toast({
+        title: r.drafted ? `${r.drafted} messages written` : "Nothing to write",
+        description: r.drafted
+          ? "They're waiting in Drafts. Read each one, then send it on LinkedIn yourself."
+          : (r.note ?? "Sort some leads first, or they have all been written to."),
+        variant: r.drafted ? undefined : "destructive",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Could not write those", description: e.message, variant: "destructive" }),
+  });
+
   const qualifyOne = useMutation({
     mutationFn: (id: number) => api(`/api/outreach/people/${id}/qualify`, token, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["outreach-people"] }),
@@ -157,6 +175,23 @@ export function OutreachPeople({ token }: { token: string }) {
         </Button>
         <span className="text-[12px] text-muted-foreground">
           Works out what each person is and how BlockFinaX relates to them. 25 at a time.
+        </span>
+      </div>
+
+      {/* Asking for their read, not their business.
+          Only sorted leads, because what you ask a Lagos treasurer and what you
+          ask a fund partner are different questions, and the wrong one is worse
+          than nothing. Publications and observers are skipped: a title has no
+          personal view on running currency exposure. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" disabled={draftMessages.isPending} onClick={() => draftMessages.mutate()}>
+          {draftMessages.isPending
+            ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Writing…</>
+            : <><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Write to the new ones</>}
+        </Button>
+        <span className="text-[12px] text-muted-foreground">
+          A short message asking for a call to hear their view. Buyers, investors, partners and
+          peers only. 10 at a time, waiting in Drafts for you to send.
         </span>
       </div>
 

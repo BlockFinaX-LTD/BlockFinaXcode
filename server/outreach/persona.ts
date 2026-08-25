@@ -21,7 +21,7 @@
  * the entire purpose of writing a good one.
  */
 
-export type Intent = "reply" | "comment" | "connect" | "dm";
+export type Intent = "reply" | "comment" | "connect" | "dm" | "insight_call";
 
 export const INTENT_RULES: Record<Intent, string> = {
   comment:
@@ -44,6 +44,26 @@ export const INTENT_RULES: Record<Intent, string> = {
     "open by praising the post. No hashtags. No call to action. Whether BlockFinaX " +
     "may be named is decided by the strategy given above. Never cite what it has " +
     "built or settled. If the point is good they will look you up.",
+  insight_call:
+    "A direct message asking for their perspective, not their business. Under " +
+    "120 words.\n" +
+    "This is the one Anthony sends most and it works because it is true: he is " +
+    "early, he is building in a market these people know better than he does, " +
+    "and their read is genuinely worth more to him than their money.\n" +
+    "Four moves. Open with the specific thing about them that prompted it, from " +
+    "their headline or a post they actually wrote, never a generic compliment " +
+    "about their impressive background. Say what BlockFinaX is in one sentence. " +
+    "Say plainly that this is not a pitch. Ask for a short call to hear how they " +
+    "see the thing they know about.\n" +
+    "Ask about their subject, not about BlockFinaX. 'How do you see currency " +
+    "risk management evolving in emerging markets' invites an answer. 'What do " +
+    "you think of what we are building' asks them to do your work and reads as " +
+    "a pitch wearing a question mark.\n" +
+    "Never say you admire their work unless you can name what you are referring " +
+    "to. Never mention raising, and never ask for an introduction. If they want " +
+    "to help beyond talking, they will offer, and asking first turns a " +
+    "conversation into a transaction.\n" +
+    "No calendar link, no attachment, no deck.",
   connect:
     "A connection request note. Under 300 characters, LinkedIn's hard limit. Say why " +
     "them specifically, in one line, referencing what they actually wrote. No pitch.",

@@ -1096,6 +1096,91 @@ export function registerOutreachRoutes(app: Express): void {
     }
   });
 
+  // ── POST /api/outreach/people/draft-messages ────────────────────────────
+  //
+  // A message for each qualified lead, asking for their perspective.
+  //
+  // Only sorted leads, because the message has to know what someone is. What
+  // you ask a Lagos treasurer and what you ask a fund partner are different
+  // questions, and sending the wrong one is worse than sending nothing.
+  //
+  // Amplifiers and observers are skipped by default. A publication has no
+  // personal perspective to offer on running currency exposure, and a request
+  // for a call reads as odd rather than flattering.
+  app.post("/api/outreach/people/draft-messages", requireAdmin, async (req, res) => {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Drafting is not configured." });
+
+      const limit = Math.min(Math.max(Number(req.body?.limit) || 10, 1), 30);
+      const wanted: string[] = Array.isArray(req.body?.segments) && req.body.segments.length
+        ? req.body.segments
+        : ["buyer", "investor", "partner", "peer"];
+
+      const people = await db.select().from(outreachPeople)
+        .where(and(isNotNull(outreachPeople.segment), eq(outreachPeople.status, "new")))
+        .orderBy(desc(outreachPeople.fitScore))
+        .limit(200);
+
+      const targets = people.filter(p => wanted.includes(p.segment ?? "")).slice(0, limit);
+      if (!targets.length) {
+        return res.json({ drafted: 0, considered: 0, note: "Nothing sorted and unwritten in those groups." });
+      }
+
+      const client = new Anthropic({ apiKey });
+      const context = await liveContext().catch(() => "");
+
+      // Recent drafts, so ten messages sent the same week do not open the same way.
+      const recent = (await db.select({ draft: outreachDrafts.draft }).from(outreachDrafts)
+        .orderBy(desc(outreachDrafts.createdAt)).limit(4))
+        .map(r => r.draft).filter(Boolean) as string[];
+
+      let drafted = 0;
+      for (const p of targets) {
+        try {
+          const who = [p.name, p.headline, p.company && `at ${p.company}`]
+            .filter(Boolean).join(", ");
+          const written = await writeDraft(client, {
+            text: [
+              p.lastPostText ? `Something they wrote: ${p.lastPostText}` : null,
+              p.fit ? `What we think they are: ${p.fit}` : null,
+              p.topics ? `Subjects they post about: ${p.topics}` : null,
+            ].filter(Boolean).join("\n\n") || (p.headline ?? p.name ?? "unknown"),
+            url: p.profileUrl,
+            name: p.name,
+            headline: p.headline,
+            score: p.topScore,
+          }, "insight_call", recent, [], null);
+          if (!written) continue;
+
+          const [row] = await db.insert(outreachDrafts).values({
+            sourceUrl: p.profileUrl,
+            sourceText: p.lastPostText || p.headline || who || "profile",
+            personName: p.name,
+            personHeadline: p.headline,
+            intent: "insight_call",
+            draft: written.trim(),
+            originalDraft: written.trim(),
+          }).returning();
+          if (row) {
+            recent.unshift(written.trim());
+            // Marked drafted so the same person is not written to twice on the
+            // next run. Anthony still decides whether it goes.
+            await db.update(outreachPeople).set({ status: "drafted" })
+              .where(eq(outreachPeople.id, p.id));
+            drafted++;
+          }
+        } catch {
+          /* one failure must not lose the batch */
+        }
+      }
+
+      return res.json({ drafted, considered: targets.length });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "drafting failed" });
+    }
+  });
+
   // ── GET /api/outreach/memory ────────────────────────────────────────────
   app.get("/api/outreach/memory", requireAdmin, async (req, res) => {
     try {

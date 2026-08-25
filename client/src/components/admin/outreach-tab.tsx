@@ -31,7 +31,7 @@ import { OutreachMemory } from "./outreach-memory";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type Intent = "reply" | "comment" | "connect" | "dm";
+type Intent = "reply" | "comment" | "connect" | "dm" | "insight_call";
 type Status = "waiting" | "sent" | "discarded";
 
 interface PlannedSearch { query: string; angle: string; why: string }
@@ -135,6 +135,7 @@ function isStale(iso: string | null): boolean {
 const INTENTS: { key: Intent; label: string; hint: string }[] = [
   { key: "comment", label: "Insight comment", hint: "70–110 words — mechanism, a number, then the second-order effect" },
   { key: "reply", label: "Public reply", hint: "under 60 words — has to add something to the thread" },
+  { key: "insight_call", label: "Ask for their view", hint: "under 120 words, asks about their subject rather than ours" },
   { key: "connect", label: "Connection note", hint: "under 300 characters, LinkedIn's limit" },
   { key: "dm", label: "Direct message", hint: "under 120 words, one question worth answering" },
 ];
