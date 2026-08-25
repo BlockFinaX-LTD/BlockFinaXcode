@@ -137,6 +137,46 @@ export function checkAmount(
  * pretending otherwise would send the user hunting for an amount that does not
  * exist. That returns null and the caller says so.
  */
+/**
+ * What the provider takes on top of the amount being sent.
+ *
+ * Measured from real transfers on Base rather than assumed. Every successful
+ * multi-leg transfer from a smart account carries three extra legs beside the
+ * recipient's, and the proportions are exact:
+ *
+ *   sent 100.00   ->  0.100000 + 0.200000 + 0.004373 gas
+ *   sent  30.00   ->  0.030000 + 0.060000 + 0.003687 gas
+ *   sent  70.00   ->  0.070000 + 0.140000 + 0.003138 gas
+ *   sent 2600.00  ->  2.600000 + 5.200000 + 0.003231 gas
+ *
+ * That is 0.1% plus 0.2%, so 0.3% of the amount, and a small flat charge for
+ * gas paid in the token itself. Across those four the gas ranged 0.0031 to
+ * 0.0044 USDC.
+ *
+ * The reserve below is deliberately above the highest observed gas. Being a
+ * fraction of a cent generous costs nothing; being a fraction of a cent short
+ * fails the whole transfer, which is the failure this exists to prevent.
+ */
+export const TRANSFER_FEE_RATE = 0.003;
+export const TRANSFER_GAS_RESERVE = 0.006;
+
+/**
+ * The most that can be sent, solved rather than searched.
+ *
+ * The overhead is charged on the amount, not on the balance, so this is not
+ * simply the balance minus a percentage. Sending A costs A plus A times the
+ * rate plus gas, and that has to equal the balance, which gives
+ * A = (balance - gas) / (1 + rate).
+ *
+ * Subtracting 0.3% from the balance instead would leave a little behind, and
+ * the amount left grows with the balance. On 2600 it is nearly eight USDC.
+ */
+export function computedMax(available: number, token: string): string {
+  if (!Number.isFinite(available) || available <= 0) return "0";
+  const net = (available - TRANSFER_GAS_RESERVE) / (1 + TRANSFER_FEE_RATE);
+  return net > 0 ? maxSendable(net, token) : "0";
+}
+
 export async function largestSendable(
   available: number,
   token: string,
@@ -153,6 +193,17 @@ export async function largestSendable(
   // The common case: no fee, or a fee taken from somewhere else entirely.
   probes++;
   if (await probe(full)) return { amount: full, probes };
+
+  // The known case: 0.3% plus gas, measured from real transfers. One more call
+  // confirms it, and confirming beats trusting because the rate can change and
+  // a stale constant would fail exactly as the old MAX did.
+  const computed = computedMax(available, token);
+  if (parseFloat(computed) > 0) {
+    probes++;
+    if (await probe(computed)) return { amount: computed, probes };
+  }
+
+  // Neither worked, so the schedule is not what was measured. Search for it.
 
   // Something is being withheld, so search for how much rather than for the
   // amount. Searching the reserve is what keeps the answer close to the
