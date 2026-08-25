@@ -51,6 +51,11 @@ interface Draft {
   postedAt: string | null;
   /** Set once LinkedIn actually created the comment. Proof, not intent. */
   commentUrn: string | null;
+  /** stated | implied | none, and the words that prove it. */
+  demandLevel: string | null;
+  demandEvidence: string | null;
+  /** replied | conversation | no_response | poor */
+  outcome: string | null;
 }
 
 interface LinkedInStatus {
@@ -313,6 +318,20 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
       });
     },
     onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
+  });
+
+  const markOutcome = useMutation({
+    mutationFn: ({ id, outcome }: { id: number; outcome: string }) =>
+      api(`/api/outreach/${id}/outcome`, token, {
+        method: "POST", body: JSON.stringify({ outcome }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["outreach"] });
+      toast({
+        title: "Noted",
+        description: "Comments that earn replies are shown to Finax when it writes the next one.",
+      });
+    },
   });
 
   const discardAll = useMutation({
@@ -728,6 +747,26 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
                     {isStale(d.postedAt) && <span className="font-medium">· thread is cold</span>}
                   </span>
                 )}
+                {/* Whether this post showed someone with the problem, and the
+                    words that prove it. Hovering shows the quote, so the claim
+                    is checkable against the post rather than taken on trust. */}
+                {d.demandLevel && (
+                  <span
+                    title={d.demandEvidence ? `They wrote: "${d.demandEvidence}"` : "No evidence of demand in the post"}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px]",
+                      d.demandLevel === "stated"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500"
+                        : d.demandLevel === "implied"
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                          : "text-muted-foreground",
+                    )}
+                  >
+                    {d.demandLevel === "stated" ? "demand stated"
+                      : d.demandLevel === "implied" ? "demand implied"
+                      : "no demand"}
+                  </span>
+                )}
                 {d.commentUrn && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11.5px] text-emerald-600 dark:text-emerald-500">
                     <Check className="h-3 w-3" /> posted by Finax
@@ -793,9 +832,34 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
                     </Button>
                   </>
                 ) : (
-                  <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: d.id, body: { status: "waiting" } })}>
-                    Back to waiting
-                  </Button>
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: d.id, body: { status: "waiting" } })}>
+                      Back to waiting
+                    </Button>
+                    {/* What happened, so the next draft can learn from it.
+                        Only replies count as a win: at this volume most good
+                        comments get no response, and treating silence as
+                        failure would train it toward whatever is loudest. */}
+                    {d.status === "sent" && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-[11.5px] text-muted-foreground">Did it land?</span>
+                        {([["replied", "Got a reply"], ["conversation", "Started a conversation"], ["no_response", "Nothing"]] as const).map(([k, label]) => (
+                          <button
+                            key={k}
+                            onClick={() => markOutcome.mutate({ id: d.id, outcome: k })}
+                            className={cn(
+                              "rounded-md border px-2 py-1 text-[11.5px]",
+                              d.outcome === k
+                                ? "border-primary bg-primary/10 text-foreground"
+                                : "border-border text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </article>

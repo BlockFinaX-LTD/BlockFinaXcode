@@ -640,6 +640,35 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   commentUrn: text("comment_urn"),
 
   /**
+   * Whether this post shows someone with the problem, and the proof.
+   *
+   * none    commentary about the market. An audience, not a buyer.
+   * implied their situation makes the exposure likely but they never said it.
+   * stated  they described the problem as theirs, in their own words.
+   *
+   * Only "stated" unlocks a positioning line. The gate is evidence rather than
+   * a confidence score, because a model's self-reported confidence is not
+   * calibrated: asked how sure it is, it says ninety for things it gets right
+   * sixty percent of the time. A quote can be checked by reading the post. A
+   * probability cannot be checked at all.
+   */
+  demandLevel: text("demand_level"),
+  /** The exact words from the post that show the problem is theirs. */
+  demandEvidence: text("demand_evidence"),
+
+  /**
+   * What happened after it went out.
+   *
+   * Marked by Anthony rather than measured. Scraping likes would be easy and
+   * would measure the wrong thing: a comment with forty likes and no
+   * conversation is worth less than one that started a reply thread with a
+   * treasurer. At this volume his judgement is better data and cheaper to get.
+   */
+  outcome: text("outcome"),
+  outcomeNote: text("outcome_note"),
+  outcomeAt: timestamp("outcome_at"),
+
+  /**
    * Set when this draft is waiting for the browser extension to place it.
    *
    * LinkedIn's comment endpoint is gated behind their partner programme, so a

@@ -36,7 +36,7 @@
 
 import type { Express } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import { eq, desc, and, isNotNull, isNull, sql } from "drizzle-orm";
+import { eq, desc, and, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { outreachDrafts, outreachPeople, marketMemory } from "@shared/schema";
 import { timingSafeEqual, randomBytes } from "node:crypto";
@@ -49,7 +49,7 @@ import { notePerson, normaliseProfileUrl } from "../outreach/people";
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
 import { type Intent, INTENT_RULES, SYSTEM } from "../outreach/persona";
-import { buildPrompt, type Candidate } from "../outreach/prompt";
+import { buildPrompt, splitDemand, type Candidate } from "../outreach/prompt";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 import { qualifyPerson } from "../outreach/qualify";
@@ -151,6 +151,7 @@ async function writeDraft(
   c: Candidate,
   kind: Intent,
   recentDrafts: string[] = [],
+  winners: string[] = [],
 ): Promise<string | null> {
   const pairs = pairsMentioned(c.text);
   const [brief, recalled] = await Promise.all([
@@ -167,12 +168,19 @@ async function writeDraft(
     model: MODEL,
     max_tokens: 900,
     system: SYSTEM,
-    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context, recentDrafts) }],
+    messages: [{ role: "user", content: buildPrompt(c, kind, brief, recalled, context, recentDrafts, winners) }],
   });
   const out = msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map(b => b.text).join("").trim();
   return out || null;
+}
+
+/** What one draft returned, once the demand header is separated from the text. */
+export interface DraftedMessage {
+  draft: string;
+  demandLevel: string | null;
+  demandEvidence: string | null;
 }
 
 const sqlCount = () => sql<number>`count(*)::int`;
@@ -231,9 +239,35 @@ export async function draftBatch(
     /* variety is a quality, not a requirement */
   }
 
+  // What has actually earned a reply.
+  //
+  // Shown as examples of what works rather than as templates to copy, because
+  // copying one is how a channel stops working: the thing that earned the reply
+  // was that it was written for that post, and reproducing its shape everywhere
+  // turns the one good comment into a formula.
+  //
+  // Only replied and conversation count. "No response" is not evidence of a bad
+  // comment at this volume, since most good comments get no response, and
+  // treating silence as failure would train it away from the honest register
+  // toward whatever is loudest.
+  let winners: string[] = [];
+  try {
+    winners = (await db.select({ draft: outreachDrafts.draft, note: outreachDrafts.outcomeNote })
+      .from(outreachDrafts)
+      .where(inArray(outreachDrafts.outcome, ["replied", "conversation"]))
+      .orderBy(desc(outreachDrafts.outcomeAt))
+      .limit(3))
+      .map(r => r.note ? `${r.draft}\n  (what happened: ${r.note})` : r.draft)
+      .filter(Boolean) as string[];
+  } catch {
+    /* the loop is an improvement, not a dependency */
+  }
+
   for (const c of chosen) {
     try {
-      const draft = await writeDraft(client, c, kind, recent.slice(0, 4));
+      const written = await writeDraft(client, c, kind, recent.slice(0, 4), winners);
+      if (!written) continue;
+      const { draft, demandLevel, demandEvidence } = splitDemand(written);
       if (!draft) continue;
       recent.unshift(draft);
       const [row] = await db.insert(outreachDrafts).values({
@@ -245,6 +279,8 @@ export async function draftBatch(
         draft,
         originalDraft: draft,
         postedAt: c.postedAt ? new Date(c.postedAt) : null,
+        demandLevel,
+        demandEvidence,
       }).returning();
       created.push(row);
 
@@ -307,6 +343,7 @@ export function registerOutreachRoutes(app: Express): void {
         score: relevanceScore(sourceText),
       }, kind, priorDrafts);
       if (!draft) return res.status(502).json({ error: "The model returned nothing. Try again." });
+      const parsed = splitDemand(draft);
 
       const [row] = await db
         .insert(outreachDrafts)
@@ -316,8 +353,10 @@ export function registerOutreachRoutes(app: Express): void {
           personName: personName?.trim() || null,
           personHeadline: personHeadline?.trim() || null,
           intent: kind,
-          draft,
-          originalDraft: draft,
+          draft: parsed.draft,
+          originalDraft: parsed.draft,
+          demandLevel: parsed.demandLevel,
+          demandEvidence: parsed.demandEvidence,
         })
         .returning();
       return res.json(row);
@@ -804,6 +843,34 @@ export function registerOutreachRoutes(app: Express): void {
       return res.json({ action, affected: rows.length });
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "bulk action failed" });
+    }
+  });
+
+  // ── POST /api/outreach/:id/outcome ──────────────────────────────────────
+  //
+  // What happened after it was posted. Marked by Anthony rather than measured.
+  //
+  // Scraping likes would be easy and would measure the wrong thing. A comment
+  // with forty likes and no conversation is worth less than one that started a
+  // reply thread with a treasurer, and only a person can tell those apart. At
+  // this volume his judgement is both better data and cheaper to collect.
+  app.post("/api/outreach/:id/outcome", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const { outcome, note } = req.body ?? {};
+      if (!["replied", "conversation", "no_response", "poor"].includes(outcome)) {
+        return res.status(400).json({ error: "unknown outcome" });
+      }
+      const [row] = await db.update(outreachDrafts).set({
+        outcome,
+        outcomeNote: typeof note === "string" ? note.trim() || null : null,
+        outcomeAt: new Date(),
+      }).where(eq(outreachDrafts.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "not found" });
+      return res.json(row);
+    } catch {
+      return res.status(500).json({ error: "Could not record that." });
     }
   });
 

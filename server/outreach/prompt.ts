@@ -26,6 +26,67 @@ export interface Candidate {
  * Shared by the prompt and the console so a draft cannot say one thing while
  * the card beside it says another.
  */
+/**
+ * Split the demand judgement off the front of what came back.
+ *
+ * Line-based rather than regex-based. The first version removed the header with
+ * a pattern that ran to the next blank line, and evidence quoted across two
+ * lines took the first line of the message with it. Consuming whole lines from
+ * the top until the header ends cannot do that.
+ *
+ * The draft is never returned empty. A lost label costs a row of analytics; a
+ * lost message costs the work that produced it, and a header printed onto
+ * LinkedIn costs more than either.
+ */
+export function splitDemand(raw: string): {
+  demandLevel: string | null;
+  demandEvidence: string | null;
+  draft: string;
+} {
+  const text = (raw ?? "").trim();
+  if (!text) return { demandLevel: null, demandEvidence: null, draft: "" };
+
+  const lines = text.split("\n");
+  let level: string | null = null;
+  let evidence: string | null = null;
+  let i = 0;
+
+  // Header lines only, from the very top. Anything else ends the header, so a
+  // model that skipped the header entirely loses nothing.
+  while (i < lines.length) {
+    const line = lines[i];
+    const d = line.match(/^\s*DEMAND:\s*(stated|implied|none)\s*$/i);
+    if (d) { level = d[1].toLowerCase(); i++; continue; }
+    const e = line.match(/^\s*EVIDENCE:\s*(.*)$/i);
+    if (e) {
+      const parts = [e[1].trim()];
+      // Continuation lines are taken only when nothing followed the colon. The
+      // prompt asks for one line, and consuming the next line unconditionally
+      // ate the first line of the message whenever the header ran straight into
+      // it without a blank line between.
+      if (!parts[0]) {
+        while (i + 1 < lines.length
+               && lines[i + 1].trim() !== ""
+               && !/^\s*(DEMAND|EVIDENCE):/i.test(lines[i + 1])) {
+          i++;
+          parts.push(lines[i].trim());
+        }
+      }
+      const joined = parts.join(" ").trim();
+      evidence = joined && !/^none$/i.test(joined) ? joined : null;
+      i++;
+      continue;
+    }
+    if (line.trim() === "" && (level || evidence)) { i++; continue; }
+    break;
+  }
+
+  const draft = lines.slice(i).join("\n").trim();
+  // If stripping the header left nothing, the header was the whole reply and
+  // something went wrong upstream. Return empty rather than posting the header.
+  return { demandLevel: level, demandEvidence: evidence, draft };
+}
+
 export function howLongAgo(iso: string | null | undefined, now = Date.now()): string | null {
   if (!iso) return null;
   const t = new Date(iso).getTime();
@@ -67,6 +128,7 @@ export function buildPrompt(
   recalled: string,
   context: string,
   recentDrafts: string[] = [],
+  winners: string[] = [],
 ): string {
   const who = [c.name, c.headline].filter(Boolean).join(", ") || "unknown";
   const age = howLongAgo(c.postedAt);
@@ -141,6 +203,29 @@ export function buildPrompt(
     );
   }
 
+  // Comments that earned a reply, as evidence of what lands rather than as
+  // templates. Copying one is how a channel stops working: what earned the
+  // reply was that it was written for that post, and reproducing its shape
+  // everywhere turns one good comment into a formula.
+  if (winners.length) {
+    sections.push(
+      `These earned a reply. Study why they worked, then write something\n` +
+      `different. Do not reuse their structure or their phrasing:\n` +
+      winners.map(w => `- "${w.slice(0, 400)}"`).join("\n"),
+    );
+  }
+
   sections.push(`Draft a ${kind}. ${INTENT_RULES[kind]}`);
+
+  // The demand judgement is returned alongside the draft rather than inferred
+  // from it afterwards. Asking for the quote in the same breath as the comment
+  // is what keeps the two honest: a model that has to produce the evidence
+  // before it writes the line will more often find that it cannot.
+  sections.push(
+    `Before the message, on their own lines, output:\n` +
+    `DEMAND: stated | implied | none\n` +
+    `EVIDENCE: the exact words from their post that make it stated, on one line, or none\n` +
+    `Then a blank line, then the message itself and nothing else.`,
+  );
   return sections.join("\n\n");
 }
