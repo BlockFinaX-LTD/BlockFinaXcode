@@ -23,6 +23,7 @@
  * silently retrying it with a weaker credential would be wrong.
  */
 
+import { largestSendable, maxSendable } from "@/lib/send-amount";
 import { getRiftAccessToken } from "./rift-token-bridge";
 import {
   getMethods,
@@ -504,6 +505,48 @@ export interface TokenTransfer {
  * different endpoints — a transfer is described by token and amount, a contract
  * call by calldata. Everything after the preview is identical.
  */
+/**
+ * The most of this token that can actually be sent, found by asking.
+ *
+ * The provider builds transfers as a batch with a fee transfer inside it, and
+ * does not report that fee anywhere in the preview response. So MAX cannot
+ * subtract it, and a guessed buffer either fails or strands money.
+ *
+ * What the preview will say is whether a given amount works. This asks, a
+ * bounded number of times, and returns the largest that does. On a token with
+ * no fee it costs one call and returns the whole balance.
+ *
+ * Returns null when nothing is sendable, which happens when the fee is larger
+ * than the balance. Saying so is better than sending the user hunting for an
+ * amount that does not exist.
+ */
+export async function findSendableMax(
+  transfer: Omit<TokenTransfer, "amount">,
+  available: number,
+): Promise<{ amount: string; probes: number } | null> {
+  let accessToken = "";
+  try {
+    accessToken = await getRiftAccessToken();
+  } catch {
+    // Without a token nothing can be asked, so fall back to the plain floored
+    // balance. It is what the button did before and it may well work.
+    return { amount: maxSendable(available, transfer.token), probes: 0 };
+  }
+  if (!accessToken) return { amount: maxSendable(available, transfer.token), probes: 0 };
+
+  return largestSendable(available, transfer.token, async (amount: string) => {
+    try {
+      await previewTransaction(accessToken, { ...transfer, amount });
+      return true;
+    } catch {
+      // Any refusal counts as "too much". Distinguishing a fee shortfall from
+      // an unrelated outage would need an error taxonomy the provider does not
+      // give, and guessing wrong here would report a balance as unsendable.
+      return false;
+    }
+  });
+}
+
 export async function trySendTokenWithV3(
   transfer: TokenTransfer,
   opts: {

@@ -13,6 +13,9 @@ import { biometricName } from '@/lib/rift-v3';
 import { useWallet } from '@/hooks/use-wallet';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
 import { maxSendable, checkAmount } from '@/lib/send-amount';
+
+/** Probing needs a recipient. Burn address, never sent to, only simulated against. */
+const ZERO_PROBE = '0x000000000000000000000000000000000000dEaD';
 import {
   sendCrypto, sendOtp, getAuthMethod,
   type ChainName, type TokenSymbol,
@@ -157,6 +160,38 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
   // Compared in base units rather than as floats. A balance and an amount that
   // are the same money can differ in the last bits of a double, which is how a
   // MAX that filled in the whole balance still failed validation.
+  // MAX asks the provider what it will actually take.
+  //
+  // The transfer is built as a batch with a fee transfer inside it, and the fee
+  // is not reported anywhere, so it cannot be subtracted. Asking costs one call
+  // when there is no fee and a handful when there is, which is worth it for a
+  // button whose whole promise is that it sends everything.
+  const [findingMax, setFindingMax] = useState(false);
+  const fillMax = async () => {
+    if (findingMax || available <= 0) return;
+    setFindingMax(true);
+    // Show the floored balance immediately so the field is never empty while
+    // this runs. It is replaced if the provider wants less.
+    setAmount(maxSendable(available, token));
+    try {
+      const { findSendableMax } = await import('@/lib/v3-sign');
+      const best = await findSendableMax({ token, chain, recipient: to || ZERO_PROBE }, available);
+      if (!best) {
+        toast({
+          title: 'Too small to send',
+          description: `The fee on this transfer is more than the ${token} in this wallet.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      setAmount(best.amount);
+    } catch {
+      /* the floored balance is already in the field, which is the old behaviour */
+    } finally {
+      setFindingMax(false);
+    }
+  };
+
   const valid = /^0x[a-fA-F0-9]{40}$/.test(to) && checkAmount(amount, available, token).ok;
 
   const review = () => {
@@ -286,7 +321,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
                   <div className="amount">
                     <div className="arow">
                       <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                      <button className="max" onClick={() => setAmount(maxSendable(available, token))}>MAX</button>
+                      <button className="max" disabled={findingMax} onClick={fillMax}>{findingMax ? '…' : 'MAX'}</button>
                     </div>
                     <div className="abot">
                       <span className="usd">≈ ${(parseFloat(amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

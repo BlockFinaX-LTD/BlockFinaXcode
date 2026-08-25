@@ -24,6 +24,9 @@ import {
 } from '@/lib/rift-client';
 import { useRiftBalances } from '@/hooks/use-rift-balances';
 import { maxSendable, checkAmount } from '@/lib/send-amount';
+
+/** Probing needs a recipient. Burn address, never sent to, only simulated against. */
+const ZERO_PROBE = '0x000000000000000000000000000000000000dEaD';
 import { explainTxError } from '@/lib/tx-errors';
 
 type Step = 'form' | 'authorize' | 'done';
@@ -170,6 +173,38 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
       setToken(availableTokens[0] as TokenSymbol);
     }
   }, [chain, availableTokens.join(',')]);
+
+  // MAX asks the provider what it will actually take.
+  //
+  // The transfer is built as a batch with a fee transfer inside it, and the fee
+  // is not reported anywhere, so it cannot be subtracted. Asking costs one call
+  // when there is no fee and a handful when there is, which is worth it for a
+  // button whose whole promise is that it sends everything.
+  const [findingMax, setFindingMax] = useState(false);
+  const fillMax = async () => {
+    if (findingMax || available <= 0) return;
+    setFindingMax(true);
+    // Show the floored balance immediately so the field is never empty while
+    // this runs. It is replaced if the provider wants less.
+    setAmount(maxSendable(available, token));
+    try {
+      const { findSendableMax } = await import('@/lib/v3-sign');
+      const best = await findSendableMax({ token, chain, recipient: to || ZERO_PROBE }, available);
+      if (!best) {
+        toast({
+          title: 'Too small to send',
+          description: `The fee on this transfer is more than the ${token} in this wallet.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      setAmount(best.amount);
+    } catch {
+      /* the floored balance is already in the field, which is the old behaviour */
+    } finally {
+      setFindingMax(false);
+    }
+  };
 
   const isValid = (): boolean => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(to)) return false;
@@ -371,12 +406,14 @@ export function RiftSendModal({ open, onClose }: RiftSendModalProps) {
                 <Label className="text-xs">Amount</Label>
                 <button
                   type="button"
-                  onClick={() => setAmount(maxSendable(available, token))}
+                  onClick={fillMax}
                   className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-                  disabled={isLoadingBalances}
+                  disabled={isLoadingBalances || findingMax}
                 >
                   {isLoadingBalances && balances.length === 0 ? (
                     <><Loader2 className="h-3 w-3 animate-spin" /> Loading…</>
+                  ) : findingMax ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Working out the most you can send…</>
                   ) : (
                     <>Available: {available.toLocaleString(undefined, { maximumFractionDigits: 6 })} {token}</>
                   )}
