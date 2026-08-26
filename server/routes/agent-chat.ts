@@ -32,6 +32,35 @@ const PUBLIC_HOURLY_LIMIT = Number(process.env.AGENT_PUBLIC_HOURLY_LIMIT || 20);
 
 const visitorHits = new Map<string, { count: number; resetAt: number }>();
 
+/**
+ * Reduce whatever arrived to something that can only be a name.
+ *
+ * This string is handed to the model, so it is an injection surface like any
+ * other visitor input. It stays inside the untrusted fence at the call site,
+ * and this strips the characters that would let it pose as structure there:
+ * no newlines, no angle brackets, no punctuation beyond what real names use.
+ *
+ * Returns null rather than an empty string when nothing survives, so the
+ * caller has one falsy case to handle instead of two.
+ */
+function cleanVisitorName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw
+    // Control characters and newlines first: those are what would let the
+    // value break out of the single line it is placed on.
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ")
+    // Then the characters that could pose as markup or fence structure.
+    // A denylist rather than a letters-only allowlist on purpose: most of our
+    // market does not write their name in ASCII, and mangling someone's name
+    // is a worse failure than passing through a character we did not predict.
+    .replace(/[<>{}\[\]|\\`"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
+  return cleaned.length >= 1 ? cleaned : null;
+}
+
+
 setInterval(() => {
   const now = Date.now();
   visitorHits.forEach((v, k) => { if (now > v.resetAt) visitorHits.delete(k); });
@@ -90,6 +119,7 @@ export function registerAgentChatRoutes(app: Express) {
     const parsed = chatSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
     const { threadId, message } = parsed.data;
+    const visitorName = cleanVisitorName(parsed.data.visitorName);
 
     try {
       // Thread ids come from the browser, so they are namespaced by the hashed
@@ -116,7 +146,15 @@ export function registerAgentChatRoutes(app: Express) {
         messages: [
           ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
           // A stranger's text is fenced as data, not folded into instructions.
-          { role: "user" as const, content: fence("website-visitor", message) },
+          {
+            role: "user" as const,
+            // Inside the fence deliberately. The name is visitor-supplied, so
+            // it gets exactly the trust the visitor's own message gets.
+            content: fence(
+              "website-visitor",
+              visitorName ? `[visitor's name: ${visitorName}]\n${message}` : message,
+            ),
+          },
         ],
       });
 

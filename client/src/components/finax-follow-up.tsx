@@ -21,10 +21,12 @@ interface Props {
   threadId: string;
   onDone: () => void;
   onDismiss: () => void;
+  /** What they already told Finax to call them, so the field starts filled. */
+  initialName?: string;
 }
 
-export function FinaxFollowUp({ threadId, onDone, onDismiss }: Props) {
-  const [name, setName] = useState("");
+export function FinaxFollowUp({ threadId, onDone, onDismiss, initialName = "" }: Props) {
+  const [name, setName] = useState(initialName);
   const [email, setEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,7 @@ export function FinaxFollowUp({ threadId, onDone, onDismiss }: Props) {
     return (
       <div className="rounded-2xl border border-border bg-muted/40 px-3.5 py-3 text-sm">
         <p className="flex items-center gap-2 font-medium">
-          <Check className="h-4 w-4 text-emerald-600" /> Thanks — we'll be in touch.
+          <Check className="h-4 w-4 text-emerald-600" /> Thanks, we'll be in touch.
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           You can unsubscribe from any message we send.
@@ -80,7 +82,7 @@ export function FinaxFollowUp({ threadId, onDone, onDismiss }: Props) {
     <form onSubmit={submit} className="rounded-2xl border border-border bg-muted/40 px-3.5 py-3">
       <p className="text-sm font-medium">Want us to follow up?</p>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Entirely optional — you can keep using the site either way.
+        Entirely optional. You can keep using the site either way.
       </p>
 
       <div className="mt-3 space-y-2">

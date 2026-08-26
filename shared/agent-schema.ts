@@ -274,6 +274,15 @@ export const agentSettings = pgTable("agent_settings", {
 export const chatSchema = z.object({
   threadId: z.string().min(1).max(64),
   message: z.string().min(1).max(8000),
+  /**
+   * What the website visitor said to call them, if they said. Optional and
+   * skippable by design: it personalises the conversation, it does not gate it.
+   *
+   * Capped short and stripped of anything that isn't part of a name at the
+   * route, because this string reaches the model. It is fenced as untrusted
+   * there like any other visitor input.
+   */
+  visitorName: z.string().max(40).optional(),
 });
 
 export const decideSchema = z.object({

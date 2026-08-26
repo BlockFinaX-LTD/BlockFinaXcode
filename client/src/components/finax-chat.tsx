@@ -43,12 +43,31 @@ const SUGGESTIONS: Record<Scope, string[]> = {
 
 const GREETING: Record<Scope, string> = {
   public:
-    "Hi — I'm Finax. I can explain how BlockFinaX protects businesses from currency swings, " +
-    "and what cover is available right now. What would you like to know?",
+    "I can explain how BlockFinaX protects businesses from currency swings, and what cover is " +
+    "available right now. What would you like to know?",
   customer:
-    "Hi — I'm Finax. I can look up your cover, your deposits and your transactions, and explain " +
-    "anything that isn't clear. What can I help with?",
+    "I can look up your cover, your deposits and your transactions, and explain anything that " +
+    "isn't clear. What can I help with?",
 };
+
+/** Where a visitor's name is kept. Absent means never asked; empty means skipped. */
+const NAME_KEY = "finax_visitor_name";
+
+/**
+ * Read the stored name, distinguishing "not asked yet" from "asked and skipped".
+ *
+ * getItem returns null for a key that was never written and "" for one written
+ * empty, which is exactly the two cases we need, so no second flag is kept.
+ */
+function storedName(): string | null {
+  try {
+    return localStorage.getItem(NAME_KEY);
+  } catch {
+    // Private browsing with storage blocked. Treated as already asked, because
+    // a prompt that cannot remember the answer would reappear on every reload.
+    return "";
+  }
+}
 
 
 
@@ -61,6 +80,33 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
   // Set only by the server, when Finax judged the moment right and this
   // visitor has not already given their details.
   const [followUp, setFollowUp] = useState(false);
+  // The visitor's name, and whether we still need to ask for it. Public
+  // surface only: a signed-in customer is already known to the server, and
+  // asking them to introduce themselves would read as the product forgetting
+  // who they are. Null means "not answered yet".
+  const [name, setName] = useState<string | null>(() =>
+    scope === "customer" ? "" : storedName(),
+  );
+  const [nameDraft, setNameDraft] = useState("");
+  // Only ever asked at the very start of a conversation, and only once the
+  // history has actually come back. Without the loaded flag the prompt flashes
+  // on screen for returning visitors during the fetch; without the empty check
+  // anyone who was already mid-conversation when this shipped would find their
+  // composer turned into an unexplained name box.
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const askingName = name === null && historyLoaded && messages.length === 0;
+
+  const settleName = useCallback((value: string) => {
+    const clean = value.replace(/\s+/g, " ").trim().slice(0, 40);
+    try {
+      localStorage.setItem(NAME_KEY, clean);
+    } catch {
+      /* storage blocked; the name still holds for this session */
+    }
+    setName(clean);
+    setNameDraft("");
+    setTimeout(() => inputRef.current?.focus(), 60);
+  }, []);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -102,7 +148,8 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
       .then((headers) => fetch(`${endpoint}/${threadId}`, { headers }))
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: Msg[]) => setMessages(Array.isArray(rows) ? rows : []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setHistoryLoaded(true));
   }, [open, endpoint, threadId, authHeaders, messages.length]);
 
   useEffect(() => {
@@ -124,7 +171,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: await authHeaders(),
-        body: JSON.stringify({ threadId, message }),
+        body: JSON.stringify({ threadId, message, visitorName: name || undefined }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.message || "Something went wrong.");
@@ -137,9 +184,15 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
     }
   };
 
+  // One opening bubble that either asks the name or greets by it. Greeting a
+  // returning visitor as "Hi Ada" is the entire return on collecting it.
+  const opener = askingName
+    ? "Hi, I'm Finax. Before we start, what should I call you?"
+    : `${name ? `Hi ${name},` : "Hi,"} I'm Finax. ${GREETING[scope]}`;
+
   const shown = messages.length
     ? messages
-    : [{ id: "greeting", role: "assistant" as const, content: GREETING[scope] }];
+    : [{ id: "greeting", role: "assistant" as const, content: opener }];
 
   return (
     <>
@@ -216,12 +269,22 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
             {followUp && !busy && (
               <FinaxFollowUp
                 threadId={threadId}
+                initialName={name || ""}
                 onDone={() => setFollowUp(false)}
                 onDismiss={() => setFollowUp(false)}
               />
             )}
 
-            {messages.length === 0 && !busy && (
+            {askingName && (
+              <button
+                onClick={() => settleName("")}
+                className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Skip
+              </button>
+            )}
+
+            {messages.length === 0 && !busy && !askingName && (
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {SUGGESTIONS[scope].map((s) => (
                   <button
@@ -239,14 +302,20 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
 
           {/* Composer */}
           <form
-            onSubmit={(e) => { e.preventDefault(); send(input); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (askingName) settleName(nameDraft);
+              else send(input);
+            }}
             className="flex items-center gap-2 border-t border-border p-3"
           >
             <input
               ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask Finax…"
+              value={askingName ? nameDraft : input}
+              onChange={(e) => (askingName ? setNameDraft : setInput)(e.target.value)}
+              placeholder={askingName ? "Your first name" : "Ask Finax…"}
+              autoComplete={askingName ? "given-name" : "off"}
+              maxLength={askingName ? 40 : undefined}
               disabled={busy}
               className={cn(
                 "flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm",
@@ -255,7 +324,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
             />
             <button
               type="submit"
-              disabled={busy || !input.trim()}
+              disabled={busy || !(askingName ? nameDraft : input).trim()}
               aria-label="Send"
               className={cn(
                 "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full",
