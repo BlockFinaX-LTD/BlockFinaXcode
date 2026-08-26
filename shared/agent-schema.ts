@@ -278,11 +278,17 @@ export const chatSchema = z.object({
    * What the website visitor said to call them, if they said. Optional and
    * skippable by design: it personalises the conversation, it does not gate it.
    *
-   * Capped short and stripped of anything that isn't part of a name at the
-   * route, because this string reaches the model. It is fenced as untrusted
-   * there like any other visitor input.
+   * Trimmed to length and stripped of anything that isn't part of a name at
+   * the route, because this string reaches the model. It is fenced as
+   * untrusted there like any other visitor input.
+   *
+   * The generous bound here is deliberate. A tight one made an over-long name
+   * fail the whole schema, so the visitor's actual question was answered with
+   * "Invalid message" and the conversation broke over a field that is supposed
+   * to be optional. The route trims instead, which degrades to a shorter name
+   * rather than to no answer.
    */
-  visitorName: z.string().max(40).optional(),
+  visitorName: z.string().max(400).optional(),
 });
 
 export const decideSchema = z.object({
