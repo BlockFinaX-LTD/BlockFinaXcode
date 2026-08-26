@@ -546,9 +546,16 @@ export const TOOLS: ToolDef[] = [
       }
       return {
         ...s,
+        // The abstract rule alone was not enough: it was stated here already
+        // when a negative move got reported to a visitor as the opposite of
+        // what happened. Each change now carries its own worded direction, and
+        // this says plainly that the wording wins over reading the sign.
         reading:
-          `A rising ${p} means the ${p.split("/")[1]} is weakening — the direction an importer paying in ` +
-          `${p.split("/")[0]} is exposed to.`,
+          `Every change here has a "direction" written out. Use those words. Do not work the ` +
+          `direction out from whether the number is positive or negative, and do not contradict them. ` +
+          `For the record: a rising ${p} means more ${p.split("/")[1]} per ${p.split("/")[0]}, so the ` +
+          `${p.split("/")[1]} is weaker, which is the direction an importer paying in ` +
+          `${p.split("/")[0]} is exposed to. A falling ${p} means the ${p.split("/")[1]} is stronger.`,
       };
     },
   },

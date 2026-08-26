@@ -123,9 +123,18 @@ export interface PairSummary {
   pair: string;
   liveRate: number | null;
   asOf: string | null;
-  changes: { period: string; percent: number }[];
+  /**
+   * Each entry carries the move in words as well as the number.
+   *
+   * The bare percentage alone was read backwards in production: USD/GHS fell
+   * 4.5% over 30 days, meaning fewer cedis per dollar and a STRONGER cedi, and
+   * it was reported to a Ghanaian importer as the cedi weakening. A minus sign
+   * on a currency pair does not mean what it intuitively looks like it means,
+   * so the direction is no longer left to be inferred.
+   */
+  changes: { period: string; percent: number; direction: string }[];
   /** Largest adverse move over a rolling window of this length. */
-  worstMove: { days: number; percent: number; from: string; to: string } | null;
+  worstMove: { days: number; percent: number; from: string; to: string; direction: string } | null;
   annualVolatilityPercent: number | null;
   regime: "stable" | "volatile" | "extreme" | "unknown";
   observations: number;
@@ -133,7 +142,11 @@ export interface PairSummary {
   note?: string;
 }
 
+import { describeMove } from "./fx-direction";
+export { describeMove };
+
 const pctChange = (a: number, b: number) => ((b - a) / a) * 100;
+
 
 /** Close nearest to `daysAgo`, so a missing day doesn't break the comparison. */
 function closeNearest(series: Close[], daysAgo: number): Close | null {
@@ -180,7 +193,8 @@ export async function summarise(pair: string, years = 5, windowDays = 60): Promi
   for (const [label, days] of [["30 days", 30], ["90 days", 90], ["1 year", 365], ["3 years", 1095]] as const) {
     const then = closeNearest(clean, days);
     if (then && then.date !== latest.date) {
-      base.changes.push({ period: label, percent: Number(pctChange(then.close, latest.close).toFixed(1)) });
+      const pct = Number(pctChange(then.close, latest.close).toFixed(1));
+      base.changes.push({ period: label, percent: pct, direction: describeMove(pair, pct) });
     }
   }
 
@@ -196,7 +210,8 @@ export async function summarise(pair: string, years = 5, windowDays = 60): Promi
     }
   }
   if (worst.percent > 0) {
-    base.worstMove = { days: windowDays, percent: Number(worst.percent.toFixed(1)), from: worst.from, to: worst.to };
+    const wp = Number(worst.percent.toFixed(1));
+    base.worstMove = { days: windowDays, percent: wp, from: worst.from, to: worst.to, direction: describeMove(pair, wp) };
   }
 
   // Annualised volatility from daily log returns.
