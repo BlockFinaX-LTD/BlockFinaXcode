@@ -250,7 +250,6 @@ export default function HomePage() {
             <button className="qa" onClick={() => setSendOpen(true)}><span className="qi"><ArrowUp /></span><span className="ql">Send</span></button>
             <button className="qa" onClick={() => setRcvOpen(true)}><span className="qi"><ArrowDown /></span><span className="ql">Receive</span></button>
             <button className="qa" onClick={() => setLocation('/hedge')}><span className="qi"><Shield /></span><span className="ql">Cover</span></button>
-            <button className="qa" onClick={() => setLocation('/tasks')}><span className="qi"><TrendingUp /></span><span className="ql">Earn</span></button>
           </div>
         </div>
         <div className="side-stack">

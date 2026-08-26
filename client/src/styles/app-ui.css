@@ -163,7 +163,7 @@
 .bfx-app .chip-chg svg{width:12px;height:12px;}
 .bfx-app .bal-chg .per{font-size:12.5px;color:var(--tx-3);font-family:var(--mono);}
 /* quick actions — small pills, like the Invite button */
-.bfx-app .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:22px;}
+.bfx-app .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:22px;}
 .bfx-app .qa{display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 10px;border-radius:10px;
   border:none;background:var(--blue);color:#fff;transition:.16s var(--ease);}
 .bfx-app .qa:hover{background:var(--blue-2);}
@@ -403,7 +403,7 @@
 .bfx-app .content{padding:18px 16px 104px;}
 .bfx-app .bal-num{font-size:42px;}
 .bfx-app .bal-num .cents{font-size:28px;}
-.bfx-app .quick{grid-template-columns:repeat(4,1fr);gap:8px;}
+.bfx-app .quick{grid-template-columns:repeat(3,1fr);gap:8px;}
 .bfx-app .qa{flex-direction:column;gap:9px;padding:14px 4px 12px;text-align:center;}
 .bfx-app .qa .ql{font-size:11.5px;}
 .bfx-app .split-card .sv{font-size:20px;}
