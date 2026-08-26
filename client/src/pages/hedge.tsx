@@ -130,6 +130,62 @@ function poolSubtitle(name: string | null | undefined, underlying: string): stri
   return rest || null;
 }
 
+/**
+ * Newest at the top, in every list.
+ *
+ * Position ids rise with each purchase, so they order by when the cover was
+ * bought, which is what someone scanning a list means by newest. Sorting by
+ * expiry instead would put a pool bought yesterday below one bought last month
+ * that happens to run longer.
+ */
+function byNewest<T extends { id: number }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => b.id - a.id);
+}
+
+/**
+ * When a position ends, said the way a person would say it.
+ *
+ * The cards showed the pool's name underneath the pair, which for most pools is
+ * the pair again. Repeating it told the reader nothing, while the one thing
+ * they want at a glance, whether this is still running and for how much longer,
+ * was not on the card at all.
+ *
+ * Past and future read differently on purpose. "Expired 3 days ago" is a fact
+ * about something finished; "expires in 3 days" is a countdown on money still
+ * at risk.
+ *
+ * Rounds rather than truncates. Flooring a countdown understates it by up to a
+ * whole unit, so a cover with 23 hours and 59 minutes left reads "expires in 23
+ * hours" and one with 45 minutes left reads "44 minutes". Every position hits
+ * that, because the gap to expiry is essentially never a whole number of units.
+ */
+function expiryNarration(d: Date | null | undefined): string | null {
+  if (!d) return null;
+  const ms = new Date(d).getTime();
+  if (Number.isNaN(ms)) return null;
+
+  const diff = ms - Date.now();
+  const past = diff < 0;
+  const say = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+
+  // Each unit is rounded before its band is tested, so a value that rounds up
+  // onto a boundary is promoted instead of being reported as "60 minutes".
+  const mins = Math.round(Math.abs(diff) / 60000);
+  const hours = Math.round(mins / 60);
+  const days = Math.round(mins / 1440);
+  const months = Math.round(mins / 43200);
+
+  const span =
+    mins < 1 ? null
+    : mins < 60 ? say(mins, "minute")
+    : hours < 24 ? say(hours, "hour")
+    : days < 30 ? say(days, "day")
+    : say(months, "month");
+
+  if (span === null) return past ? "expired just now" : "expires any moment";
+  return past ? `expired ${span} ago` : `expires in ${span}`;
+}
+
 function expiryLabel(d: Date): string {
   const days = daysToExpiry(d);
   if (days < 1) return `${Math.max(1, Math.round(days * 24))}H`;
@@ -1027,16 +1083,19 @@ export default function Hedge() {
 
   const myEvents = useMemo(() => events.filter((e) => e.creator.toLowerCase() === myAddr), [events, myAddr]);
   const activeDeposits = useMemo(() => myDeposits.filter((d) => !d.withdrawn), [myDeposits]);
-  const activePositions = useMemo(() => myPositions.filter((p) => p.status === 'active'), [myPositions]);
+  const activePositions = useMemo(
+    () => byNewest(myPositions.filter((p) => p.status === 'active')),
+    [myPositions],
+  );
   // A winning position can be reported as either 'claimable' (1) or 'settled_win'
   // (4) depending on contract version — both are claimable until `claimed`.
   const claimablePositions = useMemo(
-    () => myPositions.filter((p) => (p.status === 'claimable' || p.status === 'settled_win') && !p.claimed && p.payoutAmount >= CLAIM_DUST),
+    () => byNewest(myPositions.filter((p) => (p.status === 'claimable' || p.status === 'settled_win') && !p.claimed && p.payoutAmount >= CLAIM_DUST)),
     [myPositions],
   );
   const historyPositions = useMemo(() => {
     const claimSet = new Set(claimablePositions.map((p) => p.id));
-    return myPositions.filter((p) => p.status !== 'active' && !claimSet.has(p.id));
+    return byNewest(myPositions.filter((p) => p.status !== 'active' && !claimSet.has(p.id)));
   }, [myPositions, claimablePositions]);
 
   // ── helpers for opening sheets ──────────────────────────────────────────
@@ -1379,7 +1438,7 @@ export default function Hedge() {
                 const ev = events.find((e) => e.id === p.eventId);
                 return (
                   <div className="pool-card" key={`a${p.id}`}>
-                    <div className="pool-top"><MarketFlag pair={ev?.underlying || ''} /><div className="pt-nm"><div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="b">{ev?.name || `Event #${p.eventId}`}</div></div>
+                    <div className="pool-top"><MarketFlag pair={ev?.underlying || ''} /><div className="pt-nm"><div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="b">{expiryNarration(ev?.expiryDate) ?? `Event #${p.eventId}`}</div></div>
                       <div className="pool-apr"><div className="v">{fmtMoney(p.notional)}</div><div className="l">Notional</div></div></div>
                     <div className="pool-stats">
                       <div className="pool-stat"><div className="l">Premium paid</div><div className="v tnum">{fmtMoney(p.premiumPaid)}</div></div>
@@ -1407,6 +1466,10 @@ export default function Hedge() {
                   {historyPositions.map((p) => {
                     const ev = events.find((e) => e.id === p.eventId);
                     const label = p.status === 'claimed' ? 'Claimed' : p.status === 'settled_win' ? 'Won' : 'Expired';
+                    // These have all run their course, so the narration here is
+                    // always the past form. It answers "how long ago was this?"
+                    // without making the reader open the row.
+                    const ended = expiryNarration(ev?.expiryDate);
                     return (
                       <div
                         className="row"
@@ -1418,7 +1481,7 @@ export default function Hedge() {
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPosDetail(p); } }}
                       >
                         <MarketFlag pair={ev?.underlying || ''} />
-                        <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="r2">Position #{p.id} · {fmtMoney(p.notional)} notional</div></div>
+                        <div className="r-main"><div className="r1">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="r2">Position #{p.id} · {fmtMoney(p.notional)} notional{ended ? ` · ${ended}` : ''}</div></div>
                         <div className="r-side" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span className={`st ${p.status === 'expired' ? 'pend' : 'ok'}`}>{label}</span>
                           <ChevronRight style={{ width: 15, height: 15, color: 'var(--tx-4)', flex: '0 0 auto' }} />
