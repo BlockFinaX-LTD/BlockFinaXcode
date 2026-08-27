@@ -389,10 +389,11 @@ export function RateHistory({
           );
         })}
 
+        {!expanded && (
         <button
-          onClick={() => setExpanded((v) => !v)}
-          aria-label={expanded ? "Close the enlarged chart" : "Enlarge the chart"}
-          title={expanded ? "Close (Esc)" : "Enlarge"}
+          onClick={() => setExpanded(true)}
+          aria-label="Enlarge the chart"
+          title="Enlarge"
           style={{
             marginLeft: "auto",
             border: "none",
@@ -404,8 +405,9 @@ export function RateHistory({
             alignItems: "center",
           }}
         >
-          {expanded ? <Minimize2 style={{ width: 14, height: 14 }} /> : <Maximize2 style={{ width: 14, height: 14 }} />}
+          <Maximize2 style={{ width: 14, height: 14 }} />
         </button>
+        )}
       </div>
 
       <svg
