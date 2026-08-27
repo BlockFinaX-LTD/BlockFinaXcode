@@ -36,7 +36,7 @@ import { ethers } from 'ethers';
 import { mainnetGuard } from '@/lib/mainnet-guard';
 import { explainTxError } from '@/lib/tx-errors';
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from '@/lib/networks';
-import { PayoutOutcomes } from '@/components/hedge/payout-outcomes';
+import { CoverDetail } from '@/components/hedge/cover-detail';
 import { buildPayoutModel } from '@/lib/payout-model';
 import { RateHistory } from '@/components/hedge/rate-history';
 import { FlagSvg, CommoditySvg, CoinSvg, KNOWN_FLAGS } from '@/components/app-glyphs';
@@ -1460,20 +1460,9 @@ export default function Hedge() {
                     </div>
                     {ev && (
                       <div style={{ marginTop: 8 }}>
-                        {/* The price history carries the strike and cap as
-                            shaded zones, so "how often has the rate been
-                            there" is answered by the same picture that shows
-                            what the cover is worth. The cards beneath give the
-                            three cases in words. Between them they replaced a
-                            payoff diagram and a seven row table. */}
-                        <RateHistory
-                          pair={ev.underlying}
-                          strike={ev.strike}
-                          strikeAbove={ev.strikeAbove}
-                          cap={payoutModelFor(p, ev).cap}
-                          maxPayoutLabel={fmtMoney(p.payoutAmount)}
-                        />
-                        <PayoutOutcomes
+                        {/* Closed by default: a chart and three cards opened
+                            on every position turns the list into a wall. */}
+                        <CoverDetail
                           notional={p.notional}
                           totalCost={p.premiumPaid + p.platformFeePaid}
                           maxPayout={p.payoutAmount}
@@ -1482,6 +1471,11 @@ export default function Hedge() {
                           strikeAbove={ev.strikeAbove}
                           underlying={ev.underlying}
                           currentRate={fxData?.rates[ev.underlying]?.rate || 0}
+                          settled={ev.status !== 'open'}
+                          settlementPrice={ev.settlementPrice}
+                          actualPayout={p.payoutAmount}
+                          cap={payoutModelFor(p, ev).cap}
+                          maxPayoutLabel={fmtMoney(p.payoutAmount)}
                         />
                       </div>
                     )}
@@ -1679,7 +1673,7 @@ export default function Hedge() {
           // normal, correct result of a hedge that was not needed — say so
           // rather than leaving a bare "Expired" badge to look like a failure.
           const outcome = won
-            ? `The rate touched the strike before expiry, so this cover paid out ${fmtUsd2(p.payoutAmount)}.`
+            ? `${ev ? `${ev.underlying} settled ${ev.strikeAbove ? 'above' : 'below'} ${ev.strike.toLocaleString()}` : 'The rate settled past the strike'}, so this cover paid out ${fmtUsd2(p.payoutAmount)}.`
             : ev
               ? `The rate never ${ev.strikeAbove ? 'rose past' : 'fell below'} ${ev.strike.toLocaleString()} ${unitOf(ev.underlying)} before expiry, so no payout was due. The ${fmtUsd2(totalCost)} you paid was the cost of being protected.`
               : `This cover expired without a payout. The ${fmtUsd2(totalCost)} you paid was the cost of being protected.`;
@@ -1699,6 +1693,27 @@ export default function Hedge() {
               </div>
 
               <p className="det-cond">{outcome}</p>
+
+              {/* The same chart and cards the live positions get, with the
+                  settled rate marked, so an ended position demonstrates its
+                  outcome rather than only describing it. */}
+              {ev && (
+                <CoverDetail
+                  notional={p.notional}
+                  totalCost={totalCost}
+                  maxPayout={maxPayout}
+                  strike={ev.strike}
+                  initialRate={ev.initialRate}
+                  strikeAbove={ev.strikeAbove}
+                  underlying={ev.underlying}
+                  currentRate={fxData?.rates[ev.underlying]?.rate || 0}
+                  settled
+                  settlementPrice={ev.settlementPrice}
+                  actualPayout={won ? p.payoutAmount : 0}
+                  cap={payoutModelFor(p, ev).cap}
+                  maxPayoutLabel={fmtMoney(p.payoutAmount)}
+                />
+              )}
 
               <div className="det-grid">
                 <div className="det-stat"><div className="l">Status</div><div className="v">{label}</div></div>
