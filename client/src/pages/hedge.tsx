@@ -37,6 +37,7 @@ import { mainnetGuard } from '@/lib/mainnet-guard';
 import { explainTxError } from '@/lib/tx-errors';
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from '@/lib/networks';
 import { PayoutScenarios } from '@/components/hedge/payout-scenarios';
+import { RateHistory } from '@/components/hedge/rate-history';
 import { FlagSvg, CommoditySvg, CoinSvg, KNOWN_FLAGS } from '@/components/app-glyphs';
 
 type AssetClass = 'all' | 'fx' | 'commodity' | 'crypto';
@@ -1745,6 +1746,11 @@ export default function Hedge() {
           <>
             <div className="sum-pre" style={{ marginBottom: 16 }}>
               <div className="pair-line"><MarketFlag pair={selectedEvent.underlying} /><div><div className="pl-nm">{pairLabel(selectedEvent.underlying)}</div><div className="pl-sub">{selectedEvent.strikeAbove ? 'Rate rises past ' : 'Rate falls below '}{selectedEvent.strike.toLocaleString()} · {expiryLabel(selectedEvent.expiryDate)}</div></div></div>
+              <RateHistory
+                pair={selectedEvent.underlying}
+                strike={selectedEvent.strike}
+                strikeAbove={selectedEvent.strikeAbove}
+              />
             </div>
             <div className="field">
               <label>Notional to cover</label>

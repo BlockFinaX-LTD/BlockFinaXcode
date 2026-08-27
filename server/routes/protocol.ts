@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { db } from "../db";
 import { storage } from "../storage";
 import { eq, sql } from "drizzle-orm";
-import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits, hedgeActivity } from "../../shared/schema";
+import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits, hedgeActivity, historicalFxCloses } from "../../shared/schema";
+import { describeMove } from "../agent/fx-direction";
+import { dropSpikes } from "../lib/fx-series";
 import { requireAdmin } from "../middleware/admin-auth";
 import { requireRiftUser } from "../middleware/rift-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
@@ -255,6 +257,96 @@ export async function registerProtocolRoutes(app: Express) {
       res.json(rate);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch rate" });
+    }
+  });
+
+
+  /**
+   * Daily closes for one pair, for the chart in the purchase sheet.
+   *
+   * Closes only, because closes are all the table holds. That is the right
+   * series here anyway: someone buying thirty day cover cares where the rate
+   * settles, not where it flickered intraday, which is the only thing a
+   * candlestick would add.
+   *
+   * Deliberately returns no forecast of any kind. The chart shows what has
+   * happened and where the strike sits across it, and the buyer draws their
+   * own conclusion. A trend line on a page selling financial protection is an
+   * implied prediction, and this product is in front of a regulator.
+   */
+  app.get("/api/fx/history/:pair", async (req, res) => {
+    try {
+      const pair = decodeURIComponent(req.params.pair).toUpperCase();
+      if (!/^[A-Z]{3}\/[A-Z]{3}$/.test(pair)) {
+        return res.status(400).json({ message: "Pair must look like USD/GHS" });
+      }
+
+      // Capped so a hand-typed days value cannot ask for nineteen years of
+      // points and then be thrown away by the renderer.
+      const days = Math.min(Math.max(parseInt(String(req.query.days || "365"), 10) || 365, 30), 1825);
+      const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+
+      const rows = await db
+        .select({ date: historicalFxCloses.date, close: historicalFxCloses.close })
+        .from(historicalFxCloses)
+        .where(sql`${historicalFxCloses.pair} = ${pair} and ${historicalFxCloses.date} >= ${since}`)
+        .orderBy(historicalFxCloses.date);
+
+      const raw = rows
+        .map((r) => ({ date: r.date, close: Number(r.close) }))
+        .filter((p) => Number.isFinite(p.close));
+
+      // Feed errors that survive the 40% median filter in fx.ts. USD/GHS has a
+      // 14.50 sitting between a 12.45 and a 12.50, which alone produced a
+      // "worst 60 day move" of 30.9% that never happened. Left in, the chart
+      // would shade that band and state it as fact.
+      const { clean: points, dropped } = dropSpikes(raw);
+
+      if (points.length < 2) {
+        return res.json({ pair, days, points: [], worstMove: null, change: null, ticksDropped: dropped.length, note: "not enough history" });
+      }
+
+      // The largest adverse move over any rolling 60 day window in this range.
+      // Adverse means the pair RISING, since that is more local currency per
+      // dollar and the direction an importer is exposed to.
+      let worst = { percent: 0, from: "", to: "" };
+      for (let i = 0; i < points.length; i++) {
+        const limit = new Date(points[i].date).getTime() + 60 * 86_400_000;
+        for (let j = i + 1; j < points.length; j++) {
+          if (new Date(points[j].date).getTime() > limit) break;
+          const move = ((points[j].close - points[i].close) / points[i].close) * 100;
+          if (move > worst.percent) worst = { percent: move, from: points[i].date, to: points[j].date };
+        }
+      }
+
+      const first = points[0].close;
+      const last = points[points.length - 1].close;
+      const changePct = Number((((last - first) / first) * 100).toFixed(1));
+
+      res.json({
+        pair,
+        days,
+        points,
+        latest: last,
+        // Surfaced rather than hidden. A rising count means the upstream feed
+        // is degrading, and silently cleaning it would hide that.
+        ticksDropped: dropped.length,
+        // Stated in words, never as a bare sign. A minus on a currency pair
+        // does not mean what it looks like, and reading it wrong has already
+        // put the opposite of the truth in front of a reader once.
+        change: { percent: changePct, direction: describeMove(pair, changePct) },
+        worstMove:
+          worst.percent > 0
+            ? {
+                percent: Number(worst.percent.toFixed(1)),
+                from: worst.from,
+                to: worst.to,
+                direction: describeMove(pair, worst.percent),
+              }
+            : null,
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to load history" });
     }
   });
 
