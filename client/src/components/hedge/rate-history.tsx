@@ -521,19 +521,28 @@ export function RateHistory({
           const yCap = geom.y(cap as number);
           const top = Math.min(yStrike, yCap);
           const bot = Math.max(yStrike, yCap);
-          // The side where the maximum is already reached: above the cap for
-          // upside cover, below it for downside.
-          const maxTop = strikeAbove ? PAD.t : bot;
-          const maxBot = strikeAbove ? top : VH - PAD.b;
           return (
             <g pointerEvents="none">
-              <rect x={PAD.l} y={maxTop} width={geom.iw} height={Math.max(0, maxBot - maxTop)}
-                    fill="var(--green)" opacity="0.11" />
+              {/*
+                Strike to cap only.
+
+                The region past the cap used to be shaded too, and more
+                strongly. That was wrong twice over. Visually it is unbounded,
+                so it filled most of the frame and buried the band that
+                matters. And semantically it says the wrong thing: past the cap
+                the payout stops growing, so a rate that keeps climbing costs
+                the importer more while returning nothing further. That is
+                where the cover stops helping, and painting it the strongest
+                green on the chart read as "better still up here".
+
+                The cap line and its label stay, so the ceiling is legible
+                without claiming the space above it is good news.
+              */}
               <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
-                    fill="var(--green)" opacity="0.05" />
+                    fill="var(--green)" opacity="0.13" />
               <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke="var(--green)"
-                    strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.75" />
-              <text x={PAD.l + 4} y={strikeAbove ? maxBot - 6 : maxTop + 12}
+                    strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.8" />
+              <text x={PAD.l + 4} y={yCap + (strikeAbove ? -6 : 12)}
                     fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--green)" opacity="0.9">
                 {maxPayoutLabel ? `MAX ${maxPayoutLabel}` : "MAX PAYOUT"}
               </text>
@@ -590,8 +599,8 @@ export function RateHistory({
         )}
         {hasZones && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, background: "var(--green)", opacity: 0.28, borderRadius: 2, display: "inline-block" }} />
-            Most {strikeAbove ? "above" : "below"} {fmtRate(cap as number)}
+            <span style={{ width: 10, height: 10, background: "var(--green)", opacity: 0.3, borderRadius: 2, display: "inline-block" }} />
+            Payout grows to {fmtRate(cap as number)}, then holds
           </span>
         )}
         {!!data.observations && (
