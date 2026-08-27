@@ -31,6 +31,8 @@ interface History {
   points: Point[];
   observations?: number;
   intraday?: boolean;
+  /** Whether this pair is polled into snapshots at all, so hour views work. */
+  hasIntraday?: boolean;
   /** Different rates in the window. Low on an hour view means a staircase. */
   distinctRates?: number;
   /** Live spot, the same figure the rates list shows. */
@@ -135,6 +137,7 @@ export function RateHistory({
   const [state, setState] = useState<"loading" | "ready" | "empty">("loading");
   const [hover, setHover] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [hourly, setHourly] = useState(true);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const { VW, VH, PAD, ticks: TICKS, dates: DATES } = expanded ? SIZES.expanded : SIZES.inline;
@@ -172,6 +175,7 @@ export function RateHistory({
           setState("empty");
           return;
         }
+        if (typeof d.hasIntraday === "boolean") setHourly(d.hasIntraday);
         setData(d);
         setState("ready");
       })
@@ -355,7 +359,7 @@ export function RateHistory({
 
       {/* Range picker */}
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
-        {RANGES.map((r) => {
+        {RANGES.filter((r) => hourly || !r.hours).map((r) => {
           const on = r.key === rangeKey;
           return (
             <button

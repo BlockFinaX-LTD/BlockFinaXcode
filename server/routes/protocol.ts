@@ -359,6 +359,25 @@ export async function registerProtocolRoutes(app: Express) {
         /* the chart is still true without it */
       }
 
+      /**
+       * Whether an hour view is possible for this pair at all.
+       *
+       * 63 pairs are polled into rate_snapshots; 86 have daily closes. The 23
+       * in the gap, EUR/USD and USD/JPY among them, would answer every hour
+       * request with an empty chart. Reported so the caller can leave those
+       * buttons off rather than offer a control that cannot work.
+       */
+      let hasIntraday = false;
+      try {
+        const probe = (await db.execute(sql`
+          select 1 from rate_snapshots
+          where pair = ${pair} and recorded_at > now() - interval '48 hours' limit 1
+        `)) as any;
+        hasIntraday = (probe.rows?.length ?? 0) > 0;
+      } catch {
+        /* the daily chart does not depend on this */
+      }
+
       const last = live ?? lastClose;
       const changePct = Number((((last - first) / first) * 100).toFixed(1));
 
@@ -389,6 +408,7 @@ export async function registerProtocolRoutes(app: Express) {
         pair,
         days,
         intraday,
+        hasIntraday,
         hours: intraday ? hours : undefined,
         /**
          * How many different rates appear in this window.
