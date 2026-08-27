@@ -30,6 +30,9 @@ interface History {
   pair: string;
   points: Point[];
   observations?: number;
+  intraday?: boolean;
+  /** Different rates in the window. Low on an hour view means a staircase. */
+  distinctRates?: number;
   /** Live spot, the same figure the rates list shows. */
   live?: number | null;
   /** The last settled daily close, which the line ends on. */
@@ -40,11 +43,24 @@ interface History {
 }
 
 /**
- * Ranges start at a month. The series is daily closes, so anything shorter
- * would be a handful of points pretending to be a chart, and this product
- * sells cover measured in weeks rather than intraday exposure.
+ * Two different series, not one scale.
+ *
+ * The hour ranges read the oracle's own snapshots, which are the only intraday
+ * record that exists. They stop at 24H because that is all the snapshot
+ * history there is, and they are honest about their resolution: across 48
+ * hours these FX pairs carry roughly 50 snapshots but only THREE distinct
+ * rates, because the provider revalues exotic currencies once or twice a day
+ * rather than continuously. On those pairs an hour view is a staircase, and
+ * the chart says so beneath rather than pretending otherwise.
+ *
+ * Everything from 1M up reads daily closes.
  */
-const RANGES: { key: string; label: string; days: number | "ytd" | "max" }[] = [
+type Range = { key: string; label: string; days?: number | "ytd" | "max"; hours?: number };
+
+const RANGES: Range[] = [
+  { key: "1h",  label: "1H",  hours: 1 },
+  { key: "6h",  label: "6H",  hours: 6 },
+  { key: "24h", label: "24H", hours: 24 },
   { key: "1m",  label: "1M",  days: 30 },
   { key: "3m",  label: "3M",  days: 90 },
   { key: "6m",  label: "6M",  days: 182 },
@@ -82,15 +98,18 @@ const fmtRate = (v: number) =>
     maximumFractionDigits: v >= 100 ? 2 : 4,
   });
 
-const fmtDay = (iso: string) => {
+const fmtDay = (iso: string, intraday = false) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+  return intraday
+    ? d.toLocaleString("en-US", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 };
 
-const fmtAxis = (iso: string, span: number) => {
+const fmtAxis = (iso: string, span: number, intraday: boolean) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
+  if (intraday) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   if (span > 1200) return String(d.getFullYear());
   return d.toLocaleDateString("en-US", { month: "short", year: span > 300 ? "2-digit" : undefined });
 };
@@ -133,21 +152,22 @@ export function RateHistory({
     };
   }, [expanded]);
 
-  const range = RANGES.find((r) => r.key === rangeKey) || RANGES[4];
-  const rangeDays = daysFor(range.days);
+  const range = RANGES.find((r) => r.key === rangeKey) || RANGES[7];
+  const rangeDays = range.days !== undefined ? daysFor(range.days) : 0;
+  const query = range.hours ? `hours=${range.hours}` : `days=${rangeDays}`;
 
   useEffect(() => {
     if (!pair) return;
     let live = true;
     setState("loading");
     setHover(null);
-    fetch(`/api/fx/history/${encodeURIComponent(pair)}?days=${rangeDays}`)
+    fetch(`/api/fx/history/${encodeURIComponent(pair)}?${query}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: History | null) => {
         if (!live) return;
         // A handful of closes cannot describe a market. Drawing a shape from
         // them would imply something that is not in the data.
-        if (!d || !Array.isArray(d.points) || d.points.length < 5) {
+        if (!d || !Array.isArray(d.points) || d.points.length < (d.intraday ? 2 : 5)) {
           setData(null);
           setState("empty");
           return;
@@ -157,7 +177,7 @@ export function RateHistory({
       })
       .catch(() => { if (live) { setData(null); setState("empty"); } });
     return () => { live = false; };
-  }, [pair, rangeDays]);
+  }, [pair, query]);
 
   const geom = useMemo(() => {
     if (!data || data.points.length < 2) return null;
@@ -322,7 +342,7 @@ export function RateHistory({
         </span>
         <span style={{ fontSize: 11.5, color: "var(--tx-4)", marginLeft: "auto" }}>
           {active
-            ? fmtDay(active.date)
+            ? fmtDay(active.date, !!data.intraday)
             : data.live
               ? "live rate"
               : `over ${range.label === "MAX" ? "all time" : range.label}`}
@@ -456,7 +476,7 @@ export function RateHistory({
             fontFamily="var(--mono)"
             textAnchor={n === 0 ? "start" : n === DATES - 1 ? "end" : "middle"}
           >
-            {fmtAxis(pts[i].date, rangeDays)}
+            {fmtAxis(pts[i].date, rangeDays, !!data.intraday)}
           </text>
         ))}
       </svg>
@@ -475,6 +495,15 @@ export function RateHistory({
           </span>
         )}
       </div>
+
+      {data.intraday && (data.distinctRates ?? 0) <= 5 && (
+        <p style={{ fontSize: 11.5, color: "var(--tx-4)", margin: "8px 0 0", lineHeight: 1.5 }}>
+          The rate for this pair was revalued {data.distinctRates} time
+          {data.distinctRates === 1 ? "" : "s"} over this window. Frontier currencies are
+          repriced once or twice a day rather than continuously, so an hourly view steps
+          rather than flows.
+        </p>
+      )}
 
       {hasStrike && (
         <p style={{ fontSize: 11.5, color: "var(--tx-3)", margin: "8px 0 0", lineHeight: 1.5 }}>

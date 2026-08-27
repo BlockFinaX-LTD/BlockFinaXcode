@@ -281,26 +281,59 @@ export async function registerProtocolRoutes(app: Express) {
         return res.status(400).json({ message: "Pair must look like USD/GHS" });
       }
 
+      /**
+       * Hours are a different series from days, not a shorter one.
+       *
+       * historical_fx_closes holds one close per day, so it cannot answer
+       * "the last six hours" at all. The oracle's rate_snapshots can, and is
+       * the only intraday record there is.
+       *
+       * Worth knowing what that record looks like for these pairs. Across 48
+       * hours every FX pair carries about 50 snapshots and just THREE distinct
+       * rates: the upstream provider revalues exotic currencies once or twice
+       * a day rather than continuously. An intraday chart of USD/GHS is
+       * therefore a staircase with three steps, and that is the truth about
+       * the market rather than a defect in the chart. distinctRates is
+       * returned so the caller can say so plainly instead of drawing a line
+       * that implies a precision the data does not have.
+       */
+      const hoursRaw = req.query.hours ? parseInt(String(req.query.hours), 10) : NaN;
+      const intraday = Number.isFinite(hoursRaw) && hoursRaw > 0;
+      const hours = intraday ? Math.min(Math.max(hoursRaw, 1), 48) : 0;
+
       // Up to twenty-five years, which covers the oldest series in the table.
       // The payload stays small because the drawing points are thinned below.
       const days = Math.min(Math.max(parseInt(String(req.query.days || "365"), 10) || 365, 7), 9200);
       const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
-      const rows = await db
-        .select({ date: historicalFxCloses.date, close: historicalFxCloses.close })
-        .from(historicalFxCloses)
-        .where(sql`${historicalFxCloses.pair} = ${pair} and ${historicalFxCloses.date} >= ${since}`)
-        .orderBy(historicalFxCloses.date);
+      const rows = intraday
+        ? ((await db.execute(sql`
+            select recorded_at as date, rate as close
+            from rate_snapshots
+            where pair = ${pair}
+              and recorded_at > now() - (${hours} || ' hours')::interval
+            order by recorded_at
+          `)) as any).rows.map((r: any) => ({ date: new Date(r.date).toISOString(), close: r.close }))
+        : await db
+            .select({ date: historicalFxCloses.date, close: historicalFxCloses.close })
+            .from(historicalFxCloses)
+            .where(sql`${historicalFxCloses.pair} = ${pair} and ${historicalFxCloses.date} >= ${since}`)
+            .orderBy(historicalFxCloses.date);
 
-      const raw = rows
-        .map((r) => ({ date: r.date, close: Number(r.close) }))
-        .filter((p) => Number.isFinite(p.close));
+      const raw: { date: string; close: number }[] = (rows as { date: unknown; close: unknown }[])
+        .map((r) => ({ date: String(r.date), close: Number(r.close) }))
+        .filter((p) => Number.isFinite(p.close) && p.close > 0);
 
       // Feed errors that survive the 40% median filter in fx.ts. USD/GHS has a
       // 14.50 sitting between a 12.45 and a 12.50, which alone produced a
-      // "worst 60 day move" of 30.9% that never happened. Left in, the chart
-      // would shade that band and state it as fact.
-      const { clean: points, dropped } = dropSpikes(raw);
+      // "worst 60 day move" of 30.9% that never happened.
+      //
+      // Daily closes only. The filter judges a point against its neighbours,
+      // and snapshots hold the same rate for hours at a time by design, so the
+      // shape it looks for does not mean the same thing on that series.
+      const { clean: points, dropped } = intraday
+        ? { clean: raw, dropped: [] as typeof raw }
+        : dropSpikes(raw);
 
       if (points.length < 2) {
         return res.json({ pair, days, points: [], change: null, ticksDropped: dropped.length, note: "not enough history" });
@@ -355,6 +388,16 @@ export async function registerProtocolRoutes(app: Express) {
       res.json({
         pair,
         days,
+        intraday,
+        hours: intraday ? hours : undefined,
+        /**
+         * How many different rates appear in this window.
+         *
+         * Low on an intraday range means the provider revalues this pair only
+         * a couple of times a day, so the line is a staircase. Surfaced so the
+         * chart can say that plainly rather than let it read as a fault.
+         */
+        distinctRates: new Set(points.map((p) => p.close)).size,
         points: drawn,
         /** The last settled daily close, kept distinct from the live spot. */
         lastClose,
