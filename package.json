@@ -12,6 +12,7 @@
     "pricing:test": "tsx --test server/pricing/__tests__/*.test.ts",
     "agent:test": "tsx --test server/agent/__tests__/*.test.ts",
     "lib:test": "tsx --test server/lib/__tests__/*.test.ts",
+    "client:test": "tsx --test client/src/lib/__tests__/*.test.ts",
     "outreach:test": "tsx --env-file-if-exists=.env --test server/routes/__tests__/*.test.ts",
     "outreach:migrate": "tsx --env-file-if-exists=.env server/scripts/migrate-outreach.ts",
     "prospects:test": "tsx --env-file-if-exists=.env --test server/prospects/__tests__/*.test.ts",

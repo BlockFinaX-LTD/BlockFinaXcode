@@ -120,17 +120,26 @@ export function RateHistory({
   pair,
   strike,
   strikeAbove,
+  cap,
+  maxPayoutLabel,
   initialRange = "1y",
 }: {
   pair: string;
   /** Omitted when no particular cover is in view, as on the rates list. */
   strike?: number;
   strikeAbove?: boolean;
+  /** The rate past which the payout stops growing. Shades the zones when given. */
+  cap?: number;
+  /** Labels for the bands, so the chart says what each zone is worth. */
+  maxPayoutLabel?: string;
   initialRange?: string;
 }) {
   // Without a strike this is simply the pair's history. The strike line and the
   // sentence about where cover starts paying are the only parts that need one.
   const hasStrike = typeof strike === "number" && Number.isFinite(strike) && strike > 0;
+  // Zones need both edges. With only a strike the chart draws the one line, as
+  // it does on the rates list where no particular cover is in view.
+  const hasZones = hasStrike && typeof cap === "number" && Number.isFinite(cap) && cap > 0;
 
   const [rangeKey, setRangeKey] = useState(initialRange);
   const [data, setData] = useState<History | null>(null);
@@ -189,8 +198,11 @@ export function RateHistory({
     // The strike sits inside the scale on purpose. If it is outside everything
     // the pair has traded, that fact is the most useful thing on the chart, and
     // clipping it would hide exactly what the reader needs to see.
-    const lo = hasStrike ? Math.min(...closes, strike as number) : Math.min(...closes);
-    const hi = hasStrike ? Math.max(...closes, strike as number) : Math.max(...closes);
+    const edges: number[] = [];
+    if (hasStrike) edges.push(strike as number);
+    if (hasZones) edges.push(cap as number);
+    const lo = Math.min(...closes, ...edges);
+    const hi = Math.max(...closes, ...edges);
     // A flat series would divide by zero, and a hairline down the middle reads
     // as broken, so give it room either side.
     const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.02 || 1;
@@ -211,7 +223,7 @@ export function RateHistory({
     for (let i = 0; i <= TICKS; i++) ticks.push(min + ((max - min) * i) / TICKS);
 
     return { min, max, x, y, line, area, ticks, iw, ih };
-  }, [data, hasStrike, strike, VW, VH, PAD, TICKS]);
+  }, [data, hasStrike, hasZones, strike, cap, VW, VH, PAD, TICKS]);
 
   const onMove = useCallback((clientX: number) => {
     const svg = svgRef.current;
@@ -493,6 +505,42 @@ export function RateHistory({
         <path d={geom.line} fill="none" stroke="var(--blue)" strokeWidth="1.8"
               strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
 
+        {/*
+          The payout zones, drawn straight onto the price history.
+
+          This is the change that makes the cover legible. A payoff diagram
+          answers "what do I get if the rate lands here", which is the easy
+          half. Laying the same strike and cap over a year of real closes
+          answers the half that actually decides a purchase: how often has the
+          rate been there.
+
+          Under the price line and over the gridlines, so the price reads first.
+        */}
+        {hasZones && (() => {
+          const yStrike = geom.y(strike as number);
+          const yCap = geom.y(cap as number);
+          const top = Math.min(yStrike, yCap);
+          const bot = Math.max(yStrike, yCap);
+          // The side where the maximum is already reached: above the cap for
+          // upside cover, below it for downside.
+          const maxTop = strikeAbove ? PAD.t : bot;
+          const maxBot = strikeAbove ? top : VH - PAD.b;
+          return (
+            <g pointerEvents="none">
+              <rect x={PAD.l} y={maxTop} width={geom.iw} height={Math.max(0, maxBot - maxTop)}
+                    fill="var(--green)" opacity="0.11" />
+              <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
+                    fill="var(--green)" opacity="0.05" />
+              <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke="var(--green)"
+                    strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.75" />
+              <text x={PAD.l + 4} y={strikeAbove ? maxBot - 6 : maxTop + 12}
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--green)" opacity="0.9">
+                {maxPayoutLabel ? `MAX ${maxPayoutLabel}` : "MAX PAYOUT"}
+              </text>
+            </g>
+          );
+        })()}
+
         {/* The strike. Everything the cover is about sits on this line. */}
         {strikeVisible && (
           <>
@@ -537,7 +585,13 @@ export function RateHistory({
         {strikeVisible && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 12, height: 0, borderTop: "1.5px dashed var(--green)", display: "inline-block" }} />
-            Strike {fmtRate(strike as number)}
+            Pays {strikeAbove ? "above" : "below"} {fmtRate(strike as number)}
+          </span>
+        )}
+        {hasZones && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, background: "var(--green)", opacity: 0.28, borderRadius: 2, display: "inline-block" }} />
+            Most {strikeAbove ? "above" : "below"} {fmtRate(cap as number)}
           </span>
         )}
         {!!data.observations && (

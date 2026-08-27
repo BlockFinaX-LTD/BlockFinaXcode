@@ -36,7 +36,8 @@ import { ethers } from 'ethers';
 import { mainnetGuard } from '@/lib/mainnet-guard';
 import { explainTxError } from '@/lib/tx-errors';
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from '@/lib/networks';
-import { PayoutScenarios } from '@/components/hedge/payout-scenarios';
+import { PayoutOutcomes } from '@/components/hedge/payout-outcomes';
+import { buildPayoutModel } from '@/lib/payout-model';
 import { RateHistory } from '@/components/hedge/rate-history';
 import { FlagSvg, CommoditySvg, CoinSvg, KNOWN_FLAGS } from '@/components/app-glyphs';
 
@@ -139,6 +140,18 @@ function poolSubtitle(name: string | null | undefined, underlying: string): stri
  * expiry instead would put a pool bought yesterday below one bought last month
  * that happens to run longer.
  */
+/** The cap the chart shades and the cards quote, from one model. */
+function payoutModelFor(p: HedgePositionData, ev: HedgeEventData) {
+  return buildPayoutModel({
+    notional: p.notional,
+    initialRate: ev.initialRate,
+    maxPayout: p.payoutAmount,
+    strike: ev.strike,
+    strikeAbove: ev.strikeAbove,
+    totalCost: p.premiumPaid + p.platformFeePaid,
+  });
+}
+
 function byNewest<T extends { id: number }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => b.id - a.id);
 }
@@ -1447,7 +1460,20 @@ export default function Hedge() {
                     </div>
                     {ev && (
                       <div style={{ marginTop: 8 }}>
-                        <PayoutScenarios
+                        {/* The price history carries the strike and cap as
+                            shaded zones, so "how often has the rate been
+                            there" is answered by the same picture that shows
+                            what the cover is worth. The cards beneath give the
+                            three cases in words. Between them they replaced a
+                            payoff diagram and a seven row table. */}
+                        <RateHistory
+                          pair={ev.underlying}
+                          strike={ev.strike}
+                          strikeAbove={ev.strikeAbove}
+                          cap={payoutModelFor(p, ev).cap}
+                          maxPayoutLabel={fmtMoney(p.payoutAmount)}
+                        />
+                        <PayoutOutcomes
                           notional={p.notional}
                           totalCost={p.premiumPaid + p.platformFeePaid}
                           maxPayout={p.payoutAmount}
