@@ -124,6 +124,7 @@ export function RateHistory({
   maxPayoutLabel,
   markRate,
   markLabel,
+  entryRate,
   initialRange = "1y",
 }: {
   pair: string;
@@ -140,6 +141,14 @@ export function RateHistory({
    */
   markRate?: number;
   markLabel?: string;
+  /**
+   * The rate when the cover was bought.
+   *
+   * The gap between it and the strike is the part of the move the holder
+   * carries themselves, which is the one number a payout table never showed
+   * and the thing people most often misjudge about a hedge.
+   */
+  entryRate?: number;
   /** Labels for the bands, so the chart says what each zone is worth. */
   maxPayoutLabel?: string;
   initialRange?: string;
@@ -202,9 +211,32 @@ export function RateHistory({
     return () => { live = false; };
   }, [pair, query]);
 
+  /**
+   * The series the line is drawn from, ending at the live rate.
+   *
+   * The line used to stop at the last daily close while the marker and the
+   * headline showed live spot, so the chart carried two "now" markers at
+   * different heights. Both were labelled and it still read as a fault,
+   * because a reader sees two dots for one moment before they read anything.
+   *
+   * A close is an end-of-day figure and spot is right now, so the honest fix
+   * is to draw that last leg rather than to hide it: the series genuinely
+   * continues from the close to where the rate stands. Only added when it
+   * actually differs, so a quiet market gains no phantom point.
+   */
+  const series = useMemo<Point[]>(() => {
+    const rows: Point[] = data?.points ?? [];
+    if (!rows.length) return rows;
+    const live = data?.live;
+    if (!live || !Number.isFinite(live)) return rows;
+    const lastClose = rows[rows.length - 1].close;
+    if (!lastClose || Math.abs(live - lastClose) / lastClose < 0.0002) return rows;
+    return [...rows, { date: new Date().toISOString().slice(0, 10), close: live }];
+  }, [data]);
+
   const geom = useMemo(() => {
-    if (!data || data.points.length < 2) return null;
-    const closes = data.points.map((p) => p.close);
+    if (!data || series.length < 2) return null;
+    const closes = series.map((p) => p.close);
     // The strike sits inside the scale on purpose. If it is outside everything
     // the pair has traded, that fact is the most useful thing on the chart, and
     // clipping it would hide exactly what the reader needs to see.
@@ -212,6 +244,7 @@ export function RateHistory({
     if (hasStrike) edges.push(strike as number);
     if (hasZones) edges.push(cap as number);
     if (typeof markRate === "number" && Number.isFinite(markRate) && markRate > 0) edges.push(markRate);
+    if (typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0) edges.push(entryRate);
     const lo = Math.min(...closes, ...edges);
     const hi = Math.max(...closes, ...edges);
     // A flat series would divide by zero, and a hairline down the middle reads
@@ -222,19 +255,19 @@ export function RateHistory({
 
     const iw = VW - PAD.l - PAD.r;
     const ih = VH - PAD.t - PAD.b;
-    const x = (i: number) => PAD.l + (i / (data.points.length - 1)) * iw;
+    const x = (i: number) => PAD.l + (i / (series.length - 1)) * iw;
     const y = (v: number) => PAD.t + (1 - (v - min) / (max - min)) * ih;
 
-    const line = data.points
+    const line = series
       .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.close).toFixed(1)}`)
       .join(" ");
-    const area = `${line} L${x(data.points.length - 1).toFixed(1)},${PAD.t + ih} L${PAD.l},${PAD.t + ih} Z`;
+    const area = `${line} L${x(series.length - 1).toFixed(1)},${PAD.t + ih} L${PAD.l},${PAD.t + ih} Z`;
 
     const ticks: number[] = [];
     for (let i = 0; i <= TICKS; i++) ticks.push(min + ((max - min) * i) / TICKS);
 
     return { min, max, x, y, line, area, ticks, iw, ih };
-  }, [data, hasStrike, hasZones, strike, cap, markRate, VW, VH, PAD, TICKS]);
+  }, [data, series, hasStrike, hasZones, strike, cap, markRate, entryRate, VW, VH, PAD, TICKS]);
 
   const onMove = useCallback((clientX: number) => {
     const svg = svgRef.current;
@@ -244,9 +277,9 @@ export function RateHistory({
     // Map the pointer into viewBox space, then to the nearest close.
     const vx = ((clientX - box.left) / box.width) * VW;
     const frac = (vx - PAD.l) / geom.iw;
-    const i = Math.round(frac * (data.points.length - 1));
-    setHover(Math.max(0, Math.min(data.points.length - 1, i)));
-  }, [data, geom, VW, PAD.l]);
+    const i = Math.round(frac * (series.length - 1));
+    setHover(Math.max(0, Math.min(series.length - 1, i)));
+  }, [series, geom, VW, PAD.l]);
 
   /**
    * Every state goes through here, including loading and empty.
@@ -319,7 +352,9 @@ export function RateHistory({
     );
   }
 
-  const pts = data.points;
+  // The drawn series, not the raw closes: the endpoint dot, the date labels
+  // and the crosshair must all land on the line that is actually painted.
+  const pts = series;
   // `last` is where the LINE ends, which must stay a close, or the final point
   // would be plotted against an axis built from closes. `headline` is what the
   // reader sees, and that is the live spot so this agrees with the rates list.
@@ -527,6 +562,39 @@ export function RateHistory({
 
           Under the price line and over the gridlines, so the price reads first.
         */}
+        {/*
+          The excess: entry to strike.
+
+          This is the stretch of the move the holder absorbs before cover
+          starts, and it is the part people misjudge. Red rather than amber
+          because it is genuinely unprotected exposure, not a warning, and
+          faint because it is a fact about the position rather than an alarm.
+
+          Only drawn when the strike sits the adverse side of entry, which is
+          the normal shape. A pool struck the other side of spot has no excess
+          to show, and inventing a band there would be a lie about the terms.
+        */}
+        {hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0
+          && (strikeAbove ? (strike as number) > entryRate : (strike as number) < entryRate)
+          && (() => {
+          const yEntry = geom.y(entryRate);
+          const yStrike = geom.y(strike as number);
+          const top = Math.min(yEntry, yStrike);
+          const bot = Math.max(yEntry, yStrike);
+          return (
+            <g pointerEvents="none">
+              <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
+                    fill="var(--red)" opacity="0.09" />
+              <line x1={PAD.l} y1={yEntry} x2={VW - PAD.r} y2={yEntry} stroke="var(--red)"
+                    strokeWidth="1.1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
+              <text x={PAD.l + 4} y={yEntry + (strikeAbove ? 12 : -6)}
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--red)" opacity="0.9">
+                bought at {fmtRate(entryRate)}
+              </text>
+            </g>
+          );
+        })()}
+
         {hasZones && (() => {
           const yStrike = geom.y(strike as number);
           const yCap = geom.y(cap as number);
@@ -635,6 +703,13 @@ export function RateHistory({
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 10, height: 10, background: "var(--green)", opacity: 0.3, borderRadius: 2, display: "inline-block" }} />
             Payout grows to {fmtRate(cap as number)}, then holds
+          </span>
+        )}
+        {hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0
+          && (strikeAbove ? (strike as number) > entryRate : (strike as number) < entryRate) && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, background: "var(--red)", opacity: 0.26, borderRadius: 2, display: "inline-block" }} />
+            You carry {fmtRate(entryRate)} to {fmtRate(strike as number)}
           </span>
         )}
         {!!data.observations && (

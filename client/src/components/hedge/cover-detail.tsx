@@ -123,6 +123,7 @@ export function CoverDetail(props: OutcomeProps & { cap: number; maxPayoutLabel:
             maxPayoutLabel={maxPayoutLabel}
             markRate={settled ? props.settlementPrice : props.currentRate}
             markLabel={settled ? "settled" : "now"}
+            entryRate={props.initialRate}
           />
 
           <WhereItStands {...props} />
