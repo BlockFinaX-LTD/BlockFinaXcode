@@ -31,6 +31,10 @@ interface History {
   pair: string;
   points: Point[];
   observations?: number;
+  /** Live spot, the same figure the rates list shows. */
+  live?: number | null;
+  /** The last settled daily close, which the line ends on. */
+  lastClose?: number;
   latest?: number;
   ticksDropped?: number;
   change?: { percent: number; direction: string } | null;
@@ -265,9 +269,13 @@ export function RateHistory({
   }
 
   const pts = data.points;
+  // `last` is where the LINE ends, which must stay a close, or the final point
+  // would be plotted against an axis built from closes. `headline` is what the
+  // reader sees, and that is the live spot so this agrees with the rates list.
   const last = pts[pts.length - 1].close;
+  const headline = data.live ?? data.latest ?? last;
   const active = hover !== null ? pts[hover] : null;
-  const shownVal = active ? active.close : last;
+  const shownVal = active ? active.close : headline;
 
   const chg = data.change?.percent ?? 0;
   const flat = Math.abs(chg) < 0.05;
@@ -303,7 +311,11 @@ export function RateHistory({
           {flat ? "0.0" : `${up ? "+" : ""}${chg.toFixed(1)}`}%
         </span>
         <span style={{ fontSize: 11.5, color: "var(--tx-4)", marginLeft: "auto" }}>
-          {active ? fmtDay(active.date) : `over ${range.label === "MAX" ? "all time" : range.label}`}
+          {active
+            ? fmtDay(active.date)
+            : data.live
+              ? "live rate"
+              : `over ${range.label === "MAX" ? "all time" : range.label}`}
         </span>
       </div>
 

@@ -3,12 +3,12 @@
  *
  * Layout, UI/UX and search match the design 1:1; all data is live:
  *   - Balance + Wallet/Pools split: Rift cross-chain balances + hedge LP
- *   - Live rates: /api/fx/rates (FX / Commodities) with a gentle live tick
+ *   - Live rates: /api/fx/rates (FX / Commodities), refetched every 30s
  *   - Liquidity positions: hedgeContract LP deposits
  *   - Recent activity: unified Rift + hedge feed
  *   - Send / Receive: design sheets wired to real Rift rails
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/app-shell';
@@ -159,10 +159,10 @@ export default function HomePage() {
   );
   const totalBalance = walletTotal + poolsTotal;
 
-  // ── FX rates with a gentle live tick (mirrors the design) ──────────────
+  // ── FX rates, straight from the oracle, refetched every 30s ────────────
   const { data: fxData } = useQuery<FXResponse>({
     queryKey: ['/api/fx/rates'],
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: 30 * 1000,
   });
 
   const baseRates = useMemo(() => {
@@ -186,21 +186,24 @@ export default function HomePage() {
     return { fx: fx.slice(0, 6), cmd: cmd.slice(0, 6) };
   }, [fxData]);
 
-  // local tick state so values drift between server refetches
-  const [tick, setTick] = useState(0);
-  const driftRef = useRef<Record<string, number>>({});
-  useEffect(() => { driftRef.current = {}; }, [fxData]);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 2200);
-    return () => clearInterval(id);
-  }, []);
-  const displayRates = (rateGroup === 'fx' ? baseRates.fx : baseRates.cmd).map((r) => {
-    const prev = driftRef.current[r.pair] ?? r.px;
-    const drift = (Math.random() - 0.48) * (prev * 0.0009);
-    const next = Math.max(0.0001, prev + drift);
-    driftRef.current[r.pair] = next;
-    return { ...r, px: tick === 0 ? r.px : next };
-  });
+  /**
+   * The rates exactly as the oracle reported them.
+   *
+   * This used to add a random number to every price every 2.2 seconds, to make
+   * the list feel live between refetches. It made the list show prices that
+   * never existed, and not evenly: `Math.random() - 0.48` has a mean of +0.02
+   * rather than 0, so it pushed upward, averaging +0.25% and reaching +1.18%
+   * within a single five minute window.
+   *
+   * The direction is what makes it indefensible. Upward on USD/GHS is the cedi
+   * weakening, which is the direction that makes cover look more necessary.
+   * Nobody intended that, and no amount of intent makes invented prices
+   * acceptable on a product being shown to the Bank of Ghana.
+   *
+   * The liveness is real now instead: the query above refetches every 30
+   * seconds, so the number changes when the market does and not otherwise.
+   */
+  const displayRates = rateGroup === 'fx' ? baseRates.fx : baseRates.cmd;
 
   // ── Activity ───────────────────────────────────────────────────────────
   const { rows: activityRows, loading: activityLoading } = useUnifiedActivity(wallet?.address, 50);

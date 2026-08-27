@@ -320,7 +320,26 @@ export async function registerProtocolRoutes(app: Express) {
       }
 
       const first = points[0].close;
-      const last = points[points.length - 1].close;
+      const lastClose = points[points.length - 1].close;
+
+      /**
+       * The live spot, from the same oracle the rates list reads.
+       *
+       * A daily close is a settled end of day figure and the spot is right
+       * now, so the two legitimately differ by a few tenths of a percent. Two
+       * screens showing different numbers for the same pair reads as a bug
+       * whether or not it is one, so the chart quotes the live rate and the
+       * closes remain what the line is drawn from.
+       */
+      let live: number | null = null;
+      try {
+        const r = await getRate(pair);
+        if (r && Number.isFinite(r.rate) && r.rate > 0) live = r.rate;
+      } catch {
+        /* the chart is still true without it */
+      }
+
+      const last = live ?? lastClose;
       const changePct = Number((((last - first) / first) * 100).toFixed(1));
 
       /**
@@ -350,6 +369,9 @@ export async function registerProtocolRoutes(app: Express) {
         pair,
         days,
         points: drawn,
+        /** The last settled daily close, kept distinct from the live spot. */
+        lastClose,
+        live,
         /** How many closes the figures were computed from, before thinning. */
         observations: points.length,
         latest: last,
