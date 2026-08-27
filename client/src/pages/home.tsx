@@ -8,7 +8,7 @@
  *   - Recent activity: unified Rift + hedge feed
  *   - Send / Receive: design sheets wired to real Rift rails
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/app-shell';
@@ -24,7 +24,7 @@ import { FlagSvg, CommoditySvg, CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChai
 import { RateHistory } from '@/components/hedge/rate-history';
 import logoPath from '@/assets/logo.png';
 import {
-  Eye, EyeOff, ArrowUp, ArrowDown, Shield, TrendingUp, Gift, ArrowRight,
+  Eye, EyeOff, ArrowUp, ArrowDown, Shield, TrendingUp, Gift, ArrowRight, RefreshCw,
   ArrowDownLeft, ArrowUpRight, Plus, X, ExternalLink, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
@@ -104,7 +104,7 @@ export default function HomePage() {
   }, [isLoading, walletExists, setLocation]);
 
   // ── Cross-chain balances (Rift) ────────────────────────────────────────
-  const { balances: riftBalances, isLoading: riftLoading } = useRiftBalances();
+  const { balances: riftBalances, isLoading: riftLoading, refreshAll: refreshBalances } = useRiftBalances();
   const walletTotal = useMemo(
     () => riftBalances.reduce((s, b) => s + (Number(b.amount) || 0), 0),
     [riftBalances],
@@ -122,6 +122,8 @@ export default function HomePage() {
   // no handler, so a tap on a market simply fell through.
   const [rateDetail, setRateDetail] = useState<{ pair: string; name: string; px: number; code: string; ic?: string } | null>(null);
   const [hedgeLoading, setHedgeLoading] = useState(true);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,7 +145,33 @@ export default function HomePage() {
       setHedgeLoading(false);
     })();
     return () => { cancelled = true; clearTimeout(watchdog); };
-  }, [wallet?.address]);
+  }, [wallet?.address, reloadNonce]);
+
+  /**
+   * Pull both halves of the balance again.
+   *
+   * The number on this page is wallet balances plus on-chain positions, read
+   * from two independent sources, so refreshing one would leave the other
+   * stale and the total still wrong. allSettled rather than all: a failing
+   * chain read must not stop the wallet half from updating.
+   *
+   * The minimum delay is deliberate. A cached response can return in
+   * milliseconds, and a spinner that vanishes before it is seen reads as a
+   * button that did nothing.
+   */
+  const refreshEverything = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setReloadNonce((n) => n + 1);
+    try {
+      await Promise.allSettled([
+        refreshBalances(),
+        new Promise((r) => setTimeout(r, 600)),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, refreshBalances]);
 
   const eventsById = useMemo(() => {
     const m = new Map<number, HedgeEventData>();
@@ -246,6 +274,26 @@ export default function HomePage() {
             <span className="bal-k">Total balance</span>
             <button className="eye" aria-label="Hide balance" onClick={() => setHidden((h) => !h)}>
               <span className="ic-on"><Eye /></span><span className="ic-off"><EyeOff /></span>
+            </button>
+            <button
+              className="eye"
+              aria-label="Refresh balance"
+              title="Refresh balance"
+              onClick={refreshEverything}
+              disabled={refreshing}
+              style={{ marginLeft: 2 }}
+            >
+              {/* One icon that spins rather than swapping to a spinner: the
+                  glyph staying put makes it read as this button working,
+                  rather than as something else appearing.
+
+                  `.spin` is the app's existing rule in app-extra.css. Writing
+                  a fresh animation here named a keyframe that does not exist,
+                  which fails silently: no error, and no rotation either. */}
+              <RefreshCw
+                className={refreshing ? 'spin' : undefined}
+                style={{ width: 15, height: 15, opacity: refreshing ? 0.65 : 1 }}
+              />
             </button>
           </div>
           <div className="bal-num">
