@@ -234,9 +234,15 @@ export function RateHistory({
    */
   const wrap = (node: JSX.Element): JSX.Element => {
     if (!expanded) return node;
+
+    // The themed wrapper, falling back to body only if the shell is absent.
+    const host =
+      (typeof document !== "undefined" && document.querySelector(".bfx-app")) ||
+      (typeof document !== "undefined" ? document.body : null);
+    if (!host) return node;
+
     return createPortal(
       <div
-        className="bfx-app"
         role="dialog"
         aria-modal="true"
         aria-label={`${pair} price history, enlarged`}
@@ -271,7 +277,7 @@ export function RateHistory({
           {node}
         </div>
       </div>,
-      document.body,
+      host,
     );
   };
 
