@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 interface Point { date: string; close: number; }
 interface Move { percent: number; from: string; to: string; direction: string; }
@@ -60,10 +61,17 @@ const daysFor = (d: number | "ytd" | "max"): number => {
   return d;
 };
 
-// Room on the right for price labels and underneath for dates.
-const VW = 560;
-const VH = 220;
-const PAD = { t: 10, r: 54, b: 24, l: 6 };
+/**
+ * Geometry for the two sizes this chart draws at.
+ *
+ * One component rather than two: an expanded copy with its own state would
+ * drift from the inline one, and would forget which range you were looking at
+ * the moment you opened it.
+ */
+const SIZES = {
+  inline:   { VW: 560,  VH: 220, PAD: { t: 10, r: 54, b: 24, l: 6 }, ticks: 3, dates: 3 },
+  expanded: { VW: 1100, VH: 480, PAD: { t: 16, r: 68, b: 30, l: 10 }, ticks: 6, dates: 6 },
+};
 
 const fmtRate = (v: number) =>
   v.toLocaleString("en-US", {
@@ -104,7 +112,23 @@ export function RateHistory({
   const [data, setData] = useState<History | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "empty">("loading");
   const [hover, setHover] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const { VW, VH, PAD, ticks: TICKS, dates: DATES } = expanded ? SIZES.expanded : SIZES.inline;
+
+  // Escape closes it, and the page behind must not scroll while it is open.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [expanded]);
 
   const range = RANGES.find((r) => r.key === rangeKey) || RANGES[4];
   const rangeDays = daysFor(range.days);
@@ -157,10 +181,10 @@ export function RateHistory({
     const area = `${line} L${x(data.points.length - 1).toFixed(1)},${PAD.t + ih} L${PAD.l},${PAD.t + ih} Z`;
 
     const ticks: number[] = [];
-    for (let i = 0; i <= 3; i++) ticks.push(min + ((max - min) * i) / 3);
+    for (let i = 0; i <= TICKS; i++) ticks.push(min + ((max - min) * i) / TICKS);
 
     return { min, max, x, y, line, area, ticks, iw, ih };
-  }, [data, hasStrike, strike]);
+  }, [data, hasStrike, strike, VW, VH, PAD, TICKS]);
 
   const onMove = useCallback((clientX: number) => {
     const svg = svgRef.current;
@@ -172,20 +196,66 @@ export function RateHistory({
     const frac = (vx - PAD.l) / geom.iw;
     const i = Math.round(frac * (data.points.length - 1));
     setHover(Math.max(0, Math.min(data.points.length - 1, i)));
-  }, [data, geom]);
+  }, [data, geom, VW, PAD.l]);
+
+  /**
+   * Every state goes through here, including loading and empty.
+   *
+   * These used to return early, before the overlay was applied. Switching to a
+   * range with no data while expanded therefore left the scroll lock on with
+   * nothing on screen to release it, which froze the page.
+   */
+  const wrap = (node: JSX.Element): JSX.Element => {
+    if (!expanded) return node;
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${pair} price history, enlarged`}
+        onClick={() => setExpanded(false)}
+        style={{
+          position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.72)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+        }}
+      >
+        <div
+          // The backdrop closes it; the panel must not, or a drag across the
+          // chart that ends outside would dismiss what you were reading.
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: "var(--bg-1)", border: "1px solid var(--border)", borderRadius: 14,
+            padding: "18px 20px 20px", width: "min(1180px, 100%)", maxHeight: "92vh", overflowY: "auto",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--tx-1)" }}>{pair}</span>
+            <span style={{ fontSize: 11.5, color: "var(--tx-4)" }}>press Esc to close</span>
+            <button
+              onClick={() => setExpanded(false)}
+              aria-label="Close"
+              style={{ marginLeft: "auto", border: "none", background: "transparent", color: "var(--tx-3)", cursor: "pointer", display: "inline-flex" }}
+            >
+              <Minimize2 style={{ width: 15, height: 15 }} />
+            </button>
+          </div>
+          {node}
+        </div>
+      </div>
+    );
+  };
 
   if (state === "loading") {
-    return (
-      <div style={{ height: 250, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--tx-4)" }}>
+    return wrap(
+      <div style={{ height: expanded ? 420 : 250, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--tx-4)" }}>
         Reading history…
-      </div>
+      </div>,
     );
   }
   if (state === "empty" || !data || !geom) {
-    return (
+    return wrap(
       <div style={{ padding: "20px 0", fontSize: 12.5, color: "var(--tx-4)" }}>
         No price history for {pair} over this period.
-      </div>
+      </div>,
     );
   }
 
@@ -217,8 +287,8 @@ export function RateHistory({
 
   const gradId = `rh-${pair.replace(/[^A-Za-z0-9]/g, "")}`;
 
-  return (
-    <div style={{ marginTop: 12 }}>
+  const body = (
+    <div style={expanded ? { width: "100%" } : { marginTop: 12 }}>
       {/* Headline: the value under the cursor, or the latest close. */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
         <span className="tnum" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--tx-1)" }}>
@@ -261,6 +331,24 @@ export function RateHistory({
             </button>
           );
         })}
+
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? "Close the enlarged chart" : "Enlarge the chart"}
+          title={expanded ? "Close (Esc)" : "Enlarge"}
+          style={{
+            marginLeft: "auto",
+            border: "none",
+            background: "transparent",
+            color: "var(--tx-3)",
+            cursor: "pointer",
+            padding: "4px 6px",
+            display: "inline-flex",
+            alignItems: "center",
+          }}
+        >
+          {expanded ? <Minimize2 style={{ width: 14, height: 14 }} /> : <Maximize2 style={{ width: 14, height: 14 }} />}
+        </button>
       </div>
 
       <svg
@@ -334,15 +422,15 @@ export function RateHistory({
 
         {/* Date axis: first, middle, last. Three fit at this width without
             colliding, and more of them read as clutter. */}
-        {[0, Math.floor((pts.length - 1) / 2), pts.length - 1].map((i, n) => (
+        {Array.from({ length: DATES }, (_, n) => Math.round((n / (DATES - 1)) * (pts.length - 1))).map((i, n) => (
           <text
             key={n}
             x={geom.x(i)}
             y={VH - 8}
-            fontSize="10"
+            fontSize={expanded ? 11 : 10}
             fill="var(--tx-4)"
             fontFamily="var(--mono)"
-            textAnchor={n === 0 ? "start" : n === 2 ? "end" : "middle"}
+            textAnchor={n === 0 ? "start" : n === DATES - 1 ? "end" : "middle"}
           >
             {fmtAxis(pts[i].date, rangeDays)}
           </text>
@@ -379,4 +467,6 @@ export function RateHistory({
       )}
     </div>
   );
+
+  return wrap(body);
 }
