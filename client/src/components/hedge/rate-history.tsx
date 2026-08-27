@@ -278,11 +278,27 @@ export function RateHistory({
   const chg = data.change?.percent ?? 0;
   const flat = Math.abs(chg) < 0.05;
   const up = chg > 0;
-  // Green for a stronger local currency, which is a FALL in USD/XXX. A rise
-  // means more local currency per dollar, so imports cost more. Colouring that
-  // green because the number went up would say the opposite of the truth, and
-  // that inversion has already reached a reader once.
-  const chgColour = flat ? "var(--tx-3)" : up ? "var(--red)" : "var(--green)";
+  /**
+   * Up is green, down is red, the ordinary market convention.
+   *
+   * This was inverted at first, on the reasoning that a rise in USD/GHS means
+   * more cedis per dollar and therefore dearer imports, so a rise is bad news
+   * for a Ghanaian importer. That reasoning is sound and the colour was still
+   * wrong, for two reasons.
+   *
+   * It contradicted the rates list on the very same screen, which colours a
+   * rise green. One number, two colours, is a bug however each was argued.
+   *
+   * And it only holds for one reader. A rise is adverse for an importer and
+   * favourable for an exporter, and the underwriters on the other side of
+   * these pools have the opposite exposure again. Colour cannot encode an
+   * interpretation that depends on who is looking.
+   *
+   * The meaning is not lost: the line directly beneath spells it out in words,
+   * "GHS weaker by 0.6%, so imports cost more", which is unambiguous for every
+   * reader and needs no legend.
+   */
+  const chgColour = flat ? "var(--tx-3)" : up ? "var(--green)" : "var(--red)";
 
   const strikeY = hasStrike ? geom.y(strike as number) : 0;
   const strikeVisible = hasStrike && strikeY >= PAD.t && strikeY <= VH - PAD.b;
