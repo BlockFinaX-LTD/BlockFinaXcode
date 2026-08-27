@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 interface Point { date: string; close: number; }
@@ -207,40 +208,44 @@ export function RateHistory({
    */
   const wrap = (node: JSX.Element): JSX.Element => {
     if (!expanded) return node;
-    return (
+    return createPortal(
       <div
+        className="bfx-app"
         role="dialog"
         aria-modal="true"
         aria-label={`${pair} price history, enlarged`}
         onClick={() => setExpanded(false)}
+        // Opaque and edge to edge. A centred card with scrim either side gives
+        // back most of the width that expanding was for.
         style={{
-          position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.72)",
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          position: "fixed", inset: 0, zIndex: 100, background: "var(--bg)",
+          display: "flex", flexDirection: "column",
         }}
       >
         <div
-          // The backdrop closes it; the panel must not, or a drag across the
+          // The surround closes it; the content must not, or a drag across the
           // chart that ends outside would dismiss what you were reading.
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: "var(--bg-1)", border: "1px solid var(--border)", borderRadius: 14,
-            padding: "18px 20px 20px", width: "min(1180px, 100%)", maxHeight: "92vh", overflowY: "auto",
+            flex: 1, minHeight: 0, overflowY: "auto",
+            padding: "18px clamp(16px, 4vw, 48px) 28px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--tx-1)" }}>{pair}</span>
-            <span style={{ fontSize: 11.5, color: "var(--tx-4)" }}>press Esc to close</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
+            <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--tx)" }}>{pair}</span>
+            <span style={{ fontSize: 12, color: "var(--tx-4)" }}>press Esc to close</span>
             <button
               onClick={() => setExpanded(false)}
               aria-label="Close"
-              style={{ marginLeft: "auto", border: "none", background: "transparent", color: "var(--tx-3)", cursor: "pointer", display: "inline-flex" }}
+              style={{ marginLeft: "auto", border: "none", background: "transparent", color: "var(--tx-3)", cursor: "pointer", display: "inline-flex", padding: 6 }}
             >
-              <Minimize2 style={{ width: 15, height: 15 }} />
+              <Minimize2 style={{ width: 18, height: 18 }} />
             </button>
           </div>
           {node}
         </div>
-      </div>
+      </div>,
+      document.body,
     );
   };
 
@@ -291,7 +296,7 @@ export function RateHistory({
     <div style={expanded ? { width: "100%" } : { marginTop: 12 }}>
       {/* Headline: the value under the cursor, or the latest close. */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
-        <span className="tnum" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--tx-1)" }}>
+        <span className="tnum" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--tx)" }}>
           {fmtRate(shownVal)}
         </span>
         <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: chgColour }}>
@@ -355,7 +360,11 @@ export function RateHistory({
         ref={svgRef}
         viewBox={`0 0 ${VW} ${VH}`}
         width="100%"
-        style={{ display: "block", touchAction: "pan-y" }}
+        style={
+          expanded
+            ? { display: "block", width: "100%", height: "min(62vh, 620px)", touchAction: "pan-y" }
+            : { display: "block", touchAction: "pan-y" }
+        }
         role="img"
         aria-label={
           hasStrike
@@ -413,7 +422,7 @@ export function RateHistory({
           <>
             <line x1={geom.x(hover)} y1={PAD.t} x2={geom.x(hover)} y2={VH - PAD.b}
                   stroke="var(--tx-4)" strokeWidth="1" opacity="0.55" vectorEffect="non-scaling-stroke" />
-            <circle cx={geom.x(hover)} cy={geom.y(active.close)} r="3.5" fill="var(--blue)" stroke="var(--bg-1)" strokeWidth="1.5" />
+            <circle cx={geom.x(hover)} cy={geom.y(active.close)} r="3.5" fill="var(--blue)" stroke="var(--bg-2)" strokeWidth="1.5" />
           </>
         )}
 
