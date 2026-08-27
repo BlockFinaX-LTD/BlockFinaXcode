@@ -2393,14 +2393,20 @@ const ACTION_LABEL: Record<string, string> = {
  * at request time, not from our database — that's the point of showing it to
  * an investor. Polls every 30s while the modal is open.
  */
-function LiveTractionDoc({ token }: { token: string }) {
+export function LiveTractionDoc({ token, shareKey }: { token: string; shareKey?: string }) {
   const [d, setD] = useState<TractionData | null>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/investor/traction", { headers: { "x-investor-token": token } });
+      // Two ways in. A data-room session sends its token as a header; a share
+      // link has no session at all and puts its key in the query string,
+      // because a pasted URL cannot carry a header.
+      const url = shareKey
+        ? `/api/investor/traction?k=${encodeURIComponent(shareKey)}`
+        : "/api/investor/traction";
+      const r = await fetch(url, { headers: shareKey ? {} : { "x-investor-token": token } });
       if (!r.ok) throw new Error((await r.json()).error || "Failed to load");
       setD(await r.json());
       setErr("");
@@ -2409,7 +2415,7 @@ function LiveTractionDoc({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, shareKey]);
 
   useEffect(() => {
     load();

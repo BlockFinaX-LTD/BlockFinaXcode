@@ -27,6 +27,7 @@ import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import { InvestorGate } from "@/components/investor-gate";
 import DataRoom from "@/pages/data-room";
+import TractionShare from "@/pages/traction-share";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import BlogPage from "@/pages/blog";
@@ -224,6 +225,7 @@ function Router() {
       {/* Docs — gated by per-request magic-link token */}
       <Route path="/docs" component={DocsIndexGated} />
       <Route path="/pitch" component={PitchGated} />
+      <Route path="/traction/:key" component={TractionShare} />
       <Route path="/data-room" component={DataRoomGated} />
       <Route path="/data-room/whitepaper" component={WhitepaperGated} />
       {/* Old public path. Kept as a redirect so shared links and bookmarks

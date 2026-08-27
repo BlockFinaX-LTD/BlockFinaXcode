@@ -171,11 +171,50 @@ export function registerInvestorRoutes(app: Express) {
    *
    * Mirrors the maths in /api/admin/revenue so the two never disagree.
    */
+  /**
+   * A single long secret that opens the traction panel and nothing else.
+   *
+   * The data room password is all or nothing: one code unlocks the cap table,
+   * the signed LOIs, the financial model and the audit together. Handing that
+   * to a grant reviewer who asked for traction gives them everything, so this
+   * is a separate key that reaches exactly one endpoint.
+   *
+   * Unset means the share link is off, which is the right default: a missing
+   * environment variable must never become a link that opens to anyone.
+   */
+  const tractionShareKey = () => (process.env.TRACTION_SHARE_KEY || "").trim();
+
+  /** Attempts per IP per hour against the share key, since it is guessable in principle. */
+  const shareHits = new Map<string, { n: number; resetAt: number }>();
+  const shareThrottled = (ip: string): boolean => {
+    const now = Date.now();
+    const cur = shareHits.get(ip);
+    if (!cur || now > cur.resetAt) {
+      shareHits.set(ip, { n: 1, resetAt: now + 3_600_000 });
+      return false;
+    }
+    cur.n += 1;
+    return cur.n > 60;
+  };
+
   app.get("/api/investor/traction", async (req, res) => {
     const token = req.headers["x-investor-token"] as string;
     const expiry = investorSessions.get(token);
-    if (!expiry || Date.now() > expiry) {
-      investorSessions.delete(token);
+    const viaSession = Boolean(expiry && Date.now() <= expiry);
+
+    // The share key arrives in the query string because the link has to work
+    // when it is pasted into a browser, where no header can be set.
+    const key = tractionShareKey();
+    const offered = String(req.query.k || "");
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+    let viaShare = false;
+    if (!viaSession && offered) {
+      if (shareThrottled(ip)) return res.status(429).json({ error: "Too many attempts" });
+      viaShare = Boolean(key) && safeEqual(offered, key);
+    }
+
+    if (!viaSession && !viaShare) {
+      if (!viaShare) investorSessions.delete(token);
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -485,7 +524,11 @@ export function registerInvestorRoutes(app: Express) {
         byPair: Object.entries(byPair)
           .map(([pair, v]) => ({ pair, ...v }))
           .sort((a, b) => b.liquidity - a.liquidity),
-        agreements,
+        // A share link is stricter than the data room about who gets named.
+        // showInDataRoom is consent to appear in front of investors who typed
+        // the access code, not on a URL that can be forwarded onward. Counts
+        // and countries still tell the traction story; the names are dropped.
+        agreements: viaShare ? { ...agreements, named: [] } : agreements,
         activityBackfill: {
           running: isBackfillRunning(),
           rows: recentActivity.length,
