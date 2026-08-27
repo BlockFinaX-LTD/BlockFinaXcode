@@ -37,6 +37,7 @@ import { mainnetGuard } from '@/lib/mainnet-guard';
 import { explainTxError } from '@/lib/tx-errors';
 import { getNetworkById, DEFAULT_NETWORK, NETWORKS } from '@/lib/networks';
 import { CoverDetail } from '@/components/hedge/cover-detail';
+import { UnderwriterDetail } from '@/components/hedge/underwriter-detail';
 import { buildPayoutModel } from '@/lib/payout-model';
 import { RateHistory } from '@/components/hedge/rate-history';
 import { FlagSvg, CommoditySvg, CoinSvg, KNOWN_FLAGS } from '@/components/app-glyphs';
@@ -1578,6 +1579,33 @@ export default function Hedge() {
                               {ev.creatorEarnings >= CLAIM_DUST
                                 ? <button className="btn-sm2 primary" style={{ marginTop: 8 }} disabled={withdrawEarningsMutation.isPending} onClick={() => withdrawEarningsMutation.mutate(ev.id)}>{withdrawEarningsMutation.isPending ? 'Claiming…' : `Claim earnings ${fmtUsd2(ev.creatorEarnings)}`}</button>
                                 : (!live2 && <div className="hint" style={{ marginTop: 8 }}>No earnings to claim</div>)}
+
+                              {/* A creator seeds the pool, so they are an
+                                  underwriter in it and carry the same risk.
+                                  Shown only when they actually hold a deposit:
+                                  a creator who put in nothing has nothing at
+                                  stake, and a chart of exposure they do not
+                                  have would be fiction. */}
+                              {(() => {
+                                const myDep = activeDeposits.find((dd) => dd.eventId === ev.id);
+                                if (!myDep) return null;
+                                return (
+                                  <UnderwriterDetail
+                                    amount={myDep.amount}
+                                    premiumsEarned={myDep.premiumsEarned}
+                                    totalLiquidity={ev.totalLiquidity}
+                                    totalMaxPayout={ev.totalMaxPayout}
+                                    underlying={ev.underlying}
+                                    strike={ev.strike}
+                                    strikeAbove={ev.strikeAbove}
+                                    initialRate={ev.initialRate}
+                                    payoutCap={ev.payoutCap}
+                                    currentRate={fxData?.rates[ev.underlying]?.rate || 0}
+                                    settled={ev.status !== 'open'}
+                                    settlementPrice={ev.settlementPrice}
+                                  />
+                                );
+                              })()}
                             </div>
                           );
                         })}
@@ -1627,6 +1655,27 @@ export default function Hedge() {
                                 Expired, but not settled on-chain yet — your {fmtMoney(d.amount)} is safe and
                                 becomes withdrawable the moment it settles. We've been alerted.
                               </div>
+                            )}
+                            {/* The same chart and cards a hedger gets, read from
+                                this side: the band that pays them is the band
+                                that draws on this deposit, so it is red here
+                                and the figures are scaled to this LP's share
+                                of the pool rather than the pool's own totals. */}
+                            {ev && (
+                              <UnderwriterDetail
+                                amount={d.amount}
+                                premiumsEarned={d.premiumsEarned}
+                                totalLiquidity={ev.totalLiquidity}
+                                totalMaxPayout={ev.totalMaxPayout}
+                                underlying={ev.underlying}
+                                strike={ev.strike}
+                                strikeAbove={ev.strikeAbove}
+                                initialRate={ev.initialRate}
+                                payoutCap={ev.payoutCap}
+                                currentRate={fxData?.rates[ev.underlying]?.rate || 0}
+                                settled={ev.status !== 'open'}
+                                settlementPrice={ev.settlementPrice}
+                              />
                             )}
                           </div>
                           <div className="r-side" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

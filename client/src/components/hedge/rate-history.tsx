@@ -125,6 +125,7 @@ export function RateHistory({
   markRate,
   markLabel,
   entryRate,
+  perspective = "hedger",
   initialRange = "1y",
 }: {
   pair: string;
@@ -149,6 +150,16 @@ export function RateHistory({
    * and the thing people most often misjudge about a hedge.
    */
   entryRate?: number;
+  /**
+   * Whose side the colours are read from.
+   *
+   * A pool has two parties with opposite interests in the same picture. The
+   * band between strike and cap is where a hedger gets paid and where an
+   * underwriter pays, so it cannot be green for both. Painting it green for an
+   * underwriter would tell the person whose capital is at risk that the zone
+   * consuming it is good news.
+   */
+  perspective?: "hedger" | "underwriter";
   /** Labels for the bands, so the chart says what each zone is worth. */
   maxPayoutLabel?: string;
   initialRange?: string;
@@ -388,6 +399,11 @@ export function RateHistory({
    */
   const chgColour = flat ? "var(--tx-3)" : up ? "var(--green)" : "var(--red)";
 
+  // One band, two readings. For the hedger it is where cover pays; for the
+  // underwriter it is where their capital goes.
+  const forLp = perspective === "underwriter";
+  const zoneColour = forLp ? "var(--red)" : "var(--green)";
+
   const strikeY = hasStrike ? geom.y(strike as number) : 0;
   const strikeVisible = hasStrike && strikeY >= PAD.t && strikeY <= VH - PAD.b;
   const everPast = hasStrike
@@ -618,12 +634,12 @@ export function RateHistory({
                 without claiming the space above it is good news.
               */}
               <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
-                    fill="var(--green)" opacity="0.13" />
-              <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke="var(--green)"
+                    fill={zoneColour} opacity="0.13" />
+              <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke={zoneColour}
                     strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.8" />
               <text x={PAD.l + 4} y={yCap + (strikeAbove ? -6 : 12)}
-                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--green)" opacity="0.9">
-                {maxPayoutLabel ? `MAX ${maxPayoutLabel}` : "MAX PAYOUT"}
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={zoneColour} opacity="0.9">
+                {maxPayoutLabel ? `${forLp ? "PAYS UP TO" : "MAX"} ${maxPayoutLabel}` : forLp ? "MAX EXPOSURE" : "MAX PAYOUT"}
               </text>
             </g>
           );
@@ -632,9 +648,9 @@ export function RateHistory({
         {/* The strike. Everything the cover is about sits on this line. */}
         {strikeVisible && (
           <>
-            <line x1={PAD.l} y1={strikeY} x2={VW - PAD.r} y2={strikeY} stroke="var(--green)" strokeWidth="1.3"
+            <line x1={PAD.l} y1={strikeY} x2={VW - PAD.r} y2={strikeY} stroke={zoneColour} strokeWidth="1.3"
                   strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
-            <text x={PAD.l + 4} y={strikeY - 5} fontSize="10" fill="var(--green)" fontFamily="var(--mono)">
+            <text x={PAD.l + 4} y={strikeY - 5} fontSize="10" fill={zoneColour} fontFamily="var(--mono)">
               strike {fmtRate(strike as number)}
             </text>
           </>
@@ -695,14 +711,14 @@ export function RateHistory({
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, fontSize: 11.5, color: "var(--tx-3)" }}>
         {strikeVisible && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 12, height: 0, borderTop: "1.5px dashed var(--green)", display: "inline-block" }} />
-            Pays {strikeAbove ? "above" : "below"} {fmtRate(strike as number)}
+            <span style={{ width: 12, height: 0, borderTop: `1.5px dashed ${zoneColour}`, display: "inline-block" }} />
+            {forLp ? "You pay" : "Pays"} {strikeAbove ? "above" : "below"} {fmtRate(strike as number)}
           </span>
         )}
         {hasZones && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, background: "var(--green)", opacity: 0.3, borderRadius: 2, display: "inline-block" }} />
-            Payout grows to {fmtRate(cap as number)}, then holds
+            <span style={{ width: 10, height: 10, background: zoneColour, opacity: 0.3, borderRadius: 2, display: "inline-block" }} />
+            {forLp ? "Your exposure grows to" : "Payout grows to"} {fmtRate(cap as number)}, then holds
           </span>
         )}
         {hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0
@@ -729,7 +745,7 @@ export function RateHistory({
         </p>
       )}
 
-      {hasStrike && (
+      {hasStrike && !forLp && (
         <p style={{ fontSize: 11.5, color: "var(--tx-3)", margin: "8px 0 0", lineHeight: 1.5 }}>
           {everPast
             ? `Over this period the rate has been ${strikeAbove ? "above" : "below"} ${fmtRate(strike as number)}, which is where this cover starts paying.`
