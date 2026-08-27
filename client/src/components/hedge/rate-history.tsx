@@ -122,6 +122,8 @@ export function RateHistory({
   strikeAbove,
   cap,
   maxPayoutLabel,
+  markRate,
+  markLabel,
   initialRange = "1y",
 }: {
   pair: string;
@@ -130,6 +132,14 @@ export function RateHistory({
   strikeAbove?: boolean;
   /** The rate past which the payout stops growing. Shades the zones when given. */
   cap?: number;
+  /**
+   * A rate to mark across the chart: today's rate on a live position, or the
+   * settled rate on an ended one. Drawn as a line rather than left to the
+   * endpoint dot, because the question is where it sits against the strike,
+   * and a dot on the right edge does not answer that at a glance.
+   */
+  markRate?: number;
+  markLabel?: string;
   /** Labels for the bands, so the chart says what each zone is worth. */
   maxPayoutLabel?: string;
   initialRange?: string;
@@ -201,6 +211,7 @@ export function RateHistory({
     const edges: number[] = [];
     if (hasStrike) edges.push(strike as number);
     if (hasZones) edges.push(cap as number);
+    if (typeof markRate === "number" && Number.isFinite(markRate) && markRate > 0) edges.push(markRate);
     const lo = Math.min(...closes, ...edges);
     const hi = Math.max(...closes, ...edges);
     // A flat series would divide by zero, and a hairline down the middle reads
@@ -223,7 +234,7 @@ export function RateHistory({
     for (let i = 0; i <= TICKS; i++) ticks.push(min + ((max - min) * i) / TICKS);
 
     return { min, max, x, y, line, area, ticks, iw, ih };
-  }, [data, hasStrike, hasZones, strike, cap, VW, VH, PAD, TICKS]);
+  }, [data, hasStrike, hasZones, strike, cap, markRate, VW, VH, PAD, TICKS]);
 
   const onMove = useCallback((clientX: number) => {
     const svg = svgRef.current;
@@ -560,6 +571,29 @@ export function RateHistory({
             </text>
           </>
         )}
+
+        {/*
+          Where the rate actually is.
+
+          Over everything else on purpose: this is the line the reader
+          measures the others against. Solid rather than dashed so it is not
+          mistaken for the strike or the cap, both of which are contract terms
+          rather than facts about the market.
+        */}
+        {typeof markRate === "number" && Number.isFinite(markRate) && markRate > 0 && (() => {
+          const y = geom.y(markRate);
+          if (y < PAD.t || y > VH - PAD.b) return null;
+          return (
+            <g pointerEvents="none">
+              <line x1={PAD.l} y1={y} x2={VW - PAD.r} y2={y} stroke="var(--tx-2)"
+                    strokeWidth="1" vectorEffect="non-scaling-stroke" opacity="0.55" />
+              <text x={VW - PAD.r - 4} y={y - 5} textAnchor="end"
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--tx-2)" opacity="0.95">
+                {markLabel || "now"} {fmtRate(markRate)}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Crosshair under the pointer. */}
         {active && hover !== null && (
