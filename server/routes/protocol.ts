@@ -281,9 +281,9 @@ export async function registerProtocolRoutes(app: Express) {
         return res.status(400).json({ message: "Pair must look like USD/GHS" });
       }
 
-      // Capped so a hand-typed days value cannot ask for nineteen years of
-      // points and then be thrown away by the renderer.
-      const days = Math.min(Math.max(parseInt(String(req.query.days || "365"), 10) || 365, 30), 1825);
+      // Up to twenty-five years, which covers the oldest series in the table.
+      // The payload stays small because the drawing points are thinned below.
+      const days = Math.min(Math.max(parseInt(String(req.query.days || "365"), 10) || 365, 7), 9200);
       const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
       const rows = await db
@@ -323,10 +323,35 @@ export async function registerProtocolRoutes(app: Express) {
       const last = points[points.length - 1].close;
       const changePct = Number((((last - first) / first) * 100).toFixed(1));
 
+      /**
+       * Thin the series for drawing only.
+       *
+       * A 25 year range is about 6,000 closes, which is a 300KB payload to
+       * draw a line a few hundred pixels wide. Every statistic above is
+       * computed on the FULL series first, deliberately: sampling before
+       * measuring would let the thinning quietly drop the very spike that
+       * makes the worst move worst, and the number would drift with the
+       * viewport.
+       *
+       * The endpoints are always kept, so the line still begins and ends
+       * where the data does.
+       */
+      const MAX_POINTS = 480;
+      let drawn = points;
+      if (points.length > MAX_POINTS) {
+        const step = (points.length - 1) / (MAX_POINTS - 1);
+        const out: typeof points = [];
+        for (let i = 0; i < MAX_POINTS; i++) out.push(points[Math.round(i * step)]);
+        out[out.length - 1] = points[points.length - 1];
+        drawn = out;
+      }
+
       res.json({
         pair,
         days,
-        points,
+        points: drawn,
+        /** How many closes the figures were computed from, before thinning. */
+        observations: points.length,
         latest: last,
         // Surfaced rather than hidden. A rising count means the upstream feed
         // is degrading, and silently cleaning it would hide that.

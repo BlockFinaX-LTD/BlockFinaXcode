@@ -10,7 +10,7 @@
  *
  * No trend line. A trend line is a prediction rendered as a fact, on a page
  * selling financial protection, for a product mid application to the Bank of
- * Ghana sandbox. Everything here is history, and the buyer draws their own
+ * Ghana sandbox. Everything here is history, and the reader draws their own
  * conclusion.
  *
  * No candlesticks. The table stores closes and nothing else, so a candle is
@@ -21,146 +21,339 @@
  * strict CSP on this site blocks external scripts anyway.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface Point { date: string; close: number; }
 interface Move { percent: number; from: string; to: string; direction: string; }
 interface History {
   pair: string;
   points: Point[];
+  observations?: number;
   latest?: number;
+  ticksDropped?: number;
   change?: { percent: number; direction: string } | null;
   worstMove?: Move | null;
 }
 
-const W = 320;
-const H = 96;
-const PAD_T = 8;
-const PAD_B = 16;
+/**
+ * Ranges start at a month. The series is daily closes, so anything shorter
+ * would be a handful of points pretending to be a chart, and this product
+ * sells cover measured in weeks rather than intraday exposure.
+ */
+const RANGES: { key: string; label: string; days: number | "ytd" | "max" }[] = [
+  { key: "1m",  label: "1M",  days: 30 },
+  { key: "3m",  label: "3M",  days: 90 },
+  { key: "6m",  label: "6M",  days: 182 },
+  { key: "ytd", label: "YTD", days: "ytd" },
+  { key: "1y",  label: "1Y",  days: 365 },
+  { key: "5y",  label: "5Y",  days: 1825 },
+  { key: "max", label: "MAX", days: "max" },
+];
+
+const daysFor = (d: number | "ytd" | "max"): number => {
+  if (d === "max") return 9200;
+  if (d === "ytd") {
+    const now = new Date();
+    const jan1 = new Date(now.getFullYear(), 0, 1);
+    return Math.max(7, Math.ceil((now.getTime() - jan1.getTime()) / 86400000));
+  }
+  return d;
+};
+
+// Room on the right for price labels and underneath for dates.
+const VW = 560;
+const VH = 220;
+const PAD = { t: 10, r: 54, b: 24, l: 6 };
+
+const fmtRate = (v: number) =>
+  v.toLocaleString("en-US", {
+    minimumFractionDigits: v >= 100 ? 2 : 4,
+    maximumFractionDigits: v >= 100 ? 2 : 4,
+  });
+
+const fmtDay = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+};
+
+const fmtAxis = (iso: string, span: number) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  if (span > 1200) return String(d.getFullYear());
+  return d.toLocaleDateString("en-US", { month: "short", year: span > 300 ? "2-digit" : undefined });
+};
 
 export function RateHistory({
   pair,
   strike,
   strikeAbove,
-  days = 365,
+  initialRange = "1y",
 }: {
   pair: string;
   /** Omitted when no particular cover is in view, as on the rates list. */
   strike?: number;
   strikeAbove?: boolean;
-  days?: number;
+  initialRange?: string;
 }) {
-  // Without a strike this is simply the pair's recent history. The strike line
-  // and the sentence about where cover starts paying are the only parts that
-  // need one, so both are skipped rather than the whole chart.
+  // Without a strike this is simply the pair's history. The strike line and the
+  // sentence about where cover starts paying are the only parts that need one.
   const hasStrike = typeof strike === "number" && Number.isFinite(strike) && strike > 0;
+
+  const [rangeKey, setRangeKey] = useState(initialRange);
   const [data, setData] = useState<History | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "empty">("loading");
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const range = RANGES.find((r) => r.key === rangeKey) || RANGES[4];
+  const rangeDays = daysFor(range.days);
 
   useEffect(() => {
     if (!pair) return;
     let live = true;
     setState("loading");
-    fetch(`/api/fx/history/${encodeURIComponent(pair)}?days=${days}`)
+    setHover(null);
+    fetch(`/api/fx/history/${encodeURIComponent(pair)}?days=${rangeDays}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: History | null) => {
         if (!live) return;
-        // Two points cannot describe a market. Showing a chart drawn from one
-        // or two closes would imply a shape that is not in the data.
-        if (!d || !Array.isArray(d.points) || d.points.length < 10) {
+        // A handful of closes cannot describe a market. Drawing a shape from
+        // them would imply something that is not in the data.
+        if (!d || !Array.isArray(d.points) || d.points.length < 5) {
+          setData(null);
           setState("empty");
           return;
         }
         setData(d);
         setState("ready");
       })
-      .catch(() => live && setState("empty"));
+      .catch(() => { if (live) { setData(null); setState("empty"); } });
     return () => { live = false; };
-  }, [pair, days]);
+  }, [pair, rangeDays]);
+
+  const geom = useMemo(() => {
+    if (!data || data.points.length < 2) return null;
+    const closes = data.points.map((p) => p.close);
+    // The strike sits inside the scale on purpose. If it is outside everything
+    // the pair has traded, that fact is the most useful thing on the chart, and
+    // clipping it would hide exactly what the reader needs to see.
+    const lo = hasStrike ? Math.min(...closes, strike as number) : Math.min(...closes);
+    const hi = hasStrike ? Math.max(...closes, strike as number) : Math.max(...closes);
+    // A flat series would divide by zero, and a hairline down the middle reads
+    // as broken, so give it room either side.
+    const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.02 || 1;
+    const min = lo - pad;
+    const max = hi + pad;
+
+    const iw = VW - PAD.l - PAD.r;
+    const ih = VH - PAD.t - PAD.b;
+    const x = (i: number) => PAD.l + (i / (data.points.length - 1)) * iw;
+    const y = (v: number) => PAD.t + (1 - (v - min) / (max - min)) * ih;
+
+    const line = data.points
+      .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.close).toFixed(1)}`)
+      .join(" ");
+    const area = `${line} L${x(data.points.length - 1).toFixed(1)},${PAD.t + ih} L${PAD.l},${PAD.t + ih} Z`;
+
+    const ticks: number[] = [];
+    for (let i = 0; i <= 3; i++) ticks.push(min + ((max - min) * i) / 3);
+
+    return { min, max, x, y, line, area, ticks, iw, ih };
+  }, [data, hasStrike, strike]);
+
+  const onMove = useCallback((clientX: number) => {
+    const svg = svgRef.current;
+    if (!svg || !data || !geom) return;
+    const box = svg.getBoundingClientRect();
+    if (!box.width) return;
+    // Map the pointer into viewBox space, then to the nearest close.
+    const vx = ((clientX - box.left) / box.width) * VW;
+    const frac = (vx - PAD.l) / geom.iw;
+    const i = Math.round(frac * (data.points.length - 1));
+    setHover(Math.max(0, Math.min(data.points.length - 1, i)));
+  }, [data, geom]);
 
   if (state === "loading") {
-    return <div style={{ height: H + 46, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--tx-4)" }}>Reading history…</div>;
+    return (
+      <div style={{ height: 250, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--tx-4)" }}>
+        Reading history…
+      </div>
+    );
   }
-  // Silent when there is nothing to show. A chart is supporting evidence; its
-  // absence must not block or clutter the purchase.
-  if (state === "empty" || !data) return null;
+  if (state === "empty" || !data || !geom) {
+    return (
+      <div style={{ padding: "20px 0", fontSize: 12.5, color: "var(--tx-4)" }}>
+        No price history for {pair} over this period.
+      </div>
+    );
+  }
 
-  const closes = data.points.map((p) => p.close);
-  // The strike is inside the scale on purpose. If it sits outside the range
-  // the pair has traded, that fact is the most useful thing on the chart and
-  // clipping it would hide exactly what the buyer needs to see.
-  const lo = hasStrike ? Math.min(...closes, strike as number) : Math.min(...closes);
-  const hi = hasStrike ? Math.max(...closes, strike as number) : Math.max(...closes);
-  const span = hi - lo || hi || 1;
+  const pts = data.points;
+  const last = pts[pts.length - 1].close;
+  const active = hover !== null ? pts[hover] : null;
+  const shownVal = active ? active.close : last;
 
-  const x = (i: number) => (i / (data.points.length - 1)) * W;
-  const y = (v: number) => PAD_T + (1 - (v - lo) / span) * (H - PAD_T - PAD_B);
+  const chg = data.change?.percent ?? 0;
+  const flat = Math.abs(chg) < 0.05;
+  const up = chg > 0;
+  // Green for a stronger local currency, which is a FALL in USD/XXX. A rise
+  // means more local currency per dollar, so imports cost more. Colouring that
+  // green because the number went up would say the opposite of the truth, and
+  // that inversion has already reached a reader once.
+  const chgColour = flat ? "var(--tx-3)" : up ? "var(--red)" : "var(--green)";
 
-  const line = data.points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.close).toFixed(1)}`).join(" ");
-  const area = `${line} L${W},${H - PAD_B} L0,${H - PAD_B} Z`;
-  const strikeY = hasStrike ? y(strike as number) : 0;
-
-  // Where the worst historical run sits on the axis, so it can be shaded.
-  const idx = (d: string) => data.points.findIndex((p) => p.date === d);
-  const wFrom = data.worstMove ? idx(data.worstMove.from) : -1;
-  const wTo = data.worstMove ? idx(data.worstMove.to) : -1;
+  const wFrom = data.worstMove ? pts.findIndex((p) => p.date >= data.worstMove!.from) : -1;
+  const wTo = data.worstMove ? pts.findIndex((p) => p.date >= data.worstMove!.to) : -1;
   const showBand = wFrom >= 0 && wTo > wFrom;
 
-  const last = data.points[data.points.length - 1].close;
-  const everPast = hasStrike ? (strikeAbove ? hi >= (strike as number) : lo <= (strike as number)) : false;
-  const yearLabel = days >= 360 ? `${Math.round(days / 365)} year${days >= 700 ? "s" : ""}` : `${days} days`;
+  const strikeY = hasStrike ? geom.y(strike as number) : 0;
+  const strikeVisible = hasStrike && strikeY >= PAD.t && strikeY <= VH - PAD.b;
+  const everPast = hasStrike
+    ? (strikeAbove
+        ? Math.max(...pts.map((p) => p.close)) >= (strike as number)
+        : Math.min(...pts.map((p) => p.close)) <= (strike as number))
+    : false;
+
+  const gradId = `rh-${pair.replace(/[^A-Za-z0-9]/g, "")}`;
 
   return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
-        <span style={{ fontSize: 11, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--tx-3)" }}>
-          Last {yearLabel}
+    <div style={{ marginTop: 12 }}>
+      {/* Headline: the value under the cursor, or the latest close. */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
+        <span className="tnum" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--tx-1)" }}>
+          {fmtRate(shownVal)}
         </span>
-        {data.change && (
-          <span style={{ fontSize: 11.5, color: "var(--tx-3)" }}>{data.change.direction}</span>
-        )}
+        <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: chgColour }}>
+          {flat ? "0.0" : `${up ? "+" : ""}${chg.toFixed(1)}`}%
+        </span>
+        <span style={{ fontSize: 11.5, color: "var(--tx-4)", marginLeft: "auto" }}>
+          {active ? fmtDay(active.date) : `over ${range.label === "MAX" ? "all time" : range.label}`}
+        </span>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img"
-           aria-label={
-             hasStrike
-               ? `${pair} closing rate over the last ${yearLabel}, with the strike at ${strike} marked`
-               : `${pair} closing rate over the last ${yearLabel}`
-           }>
+      {data.change && (
+        <div style={{ fontSize: 11.5, color: "var(--tx-3)", marginBottom: 10 }}>{data.change.direction}</div>
+      )}
+
+      {/* Range picker */}
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+        {RANGES.map((r) => {
+          const on = r.key === rangeKey;
+          return (
+            <button
+              key={r.key}
+              onClick={() => setRangeKey(r.key)}
+              aria-pressed={on}
+              style={{
+                border: "none",
+                borderRadius: 6,
+                padding: "4px 9px",
+                fontSize: 11.5,
+                fontWeight: on ? 600 : 500,
+                fontFamily: "var(--mono)",
+                cursor: "pointer",
+                background: on ? "color-mix(in oklab, var(--blue) 16%, transparent)" : "transparent",
+                color: on ? "var(--blue)" : "var(--tx-3)",
+              }}
+            >
+              {r.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${VW} ${VH}`}
+        width="100%"
+        style={{ display: "block", touchAction: "pan-y" }}
+        role="img"
+        aria-label={
+          hasStrike
+            ? `${pair} closing rate over ${range.label}, with the strike at ${strike} marked`
+            : `${pair} closing rate over ${range.label}`
+        }
+        onMouseMove={(e) => onMove(e.clientX)}
+        onMouseLeave={() => setHover(null)}
+        onTouchStart={(e) => e.touches[0] && onMove(e.touches[0].clientX)}
+        onTouchMove={(e) => e.touches[0] && onMove(e.touches[0].clientX)}
+        onTouchEnd={() => setHover(null)}
+      >
         <defs>
-          <linearGradient id="rh-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--blue)" stopOpacity="0.16" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--blue)" stopOpacity="0.20" />
             <stop offset="100%" stopColor="var(--blue)" stopOpacity="0" />
           </linearGradient>
         </defs>
 
-        {/* The worst run in this window, shaded. Pure history, and the single
-            strongest argument for holding cover on the whole page. */}
+        {/* Gridlines, with the price axis on the right the way a quote screen puts it. */}
+        {geom.ticks.map((v, i) => (
+          <g key={i}>
+            <line x1={PAD.l} y1={geom.y(v)} x2={VW - PAD.r} y2={geom.y(v)}
+                  stroke="var(--border)" strokeWidth="1" opacity="0.5" vectorEffect="non-scaling-stroke" />
+            <text x={VW - PAD.r + 6} y={geom.y(v) + 3.5} fontSize="10" fill="var(--tx-4)" fontFamily="var(--mono)">
+              {fmtRate(v)}
+            </text>
+          </g>
+        ))}
+
+        {/* The worst run in this window. Pure history, and the strongest
+            argument for holding cover anywhere on the page. */}
         {showBand && (
-          <rect x={x(wFrom)} y={PAD_T} width={Math.max(1, x(wTo) - x(wFrom))} height={H - PAD_T - PAD_B}
-                fill="var(--red)" opacity="0.09" />
+          <rect x={geom.x(wFrom)} y={PAD.t} width={Math.max(1, geom.x(wTo) - geom.x(wFrom))} height={geom.ih}
+                fill="var(--red)" opacity="0.08" />
         )}
 
-        <path d={area} fill="url(#rh-fill)" />
-        <path d={line} fill="none" stroke="var(--blue)" strokeWidth="1.6" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={geom.area} fill={`url(#${gradId})`} />
+        <path d={geom.line} fill="none" stroke="var(--blue)" strokeWidth="1.8"
+              strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
 
         {/* The strike. Everything the cover is about sits on this line. */}
-        {hasStrike && (
-          <line x1="0" y1={strikeY} x2={W} y2={strikeY} stroke="var(--green)" strokeWidth="1.2"
-                strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+        {strikeVisible && (
+          <>
+            <line x1={PAD.l} y1={strikeY} x2={VW - PAD.r} y2={strikeY} stroke="var(--green)" strokeWidth="1.3"
+                  strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+            <text x={PAD.l + 4} y={strikeY - 5} fontSize="10" fill="var(--green)" fontFamily="var(--mono)">
+              strike {fmtRate(strike as number)}
+            </text>
+          </>
         )}
+
+        {/* Crosshair under the pointer. */}
+        {active && hover !== null && (
+          <>
+            <line x1={geom.x(hover)} y1={PAD.t} x2={geom.x(hover)} y2={VH - PAD.b}
+                  stroke="var(--tx-4)" strokeWidth="1" opacity="0.55" vectorEffect="non-scaling-stroke" />
+            <circle cx={geom.x(hover)} cy={geom.y(active.close)} r="3.5" fill="var(--blue)" stroke="var(--bg-1)" strokeWidth="1.5" />
+          </>
+        )}
+
+        {/* Where the series stands right now. */}
+        <circle cx={geom.x(pts.length - 1)} cy={geom.y(last)} r="3" fill="var(--blue)" />
+
+        {/* Date axis: first, middle, last. Three fit at this width without
+            colliding, and more of them read as clutter. */}
+        {[0, Math.floor((pts.length - 1) / 2), pts.length - 1].map((i, n) => (
+          <text
+            key={n}
+            x={geom.x(i)}
+            y={VH - 8}
+            fontSize="10"
+            fill="var(--tx-4)"
+            fontFamily="var(--mono)"
+            textAnchor={n === 0 ? "start" : n === 2 ? "end" : "middle"}
+          >
+            {fmtAxis(pts[i].date, rangeDays)}
+          </text>
+        ))}
       </svg>
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--tx-4)", marginTop: 2 }}>
-        <span>{data.points[0].date}</span>
-        <span>now {last.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
-      </div>
-
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, fontSize: 11.5, color: "var(--tx-3)" }}>
-        {hasStrike && (
+        {strikeVisible && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 12, height: 0, borderTop: "1.5px dashed var(--green)", display: "inline-block" }} />
-            Strike {(strike as number).toLocaleString()}
+            Strike {fmtRate(strike as number)}
           </span>
         )}
         {showBand && data.worstMove && (
@@ -169,15 +362,19 @@ export function RateHistory({
             Worst 60 day run, {data.worstMove.percent}%
           </span>
         )}
+        {!!data.observations && (
+          <span style={{ marginLeft: "auto", color: "var(--tx-4)" }}>
+            {data.observations.toLocaleString()} closes
+            {data.ticksDropped ? `, ${data.ticksDropped} bad tick${data.ticksDropped === 1 ? "" : "s"} removed` : ""}
+          </span>
+        )}
       </div>
 
-      {/* The one sentence that turns the picture into an answer. Stated as a
-          fact about the past, with no claim about what happens next. */}
       {hasStrike && (
         <p style={{ fontSize: 11.5, color: "var(--tx-3)", margin: "8px 0 0", lineHeight: 1.5 }}>
           {everPast
-            ? `Over this period the rate has been ${strikeAbove ? "above" : "below"} ${(strike as number).toLocaleString()}, which is where this cover starts paying.`
-            : `Over this period the rate has not reached ${(strike as number).toLocaleString()}. Past movement is not a forecast.`}
+            ? `Over this period the rate has been ${strikeAbove ? "above" : "below"} ${fmtRate(strike as number)}, which is where this cover starts paying.`
+            : `Over this period the rate has not reached ${fmtRate(strike as number)}. Past movement is not a forecast.`}
         </p>
       )}
     </div>
