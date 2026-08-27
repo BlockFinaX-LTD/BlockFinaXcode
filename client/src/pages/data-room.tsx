@@ -2419,7 +2419,12 @@ export function LiveTractionDoc({ token, shareKey }: { token: string; shareKey?:
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 30_000);
+    // Thirty seconds is right for someone watching the protocol live inside
+    // the data room. On a shared link it is wrong: the reader is doing
+    // diligence, not trading, and the figures move a few times a week. Every
+    // poll re-reads two chains and aggregates the database, so a tab left
+    // open all day would cost thousands of those for no new information.
+    const t = setInterval(load, shareKey ? 300_000 : 30_000);
     return () => clearInterval(t);
   }, [load]);
 

@@ -209,8 +209,14 @@ export function registerInvestorRoutes(app: Express) {
     const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
     let viaShare = false;
     if (!viaSession && offered) {
-      if (shareThrottled(ip)) return res.status(429).json({ error: "Too many attempts" });
       viaShare = Boolean(key) && safeEqual(offered, key);
+      // Only failures count. The limiter exists to stop someone guessing the
+      // key, and counting successful loads would have throttled the very
+      // reviewer the link was made for: the panel refreshes itself, so an
+      // open tab spends the allowance on its own without anyone touching it.
+      if (!viaShare && shareThrottled(ip)) {
+        return res.status(429).json({ error: "Too many attempts" });
+      }
     }
 
     if (!viaSession && !viaShare) {
