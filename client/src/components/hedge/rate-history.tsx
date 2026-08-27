@@ -45,10 +45,15 @@ export function RateHistory({
   days = 365,
 }: {
   pair: string;
-  strike: number;
-  strikeAbove: boolean;
+  /** Omitted when no particular cover is in view, as on the rates list. */
+  strike?: number;
+  strikeAbove?: boolean;
   days?: number;
 }) {
+  // Without a strike this is simply the pair's recent history. The strike line
+  // and the sentence about where cover starts paying are the only parts that
+  // need one, so both are skipped rather than the whole chart.
+  const hasStrike = typeof strike === "number" && Number.isFinite(strike) && strike > 0;
   const [data, setData] = useState<History | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "empty">("loading");
 
@@ -84,8 +89,8 @@ export function RateHistory({
   // The strike is inside the scale on purpose. If it sits outside the range
   // the pair has traded, that fact is the most useful thing on the chart and
   // clipping it would hide exactly what the buyer needs to see.
-  const lo = Math.min(...closes, strike);
-  const hi = Math.max(...closes, strike);
+  const lo = hasStrike ? Math.min(...closes, strike as number) : Math.min(...closes);
+  const hi = hasStrike ? Math.max(...closes, strike as number) : Math.max(...closes);
   const span = hi - lo || hi || 1;
 
   const x = (i: number) => (i / (data.points.length - 1)) * W;
@@ -93,7 +98,7 @@ export function RateHistory({
 
   const line = data.points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.close).toFixed(1)}`).join(" ");
   const area = `${line} L${W},${H - PAD_B} L0,${H - PAD_B} Z`;
-  const strikeY = y(strike);
+  const strikeY = hasStrike ? y(strike as number) : 0;
 
   // Where the worst historical run sits on the axis, so it can be shaded.
   const idx = (d: string) => data.points.findIndex((p) => p.date === d);
@@ -102,7 +107,7 @@ export function RateHistory({
   const showBand = wFrom >= 0 && wTo > wFrom;
 
   const last = data.points[data.points.length - 1].close;
-  const everPast = strikeAbove ? hi >= strike : lo <= strike;
+  const everPast = hasStrike ? (strikeAbove ? hi >= (strike as number) : lo <= (strike as number)) : false;
   const yearLabel = days >= 360 ? `${Math.round(days / 365)} year${days >= 700 ? "s" : ""}` : `${days} days`;
 
   return (
@@ -117,7 +122,11 @@ export function RateHistory({
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img"
-           aria-label={`${pair} closing rate over the last ${yearLabel}, with the strike at ${strike} marked`}>
+           aria-label={
+             hasStrike
+               ? `${pair} closing rate over the last ${yearLabel}, with the strike at ${strike} marked`
+               : `${pair} closing rate over the last ${yearLabel}`
+           }>
         <defs>
           <linearGradient id="rh-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--blue)" stopOpacity="0.16" />
@@ -136,8 +145,10 @@ export function RateHistory({
         <path d={line} fill="none" stroke="var(--blue)" strokeWidth="1.6" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
 
         {/* The strike. Everything the cover is about sits on this line. */}
-        <line x1="0" y1={strikeY} x2={W} y2={strikeY} stroke="var(--green)" strokeWidth="1.2"
-              strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+        {hasStrike && (
+          <line x1="0" y1={strikeY} x2={W} y2={strikeY} stroke="var(--green)" strokeWidth="1.2"
+                strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+        )}
       </svg>
 
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--tx-4)", marginTop: 2 }}>
@@ -146,10 +157,12 @@ export function RateHistory({
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, fontSize: 11.5, color: "var(--tx-3)" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 12, height: 0, borderTop: "1.5px dashed var(--green)", display: "inline-block" }} />
-          Strike {strike.toLocaleString()}
-        </span>
+        {hasStrike && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 12, height: 0, borderTop: "1.5px dashed var(--green)", display: "inline-block" }} />
+            Strike {(strike as number).toLocaleString()}
+          </span>
+        )}
         {showBand && data.worstMove && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 10, height: 10, background: "var(--red)", opacity: 0.22, borderRadius: 2, display: "inline-block" }} />
@@ -160,11 +173,13 @@ export function RateHistory({
 
       {/* The one sentence that turns the picture into an answer. Stated as a
           fact about the past, with no claim about what happens next. */}
-      <p style={{ fontSize: 11.5, color: "var(--tx-3)", margin: "8px 0 0", lineHeight: 1.5 }}>
-        {everPast
-          ? `Over this period the rate has been ${strikeAbove ? "above" : "below"} ${strike.toLocaleString()}, which is where this cover starts paying.`
-          : `Over this period the rate has not reached ${strike.toLocaleString()}. Past movement is not a forecast.`}
-      </p>
+      {hasStrike && (
+        <p style={{ fontSize: 11.5, color: "var(--tx-3)", margin: "8px 0 0", lineHeight: 1.5 }}>
+          {everPast
+            ? `Over this period the rate has been ${strikeAbove ? "above" : "below"} ${(strike as number).toLocaleString()}, which is where this cover starts paying.`
+            : `Over this period the rate has not reached ${(strike as number).toLocaleString()}. Past movement is not a forecast.`}
+        </p>
+      )}
     </div>
   );
 }

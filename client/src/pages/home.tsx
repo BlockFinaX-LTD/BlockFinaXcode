@@ -21,6 +21,7 @@ import {
   hedgeContract, type HedgeEventData, type HedgeLpDepositData, type HedgePositionData,
 } from '@/lib/hedge-contract';
 import { FlagSvg, CommoditySvg, CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChain, KNOWN_FLAGS } from '@/components/app-glyphs';
+import { RateHistory } from '@/components/hedge/rate-history';
 import logoPath from '@/assets/logo.png';
 import {
   Eye, EyeOff, ArrowUp, ArrowDown, Shield, TrendingUp, Gift, ArrowRight,
@@ -117,6 +118,9 @@ export default function HomePage() {
   const [deposits, setDeposits] = useState<HedgeLpDepositData[]>([]);
   const [positions, setPositions] = useState<HedgePositionData[]>([]);
   const [events, setEvents] = useState<HedgeEventData[]>([]);
+  // The rate the user tapped in Live rates. Rows did nothing at all before:
+  // no handler, so a tap on a market simply fell through.
+  const [rateDetail, setRateDetail] = useState<{ pair: string; name: string; px: number; code: string; ic?: string } | null>(null);
   const [hedgeLoading, setHedgeLoading] = useState(true);
 
   useEffect(() => {
@@ -294,7 +298,20 @@ export default function HomePage() {
               {displayRates.length === 0 ? (
                 <div className="rate"><div className="rk"><div className="p">No rates</div><div className="s">Check back shortly</div></div></div>
               ) : displayRates.map((r) => (
-                <div className="rate" key={r.pair}>
+                <div
+                  className="rate"
+                  key={r.pair}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setRateDetail({ pair: r.pair, name: r.name, px: r.px, code: r.code, ic: r.ic })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setRateDetail({ pair: r.pair, name: r.name, px: r.px, code: r.code, ic: r.ic });
+                    }
+                  }}
+                >
                   {r.ic
                     ? <span className="ico"><CommoditySvg ic={r.ic} /></span>
                     : <span className="ico flag"><FlagSvg code={KNOWN_FLAGS.includes(r.code) ? r.code : r.code} /></span>}
@@ -370,6 +387,66 @@ export default function HomePage() {
       <AppReceiveSheet open={rcvOpen} onClose={() => setRcvOpen(false)} />
 
       {/* ===== FULL ACTIVITY HISTORY (paginated) ===== */}
+      {/* Rate detail. Opened from a Live rates row.
+
+          It shows history rather than jumping straight to Cover because there
+          is not always cover to jump to: every pool on the book is settled
+          right now, so a navigation would have landed on an empty list for
+          every market and looked as broken as the dead row it replaced. The
+          chart is true whether or not anything is open to buy, and the button
+          appears only when there is something behind it. */}
+      <div className={`sheet-scrim${rateDetail ? ' on' : ''}`} onClick={() => setRateDetail(null)} />
+      <div className={`sheet${rateDetail ? ' on' : ''}`} role="dialog" aria-modal="true">
+        <div className="grab" />
+        <div className="sheet-h">
+          <h3>{rateDetail?.pair || 'Rate'}</h3>
+          <button className="sheet-x" onClick={() => setRateDetail(null)}><X /></button>
+        </div>
+        {rateDetail && (
+          <>
+            <div className="sum-pre" style={{ marginBottom: 4 }}>
+              <div className="pair-line">
+                {rateDetail.ic
+                  ? <span className="ico"><CommoditySvg ic={rateDetail.ic} /></span>
+                  : <span className="ico flag"><FlagSvg code={rateDetail.code} /></span>}
+                <div>
+                  <div className="pl-nm">{rateDetail.name}</div>
+                  <div className="pl-sub tnum">
+                    {rateDetail.px.toLocaleString('en-US', {
+                      minimumFractionDigits: decimalsFor(rateDetail.px),
+                      maximumFractionDigits: decimalsFor(rateDetail.px),
+                    })}
+                  </div>
+                </div>
+              </div>
+              <RateHistory pair={rateDetail.pair} />
+            </div>
+
+            {(() => {
+              const open = events.filter(
+                // 'open', not 'active': an event's statuses are open/expired/
+                // settled. The compiler caught this, which is the only reason
+                // it is not silently reporting no cover on every pair forever.
+                (e) => e.underlying === rateDetail.pair && e.status === 'open',
+              );
+              return open.length > 0 ? (
+                <button
+                  className="btn btn-primary"
+                  style={{ marginTop: 14 }}
+                  onClick={() => { setRateDetail(null); setLocation(`/hedge?q=${encodeURIComponent(rateDetail.pair)}`); }}
+                >
+                  <Shield /> {open.length === 1 ? 'View the cover available' : `View ${open.length} pools`}
+                </button>
+              ) : (
+                <p className="hint" style={{ marginTop: 14 }}>
+                  No cover is open on {rateDetail.pair} at the moment.
+                </p>
+              );
+            })()}
+          </>
+        )}
+      </div>
+
       <div className={`sheet-scrim${historyOpen ? ' on' : ''}`} onClick={() => setHistoryOpen(false)} />
       <div className={`sheet${historyOpen ? ' on' : ''}`} role="dialog" aria-modal="true">
         <div className="grab" />
