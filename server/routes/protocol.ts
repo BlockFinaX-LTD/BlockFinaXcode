@@ -303,20 +303,7 @@ export async function registerProtocolRoutes(app: Express) {
       const { clean: points, dropped } = dropSpikes(raw);
 
       if (points.length < 2) {
-        return res.json({ pair, days, points: [], worstMove: null, change: null, ticksDropped: dropped.length, note: "not enough history" });
-      }
-
-      // The largest adverse move over any rolling 60 day window in this range.
-      // Adverse means the pair RISING, since that is more local currency per
-      // dollar and the direction an importer is exposed to.
-      let worst = { percent: 0, from: "", to: "" };
-      for (let i = 0; i < points.length; i++) {
-        const limit = new Date(points[i].date).getTime() + 60 * 86_400_000;
-        for (let j = i + 1; j < points.length; j++) {
-          if (new Date(points[j].date).getTime() > limit) break;
-          const move = ((points[j].close - points[i].close) / points[i].close) * 100;
-          if (move > worst.percent) worst = { percent: move, from: points[i].date, to: points[j].date };
-        }
+        return res.json({ pair, days, points: [], change: null, ticksDropped: dropped.length, note: "not enough history" });
       }
 
       const first = points[0].close;
@@ -382,15 +369,6 @@ export async function registerProtocolRoutes(app: Express) {
         // does not mean what it looks like, and reading it wrong has already
         // put the opposite of the truth in front of a reader once.
         change: { percent: changePct, direction: describeMove(pair, changePct) },
-        worstMove:
-          worst.percent > 0
-            ? {
-                percent: Number(worst.percent.toFixed(1)),
-                from: worst.from,
-                to: worst.to,
-                direction: describeMove(pair, worst.percent),
-              }
-            : null,
       });
     } catch {
       res.status(500).json({ message: "Failed to load history" });

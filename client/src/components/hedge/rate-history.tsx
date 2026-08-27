@@ -26,7 +26,6 @@ import { createPortal } from "react-dom";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 interface Point { date: string; close: number; }
-interface Move { percent: number; from: string; to: string; direction: string; }
 interface History {
   pair: string;
   points: Point[];
@@ -38,7 +37,6 @@ interface History {
   latest?: number;
   ticksDropped?: number;
   change?: { percent: number; direction: string } | null;
-  worstMove?: Move | null;
 }
 
 /**
@@ -286,10 +284,6 @@ export function RateHistory({
   // that inversion has already reached a reader once.
   const chgColour = flat ? "var(--tx-3)" : up ? "var(--red)" : "var(--green)";
 
-  const wFrom = data.worstMove ? pts.findIndex((p) => p.date >= data.worstMove!.from) : -1;
-  const wTo = data.worstMove ? pts.findIndex((p) => p.date >= data.worstMove!.to) : -1;
-  const showBand = wFrom >= 0 && wTo > wFrom;
-
   const strikeY = hasStrike ? geom.y(strike as number) : 0;
   const strikeVisible = hasStrike && strikeY >= PAD.t && strikeY <= VH - PAD.b;
   const everPast = hasStrike
@@ -407,13 +401,6 @@ export function RateHistory({
           </g>
         ))}
 
-        {/* The worst run in this window. Pure history, and the strongest
-            argument for holding cover anywhere on the page. */}
-        {showBand && (
-          <rect x={geom.x(wFrom)} y={PAD.t} width={Math.max(1, geom.x(wTo) - geom.x(wFrom))} height={geom.ih}
-                fill="var(--red)" opacity="0.08" />
-        )}
-
         <path d={geom.area} fill={`url(#${gradId})`} />
         <path d={geom.line} fill="none" stroke="var(--blue)" strokeWidth="1.8"
               strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
@@ -463,12 +450,6 @@ export function RateHistory({
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 12, height: 0, borderTop: "1.5px dashed var(--green)", display: "inline-block" }} />
             Strike {fmtRate(strike as number)}
-          </span>
-        )}
-        {showBand && data.worstMove && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, background: "var(--red)", opacity: 0.22, borderRadius: 2, display: "inline-block" }} />
-            Worst 60 day run, {data.worstMove.percent}%
           </span>
         )}
         {!!data.observations && (
