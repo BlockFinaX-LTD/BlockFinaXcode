@@ -90,8 +90,8 @@ const daysFor = (d: number | "ytd" | "max"): number => {
  * the moment you opened it.
  */
 const SIZES = {
-  inline:   { VW: 560,  VH: 220, PAD: { t: 10, r: 54, b: 24, l: 6 }, ticks: 3, dates: 3 },
-  expanded: { VW: 1100, VH: 480, PAD: { t: 16, r: 68, b: 30, l: 10 }, ticks: 6, dates: 6 },
+  inline:   { VW: 560,  VH: 220, PAD: { t: 10, r: 54, b: 24, l: 6 },  ticks: 3, dates: 3, mark: 44, sub: 12 },
+  expanded: { VW: 1100, VH: 480, PAD: { t: 16, r: 68, b: 30, l: 10 }, ticks: 6, dates: 6, mark: 92, sub: 20 },
 };
 
 const fmtRate = (v: number) =>
@@ -140,7 +140,7 @@ export function RateHistory({
   const [hourly, setHourly] = useState(true);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const { VW, VH, PAD, ticks: TICKS, dates: DATES } = expanded ? SIZES.expanded : SIZES.inline;
+  const { VW, VH, PAD, ticks: TICKS, dates: DATES, mark: MARK, sub: SUB } = expanded ? SIZES.expanded : SIZES.inline;
 
   // Escape closes it, and the page behind must not scroll while it is open.
   useEffect(() => {
@@ -435,6 +435,46 @@ export function RateHistory({
             <stop offset="100%" stopColor="var(--blue)" stopOpacity="0" />
           </linearGradient>
         </defs>
+
+        {/*
+          Watermark. Screenshots of this chart travel further than the app
+          does, so the brand and the subject travel with them.
+
+          Drawn first, so every gridline and the data itself sit on top of it.
+          Painted in var(--tx) at a few percent rather than a fixed grey, so it
+          stays legible-but-quiet in both themes without a second rule. Vector
+          text rather than the PNG logo: crisp at any size, nothing to load,
+          and no CSP question.
+
+          pointer-events are off, or it would swallow the crosshair.
+        */}
+        <g pointerEvents="none" aria-hidden="true">
+          <text
+            x={PAD.l + geom.iw / 2}
+            y={PAD.t + geom.ih / 2}
+            textAnchor="middle"
+            fontSize={MARK}
+            fontWeight="700"
+            fontFamily="var(--sans)"
+            letterSpacing="-0.02em"
+            fill="var(--tx)"
+            opacity="0.055"
+          >
+            BlockFinaX
+          </text>
+          <text
+            x={PAD.l + geom.iw / 2}
+            y={PAD.t + geom.ih / 2 + MARK * 0.62}
+            textAnchor="middle"
+            fontSize={SUB}
+            fontFamily="var(--mono)"
+            letterSpacing="0.08em"
+            fill="var(--tx)"
+            opacity="0.05"
+          >
+            {pair} · {range.label} · blockfinax.com
+          </text>
+        </g>
 
         {/* Gridlines, with the price axis on the right the way a quote screen puts it. */}
         {geom.ticks.map((v, i) => (
