@@ -1056,10 +1056,22 @@ export default function Hedge() {
 
   // ── Derived lists ───────────────────────────────────────────────────────
   const myAddr = wallet?.address?.toLowerCase() || '';
-  // Buyable markets: open, not expired by date, and not your own pools.
+  /**
+   * Buyable markets: open, and not expired by date.
+   *
+   * Your own pools used to be filtered out here. Nothing in the contract asks
+   * for that: simulating buyProtection from the creator's address and from a
+   * stranger's returns the identical revert, "Event not open", so the creator
+   * is not treated differently on chain. It was a UI rule.
+   *
+   * And it blocked a real case. A business that creates a pool to attract
+   * underwriters usually has the exposure it is trying to hedge in the first
+   * place, and an underwriter may want to lay off part of the risk they are
+   * carrying. Both are legitimate, and both were unreachable.
+   */
   const openMarkets = useMemo(
-    () => events.filter((e) => e.status === 'open' && e.expiryDate.getTime() > Date.now() && e.creator.toLowerCase() !== myAddr),
-    [events, myAddr],
+    () => events.filter((e) => e.status === 'open' && e.expiryDate.getTime() > Date.now()),
+    [events],
   );
 
   const buyList = useMemo(() => {
@@ -1239,7 +1251,22 @@ export default function Hedge() {
                   <div className="empty">No covers match your filters.</div>
                 ) : buyList.map((ev) => (
                   <div className="mkt-row" key={ev.id} onClick={() => openDetail(ev)}>
-                    <div className="mkt-mk"><MarketFlag pair={ev.underlying} /><div className="mkt-nm"><div className="a">{pairLabel(ev.underlying)}</div><div className="b">{ev.name} · {expiryLabel(ev.expiryDate)}</div></div></div>
+                    <div className="mkt-mk"><MarketFlag pair={ev.underlying} /><div className="mkt-nm">
+                      <div className="a">
+                        {pairLabel(ev.underlying)}
+                        {/* Marked, not hidden. Buying into a pool you created
+                            is allowed and sometimes sensible, but it should be
+                            a choice you can see you are making. */}
+                        {ev.creator.toLowerCase() === myAddr && (
+                          <span style={{
+                            marginLeft: 7, fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '.05em',
+                            padding: '2px 6px', borderRadius: 4, verticalAlign: 'middle',
+                            border: '1px solid color-mix(in oklab, var(--blue) 40%, var(--border))',
+                            color: 'var(--blue)',
+                          }}>YOUR POOL</span>
+                        )}
+                      </div>
+                      <div className="b">{ev.name} · {expiryLabel(ev.expiryDate)}</div></div></div>
                     <div className="mkt-col"><span className="k">Direction</span><span className="dir"><span className="da">{ev.strikeAbove ? <ArrowUpRight /> : <ArrowDownRight />}</span>{ev.strikeAbove ? 'Rises' : 'Falls'}</span></div>
                     <div className="mkt-col"><span className="k">Strike</span><span className="mkt-v">{ev.strike.toLocaleString()}</span></div>
                     <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{(ev.premiumRate * 100).toFixed(1)}%</span></div>
@@ -1842,6 +1869,19 @@ export default function Hedge() {
                 strikeAbove={selectedEvent.strikeAbove}
               />
             </div>
+            {/* Said once, where the money actually moves. Buying cover in
+                your own pool is permitted and can be the right call, but the
+                premium largely returns to you as the underwriter, so the net
+                effect is the platform fee plus a genuine transfer of risk to
+                whichever other LPs are in the pool. Worth knowing before you
+                sign rather than after. */}
+            {selectedEvent.creator.toLowerCase() === myAddr && (
+              <p className="hint" style={{ marginBottom: 12, color: 'var(--tx-3)' }}>
+                You created this pool. The premium goes into it, so most of it comes back to you
+                as an underwriter and the cover is only as useful as the share of the pool other
+                LPs are funding.
+              </p>
+            )}
             <div className="field">
               <label>Notional to cover</label>
               <div className="amount">
