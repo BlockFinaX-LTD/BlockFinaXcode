@@ -29,20 +29,11 @@ import {
 } from "./data/garch";
 import type { PairTier } from "./data/pairs";
 
-// Safety cap on max_payout/premium ratio. Quotes above this are rejected
-// because they indicate the option is essentially free, which is always a
-// pricing-model failure (σ stuck at floor on a tier with real jump risk).
-// See the leverage check below for the rationale.
-export const MAX_LEVERAGE_RATIO = 100;
-/**
- * Floor on max_payout/premium — the point past which cover stops being worth buying.
- *
- * 1.0714 is the hard break-even under the deployed Base fees (5% on the premium
- * in, 2% off the payout out): below it the hedger loses money even when the rate
- * finishes at the cap. 1.5 leaves a real margin — at the floor the buyer is
- * already paying two thirds of the most they could ever receive.
- */
-export const MIN_LEVERAGE_RATIO = 1.5;
+// Defined in ./bounds, which imports nothing, so the purchase maths can use
+// them without pulling the oracle and the database in behind. Re-exported here
+// because callers have imported them from this module since before that split.
+export { MAX_LEVERAGE_RATIO, MIN_LEVERAGE_RATIO } from "./bounds";
+import { MAX_LEVERAGE_RATIO, MIN_LEVERAGE_RATIO } from "./bounds";
 
 export interface QuoteRequest {
   pair: string;            // e.g. "USD/GHS"

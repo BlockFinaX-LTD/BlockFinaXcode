@@ -39,7 +39,6 @@ import { getRate } from "../fx-oracle";
 import { mertonCallSpread, mertonPutSpread } from "./kernel";
 import { impliedVolFromPremiumRate } from "./implied-vol";
 import { getPairJumpParams } from "./data/jump-params";
-import { MAX_LEVERAGE_RATIO, MIN_LEVERAGE_RATIO } from "./quote";
 
 const CHAINS: Record<number, { diamond: string; rpcs: string[] }> = {
   8453: {
@@ -71,52 +70,14 @@ const ABI = [
   "function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 lpCount, uint256 hedgerCount, uint256 totalMaxPayout)",
 ];
 
-/**
- * Utilisation markup. Quadratic, so early buyers are barely touched and the
- * last of the capacity is genuinely dear:
- *
- *   0% used   →  ×1.000        50% used  →  ×1.125
- *   90% used  →  ×1.405        100% used →  ×1.500
- *
- * An LP's marginal risk is not linear in how full their pool is. Nothing in the
- * engine priced this at all before — the same quote came out of an empty pool
- * and a pool with one slot left.
- */
-export const UTILISATION_K = 0.5;
+// The maths, and these two, live in ./purchase-math so they can be tested
+// without a chain behind them. Re-exported: callers import them from here.
+export { pricePurchase, UTILISATION_K, MIN_TENOR_HOURS } from "./purchase-math";
+import { pricePurchase, MIN_TENOR_HOURS } from "./purchase-math";
 
-/** Refuse to quote inside this window; the outcome is close to decided. */
-export const MIN_TENOR_HOURS = 1;
-
-export interface PurchaseQuote {
-  ok: true;
-  /** Premium as a fraction of notional, after skew and floor. */
-  premiumRate: number;
-  premiumUsd: number;
-  maxPayoutUsd: number;
-  /** What the pool would have charged flat — for comparison, not for charging. */
-  storedRate: number;
-  storedPremiumUsd: number;
-  breakdown: {
-    spot: number;
-    strike: number;
-    payoutCap: number;
-    daysRemaining: number;
-    /** The LP's implied volatility, the anchor this is priced against. */
-    sigmaStar: number;
-    sigmaStarSource: "stored" | "inverted";
-    /** Before skew and floor. */
-    baseRate: number;
-    utilisation: number;
-    utilisationMultiplier: number;
-    floorApplied: boolean;
-    leverage: number;
-  };
-}
-
-export interface PurchaseQuoteError {
-  ok: false;
-  reason: string;
-}
+// Defined in ./purchase-math beside the function that builds them.
+export type { PurchaseQuote, PurchaseQuoteError } from "./purchase-math";
+import type { PurchaseQuote, PurchaseQuoteError } from "./purchase-math";
 
 async function provider(chainId: number): Promise<{ p: ethers.JsonRpcProvider; diamond: string }> {
   const cfg = CHAINS[chainId];
@@ -243,65 +204,13 @@ export async function quotePurchase(args: {
     sigmaStarSource = "inverted";
   }
 
-  const perUnit = strikeAbove
-    ? mertonCallSpread({ S, K_lower: strike, K_upper: payoutCap, T, r: 0, q: 0, sigma: sigmaStar, ...jump })
-    : mertonPutSpread({ S, K_lower: payoutCap, K_upper: strike, T, r: 0, q: 0, sigma: sigmaStar, ...jump });
-  const baseRate = perUnit / S;
-
-  const totalLiquidity = num(stats.totalLiquidity);
-  const totalMaxPayout = num(stats.totalMaxPayout);
-  const utilisation = totalLiquidity > 0 ? Math.min(1, totalMaxPayout / totalLiquidity) : 0;
-  const utilisationMultiplier = 1 + UTILISATION_K * utilisation * utilisation;
-
-  let premiumRate = baseRate * utilisationMultiplier;
-  const floor = args.minPremiumRate ?? 0;
-  const floorApplied = floor > 0 && premiumRate < floor;
-  if (floorApplied) premiumRate = floor;
-
-  const maxPayoutUsd = (args.notional * Math.abs(payoutCap - strike)) / S0;
-  const premiumUsd = args.notional * premiumRate;
-
-  if (!(premiumUsd > 0) || Math.round(premiumRate * 1e6) <= 0) {
-    return {
-      ok: false,
-      reason:
-        "The premium rounds to zero at the contract's precision — the strike is too far from spot " +
-        "for the time remaining. This pool is not worth buying into right now.",
-    };
-  }
-  const leverage = maxPayoutUsd / premiumUsd;
-  if (leverage > MAX_LEVERAGE_RATIO) {
-    return { ok: false, reason: `Quote rejected: ${leverage.toFixed(0)}× leverage exceeds the ${MAX_LEVERAGE_RATIO}× cap.` };
-  }
-  if (leverage < MIN_LEVERAGE_RATIO) {
-    return {
-      ok: false,
-      reason:
-        `Spot has moved so far through the strike that the premium is ${(100 / leverage).toFixed(0)}% of the ` +
-        `most this position could pay. After fees a buyer cannot profit. This pool is no longer worth ` +
-        `buying into.`,
-    };
-  }
-
-  return {
-    ok: true,
-    premiumRate,
-    premiumUsd,
-    maxPayoutUsd,
+  return pricePurchase({
+    notional: args.notional,
+    S, S0, strike, payoutCap, strikeAbove, T, daysRemaining,
+    sigmaStar, sigmaStarSource, jump,
+    totalLiquidity: num(stats.totalLiquidity),
+    totalMaxPayout: num(stats.totalMaxPayout),
+    minPremiumRate: args.minPremiumRate ?? 0,
     storedRate,
-    storedPremiumUsd: args.notional * storedRate,
-    breakdown: {
-      spot: S,
-      strike,
-      payoutCap,
-      daysRemaining,
-      sigmaStar,
-      sigmaStarSource,
-      baseRate,
-      utilisation,
-      utilisationMultiplier,
-      floorApplied,
-      leverage,
-    },
-  };
+  });
 }

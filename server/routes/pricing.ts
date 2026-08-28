@@ -12,7 +12,11 @@
 
 import type { Express } from "express";
 import { quote } from "../pricing/quote";
+import { quotePurchase } from "../pricing/quote-purchase";
 import { validateLpPremium } from "../pricing/implied-vol";
+import { db } from "../db";
+import { hedgeEvents } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
 import { getPairJumpParams } from "../pricing/data/jump-params";
 import { getPricingVol } from "../pricing/data/vol";
 import { getUsdRateCache } from "../pricing/data/usdRate";
@@ -74,6 +78,85 @@ export function registerPricingRoutes(app: Express): void {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "internal pricing error";
       return res.status(400).json({ error: msg });
+    }
+  });
+
+  /**
+   * POST /api/pricing/quote-purchase
+   *
+   * What an existing pool costs a buyer arriving now, as opposed to
+   * /api/pricing/quote which prices a pool that does not exist yet.
+   *
+   * The premium a pool charges is fixed at creation and every buyer pays it
+   * whatever the time remaining, so a buyer with ten days left of a thirty day
+   * pool pays for thirty. This returns what the same cover is actually worth
+   * today, priced against the volatility the underwriter themselves implied
+   * when they set their opening premium.
+   *
+   * Read-only and unsigned. It does not change what anyone is charged; the
+   * contract still takes the pool's stored rate. Both numbers come back so the
+   * caller can show them side by side.
+   */
+  app.post("/api/pricing/quote-purchase", async (req, res) => {
+    try {
+      const { chainId, eventId, notional } = req.body ?? {};
+
+      if (typeof chainId !== "number" || !Number.isFinite(chainId)) {
+        return res.status(400).json({ ok: false, reason: "chainId (number) is required" });
+      }
+      if (typeof eventId !== "number" || !Number.isInteger(eventId) || eventId < 0) {
+        return res.status(400).json({ ok: false, reason: "eventId (non-negative integer) is required" });
+      }
+      if (typeof notional !== "number" || !Number.isFinite(notional) || notional <= 0) {
+        return res.status(400).json({ ok: false, reason: "notional (positive number) is required" });
+      }
+
+      /**
+       * The anchor recorded when the pool was created, if it is there.
+       *
+       * quotePurchase recovers σ* from the pool's own premium when this is
+       * absent, so a miss costs an extra inversion rather than a wrong answer.
+       * Reading it must never be able to fail the quote, hence the catch.
+       */
+      let storedImpliedVol: number | null = null;
+      let minPremiumRate: number | null = null;
+      let originalTenorDays: number | null = null;
+      try {
+        const [row] = await db
+          .select({
+            impliedVol: hedgeEvents.impliedVol,
+            minPremiumRate: hedgeEvents.minPremiumRate,
+            createdAt: hedgeEvents.createdAt,
+            expiryDate: hedgeEvents.expiryDate,
+          })
+          .from(hedgeEvents)
+          .where(and(eq(hedgeEvents.chainId, chainId), eq(hedgeEvents.onChainEventId, eventId)))
+          .limit(1);
+        if (row) {
+          const iv = row.impliedVol === null ? NaN : Number(row.impliedVol);
+          const mp = row.minPremiumRate === null ? NaN : Number(row.minPremiumRate);
+          if (Number.isFinite(iv) && iv > 0) storedImpliedVol = iv;
+          if (Number.isFinite(mp) && mp > 0) minPremiumRate = mp;
+          if (row.createdAt && row.expiryDate) {
+            const days = (new Date(row.expiryDate).getTime() - new Date(row.createdAt).getTime()) / 86_400_000;
+            if (Number.isFinite(days) && days > 0) originalTenorDays = days;
+          }
+        }
+      } catch {
+        /* the chain has everything needed; the mirror is an optimisation */
+      }
+
+      const result = await quotePurchase({
+        chainId, eventId, notional, storedImpliedVol, minPremiumRate, originalTenorDays,
+      });
+
+      // A refusal is a real answer, not a server fault: too near expiry, or a
+      // leverage bound the buyer would lose on. 200 with ok:false so the caller
+      // can render the reason instead of a generic failure.
+      return res.json(result);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "internal pricing error";
+      return res.status(400).json({ ok: false, reason });
     }
   });
 
