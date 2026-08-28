@@ -1655,7 +1655,7 @@ export default function Hedge() {
                       // Diamonds without the getter.
                       const claimable = d.pendingPremiums ?? (d.premiumsEarned - d.premiumsClaimed);
                       // Principal is only withdrawable once the event is SETTLED on-chain
-                      // (the oracle runs settleEvent — one-touch or at expiry). Gating on the
+                      // (the oracle runs settleEvent at expiry). Gating on the
                       // calendar date alone would surface a button that reverts before
                       // settlement completes, so we trust the on-chain status only.
                       const settledOnChain = ev ? (ev.status === 'settled' || ev.status === 'expired') : false;
@@ -1835,7 +1835,41 @@ export default function Hedge() {
                 <div className="det-hn"><div className="a">{pairLabel(ev.underlying)}</div><div className="b">{ev.name}</div></div>
                 <div className="det-apr"><div className="v">{(ev.premiumRate * 100).toFixed(1)}%</div><div className="l">Premium</div></div>
               </div>
-              <p className="det-cond">{ev.strikeAbove ? 'Pays out if the rate rises past ' : 'Pays out if the rate falls below '}{ev.strike.toLocaleString()} {unitOf(ev.underlying)} before expiry. Settlement is one-touch — the event triggers the moment the rate touches the strike.</p>
+              <p className="det-cond">{ev.strikeAbove ? 'Pays out if the rate settles above ' : 'Pays out if the rate settles below '}{ev.strike.toLocaleString()} {unitOf(ev.underlying)} at expiry. What matters is where the rate finishes, not whether it touched the strike along the way.</p>
+              {/*
+                The market's own history, with this pool's terms on it.
+
+                A grid of six numbers tells you the terms and nothing about
+                whether they are likely, which is the question someone opens a
+                market to answer.
+
+                Read from whichever side this person is already on. Holding a
+                deposit here makes the band their exposure and it is drawn red;
+                holding cover, or holding nothing and browsing to buy, makes it
+                the zone that pays and it is drawn green. The same picture
+                cannot mean the same thing to both.
+              */}
+              {(() => {
+                const myDep = myDeposits.find((d) => d.eventId === ev.id && !d.withdrawn);
+                const myPos = myPositions.find((pp) => pp.eventId === ev.id && pp.status === 'active');
+                const asLp = !!myDep && !myPos;
+                const live = fxData?.rates[ev.underlying]?.rate || 0;
+                const capRate = ev.payoutCap && ev.payoutCap > 0 ? ev.payoutCap : undefined;
+                return (
+                  <RateHistory
+                    pair={ev.underlying}
+                    strike={ev.strike}
+                    strikeAbove={ev.strikeAbove}
+                    cap={capRate}
+                    maxPayoutLabel={capRate ? fmtK(ev.totalMaxPayout) : undefined}
+                    markRate={live}
+                    markLabel="now"
+                    perspective={asLp ? 'underwriter' : 'hedger'}
+                    initialRange="6m"
+                  />
+                );
+              })()}
+
               <div className="det-grid">
                 <div className="det-stat"><div className="l">Direction</div><div className="v">{ev.strikeAbove ? 'Rate rises' : 'Rate falls'}</div></div>
                 <div className="det-stat"><div className="l">Strike</div><div className="v">{ev.strike.toLocaleString()} {unitOf(ev.underlying)}</div></div>
@@ -1845,6 +1879,7 @@ export default function Hedge() {
                 <div className="det-stat"><div className="l">Pool size</div><div className="v">{fmtMoney(ev.totalLiquidity)}</div></div>
               </div>
               <div className="det-cap-bar"><div className="row1"><span>Capacity</span><span>{util}% used</span></div><div className="liqbar"><i style={{ width: `${util}%` }} /></div></div>
+
               <div className="det-actions">
                 <button className="btn btn-ghost" onClick={() => openLp(ev)}><Layers /> Underwrite</button>
                 <button className="btn btn-primary" onClick={() => openBuy(ev)}><ShieldCheck /> Buy cover</button>

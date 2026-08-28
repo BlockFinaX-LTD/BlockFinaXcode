@@ -29,7 +29,7 @@ export default function TermsPage() {
           </div>
 
           <Section title="1. About the Protocol">
-            <p>BlockFinaX is a decentralised peer-to-peer (P2P) hedging protocol built on Base and BNB Smart Chain. The protocol enables users to create, buy, and provide liquidity for one-touch FX and commodity protection contracts governed entirely by open-source smart contracts.</p>
+            <p>BlockFinaX is a decentralised peer-to-peer (P2P) hedging protocol built on Base and BNB Smart Chain. The protocol enables users to create, buy, and provide liquidity for FX and commodity protection contracts governed entirely by open-source smart contracts. Contracts settle at expiry on the rate recorded then.</p>
             <p>BlockFinaX Inc. and its contributors (collectively "BlockFinaX", "we", "us") develop and maintain the smart contract infrastructure and the interface at this domain. We do not operate as a counterparty, broker, exchange, or financial intermediary in any transaction executed through the protocol.</p>
             <p className="mt-2">BlockFinaX Inc. is incorporated in the State of Delaware, United States, with its registered office at 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801, USA. It is the parent company and the entity with which you are contracting under these Terms. BlockFinaX Ltd, registered in Ghana, is its wholly-owned operating subsidiary. References to "BlockFinaX" in these Terms include both companies.</p>
           </Section>
