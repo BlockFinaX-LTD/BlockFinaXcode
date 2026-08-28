@@ -978,6 +978,35 @@ export default function Hedge() {
 
   // ── Derived for the buy/LP sheets ───────────────────────────────────────
   const premiumCalc = selectedEvent && notional ? parseFloat(notional) * selectedEvent.premiumRate : 0;
+
+  /**
+   * What this cover is worth today, beside what the pool charges.
+   *
+   * Advisory only. `premiumCalc` above is still what the buyer pays, because
+   * the contract takes the pool's stored rate and has no field for anything
+   * else. This exists so the gap is visible instead of silent: a buyer with ten
+   * days left of a thirty day pool is paying for thirty, and nothing on the
+   * screen said so.
+   *
+   * Debounced, because it re-prices from chain on every keystroke otherwise,
+   * and abandoned quietly on failure. A pricing engine that is down must never
+   * be able to stop a purchase.
+   */
+  const [livePrice, setLivePrice] = useState<import('@/lib/purchase-quote').PurchaseQuote | null>(null);
+  useEffect(() => {
+    const n = parseFloat(notional);
+    if (!buyOpen || !selectedEvent || !Number.isFinite(n) || n <= 0) { setLivePrice(null); return; }
+    const ctl = new AbortController();
+    const t = setTimeout(async () => {
+      const { fetchPurchaseQuote } = await import('@/lib/purchase-quote');
+      const q = await fetchPurchaseQuote(
+        { chainId: activeChainId, eventId: selectedEvent.id, notional: n },
+        ctl.signal,
+      );
+      if (!ctl.signal.aborted) setLivePrice(q.ok ? q : null);
+    }, 400);
+    return () => { ctl.abort(); clearTimeout(t); };
+  }, [buyOpen, selectedEvent, notional, activeChainId]);
   // null until the live on-chain rate loads — never assume a rate.
   const hedgerFeeRate = feeConfig ? feeConfig.hedgerFeeRate : null;
   const feeKnown = hedgerFeeRate !== null;
@@ -1951,6 +1980,34 @@ export default function Hedge() {
               </div>
               <div className="brk-line total"><span className="l">You pay</span><span className="v">{fmtMoney(totalCostCalc)}</span></div>
             </div>
+
+            {/* What the same cover is worth today, beside what the pool asks.
+                Shown only when the two differ enough to mean anything, and
+                never in place of the charged figure above. */}
+            {livePrice && Math.abs(livePrice.premiumRate - selectedEvent.premiumRate) / selectedEvent.premiumRate >= 0.1 && (
+              <div
+                style={{
+                  marginTop: 10, padding: '10px 12px', borderRadius: 9,
+                  border: '1px solid var(--border)', background: 'var(--card)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                  <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Worth today</span>
+                  <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tx-2)' }}>
+                    {(livePrice.premiumRate * 100).toFixed(2)}% · {fmtMoney(livePrice.premiumUsd)}
+                  </span>
+                </div>
+                <p style={{ fontSize: 11.5, color: 'var(--tx-4)', margin: '6px 0 0', lineHeight: 1.5 }}>
+                  {(() => {
+                    const days = livePrice.breakdown.daysRemaining;
+                    const left = days >= 1.5 ? `${Math.round(days)} days` : days >= 1 ? 'a day' : 'hours';
+                    return livePrice.premiumRate < selectedEvent.premiumRate
+                      ? `With ${left} left this cover is worth less than the pool's opening rate. You are charged the pool rate above.`
+                      : `With ${left} left and the rate nearer the strike this cover is worth more than the pool's opening rate. You are charged the pool rate above.`;
+                  })()}
+                </p>
+              </div>
+            )}
             {tokenBalanceNum > 0 && <p className="hint" style={{ marginBottom: 12 }}>Balance {fmtMoney(tokenBalanceNum)} {eventTokenSymbol}</p>}
             {exceedsCapacity && notional && (
               <p className="hint" style={{ marginBottom: 12, color: 'var(--red)' }}>
