@@ -137,6 +137,20 @@ export function registerPricingRoutes(app: Express): void {
           const mp = row.minPremiumRate === null ? NaN : Number(row.minPremiumRate);
           if (Number.isFinite(iv) && iv > 0) storedImpliedVol = iv;
           if (Number.isFinite(mp) && mp > 0) minPremiumRate = mp;
+
+          /**
+           * The fallback tenor, and it is only that.
+           *
+           * `created_at` is `new Date()` at row insert, so it records when
+           * chain-sync noticed the pool rather than when the pool was created.
+           * On Base event 13 the gap was eleven minutes on a one day pool, and
+           * because sigma is sensitive to tenor on short cover, the same pool
+           * priced from two mirrors returned 43.41% and 29.21%.
+           *
+           * resolveSigmaStar takes the creation time from the chain and caches
+           * the answer. This is passed only so a pool it cannot find still
+           * gets a number rather than nothing.
+           */
           if (row.createdAt && row.expiryDate) {
             const days = (new Date(row.expiryDate).getTime() - new Date(row.createdAt).getTime()) / 86_400_000;
             if (Number.isFinite(days) && days > 0) originalTenorDays = days;

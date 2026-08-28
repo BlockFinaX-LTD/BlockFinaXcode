@@ -37,7 +37,7 @@
 import { ethers } from "ethers";
 import { getRate } from "../fx-oracle";
 import { mertonCallSpread, mertonPutSpread } from "./kernel";
-import { impliedVolFromPremiumRate } from "./implied-vol";
+import { resolveSigmaStar } from "./sigma-star";
 import { getPairJumpParams } from "./data/jump-params";
 
 const CHAINS: Record<number, { diamond: string; rpcs: string[] }> = {
@@ -177,30 +177,45 @@ export async function quotePurchase(args: {
     jumpStd: 0.12,
   }));
 
-  // The anchor.
+  /**
+   * The anchor.
+   *
+   * Delegated to resolveSigmaStar, which takes the pool's creation time from
+   * the chain rather than from the mirror. `hedge_events.created_at` is the
+   * row-insert time, so a tenor derived from it is short by however long
+   * chain-sync took to notice the pool, and sigma is sensitive enough to tenor
+   * on short cover that the same pool priced from two mirrors returned 43.41%
+   * and 29.21%. A price that moves with job timing is not a price.
+   *
+   * The answer is cached back onto the event, so the chain is read once per
+   * pool rather than once per quote.
+   */
   let sigmaStar = args.storedImpliedVol ?? null;
   let sigmaStarSource: "stored" | "inverted" = "stored";
   if (!sigmaStar || !(sigmaStar > 0)) {
-    const tenorDays = args.originalTenorDays ?? null;
-    if (!tenorDays || !(tenorDays > 0)) {
+    const resolved = await resolveSigmaStar({
+      chainId: args.chainId,
+      eventId: args.eventId,
+      storedRate,
+      spotAtCreation: S0,
+      strike,
+      payoutCap,
+      strikeAbove,
+      pair,
+      expiryUnixSeconds: expiry,
+      mirrorCreatedAt: args.originalTenorDays
+        ? new Date((expiry - args.originalTenorDays * 86400) * 1000)
+        : null,
+    });
+    if (!resolved) {
       return {
         ok: false,
         reason:
-          "No implied volatility recorded for this pool and no original tenor to recover it from. " +
-          "The pool keeps its fixed rate until it is re-synced.",
+          "This pool's opening volatility could not be recovered, so there is no basis to " +
+          "re-price it. It keeps its fixed rate.",
       };
     }
-    const inv = impliedVolFromPremiumRate({
-      targetRate: storedRate,
-      S: S0,
-      strike,
-      payoutCap,
-      T: tenorDays / 365.25,
-      strikeAbove,
-      ...jump,
-    });
-    if (!inv.ok) return { ok: false, reason: `Cannot recover this pool's volatility: ${inv.reason}` };
-    sigmaStar = inv.sigma;
+    sigmaStar = resolved.sigma;
     sigmaStarSource = "inverted";
   }
 
