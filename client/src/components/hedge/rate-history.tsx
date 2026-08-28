@@ -125,6 +125,7 @@ export function RateHistory({
   markRate,
   markLabel,
   entryRate,
+  boughtOn,
   perspective = "hedger",
   initialRange = "1y",
 }: {
@@ -150,6 +151,15 @@ export function RateHistory({
    * and the thing people most often misjudge about a hedge.
    */
   entryRate?: number;
+  /**
+   * When this holder entered, as an ISO date.
+   *
+   * A vertical line, and the only marker here that belongs to the person
+   * rather than to the contract. The strike and the cap are the same for
+   * everyone in the pool; where you came in is yours, and it is what turns
+   * "the rate did this" into "the rate did this to me".
+   */
+  boughtOn?: string;
   /**
    * Whose side the colours are read from.
    *
@@ -655,6 +665,28 @@ export function RateHistory({
             </text>
           </>
         )}
+
+        {/* Where this holder came in. */}
+        {boughtOn && (() => {
+          // Nearest drawn point at or after the purchase date. The series is
+          // thinned on long ranges, so an exact date match would usually miss.
+          const i = pts.findIndex((q) => q.date >= boughtOn);
+          if (i < 0) return null;
+          const bx = geom.x(i);
+          // Suppressed at the very edge, where the label would clip and the
+          // line would sit on the axis reading as a border.
+          if (bx < PAD.l + 12 || bx > VW - PAD.r - 12) return null;
+          return (
+            <g pointerEvents="none">
+              <line x1={bx} y1={PAD.t} x2={bx} y2={VH - PAD.b} stroke="var(--tx-3)"
+                    strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
+              <text x={bx + 4} y={PAD.t + 11} fontSize={expanded ? 11 : 9.5}
+                    fontFamily="var(--mono)" fill="var(--tx-3)" opacity="0.95">
+                you bought
+              </text>
+            </g>
+          );
+        })()}
 
         {/*
           Where the rate actually is.

@@ -1502,6 +1502,7 @@ export default function Hedge() {
                           settled={ev.status !== 'open'}
                           settlementPrice={ev.settlementPrice}
                           actualPayout={p.payoutAmount}
+                          boughtOn={p.createdAt ? p.createdAt.toISOString().slice(0, 10) : undefined}
                           cap={payoutModelFor(p, ev).cap}
                           maxPayoutLabel={fmtMoney(p.payoutAmount)}
                         />
@@ -1786,6 +1787,7 @@ export default function Hedge() {
                   settled
                   settlementPrice={ev.settlementPrice}
                   actualPayout={won ? p.payoutAmount : 0}
+                  boughtOn={p.createdAt ? p.createdAt.toISOString().slice(0, 10) : undefined}
                   cap={payoutModelFor(p, ev).cap}
                   maxPayoutLabel={fmtMoney(p.payoutAmount)}
                 />

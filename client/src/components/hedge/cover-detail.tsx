@@ -68,7 +68,7 @@ function WhereItStands(props: OutcomeProps) {
   );
 }
 
-export function CoverDetail(props: OutcomeProps & { cap: number; maxPayoutLabel: string }) {
+export function CoverDetail(props: OutcomeProps & { cap: number; maxPayoutLabel: string; boughtOn?: string }) {
   const [open, setOpen] = useState(false);
   const { cap, maxPayoutLabel, underlying, strike, strikeAbove, settled } = props;
 
@@ -124,6 +124,7 @@ export function CoverDetail(props: OutcomeProps & { cap: number; maxPayoutLabel:
             markRate={settled ? props.settlementPrice : props.currentRate}
             markLabel={settled ? "settled" : "now"}
             entryRate={props.initialRate}
+            boughtOn={props.boughtOn}
           />
 
           <WhereItStands {...props} />
