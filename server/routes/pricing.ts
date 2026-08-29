@@ -204,7 +204,23 @@ export function registerPricingRoutes(app: Express): void {
             notional: BigInt(Math.round(notional * 1e6)),
             premiumRate: BigInt(Math.round(result.premiumRate * 1e6)),
           });
-          return res.json({ ...result, attestation });
+          /**
+           * quoteTimestamp is a bigint, and JSON.stringify throws on those, so
+           * res.json() failed and the catch below turned it into a 400. The
+           * signing path was never exercised end to end before shipping,
+           * because the only pool available to test against had settled and
+           * the request was refused long before it reached here.
+           *
+           * Serialised as a decimal string rather than a number: these are unix
+           * seconds today, but a string cannot silently lose precision if that
+           * ever changes, and the client casts it back with BigInt() either way.
+           */
+          return res.json({
+            ...result,
+            attestation: attestation
+              ? { ...attestation, quoteTimestamp: attestation.quoteTimestamp.toString() }
+              : null,
+          });
         }
       }
 
