@@ -441,6 +441,9 @@ export default function Hedge() {
     direction: 'up' as 'up' | 'down',
     paymentCurrency: 'USDC' as 'USDC' | 'USDT',
     overrideAcknowledged: false, selfPriced: false,
+    // How this pool prices cover for its whole life. Fixed by default, which is
+    // how every pool has behaved until now, and immutable once created.
+    dynamicPricing: false,
   });
 
   useEffect(() => {
@@ -878,7 +881,8 @@ export default function Hedge() {
         name: newEvent.name, underlying: newEvent.underlying, strike: strikePrice, payoutCap: payoutCapNum,
         premiumRate: parseFloat(newEvent.premiumRate) / 100, expiryDate, allowExternalLp: newEvent.allowExternalLp,
         initialLiquidity: newEvent.initialLiquidity || '0', initialRate: signedInitialRate, strikeAbove,
-        paymentToken: paymentTokenAddr, signature, quoteTimestamp, quoteNonce,
+        paymentToken: paymentTokenAddr, dynamicPricing: newEvent.dynamicPricing,
+        signature, quoteTimestamp, quoteNonce,
       }, setTxStep);
       await recordActivity({
         actionType: 'create_event', txHash: createTxHash, onChainEventId: newEventId,
@@ -903,7 +907,7 @@ export default function Hedge() {
       setTxStep(''); await loadEvents();
       toast({ title: 'Event Created', description: newEvent.poolOpen ? 'Event created and pool is open for hedgers!' : 'Event created. Open the pool from My pools when ready.' });
       setView('mypools');
-      setNewEvent({ name: '', description: '', assetClass: 'fx', underlying: 'USD/GHS', strike: '', payoutCap: '', premiumRate: '', expiryHours: '720', initialLiquidity: '', poolOpen: true, allowExternalLp: true, direction: 'up', paymentCurrency: 'USDC', overrideAcknowledged: false, selfPriced: false });
+      setNewEvent({ name: '', description: '', assetClass: 'fx', underlying: 'USD/GHS', strike: '', payoutCap: '', premiumRate: '', expiryHours: '720', initialLiquidity: '', poolOpen: true, allowExternalLp: true, direction: 'up', paymentCurrency: 'USDC', overrideAcknowledged: false, selfPriced: false, dynamicPricing: false });
     },
     onError: (error: any) => { setTxStep(''); console.error('[createEvent] Failed:', error); toastTxError(error); },
   });
@@ -1459,6 +1463,24 @@ export default function Hedge() {
                 <div style={{ marginTop: 10 }}>
                   <div className="toggle-row"><div><div className="tt">Open pool to hedgers</div><div className="ts">List on the marketplace so anyone can buy cover.</div></div><div className={`switch${newEvent.poolOpen ? ' on' : ''}`} onClick={() => setNewEvent((p) => ({ ...p, poolOpen: !p.poolOpen }))} /></div>
                   <div className="toggle-row"><div><div className="tt">Allow external LPs</div><div className="ts">Let other liquidity providers add collateral to your pool.</div></div><div className={`switch${newEvent.allowExternalLp ? ' on' : ''}`} onClick={() => setNewEvent((p) => ({ ...p, allowExternalLp: !p.allowExternalLp }))} /></div>
+                  {/* Chosen here and never again: the contract has no setter,
+                      because how a pool prices is one of its terms and an LP
+                      who funded it on that basis must not have it changed
+                      under them. It also decides which entry point buyers use,
+                      so they cannot pick whichever price is cheaper. */}
+                  <div className="toggle-row">
+                    <div>
+                      <div className="tt">Price it as time passes</div>
+                      <div className="ts">
+                        {newEvent.dynamicPricing
+                          ? 'Each buyer pays what the cover is worth on the day, priced from the volatility your premium implies. Costs less with little time left, more once the rate nears the strike.'
+                          : 'Every buyer pays your premium for the pool\'s whole life, so someone buying on the last day pays the same as someone buying on the first.'}
+                      </div>
+                      <div className="ts" style={{ marginTop: 4, color: 'var(--tx-4)' }}>
+                        This cannot be changed after the pool is created.
+                      </div>
+                    </div>
+                    <div className={`switch${newEvent.dynamicPricing ? ' on' : ''}`} onClick={() => setNewEvent((p) => ({ ...p, dynamicPricing: !p.dynamicPricing }))} /></div>
                 </div>
               </div>
             </div>

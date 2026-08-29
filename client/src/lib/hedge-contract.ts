@@ -102,10 +102,17 @@ const MULTICALL3_ABI = [
 
 const HEDGE_ABI = [
   // v7 + v8: payoutCap (range product) + signature/timestamp/nonce (pricing-engine attestation)
-  'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 payoutCap, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken, bytes signature, uint256 quoteTimestamp, bytes32 quoteNonce)) returns (uint256)',
+  'function createEvent(tuple(string name, string underlying, uint256 strike, uint256 payoutCap, uint256 premiumRate, uint256 expiryDate, bool allowExternalLp, uint256 initialLiquidity, uint256 initialRate, bool strikeAbove, address paymentToken, bool dynamicPricing, bytes signature, uint256 quoteTimestamp, bytes32 quoteNonce)) returns (uint256)',
   'function setPoolSettings(uint256 _eventId, bool _poolOpen, bool _allowExternalLp)',
   'function deposit(uint256 _eventId, uint256 _amount) returns (uint256)',
   'function buyProtection(uint256 _eventId, uint256 _notional, uint256 _maxCost, uint256 _deadline) returns (uint256)',
+  // Dynamic pools are bought through this instead: the premium comes from a
+  // signed quote rather than the rate frozen at creation. Which one works is
+  // decided by the pool, not the buyer — buyProtection reverts on a dynamic
+  // pool and this reverts on a fixed one, so neither side can pick whichever
+  // price happens to be cheaper.
+  'function buyProtectionQuoted(uint256 _eventId, uint256 _notional, uint256 _maxCost, uint256 _deadline, uint256 _premiumRate, uint256 _quoteTimestamp, bytes32 _quoteNonce, bytes _signature) returns (uint256)',
+  'function isDynamicallyPriced(uint256) view returns (bool)',
   'function settleEvent(uint256 _eventId, uint256 _settlementPrice)',
   'function claimPayout(uint256 _positionId)',
   'function claimPremiums(uint256 _depositId)',
@@ -979,6 +986,19 @@ class HedgeContractManager {
       initialRate: number;
       strikeAbove: boolean;
       paymentToken?: string;
+      /**
+       * How this pool prices cover for its whole life. Chosen here and never
+       * changeable: there is no setter on the contract.
+       *
+       *   false — fixed. Every buyer pays this premium, whatever the time left.
+       *   true  — dynamic. Each purchase is re-priced from the volatility your
+       *           opening premium implies, so it moves with time and with spot
+       *           against the strike.
+       *
+       * It also decides which entry point buyers use, so it cannot be inferred
+       * later or left undefined at the contract.
+       */
+      dynamicPricing?: boolean;
       /** v8 pricing-engine attestation (required when on-chain pricingEngineSigner is set). */
       signature?: string;        // 0x-prefixed 65-byte hex; default "0x" for legacy mode
       quoteTimestamp?: number;   // unix seconds; default 0 for legacy mode
@@ -1047,6 +1067,7 @@ class HedgeContractManager {
         initialRateWei,
         params.strikeAbove,
         tokenAddress,
+        params.dynamicPricing === true,
         signature,
         quoteTimestamp,
         quoteNonce,

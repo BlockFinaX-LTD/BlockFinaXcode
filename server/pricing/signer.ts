@@ -76,6 +76,14 @@ export interface SignableQuote {
   expiryDate: bigint;        // unix seconds
   initialRate: bigint;       // 6-dec fixed
   strikeAbove: boolean;
+  /**
+   * How the pool prices cover for its whole life: false fixed, true per-purchase.
+   *
+   * Signed, not merely sent. Without it in the payload a creator could take an
+   * attestation for their opening premium and then flip the pool to dynamic,
+   * which is a different product from the one the engine blessed.
+   */
+  dynamicPricing: boolean;
 }
 
 export interface SignedQuote {
@@ -92,12 +100,14 @@ export function buildSignableHash(q: SignableQuote, quoteTimestamp: bigint, quot
       "uint256", "address", "address",
       "string",
       "uint256", "uint256", "uint256", "uint256", "uint256", "bool",
+      "bool",
       "uint256", "bytes32",
     ],
     [
       asBigint(q.chainId), ethers.getAddress(q.diamondAddress), ethers.getAddress(q.creator),
       q.underlying,
       q.strike, q.payoutCap, q.premiumRate, q.expiryDate, q.initialRate, q.strikeAbove,
+      q.dynamicPricing,
       quoteTimestamp, quoteNonce,
     ],
   );
@@ -130,12 +140,14 @@ export async function signQuote(q: SignableQuote): Promise<SignedQuote | null> {
         "uint256", "address", "address",
         "string",
         "uint256", "uint256", "uint256", "uint256", "uint256", "bool",
+        "bool",
         "uint256", "bytes32",
       ],
       [
         asBigint(q.chainId), ethers.getAddress(q.diamondAddress), ethers.getAddress(q.creator),
         q.underlying,
         q.strike, q.payoutCap, q.premiumRate, q.expiryDate, q.initialRate, q.strikeAbove,
+        q.dynamicPricing,
         quoteTimestamp, quoteNonce,
       ],
     ),

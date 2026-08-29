@@ -42,6 +42,16 @@ export interface QuoteRequest {
   expiryUnixSeconds: number;
   notional: number;        // size of the hedge in payment-token units (USDC)
   strikeAbove: boolean;    // true = upward hedge (call spread), false = downward (put spread)
+  /**
+   * Whether the pool being created re-prices each purchase (true) or sells at
+   * this premium for its whole life (false). Defaults to false, which is how
+   * every pool behaved before the option existed.
+   *
+   * It is part of the signed payload because the contract signs it: without
+   * that, a creator could take this attestation and then create a differently
+   * priced product with it.
+   */
+  dynamicPricing?: boolean;
 
   // ── v8: required for signed-quote attestation ────────────────────────
   // The signature is bound to the chain + diamond + creator so it can't be
@@ -452,6 +462,7 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
       chainId: req.chainId,
       diamondAddress: req.diamondAddress,
       creator: req.creator,
+      dynamicPricing: req.dynamicPricing === true,
       underlying: req.pair,
       strike: strikeFixed6,
       payoutCap: payoutCapFixed6,
