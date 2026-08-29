@@ -1146,24 +1146,53 @@ class HedgeContractManager {
     return txHash;
   }
 
+  /**
+   * Buy cover, through whichever entry point this pool requires.
+   *
+   * A pool is either fixed-price or dynamically priced, chosen by its creator
+   * and immutable. The contract enforces the split: buyProtection reverts on a
+   * dynamic pool and buyProtectionQuoted reverts on a fixed one. That is
+   * deliberate — both selectors are permissionless, so a buyer allowed to pick
+   * would always take whichever was cheaper that day, at the LPs' expense.
+   *
+   * So the basis is read from the chain rather than passed in, and a caller
+   * cannot accidentally route around it.
+   *
+   * `quote` is required for a dynamic pool and ignored for a fixed one. It must
+   * be signed for THIS buyer: the contract binds the signature to msg.sender.
+   */
   async buyProtection(
     signer: ethers.Wallet,
     eventId: number,
     notional: string,
-    onStep?: (s: string) => void
+    onStep?: (s: string) => void,
+    quote?: { premiumRate: bigint; quoteTimestamp: bigint; quoteNonce: string; signature: string } | null,
   ): Promise<string> {
     const readContract = this.getReadContract();
     // getFeeConfig() has error handling + defaults for chains where getHedgeFeeConfig()
     // is absent (e.g. Base Diamond uses a different facet version).
-    const [core, feeConfig, tokenAddress] = await Promise.all([
+    const [core, feeConfig, tokenAddress, dynamic] = await Promise.all([
       readContract.getHedgeEventCore(eventId),
       this.getFeeConfig(),
       readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
+      // Older Diamonds have no such getter; absent means fixed, which is how
+      // every pool behaved before the choice existed.
+      readContract.isDynamicallyPriced(eventId).catch(() => false),
     ]);
+
+    if (dynamic && !quote) {
+      throw new Error(
+        'This pool is priced at the time of purchase, and the price quote could not be obtained. ' +
+        'Please try again in a moment.'
+      );
+    }
 
     const dec = this.tokenDecimals;
     const notionalWei = ethers.parseUnits(notional, dec);
-    const premiumRate = core.premiumRate as bigint;
+    // A dynamic pool charges the signed rate, not the one stored at creation.
+    // The cost preview below has to use the same number the contract will, or
+    // the balance check and the approval are both drawn against the wrong sum.
+    const premiumRate = dynamic && quote ? quote.premiumRate : (core.premiumRate as bigint);
     // getFeeConfig returns hedgerFeeRate as a float (e.g. 0.005 = 0.5%).
     // Convert back to 6-decimal fixed-point bigint to match contract math.
     const hedgerFeeRateBigInt = BigInt(Math.round(feeConfig.hedgerFeeRate * PRECISION));
@@ -1215,7 +1244,12 @@ class HedgeContractManager {
       const maxCost = (totalCost * 110n) / 100n;
       // deadline = 5 minutes from now (in unix seconds)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-      const calldata = iface.encodeFunctionData('buyProtection', [eventId, notionalWei, maxCost, deadline]);
+      const calldata = dynamic && quote
+        ? iface.encodeFunctionData('buyProtectionQuoted', [
+            eventId, notionalWei, maxCost, deadline,
+            quote.premiumRate, quote.quoteTimestamp, quote.quoteNonce, quote.signature,
+          ])
+        : iface.encodeFunctionData('buyProtection', [eventId, notionalWei, maxCost, deadline]);
       onStep?.('Submitting to blockchain...');
       const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, 0n, 0, onStep);
       onStep?.('Waiting for confirmation...');
@@ -1225,6 +1259,12 @@ class HedgeContractManager {
       const msg = error?.reason || error?.message || 'Transaction failed';
       if (msg.includes('insufficient') || msg.includes('transfer amount exceeds balance')) {
         throw new Error(`Insufficient ${symbol} balance — the contract rejected the transfer. Please top up your ${symbol} and try again.`);
+      }
+      if (msg.includes('Quote expired')) {
+        throw new Error('The price quote expired while the transaction was being prepared. Please try again.');
+      }
+      if (msg.includes('dynamically priced') || msg.includes('fixed price')) {
+        throw new Error('This pool changed how it prices cover. Please reopen it and try again.');
       }
       throw new Error(`Buy protection failed: ${msg}`);
     }

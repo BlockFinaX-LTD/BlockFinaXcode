@@ -41,10 +41,24 @@ export interface PurchaseQuoteError {
   reason: string;
 }
 
+/**
+ * The signed half, present only when a buyer was named on the request.
+ *
+ * Bound on chain to that address, this pool, this size and this price, and
+ * valid for 120 seconds. It cannot be lifted from the mempool and spent by
+ * somebody else, nor stretched to a larger notional.
+ */
+export interface QuoteAttestation {
+  signature: string;
+  quoteTimestamp: string | number | bigint;
+  quoteNonce: string;
+  signerAddress: string;
+}
+
 export async function fetchPurchaseQuote(
-  args: { chainId: number; eventId: number; notional: number },
+  args: { chainId: number; eventId: number; notional: number; buyer?: string },
   signal?: AbortSignal,
-): Promise<PurchaseQuote | PurchaseQuoteError> {
+): Promise<(PurchaseQuote & { attestation?: QuoteAttestation | null }) | PurchaseQuoteError> {
   try {
     const res = await fetch("/api/pricing/quote-purchase", {
       method: "POST",
@@ -56,7 +70,7 @@ export async function fetchPurchaseQuote(
     if (!body || typeof body !== "object") {
       return { ok: false, reason: "The pricing engine returned nothing." };
     }
-    return body as PurchaseQuote | PurchaseQuoteError;
+    return body as (PurchaseQuote & { attestation?: QuoteAttestation | null }) | PurchaseQuoteError;
   } catch (e) {
     // Aborts are the caller changing the amount, not a failure worth showing.
     const aborted = e instanceof DOMException && e.name === "AbortError";

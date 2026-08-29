@@ -13,6 +13,7 @@
 import type { Express } from "express";
 import { quote } from "../pricing/quote";
 import { quotePurchase } from "../pricing/quote-purchase";
+import { signPurchaseQuote } from "../pricing/signer";
 import { validateLpPremium } from "../pricing/implied-vol";
 import { db } from "../db";
 import { hedgeEvents } from "@shared/schema";
@@ -23,6 +24,17 @@ import { getUsdRateCache } from "../pricing/data/usdRate";
 import { getCloseCount } from "../pricing/data/historical";
 import { listAllClassifications } from "../pricing/data/classification";
 import { getSignerAddress } from "../pricing/signer";
+
+/**
+ * The Diamond a quote is bound to. Read from env with the deployed address as
+ * the fallback, matching quote-purchase.ts, because a signature bound to the
+ * wrong diamond is rejected on chain rather than misapplied.
+ */
+const DIAMONDS: Record<number, string> = {
+  8453: process.env.BASE_DIAMOND_ADDRESS || "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
+  56: process.env.BSC_DIAMOND_ADDRESS || "0xaC939C0897981Abc0711ec4e37527F13106180fc",
+};
+
 
 export function registerPricingRoutes(app: Express): void {
   // ── POST /api/pricing/quote ─────────────────────────────────────────────
@@ -93,13 +105,17 @@ export function registerPricingRoutes(app: Express): void {
    * today, priced against the volatility the underwriter themselves implied
    * when they set their opening premium.
    *
-   * Read-only and unsigned. It does not change what anyone is charged; the
-   * contract still takes the pool's stored rate. Both numbers come back so the
-   * caller can show them side by side.
+   * Both numbers come back, the live one and the pool's own, so a caller can
+   * show them side by side.
+   *
+   * Unsigned by default. Pass `buyer` and the response carries an attestation
+   * the contract will accept from that address, which is what a dynamic pool
+   * needs to be bought at all. Without a buyer this stays advisory, which is
+   * the right shape for showing a price before anyone has committed to it.
    */
   app.post("/api/pricing/quote-purchase", async (req, res) => {
     try {
-      const { chainId, eventId, notional } = req.body ?? {};
+      const { chainId, eventId, notional, buyer } = req.body ?? {};
 
       if (typeof chainId !== "number" || !Number.isFinite(chainId)) {
         return res.status(400).json({ ok: false, reason: "chainId (number) is required" });
@@ -163,6 +179,34 @@ export function registerPricingRoutes(app: Express): void {
       const result = await quotePurchase({
         chainId, eventId, notional, storedImpliedVol, minPremiumRate, originalTenorDays,
       });
+
+      /**
+       * Attach a signature when the caller says who is buying.
+       *
+       * Without a buyer this stays advisory: a price to show beside the pool's
+       * own, which is what the buy sheet uses before anyone commits. With one,
+       * it becomes spendable, and the contract binds it to that address so it
+       * cannot be lifted from the mempool and used by somebody else.
+       *
+       * Signing is deliberately last. A quote that was refused has no price to
+       * sign, and signing before the leverage and floor checks would put the
+       * engine's name on a number it had already rejected.
+       */
+      if (result.ok && typeof buyer === "string" && /^0x[0-9a-fA-F]{40}$/.test(buyer)) {
+        const diamond = DIAMONDS[chainId];
+        if (diamond) {
+          const attestation = await signPurchaseQuote({
+            chainId,
+            diamondAddress: diamond,
+            buyer,
+            eventId,
+            // 6-decimal fixed, as the contract holds them.
+            notional: BigInt(Math.round(notional * 1e6)),
+            premiumRate: BigInt(Math.round(result.premiumRate * 1e6)),
+          });
+          return res.json({ ...result, attestation });
+        }
+      }
 
       // A refusal is a real answer, not a server fault: too near expiry, or a
       // leverage bound the buyer would lose on. 200 with ok:false so the caller

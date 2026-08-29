@@ -164,3 +164,68 @@ export async function signQuote(q: SignableQuote): Promise<SignedQuote | null> {
     signerAddress: wallet.address,
   };
 }
+
+/* ── Purchase quotes ─────────────────────────────────────────────────────── */
+
+export interface SignablePurchase {
+  chainId: number | bigint;
+  diamondAddress: string;
+  /** The wallet that will call buyProtectionQuoted. The quote is bound to it. */
+  buyer: string;
+  eventId: number | bigint;
+  /** 6-decimal fixed, matching the contract's token precision. */
+  notional: bigint;
+  /** PRECISION-denominated rate to charge (1e6 = 100%). */
+  premiumRate: bigint;
+}
+
+/**
+ * Sign a purchase quote for buyProtectionQuoted.
+ *
+ * A different payload from signQuote on purpose, and it must stay that way. The
+ * creation quote binds to the creator and the event's terms; this binds to the
+ * buyer, the pool being bought into, the size and the price. A shared shape
+ * would let a signature minted for one action be replayed as the other, and
+ * both draw on the same nonce set.
+ *
+ * Every field is in the hash for a reason the contract enforces:
+ *   chainId + diamond  — no cross-chain or cross-diamond replay
+ *   buyer              — Alice cannot spend a quote issued to Bob
+ *   eventId            — a quote for a cheap pool cannot buy into a dear one
+ *   notional           — a quote for $1,000 cannot buy $1,000,000 at that rate
+ *   premiumRate        — the price cannot be edited downward in flight
+ *   timestamp + nonce  — 120 second freshness, single use
+ *
+ * Returns null when PRICING_ENGINE_PRIVATE_KEY is unset, which the caller must
+ * treat as "this pool cannot be bought right now" rather than falling back to
+ * the pool's fixed rate: a dynamic pool has no fixed rate to fall back to.
+ */
+export async function signPurchaseQuote(q: SignablePurchase): Promise<SignedQuote | null> {
+  const wallet = getSigner();
+  if (!wallet) return null;
+
+  const quoteTimestamp = BigInt(Math.floor(Date.now() / 1000));
+  const quoteNonce = "0x" + randomBytes(32).toString("hex");
+
+  // abi.encode, matching _verifyPurchaseQuote exactly. Field order is part of
+  // the contract; changing it here without changing it there recovers a
+  // different address and every purchase reverts.
+  const messageHash = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "address", "address", "uint256", "uint256", "uint256", "uint256", "bytes32"],
+      [
+        asBigint(q.chainId),
+        ethers.getAddress(q.diamondAddress),
+        ethers.getAddress(q.buyer),
+        asBigint(q.eventId),
+        q.notional,
+        q.premiumRate,
+        quoteTimestamp,
+        quoteNonce,
+      ],
+    ),
+  );
+
+  const signature = await wallet.signMessage(ethers.getBytes(messageHash));
+  return { signature, quoteTimestamp, quoteNonce, signerAddress: wallet.address };
+}

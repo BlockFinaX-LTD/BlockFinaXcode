@@ -822,7 +822,36 @@ export default function Hedge() {
       if (!selectedEvent) throw new Error('No event selected');
       const signer = await walletManager.getSigner(selectedNetworkId);
       if (!signer) throw new Error('Wallet signer not available. Please unlock your wallet.');
-      const txHash = await hedgeContract.buyProtection(signer, selectedEvent.id, notional, setTxStep);
+
+      /**
+       * A dynamic pool needs a price signed for this buyer, at the moment of
+       * buying. The panel above already shows an unsigned quote, but that one
+       * is bound to nobody and may be minutes old; a signature lasts 120
+       * seconds and the contract binds it to msg.sender, so it is fetched here
+       * rather than reused.
+       *
+       * Asked for on every purchase. buyProtection ignores it on a fixed pool,
+       * and deciding here which kind of pool this is would duplicate a judgement
+       * the contract already enforces.
+       */
+      setTxStep('Getting the current price...');
+      const { fetchPurchaseQuote } = await import('@/lib/purchase-quote');
+      const q = await fetchPurchaseQuote({
+        chainId: activeChainId,
+        eventId: selectedEvent.id,
+        notional: parseFloat(notional),
+        buyer: signer.address,
+      });
+      const quote = q.ok && q.attestation
+        ? {
+            premiumRate: BigInt(Math.round(q.premiumRate * 1e6)),
+            quoteTimestamp: BigInt(q.attestation.quoteTimestamp),
+            quoteNonce: q.attestation.quoteNonce,
+            signature: q.attestation.signature,
+          }
+        : null;
+
+      const txHash = await hedgeContract.buyProtection(signer, selectedEvent.id, notional, setTxStep, quote);
       await recordActivity({
         actionType: 'buy_protection', txHash, onChainEventId: selectedEvent.id, amount: notional,
         token: selectedEvent.paymentToken?.toLowerCase() === activeUsdcAddress.toLowerCase() ? 'USDC' : 'USDT',
