@@ -78,6 +78,29 @@ function fmtMoney(n: number): string { return '$' + Math.round(n).toLocaleString
 // Cents-precise — use for claimable amounts so a real sub-dollar value never
 // renders as "$0" (which made it look like there was nothing to claim).
 function fmtUsd2(n: number): string { return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+/**
+ * A premium rate, with enough precision to see it move.
+ *
+ * `.toFixed(1)` rendered 0.5010% and 0.4997% both as "0.5%", which hid the
+ * entire point of a dynamically priced pool: position 16 was charged a rate
+ * that genuinely differed from the pool's stored one and the screen said the
+ * two were identical.
+ *
+ * Adaptive rather than a fixed four decimals, because 2.5% should not read
+ * "2.5000%". Small rates get the digits they need and trailing zeros are
+ * trimmed, so 0.501% stays "0.501%" and 2.5% stays "2.5%".
+ */
+function fmtRate(rate: number): string {
+  if (!Number.isFinite(rate)) return '—';
+  const pct = rate * 100;
+  if (pct === 0) return '0%';
+  // Below 1% the interesting digits sit further right. Three was not enough:
+  // 0.4997% rounded to 0.500% and then lost its zeros to become "0.5%", which
+  // is the very collapse this exists to prevent. Four keeps the difference.
+  const dp = Math.abs(pct) < 1 ? 4 : 2;
+  return pct.toFixed(dp).replace(/\.?0+$/, '') + '%';
+}
+
 // Smallest amount worth a claim/withdraw tx — below this we treat it as nothing.
 const CLAIM_DUST = 0.01;
 function fmtK(n: number): string { return n >= 1000 ? '$' + (n / 1000).toFixed(n % 1000 ? 1 : 0) + 'k' : '$' + Math.round(n); }
@@ -219,7 +242,7 @@ function PoolCard({ ev, onAdd, onOpen }: { ev: HedgeEventData; onAdd: () => void
           <div className="a">{pairLabel(ev.underlying)}</div>
           <div className="b">{ev.strikeAbove ? 'Rate rises past' : 'Rate falls below'} {ev.strike.toLocaleString()}</div>
         </div>
-        <div className="pool-apr"><div className="v">{(ev.premiumRate * 100).toFixed(1)}%</div><div className="l">Premium</div></div>
+        <div className="pool-apr"><div className="v">{fmtRate(ev.premiumRate)}</div><div className="l">Premium</div></div>
       </div>
       <div className="pool-stats">
         <div className="pool-stat"><div className="l">Pool size</div><div className="v tnum">{fmtK(ev.totalLiquidity)}</div></div>
@@ -1331,7 +1354,7 @@ export default function Hedge() {
                       <div className="b">{ev.name} · {expiryLabel(ev.expiryDate)}</div></div></div>
                     <div className="mkt-col"><span className="k">Direction</span><span className="dir"><span className="da">{ev.strikeAbove ? <ArrowUpRight /> : <ArrowDownRight />}</span>{ev.strikeAbove ? 'Rises' : 'Falls'}</span></div>
                     <div className="mkt-col"><span className="k">Strike</span><span className="mkt-v">{ev.strike.toLocaleString()}</span></div>
-                    <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{(ev.premiumRate * 100).toFixed(1)}%</span></div>
+                    <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{fmtRate(ev.premiumRate)}</span></div>
                     {/* Capacity a buyer can actually draw on. Without this the
                         table gave no indication whether a pool could fill the
                         cover being requested. */}
@@ -1563,7 +1586,7 @@ export default function Hedge() {
                     <div className="pool-top"><MarketFlag pair={ev?.underlying || ''} /><div className="pt-nm"><div className="a">{pairLabel(ev?.underlying || `#${p.eventId}`)}</div><div className="b">{expiryNarration(ev?.expiryDate) ?? `Event #${p.eventId}`}</div></div>
                       <div className="pool-apr"><div className="v">{fmtMoney(p.notional)}</div><div className="l">Notional</div></div></div>
                     <div className="pool-stats">
-                      <div className="pool-stat"><div className="l">Premium paid</div><div className="v tnum">{fmtMoney(p.premiumPaid)}</div></div>
+                      <div className="pool-stat"><div className="l">Premium paid</div><div className="v tnum">{fmtUsd2(p.premiumPaid)}</div></div>
                       <div className="pool-stat"><div className="l">Max payout</div><div className="v tnum">{fmtMoney(p.payoutAmount)}</div></div>
                     </div>
                     {ev && (
@@ -1659,7 +1682,7 @@ export default function Hedge() {
                           return (
                             <div className="pool-card" key={ev.id}>
                               <div className="pool-top"><MarketFlag pair={ev.underlying} /><div className="pt-nm"><div className="a">{pairLabel(ev.underlying)}</div>{poolSubtitle(ev.name, ev.underlying) && <div className="b">{poolSubtitle(ev.name, ev.underlying)}</div>}</div>
-                                <div className="pool-apr"><div className="v">{(ev.premiumRate * 100).toFixed(1)}%</div><div className="l">Premium</div></div></div>
+                                <div className="pool-apr"><div className="v">{fmtRate(ev.premiumRate)}</div><div className="l">Premium</div></div></div>
                               <div className="pool-stats">
                                 <div className="pool-stat"><div className="l">Pool size</div><div className="v tnum">{fmtK(ev.totalLiquidity)}</div></div>
                                 <div className="pool-stat"><div className="l">{live2 ? 'Expires in' : 'Status'}</div><div className="v tnum">{live2 ? expiryLabel(ev.expiryDate) : (ev.status === 'open' ? 'Expired' : ev.status)}</div></div>
@@ -1877,6 +1900,20 @@ export default function Hedge() {
                 <div className="det-stat"><div className="l">Status</div><div className="v">{label}</div></div>
                 <div className="det-stat"><div className="l">Notional covered</div><div className="v">{fmtUsd2(p.notional)}</div></div>
                 <div className="det-stat"><div className="l">Premium paid</div><div className="v">{fmtUsd2(p.premiumPaid)}</div></div>
+                {/* The rate this position was actually bought at. On a
+                    dynamically priced pool it is not the pool's stored rate,
+                    and until now nothing on screen showed the difference. */}
+                {p.notional > 0 && (
+                  <div className="det-stat">
+                    <div className="l">Rate you paid</div>
+                    <div className="v">
+                      {fmtRate(p.premiumPaid / p.notional)}
+                      {ev && Math.abs(p.premiumPaid / p.notional - ev.premiumRate) > 1e-7 && (
+                        <span style={{ color: 'var(--tx-4)', fontWeight: 400 }}> vs {fmtRate(ev.premiumRate)} listed</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="det-stat"><div className="l">Platform fee</div><div className="v">{fmtUsd2(p.platformFeePaid)}</div></div>
                 <div className="det-stat"><div className="l">Total cost</div><div className="v">{fmtUsd2(totalCost)}</div></div>
                 <div className="det-stat"><div className="l">Payout received</div><div className="v">{fmtUsd2(p.payoutAmount)}</div></div>
@@ -1915,7 +1952,7 @@ export default function Hedge() {
               <div className="det-head">
                 <MarketFlag pair={ev.underlying} />
                 <div className="det-hn"><div className="a">{pairLabel(ev.underlying)}</div><div className="b">{ev.name}</div></div>
-                <div className="det-apr"><div className="v">{(ev.premiumRate * 100).toFixed(1)}%</div><div className="l">Premium</div></div>
+                <div className="det-apr"><div className="v">{fmtRate(ev.premiumRate)}</div><div className="l">Premium</div></div>
               </div>
               <p className="det-cond">{ev.strikeAbove ? 'Pays out if the rate settles above ' : 'Pays out if the rate settles below '}{ev.strike.toLocaleString()} {unitOf(ev.underlying)} at expiry. What matters is where the rate finishes, not whether it touched the strike along the way.</p>
               {/*
@@ -1955,7 +1992,7 @@ export default function Hedge() {
               <div className="det-grid">
                 <div className="det-stat"><div className="l">Direction</div><div className="v">{ev.strikeAbove ? 'Rate rises' : 'Rate falls'}</div></div>
                 <div className="det-stat"><div className="l">Strike</div><div className="v">{ev.strike.toLocaleString()} {unitOf(ev.underlying)}</div></div>
-                <div className="det-stat"><div className="l">Premium</div><div className="v">{(ev.premiumRate * 100).toFixed(1)}%</div></div>
+                <div className="det-stat"><div className="l">Premium</div><div className="v">{fmtRate(ev.premiumRate)}</div></div>
                 <div className="det-stat"><div className="l">Expiry</div><div className="v">{expiryLabel(ev.expiryDate)}</div></div>
                 <div className="det-stat"><div className="l">Available liquidity</div><div className="v">{fmtMoney(ev.availableCapacity)}</div></div>
                 <div className="det-stat"><div className="l">Pool size</div><div className="v">{fmtMoney(ev.totalLiquidity)}</div></div>
@@ -2003,7 +2040,7 @@ export default function Hedge() {
               <label>Notional to cover</label>
               <div className="amount">
                 <div className="arow"><input inputMode="decimal" placeholder="0" value={notional} onChange={(e) => setNotional(e.target.value)} /><span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx-3)' }}>USD</span></div>
-                <div className="abot"><span className="usd">Premium {(selectedEvent.premiumRate * 100).toFixed(1)}%</span><span className="bal">Available {fmtMoney(selectedEvent.availableCapacity)}</span></div>
+                <div className="abot"><span className="usd">Premium {fmtRate(selectedEvent.premiumRate)}</span><span className="bal">Available {fmtMoney(selectedEvent.availableCapacity)}</span></div>
               </div>
               <div className="notrow">{[10000, 50000, 100000].map((n) => <button key={n} onClick={() => setNotional(String(n))}>${n / 1000}k</button>)}</div>
             </div>
@@ -2017,7 +2054,10 @@ export default function Hedge() {
                 : 'Pays out when the rate moves from strike toward the cap.'}</div>
             </div>
             <div className="brk">
-              <div className="brk-line"><span className="l">Premium ({(selectedEvent.premiumRate * 100).toFixed(1)}% of notional)</span><span className="v">{fmtMoney(premiumCalc)}</span></div>
+              {/* Cents, not whole dollars. fmtMoney rounds, so a premium of
+                  $14.99 and one of $15.03 both rendered "$15" and a
+                  dynamically priced pool looked identical to a fixed one. */}
+              <div className="brk-line"><span className="l">Premium ({fmtRate(selectedEvent.premiumRate)} of notional)</span><span className="v">{fmtUsd2(premiumCalc)}</span></div>
               {/* The second figure used to restate the fee as a share of the
                   premium, because the fee was being quoted on notional and at a
                   1% premium that made it 500% of what it was a fee on. Now that
@@ -2027,9 +2067,9 @@ export default function Hedge() {
                 <span className="l">
                   {hedgerFeeRate !== null ? `Platform fee (${(hedgerFeeRate * 100).toFixed(2)}% of premium)` : 'Platform fee'}
                 </span>
-                <span className="v">{feeKnown ? fmtMoney(hedgerFeeCalc) : 'unavailable'}</span>
+                <span className="v">{feeKnown ? fmtUsd2(hedgerFeeCalc) : 'unavailable'}</span>
               </div>
-              <div className="brk-line total"><span className="l">You pay</span><span className="v">{fmtMoney(totalCostCalc)}</span></div>
+              <div className="brk-line total"><span className="l">You pay</span><span className="v">{fmtUsd2(totalCostCalc)}</span></div>
             </div>
 
             {/* What the same cover is worth today, beside what the pool asks.
@@ -2045,7 +2085,7 @@ export default function Hedge() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                   <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Worth today</span>
                   <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tx-2)' }}>
-                    {(livePrice.premiumRate * 100).toFixed(2)}% · {fmtMoney(livePrice.premiumUsd)}
+                    {fmtRate(livePrice.premiumRate)} · {fmtUsd2(livePrice.premiumUsd)}
                   </span>
                 </div>
                 <p style={{ fontSize: 11.5, color: 'var(--tx-4)', margin: '6px 0 0', lineHeight: 1.5 }}>
@@ -2095,7 +2135,7 @@ export default function Hedge() {
                 </div>
               </div>
               <div className="brk">
-                <div className="brk-line"><span className="l">Premium rate</span><span className="v">{(selectedEvent.premiumRate * 100).toFixed(1)}%</span></div>
+                <div className="brk-line"><span className="l">Premium rate</span><span className="v">{fmtRate(selectedEvent.premiumRate)}</span></div>
                 <div className="brk-line"><span className="l">Your pool share</span><span className="v">{share.toFixed(2)}%</span></div>
                 <div className="brk-line total"><span className="l">Pool size after deposit</span><span className="v">{fmtMoney(selectedEvent.totalLiquidity + amt)}</span></div>
               </div>
