@@ -88,6 +88,22 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
   const util = b ? b.utilisation : null;
   const utilMult = b ? b.utilisationMultiplier : null;
 
+  /**
+   * Is the payout side already winning?
+   *
+   * This decides which way time pushes the price, and the two directions are
+   * opposite. Out of the money, less time is less room for the rate to reach
+   * the strike, so cover gets cheaper. In the money, less time is less room for
+   * the rate to come BACK, so the payout is closer to locked in and cover gets
+   * dearer.
+   *
+   * Measured on a USD/GHS pool struck at 12.60 with a 13.20 cap: at spot 12.00
+   * the rate falls 1.500% -> 0.075% over the last 30 days, and at spot 13.15 it
+   * RISES 2.297% -> 3.251% over the same window. This panel used to state the
+   * falling case as though it were the only one.
+   */
+  const inTheMoney = spot > 0 && strike > 0 ? (strikeAbove ? spot > strike : spot < strike) : null;
+
   return createPortal(
     <div
       role="dialog"
@@ -142,13 +158,16 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
             </div>
             <div className="tnum" style={{ fontSize: 19, fontWeight: 700, color: 'var(--tx)', marginTop: 3 }}>{fmtRate(storedRate)}</div>
           </div>
-          {dynamic && (
+          {/* Only when there is a second number to show. Opened from a market
+              detail there is no amount yet, so no quote is being fetched and an
+              ellipsis here read as "loading" forever. */}
+          {dynamic && (paidRate != null || liveRate != null) && (
             <div style={{ flex: 1, padding: '11px 12px', borderRadius: 11, background: 'var(--card)', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--tx-4)' }}>
                 {paidRate != null ? 'You paid' : 'Right now'}
               </div>
               <div className="tnum" style={{ fontSize: 19, fontWeight: 700, color: 'var(--tx)', marginTop: 3 }}>
-                {paidRate != null ? fmtRate(paidRate) : liveRate != null ? fmtRate(liveRate) : '…'}
+                {paidRate != null ? fmtRate(paidRate) : fmtRate(liveRate as number)}
               </div>
             </div>
           )}
@@ -181,8 +200,13 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
                 view of the risk, and it anchors every price after it. From there the rate moves, and you are
                 charged the price at the moment you buy rather than the opening one.
               </p>
+              {/* The drivers only carry live figures once a quote exists, and a
+                  quote needs an amount. Say so rather than showing three rows of
+                  general prose and letting it look like the pool's own numbers. */}
               <p style={{ fontSize: 12.5, color: 'var(--tx-3)', lineHeight: 1.6, margin: '0 0 14px' }}>
-                Three things move it, and you can see all three below as they stand right now.
+                {b
+                  ? 'Three things move it, and you can see all three below as they stand right now.'
+                  : 'Three things move it. Enter an amount on the buy screen to see where this pool stands on each of them.'}
               </p>
 
               <Row head="Time left">
@@ -190,11 +214,19 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
                   <>
                     <Fig>{dayWord(daysLeft)}</Fig>
                     {totalDays && totalDays > 0 ? <> of the pool's {Math.round(totalDays)}.</> : '.'}{' '}
-                    Less time is less room for the rate to move, so cover gets cheaper as expiry approaches.
-                    This is usually the largest of the three.
+                    {inTheMoney
+                      ? <>The rate is already past the strike, so less time means less room for it to come
+                          back. The payout gets closer to settled and cover gets <strong>dearer</strong> as
+                          expiry approaches.</>
+                      : <>The rate has not reached the strike, so less time means less room for it to get
+                          there. Cover gets <strong>cheaper</strong> as expiry approaches.</>}
                   </>
                 ) : (
-                  <>Less time is less room for the rate to move, so cover gets cheaper as expiry approaches.</>
+                  <>
+                    Which way this pushes depends on where the rate sits. Short of the strike, less time
+                    means less room to reach it and cover gets cheaper. Past the strike, less time means
+                    less room to come back and cover gets dearer.
+                  </>
                 )}
               </Row>
 
@@ -250,9 +282,9 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
                   The underwriter's own view of the risk. Nothing here overrules the rate they set. The engine works
                   out the volatility that produces exactly their opening premium
                   {b ? <>, which for this pool is <Fig>{(b.sigmaStar * 100).toFixed(1)}%</Fig> a year,</> : ','}{' '}
-                  then re-prices with that same volatility as time passes and the rate moves. A 2% pool does not
-                  become a 1% pool because a model disagrees with the underwriter. It becomes 1.15% because there
-                  are ten days left instead of thirty.
+                  then re-prices with that same volatility as time passes and the rate moves. A pool does not get
+                  cheaper because a model disagrees with the underwriter. It changes because the time left and
+                  the distance to the strike have changed, and by exactly as much as those two things are worth.
                 </p>
               </div>
 
