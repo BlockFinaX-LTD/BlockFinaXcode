@@ -69,3 +69,38 @@ test("a broken quote never prices cover at zero", () => {
   assert.equal(chargedRateFor(true, 0.02, { premiumRate: NaN }), 0.02);
   assert.equal(chargedRateFor(true, 0.02, { premiumRate: -0.01 }), 0.02);
 });
+
+/**
+ * The explainer fetches its own quote at a nominal notional when opened from a
+ * market detail, where no amount has been typed. That is only sound because the
+ * premium rate does not depend on size.
+ *
+ * pricePurchase derives the rate as perUnit/S times a utilisation multiplier
+ * read off pool totals; notional enters only when the rate becomes dollars.
+ * This pins the property, because if it ever stopped holding the panel would
+ * quietly show a rate nobody is charged.
+ */
+test("the premium rate does not depend on the notional", async () => {
+  const { pricePurchase } = await import("../../../../server/pricing/purchase-math");
+  const base = {
+    S: 12.3, S0: 12.0, strike: 12.6, payoutCap: 13.2, strikeAbove: true,
+    T: 20 / 365.25, daysRemaining: 20, sigmaStar: 0.5684,
+    sigmaStarSource: "stored" as const,
+    jump: { lambda: 2, jumpMean: 0.08, jumpStd: 0.12 },
+    totalLiquidity: 50000, totalMaxPayout: 20000, minPremiumRate: 0, storedRate: 0.015,
+  };
+  const rates = [100, 1000, 25000, 1_000_000].map((notional) => {
+    const q = pricePurchase({ ...base, notional });
+    assert.ok(q.ok, "every size should quote");
+    return q.ok ? q.premiumRate : NaN;
+  });
+  rates.forEach((r) => assert.equal(r, rates[0], "rate must not move with size"));
+
+  // The dollar amounts, by contrast, must scale exactly.
+  const small = pricePurchase({ ...base, notional: 1000 });
+  const large = pricePurchase({ ...base, notional: 10000 });
+  assert.ok(small.ok && large.ok);
+  if (small.ok && large.ok) {
+    assert.ok(Math.abs(large.premiumUsd - small.premiumUsd * 10) < 1e-9);
+  }
+});

@@ -12,11 +12,26 @@
  * So this says which basis a pool uses, in that pool's own live numbers, and
  * what each of them is doing to the price.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { fmtRate } from '@/lib/format-rate';
 import type { PurchaseQuote } from '@/lib/purchase-quote';
+
+/**
+ * Notional used when this panel has to fetch its own quote.
+ *
+ * The premium RATE does not depend on how much is being bought. `pricePurchase`
+ * derives it as `perUnit / S` scaled by a utilisation multiplier read off pool
+ * totals, and notional enters only when the rate is turned into dollars.
+ * Verified across four orders of magnitude: $100 and $1,000,000 both quote
+ * 1.756736% with identical leverage and utilisation.
+ *
+ * So a nominal amount returns the pool's true current rate. A round number well
+ * clear of the dust thresholds, rather than 1, so nothing rounds oddly on the
+ * way through.
+ */
+const NOMINAL_NOTIONAL = 1000;
 
 export interface PremiumExplainerProps {
   open: boolean;
@@ -27,6 +42,9 @@ export interface PremiumExplainerProps {
   dynamic: boolean;
   /** The live quote, when one has loaded. */
   quote?: PurchaseQuote | null;
+  /** Needed to fetch a quote when the caller has none of its own. */
+  chainId?: number;
+  eventId?: number;
   /** Set on a position already bought, so the holder sees what they actually paid. */
   paidRate?: number | null;
   underlying: string;
@@ -52,7 +70,7 @@ function Fig({ children }: { children: React.ReactNode }) {
 }
 
 export function PremiumExplainer(props: PremiumExplainerProps) {
-  const { open, onClose, storedRate, dynamic, quote, paidRate, strike, strikeAbove, createdAt, expiryDate, hedgerFeeRate } = props;
+  const { open, onClose, storedRate, dynamic, quote, paidRate, strike, strikeAbove, createdAt, expiryDate, hedgerFeeRate, chainId, eventId } = props;
 
   useEffect(() => {
     if (!open) return;
@@ -60,6 +78,37 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  /**
+   * Fetch a quote when the caller has none.
+   *
+   * Opened from a market detail there is no amount typed, so nothing was ever
+   * fetched, and the panel showed an opening rate with no live rate beside it
+   * and three drivers with no numbers in them. Hiding the empty half was the
+   * wrong fix: a panel about a price that moves has to show where it has moved
+   * to. Since the rate is independent of size, a nominal notional gets the true
+   * one.
+   *
+   * Unsigned, because nothing is being bought here. Failure is silent and
+   * leaves the panel in its explain-the-mechanism state.
+   */
+  const [ownQuote, setOwnQuote] = useState<PurchaseQuote | null>(null);
+  const needsOwnQuote = open && dynamic && !quote && paidRate == null
+    && typeof chainId === 'number' && typeof eventId === 'number';
+  useEffect(() => {
+    if (!needsOwnQuote) { setOwnQuote(null); return; }
+    const ctl = new AbortController();
+    let live = true;
+    (async () => {
+      const { fetchPurchaseQuote } = await import('@/lib/purchase-quote');
+      const q = await fetchPurchaseQuote(
+        { chainId: chainId as number, eventId: eventId as number, notional: NOMINAL_NOTIONAL },
+        ctl.signal,
+      );
+      if (live && !ctl.signal.aborted) setOwnQuote(q.ok ? q : null);
+    })();
+    return () => { live = false; ctl.abort(); };
+  }, [needsOwnQuote, chainId, eventId]);
 
   if (!open) return null;
 
@@ -73,8 +122,10 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
     (typeof document !== 'undefined' ? document.body : null);
   if (!host) return null;
 
-  const b = quote?.breakdown;
-  const liveRate = quote?.premiumRate ?? null;
+  // Whichever quote is to hand: the caller's, or the one fetched above.
+  const q = quote ?? ownQuote;
+  const b = q?.breakdown;
+  const liveRate = q?.premiumRate ?? null;
 
   // How much of the pool's life has gone. Only knowable when the chain gave us
   // a creation time; without it the tenor is left out rather than guessed.
@@ -158,16 +209,20 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
             </div>
             <div className="tnum" style={{ fontSize: 19, fontWeight: 700, color: 'var(--tx)', marginTop: 3 }}>{fmtRate(storedRate)}</div>
           </div>
-          {/* Only when there is a second number to show. Opened from a market
-              detail there is no amount yet, so no quote is being fetched and an
-              ellipsis here read as "loading" forever. */}
-          {dynamic && (paidRate != null || liveRate != null) && (
+          {/* Shown whenever a second number is coming. This panel now fetches
+              its own quote when the caller has none, so "waiting" is true
+              rather than the indefinite ellipsis it used to be. */}
+          {dynamic && (paidRate != null || liveRate != null || needsOwnQuote) && (
             <div style={{ flex: 1, padding: '11px 12px', borderRadius: 11, background: 'var(--card)', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--tx-4)' }}>
                 {paidRate != null ? 'You paid' : 'Right now'}
               </div>
               <div className="tnum" style={{ fontSize: 19, fontWeight: 700, color: 'var(--tx)', marginTop: 3 }}>
-                {paidRate != null ? fmtRate(paidRate) : fmtRate(liveRate as number)}
+                {paidRate != null
+                  ? fmtRate(paidRate)
+                  : liveRate != null
+                    ? fmtRate(liveRate)
+                    : <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx-4)' }}>pricing…</span>}
               </div>
             </div>
           )}
@@ -206,7 +261,9 @@ export function PremiumExplainer(props: PremiumExplainerProps) {
               <p style={{ fontSize: 12.5, color: 'var(--tx-3)', lineHeight: 1.6, margin: '0 0 14px' }}>
                 {b
                   ? 'Three things move it, and you can see all three below as they stand right now.'
-                  : 'Three things move it. Enter an amount on the buy screen to see where this pool stands on each of them.'}
+                  : needsOwnQuote
+                    ? 'Three things move it. Reading where this pool stands on each of them…'
+                    : 'Three things move it.'}
               </p>
 
               <Row head="Time left">

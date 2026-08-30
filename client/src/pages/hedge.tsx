@@ -2293,8 +2293,12 @@ export default function Hedge() {
             onClose={() => setPremiumInfoFor(null)}
             storedRate={ev.premiumRate}
             dynamic={dynamicById[premiumInfoFor] === true}
-            // Only meaningful for the pool actually being quoted.
+            // Only meaningful for the pool actually being quoted. Where there is
+            // none, the panel fetches its own at a nominal size, since the rate
+            // does not depend on how much is being bought.
             quote={selectedEvent && selectedEvent.id === premiumInfoFor ? livePrice : null}
+            chainId={activeChainId}
+            eventId={premiumInfoFor}
             paidRate={pos && pos.notional > 0 ? pos.premiumPaid / pos.notional : null}
             underlying={ev.underlying}
             strike={ev.strike}
