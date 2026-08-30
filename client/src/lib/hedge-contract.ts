@@ -1147,6 +1147,21 @@ class HedgeContractManager {
   }
 
   /**
+   * Whether this pool prices at the moment of purchase.
+   *
+   * Chosen by the creator and immutable once the pool exists, so it is safe to
+   * cache per event id. Older Diamonds have no such getter; absent means fixed,
+   * which is how every pool behaved before the choice existed.
+   */
+  async isDynamicallyPriced(eventId: number): Promise<boolean> {
+    try {
+      return Boolean(await this.getReadContract().isDynamicallyPriced(eventId));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Buy cover, through whichever entry point this pool requires.
    *
    * A pool is either fixed-price or dynamically priced, chosen by its creator
@@ -1175,9 +1190,7 @@ class HedgeContractManager {
       readContract.getHedgeEventCore(eventId),
       this.getFeeConfig(),
       readContract.getEventPaymentToken(eventId).catch(() => CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS),
-      // Older Diamonds have no such getter; absent means fixed, which is how
-      // every pool behaved before the choice existed.
-      readContract.isDynamicallyPriced(eventId).catch(() => false),
+      this.isDynamicallyPriced(eventId),
     ]);
 
     if (dynamic && !quote) {

@@ -31,6 +31,9 @@ import {
   hedgeContract, getUsdcAddress, getUsdtAddress,
   type HedgeEventData, type HedgePositionData, type HedgeLpDepositData, type HedgeFeeConfig,
 } from '@/lib/hedge-contract';
+import { fmtRate } from '@/lib/format-rate';
+import { chargedRateFor } from '@/lib/purchase-quote';
+import { PremiumExplainer } from '@/components/hedge/premium-explainer';
 import { walletManager } from '@/lib/wallet';
 import { ethers } from 'ethers';
 import { mainnetGuard } from '@/lib/mainnet-guard';
@@ -78,29 +81,7 @@ function fmtMoney(n: number): string { return '$' + Math.round(n).toLocaleString
 // Cents-precise — use for claimable amounts so a real sub-dollar value never
 // renders as "$0" (which made it look like there was nothing to claim).
 function fmtUsd2(n: number): string { return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-/**
- * A premium rate, with enough precision to see it move.
- *
- * `.toFixed(1)` rendered 0.5010% and 0.4997% both as "0.5%", which hid the
- * entire point of a dynamically priced pool: position 16 was charged a rate
- * that genuinely differed from the pool's stored one and the screen said the
- * two were identical.
- *
- * Adaptive rather than a fixed four decimals, because 2.5% should not read
- * "2.5000%". Small rates get the digits they need and trailing zeros are
- * trimmed, so 0.501% stays "0.501%" and 2.5% stays "2.5%".
- */
-function fmtRate(rate: number): string {
-  if (!Number.isFinite(rate)) return '—';
-  const pct = rate * 100;
-  if (pct === 0) return '0%';
-  // Below 1% the interesting digits sit further right. Three was not enough:
-  // 0.4997% rounded to 0.500% and then lost its zeros to become "0.5%", which
-  // is the very collapse this exists to prevent. Four keeps the difference.
-  const dp = Math.abs(pct) < 1 ? 4 : 2;
-  return pct.toFixed(dp).replace(/\.?0+$/, '') + '%';
-}
-
+// fmtRate now lives in @/lib/format-rate, shared with the explainer.
 // Smallest amount worth a claim/withdraw tx — below this we treat it as nothing.
 const CLAIM_DUST = 0.01;
 function fmtK(n: number): string { return n >= 1000 ? '$' + (n / 1000).toFixed(n % 1000 ? 1 : 0) + 'k' : '$' + Math.round(n); }
@@ -429,6 +410,10 @@ export default function Hedge() {
   // showed only a status badge, so a hedger could not see what they paid, what
   // the strike was, or why a position expired without paying out.
   const [posDetail, setPosDetail] = useState<HedgePositionData | null>(null);
+  // Which pools price at the moment of purchase. Chosen at creation and
+  // immutable, so it is cached per event id and never re-read.
+  const [dynamicById, setDynamicById] = useState<Record<number, boolean>>({});
+  const [premiumInfoFor, setPremiumInfoFor] = useState<number | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
   const [lpOpen, setLpOpen] = useState(false);
   // A deep-linked market (from search / share link) whose data is still loading.
@@ -1033,7 +1018,34 @@ export default function Hedge() {
   });
 
   // ── Derived for the buy/LP sheets ───────────────────────────────────────
-  const premiumCalc = selectedEvent && notional ? parseFloat(notional) * selectedEvent.premiumRate : 0;
+  /**
+   * Which pricing basis the pools on screen use, read from the chain.
+   *
+   * Not derivable from anything already loaded: the event getters do not return
+   * it, and inferring it from a rate that happens to differ would call a fixed
+   * pool dynamic the moment a rounding difference appeared.
+   */
+  useEffect(() => {
+    const wanted: number[] = [];
+    if (selectedEvent && dynamicById[selectedEvent.id] === undefined) wanted.push(selectedEvent.id);
+    if (posDetail && dynamicById[posDetail.eventId] === undefined) wanted.push(posDetail.eventId);
+    if (!wanted.length) return;
+    let live = true;
+    Promise.all(wanted.map((id) => hedgeContract.isDynamicallyPriced(id).then((d) => [id, d] as const)))
+      .then((pairs) => {
+        if (!live) return;
+        setDynamicById((prev) => {
+          const next = { ...prev };
+          pairs.forEach(([id, d]) => { next[id] = d; });
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [selectedEvent, posDetail, dynamicById]);
+
+  const selectedIsDynamic = selectedEvent ? dynamicById[selectedEvent.id] === true : false;
+
 
   /**
    * What this cover is worth today, beside what the pool charges.
@@ -1063,6 +1075,14 @@ export default function Hedge() {
     }, 400);
     return () => { ctl.abort(); clearTimeout(t); };
   }, [buyOpen, selectedEvent, notional, activeChainId]);
+  // The rate this purchase is actually charged at, which is not the stored one
+  // on a dynamic pool. The rule lives in purchase-quote.ts so it can be tested;
+  // it also feeds the balance check, the buy button and the confirm text below.
+  const chargedRate = selectedEvent
+    ? chargedRateFor(selectedIsDynamic, selectedEvent.premiumRate, livePrice)
+    : 0;
+  const premiumCalc = selectedEvent && notional ? parseFloat(notional) * chargedRate : 0;
+
   // null until the live on-chain rate loads — never assume a rate.
   const hedgerFeeRate = feeConfig ? feeConfig.hedgerFeeRate : null;
   const feeKnown = hedgerFeeRate !== null;
@@ -1905,7 +1925,17 @@ export default function Hedge() {
                     and until now nothing on screen showed the difference. */}
                 {p.notional > 0 && (
                   <div className="det-stat">
-                    <div className="l">Rate you paid</div>
+                    <div className="l">
+                      Rate you paid
+                      <button
+                        type="button"
+                        aria-label="How this premium was set"
+                        onClick={() => setPremiumInfoFor(p.eventId)}
+                        style={{ border: 'none', background: 'transparent', color: 'var(--tx-4)', cursor: 'pointer', padding: '0 0 0 4px', verticalAlign: 'middle', display: 'inline-flex' }}
+                      >
+                        <Info style={{ width: 12, height: 12 }} />
+                      </button>
+                    </div>
                     <div className="v">
                       {fmtRate(p.premiumPaid / p.notional)}
                       {ev && Math.abs(p.premiumPaid / p.notional - ev.premiumRate) > 1e-7 && (
@@ -1992,7 +2022,20 @@ export default function Hedge() {
               <div className="det-grid">
                 <div className="det-stat"><div className="l">Direction</div><div className="v">{ev.strikeAbove ? 'Rate rises' : 'Rate falls'}</div></div>
                 <div className="det-stat"><div className="l">Strike</div><div className="v">{ev.strike.toLocaleString()} {unitOf(ev.underlying)}</div></div>
-                <div className="det-stat"><div className="l">Premium</div><div className="v">{fmtRate(ev.premiumRate)}</div></div>
+                <div className="det-stat">
+                  <div className="l">
+                    Premium
+                    <button
+                      type="button"
+                      aria-label="How this premium is set"
+                      onClick={() => setPremiumInfoFor(ev.id)}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--tx-4)', cursor: 'pointer', padding: '0 0 0 4px', verticalAlign: 'middle', display: 'inline-flex' }}
+                    >
+                      <Info style={{ width: 12, height: 12 }} />
+                    </button>
+                  </div>
+                  <div className="v">{fmtRate(ev.premiumRate)}</div>
+                </div>
                 <div className="det-stat"><div className="l">Expiry</div><div className="v">{expiryLabel(ev.expiryDate)}</div></div>
                 <div className="det-stat"><div className="l">Available liquidity</div><div className="v">{fmtMoney(ev.availableCapacity)}</div></div>
                 <div className="det-stat"><div className="l">Pool size</div><div className="v">{fmtMoney(ev.totalLiquidity)}</div></div>
@@ -2057,7 +2100,20 @@ export default function Hedge() {
               {/* Cents, not whole dollars. fmtMoney rounds, so a premium of
                   $14.99 and one of $15.03 both rendered "$15" and a
                   dynamically priced pool looked identical to a fixed one. */}
-              <div className="brk-line"><span className="l">Premium ({fmtRate(selectedEvent.premiumRate)} of notional)</span><span className="v">{fmtUsd2(premiumCalc)}</span></div>
+              <div className="brk-line">
+                <span className="l">
+                  Premium ({fmtRate(chargedRate)} of notional)
+                  <button
+                    type="button"
+                    aria-label="How this premium is set"
+                    onClick={() => setPremiumInfoFor(selectedEvent.id)}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--tx-4)', cursor: 'pointer', padding: '0 0 0 5px', verticalAlign: 'middle', display: 'inline-flex' }}
+                  >
+                    <Info style={{ width: 13, height: 13 }} />
+                  </button>
+                </span>
+                <span className="v">{fmtUsd2(premiumCalc)}</span>
+              </div>
               {/* The second figure used to restate the fee as a share of the
                   premium, because the fee was being quoted on notional and at a
                   1% premium that made it 500% of what it was a fee on. Now that
@@ -2072,16 +2128,44 @@ export default function Hedge() {
               <div className="brk-line total"><span className="l">You pay</span><span className="v">{fmtUsd2(totalCostCalc)}</span></div>
             </div>
 
-            {/* What the same cover is worth today, beside what the pool asks.
-                Shown only when the two differ enough to mean anything, and
-                never in place of the charged figure above. */}
-            {livePrice && Math.abs(livePrice.premiumRate - selectedEvent.premiumRate) / selectedEvent.premiumRate >= 0.1 && (
-              <div
-                style={{
-                  marginTop: 10, padding: '10px 12px', borderRadius: 9,
-                  border: '1px solid var(--border)', background: 'var(--card)',
-                }}
-              >
+            {/*
+                On a fixed pool this is advisory: what the cover is worth today
+                beside what the pool asks, never in place of the charged figure.
+
+                On a dynamic pool the live rate IS the charged figure, so the
+                comparison flips. The interesting number becomes the opening
+                rate the underwriter set, and the panel's old copy ("you are
+                charged the pool rate above") was simply false there.
+            */}
+            {livePrice && selectedIsDynamic && Math.abs(livePrice.premiumRate - selectedEvent.premiumRate) > 1e-7 && (
+              <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                  <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Pool opened at</span>
+                  <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tx-2)' }}>
+                    {fmtRate(selectedEvent.premiumRate)}
+                  </span>
+                </div>
+                <p style={{ fontSize: 11.5, color: 'var(--tx-4)', margin: '6px 0 0', lineHeight: 1.5 }}>
+                  {(() => {
+                    const days = livePrice.breakdown.daysRemaining;
+                    const left = days >= 1.5 ? `${Math.round(days)} days` : days >= 1 ? 'a day' : 'hours';
+                    return livePrice.premiumRate < selectedEvent.premiumRate
+                      ? `This pool prices at the moment you buy. With ${left} left you are charged ${fmtRate(livePrice.premiumRate)}, below the rate it opened at.`
+                      : `This pool prices at the moment you buy. With ${left} left and the rate nearer the strike you are charged ${fmtRate(livePrice.premiumRate)}, above the rate it opened at.`;
+                  })()}
+                  {' '}
+                  <button
+                    type="button"
+                    onClick={() => setPremiumInfoFor(selectedEvent.id)}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--tx-2)', cursor: 'pointer', padding: 0, font: 'inherit', textDecoration: 'underline' }}
+                  >
+                    What moves it
+                  </button>
+                </p>
+              </div>
+            )}
+            {livePrice && !selectedIsDynamic && Math.abs(livePrice.premiumRate - selectedEvent.premiumRate) / selectedEvent.premiumRate >= 0.1 && (
+              <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                   <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Worth today</span>
                   <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tx-2)' }}>
@@ -2093,9 +2177,17 @@ export default function Hedge() {
                     const days = livePrice.breakdown.daysRemaining;
                     const left = days >= 1.5 ? `${Math.round(days)} days` : days >= 1 ? 'a day' : 'hours';
                     return livePrice.premiumRate < selectedEvent.premiumRate
-                      ? `With ${left} left this cover is worth less than the pool's opening rate. You are charged the pool rate above.`
-                      : `With ${left} left and the rate nearer the strike this cover is worth more than the pool's opening rate. You are charged the pool rate above.`;
+                      ? `With ${left} left this cover is worth less than the pool's rate. This pool charges one rate for its whole life, so you pay the rate above.`
+                      : `With ${left} left and the rate nearer the strike this cover is worth more than the pool's rate. This pool charges one rate for its whole life, so you pay the rate above.`;
                   })()}
+                  {' '}
+                  <button
+                    type="button"
+                    onClick={() => setPremiumInfoFor(selectedEvent.id)}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--tx-2)', cursor: 'pointer', padding: 0, font: 'inherit', textDecoration: 'underline' }}
+                  >
+                    Why
+                  </button>
                 </p>
               </div>
             )}
@@ -2183,6 +2275,36 @@ export default function Hedge() {
           }}>Set duration</button>
         </div>
       </div>
+
+      {/* ===== HOW THIS PREMIUM IS SET ===== */}
+      {(() => {
+        if (premiumInfoFor == null) return null;
+        // Whichever copy of the event is to hand. The buy and detail sheets
+        // hold a fresher one than the list, so prefer it.
+        const ev =
+          (selectedEvent && selectedEvent.id === premiumInfoFor ? selectedEvent : null) ||
+          events.find((e) => e.id === premiumInfoFor) ||
+          null;
+        if (!ev) return null;
+        const pos = posDetail && posDetail.eventId === premiumInfoFor ? posDetail : null;
+        return (
+          <PremiumExplainer
+            open
+            onClose={() => setPremiumInfoFor(null)}
+            storedRate={ev.premiumRate}
+            dynamic={dynamicById[premiumInfoFor] === true}
+            // Only meaningful for the pool actually being quoted.
+            quote={selectedEvent && selectedEvent.id === premiumInfoFor ? livePrice : null}
+            paidRate={pos && pos.notional > 0 ? pos.premiumPaid / pos.notional : null}
+            underlying={ev.underlying}
+            strike={ev.strike}
+            strikeAbove={ev.strikeAbove}
+            createdAt={ev.createdAt}
+            expiryDate={ev.expiryDate}
+            hedgerFeeRate={hedgerFeeRate}
+          />
+        );
+      })()}
 
       {/* ===== MAINNET CONFIRM ===== */}
       <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
