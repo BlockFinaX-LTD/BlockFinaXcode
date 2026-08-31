@@ -213,7 +213,7 @@ function expiryLabel(d: Date): string {
 // Comprehensive pool card for the Provide-liquidity grid (no APR — premium rate
 // is the honest, directly-comparable number; APR annualised from a sub-day pool
 // is meaningless).
-function PoolCard({ ev, onAdd, onOpen }: { ev: HedgeEventData; onAdd: () => void; onOpen: () => void }) {
+function PoolCard({ ev, onAdd, onOpen, rate }: { ev: HedgeEventData; onAdd: () => void; onOpen: () => void; rate?: number }) {
   const util = Math.round(ev.utilization * 100);
   return (
     <div className="pool-card">
@@ -223,7 +223,7 @@ function PoolCard({ ev, onAdd, onOpen }: { ev: HedgeEventData; onAdd: () => void
           <div className="a">{pairLabel(ev.underlying)}</div>
           <div className="b">{ev.strikeAbove ? 'Rate rises past' : 'Rate falls below'} {ev.strike.toLocaleString()}</div>
         </div>
-        <div className="pool-apr"><div className="v">{fmtRate(ev.premiumRate)}</div><div className="l">Premium</div></div>
+        <div className="pool-apr"><div className="v">{fmtRate(rate ?? ev.premiumRate)}</div><div className="l">Premium</div></div>
       </div>
       <div className="pool-stats">
         <div className="pool-stat"><div className="l">Pool size</div><div className="v tnum">{fmtK(ev.totalLiquidity)}</div></div>
@@ -1029,6 +1029,12 @@ export default function Hedge() {
     const wanted: number[] = [];
     if (selectedEvent && dynamicById[selectedEvent.id] === undefined) wanted.push(selectedEvent.id);
     if (posDetail && dynamicById[posDetail.eventId] === undefined) wanted.push(posDetail.eventId);
+    // Every open pool, because the browse cards show a premium too and a card
+    // advertising a rate nobody is charged is the worst place for this to be
+    // wrong. Settled pools are skipped; nothing can be bought in them.
+    events.forEach((e) => {
+      if (e.status === 'open' && dynamicById[e.id] === undefined && wanted.indexOf(e.id) < 0) wanted.push(e.id);
+    });
     if (!wanted.length) return;
     let live = true;
     Promise.all(wanted.map((id) => hedgeContract.isDynamicallyPriced(id).then((d) => [id, d] as const)))
@@ -1042,7 +1048,58 @@ export default function Hedge() {
       })
       .catch(() => {});
     return () => { live = false; };
-  }, [selectedEvent, posDetail, dynamicById]);
+  }, [selectedEvent, posDetail, dynamicById, events]);
+
+  /**
+   * The rate a dynamic pool is actually charging, for the surfaces that browse
+   * rather than buy.
+   *
+   * The cards, the market rows and the detail header all rendered
+   * `ev.premiumRate`, which on a dynamic pool is the rate the creator opened at
+   * and not the rate anyone pays. Event 14 listed 0.501% while the engine was
+   * quoting 0.3625%, so the whole list was advertising a price that did not
+   * exist. Worse, the buy sheet showed the opening rate above the amount box
+   * and the charged rate in the breakdown twenty lines below it.
+   *
+   * Quoted at a nominal notional, which is exact: the rate does not depend on
+   * size. Refreshed with the events themselves rather than on a timer.
+   */
+  const [liveRateById, setLiveRateById] = useState<Record<number, number>>({});
+  useEffect(() => {
+    const wanted = events.filter((e) => e.status === 'open' && dynamicById[e.id] === true);
+    if (!wanted.length) return;
+    let live = true;
+    const ctl = new AbortController();
+    (async () => {
+      const { fetchPurchaseQuote } = await import('@/lib/purchase-quote');
+      const got: Array<readonly [number, number]> = [];
+      for (const e of wanted) {
+        const q = await fetchPurchaseQuote(
+          { chainId: activeChainId, eventId: e.id, notional: 1000 },
+          ctl.signal,
+        );
+        if (q.ok) got.push([e.id, q.premiumRate] as const);
+      }
+      if (!live || !got.length) return;
+      setLiveRateById((prev) => {
+        const next = { ...prev };
+        got.forEach(([id, r]) => { next[id] = r; });
+        return next;
+      });
+    })().catch(() => {});
+    return () => { live = false; ctl.abort(); };
+  }, [events, dynamicById, activeChainId]);
+
+  /**
+   * What to show as "the premium" anywhere a pool is displayed rather than
+   * bought. The live rate when there is one, the pool's own rate otherwise,
+   * which is exactly right for a fixed pool and the honest fallback for a
+   * dynamic one whose quote has not landed.
+   */
+  const displayRate = (ev: HedgeEventData): number => {
+    const live = liveRateById[ev.id];
+    return typeof live === 'number' && live > 0 ? live : ev.premiumRate;
+  };
 
   const selectedIsDynamic = selectedEvent ? dynamicById[selectedEvent.id] === true : false;
 
@@ -1374,7 +1431,7 @@ export default function Hedge() {
                       <div className="b">{ev.name} · {expiryLabel(ev.expiryDate)}</div></div></div>
                     <div className="mkt-col"><span className="k">Direction</span><span className="dir"><span className="da">{ev.strikeAbove ? <ArrowUpRight /> : <ArrowDownRight />}</span>{ev.strikeAbove ? 'Rises' : 'Falls'}</span></div>
                     <div className="mkt-col"><span className="k">Strike</span><span className="mkt-v">{ev.strike.toLocaleString()}</span></div>
-                    <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{fmtRate(ev.premiumRate)}</span></div>
+                    <div className="mkt-col"><span className="k">Premium</span><span className="mkt-v">{fmtRate(displayRate(ev))}</span></div>
                     {/* Capacity a buyer can actually draw on. Without this the
                         table gave no indication whether a pool could fill the
                         cover being requested. */}
@@ -1434,7 +1491,7 @@ export default function Hedge() {
             ) : lpList.length === 0 ? (
               <div className="empty">No open pools right now.</div>
             ) : lpList.map((ev) => (
-              <PoolCard key={ev.id} ev={ev} onAdd={() => openLp(ev)} onOpen={() => openDetail(ev)} />
+              <PoolCard key={ev.id} ev={ev} rate={displayRate(ev)} onAdd={() => openLp(ev)} onOpen={() => openDetail(ev)} />
             ))}
           </div>
         </section>
@@ -1702,7 +1759,7 @@ export default function Hedge() {
                           return (
                             <div className="pool-card" key={ev.id}>
                               <div className="pool-top"><MarketFlag pair={ev.underlying} /><div className="pt-nm"><div className="a">{pairLabel(ev.underlying)}</div>{poolSubtitle(ev.name, ev.underlying) && <div className="b">{poolSubtitle(ev.name, ev.underlying)}</div>}</div>
-                                <div className="pool-apr"><div className="v">{fmtRate(ev.premiumRate)}</div><div className="l">Premium</div></div></div>
+                                <div className="pool-apr"><div className="v">{fmtRate(displayRate(ev))}</div><div className="l">Premium</div></div></div>
                               <div className="pool-stats">
                                 <div className="pool-stat"><div className="l">Pool size</div><div className="v tnum">{fmtK(ev.totalLiquidity)}</div></div>
                                 <div className="pool-stat"><div className="l">{live2 ? 'Expires in' : 'Status'}</div><div className="v tnum">{live2 ? expiryLabel(ev.expiryDate) : (ev.status === 'open' ? 'Expired' : ev.status)}</div></div>
@@ -1982,7 +2039,7 @@ export default function Hedge() {
               <div className="det-head">
                 <MarketFlag pair={ev.underlying} />
                 <div className="det-hn"><div className="a">{pairLabel(ev.underlying)}</div><div className="b">{ev.name}</div></div>
-                <div className="det-apr"><div className="v">{fmtRate(ev.premiumRate)}</div><div className="l">Premium</div></div>
+                <div className="det-apr"><div className="v">{fmtRate(displayRate(ev))}</div><div className="l">Premium</div></div>
               </div>
               <p className="det-cond">{ev.strikeAbove ? 'Pays out if the rate settles above ' : 'Pays out if the rate settles below '}{ev.strike.toLocaleString()} {unitOf(ev.underlying)} at expiry. What matters is where the rate finishes, not whether it touched the strike along the way.</p>
               {/*
@@ -2034,7 +2091,7 @@ export default function Hedge() {
                       <Info style={{ width: 12, height: 12 }} />
                     </button>
                   </div>
-                  <div className="v">{fmtRate(ev.premiumRate)}</div>
+                  <div className="v">{fmtRate(displayRate(ev))}</div>
                 </div>
                 <div className="det-stat"><div className="l">Expiry</div><div className="v">{expiryLabel(ev.expiryDate)}</div></div>
                 <div className="det-stat"><div className="l">Available liquidity</div><div className="v">{fmtMoney(ev.availableCapacity)}</div></div>
@@ -2083,7 +2140,7 @@ export default function Hedge() {
               <label>Notional to cover</label>
               <div className="amount">
                 <div className="arow"><input inputMode="decimal" placeholder="0" value={notional} onChange={(e) => setNotional(e.target.value)} /><span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx-3)' }}>USD</span></div>
-                <div className="abot"><span className="usd">Premium {fmtRate(selectedEvent.premiumRate)}</span><span className="bal">Available {fmtMoney(selectedEvent.availableCapacity)}</span></div>
+                <div className="abot"><span className="usd">Premium {fmtRate(chargedRate)}</span><span className="bal">Available {fmtMoney(selectedEvent.availableCapacity)}</span></div>
               </div>
               <div className="notrow">{[10000, 50000, 100000].map((n) => <button key={n} onClick={() => setNotional(String(n))}>${n / 1000}k</button>)}</div>
             </div>
@@ -2227,7 +2284,7 @@ export default function Hedge() {
                 </div>
               </div>
               <div className="brk">
-                <div className="brk-line"><span className="l">Premium rate</span><span className="v">{fmtRate(selectedEvent.premiumRate)}</span></div>
+                <div className="brk-line"><span className="l">Premium rate</span><span className="v">{fmtRate(displayRate(selectedEvent))}</span></div>
                 <div className="brk-line"><span className="l">Your pool share</span><span className="v">{share.toFixed(2)}%</span></div>
                 <div className="brk-line total"><span className="l">Pool size after deposit</span><span className="v">{fmtMoney(selectedEvent.totalLiquidity + amt)}</span></div>
               </div>
