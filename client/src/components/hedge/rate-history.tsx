@@ -416,6 +416,65 @@ export function RateHistory({
 
   const strikeY = hasStrike ? geom.y(strike as number) : 0;
   const strikeVisible = hasStrike && strikeY >= PAD.t && strikeY <= VH - PAD.b;
+
+  /**
+   * Laying out the three left-edge labels so they cannot overprint.
+   *
+   * Event 13 was written with its cap equal to its strike, both 11.2500. The
+   * cap label sits at yCap - 6 and the strike label at strikeY - 5, so with the
+   * two lines identical the labels landed one pixel apart at the same x and
+   * rendered as "MAXi$0e 11.2500": two legible strings destroying each other.
+   *
+   * Three faults, fixed separately below rather than papered over:
+   *
+   *   1. A cap equal to the strike is not a band. There is nothing to shade and
+   *      no second line to name, so the cap is dropped entirely.
+   *   2. Even a real band can be narrow enough on screen to collide, so the
+   *      labels are pushed apart to a minimum spacing.
+   *   3. "MAX $0" reads as "the most you can get is nothing". A zero amount is
+   *      not a cap worth printing, so it falls back to naming the line.
+   */
+  const capIsDistinct = hasZones
+    && Math.abs((cap as number) - (strike as number)) / (strike as number) > 1e-4;
+
+  // "$0", "$0.00" and friends carry no information on a ceiling.
+  const maxLabelMeaningful = !!maxPayoutLabel
+    && /[1-9]/.test(maxPayoutLabel.replace(/[^0-9]/g, "") || "0");
+
+  const hasEntryBand = hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate)
+    && entryRate > 0 && (strikeAbove ? (strike as number) > entryRate : (strike as number) < entryRate);
+
+  /**
+   * Push the labels apart, top to bottom, preserving their reading order.
+   *
+   * Only the labels actually drawn take part, so a chart without a cap or
+   * without an entry mark keeps its natural placement.
+   */
+  const labelY = (() => {
+    const fs = expanded ? 11 : 9.5;
+    const gap = fs + 3;
+    const capNat = capIsDistinct ? geom.y(cap as number) + (strikeAbove ? -6 : 12) : null;
+    const strikeNat = strikeVisible ? strikeY - 5 : null;
+    const entryNat = hasEntryBand ? geom.y(entryRate as number) + (strikeAbove ? 12 : -6) : null;
+
+    // Reading order down the chart. For a rising pool the cap sits above the
+    // strike and entry below it; for a falling pool the order inverts.
+    const order: Array<["cap" | "strike" | "entry", number]> = (
+      strikeAbove
+        ? ([["cap", capNat], ["strike", strikeNat], ["entry", entryNat]] as const)
+        : ([["entry", entryNat], ["strike", strikeNat], ["cap", capNat]] as const)
+    ).filter((e): e is ["cap" | "strike" | "entry", number] => e[1] !== null)
+     .map((e) => [e[0], e[1]] as ["cap" | "strike" | "entry", number]);
+
+    const out: Record<string, number> = {};
+    let prev = -Infinity;
+    order.forEach(([k, want]) => {
+      const y = Math.max(want, prev + gap);
+      out[k] = y;
+      prev = y;
+    });
+    return out as { cap?: number; strike?: number; entry?: number };
+  })();
   const everPast = hasStrike
     ? (strikeAbove
         ? Math.max(...pts.map((p) => p.close)) >= (strike as number)
@@ -600,9 +659,7 @@ export function RateHistory({
           the normal shape. A pool struck the other side of spot has no excess
           to show, and inventing a band there would be a lie about the terms.
         */}
-        {hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0
-          && (strikeAbove ? (strike as number) > entryRate : (strike as number) < entryRate)
-          && (() => {
+        {hasEntryBand && (() => {
           const yEntry = geom.y(entryRate);
           const yStrike = geom.y(strike as number);
           const top = Math.min(yEntry, yStrike);
@@ -613,7 +670,7 @@ export function RateHistory({
                     fill="var(--red)" opacity="0.09" />
               <line x1={PAD.l} y1={yEntry} x2={VW - PAD.r} y2={yEntry} stroke="var(--red)"
                     strokeWidth="1.1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
-              <text x={PAD.l + 4} y={yEntry + (strikeAbove ? 12 : -6)}
+              <text x={PAD.l + 4} y={labelY.entry ?? yEntry}
                     fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--red)" opacity="0.9">
                 bought at {fmtRate(entryRate)}
               </text>
@@ -643,14 +700,22 @@ export function RateHistory({
                 The cap line and its label stay, so the ceiling is legible
                 without claiming the space above it is good news.
               */}
-              <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
-                    fill={zoneColour} opacity="0.13" />
-              <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke={zoneColour}
-                    strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.8" />
-              <text x={PAD.l + 4} y={yCap + (strikeAbove ? -6 : 12)}
-                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={zoneColour} opacity="0.9">
-                {maxPayoutLabel ? `${forLp ? "PAYS UP TO" : "MAX"} ${maxPayoutLabel}` : forLp ? "MAX EXPOSURE" : "MAX PAYOUT"}
-              </text>
+              {capIsDistinct && (
+                <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
+                      fill={zoneColour} opacity="0.13" />
+              )}
+              {capIsDistinct && (
+                <>
+                  <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke={zoneColour}
+                        strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.8" />
+                  <text x={PAD.l + 4} y={labelY.cap ?? yCap}
+                        fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={zoneColour} opacity="0.9">
+                    {maxLabelMeaningful
+                      ? `${forLp ? "PAYS UP TO" : "MAX"} ${maxPayoutLabel}`
+                      : forLp ? "MAX EXPOSURE" : "MAX PAYOUT"}
+                  </text>
+                </>
+              )}
             </g>
           );
         })()}
@@ -660,7 +725,8 @@ export function RateHistory({
           <>
             <line x1={PAD.l} y1={strikeY} x2={VW - PAD.r} y2={strikeY} stroke={zoneColour} strokeWidth="1.3"
                   strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
-            <text x={PAD.l + 4} y={strikeY - 5} fontSize="10" fill={zoneColour} fontFamily="var(--mono)">
+            <text x={PAD.l + 4} y={labelY.strike ?? strikeY - 5} fontSize={expanded ? 11 : 10}
+                  fill={zoneColour} fontFamily="var(--mono)">
               strike {fmtRate(strike as number)}
             </text>
           </>
@@ -747,14 +813,13 @@ export function RateHistory({
             {forLp ? "You pay" : "Pays"} {strikeAbove ? "above" : "below"} {fmtRate(strike as number)}
           </span>
         )}
-        {hasZones && (
+        {capIsDistinct && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 10, height: 10, background: zoneColour, opacity: 0.3, borderRadius: 2, display: "inline-block" }} />
             {forLp ? "Your exposure grows to" : "Payout grows to"} {fmtRate(cap as number)}, then holds
           </span>
         )}
-        {hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0
-          && (strikeAbove ? (strike as number) > entryRate : (strike as number) < entryRate) && (
+        {hasEntryBand && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 10, height: 10, background: "var(--red)", opacity: 0.26, borderRadius: 2, display: "inline-block" }} />
             You carry {fmtRate(entryRate)} to {fmtRate(strike as number)}
