@@ -144,15 +144,23 @@ export function RateHistory({
   markRate?: number;
   markLabel?: string;
   /**
-   * The rate when the cover was bought.
+   * The rate when this viewer entered: bought cover, or underwrote it.
    *
-   * The gap between it and the strike is the part of the move the holder
-   * carries themselves, which is the one number a payout table never showed
-   * and the thing people most often misjudge about a hedge.
+   * For a hedger the gap between it and the strike is the part of the move
+   * they carry themselves, which is the one number a payout table never showed
+   * and the thing people most often misjudge about a hedge. That gap is shaded
+   * for them and captioned "You carry".
+   *
+   * For an underwriter the same line means something else entirely, so only
+   * the line and its label draw. They are not carrying the gap, they are the
+   * ones standing behind it, and shading it as theirs would invert who bears
+   * what. The label reads "underwrote at" rather than "bought at": only
+   * hedgers buy.
    */
   entryRate?: number;
   /**
-   * When this holder entered, as an ISO date.
+   * When this viewer entered, as an ISO date. Labelled "you bought" for a
+   * hedger and "you joined" for an underwriter.
    *
    * A vertical line, and the only marker here that belongs to the person
    * rather than to the contract. The strike and the cap are the same for
@@ -441,8 +449,21 @@ export function RateHistory({
   const maxLabelMeaningful = !!maxPayoutLabel
     && /[1-9]/.test(maxPayoutLabel.replace(/[^0-9]/g, "") || "0");
 
-  const hasEntryBand = hasStrike && typeof entryRate === "number" && Number.isFinite(entryRate)
-    && entryRate > 0 && (strikeAbove ? (strike as number) > entryRate : (strike as number) < entryRate);
+  const hasEntryMark = typeof entryRate === "number" && Number.isFinite(entryRate) && entryRate > 0;
+  /**
+   * The excess band belongs to the hedger alone.
+   *
+   * It shades the move between where a holder came in and where their cover
+   * starts, which is the part they carry themselves. An underwriter is on the
+   * other side of that: it is not their exposure, it is the exposure they were
+   * paid to stand behind. Painting it for them and captioning it "You carry"
+   * would hand them the counterparty's risk as their own.
+   *
+   * The entry line and its label still draw for both, because where you came
+   * in is worth knowing whichever side you took.
+   */
+  const hasEntryBand = hasStrike && hasEntryMark && !forLp
+    && (strikeAbove ? (strike as number) > (entryRate as number) : (strike as number) < (entryRate as number));
 
   /**
    * Push the labels apart, top to bottom, preserving their reading order.
@@ -455,7 +476,7 @@ export function RateHistory({
     const gap = fs + 3;
     const capNat = capIsDistinct ? geom.y(cap as number) + (strikeAbove ? -6 : 12) : null;
     const strikeNat = strikeVisible ? strikeY - 5 : null;
-    const entryNat = hasEntryBand ? geom.y(entryRate as number) + (strikeAbove ? 12 : -6) : null;
+    const entryNat = hasEntryMark ? geom.y(entryRate as number) + (strikeAbove ? 12 : -6) : null;
 
     // Reading order down the chart. For a rising pool the cap sits above the
     // strike and entry below it; for a falling pool the order inverts.
@@ -659,20 +680,27 @@ export function RateHistory({
           the normal shape. A pool struck the other side of spot has no excess
           to show, and inventing a band there would be a lie about the terms.
         */}
-        {hasEntryBand && (() => {
-          const yEntry = geom.y(entryRate);
-          const yStrike = geom.y(strike as number);
+        {hasEntryMark && (() => {
+          const yEntry = geom.y(entryRate as number);
+          // The band needs a strike to run to; the line and label do not.
+          const yStrike = hasStrike ? geom.y(strike as number) : yEntry;
           const top = Math.min(yEntry, yStrike);
           const bot = Math.max(yEntry, yStrike);
+          // Neutral for an underwriter: red is this chart's colour for a
+          // hedger's own uncovered exposure, and an underwriter's entry is not
+          // that. It is simply where they took the risk on.
+          const entryColour = forLp ? "var(--tx-3)" : "var(--red)";
           return (
             <g pointerEvents="none">
-              <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
-                    fill="var(--red)" opacity="0.09" />
-              <line x1={PAD.l} y1={yEntry} x2={VW - PAD.r} y2={yEntry} stroke="var(--red)"
+              {hasEntryBand && (
+                <rect x={PAD.l} y={top} width={geom.iw} height={Math.max(0, bot - top)}
+                      fill="var(--red)" opacity="0.09" />
+              )}
+              <line x1={PAD.l} y1={yEntry} x2={VW - PAD.r} y2={yEntry} stroke={entryColour}
                     strokeWidth="1.1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
               <text x={PAD.l + 4} y={labelY.entry ?? yEntry}
-                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--red)" opacity="0.9">
-                bought at {fmtRate(entryRate)}
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={entryColour} opacity="0.9">
+                {forLp ? "underwrote at" : "bought at"} {fmtRate(entryRate as number)}
               </text>
             </g>
           );
@@ -748,7 +776,7 @@ export function RateHistory({
                     strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
               <text x={bx + 4} y={PAD.t + 11} fontSize={expanded ? 11 : 9.5}
                     fontFamily="var(--mono)" fill="var(--tx-3)" opacity="0.95">
-                you bought
+                {forLp ? "you joined" : "you bought"}
               </text>
             </g>
           );
