@@ -146,11 +146,38 @@ function poolSubtitle(name: string | null | undefined, underlying: string): stri
  * that happens to run longer.
  */
 /** The cap the chart shades and the cards quote, from one model. */
+/**
+ * The payout curve for one position.
+ *
+ * `maxPayout` here means the CEILING of the contract, not what the position
+ * happened to receive. Passing the realised figure was the bug behind the
+ * unreadable chart labels: `p.payoutAmount` is zero on cover that expired
+ * without triggering, which makes buildPayoutModel compute
+ * `maxPriceMove = 0`, hence `cap = strike + 0`, hence a cap sitting exactly on
+ * the strike. The chart then drew both lines on top of each other and printed
+ * "MAX $0" over "strike 11.2600".
+ *
+ * It also silently marked the whole model `valid: false`, so every payout
+ * figure derived from it on an expired position was coming out of an invalid
+ * model rather than a real one.
+ *
+ * The ceiling is a contract term, so it comes from the event's own payout cap:
+ * notional x the distance from strike to cap, scaled by the rate the pool was
+ * struck at. The realised amount is only the fallback, for Diamonds with no
+ * range getter where payoutCap reads back zero.
+ */
+function maxPayoutFor(p: HedgePositionData, ev: HedgeEventData): number {
+  if (ev.payoutCap > 0 && ev.initialRate > 0 && ev.strike > 0) {
+    return (p.notional * Math.abs(ev.payoutCap - ev.strike)) / ev.initialRate;
+  }
+  return p.payoutAmount;
+}
+
 function payoutModelFor(p: HedgePositionData, ev: HedgeEventData) {
   return buildPayoutModel({
     notional: p.notional,
     initialRate: ev.initialRate,
-    maxPayout: p.payoutAmount,
+    maxPayout: maxPayoutFor(p, ev),
     strike: ev.strike,
     strikeAbove: ev.strikeAbove,
     totalCost: p.premiumPaid + p.platformFeePaid,
@@ -1684,7 +1711,7 @@ export default function Hedge() {
                           actualPayout={p.payoutAmount}
                           boughtOn={p.createdAt ? p.createdAt.toISOString().slice(0, 10) : undefined}
                           cap={payoutModelFor(p, ev).cap}
-                          maxPayoutLabel={fmtMoney(p.payoutAmount)}
+                          maxPayoutLabel={fmtMoney(maxPayoutFor(p, ev))}
                         />
                       </div>
                     )}
@@ -1969,7 +1996,7 @@ export default function Hedge() {
                   actualPayout={won ? p.payoutAmount : 0}
                   boughtOn={p.createdAt ? p.createdAt.toISOString().slice(0, 10) : undefined}
                   cap={payoutModelFor(p, ev).cap}
-                  maxPayoutLabel={fmtMoney(p.payoutAmount)}
+                  maxPayoutLabel={fmtMoney(maxPayoutFor(p, ev))}
                 />
               )}
 

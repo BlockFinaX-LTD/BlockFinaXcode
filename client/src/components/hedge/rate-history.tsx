@@ -116,6 +116,21 @@ const fmtAxis = (iso: string, span: number, intraday: boolean) => {
   return d.toLocaleDateString("en-US", { month: "short", year: span > 300 ? "2-digit" : undefined });
 };
 
+/**
+ * Legibility for text sitting directly on the chart.
+ *
+ * These labels are drawn over the plotted line, the shaded bands and the
+ * watermark, with nothing behind them. A halo in the page colour, painted
+ * under the glyphs, keeps them readable against any of it without the boxes
+ * and measuring that backing plates would need.
+ */
+const HALO = {
+  stroke: "var(--bg)",
+  strokeWidth: 3,
+  strokeLinejoin: "round" as const,
+  paintOrder: "stroke" as const,
+};
+
 export function RateHistory({
   pair,
   strike,
@@ -699,7 +714,7 @@ export function RateHistory({
               <line x1={PAD.l} y1={yEntry} x2={VW - PAD.r} y2={yEntry} stroke={entryColour}
                     strokeWidth="1.1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
               <text x={PAD.l + 4} y={labelY.entry ?? yEntry}
-                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={entryColour} opacity="0.9">
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={entryColour} opacity="0.9" {...HALO}>
                 {forLp ? "underwrote at" : "bought at"} {fmtRate(entryRate as number)}
               </text>
             </g>
@@ -737,7 +752,7 @@ export function RateHistory({
                   <line x1={PAD.l} y1={yCap} x2={VW - PAD.r} y2={yCap} stroke={zoneColour}
                         strokeWidth="1.1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" opacity="0.8" />
                   <text x={PAD.l + 4} y={labelY.cap ?? yCap}
-                        fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={zoneColour} opacity="0.9">
+                        fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill={zoneColour} opacity="0.9" {...HALO}>
                     {maxLabelMeaningful
                       ? `${forLp ? "PAYS UP TO" : "MAX"} ${maxPayoutLabel}`
                       : forLp ? "MAX EXPOSURE" : "MAX PAYOUT"}
@@ -754,7 +769,7 @@ export function RateHistory({
             <line x1={PAD.l} y1={strikeY} x2={VW - PAD.r} y2={strikeY} stroke={zoneColour} strokeWidth="1.3"
                   strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
             <text x={PAD.l + 4} y={labelY.strike ?? strikeY - 5} fontSize={expanded ? 11 : 10}
-                  fill={zoneColour} fontFamily="var(--mono)">
+                  fill={zoneColour} fontFamily="var(--mono)" {...HALO}>
               strike {fmtRate(strike as number)}
             </text>
           </>
@@ -775,7 +790,7 @@ export function RateHistory({
               <line x1={bx} y1={PAD.t} x2={bx} y2={VH - PAD.b} stroke="var(--tx-3)"
                     strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
               <text x={bx + 4} y={PAD.t + 11} fontSize={expanded ? 11 : 9.5}
-                    fontFamily="var(--mono)" fill="var(--tx-3)" opacity="0.95">
+                    fontFamily="var(--mono)" fill="var(--tx-3)" opacity="0.95" {...HALO}>
                 {forLp ? "you joined" : "you bought"}
               </text>
             </g>
@@ -798,7 +813,7 @@ export function RateHistory({
               <line x1={PAD.l} y1={y} x2={VW - PAD.r} y2={y} stroke="var(--tx-2)"
                     strokeWidth="1" vectorEffect="non-scaling-stroke" opacity="0.55" />
               <text x={VW - PAD.r - 4} y={y - 5} textAnchor="end"
-                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--tx-2)" opacity="0.95">
+                    fontSize={expanded ? 11 : 9.5} fontFamily="var(--mono)" fill="var(--tx-2)" opacity="0.95" {...HALO}>
                 {markLabel || "now"} {fmtRate(markRate)}
               </text>
             </g>
