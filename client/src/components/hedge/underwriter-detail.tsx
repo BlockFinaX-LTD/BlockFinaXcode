@@ -71,6 +71,32 @@ export function UnderwriterDetail(p: UnderwriterDetailProps) {
   const valid = totalLiquidity > 0 && totalMaxPayout > 0 && strike > 0;
   if (!valid) return null;
 
+  /**
+   * How it actually finished, once it has.
+   *
+   * Until now this component had no settled branch at all: `settled` was
+   * declared and used only to pick the chart's mark label, so an underwriter
+   * whose pool had ended still saw three forward-looking scenario cards for a
+   * question already answered, and was never told what they made.
+   *
+   * The hedger side has had this since the payout work, as "How it finished".
+   * This is its counterpart, and it is the same arithmetic read from the other
+   * side of the contract: premiums are income, the payout share is the cost.
+   *
+   * Both halves are known exactly. `premiumsEarned` comes off the deposit, and
+   * `myPayoutAt` is the pool's own payout curve scaled by this deposit's share,
+   * which is the same model the hedger's payout is drawn from. I had thought
+   * the payout share was unavailable and said so; it is right here, and it is
+   * the model both sides already agree on.
+   */
+  const settledResult = (() => {
+    if (!settled || !settlementPrice || !Number.isFinite(settlementPrice) || settlementPrice <= 0) return null;
+    const calledOn = myPayoutAt(settlementPrice);
+    const net = premiumsEarned - calledOn;
+    const triggered = strikeAbove ? settlementPrice > strike : settlementPrice < strike;
+    return { calledOn, net, triggered };
+  })();
+
   const mid = strikeAbove ? strike + Math.abs(cap - strike) / 2 : strike - Math.abs(cap - strike) / 2;
   const stays = strikeAbove ? "stays under" : "stays over";
 
@@ -133,10 +159,52 @@ export function UnderwriterDetail(p: UnderwriterDetailProps) {
             perspective="underwriter"
           />
 
+          {settledResult && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--tx-3)", marginBottom: 8 }}>
+                How it finished
+              </div>
+              <div
+                style={{
+                  border: `1px solid ${settledResult.net >= 0 ? "color-mix(in oklab, var(--green) 34%, var(--border))" : "var(--border)"}`,
+                  borderRadius: 10, padding: "13px 14px 14px", background: "var(--card)",
+                }}
+              >
+                <div style={{ fontSize: 12, color: "var(--tx-3)", marginBottom: 5 }}>
+                  {underlying} settled at {rate(settlementPrice as number)}
+                </div>
+                <div className="tnum" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em",
+                     color: settledResult.net >= 0 ? "var(--green)" : "var(--tx-2)" }}>
+                  {settledResult.net >= 0 ? "+" : "\u2212"}{usd(Math.abs(settledResult.net))}
+                </div>
+                <p style={{ fontSize: 12, color: "var(--tx-3)", margin: "7px 0 0", lineHeight: 1.55 }}>
+                  {settledResult.triggered ? (
+                    <>
+                      The rate finished past {rate(strike)}, so {usd(settledResult.calledOn)} of your
+                      deposit was called on to pay the hedgers you were covering. You kept{" "}
+                      {usd(premiumsEarned)} in premiums.
+                    </>
+                  ) : (
+                    <>
+                      The rate never reached {rate(strike)}, so none of your deposit was called on.
+                      You kept {usd(premiumsEarned)} in premiums and your {usd(amount)} came back whole.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* The scenarios are a forecast, so they go once there is an answer.
+              Leaving them up asks an underwriter to consider what might happen
+              in a pool that has already finished. */}
+          {!settledResult && (
           <div style={{ fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--tx-3)", margin: "14px 0 8px" }}>
             What you are underwriting
           </div>
+          )}
 
+          {!settledResult && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
             {cards.map((c) => (
               <div
@@ -156,7 +224,9 @@ export function UnderwriterDetail(p: UnderwriterDetailProps) {
               </div>
             ))}
           </div>
+          )}
 
+          {!settledResult && (
           <p style={{ fontSize: 11.5, color: "var(--tx-3)", margin: "10px 0 0", lineHeight: 1.55 }}>
             You hold {(share * 100).toFixed(share < 0.1 ? 1 : 0)}% of this pool, so at most{" "}
             <strong style={{ color: "var(--tx-2)" }}>{usd(myMaxExposure)}</strong> of your{" "}
@@ -171,6 +241,7 @@ export function UnderwriterDetail(p: UnderwriterDetailProps) {
               </>
             ) : null}
           </p>
+          )}
         </div>
       )}
     </div>
