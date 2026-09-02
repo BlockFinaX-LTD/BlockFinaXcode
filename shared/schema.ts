@@ -887,3 +887,62 @@ export type OutreachPerson = typeof outreachPeople.$inferSelect;
 export type MarketMemory = typeof marketMemory.$inferSelect;
 export type OutreachDraft = typeof outreachDrafts.$inferSelect;
 export type InsertOutreachDraft = z.infer<typeof insertOutreachDraftSchema>;
+
+/* ── Prediction markets ──────────────────────────────────────────────────────
+ *
+ * Parimutuel, not an order book and not an AMM: everyone backing Yes shares the
+ * pot against everyone backing No, split by stake. The two pools are the
+ * market, so there is no liquidity to seed and no maker to carry losses, and a
+ * market can never pay out more than it took in.
+ *
+ * Off chain on purpose, for now. The mechanism and the settlement rule are the
+ * parts worth proving; moving custody to a facet is a later decision that
+ * should be made once it is known what people actually trade.
+ *
+ * Settlement reuses the same rates Cover settles on, so a prediction and a
+ * hedge on the same pair can never disagree about where the rate finished.
+ */
+export const predictionMarkets = pgTable("prediction_markets", {
+  id: serial("id").primaryKey(),
+  /** e.g. "USD/NGN". Must be a pair the rate feed actually carries. */
+  pair: text("pair").notNull(),
+  /** The question as a person reads it, e.g. "USD/NGN above 1,700 by 31 Oct?" */
+  question: text("question").notNull(),
+  /** The level the rate is measured against. */
+  threshold: decimal("threshold", { precision: 18, scale: 6 }).notNull(),
+  /** "above" or "below". Ties resolve No: landing on the line did not clear it. */
+  direction: text("direction").notNull(),
+  /** Staking closes here, which is deliberately before settlement. */
+  closesAt: timestamp("closes_at").notNull(),
+  /** The moment the rate is read. */
+  settlesAt: timestamp("settles_at").notNull(),
+  /** open, closed, settled, void */
+  status: text("status").notNull().default("open"),
+  /** The rate actually recorded at settlesAt. */
+  settlementRate: decimal("settlement_rate", { precision: 18, scale: 6 }),
+  /** yes, no, void. Void when one side never attracted a stake. */
+  outcome: text("outcome"),
+  settledAt: timestamp("settled_at"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const predictionPositions = pgTable("prediction_positions", {
+  id: serial("id").primaryKey(),
+  marketId: integer("market_id").notNull(),
+  /** Wallet address, lowercased. */
+  account: text("account").notNull(),
+  /** "yes" or "no". */
+  side: text("side").notNull(),
+  stake: decimal("stake", { precision: 18, scale: 6 }).notNull(),
+  /**
+   * Written only at settlement, from the pools as they finally stood.
+   *
+   * Not derived on read: the pools keep moving until staking closes, so a
+   * payout recomputed later against different totals would not be the one the
+   * holder was actually paid.
+   */
+  payout: decimal("payout", { precision: 18, scale: 6 }),
+  claimed: boolean("claimed").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
