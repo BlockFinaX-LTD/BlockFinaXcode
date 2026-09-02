@@ -29,6 +29,7 @@ import { InvestorGate } from "@/components/investor-gate";
 import DataRoom from "@/pages/data-room";
 import TractionShare from "@/pages/traction-share";
 import TermsPage from "@/pages/terms";
+import FaqPage from "@/pages/faq";
 import PrivacyPage from "@/pages/privacy";
 import BlogPage from "@/pages/blog";
 import PredictPage from "@/pages/predict";
@@ -199,6 +200,7 @@ function Router() {
       {/* Public */}
       <Route path="/" component={Website} />
       <Route path="/terms" component={TermsPage} />
+      <Route path="/faq" component={FaqPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPage} />
