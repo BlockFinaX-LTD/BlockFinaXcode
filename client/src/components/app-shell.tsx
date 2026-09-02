@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useRift } from '@rift-finance/react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Shield, TrendingUp, LineChart, Search, Bell, Moon, Sun, User } from 'lucide-react';
+import { LayoutDashboard, Shield, TrendingUp, Search, Bell, Moon, Sun, User } from 'lucide-react';
 // Same brand mark as the landing-page nav (served from /public).
 const logoPath = '/favicon.png';
 import { FlagSvg, CommoditySvg, KNOWN_FLAGS } from '@/components/app-glyphs';
@@ -75,7 +75,7 @@ type FXResponse = {
 type Market = { id?: number; pair: string; name: string; code: string; cls: 'fx' | 'cmd'; prem: number };
 
 interface AppShellProps {
-  active: 'home' | 'cover' | 'predict' | 'earn' | 'profile';
+  active: 'home' | 'cover' | 'earn' | 'profile';
   greeting?: { title: string; subtitle?: string };
   children: React.ReactNode;
 }
@@ -188,7 +188,6 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
           <nav className="sb-nav">
             {navItem('home', '/home', 'Home', LayoutDashboard)}
             {navItem('cover', '/hedge', 'Cover', Shield)}
-            {navItem('predict', '/predict', 'Predict', LineChart)}
             {navItem('earn', '/tasks', 'Earn', TrendingUp)}
             {navItem('profile', '/profile', 'Profile', User)}
           </nav>
@@ -282,9 +281,6 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
         </Link>
         <Link href="/hedge" className={`tab${active === 'cover' ? ' on' : ''}`}>
           <Shield /><span className="tl">Cover</span>
-        </Link>
-        <Link href="/predict" className={`tab${active === 'predict' ? ' on' : ''}`}>
-          <LineChart /><span className="tl">Predict</span>
         </Link>
         <Link href="/profile" className={`tab${active === 'profile' ? ' on' : ''}`}>
           <User /><span className="tl">Profile</span>
