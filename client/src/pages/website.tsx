@@ -648,7 +648,6 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
               {resourcesOpen && (
                 <div className="nav-dropdown-menu">
                   <Link href="/docs/request">Documentation</Link>
-                  <Link href="/pitch">Pitch deck</Link>
                   <Link href="/blog">Blog</Link>
                   <Link href="/faq">FAQ</Link>
                 </div>
@@ -722,7 +721,6 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             {mobileResourcesOpen && (
               <div className="nav-mobile-resources">
                 <Link href="/docs/request" onClick={closeMobile}>Documentation</Link>
-                <Link href="/pitch" onClick={closeMobile}>Pitch deck</Link>
                 <Link href="/blog" onClick={closeMobile}>Blog</Link>
                 <Link href="/faq" onClick={closeMobile}>FAQ</Link>
               </div>
@@ -1241,7 +1239,6 @@ function Footer() {
               <h5>Resources</h5>
               <Link href="/faq">FAQ</Link>
               <Link href="/learn">Academy</Link>
-              <Link href="/pitch">Pitch deck</Link>
               <Link href="/blog">Blog</Link>
               <a href="mailto:hello@blockfinax.com">Contact</a>
             </div>
