@@ -18,6 +18,8 @@ import { Link } from 'wouter';
 import { ArrowLeft, ArrowRight, Loader2, TrendingUp } from 'lucide-react';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';
+import { predictApi, type PredictAccount } from '@/lib/predict-api';
+import { DEFAULT_NETWORK } from '@/lib/networks';
 
 interface Pools { yes: number; no: number }
 interface Market {
@@ -65,6 +67,125 @@ function SplitBar({ pools }: { pools: Pools }) {
   );
 }
 
+
+/**
+ * Balance, deposits and withdrawals.
+ *
+ * Depositing is two steps and the page says so, because pretending otherwise is
+ * what makes people think their money vanished: the transfer goes on chain
+ * first, and only then does the server read that transaction and credit it.
+ * Nothing here sends an amount to the server. The hash is enough, and the chain
+ * is the source of truth for how much arrived.
+ */
+function AccountPanel({ onChanged }: { onChanged: () => void }) {
+  const { wallet } = useWallet();
+  const { toast } = useToast();
+  const [acct, setAcct] = useState<PredictAccount | null>(null);
+  const [txHash, setTxHash] = useState('');
+  const [wd, setWd] = useState('');
+  const [busy, setBusy] = useState<'deposit' | 'withdraw' | null>(null);
+
+  const load = () => {
+    if (!wallet?.address) { setAcct(null); return; }
+    predictApi.account(DEFAULT_NETWORK.chainId).then(setAcct).catch(() => setAcct(null));
+  };
+  useEffect(load, [wallet?.address]);
+
+  if (!wallet?.address) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-[13px] text-gray-600">
+        Unlock your wallet to see your balance and take positions.
+      </div>
+    );
+  }
+
+  const claim = async () => {
+    setBusy('deposit');
+    try {
+      const r = await predictApi.deposit(DEFAULT_NETWORK.chainId, txHash.trim());
+      toast({
+        title: r.alreadyCredited ? 'Already credited' : 'Deposit credited',
+        description: r.alreadyCredited
+          ? 'That transaction had been counted already, so nothing was added twice.'
+          : `${usd(r.amount)} ${r.token} added to your balance.`,
+      });
+      setTxHash(''); load(); onChanged();
+    } catch (e: any) {
+      toast({ title: 'Not credited', description: e?.message, variant: 'destructive' });
+    } finally { setBusy(null); }
+  };
+
+  const withdraw = async () => {
+    const amt = parseFloat(wd);
+    setBusy('withdraw');
+    try {
+      const r = await predictApi.withdraw(DEFAULT_NETWORK.chainId, amt);
+      toast({
+        title: r.sent ? 'Sent' : 'Queued',
+        description: r.sent
+          ? `${usd(amt)} is on its way to your wallet.`
+          : r.note || 'Your balance is debited and the transfer will follow.',
+      });
+      setWd(''); load(); onChanged();
+    } catch (e: any) {
+      toast({ title: 'Not withdrawn', description: e?.message, variant: 'destructive' });
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Your balance</span>
+        <span className="text-2xl font-semibold tabular-nums text-[#0a0e1a]">
+          {acct ? usd(acct.balance) : '—'}
+        </span>
+      </div>
+
+      {acct?.depositAddress ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-[13px] leading-relaxed text-gray-500">
+            To add funds, send USDC on Base to{' '}
+            <span className="break-all font-mono text-[12px] text-[#0a0e1a]">{acct.depositAddress}</span>,
+            then paste the transaction hash below. The amount is read from the chain, not from what you type.
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={txHash} onChange={(e) => setTxHash(e.target.value)} placeholder="0x…"
+              className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 font-mono text-[12px] outline-none"
+            />
+            <button
+              onClick={claim} disabled={busy !== null || txHash.trim().length < 66}
+              className="flex-none rounded-xl bg-[#1a4480] px-4 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {busy === 'deposit' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Credit'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 text-[13px] text-gray-400">Deposits are not enabled on this deployment yet.</p>
+      )}
+
+      {acct && acct.balance > 0 && (
+        <div className="mt-4 flex gap-2 border-t border-gray-100 pt-4">
+          <input
+            value={wd} onChange={(e) => setWd(e.target.value)}
+            placeholder={`Withdraw (min $${acct.minWithdrawal})`}
+            inputMode="decimal"
+            className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
+          />
+          <button
+            onClick={withdraw}
+            disabled={busy !== null || !(parseFloat(wd) >= acct.minWithdrawal) || parseFloat(wd) > acct.balance}
+            className="flex-none rounded-xl border border-gray-200 px-4 text-sm font-medium text-gray-700 disabled:opacity-40"
+          >
+            {busy === 'withdraw' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Withdraw'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MarketCard({ m, onStaked }: { m: Market; onStaked: () => void }) {
   const { wallet } = useWallet();
   const { toast } = useToast();
@@ -99,12 +220,7 @@ function MarketCard({ m, onStaked }: { m: Market; onStaked: () => void }) {
     }
     setBusy(true);
     try {
-      const r = await fetch('/api/predict/stake', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketId: m.id, account: wallet.address, side, stake }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'Could not place that stake.');
+      await predictApi.stake(DEFAULT_NETWORK.chainId, m.id, side!, stake);
       toast({ title: 'Position taken', description: `${usd(stake)} on ${side === 'yes' ? 'Yes' : 'No'}.` });
       setAmount(''); setSide(null); setQuote(null); onStaked();
     } catch (e: any) {
@@ -250,6 +366,8 @@ export default function PredictPage() {
             on the line has not passed it.
           </p>
         </section>
+
+        <div className="mb-6"><AccountPanel onChanged={load} /></div>
 
         {markets === null ? (
           <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>

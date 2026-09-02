@@ -946,3 +946,65 @@ export const predictionPositions = pgTable("prediction_positions", {
   claimed: boolean("claimed").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+/**
+ * The money ledger for prediction markets.
+ *
+ * Append only, signed amounts, balance = sum. Never a mutable balance column:
+ * with money the ability to reconstruct how an account reached its total
+ * matters more than the convenience of reading it in one hop, and a balance
+ * that can be written can be written wrongly with nothing left to show it.
+ *
+ * `ref` is the idempotency key and it is unique. Every writer derives it from
+ * something that already identifies the event exactly ("deposit:0xabc",
+ * "payout:41"), so replaying a deposit webhook, re-running settlement or
+ * double-submitting a withdrawal cannot credit twice.
+ */
+export const predictionLedger = pgTable("prediction_ledger", {
+  id: serial("id").primaryKey(),
+  account: text("account").notNull(),
+  /** deposit, stake, payout, refund, withdrawal */
+  kind: text("kind").notNull(),
+  /** Signed. Positive credits the account, negative debits it. */
+  amount: decimal("amount", { precision: 18, scale: 6 }).notNull(),
+  marketId: integer("market_id"),
+  positionId: integer("position_id"),
+  /** The on-chain transfer, for deposits and completed withdrawals. */
+  txHash: text("tx_hash"),
+  /** Idempotency key. Unique, so the same event can never be applied twice. */
+  ref: text("ref").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * One row per account, existing only to be locked.
+ *
+ * Balance is derived from the ledger, so there is no row to lock while deciding
+ * whether a stake is affordable. Without one, two stakes arriving together both
+ * read the same balance and both pass, and the account spends money twice. This
+ * row is the mutex: SELECT ... FOR UPDATE on it inside the transaction.
+ */
+export const predictionAccounts = pgTable("prediction_accounts", {
+  account: text("account").primaryKey(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * Withdrawal requests, and how far each has got.
+ *
+ * Separate from the ledger because a withdrawal has a lifecycle the ledger does
+ * not model: the balance is debited when the request is accepted, so the money
+ * cannot be staked while a payout is in flight, but the transfer itself may
+ * fail and need retrying without re-debiting.
+ */
+export const predictionWithdrawals = pgTable("prediction_withdrawals", {
+  id: serial("id").primaryKey(),
+  account: text("account").notNull(),
+  amount: decimal("amount", { precision: 18, scale: 6 }).notNull(),
+  /** pending, sent, failed */
+  status: text("status").notNull().default("pending"),
+  txHash: text("tx_hash"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+});

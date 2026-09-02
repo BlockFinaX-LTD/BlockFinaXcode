@@ -10,6 +10,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { predictionMarkets, predictionPositions } from "@shared/schema";
 import { getRate } from "../fx-oracle";
+import { credit, spend } from "./ledger";
 import {
   impliedProbability, resolve, payoutFor, didHappen, type Pools, type Outcome,
 } from "./parimutuel";
@@ -103,11 +104,44 @@ export async function placeStake(args: {
     return { ok: false, reason: "Staking on this market has closed." };
   }
 
-  const [row] = await db
-    .insert(predictionPositions)
-    .values({ marketId, account: account.toLowerCase(), side, stake: String(stake) })
-    .returning({ id: predictionPositions.id });
-  return { ok: true, id: row.id };
+  /**
+   * The stake and its debit are written together, inside the account lock.
+   *
+   * Recording the position first and debiting after would leave a window where
+   * a position exists that nobody paid for, and a crash in that window makes it
+   * permanent. Debiting first leaves the mirror image. Both go in one
+   * transaction, or neither does.
+   */
+  const res = await spend({
+    account,
+    amount: stake,
+    apply: async (tx: any) => {
+      const [row] = await tx
+        .insert(predictionPositions)
+        .values({ marketId, account: account.toLowerCase(), side, stake: String(stake) })
+        .returning({ id: predictionPositions.id });
+      return {
+        entries: [{
+          kind: "stake",
+          amount: -stake,
+          ref: `stake:${row.id}`,
+          marketId,
+          positionId: row.id,
+        }],
+        result: row.id as number,
+      };
+    },
+  });
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: res.reason === "Not enough balance."
+        ? `Not enough balance. You have $${res.balance.toFixed(2)} and this stake is $${stake.toFixed(2)}.`
+        : res.reason,
+    };
+  }
+  return { ok: true, id: res.result };
 }
 
 /**
@@ -150,6 +184,24 @@ export async function settleDueMarkets(now = new Date()): Promise<{ settled: num
       await db.update(predictionPositions)
         .set({ payout: String(pay.total) })
         .where(eq(predictionPositions.id, p.id));
+
+      /**
+       * The money, not just the record.
+       *
+       * Keyed on the position id, so re-running settlement credits nothing a
+       * second time. A losing position pays zero and `credit` ignores it, which
+       * keeps the ledger to entries that actually moved something.
+       */
+      if (pay.total > 0) {
+        await credit({
+          account: p.account,
+          kind: outcome === "void" ? "refund" : "payout",
+          amount: pay.total,
+          ref: `payout:${p.id}`,
+          marketId: m.id,
+          positionId: p.id,
+        });
+      }
     }
 
     await db.update(predictionMarkets)

@@ -10,6 +10,7 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "pricing:test": "tsx --test server/pricing/__tests__/*.test.ts",
+    "predict:test": "tsx --test server/predict/__tests__/*.test.ts",
     "agent:test": "tsx --test server/agent/__tests__/*.test.ts",
     "lib:test": "tsx --test server/lib/__tests__/*.test.ts",
     "client:test": "tsx --test client/src/lib/__tests__/*.test.ts",
