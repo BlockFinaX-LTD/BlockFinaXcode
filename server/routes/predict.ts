@@ -10,7 +10,8 @@ import type { Express } from "express";
 import { listMarkets, placeStake, poolsFor, positionsFor, settleDueMarkets, closeExpiredStaking } from "../predict/markets";
 import { quoteStake, impliedProbability } from "../predict/parimutuel";
 import { balanceOf, entriesFor } from "../predict/ledger";
-import { creditDeposit, treasuryAddress } from "../predict/deposits";
+import { creditDeposit } from "../predict/deposits";
+import { treasuryAddress, treasuryStatus } from "../predict/treasury";
 import { requestWithdrawal, executeWithdrawal, withdrawalsFor, MIN_WITHDRAWAL } from "../predict/withdrawals";
 import { requireSignature, type AuthenticatedRequest } from "../middleware/signature-auth";
 
@@ -122,6 +123,22 @@ export function registerPredictRoutes(app: Express): void {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "could not credit that deposit";
       return res.status(400).json({ error: msg });
+    }
+  });
+
+  /**
+   * GET /api/predict/treasury
+   *
+   * Public on purpose. A custodial balance is only as good as the wallet behind
+   * it, so what that wallet holds and whether it can still pay gas is not
+   * something to keep quiet about.
+   */
+  app.get("/api/predict/treasury", async (_req, res) => {
+    try {
+      return res.json(await treasuryStatus());
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "could not read treasury";
+      return res.status(500).json({ error: msg });
     }
   });
 

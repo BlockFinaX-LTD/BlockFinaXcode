@@ -14,11 +14,14 @@
  *
  * ## On the treasury key
  *
- * Sending requires a key that can move every deposit held. That is a hot wallet
- * and it is the largest new risk this feature introduces, so it is opt in: with
- * no `PREDICT_TREASURY_PRIVATE_KEY` configured, requests still queue correctly
- * and an operator settles them, rather than the deployment silently gaining the
- * ability to drain itself.
+ * Sending uses TREASURY_POOL_PRIVATE_KEY, the wallet the platform already
+ * operates. That key can move everything the treasury holds, which makes it the
+ * most valuable secret in the deployment; nothing here reduces that, it only
+ * declines to add a second one.
+ *
+ * Where the key is absent, as it is in the development environment, requests
+ * still queue correctly and an operator settles them. That is the honest
+ * behaviour for a debited balance: the user is owed the money either way.
  */
 
 import { ethers } from "ethers";
@@ -26,8 +29,8 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { predictionWithdrawals } from "@shared/schema";
 import { credit, spend } from "./ledger";
+import { USDC_BASE, baseProvider, treasurySigner } from "./treasury";
 
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const ERC20 = [
   "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
@@ -84,28 +87,39 @@ export async function requestWithdrawal(args: {
 export async function executeWithdrawal(id: number): Promise<
   { ok: true; txHash: string } | { ok: false; reason: string }
 > {
-  const key = process.env.PREDICT_TREASURY_PRIVATE_KEY;
-  if (!key) {
-    return { ok: false, reason: "No treasury key is configured, so withdrawals must be sent by hand." };
-  }
-
   const [w] = await db.select().from(predictionWithdrawals).where(eq(predictionWithdrawals.id, id)).limit(1);
   if (!w) return { ok: false, reason: "No such withdrawal." };
   if (w.status !== "pending") return { ok: false, reason: `That withdrawal is already ${w.status}.` };
 
   const amount = Number(w.amount);
   try {
-    const provider = new ethers.JsonRpcProvider("https://mainnet.base.org", 8453, {
-      staticNetwork: ethers.Network.from(8453),
-    });
-    const wallet = new ethers.Wallet(key, provider);
+    const provider = await baseProvider();
+    if (!provider) return { ok: false, reason: "Could not reach the chain. This will be retried." };
+    const wallet = treasurySigner(provider);
+    if (!wallet) {
+      return { ok: false, reason: "No treasury key is configured here, so this will be sent by hand." };
+    }
     const usdc = new ethers.Contract(USDC_BASE, ERC20, wallet);
 
-    const held = await usdc.balanceOf(wallet.address);
+    const [held, gas] = await Promise.all([
+      usdc.balanceOf(wallet.address),
+      provider.getBalance(wallet.address),
+    ]);
     const wei = ethers.parseUnits(amount.toFixed(6), 6);
     if (held < wei) {
-      // Not the user's fault and not a permanent failure. Leave it pending.
+      // Not the user's fault and not permanent. Leave it pending and retry.
       return { ok: false, reason: "The treasury does not currently hold enough to pay this out." };
+    }
+    /**
+     * Gas, checked before the balance is committed to a transaction.
+     *
+     * A treasury full of USDC and empty of ETH cannot pay anyone, and without
+     * this the attempt burns into the catch below, marks the withdrawal failed
+     * and refunds, making an operations problem look to the user like their
+     * withdrawal was rejected. Leaving it pending is the truthful state.
+     */
+    if (gas < ethers.parseEther("0.00002")) {
+      return { ok: false, reason: "The treasury is low on gas. This will be sent shortly." };
     }
 
     const tx = await usdc.transfer(w.account, wei);

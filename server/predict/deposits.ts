@@ -19,36 +19,14 @@
 
 import { ethers } from "ethers";
 import { credit } from "./ledger";
-
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const USDT_BASE = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2";
+import { USDC_BASE, USDT_BASE, baseProvider, treasuryAddress } from "./treasury";
 
 /** Minimum confirmations before a deposit is credited. */
 const MIN_CONFIRMATIONS = 3;
 
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 
-const RPCS = [
-  "https://mainnet.base.org",
-  "https://base-rpc.publicnode.com",
-  "https://base.drpc.org",
-];
-
-async function provider(): Promise<ethers.JsonRpcProvider | null> {
-  for (const url of RPCS) {
-    try {
-      const p = new ethers.JsonRpcProvider(url, 8453, { staticNetwork: ethers.Network.from(8453) });
-      await p.getBlockNumber();
-      return p;
-    } catch { /* next */ }
-  }
-  return null;
-}
-
-export function treasuryAddress(): string | null {
-  const a = process.env.PREDICT_TREASURY_ADDRESS;
-  return a && /^0x[0-9a-fA-F]{40}$/.test(a) ? a.toLowerCase() : null;
-}
+export { treasuryAddress };
 
 export type DepositResult =
   | { ok: true; amount: number; token: "USDC" | "USDT"; alreadyCredited: boolean }
@@ -72,7 +50,7 @@ export async function creditDeposit(args: {
   const treasury = treasuryAddress();
   if (!treasury) return { ok: false, reason: "Deposits are not configured on this deployment." };
 
-  const p = await provider();
+  const p = await baseProvider();
   if (!p) return { ok: false, reason: "Could not reach the chain to check that transaction." };
 
   const receipt = await p.getTransactionReceipt(txHash).catch(() => null);
