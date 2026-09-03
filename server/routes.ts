@@ -32,6 +32,7 @@ import { registerMercuryoRoutes } from "./routes/mercuryo";
 import { registerPricingRoutes } from "./routes/pricing";
 import { registerPredictRoutes } from "./routes/predict";
 import { registerFundingRoutes } from "./routes/funding";
+import { registerContentRoutes } from "./routes/content";
 import { registerGateRoutes } from "./routes/gate";
 import { registerLoiRoutes } from "./routes/loi";
 import { registerAgentRoutes } from "./routes/agent";
@@ -71,6 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPricingRoutes(app);
   registerPredictRoutes(app);
   registerFundingRoutes(app);
+  registerContentRoutes(app);
   registerGateRoutes(app);
   registerLoiRoutes(app);
   registerAgentRoutes(app);

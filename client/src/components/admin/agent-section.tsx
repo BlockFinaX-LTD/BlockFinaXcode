@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   Bot, Send, Sparkles, Check, X, Pencil, Trash2, Loader2, AlertTriangle,
-  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText, Landmark,
+  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText, Landmark, PenLine,
   Mail,
   BookOpen,
 } from "lucide-react";
@@ -33,6 +33,7 @@ import { ProspectsTab } from "./prospects-tab";
 import { ResearchTab } from "./research-tab";
 import { InvestorsTab } from "./investors-tab";
 import { FundingTab } from "./funding-tab";
+import { ContentTab } from "./content-tab";
 import { OutreachTab } from "@/components/admin/outreach-tab";
 import { AgentMarkdown } from "@/components/agent-markdown";
 import {
@@ -54,7 +55,7 @@ async function api(url: string, token: string, options?: RequestInit) {
 
 const kindLabel = (k: string) => PROPOSAL_KIND_LABELS[k as ProposalKind] ?? k;
 
-type Tab = "chat" | "queue" | "outreach" | "prospects" | "research" | "investors" | "funding" | "training" | "activity";
+type Tab = "chat" | "queue" | "outreach" | "prospects" | "research" | "investors" | "funding" | "content" | "training" | "activity";
 
 export function AgentSection({ token }: { token: string }) {
   const [tab, setTab] = useState<Tab>("chat");
@@ -112,6 +113,7 @@ export function AgentSection({ token }: { token: string }) {
           ["research", "Research", BookOpen],
           ["investors", "Investors", DollarSign],
           ["funding", "Funding", Landmark],
+          ["content", "Content", PenLine],
           ["training", "Training", BrainCircuit],
           ["activity", "Activity", Activity],
         ] as const).map(([k, label, Icon]) => (
@@ -142,6 +144,7 @@ export function AgentSection({ token }: { token: string }) {
       {tab === "research" && <ResearchTab token={token} enabled={!!status?.configured} />}
       {tab === "investors" && <InvestorsTab token={token} enabled={!!status?.configured} />}
       {tab === "funding" && <FundingTab token={token} />}
+      {tab === "content" && <ContentTab token={token} />}
       {tab === "training" && <TrainingTab token={token} autonomy={status?.autonomy} canApprove={status?.canApprove !== false} />}
       {tab === "activity" && <ActivityTab token={token} />}
     </div>
