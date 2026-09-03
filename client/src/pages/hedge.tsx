@@ -1299,6 +1299,29 @@ export default function Hedge() {
 
   const myEvents = useMemo(() => events.filter((e) => e.creator.toLowerCase() === myAddr), [events, myAddr]);
   const activeDeposits = useMemo(() => myDeposits.filter((d) => !d.withdrawn), [myDeposits]);
+
+  /**
+   * Premiums still owed on deposits whose capital has already come out.
+   *
+   * These exist because withdrawCapital used to mark a deposit withdrawn
+   * without paying the premiums it had earned, and claimPremiums then refused
+   * forever. It cost $165.59 across nine deposits before the contract was
+   * fixed. The money was never gone, only unreachable, and both the payment
+   * and the view now report it correctly.
+   *
+   * Deliberately its own section rather than folded into the list above, which
+   * is about live underwriting. And deliberately self-clearing: it renders only
+   * while something is owed, so once these are claimed it disappears on its own
+   * rather than needing to be taken out later.
+   */
+  const owedAfterWithdrawal = useMemo(
+    () => myDeposits.filter((d) => d.withdrawn && (d.pendingPremiums ?? 0) > 0),
+    [myDeposits],
+  );
+  const owedTotal = useMemo(
+    () => owedAfterWithdrawal.reduce((a, d) => a + (d.pendingPremiums ?? 0), 0),
+    [owedAfterWithdrawal],
+  );
   const activePositions = useMemo(
     () => byNewest(myPositions.filter((p) => p.status === 'active')),
     [myPositions],
@@ -1758,7 +1781,9 @@ export default function Hedge() {
         <section className="cv-view on">
           {eventsLoading ? (
             <div className="pool-grid">{[0, 1].map((i) => <PoolCardSkeleton key={i} />)}</div>
-          ) : myEvents.length === 0 && activeDeposits.length === 0 ? (
+          ) : myEvents.length === 0 && activeDeposits.length === 0 && owedAfterWithdrawal.length === 0 ? (
+            /* Every affected LP has withdrawn everything, so without the third
+               clause this empty state would hide the one thing they came for. */
             <div className="empty">You haven't created pools or underwritten cover yet.</div>
           ) : (
             <>
@@ -1849,6 +1874,67 @@ export default function Hedge() {
                   </>
                 );
               })()}
+
+              {owedAfterWithdrawal.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <div className="sec-h"><h2>Premiums you have not taken</h2></div>
+                  <div
+                    style={{
+                      borderRadius: 12, border: '1px solid var(--green)',
+                      background: 'color-mix(in oklab, var(--green) 8%, var(--card))',
+                      padding: '14px 16px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                      <span style={{ fontSize: 13, color: 'var(--tx-2)' }}>
+                        Earned on pools you have already withdrawn from
+                      </span>
+                      <span className="tnum" style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>
+                        {fmtUsd2(owedTotal)}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--tx-3)', margin: '8px 0 0', lineHeight: 1.55 }}>
+                      Withdrawing your capital used to end your claim on the premiums it had earned.
+                      That is fixed, and this is what you were owed. Claim it whenever you like, it does
+                      not expire.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                      {owedAfterWithdrawal.map((d) => {
+                        const ev = events.find((e) => e.id === d.eventId);
+                        return (
+                          <div
+                            key={d.id}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              gap: 10, padding: '9px 11px', borderRadius: 9,
+                              border: '1px solid var(--border)', background: 'var(--card)',
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                {ev ? pairLabel(ev.underlying) : `Pool ${d.eventId}`}
+                              </div>
+                              <div style={{ fontSize: 11.5, color: 'var(--tx-4)' }}>
+                                {fmtUsd2(d.amount)} underwritten · deposit {d.id}
+                              </div>
+                            </div>
+                            <span className="tnum" style={{ fontSize: 14, fontWeight: 600, color: 'var(--green)' }}>
+                              {fmtUsd2(d.pendingPremiums ?? 0)}
+                            </span>
+                            <button
+                              className="btn-sm2 primary"
+                              disabled={claimPremiumsMutation.isPending}
+                              onClick={() => claimPremiumsMutation.mutate(d.id)}
+                            >
+                              {claimPremiumsMutation.isPending ? <Loader2 className="spin" /> : 'Claim'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {activeDeposits.length > 0 && (
                 <div style={{ marginTop: 18 }}>
