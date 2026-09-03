@@ -62,6 +62,7 @@ const CURRENCY_NAMES: Record<string, string> = {
   NGN: 'Nigerian naira', GHS: 'Ghanaian cedi', KES: 'Kenyan shilling',
   ZAR: 'South African rand', EGP: 'Egyptian pound', XOF: 'West African CFA',
   UGX: 'Ugandan shilling', TZS: 'Tanzanian shilling', XAF: 'Central African CFA',
+  TRY: 'Turkish lira',
   EUR: 'Euro', GBP: 'British pound', USD: 'US dollar',
 };
 

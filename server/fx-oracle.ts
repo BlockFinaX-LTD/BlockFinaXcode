@@ -8,6 +8,12 @@ const FX_PAIRS: Record<string, { base: string; quote: string }> = {
   "USD/NGN": { base: "USD", quote: "NGN" },
   "USD/KES": { base: "USD", quote: "KES" },
   "USD/ZAR": { base: "USD", quote: "ZAR" },
+  // Not African, and deliberately so. The lira is the clearest jump-regime
+  // currency outside the continent, and importers paying Turkish suppliers
+  // carry exactly the exposure this product covers. Already classified
+  // frontierEM in the pricing registry, which is where its risk parameters
+  // come from.
+  "USD/TRY": { base: "USD", quote: "TRY" },
   "USD/XOF": { base: "USD", quote: "XOF" },
   "USD/XAF": { base: "USD", quote: "XAF" },
   "USD/TZS": { base: "USD", quote: "TZS" },
