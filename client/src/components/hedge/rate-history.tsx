@@ -108,12 +108,38 @@ const fmtDay = (iso: string, intraday = false) => {
     : d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 };
 
-const fmtAxis = (iso: string, span: number, intraday: boolean) => {
+/**
+ * An axis label, at the precision the window actually distinguishes.
+ *
+ * The rule is that two adjacent ticks must never read the same. A month view
+ * printed the month only, so 1M came out "Aug Aug Aug Sep": four labels, one
+ * of them useful, and no way to tell which part of August anything happened in.
+ *
+ * So the unit follows the span rather than being fixed:
+ *
+ *   hours    within a day, and with the weekday too once the window crosses
+ *            midnight, since "2:00 AM" alone does not say which night
+ *   day+month  up to about three months, where ticks land inside one or two
+ *              months and the day is the only thing separating them
+ *   month      out to a year, where consecutive ticks are different months
+ *   month+year past a year, where the same month recurs
+ *   year       past about three years
+ */
+const fmtAxis = (iso: string, span: number, intraday: boolean, hours = 0) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  if (intraday) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (intraday) {
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    // Only the 24H window spans more than one day, and there a bare clock time
+    // is genuinely ambiguous.
+    return hours > 12
+      ? `${d.toLocaleDateString("en-US", { weekday: "short" })} ${time}`
+      : time;
+  }
   if (span > 1200) return String(d.getFullYear());
-  return d.toLocaleDateString("en-US", { month: "short", year: span > 300 ? "2-digit" : undefined });
+  if (span > 300) return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  if (span > 95) return d.toLocaleDateString("en-US", { month: "short" });
+  return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 };
 
 /**
@@ -844,7 +870,7 @@ export function RateHistory({
             fontFamily="var(--mono)"
             textAnchor={n === 0 ? "start" : n === DATES - 1 ? "end" : "middle"}
           >
-            {fmtAxis(pts[i].date, rangeDays, !!data.intraday)}
+            {fmtAxis(pts[i].date, rangeDays, !!data.intraday, range.hours ?? 0)}
           </text>
         ))}
       </svg>
