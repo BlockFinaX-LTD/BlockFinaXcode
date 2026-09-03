@@ -80,3 +80,51 @@ test("the default queries describe this company, not funding in general", () => 
   ["africa", "base", "fintech"].forEach((k) =>
     assert.ok(all.includes(k), `default queries never mention ${k}`));
 });
+
+/* ── closed programmes must not enter ────────────────────────────────────── */
+
+/**
+ * The sweep proposed opportunities whose applications had already ended.
+ *
+ * Not a hallucination: a real page, a real deadline, already gone. The link
+ * check cannot catch that because the link is fine, so the date has to be
+ * checked against today.
+ */
+test("a deadline already past is refused, with a day of slack", () => {
+  const DAY = 86400000;
+  const now = Date.now();
+  const closed = (deadline: Date | null) =>
+    !!deadline && deadline.getTime() < now - DAY;
+
+  assert.equal(closed(new Date(now - 5 * DAY)), true, "five days ago should be refused");
+  assert.equal(closed(new Date(now + 5 * DAY)), false, "five days away should pass");
+
+  // A deadline is a date rather than an instant, so "closes today" is still
+  // open somewhere. Refusing it would drop live programmes on their last day,
+  // which is exactly when they matter most.
+  assert.equal(closed(new Date(now)), false, "today should still pass");
+  assert.equal(closed(new Date(now - DAY / 2)), false, "twelve hours ago should still pass");
+
+  // Rolling and undated entries have no date to judge, so they are never
+  // refused on this basis.
+  assert.equal(closed(null), false);
+});
+
+test("the recheck flags a stored deadline that has since gone by", () => {
+  const DAY = 86400000;
+  const stale = (d: Date | null) => !!d && d.getTime() < Date.now() - DAY;
+  assert.equal(stale(new Date(Date.now() - 3 * DAY)), true);
+  assert.equal(stale(new Date(Date.now() + 3 * DAY)), false);
+});
+
+test("a deadline the page has moved is only applied when it really differs", () => {
+  const DAY = 86400000;
+  const moved = (fresh: Date, stored: Date | null) =>
+    !stored || Math.abs(fresh.getTime() - stored.getTime()) > DAY;
+
+  const base = new Date("2026-10-01T00:00:00Z");
+  assert.equal(moved(new Date("2026-11-01T00:00:00Z"), base), true);
+  // The same date read again must not churn the row or file a note every run.
+  assert.equal(moved(new Date("2026-10-01T00:00:00Z"), base), false);
+  assert.equal(moved(base, null), true, "a first known deadline is always worth storing");
+});

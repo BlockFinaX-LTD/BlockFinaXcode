@@ -103,7 +103,9 @@ async function searchOnce(client: Anthropic, query: string): Promise<Candidate[]
         `"fit":0-100,"rationale"}\n\n` +
         `Rules:\n` +
         `- Only programmes you actually found a page for. url must be that page.\n` +
-        `- Omit anything whose applications have closed with no future round.\n` +
+        `- Today is ${new Date().toISOString().slice(0, 10)}. Omit anything whose deadline has\n` +
+        `  already passed, and anything whose applications have closed with no future round.\n` +
+        `  A programme whose next round has not opened yet is fine; say so in rationale.\n` +
         `- If unsure of a deadline, omit the field rather than guessing.\n` +
         `- fit is how well it matches THIS company, not how prestigious it is.\n` +
         `- Return [] if you found nothing real. An empty result is correct and expected.`,
@@ -127,6 +129,8 @@ export interface SweepResult {
   proposed: number;
   droppedUnreachable: number;
   droppedDuplicate: number;
+  /** Proposed with a deadline that has already gone by. */
+  droppedClosed: number;
   added: Array<{ id: number; name: string; url: string }>;
 }
 
@@ -143,7 +147,8 @@ export async function sweep(args: { queries?: string[] } = {}): Promise<SweepRes
   const queries = args.queries?.length ? args.queries : DEFAULT_QUERIES;
 
   const out: SweepResult = {
-    queries: queries.length, proposed: 0, droppedUnreachable: 0, droppedDuplicate: 0, added: [],
+    queries: queries.length, proposed: 0, droppedUnreachable: 0, droppedDuplicate: 0,
+    droppedClosed: 0, added: [],
   };
 
   for (const q of queries) {
@@ -156,9 +161,27 @@ export async function sweep(args: { queries?: string[] } = {}): Promise<SweepRes
       out.proposed++;
 
       if (await alreadyTracked(c)) { out.droppedDuplicate++; continue; }
-      if (!(await urlResolves(c.url))) { out.droppedUnreachable++; continue; }
 
+      /**
+       * A deadline in the past means the round is over.
+       *
+       * The prompt asks for open programmes only and the model does not
+       * reliably comply: it finds a real page, reads a real deadline, and
+       * proposes it anyway. That is not a hallucination, so the link check
+       * never catches it, and it arrived as a candidate looking exactly like a
+       * live one. Checking the date it supplied against today costs nothing and
+       * catches the whole class.
+       *
+       * A day of slack, because a deadline is a date rather than an instant and
+       * "closes 3 September" is still open for most of that day somewhere.
+       */
       const deadline = parseDeadline(c.deadline);
+      if (deadline && deadline.getTime() < Date.now() - 86400000) {
+        out.droppedClosed++;
+        continue;
+      }
+
+      if (!(await urlResolves(c.url))) { out.droppedUnreachable++; continue; }
 
       const [row] = await db.insert(fundingOpportunities).values({
         name: c.name.slice(0, 200),

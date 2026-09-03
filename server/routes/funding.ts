@@ -10,6 +10,7 @@ import {
   notesFor, setStage, addOpportunity, addNote, STAGES, type Stage,
 } from "../funding/pipeline";
 import { sweep, DEFAULT_QUERIES } from "../funding/discover";
+import { recheck } from "../funding/recheck";
 import { requireAdmin } from "../middleware/admin-auth";
 
 /**
@@ -77,6 +78,23 @@ export function registerFundingRoutes(app: Express): void {
       if (!r.ok) return res.status(400).json({ error: r.reason });
       return res.json({ ok: true });
     } catch (e: any) { return res.status(400).json({ error: e?.message ?? "could not add note" }); }
+  });
+
+  /**
+   * POST /api/funding/recheck
+   *
+   * Revisits everything still live and reports what has changed underneath it.
+   * Free without `deep`, which catches dead links and deadlines already gone
+   * by; `deep` adds a page read per opportunity and costs a model call each.
+   *
+   * Changes nothing except a deadline that the programme's own page has moved.
+   * A closing programme is news for whoever owns it, not grounds for a
+   * background job to decide an application is abandoned.
+   */
+  app.post("/api/funding/recheck", guard, async (req, res) => {
+    try {
+      return res.json(await recheck({ deep: req.body?.deep === true }));
+    } catch (e: any) { return res.status(500).json({ error: e?.message ?? "recheck failed" }); }
   });
 
   /**

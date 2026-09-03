@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Loader2, Search, ExternalLink, Check, X, Plus, AlertTriangle, CalendarClock,
+  Loader2, Search, ExternalLink, Check, X, Plus, AlertTriangle, CalendarClock, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -90,7 +90,19 @@ function Row({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{o.name}</span>
+            {/* The name is the link. A small icon at the far right was
+                findable but not obvious, and the first thing anyone wants
+                from a row is to go and read the programme. */}
+            {o.url ? (
+              <a
+                href={o.url} target="_blank" rel="noopener noreferrer"
+                className="truncate text-sm font-medium underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground"
+              >
+                {o.name}
+              </a>
+            ) : (
+              <span className="truncate text-sm font-medium">{o.name}</span>
+            )}
             {o.fit != null && (
               <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
                 fit {o.fit}
@@ -104,6 +116,15 @@ function Row({
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {o.funder && <span>{o.funder}</span>}
+            {o.url && (
+              <a
+                href={o.url} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-foreground/70 hover:text-foreground"
+              >
+                <ExternalLink className="h-3 w-3" />
+                {(() => { try { return new URL(o.url).hostname.replace(/^www\./, ""); } catch { return "open"; } })()}
+              </a>
+            )}
             <span className="capitalize">{o.kind}</span>
             <span className="tabular-nums">{money(o.amountMin, o.amountMax, o.currency)}</span>
             <span className={cn("tabular-nums", toneClass[d.tone])}>{d.text}</span>
@@ -112,15 +133,6 @@ function Row({
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{o.rationale}</p>
           )}
         </div>
-        {o.url && (
-          <a
-            href={o.url} target="_blank" rel="noopener noreferrer"
-            className="flex-none text-muted-foreground hover:text-foreground"
-            title="Open the programme page"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        )}
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -179,12 +191,27 @@ export function FundingTab({ token }: { token: string }) {
       toast({
         title: r.added?.length ? `${r.added.length} new to review` : "Nothing new",
         description: r.added?.length
-          ? `${r.proposed} proposed, ${r.droppedDuplicate} already tracked, ${r.droppedUnreachable} dropped for a dead link.`
-          : `${r.proposed} proposed but none survived: ${r.droppedDuplicate} already tracked, ${r.droppedUnreachable} had links that did not resolve.`,
+          ? `${r.proposed} proposed, ${r.droppedDuplicate} already tracked, ${r.droppedClosed} already closed, ${r.droppedUnreachable} dropped for a dead link.`
+          : `${r.proposed} proposed but none survived: ${r.droppedDuplicate} already tracked, ${r.droppedClosed} had deadlines already passed, ${r.droppedUnreachable} had links that did not resolve.`,
       });
       refresh();
     },
     onError: (e: any) => toast({ title: "Sweep failed", description: e.message, variant: "destructive" }),
+  });
+
+  const [findings, setFindings] = useState<any[]>([]);
+  const recheckM = useMutation({
+    mutationFn: (deep: boolean) =>
+      api("/api/funding/recheck", token, { method: "POST", body: JSON.stringify({ deep }) }),
+    onSuccess: (r: any) => {
+      setFindings(r.findings ?? []);
+      toast({
+        title: r.findings?.length ? `${r.findings.length} need attention` : "All still current",
+        description: `Checked ${r.checked}.` + (r.findings?.length ? "" : " Nothing has closed or moved."),
+      });
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "Recheck failed", description: e.message, variant: "destructive" }),
   });
 
   const addM = useMutation({
@@ -234,6 +261,15 @@ export function FundingTab({ token }: { token: string }) {
             ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Searching…</>
             : <><Search className="mr-1.5 h-3.5 w-3.5" /> Search for opportunities</>}
         </Button>
+        <Button
+          size="sm" variant="outline"
+          onClick={() => recheckM.mutate(true)} disabled={recheckM.isPending}
+          title="Revisit every open opportunity and report what has closed or moved"
+        >
+          {recheckM.isPending
+            ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Checking…</>
+            : <><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Recheck what is still open</>}
+        </Button>
         <Button size="sm" variant="outline" onClick={() => setAdding((v) => !v)}>
           <Plus className="mr-1.5 h-3.5 w-3.5" /> Add one I know of
         </Button>
@@ -266,6 +302,32 @@ export function FundingTab({ token }: { token: string }) {
           <Button size="sm" onClick={() => addM.mutate()} disabled={!form.name.trim() || addM.isPending}>
             {addM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}
           </Button>
+        </div>
+      )}
+
+      {findings.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              Last recheck found {findings.length}
+            </p>
+            <button onClick={() => setFindings([])} className="text-amber-700/70 hover:text-amber-900 dark:text-amber-400/70">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <ul className="mt-1.5 space-y-1">
+            {findings.map((f) => (
+              <li key={`${f.id}-${f.issue}`} className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                <span className="font-medium">{f.name}</span>
+                {" · "}
+                {/* The issue is named, because "dead link" and "the page says
+                    closed" need different responses and one is certain while
+                    the other is the model's reading. */}
+                <span className="uppercase tracking-wide text-[10px]">{f.issue.replace(/-/g, " ")}</span>
+                {" · "}{f.detail}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
