@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 import { storage } from './storage';
+import { db } from './db';
+import { sql } from 'drizzle-orm';
 
 export type AssetClass = 'fx' | 'commodity' | 'crypto';
 
@@ -122,15 +124,44 @@ const cache: OracleCache = {
   lastFetch: 0,
 };
 
+/**
+ * The 24 hour move, from a snapshot if there is one and the daily closes if not.
+ *
+ * Snapshots are taken as this process runs, so a pair added today has none from
+ * yesterday and the change came back undefined. USD/TRY went live with a full
+ * history behind it and still showed no percentage at all, which reads as the
+ * market being flat rather than as the pair being new.
+ *
+ * The daily closes answer the same question and are backfilled for years, so
+ * they are the right fallback. Slightly less precise, since a close is an end of
+ * day figure rather than exactly 24 hours ago, and that is worth far more than
+ * showing nothing.
+ */
 async function get24hChangeFromDB(pair: string, currentRate: number): Promise<number | undefined> {
+  const pct = (oldRate: number) =>
+    oldRate > 0 ? ((currentRate - oldRate) / oldRate) * 100 : undefined;
+
   try {
-    const now = Date.now();
-    const target24h = now - 24 * 60 * 60 * 1000;
+    const target24h = Date.now() - 24 * 60 * 60 * 1000;
     const snap = await storage.getRateSnapshotBefore(pair, target24h + 15 * 60 * 1000);
-    if (!snap) return undefined;
-    const oldRate = parseFloat(snap.rate as string);
-    if (!oldRate || oldRate === 0) return undefined;
-    return ((currentRate - oldRate) / oldRate) * 100;
+    if (snap) {
+      const fromSnap = pct(parseFloat(snap.rate as string));
+      if (fromSnap !== undefined) return fromSnap;
+    }
+  } catch { /* fall through to the closes */ }
+
+  try {
+    // The most recent close strictly before today, so "yesterday" rather than a
+    // partial figure for a day still in progress.
+    const today = new Date().toISOString().slice(0, 10);
+    const rows: any = await db.execute(sql`
+      select close from historical_fx_closes
+      where pair = ${pair} and date < ${today}
+      order by date desc limit 1
+    `);
+    const row = (rows.rows ?? rows)[0];
+    if (!row) return undefined;
+    return pct(parseFloat(String(row.close)));
   } catch {
     return undefined;
   }
