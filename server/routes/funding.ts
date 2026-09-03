@@ -10,24 +10,19 @@ import {
   notesFor, setStage, addOpportunity, addNote, STAGES, type Stage,
 } from "../funding/pipeline";
 import { sweep, DEFAULT_QUERIES } from "../funding/discover";
+import { requireAdmin } from "../middleware/admin-auth";
 
 /**
- * Who may touch any of this.
+ * Guarded by the same session every other admin route uses.
  *
- * ADMIN_EMAILS is the existing list; the header is the same one the admin
- * console already sends. Failing closed matters more here than elsewhere,
- * because one of these routes spends money on model calls.
+ * My first version checked an `x-admin-email` header against ADMIN_EMAILS,
+ * which was both a second auth scheme and a weaker one: a header naming an
+ * allowed address is not proof of being that person. requireAdmin resolves a
+ * real signed-in session and puts the verified email on the request, which is
+ * also what makes attribution on a stage change trustworthy.
  */
-function isAdmin(req: any): boolean {
-  const raw = (process.env.ADMIN_EMAILS || "").toLowerCase();
-  const allowed = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  const who = String(req.headers["x-admin-email"] || "").toLowerCase().trim();
-  return !!who && allowed.includes(who);
-}
-
 export function registerFundingRoutes(app: Express): void {
-  const guard = (req: any, res: any, next: any) =>
-    isAdmin(req) ? next() : res.status(403).json({ error: "Admins only." });
+  const guard = requireAdmin;
 
   app.get("/api/funding/opportunities", guard, async (req, res) => {
     try {
@@ -56,7 +51,7 @@ export function registerFundingRoutes(app: Express): void {
 
   app.post("/api/funding/opportunities", guard, async (req, res) => {
     try {
-      const r = await addOpportunity({ ...req.body, author: req.headers["x-admin-email"] as string });
+      const r = await addOpportunity({ ...req.body, author: (req as any).adminEmail });
       if (!r.ok) return res.status(400).json({ error: r.reason });
       return res.json(r);
     } catch (e: any) { return res.status(400).json({ error: e?.message ?? "could not add" }); }
@@ -68,7 +63,7 @@ export function registerFundingRoutes(app: Express): void {
       const { stage, note } = req.body ?? {};
       const r = await setStage({
         id, stage: stage as Stage, note,
-        author: req.headers["x-admin-email"] as string,
+        author: (req as any).adminEmail,
       });
       if (!r.ok) return res.status(400).json({ error: r.reason });
       return res.json({ ok: true });
@@ -78,7 +73,7 @@ export function registerFundingRoutes(app: Express): void {
   app.post("/api/funding/opportunities/:id/notes", guard, async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const r = await addNote({ id, body: req.body?.body, author: req.headers["x-admin-email"] as string });
+      const r = await addNote({ id, body: req.body?.body, author: (req as any).adminEmail });
       if (!r.ok) return res.status(400).json({ error: r.reason });
       return res.json({ ok: true });
     } catch (e: any) { return res.status(400).json({ error: e?.message ?? "could not add note" }); }
