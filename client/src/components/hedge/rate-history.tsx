@@ -41,6 +41,14 @@ interface History {
   lastClose?: number;
   latest?: number;
   ticksDropped?: number;
+  /**
+   * When this pair first entered the snapshot table, for hour ranges.
+   *
+   * Hour views are drawn from snapshots the oracle takes as it runs, so a pair
+   * added today has almost none. That is not missing data, it is a pair that
+   * has only just started being watched, and the two need saying differently.
+   */
+  trackingSince?: string | null;
   change?: { percent: number; direction: string } | null;
 }
 
@@ -269,7 +277,10 @@ export function RateHistory({
         // A handful of closes cannot describe a market. Drawing a shape from
         // them would imply something that is not in the data.
         if (!d || !Array.isArray(d.points) || d.points.length < (d.intraday ? 2 : 5)) {
-          setData(null);
+          // Kept rather than discarded: the response says WHY there is nothing,
+          // and throwing it away is what left the chart able to report only
+          // "no history" for a pair that is simply new.
+          setData(d ?? null);
           setState("empty");
           return;
         }
@@ -415,9 +426,33 @@ export function RateHistory({
     );
   }
   if (state === "empty" || !data || !geom) {
+    /**
+     * Say which of the two it is.
+     *
+     * An hour view on a pair that started being tracked this afternoon has
+     * nothing to draw, and calling that "no price history" reads as a fault.
+     * Someone then goes looking for a break that is not there, which is worse
+     * than the missing chart. When the snapshot table knows when tracking
+     * began, the wait is stated instead.
+     */
+    const since = data?.trackingSince ? new Date(data.trackingSince) : null;
+    const hoursTracked = since ? (Date.now() - since.getTime()) / 3600000 : null;
+    const isNew = !!data?.intraday && hoursTracked !== null && hoursTracked < 48;
+
     return wrap(
-      <div style={{ padding: "20px 0", fontSize: 12.5, color: "var(--tx-4)" }}>
-        No price history for {pair} over this period.
+      <div style={{ padding: "20px 0", fontSize: 12.5, color: "var(--tx-4)", lineHeight: 1.6 }}>
+        {isNew ? (
+          <>
+            Hour views are built from readings taken as the oracle runs, and {pair} was only added{" "}
+            {hoursTracked! < 1
+              ? `${Math.max(1, Math.round(hoursTracked! * 60))} minutes ago`
+              : `${Math.round(hoursTracked!)} hours ago`}.
+            <br />
+            This fills in as readings accumulate. The longer ranges work now, drawn from daily closes.
+          </>
+        ) : (
+          <>No price history for {pair} over this period.</>
+        )}
       </div>,
     );
   }

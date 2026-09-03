@@ -79,3 +79,38 @@ test("a 24 hour window tells apart the same clock time on either side of midnigh
   const b = fmtAxis("2026-09-03T14:00:00Z", 0, true, 24);
   assert.notEqual(a, b, "same time on consecutive days must not read identically");
 });
+
+/* ── the empty state ─────────────────────────────────────────────────────── */
+
+/**
+ * "No price history" and "we started watching this an hour ago" are different
+ * facts, and only one of them is a problem. USD/TRY was added with a single
+ * snapshot to its name, so every hour range reported the first when the second
+ * was true, which sends someone looking for a break that is not there.
+ */
+const isNewlyTracked = (intraday: boolean, trackingSince: string | null, now = Date.now()) => {
+  if (!intraday || !trackingSince) return false;
+  const hours = (now - new Date(trackingSince).getTime()) / 3600000;
+  return hours < 48;
+};
+
+test("a pair tracked for minutes is new, not empty", () => {
+  const twentyMinutesAgo = new Date(Date.now() - 20 * 60000).toISOString();
+  assert.equal(isNewlyTracked(true, twentyMinutesAgo), true);
+});
+
+test("a pair tracked for weeks with no points really has none", () => {
+  const longAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+  assert.equal(isNewlyTracked(true, longAgo), false);
+});
+
+test("daily ranges never claim newness, since closes are backfilled from years", () => {
+  const twentyMinutesAgo = new Date(Date.now() - 20 * 60000).toISOString();
+  // A daily view with no data is a real absence whatever the snapshot table
+  // says, because those points come from historical closes instead.
+  assert.equal(isNewlyTracked(false, twentyMinutesAgo), false);
+});
+
+test("an unknown tracking start falls back to the plain message", () => {
+  assert.equal(isNewlyTracked(true, null), false);
+});

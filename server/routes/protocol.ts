@@ -306,6 +306,26 @@ export async function registerProtocolRoutes(app: Express) {
       const days = Math.min(Math.max(parseInt(String(req.query.days || "365"), 10) || 365, 7), 9200);
       const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
+      /**
+       * When this pair first appeared in the snapshot table.
+       *
+       * An hour view on a pair added an hour ago has nothing to draw, and
+       * saying "no price history" for that is wrong in a way that matters: it
+       * reads as a fault, and someone goes looking for a break that is not
+       * there. The client uses this to say the true thing instead, which is
+       * that tracking only just started.
+       *
+       * Only computed for intraday, since daily closes are backfilled from
+       * years of history and never have this problem.
+       */
+      let trackingSince: string | null = null;
+      if (intraday) {
+        const t: any = await db.execute(sql`
+          select min(recorded_at) as first from rate_snapshots where pair = ${pair}`);
+        const first = (t.rows ?? t)[0]?.first;
+        trackingSince = first ? new Date(first).toISOString() : null;
+      }
+
       const rows = intraday
         ? ((await db.execute(sql`
             select recorded_at as date, rate as close
@@ -336,7 +356,8 @@ export async function registerProtocolRoutes(app: Express) {
         : dropSpikes(raw);
 
       if (points.length < 2) {
-        return res.json({ pair, days, points: [], change: null, ticksDropped: dropped.length, note: "not enough history" });
+        return res.json({ pair, days, points: [], change: null, ticksDropped: dropped.length,
+          intraday, trackingSince, note: "not enough history" });
       }
 
       const first = points[0].close;
@@ -418,6 +439,8 @@ export async function registerProtocolRoutes(app: Express) {
          * chart can say that plainly rather than let it read as a fault.
          */
         distinctRates: new Set(points.map((p) => p.close)).size,
+        /** When this pair first entered the snapshot table. Intraday only. */
+        trackingSince,
         points: drawn,
         /** The last settled daily close, kept distinct from the live spot. */
         lastClose,
