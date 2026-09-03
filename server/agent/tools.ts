@@ -26,6 +26,9 @@ import { loiDocuments } from "@shared/loi-schema";
 import { kycSubmissions, complianceAlerts, sanctionsScreenings } from "@shared/compliance-schema";
 import type { AgentScope } from "@shared/agent-schema";
 import { summarise, scenario, availablePairs } from "./fx";
+import {
+  listOpportunities, deadlinesWithin, missedDeadlines, pipelineSummary, notesFor,
+} from "../funding/pipeline";
 
 /**
  * Who the caller is, resolved by the auth layer.
@@ -637,6 +640,109 @@ export function toolsFor(scope: AgentScope): ToolDef[] {
 export function toolSchemasFor(scope: AgentScope) {
   return toolsFor(scope).map(({ name, description, input_schema }) => ({ name, description, input_schema }));
 }
+
+/* ── Fundraising ─────────────────────────────────────────────────────────────
+ *
+ * Read only, internal only, and both of those on purpose.
+ *
+ * Read only because §3 of the design doc makes capability the tool list rather
+ * than the prompt, and this agent reads text written by website visitors and
+ * counterparties. A tool that could move a grant to "submitted" would be
+ * reachable by anyone who could get a sentence in front of the model.
+ *
+ * Internal only because which funders a company is talking to, and how far each
+ * has got, is not something to hand a customer or a stranger.
+ */
+TOOLS.push(
+  {
+    name: "get_funding_pipeline",
+    description:
+      "Fundraising opportunities BlockFinaX is tracking: grants, accelerators, funds and competitions, " +
+      "with the stage each has reached and how long is left to apply. " +
+      "Stages run candidate, researching, drafting, submitted, interview, then won, lost or passed. " +
+      "'candidate' means a discovery sweep proposed it and nobody has reviewed it yet, so it is not " +
+      "something the company has decided to pursue. Use this for anything about what we are applying " +
+      "for or could apply for.",
+    input_schema: {
+      type: "object",
+      properties: {
+        stage: {
+          type: "string",
+          description:
+            "Optional. One stage to filter to. Omit for everything still open, which excludes won, lost and passed.",
+        },
+        includeClosed: {
+          type: "boolean",
+          description: "Include won, lost and passed. Default false.",
+        },
+      },
+    },
+    scopes: ["internal"],
+    run: async ({ stage, includeClosed }: any) => {
+      const rows = await listOpportunities({ stage, includeClosed: includeClosed === true });
+      return {
+        count: rows.length,
+        opportunities: rows,
+        note: rows.length === 0
+          ? "Nothing is being tracked that matches. That is a real answer, not a failure to load."
+          : undefined,
+      };
+    },
+  },
+  {
+    name: "get_funding_deadlines",
+    description:
+      "Funding deadlines coming up, and any that have already passed while the application was still open. " +
+      "Use this for 'what is due', 'what is closing soon', or 'have we missed anything'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        withinDays: { type: "number", description: "Look-ahead window in days. Default 30." },
+      },
+    },
+    scopes: ["internal"],
+    run: async ({ withinDays }: any) => {
+      const days = typeof withinDays === "number" && withinDays > 0 ? Math.min(365, withinDays) : 30;
+      const [upcoming, missed] = await Promise.all([deadlinesWithin(days), missedDeadlines()]);
+      return {
+        windowDays: days,
+        upcoming,
+        // Surfaced unasked, because a deadline that has gone by on something
+        // still marked in progress is the thing most worth knowing here.
+        missed,
+      };
+    },
+  },
+  {
+    name: "get_funding_summary",
+    description:
+      "How the fundraising pipeline stands overall: how many at each stage, how much is in play across " +
+      "everything still open, how much has been won, and how many proposed opportunities are waiting " +
+      "for a human to review.",
+    input_schema: { type: "object", properties: {} },
+    scopes: ["internal"],
+    run: async () => pipelineSummary(),
+  },
+  {
+    name: "get_funding_history",
+    description:
+      "The full history on one opportunity: every stage change and every note, oldest first. " +
+      "Use it to answer what happened with a specific grant or fund.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "number", description: "The opportunity id." } },
+      required: ["id"],
+    },
+    scopes: ["internal"],
+    run: async ({ id }: any) => {
+      if (typeof id !== "number") return { error: "An opportunity id is required." };
+      const [rows, notes] = await Promise.all([listOpportunities({ includeClosed: true }), notesFor(id)]);
+      const opp = rows.find((o) => o.id === id);
+      if (!opp) return { error: `No opportunity with id ${id}.` };
+      return { opportunity: opp, history: notes };
+    },
+  },
+);
 
 /**
  * Executes a tool by name, refusing anything outside the caller's scope.

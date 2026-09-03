@@ -1008,3 +1008,62 @@ export const predictionWithdrawals = pgTable("prediction_withdrawals", {
   createdAt: timestamp("created_at").defaultNow(),
   sentAt: timestamp("sent_at"),
 });
+
+/* ── Fundraising pipeline ────────────────────────────────────────────────────
+ *
+ * What BlockFinaX could raise from, and where each one has got to.
+ *
+ * Rows arrive two ways and the difference is recorded rather than smoothed
+ * over: `source` is "manual" for something a person added, and "search" for
+ * something a discovery sweep proposed. A searched row lands at stage
+ * "candidate" and stays there until a human moves it, because a pipeline that
+ * silently fills itself with plausible-looking grants is worse than an empty
+ * one, and this codebase already refuses to let the agent state figures it did
+ * not fetch.
+ */
+export const fundingOpportunities = pgTable("funding_opportunities", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  /** Who is giving the money, e.g. "Coinbase / Base". */
+  funder: text("funder"),
+  /** grant, accelerator, vc, competition, other */
+  kind: text("kind").notNull().default("grant"),
+  url: text("url"),
+  amountMin: decimal("amount_min", { precision: 14, scale: 2 }),
+  amountMax: decimal("amount_max", { precision: 14, scale: 2 }),
+  currency: text("currency").notNull().default("USD"),
+  /** Null when applications are rolling; `rolling` says which it is. */
+  deadline: timestamp("deadline"),
+  rolling: boolean("rolling").notNull().default(false),
+  /**
+   * candidate, researching, drafting, submitted, interview, won, lost, passed
+   *
+   * "passed" is a decision not to apply, kept rather than deleted so the same
+   * opportunity is not rediscovered and reconsidered every sweep.
+   */
+  stage: text("stage").notNull().default("candidate"),
+  /** 0 to 100, how well it matches what BlockFinaX actually does. */
+  fit: integer("fit"),
+  /** Why the sweep thought it fits, in its own words. */
+  rationale: text("rationale"),
+  /** manual or search. */
+  source: text("source").notNull().default("manual"),
+  /** The query that surfaced it, so a bad query can be traced from its results. */
+  sourceQuery: text("source_query"),
+  owner: text("owner"),
+  notes: text("notes"),
+  discoveredAt: timestamp("discovered_at").defaultNow(),
+  /** When a person moved it out of "candidate", either way. */
+  decidedAt: timestamp("decided_at"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** Everything that has happened on one opportunity, oldest first. */
+export const fundingNotes = pgTable("funding_notes", {
+  id: serial("id").primaryKey(),
+  opportunityId: integer("opportunity_id").notNull(),
+  body: text("body").notNull(),
+  /** Who wrote it: an email address, or "sweep" for the discovery job. */
+  author: text("author"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
