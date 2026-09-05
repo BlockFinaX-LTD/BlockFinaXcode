@@ -49,6 +49,12 @@ interface History {
    * has only just started being watched, and the two need saying differently.
    */
   trackingSince?: string | null;
+  /**
+   * Typical minutes between oracle readings for this pair, or null.
+   *
+   * Decides which hour windows can be drawn at all. See offerableRanges.
+   */
+  snapshotGapMinutes?: number | null;
   change?: { percent: number; direction: string } | null;
 }
 
@@ -244,9 +250,49 @@ export function RateHistory({
   const [hover, setHover] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [hourly, setHourly] = useState(true);
+  /**
+   * The oracle's reading cadence, remembered across range changes.
+   *
+   * It has to survive a switch to a daily range, because daily responses do
+   * not carry it and losing it would put the unusable hour buttons back.
+   */
+  const [gapMinutes, setGapMinutes] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const { VW, VH, PAD, ticks: TICKS, dates: DATES, mark: MARK, sub: SUB } = expanded ? SIZES.expanded : SIZES.inline;
+
+  /**
+   * The ranges this pair can actually fill, which is not all of them.
+   *
+   * An hour window needs at least two readings to be a line rather than a dot.
+   * The oracle writes roughly every 47 minutes, so 1H holds exactly one on
+   * every pair and could never draw: the button was an offer the data has
+   * never once been able to meet. 6H holds about eight and is fine.
+   *
+   * Until the cadence is known the hour ranges are kept, so the picker does
+   * not visibly reshuffle on the first response.
+   */
+  const offerableRanges = RANGES.filter((r) => {
+    if (!r.hours) return true;
+    if (!hourly) return false;
+    if (gapMinutes === null) return true;
+    return (r.hours * 60) / gapMinutes >= 2;
+  });
+
+  /**
+   * Leave a range the data cannot fill.
+   *
+   * Reached when the cadence arrives and rules out the window currently
+   * selected, which is how someone who tapped 1H before the first response
+   * lands on an empty chart. Falling to the shortest range that does work
+   * shows them something true instead of an apology.
+   */
+  useEffect(() => {
+    if (gapMinutes === null) return;
+    if (offerableRanges.some((r) => r.key === rangeKey)) return;
+    const next = offerableRanges[0];
+    if (next) setRangeKey(next.key);
+  }, [gapMinutes, rangeKey, offerableRanges.length]);
 
   // Escape closes it, and the page behind must not scroll while it is open.
   useEffect(() => {
@@ -281,10 +327,12 @@ export function RateHistory({
           // and throwing it away is what left the chart able to report only
           // "no history" for a pair that is simply new.
           setData(d ?? null);
+          if (d && typeof d.snapshotGapMinutes === "number") setGapMinutes(d.snapshotGapMinutes);
           setState("empty");
           return;
         }
         if (typeof d.hasIntraday === "boolean") setHourly(d.hasIntraday);
+        if (typeof d.snapshotGapMinutes === "number") setGapMinutes(d.snapshotGapMinutes);
         setData(d);
         setState("ready");
       })
@@ -418,6 +466,63 @@ export function RateHistory({
     );
   };
 
+  /**
+   * The range picker, rendered by BOTH the drawn chart and the empty state.
+   *
+   * It used to live only inside the drawn branch. So a range with nothing to
+   * show produced a panel with no controls on it, and the one thing that
+   * would have fixed it, pressing 1M, was not on screen. A reader who landed
+   * on an empty window had no way out of it except closing the sheet, on a
+   * pair holding six thousand daily closes.
+   */
+  const rangePicker = (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+      {offerableRanges.map((r) => {
+        const on = r.key === rangeKey;
+        return (
+          <button
+            key={r.key}
+            onClick={() => setRangeKey(r.key)}
+            aria-pressed={on}
+            style={{
+              border: "none",
+              borderRadius: 6,
+              padding: "4px 9px",
+              fontSize: 11.5,
+              fontWeight: on ? 600 : 500,
+              fontFamily: "var(--mono)",
+              cursor: "pointer",
+              background: on ? "color-mix(in oklab, var(--blue) 16%, transparent)" : "transparent",
+              color: on ? "var(--blue)" : "var(--tx-3)",
+            }}
+          >
+            {r.label}
+          </button>
+        );
+      })}
+
+      {!expanded && (
+      <button
+        onClick={() => setExpanded(true)}
+        aria-label="Enlarge the chart"
+        title="Enlarge"
+        style={{
+          marginLeft: "auto",
+          border: "none",
+          background: "transparent",
+          color: "var(--tx-3)",
+          cursor: "pointer",
+          padding: "4px 6px",
+          display: "inline-flex",
+          alignItems: "center",
+        }}
+      >
+        <Maximize2 style={{ width: 14, height: 14 }} />
+      </button>
+      )}
+    </div>
+  );
+
   if (state === "loading") {
     return wrap(
       <div style={{ height: expanded ? 420 : 250, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--tx-4)" }}>
@@ -440,19 +545,29 @@ export function RateHistory({
     const isNew = !!data?.intraday && hoursTracked !== null && hoursTracked < 48;
 
     return wrap(
-      <div style={{ padding: "20px 0", fontSize: 12.5, color: "var(--tx-4)", lineHeight: 1.6 }}>
-        {isNew ? (
-          <>
-            Hour views are built from readings taken as the oracle runs, and {pair} was only added{" "}
-            {hoursTracked! < 1
-              ? `${Math.max(1, Math.round(hoursTracked! * 60))} minutes ago`
-              : `${Math.round(hoursTracked!)} hours ago`}.
-            <br />
-            This fills in as readings accumulate. The longer ranges work now, drawn from daily closes.
-          </>
-        ) : (
-          <>No price history for {pair} over this period.</>
-        )}
+      <div>
+        {/* Offered here too, because this is the state that most needs it. */}
+        {rangePicker}
+        <div style={{ padding: "6px 0 20px", fontSize: 12.5, color: "var(--tx-4)", lineHeight: 1.6 }}>
+          {isNew ? (
+            <>
+              {/* Deliberately not "this pair was added N hours ago". The whole
+                  snapshot table begins at the same moment for every pair, so
+                  naming the pair sent people looking for a fault specific to
+                  it that was never there. What is young is the intraday
+                  record, not the market and not this currency. */}
+              Intraday readings only go back{" "}
+              {hoursTracked! < 1
+                ? `${Math.max(1, Math.round(hoursTracked! * 60))} minutes`
+                : `${Math.round(hoursTracked!)} hours`}
+              , so this window has too few to draw.
+              <br />
+              Pick a longer range above. Those are built from daily closes and go back years.
+            </>
+          ) : (
+            <>No price history for {pair} over this period. Try a longer range above.</>
+          )}
+        </div>
       </div>,
     );
   }
@@ -603,52 +718,7 @@ export function RateHistory({
         <div style={{ fontSize: 11.5, color: "var(--tx-3)", marginBottom: 10 }}>{data.change.direction}</div>
       )}
 
-      {/* Range picker */}
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
-        {RANGES.filter((r) => hourly || !r.hours).map((r) => {
-          const on = r.key === rangeKey;
-          return (
-            <button
-              key={r.key}
-              onClick={() => setRangeKey(r.key)}
-              aria-pressed={on}
-              style={{
-                border: "none",
-                borderRadius: 6,
-                padding: "4px 9px",
-                fontSize: 11.5,
-                fontWeight: on ? 600 : 500,
-                fontFamily: "var(--mono)",
-                cursor: "pointer",
-                background: on ? "color-mix(in oklab, var(--blue) 16%, transparent)" : "transparent",
-                color: on ? "var(--blue)" : "var(--tx-3)",
-              }}
-            >
-              {r.label}
-            </button>
-          );
-        })}
-
-        {!expanded && (
-        <button
-          onClick={() => setExpanded(true)}
-          aria-label="Enlarge the chart"
-          title="Enlarge"
-          style={{
-            marginLeft: "auto",
-            border: "none",
-            background: "transparent",
-            color: "var(--tx-3)",
-            cursor: "pointer",
-            padding: "4px 6px",
-            display: "inline-flex",
-            alignItems: "center",
-          }}
-        >
-          <Maximize2 style={{ width: 14, height: 14 }} />
-        </button>
-        )}
-      </div>
+      {rangePicker}
 
       <svg
         ref={svgRef}

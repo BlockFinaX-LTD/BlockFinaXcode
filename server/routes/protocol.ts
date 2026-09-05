@@ -355,9 +355,53 @@ export async function registerProtocolRoutes(app: Express) {
         ? { clean: raw, dropped: [] as typeof raw }
         : dropSpikes(raw);
 
+      let hasIntraday = false;
+      /**
+       * How far apart the oracle's readings actually land, in minutes.
+       *
+       * This decides which hour windows are drawable at all, and the answer is
+       * not what the range buttons assumed. The oracle writes roughly every 47
+       * minutes, so a 1H window holds ONE reading on every pair, and one point
+       * is not a line. The chart then showed its empty state, and because the
+       * empty state rendered no range picker, the reader was left in a dead
+       * end on a pair with 6,122 daily closes sitting behind it.
+       *
+       * Measured rather than assumed: the cadence is a property of the polling
+       * schedule, which has changed before and will again. A hard-coded
+       * minimum tenor would go stale silently the next time it does.
+       */
+      let snapshotGapMinutes: number | null = null;
+      try {
+        const probe = (await db.execute(sql`
+          select 1 from rate_snapshots
+          where pair = ${pair} and recorded_at > now() - interval '48 hours' limit 1
+        `)) as any;
+        hasIntraday = (probe.rows?.length ?? 0) > 0;
+
+        if (hasIntraday) {
+          // Median, not mean: a single restart gap of several hours would drag
+          // an average past every real interval and hide every hour range.
+          const g = (await db.execute(sql`
+            select percentile_cont(0.5) within group (
+              order by extract(epoch from gap) / 60
+            ) as median_minutes
+            from (
+              select recorded_at - lag(recorded_at) over (order by recorded_at) as gap
+              from rate_snapshots
+              where pair = ${pair} and recorded_at > now() - interval '48 hours'
+            ) gaps
+            where gap is not null`)) as any;
+          const m = Number((g.rows ?? g)[0]?.median_minutes);
+          if (Number.isFinite(m) && m > 0) snapshotGapMinutes = Math.round(m);
+        }
+      } catch {
+        /* the daily chart does not depend on this */
+      }
+
       if (points.length < 2) {
         return res.json({ pair, days, points: [], change: null, ticksDropped: dropped.length,
-          intraday, trackingSince, note: "not enough history" });
+          intraday, trackingSince, hasIntraday, snapshotGapMinutes,
+          note: "not enough history" });
       }
 
       const first = points[0].close;
@@ -388,17 +432,6 @@ export async function registerProtocolRoutes(app: Express) {
        * request with an empty chart. Reported so the caller can leave those
        * buttons off rather than offer a control that cannot work.
        */
-      let hasIntraday = false;
-      try {
-        const probe = (await db.execute(sql`
-          select 1 from rate_snapshots
-          where pair = ${pair} and recorded_at > now() - interval '48 hours' limit 1
-        `)) as any;
-        hasIntraday = (probe.rows?.length ?? 0) > 0;
-      } catch {
-        /* the daily chart does not depend on this */
-      }
-
       const last = live ?? lastClose;
       const changePct = Number((((last - first) / first) * 100).toFixed(1));
 
@@ -441,6 +474,13 @@ export async function registerProtocolRoutes(app: Express) {
         distinctRates: new Set(points.map((p) => p.close)).size,
         /** When this pair first entered the snapshot table. Intraday only. */
         trackingSince,
+        /**
+         * Typical minutes between oracle readings, or null when unknown.
+         *
+         * The client offers an hour range only when the window can hold at
+         * least two readings, so a 47 minute cadence removes 1H and keeps 6H.
+         */
+        snapshotGapMinutes,
         points: drawn,
         /** The last settled daily close, kept distinct from the live spot. */
         lastClose,

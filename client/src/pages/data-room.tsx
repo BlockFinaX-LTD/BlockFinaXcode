@@ -230,6 +230,7 @@ const CATEGORIES = [
     id: "company", label: "Company", icon: Users,
     color: "border-indigo-200 bg-indigo-50", iconColor: "text-indigo-600",
     documents: [
+      { id: "governance", title: "Governance & Protocol Control", description: "Who can change the protocol today, read from the chain rather than from a deployment record, and what changes before third-party capital", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
       { id: "cap-table", title: "Cap Table", description: "Founder equity, option pool, investor allocations, and post-money ownership structure", href: null, type: "modal" as const, badge: "Confidential", badgeColor: "bg-indigo-100 text-indigo-700", icon: PieChart },
       { id: "team-info", title: "Team", description: "Founding team, advisors, and key hires — backgrounds, roles, and LinkedIn profiles", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Users },
       { id: "incorporation", title: "Incorporation & Ownership", description: "Ghana incorporation (active) · Delaware C-Corp in progress — dual-entity structure for US investors", href: null, type: "modal" as const, badge: "Active", badgeColor: "bg-emerald-100 text-emerald-700", icon: Building2 },
@@ -247,7 +248,7 @@ const EXEC_D = {
   solution_wallet: "BlockFinaX Wallet — Non-custodial USDC wallet with AES-256 encrypted key storage, gasless transactions, and real-time cross-border transfers at 0.3% (min $0.50).",
   traction: "Live on Base Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
   technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Base L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
-  mainnet: "Live — Deployed on Base Mainnet and BNB Smart Chain (Q1 2026). EIP-2535 Diamond proxy on each chain. All contracts verified (Basescan on Base, BscScan on BSC). Gnosis Safe 2-of-3 multisig governs upgrades on all chains.",
+  mainnet: "Live — Deployed on Base Mainnet and BNB Smart Chain (Q1 2026). EIP-2535 Diamond proxy on each chain. All contracts verified (Basescan on Base, BscScan on BSC). Upgrade authority currently sits with a single founder-controlled key; migration to a 2-of-3 Gnosis Safe with a 48-hour timelock is the next governance step. See Governance & Protocol Control for the current position in full.",
   ask: [
     { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
     { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
@@ -1461,6 +1462,128 @@ function IncorporationDoc({ token }: { token: string }) {
       <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "14px 18px", marginTop: "20px" }}>
         <div style={{ fontSize: "13px", fontWeight: 600, color: "#1d4ed8" }}>ℹ Investor Note</div>
         <div style={{ fontSize: "13px", color: "#1e40af", marginTop: "4px" }}>{data.investor_note}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Governance, stated as it is rather than as intended.
+ *
+ * The executive summary previously read "Gnosis Safe 2-of-3 multisig governs
+ * upgrades on all chains". Read from Base storage on 5 September 2026, the
+ * Diamond's contractOwner is 0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d, an
+ * address with no bytecode, and pendingOwner is the zero address, so no
+ * transfer is even in flight. The claim was not true.
+ *
+ * That matters more here than in most documents. A counterparty performing
+ * diligence on a protocol reads its storage, and a governance claim that does
+ * not survive that reading costs more than the weakness it was covering. The
+ * honest version is a defensible position: single-key control is normal for a
+ * pilot, and what a counterparty needs is the plan and the date, not a
+ * reassurance that contradicts the chain.
+ *
+ * Every value below was read from the chain, not from a deployment record.
+ */
+const GOV_D = {
+  intro: "This section states who can change the protocol today, and what changes before third-party capital is placed on it. Every on-chain value below was read directly from contract storage on Base rather than taken from a deployment record, and can be independently verified by anyone with an RPC endpoint.",
+  as_at: "On-chain values read 5 September 2026, Base mainnet (chain 8453).",
+  control_rows: [
+    { k: "Protocol contract",          v: "EIP-2535 Diamond at 0xbCC51E62C4948FD35ab505bd71804C849601e4Ef (Base, chain 8453)" },
+    { k: "Upgrade authority today",    v: "0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d — a single externally owned account holding no contract code" },
+    { k: "Multisig status",            v: "A 2-of-3 Gnosis Safe exists at 0x7909a2f1… but does NOT yet control the Diamond" },
+    { k: "Transfer in progress",       v: "None. pendingOwner is the zero address" },
+    { k: "Ownership transfer model",   v: "Two-step: transferOwnership then acceptOwnership, so a mistyped address cannot orphan the protocol" },
+    { k: "Upgrade delay",              v: "None in force. A 48-hour timelock facet is written and covered by tests but is not installed" },
+    { k: "Public verifiability",       v: "No facet currently exposes owner(), so control must be read from storage rather than called" },
+    { k: "Facets registered",          v: "23 addresses registered, of which 8 are current. EIP-2535 registries only ever grow, so superseded entries remain listed and hold no live selectors" },
+  ],
+  operational_rows: [
+    { k: "Settlement rate",     v: "Multi-signer oracle. A minimum number of independent nodes must agree, default 2 of 3" },
+    { k: "Disagreement",        v: "If submissions differ by more than the tolerance, default 1%, all are discarded and settlement waits rather than proceeding on a contested rate" },
+    { k: "Underwriting limits", v: "Leverage floor 1.5, ceiling 100, and an implied-volatility band of 0.4x to 2.5x of market, all enforced in the contract rather than by policy" },
+    { k: "Concentration",       v: "500 policies and 200 capacity providers per pool, enforced at the contract level" },
+    { k: "Customer onboarding", v: "Tiered verification with sanctions screening and an audit record for every check" },
+    { k: "Administrative access", v: "Named-address allowlist for the internal console. Reviewed as part of the work below" },
+  ],
+  roadmap_rows: [
+    { item: "Transfer Diamond ownership to the 2-of-3 Safe",        status: "Not started", priority: "Highest", color: "red",   note: "Removes the single point of failure. One transaction, then acceptance from the Safe" },
+    { item: "Install the 48-hour timelock facet",                   status: "Built, tested, not installed", priority: "High", color: "amber", note: "Gives counterparties a window to observe and object before any upgrade takes effect" },
+    { item: "Expose owner() through a facet",                       status: "Not started", priority: "High", color: "amber", note: "Makes control publicly checkable with one call instead of a storage read" },
+    { item: "Rotate the client-side API key for the wallet partner", status: "Not started", priority: "High", color: "amber", note: "Pending rotation with the partner. Until it completes we treat this credential as public and assume no secrecy from it" },
+    { item: "Independent review of the money-path test suite",       status: "In progress", priority: "Medium", color: "blue", note: "Ledger-level tests covering exit ordering and solvency were added September 2026" },
+  ],
+  note: "We would rather a counterparty read this and ask hard questions than find it themselves. Single-key control is ordinary for a pilot written on the founders' own capital, and it is not acceptable for a book carrying third-party risk. The first two items above are the conditions we would expect an underwriting partner to set before any capacity is committed, and we would treat them as conditions precedent rather than as commitments to be met later.",
+};
+
+function GovernanceDoc({ token }: { token: string }) {
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("governance", token, GOV_D);
+  const setCtl = (i: number, k: string, v: string) => setField("control_rows",     draft.control_rows.map((r, j)     => j === i ? { ...r, [k]: v } : r));
+  const setOps = (i: number, k: string, v: string) => setField("operational_rows", draft.operational_rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
+  const setRm  = (i: number, k: string, v: string) => setField("roadmap_rows",     draft.roadmap_rows.map((r, j)     => j === i ? { ...r, [k]: v } : r));
+
+  const KV = ({ rows, setter }: { rows: { k: string; v: string }[]; setter: (i: number, k: string, v: string) => void }) => (
+    <table style={S.table}>
+      <tbody>{rows.map((r, i) => (
+        <tr key={i}>
+          <td style={{ ...S.td, width: "34%" }}><input value={r.k} onChange={e => setter(i, "k", e.target.value)} style={EI} /></td>
+          <td style={S.td}><input value={r.v} onChange={e => setter(i, "v", e.target.value)} style={EI} /></td>
+        </tr>
+      ))}</tbody>
+    </table>
+  );
+
+  if (editing) return (
+    <div>
+      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
+      <TxtF label="intro" value={draft.intro} onChange={v => setField("intro", v)} />
+      <TxtF label="as_at" value={draft.as_at} onChange={v => setField("as_at", v)} rows={2} />
+      <h2 style={S.h2}>Who Can Change the Protocol</h2>
+      <KV rows={draft.control_rows} setter={setCtl} />
+      <h2 style={S.h2}>Operational Controls</h2>
+      <KV rows={draft.operational_rows} setter={setOps} />
+      <h2 style={S.h2}>Before Third-Party Capital</h2>
+      {draft.roadmap_rows.map((r, i) => (
+        <div key={i} style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+          <input value={r.item}     onChange={e => setRm(i, "item", e.target.value)}     style={{ ...EI, flex: 1 }} />
+          <input value={r.status}   onChange={e => setRm(i, "status", e.target.value)}   style={{ ...EI, width: "150px" }} />
+          <input value={r.priority} onChange={e => setRm(i, "priority", e.target.value)} style={{ ...EI, width: "90px" }} />
+        </div>
+      ))}
+      <TxtF label="note" value={draft.note} onChange={v => setField("note", v)} rows={5} />
+    </div>
+  );
+
+  return (
+    <div>
+      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
+      <p style={S.p}>{data.intro}</p>
+      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "12px 16px", margin: "12px 0" }}>
+        <div style={{ fontSize: "12.5px", color: "#92400e" }}>{data.as_at}</div>
+      </div>
+      <h2 style={S.h2}>Who Can Change the Protocol</h2>
+      <table style={S.table}><tbody>{data.control_rows.map(r => (
+        <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "34%" }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
+      ))}</tbody></table>
+      <h2 style={S.h2}>Operational Controls</h2>
+      <table style={S.table}><tbody>{data.operational_rows.map(r => (
+        <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "34%" }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
+      ))}</tbody></table>
+      <h2 style={S.h2}>Before Third-Party Capital Is Placed</h2>
+      <table style={S.table}>
+        <thead><tr><th style={S.th}>Action</th><th style={S.th}>Status</th><th style={S.th}>Priority</th><th style={S.th}>Why it matters</th></tr></thead>
+        <tbody>{data.roadmap_rows.map(r => (
+          <tr key={r.item}>
+            <td style={S.td}>{r.item}</td>
+            <td style={S.td}>{r.status}</td>
+            <td style={S.td}><span style={S.tag(r.color)}>{r.priority}</span></td>
+            <td style={{ ...S.td, color: "#64748b" }}>{r.note}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px 18px", marginTop: "20px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>Our position</div>
+        <div style={{ fontSize: "13px", color: "#334155", marginTop: "4px", lineHeight: 1.6 }}>{data.note}</div>
       </div>
     </div>
   );
@@ -2855,6 +2978,7 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
     "market-opportunity": { title: "Market Opportunity", subtitle: "TAM / SAM / SOM and growth drivers" },
     "competitive-landscape": { title: "Competitive Landscape", subtitle: "Side-by-side comparison across key dimensions" },
     "gtm-strategy": { title: "Go-to-Market Strategy", subtitle: "4-phase GTM, partnerships, and flywheel" },
+    "governance":            { title: "Governance & Protocol Control", subtitle: "Upgrade authority, operational controls, and what changes before third-party capital" },
     "incorporation":         { title: "Incorporation",         subtitle: "Ghana entity (active) · Delaware C-Corp in progress" },
     "agreements":            { title: "Agreements",            subtitle: "NDAs, service contracts, IP ownership, and investor docs" },
     "compliance-proposals":  { title: "Compliance Proposals",  subtitle: "Consultant proposals — admin editable" },
@@ -2883,6 +3007,7 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       {docId === "market-opportunity"     && <MarketOpportunityDoc token={token} />}
       {docId === "competitive-landscape"  && <CompetitiveLandscapeDoc token={token} />}
       {docId === "gtm-strategy"           && <GTMStrategyDoc token={token} />}
+      {docId === "governance"             && <GovernanceDoc token={token} />}
       {docId === "incorporation"          && <IncorporationDoc token={token} />}
       {docId === "agreements"             && <AgreementsDoc token={token} />}
       {docId === "compliance-proposals"   && <ComplianceProposalsDoc token={token} />}
