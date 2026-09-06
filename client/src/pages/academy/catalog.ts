@@ -24,12 +24,15 @@ export const CATALOG: Lesson[] = [
   {
     slug: '',
     title: 'Start here',
-    blurb: 'A short tour of the Academy and how to use it.',
+    blurb: 'Who BlockFinaX is, the gap we exist to close, and how to use the Academy.',
     group: 'Introduction',
     level: 'beginner',
-    readMin: 3,
+    readMin: 6,
     toc: [
-      { id: 'why',   label: 'Why this exists' },
+      { id: 'about', label: 'About BlockFinaX' },
+      { id: 'gap',   label: 'Why hedging has been out of reach' },
+      { id: 'goal',  label: 'Protection as accessible as payment' },
+      { id: 'who',   label: 'Who shows up here' },
       { id: 'paths', label: 'Three ways in' },
       { id: 'map',   label: 'The full curriculum' },
     ],

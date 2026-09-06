@@ -1,10 +1,16 @@
 import { Link } from 'wouter';
 import { CATALOG, groupedCatalog } from '../catalog';
-import { P } from '../lesson-blocks';
+import { Callout, P, Pull, Section, UL } from '../lesson-blocks';
 
 /**
- * Landing page for /learn. Hero, three entry cards, then the full
- * curriculum laid out as a simple index.
+ * Landing page for /learn: who BlockFinaX is, then who the Academy is for,
+ * then the curriculum.
+ *
+ * The company introduction lives here rather than in a lesson of its own.
+ * It was briefly separate, which meant a visitor arriving from the website
+ * read two consecutive pages of introduction before reaching anything about
+ * the product. One page answers "who are you" and "what will I learn" together,
+ * which is the order a first-time reader actually asks them in.
  */
 export default function StartHere() {
   const groups = groupedCatalog();
@@ -25,6 +31,66 @@ export default function StartHere() {
           This course explains how it works in plain English.
         </p>
       </div>
+
+      <Section n="01" id="about" title="About BlockFinaX">
+        <P>
+          BlockFinaX Ltd is a Ghana-incorporated company building a new market
+          for programmable FX protection. We bring together businesses that need
+          protection from currency swings and underwriters willing to price and
+          carry that risk.
+        </P>
+        <P>
+          We build the market itself: the pricing, the distribution and the
+          settlement that let protection be bought and sold. We do not carry the
+          risk ourselves. Underwriters price it and stand behind it, and that
+          separation is deliberate.
+        </P>
+      </Section>
+
+      <Section n="02" id="gap" title="Why hedging has been out of reach">
+        <P>
+          For many small businesses, hedging has been out of reach. Not because
+          the risk is unusual or hard to understand, but because of how the
+          market is built.
+        </P>
+        <UL>
+          <li>The products are too complex for a business with no treasury
+            function.</li>
+          <li>The ticket sizes are too small to interest the institutions that
+            quote them.</li>
+          <li>The market is built for larger institutions, and the paperwork
+            assumes you are one.</li>
+        </UL>
+        <P>
+          So the exposure does not disappear. It stays where it lands, with the
+          business least able to absorb it. Most price a guess into their goods
+          and carry the difference themselves.
+        </P>
+        <Callout label="The point">
+          Nothing about this risk makes it uninsurable. What made it unreachable
+          was distribution and cost, and those are engineering problems.
+        </Callout>
+      </Section>
+
+      <Section n="03" id="goal" title="Protection as accessible as payment">
+        <P>
+          BlockFinaX is designed to change that. We give smaller businesses
+          access to hedging solutions they have traditionally been excluded
+          from, while giving underwriters a way to participate in
+          short-duration, structured FX exposure.
+        </P>
+        <P>
+          Our goal is to make protection as accessible as payment. As payments
+          become more programmable, protection should move closer to the trade
+          itself. That means businesses can protect what they earn before value
+          is lost to currency movement, and underwriters can participate in a
+          market that is transparent, controlled, and built for scale.
+        </P>
+        <Pull>
+          The future of trade should not be just about moving money faster. It
+          should also be about preserving value as it moves.
+        </Pull>
+      </Section>
 
       <section id="paths">
         <div className="ac-cards">
@@ -53,9 +119,13 @@ export default function StartHere() {
       </section>
 
       <section id="why">
+        <h2 className="ac-h2" id="who">
+          <span className="num">04</span>
+          <span>Who shows up here</span>
+        </h2>
         <P>
-          Two kinds of people show up here. The first are the ones getting
-          squeezed by their currency. A Ghanaian importer whose suppliers
+          In practice that means two kinds of people. The first are the ones
+          getting squeezed by their currency. A Ghanaian importer whose suppliers
           invoice in dollars but who gets paid in cedi. A Nigerian
           freelancer earning in naira with school fees creeping up every
           term. A Kenyan family repaying a dollar loan in shillings. When
