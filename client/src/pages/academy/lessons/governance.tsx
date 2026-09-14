@@ -114,12 +114,13 @@ export default function Governance() {
           watchable and cancellable.
         </P>
         <Callout kind="warn" label="Where we are today">
-          Both mainnet Diamonds are owned by a single deployer EOA. The
-          timelock facet is deployed but not installed. The Gnosis Safes
-          are deployed but ownership hasn&apos;t been transferred to them.
-          The path to hardening is documented and scripted. It hasn&apos;t
-          been executed yet. If you&apos;re evaluating whether to underwrite
-          a large position, this is the material fact.
+          Upgrade authority over the mainnet Diamond sits with a Gnosis
+          Safe requiring two of three signatures. No single key can change
+          the protocol. The timelock facet is deployed but not yet
+          installed, so an approved upgrade still applies immediately
+          rather than after a public delay. Wiring it is the next step. If
+          you&apos;re evaluating whether to underwrite a large position,
+          that is the material fact.
         </Callout>
       </Section>
 

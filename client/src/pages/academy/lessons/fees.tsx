@@ -23,8 +23,8 @@ export default function Fees() {
             A flat fee in the pool&apos;s payment token, charged when
             <CodeInline>createEvent</CodeInline> is called. Sized to
             discourage spam pools without gating serious ones.
-            <strong> $25 on Base</strong>, <strong>$2 on BSC</strong> — set
-            per chain, not uniformly.
+            <strong> $25 on Base</strong>, set per chain rather than
+            uniformly.
           </KVRow>
           <KVRow term="Platform fee on premium">
             The primary revenue stream. When a hedger buys cover, the

@@ -33,8 +33,8 @@ export default function HowBlockFinaXWorks() {
             reserved.
           </KVRow>
           <KVRow term="Payment tokens">
-            USDC on Base, USDT on BSC. Every pool is denominated in one
-            of these. The token is fixed at creation.
+            USDC on Base. Every pool is denominated in a payment token,
+            fixed at creation.
           </KVRow>
         </KV>
       </Section>

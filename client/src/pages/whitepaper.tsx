@@ -400,7 +400,7 @@ export default function Whitepaper() {
             <div className="flex flex-wrap gap-x-7 gap-y-2 font-mono text-[11px] text-muted-foreground">
               <span>Version {VERSION}</span>
               <span>{DATE}</span>
-              <span>Base 8453 · BNB Smart Chain 56</span>
+              <span>Base 8453</span>
               <span>Live on mainnet</span>
             </div>
           </div>
@@ -422,7 +422,7 @@ export default function Whitepaper() {
             worst case before they commit.
           </P>
           <P>
-            The protocol runs as an EIP-2535 Diamond on Base and BNB Smart Chain. Pricing is a
+            The protocol runs as an EIP-2535 Diamond on Base. Pricing is a
             Garman–Kohlhagen kernel with a Merton jump overlay and GARCH volatility, computed
             off-chain and verified on-chain by signature. Everything below explains why each of those
             choices was made, and what the alternatives cost.
@@ -753,7 +753,7 @@ export default function Whitepaper() {
               ["Entry", "5% of the premium", "Hedger, at purchase", "95% treasury · 5% pool creator"],
               ["Payout claim", "2% of the payout", "Hedger, at claim", "95% treasury · 5% pool creator"],
               ["Underwriter profit", "2% of premium income", "LP, at claim", "95% treasury · 5% pool creator"],
-              ["Pool creation", "$25 on Base · $2 on BSC", "Creator, once", "100% treasury"],
+              ["Pool creation", "$25 on Base", "Creator, once", "100% treasury"],
             ]}
           />
           <P>

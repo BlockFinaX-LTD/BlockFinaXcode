@@ -82,9 +82,8 @@ export default function Cheatsheet() {
             sweep into platform fees via
             <CodeInline>recoverExpiredPayouts</CodeInline>.
           </KVRow>
-          <KVRow term="Mainnet Diamonds">
+          <KVRow term="Mainnet Diamond">
             Base 8453: <CodeInline>0xbCC51E62C4948FD35ab505bd71804C849601e4Ef</CodeInline> (USDC).
-            BSC 56: <CodeInline>0xaC939C0897981Abc0711ec4e37527F13106180fc</CodeInline> (USDT).
           </KVRow>
         </KV>
       </Section>
