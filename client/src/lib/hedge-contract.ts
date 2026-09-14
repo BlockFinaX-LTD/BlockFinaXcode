@@ -565,12 +565,30 @@ class HedgeContractManager {
   private feeConfigCachedAt: number = 0;
   private static readonly FEE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+  /**
+   * Fallback fee config, used only when getHedgeFeeConfig() times out.
+   *
+   * Per chain, because the live values differ a lot: Base charges a $25
+   * creation fee and a 5% hedger fee, BSC charges $2 and 0.5%. A single
+   * shared default (previously BSC's numbers) quoted Base users roughly a
+   * tenth of what the contract actually charges them. Verified by reading
+   * getHedgeFeeConfig() on both Diamonds.
+   */
+  private static readonly DEFAULT_FEE_CONFIG_BY_CHAIN: Record<number, HedgeFeeConfig> = {
+    8453: { creationFee: 25, hedgerFeeRate: 0.05,  hedgerPayoutFeeRate: 0.02, lpProfitFeeRate: 0.02, creatorLoyaltyRate: 0.05 },
+    56:   { creationFee: 2,  hedgerFeeRate: 0.005, hedgerPayoutFeeRate: 0.01, lpProfitFeeRate: 0.01, creatorLoyaltyRate: 0.05 },
+  };
+
+  /**
+   * Unknown chain: quote the most expensive fees we charge anywhere. Showing a
+   * user less than they will be charged is the failure that actually hurts.
+   */
   private static readonly DEFAULT_FEE_CONFIG: HedgeFeeConfig = {
-    creationFee: 2,
-    hedgerFeeRate: 0.005,
-    hedgerPayoutFeeRate: 0.01,
-    lpProfitFeeRate: 0.01,
-    creatorLoyaltyRate: 0.005,
+    creationFee: 25,
+    hedgerFeeRate: 0.05,
+    hedgerPayoutFeeRate: 0.02,
+    lpProfitFeeRate: 0.02,
+    creatorLoyaltyRate: 0.05,
   };
 
   async getFeeConfig(): Promise<HedgeFeeConfig> {
@@ -597,8 +615,13 @@ class HedgeContractManager {
       this.feeConfigCachedAt = now;
       return this.feeConfigCache;
     } catch (e) {
-      console.warn('[getFeeConfig] RPC failed, using defaults:', e);
-      return HedgeContractManager.DEFAULT_FEE_CONFIG;
+      // Deliberately not cached: a fallback must not suppress the next attempt
+      // to read the real numbers off chain.
+      const fallback =
+        HedgeContractManager.DEFAULT_FEE_CONFIG_BY_CHAIN[this._chainId]
+        ?? HedgeContractManager.DEFAULT_FEE_CONFIG;
+      console.warn(`[getFeeConfig] RPC failed on chain ${this._chainId}, using fallback fees:`, e);
+      return fallback;
     }
   }
 

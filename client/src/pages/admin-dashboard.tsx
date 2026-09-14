@@ -1381,7 +1381,10 @@ function ProtocolSection() {
     }
     const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
     const tx = await contract.initializeHedgeFees(
-      ethers.parseUnits(feeForm.creationFee, 6),
+      // Creation fee is denominated in the chain's payment token, which is
+      // 6dp on Base (USDC) and 18dp on BSC (USDT). Hardcoding 6 wrote a fee
+      // ~1e12 too small on BSC, i.e. effectively free pool creation.
+      ethers.parseUnits(feeForm.creationFee, cfg.usdcDecimals),
       p(feeForm.hedgerFeeRate),
       p(feeForm.hedgerPayoutFeeRate),
       p(feeForm.lpProfitFeeRate),
@@ -1397,7 +1400,8 @@ function ProtocolSection() {
       const iface = new ethers.Interface(OWNER_ABI);
       const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
       const calldata = iface.encodeFunctionData("initializeHedgeFees", [
-        ethers.parseUnits(feeForm.creationFee || "0", 6),
+        // Same per-chain decimals rule as the direct path above.
+        ethers.parseUnits(feeForm.creationFee || "0", cfg.usdcDecimals),
         p(feeForm.hedgerFeeRate || "0"),
         p(feeForm.hedgerPayoutFeeRate || "0"),
         p(feeForm.lpProfitFeeRate || "0"),
