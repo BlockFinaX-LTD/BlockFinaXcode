@@ -61,6 +61,50 @@ app.set('trust proxy', 1);
 
 // Security headers — must be applied before any routes
 const isProd = process.env.NODE_ENV === 'production';
+
+/**
+ * Canonical host redirect.
+ *
+ * Both blockfinax.com and www.blockfinax.com are attached to this service in
+ * Railway, so both serve the app directly. Browsers treat them as two separate
+ * origins, and the Rift session lives in localStorage, which is per origin. A
+ * user signed in on one therefore appears signed out on the other, with an
+ * empty wallet balance and no error to explain it.
+ *
+ * www is canonical because PUBLIC_APP_URL and APP_URL already point there, so
+ * every magic link and transactional email we have ever sent goes to www.
+ *
+ * The host is taken from PUBLIC_APP_URL (falling back to APP_URL), which is
+ * already set to the canonical origin because every transactional email builds
+ * its links from it. Nothing new to configure: if those move, the redirect
+ * follows. CANONICAL_HOST overrides it if the two ever need to differ.
+ *
+ * Runs before everything else so no route can answer on the wrong host first,
+ * and only ever rewrites the apex/www pair, leaving Railway's internal health
+ * checks and *.up.railway.app untouched.
+ */
+const CANONICAL_HOST = (() => {
+  const explicit = (process.env.CANONICAL_HOST || '').trim();
+  if (explicit) return explicit;
+  const appUrl = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').trim();
+  try {
+    return appUrl ? new URL(appUrl).hostname : '';
+  } catch {
+    return '';
+  }
+})();
+if (isProd && CANONICAL_HOST) {
+  app.use((req, res, next) => {
+    const host = (req.headers.host || '').toLowerCase().split(':')[0];
+    // Only redirect a host that is the canonical one minus its leading "www.",
+    // or vice versa. Anything else (railway.app, health checks) passes through.
+    const stripped = CANONICAL_HOST.replace(/^www\./, '');
+    if (host && host !== CANONICAL_HOST && (host === stripped || host === `www.${stripped}`)) {
+      return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+    }
+    next();
+  });
+}
 app.use(helmet({
   contentSecurityPolicy: isProd ? {
     directives: {
