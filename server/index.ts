@@ -93,6 +93,13 @@ const CANONICAL_HOST = (() => {
     return '';
   }
 })();
+if (isProd) {
+  console.log(
+    CANONICAL_HOST
+      ? `[Canonical] redirecting the apex/www pair to ${CANONICAL_HOST}`
+      : '[Canonical] no redirect: set PUBLIC_APP_URL, APP_URL or CANONICAL_HOST to enable it'
+  );
+}
 if (isProd && CANONICAL_HOST) {
   app.use((req, res, next) => {
     const host = (req.headers.host || '').toLowerCase().split(':')[0];

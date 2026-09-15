@@ -85,7 +85,7 @@ export default function TermsPage() {
           <Section title="7. Fees">
             <p>The protocol charges the following fees, which are applied automatically by smart contracts:</p>
             <ul>
-              <li>Event creation fee: $25 on Base, $2 on BSC</li>
+              <li>Event creation fee: $25 on Base</li>
               <li>Hedger entry fee: 5% of the premium paid</li>
               <li>Payout fee: 2% deducted at claim</li>
               <li>Liquidity provider profit fee: 2% deducted at claim</li>
