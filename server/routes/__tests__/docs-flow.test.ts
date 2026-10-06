@@ -13,6 +13,8 @@ async function harness() {
   const sessions: any[] = [];
   const revocations: number[] = [];
   let mailOk = true;
+  let riftEmail = 'admin@example.com';
+  let riftStatus = 200;
   const db: any = {
     insert: (table: any) => ({ values: (values: any) => {
       writes.push({ kind: 'insert', table, values });
@@ -46,7 +48,8 @@ async function harness() {
   });
   const module = { exports: {} as any };
   vm.runInNewContext(result.outputFiles[0].text, {
-    module, exports: module.exports, require: createRequire(import.meta.url), process, console, Date, Buffer,
+    module, exports: module.exports, require: createRequire(import.meta.url), process: { env: { RIFT_SECRET_KEY: 'isolated-test-key' } }, console, Date, Buffer,
+    fetch: async () => ({ status: riftStatus, ok: riftStatus === 200, json: async () => ({ user: { email: riftEmail } }) }),
     adapters: {
       db,
       revoke: (id: number) => revocations.push(id),
@@ -69,7 +72,7 @@ async function harness() {
     }
     return response;
   }
-  return { rows, writes, sends, sessions, revocations, call, failMail: () => { mailOk = false; } };
+  return { rows, writes, sends, sessions, revocations, call, rift: (email: string, status = 200) => { riftEmail = email; riftStatus = status; }, failMail: () => { mailOk = false; } };
 }
 const admin = { headers: { 'x-admin-token': 'admin' }, params: { id: '1' } };
 const pending = { id: 1, email: 'visitor@example.com', name: 'Visitor', reason: 'Review', emailSentAt: null, status: 'pending' };
@@ -143,4 +146,27 @@ test('revoking an issued link also revokes derived data-room sessions', async ()
   const r = await h.call('delete', '/api/admin/docs/tokens/:id', admin);
   assert.equal(r.data.status, 'revoked');
   assert.deepEqual(h.revocations, [1]);
+});
+
+test('an allowlisted signed-in admin can directly mint docs and editable data-room sessions', async () => {
+  const h = await harness();
+  const r = await h.call('post', '/api/docs/admin-bypass', { body: { accessToken: 'admin-rift-session' } });
+  assert.equal(r.code, 200);
+  assert.ok(r.data.token);
+  assert.equal(r.data.investorToken, 'investor-session');
+  assert.equal(h.writes[0].values.isAdmin, true);
+  assert.equal(h.sessions[0].editEnabled, true);
+});
+test('a signed-in visitor cannot use the direct admin bypass', async () => {
+  const h = await harness(); h.rift('visitor@example.com');
+  const r = await h.call('post', '/api/docs/admin-bypass', { body: { accessToken: 'visitor-rift-session' } });
+  assert.equal(r.code, 403);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.sessions.length, 0);
+});
+test('expired sign-in sessions cannot use the direct admin bypass', async () => {
+  const h = await harness(); h.rift('admin@example.com', 401);
+  const r = await h.call('post', '/api/docs/admin-bypass', { body: { accessToken: 'expired-rift-session' } });
+  assert.equal(r.code, 401);
+  assert.equal(h.writes.length, 0);
 });
