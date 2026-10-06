@@ -81,7 +81,7 @@ async function hasDataRoomSession(): Promise<boolean> {
   }
 }
 
-async function adminBypass(accessToken: string): Promise<{ token: string; expiresAt: string } | null> {
+async function adminBypass(accessToken: string): Promise<{ token: string; expiresAt: string; investorToken?: string } | null> {
   try {
     const res = await fetch('/api/docs/admin-bypass', {
       method: 'POST',
@@ -222,6 +222,7 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
             if (cancelled) return;
             if (bypass?.token && bypass.expiresAt) {
               setStoredToken(bypass.token, bypass.expiresAt);
+              persistInvestorToken(bypass.investorToken);
               setPhase('allowed');
               return;
             }
@@ -263,7 +264,7 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
         </h1>
         <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
           The strategy materials and technical documentation are behind a 7-day
-          magic-link gate. Request access and we&rsquo;ll email you a link.
+          magic-link gate. Request access and we&rsquo;ll email you a link after approval.
         </p>
 
         <div className="mt-7 flex flex-col items-center gap-3">

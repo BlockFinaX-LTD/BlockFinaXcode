@@ -18,6 +18,7 @@ import { isBackfillRunning } from "../chain-logs";
 
 const investorSessions = new Map<string, number>();
 const investorEditSessions = new Set<string>();
+const docsInvestorSessions = new Map<string, number>();
 const investorLoginAttempts = new Map<string, { count: number; resetAt: number }>();
 const EDIT_ACCESS_CODE = process.env.EDIT_ACCESS_CODE || "";
 
@@ -30,7 +31,7 @@ function generateInvestorToken(): string {
  * docs-gate shared-key bypass) to grant admins data-room access without
  * forcing them to retype the investor password.
  */
-export function mintInvestorSession(opts: { editEnabled?: boolean; ttlMs?: number } = {}): {
+export function mintInvestorSession(opts: { editEnabled?: boolean; ttlMs?: number; docsTokenId?: number } = {}): {
   token: string;
   expiresAt: number;
 } {
@@ -41,7 +42,19 @@ export function mintInvestorSession(opts: { editEnabled?: boolean; ttlMs?: numbe
   const expiry = Date.now() + (opts.ttlMs ?? 60 * 24 * 60 * 60_000);
   investorSessions.set(token, expiry);
   if (opts.editEnabled) investorEditSessions.add(token);
+  if (opts.docsTokenId) docsInvestorSessions.set(token, opts.docsTokenId);
   return { token, expiresAt: expiry };
+}
+
+// This service runs one replica; all investor sessions are process-local.
+// Revoking a docs credential also removes sessions already derived from it.
+export function revokeDocsInvestorSessions(docsTokenId: number) {
+  docsInvestorSessions.forEach((id, token) => {
+    if (id !== docsTokenId) return;
+    investorSessions.delete(token);
+    investorEditSessions.delete(token);
+    docsInvestorSessions.delete(token);
+  });
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -59,7 +72,7 @@ function safeEqual(a: string, b: string): boolean {
 setInterval(() => {
   const now = Date.now();
   for (const [token, expiry] of investorSessions.entries()) {
-    if (now > expiry) investorSessions.delete(token);
+    if (now > expiry) { investorSessions.delete(token); investorEditSessions.delete(token); docsInvestorSessions.delete(token); }
   }
 }, 3600_000);
 

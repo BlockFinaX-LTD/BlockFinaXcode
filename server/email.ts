@@ -284,6 +284,7 @@ export async function emailUserAccessRejected(to: string, name: string, note?: s
 }
 
 export async function emailDocsToken(to: string, name: string | null, rawToken: string, expiresAt: Date) {
+  if (!resend) return { ok: false, error: 'Email delivery is not configured' };
   const exp = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   const tokenQuery = `?t=${encodeURIComponent(rawToken)}`;
   const marketingLink = `${APP_URL}/docs${tokenQuery}`;
@@ -332,13 +333,13 @@ export async function emailAdminNewDocsRequest(req: {
     .join('');
   const body = `
     <h2 style="font-size:18px;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em;">Docs access requested</h2>
-    <p style="font-size:13px;color:#5b6577;margin:0 0 16px;">A magic link has been auto-sent. Revoke from the admin dashboard if needed.</p>
+    <p style="font-size:13px;color:#5b6577;margin:0 0 16px;">This visitor is waiting for approval. No access link has been sent.</p>
     <table style="width:100%;border-collapse:collapse;">${rows}</table>
   `;
   return sendEmail({
     to: ADMIN_EMAILS,
     subject: `[BlockFinaX] Docs request: ${req.email}`,
-    html: shell('Docs request', body),
+    html: shell('Docs request', body + `<p><a href="${APP_URL}/admin#docs">Review document requests</a></p>`),
     replyTo: req.email,
   });
 }
@@ -352,4 +353,4 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export { ADMIN_EMAILS, APP_URL, sendEmail, shell, escapeHtml };
+export { ADMIN_EMAILS, APP_URL, DOCS_URL, sendEmail, shell, escapeHtml };

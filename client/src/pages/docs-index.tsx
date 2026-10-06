@@ -12,9 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Presentation, Folder, ChevronRight } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
-// The whitepaper is not listed here any more. It moved to the data room, and a
-// magic-link token no longer opens it — listing it would offer this audience a
-// link that bounces them to a password screen they have not been given.
+// The whitepaper is reached from the data room rather than listed separately.
 const DOCS = [
   {
     href: '/pitch',
@@ -49,8 +47,8 @@ export default function DocsIndex() {
         <div className="mb-6">
           <h1 className="bfx-display text-2xl font-semibold tracking-tight">You're in</h1>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            Your magic link is valid for 7 days from issue. You'll stay signed in to the docs on this
-            browser until it expires.
+            Your access link expires on the date shown in your email. You'll stay signed in on this
+            browser until then.
           </p>
         </div>
 

@@ -22,9 +22,9 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { db } from '../db';
 import { storage } from '../storage';
-import { accessRequests, accessGrants, docsTokens, signinTokens, wallets } from '@shared/schema';
+import { accessRequests, accessGrants, docsTokens, docsRequests, signinTokens, wallets } from '@shared/schema';
 import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
-import { mintInvestorSession } from './investor';
+import { mintInvestorSession, revokeDocsInvestorSessions } from './investor';
 
 const RIFT_API_BASE = process.env.RIFT_API_BASE || 'https://payment.riftfi.xyz';
 /**
@@ -40,14 +40,13 @@ import {
   emailAdminNewDocsRequest,
   emailDocsToken,
   APP_URL,
+  DOCS_URL,
 } from '../email';
 
-// Once a user is invited or approved, we want them to effectively never have
-// to request access again on the same browser. Tokens are minted for 90 days
-// and renewed on use whenever they have < RENEW_BELOW_MS left — so any user
-// who hits a gated route at least once per 90 days stays logged in forever.
+// App sign-in tokens renew on use. Document links have a fixed seven-day
+// window and require admin approval before issue.
 const SIGNIN_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-const DOCS_TOKEN_TTL_MS   = 90 * 24 * 60 * 60 * 1000; // 90 days
+const DOCS_TOKEN_TTL_MS   = 7 * 24 * 60 * 60 * 1000; // 90 days
 const RENEW_BELOW_MS      = 30 * 24 * 60 * 60 * 1000; // renew if < 30 days left
 
 function shouldRenew(expiresAt: Date): boolean {
@@ -219,29 +218,13 @@ export function registerGateRoutes(app: Express) {
     }
     const data = parsed.data;
 
-    // Generate a 32-byte URL-safe token, store only its sha256 hash.
-    const raw = crypto.randomBytes(32).toString('base64url');
-    const tokenHash = hashToken(raw);
-    const expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
-
-    await db.insert(docsTokens).values({
-      email: data.email,
-      tokenHash,
-      name: data.name || null,
-      reason: data.reason || null,
-      expiresAt,
-    });
-
-    Promise.all([
-      emailDocsToken(data.email, data.name || null, raw, expiresAt).catch((e) =>
-        console.error('[docs/request] user email failed:', e?.message),
-      ),
-      emailAdminNewDocsRequest({ email: data.email, name: data.name, reason: data.reason }).catch(
-        (e) => console.error('[docs/request] admin email failed:', e?.message),
-      ),
-    ]);
-
-    return res.json({ status: 'sent' });
+    const [request] = await db.insert(docsRequests).values({
+      email: data.email, name: data.name || null, reason: data.reason || null,
+    }).returning({ id: docsRequests.id });
+    // The durable queue is authoritative even if the admin notification fails.
+    const notification = await emailAdminNewDocsRequest(data);
+    if (!notification.ok) console.error('[docs/request] admin notification failed');
+    return res.json({ status: 'pending', id: request.id });
   });
 
   // ── Public: verify a docs token (CORS-enabled for the external docs site) ─
@@ -285,19 +268,12 @@ export function registerGateRoutes(app: Express) {
     if (!tok.usedAt) {
       await db.update(docsTokens).set({ usedAt: new Date() }).where(eq(docsTokens.id, tok.id));
     }
-    // Sliding-window renewal: if the token is within RENEW_BELOW_MS of expiry,
-    // push it out to a fresh 90-day window. Active users effectively never
-    // expire as long as they visit at least once per 90 days.
-    let expiresAt = tok.expiresAt;
-    if (shouldRenew(expiresAt)) {
-      expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
-      await db.update(docsTokens).set({ expiresAt }).where(eq(docsTokens.id, tok.id));
-    }
+    const expiresAt = tok.expiresAt;
     // Also mint a fresh investor-room session so the data-room page never
     // asks for a code on a return visit. Investor sessions are in-memory and
     // die on server restart, so we re-mint on every verify to make the flow
     // self-healing.
-    const investor = mintInvestorSession({ editEnabled: true });
+    const investor = mintInvestorSession({ editEnabled: tok.isAdmin, ttlMs: Math.max(1, tok.expiresAt.getTime() - Date.now()), docsTokenId: tok.id });
     return res.json({
       valid: true,
       expiresAt,
@@ -325,6 +301,7 @@ export function registerGateRoutes(app: Express) {
       tokenHash,
       name: 'shared-key bypass',
       reason: 'DOCS_BYPASS_KEY',
+      isAdmin: true,
       expiresAt,
       usedAt: new Date(),
     });
@@ -393,10 +370,12 @@ export function registerGateRoutes(app: Express) {
       tokenHash,
       name: 'admin bypass',
       reason: 'admin email allowlist',
+      isAdmin: true,
       expiresAt,
       usedAt: new Date(),
     });
-    return res.json({ token: raw, expiresAt: expiresAt.toISOString() });
+    const investor = mintInvestorSession({ editEnabled: true });
+    return res.json({ token: raw, expiresAt: expiresAt.toISOString(), investorToken: investor.token });
   });
 
   // ── Public: register a Rift-authenticated user in our wallets table ─
@@ -580,6 +559,72 @@ export function registerGateRoutes(app: Express) {
     return res.json({ status: 'revoked' });
   });
 
+  // Admin documents: open materials, review requests, and retry failed delivery.
+  app.post('/api/admin/docs/session', requireAdmin, async (req, res) => {
+    const raw = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
+    await db.insert(docsTokens).values({
+      email: (req as any).adminEmail, tokenHash: hashToken(raw),
+      name: 'Admin', reason: 'Admin dashboard', isAdmin: true, expiresAt,
+    });
+    return res.json({ token: raw, technicalUrl: DOCS_URL });
+  });
+
+  app.get('/api/admin/docs/requests', requireAdmin, async (_req, res) => {
+    const requests = await db.select().from(docsRequests)
+      .orderBy(desc(docsRequests.createdAt)).limit(500);
+    return res.json({ requests });
+  });
+
+  app.post('/api/admin/docs/requests/:id', requireAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    const action = req.body?.action;
+    if (!Number.isInteger(id) || id < 1 || !['approve', 'reject', 'resend'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid request or action' });
+    }
+    const [existing] = await db.select().from(docsRequests).where(eq(docsRequests.id, id)).limit(1);
+    if (!existing) return res.status(404).json({ error: 'Request not found' });
+    if (action === 'reject') {
+      const [rejected] = await db.update(docsRequests).set({
+        status: 'rejected', reviewedBy: (req as any).adminEmail, reviewedAt: new Date(),
+      }).where(and(eq(docsRequests.id, id), eq(docsRequests.status, 'pending'))).returning();
+      if (!rejected) return res.status(409).json({ error: 'Request is no longer pending' });
+      return res.json({ status: 'rejected' });
+    }
+    const expectedStatus = action === 'resend' ? 'approved' : 'pending';
+    // Atomically claim a request; two admins cannot send it simultaneously.
+    // Recover an interrupted send after five minutes.
+    const [claimed] = await db.update(docsRequests).set({
+      status: 'sending', reviewedBy: (req as any).adminEmail, reviewedAt: new Date(), deliveryError: null,
+    }).where(and(eq(docsRequests.id, id), sql`(
+      ${docsRequests.status} = ${expectedStatus} OR
+      (${docsRequests.status} = 'sending' AND ${docsRequests.reviewedAt} < NOW() - INTERVAL '5 minutes')
+    )`)).returning();
+    if (!claimed) return res.status(409).json({ error: 'Request already processed or currently sending' });
+    const raw = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + DOCS_TOKEN_TTL_MS);
+    let tokenId: number | undefined;
+    try {
+      const [token] = await db.insert(docsTokens).values({
+        email: claimed.email, name: claimed.name, reason: claimed.reason,
+        tokenHash: hashToken(raw), expiresAt, isAdmin: false,
+      }).returning({ id: docsTokens.id });
+      tokenId = token.id;
+      const delivery = await emailDocsToken(claimed.email, claimed.name, raw, expiresAt);
+      if (!delivery.ok) throw new Error('Email provider did not accept the access email');
+      await db.update(docsRequests).set({ status: 'approved', emailSentAt: new Date(), deliveryError: null })
+        .where(eq(docsRequests.id, id));
+      return res.json({ status: 'approved', emailSent: true });
+    } catch (error) {
+      if (tokenId) await db.update(docsTokens).set({ revokedAt: new Date() }).where(eq(docsTokens.id, tokenId));
+      await db.update(docsRequests).set({
+        status: claimed.emailSentAt ? 'approved' : 'pending',
+        deliveryError: 'Access email could not be delivered. Please retry.',
+      }).where(eq(docsRequests.id, id));
+      return res.status(502).json({ error: 'Access email could not be delivered. Please retry.' });
+    }
+  });
+
   // ── Admin: docs tokens ───────────────────────────────────────────────
   app.get('/api/admin/docs/tokens', requireAdmin, async (_req, res) => {
     const rows = await db
@@ -603,6 +648,7 @@ export function registerGateRoutes(app: Express) {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'bad id' });
     await db.update(docsTokens).set({ revokedAt: new Date() }).where(eq(docsTokens.id, id));
+    revokeDocsInvestorSessions(id);
     return res.json({ status: 'revoked' });
   });
 }

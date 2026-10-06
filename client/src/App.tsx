@@ -57,6 +57,7 @@ import DocsIndex from "@/pages/docs-index";
 import LiquidityProviderPage from "@/pages/liquidity-provider";
 import HedgerPage from "@/pages/hedger";
 import AcademyRoute from "@/pages/academy";
+import { DocsSessionRecovery } from "@/components/docs-session-recovery";
 import { DocsGate } from "@/components/docs-gate";
 
 // Counterparty signing portal. Public by design — authenticated by the
@@ -187,12 +188,11 @@ const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
 // The whitepaper is an investor document, not a marketing page. It sits under
 // /data-room and admits only a live data-room session — no magic link, no
 // admin bypass, and no entry from the public navigation.
-const WhitepaperGated = () => <InvestorGate><Whitepaper /></InvestorGate>;
+const WhitepaperGated = () => <DocsSessionRecovery><InvestorGate><Whitepaper /></InvestorGate></DocsSessionRecovery>;
 
-// Data room is the exception: no magic link. It carries its own password
-// screen (PasswordGate in data-room.tsx), which authenticates against
-// INVESTOR_PASSWORD via /api/investor/auth. Share the password directly.
-const DataRoomGated   = () => <DataRoom />;
+// Recover approved docs sessions before entering the data room. Visitors
+// without a docs credential can still use its existing password screen.
+const DataRoomGated   = () => <DocsSessionRecovery><DataRoom /></DocsSessionRecovery>;
 
 function Router() {
   return (

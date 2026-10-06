@@ -12,6 +12,22 @@ import { eq } from "drizzle-orm";
 
 async function createTables() {
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS docs_tokens (
+      id SERIAL PRIMARY KEY, email TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
+      name TEXT, reason TEXT, expires_at TIMESTAMP NOT NULL, used_at TIMESTAMP,
+      revoked_at TIMESTAMP, created_at TIMESTAMP DEFAULT NOW(),
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE
+    )
+  `);
+  await db.execute(sql`ALTER TABLE docs_tokens ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS docs_requests (
+      id SERIAL PRIMARY KEY, email TEXT NOT NULL, name TEXT, reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending', reviewed_by TEXT, reviewed_at TIMESTAMP,
+      email_sent_at TIMESTAMP, delivery_error TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS user_accounts (
       id SERIAL PRIMARY KEY,
       email TEXT UNIQUE,

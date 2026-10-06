@@ -547,7 +547,21 @@ export const accessGrants = pgTable("access_grants", {
 
 export type AccessGrant = typeof accessGrants.$inferSelect;
 
+export const docsRequests = pgTable("docs_requests", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  name: text("name"),
+  reason: text("reason"),
+  status: text("status").notNull().default('pending'),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  emailSentAt: timestamp("email_sent_at"),
+  deliveryError: text("delivery_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const docsTokens = pgTable("docs_tokens", {
+  isAdmin: boolean("is_admin").notNull().default(false),
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
   tokenHash: text("token_hash").notNull().unique(),

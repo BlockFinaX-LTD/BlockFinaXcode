@@ -38,7 +38,9 @@ export default function DocsRequestPage() {
           reason: reason.trim() || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Request failed');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      if (data.status !== 'pending') throw new Error('Unexpected response. Please try again.');
       setSent(true);
     } catch (err: any) {
       toast({
@@ -61,15 +63,15 @@ export default function DocsRequestPage() {
               <CheckCircle className="h-7 w-7 text-emerald-600" strokeWidth={1.8} />
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900">
-              Check your email
+              Request received
             </h1>
             <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
-              We&rsquo;ve sent your access link to{' '}
-              <span className="font-medium text-gray-900 break-words">{email}</span>. It&rsquo;s
-              valid for 7 days and unlocks both our strategy and technical documentation.
+              We&rsquo;ll review your request for{' '}
+              <span className="font-medium text-gray-900 break-words">{email}</span>. If approved, you&rsquo;ll receive a 7-day access link
+              for our strategy and technical documentation.
             </p>
             <p className="mt-4 text-xs text-gray-400">
-              If you don&rsquo;t see it within a few minutes, check your spam folder.
+              No access link is sent until an admin approves your request.
             </p>
             <div className="mt-8">
               <Button
@@ -98,7 +100,7 @@ export default function DocsRequestPage() {
             </h1>
             <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed">
               The strategy materials and technical documentation are behind a 7-day magic link.
-              Submit your email and we&rsquo;ll send it over.
+              Submit your email for review. We&rsquo;ll send a link once your request is approved.
             </p>
           </div>
 
@@ -141,10 +143,10 @@ export default function DocsRequestPage() {
             >
               {submitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending&hellip;
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting&hellip;
                 </>
               ) : (
-                'Send access link'
+                'Request access'
               )}
             </Button>
 

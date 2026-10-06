@@ -25,6 +25,8 @@ import { LoiSection } from "@/components/admin/loi-section";
 import { AgentSection } from "@/components/admin/agent-section";
 import { ComplianceSection } from "@/components/admin/compliance-section";
 
+import { DocumentsSection } from "@/components/admin/documents-section";
+
 const AdminTokenContext = createContext<{ token: string; logout: () => void }>({ token: "", logout: () => {} });
 function useAdminToken() { return useContext(AdminTokenContext); }
 
@@ -38,7 +40,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "dashboard" | "agent" | "compliance" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "docs" | "dashboard" | "agent" | "compliance" | "users" | "hedge" | "revenue" | "tasks" | "payouts" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -50,6 +52,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "tasks", label: "Tasks & Points", icon: ListChecks },
   { key: "payouts", label: "Reviews & Payouts", icon: Wallet },
   { key: "analytics", label: "Analytics", icon: Activity },
+  { key: "docs", label: "Documents", icon: FileText },
   { key: "content", label: "Content", icon: FileText },
   { key: "agreements", label: "Agreements", icon: FileSignature },
   { key: "protocol", label: "Protocol", icon: Settings },
@@ -2902,7 +2905,7 @@ function PayoutsSection() {
 }
 
 export default function AdminDashboard() {
-  const [section, setSection] = useState<Section>("dashboard");
+  const [section, setSection] = useState<Section>(() => window.location.hash === "#docs" ? "docs" : "dashboard");
   const [adminToken, setAdminToken] = useState<string | null>(() => sessionStorage.getItem("admin_token"));
 
   const logout = () => {
@@ -2996,6 +2999,7 @@ function AdminLayout({
       </div>
 
       <main className="flex-1 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
+        {section === "docs" && <DocumentsSection token={adminToken} />}
         {section === "dashboard" && <DashboardSection />}
         {section === "users" && <UsersSection />}
         {section === "hedge" && <HedgeSection />}
