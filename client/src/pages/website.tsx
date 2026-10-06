@@ -663,7 +663,6 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             >
               {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <Link href="/predict" className="btn btn-ghost btn-sm">Predict</Link>
             <Link href="/hedge" className="btn btn-primary btn-sm">
               Launch App <span className="arrow">→</span>
             </Link>
@@ -737,9 +736,6 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-ctas">
-            <Link href="/predict" className="btn btn-ghost" onClick={closeMobile}>
-              Predict
-            </Link>
             <Link href="/hedge" className="btn btn-primary" onClick={closeMobile}>
               Launch App <span className="arrow">→</span>
             </Link>
@@ -772,7 +768,6 @@ function Hero() {
               <Link href="/hedge" className="btn btn-primary">
                 Launch App <span className="arrow">→</span>
               </Link>
-              <Link href="/predict" className="btn btn-ghost">Predict</Link>
             </div>
           </div>
           <div className="hero-visual">
@@ -829,9 +824,6 @@ function UseSection({ theme }: { theme: Theme }) {
               <div className="feat-name">Predict <span className="feat-pill">SOON</span></div>
               <p>Buy Yes or No shares.</p>
               <div className="feat-actions">
-                <Link href="/predict" className="feat-btn primary">
-                  Predict <span className="arrow">→</span>
-                </Link>
                 <Link href="/predict" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
@@ -1124,9 +1116,6 @@ function MarketsSection() {
               <text className="lbl" x="138" y="184">Strike</text>
             </svg>
             <p>Buy Yes or No shares on where a rate is headed.</p>
-            <Link href="/predict" className="acard-cta">
-              Predict <span className="arrow">→</span>
-            </Link>
           </article>
 
         </div>
@@ -1163,9 +1152,6 @@ function TailCTA() {
         <div className="hero-ctas">
           <Link href="/hedge" className="btn btn-primary">
             Launch App <span className="arrow">→</span>
-          </Link>
-          <Link href="/predict" className="btn btn-ghost">
-            Predict
           </Link>
         </div>
       </div>
