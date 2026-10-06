@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { getAdminDocsSession } from '@/lib/admin-docs-session';
 import { useRift } from '@rift-finance/react';
 
 // Investor sessions are in memory. Re-establish one from the durable docs
@@ -22,6 +23,13 @@ export function DocsSessionRecovery({ children }: { children: React.ReactNode })
     setChecking(true);
     (async () => {
       try {
+        const dashboardSession = await getAdminDocsSession();
+        if (cancelled) return;
+        if (dashboardSession?.token && dashboardSession.expiresAt && dashboardSession.investorToken) {
+          localStorage.setItem('bfx_docs_token', JSON.stringify({ token: dashboardSession.token, expiresAt: dashboardSession.expiresAt }));
+          localStorage.setItem('bfx_investor_token', dashboardSession.investorToken);
+          return;
+        }
         // Direct admin entry uses the same server allowlist as the docs hub.
         // Ordinary signed-in visitors do not qualify for this bypass.
         if (isAuthenticated) {

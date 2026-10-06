@@ -22,6 +22,7 @@ import { useLocation } from 'wouter';
 import { useRift } from '@rift-finance/react';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, ArrowRight } from 'lucide-react';
+import { getAdminDocsSession } from '@/lib/admin-docs-session';
 import logoPath from '@/assets/logo.png';
 
 const STORAGE_KEY = 'bfx_docs_token';
@@ -152,6 +153,14 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     async function run() {
+      const dashboardSession = await getAdminDocsSession();
+      if (cancelled) return;
+      if (dashboardSession?.token && dashboardSession.expiresAt) {
+        setStoredToken(dashboardSession.token, dashboardSession.expiresAt);
+        persistInvestorToken(dashboardSession.investorToken);
+        setPhase('allowed');
+        return;
+      }
       // 0) Shared admin key in URL → mint a docs token + store, strip ?key=
       const params = new URLSearchParams(window.location.search);
       const urlKey = params.get('key');
@@ -274,6 +283,7 @@ export function DocsGate({ children }: { children: React.ReactNode }) {
           >
             Request access <ArrowRight className="h-4 w-4 ml-1.5" />
           </Button>
+          <a href="/admin" className="text-sm text-gray-600 underline">Admin sign-in</a>
           <Button
             variant="ghost"
             size="sm"

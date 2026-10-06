@@ -102,6 +102,10 @@ if (isProd) {
 }
 if (isProd && CANONICAL_HOST) {
   app.use((req, res, next) => {
+    // Cached technical-docs bundles call the apex cross-origin. Answer the
+    // verification request directly so its route can add CORS headers; an
+    // intervening redirect is rejected before the browser reaches that route.
+    if (req.path === '/api/docs/verify') return next();
     const host = (req.headers.host || '').toLowerCase().split(':')[0];
     // Only redirect a host that is the canonical one minus its leading "www.",
     // or vice versa. Anything else (railway.app, health checks) passes through.

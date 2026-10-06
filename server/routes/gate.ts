@@ -559,6 +559,8 @@ export function registerGateRoutes(app: Express) {
     return res.json({ status: 'revoked' });
   });
 
+  app.get('/api/docs/site', (_req, res) => res.json({ url: DOCS_URL }));
+
   // Admin documents: open materials, review requests, and retry failed delivery.
   app.post('/api/admin/docs/session', requireAdmin, async (req, res) => {
     const raw = crypto.randomBytes(32).toString('base64url');
@@ -567,7 +569,8 @@ export function registerGateRoutes(app: Express) {
       email: (req as any).adminEmail, tokenHash: hashToken(raw),
       name: 'Admin', reason: 'Admin dashboard', isAdmin: true, expiresAt,
     });
-    return res.json({ token: raw, technicalUrl: DOCS_URL });
+    const investor = mintInvestorSession({ editEnabled: true, ttlMs: DOCS_TOKEN_TTL_MS });
+    return res.json({ token: raw, expiresAt: expiresAt.toISOString(), investorToken: investor.token, technicalUrl: DOCS_URL });
   });
 
   app.get('/api/admin/docs/requests', requireAdmin, async (_req, res) => {

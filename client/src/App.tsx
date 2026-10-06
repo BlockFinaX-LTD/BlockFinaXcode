@@ -52,6 +52,7 @@ import FinancialModel from "@/pages/financial-model";
 
 // Private beta gating
 import ApplyPage from "@/pages/apply";
+import TechnicalDocs from "@/pages/docs-technical";
 import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
 import LiquidityProviderPage from "@/pages/liquidity-provider";
@@ -183,6 +184,7 @@ function RiftPostSigninSync() {
 // Docs gate: the whitepaper, docs index, and pitch deck only render once the
 // visitor has a valid magic-link token. The gate intercepts and shows a
 // "request access" form otherwise. Docs stay gated.
+const TechnicalDocsGated = () => <DocsGate><TechnicalDocs /></DocsGate>;
 const DocsIndexGated  = () => <DocsGate><DocsIndex /></DocsGate>;
 const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
 // The whitepaper is an investor document, not a marketing page. It sits under
@@ -225,6 +227,7 @@ function Router() {
       <Route path="/auth" component={Auth} />
 
       {/* Docs — gated by per-request magic-link token */}
+      <Route path="/docs/technical" component={TechnicalDocsGated} />
       <Route path="/docs" component={DocsIndexGated} />
       <Route path="/pitch" component={PitchGated} />
       <Route path="/traction/:key" component={TractionShare} />

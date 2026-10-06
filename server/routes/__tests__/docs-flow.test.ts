@@ -170,3 +170,14 @@ test('expired sign-in sessions cannot use the direct admin bypass', async () => 
   assert.equal(r.code, 401);
   assert.equal(h.writes.length, 0);
 });
+
+test('existing admin dashboard sessions can directly open documents without rechecking Rift', async () => {
+  const h = await harness();
+  const r = await h.call('post', '/api/admin/docs/session', admin);
+  assert.equal(r.code, 200);
+  assert.ok(r.data.token);
+  assert.ok(r.data.expiresAt);
+  assert.equal(r.data.investorToken, 'investor-session');
+  assert.equal(r.data.technicalUrl, 'https://docs.blockfinax.com');
+  assert.equal(h.writes[0].values.isAdmin, true);
+});
