@@ -4,7 +4,7 @@
  * Defines supported networks with RPC URLs and metadata.
  * Mainnet supports Base (8453) and BSC (56). Lisk has been removed — we
  * no longer deploy smart contracts on the Lisk network.
- * Testnet currently only has a Sepolia fallback. Network mode is controlled
+ * Testnet supports Base Sepolia (84532). Network mode is controlled
  * by VITE_NETWORK_MODE env var (default: "mainnet").
  * Exports: NETWORKS, TESTNET_NETWORKS, MAINNET_NETWORKS, NetworkConfig,
  *          getNetworkById, getNetworkByChainId, DEFAULT_NETWORK, isMainnet, getNetworkMode
@@ -32,8 +32,7 @@ export function isMainnet(): boolean {
   return getNetworkMode() === "mainnet";
 }
 
-// No testnet networks currently configured. (Lisk Sepolia was the previous
-// testnet but Lisk support has been removed from the protocol.)
+// The sandbox supports Base Sepolia only.
 export const TESTNET_NETWORKS: NetworkConfig[] = [{
   id: 84532, name: 'Base Sepolia', chainId: 84532,
   rpcUrl: 'https://sepolia.base.org', symbol: 'ETH',

@@ -36,7 +36,7 @@ const CHAIN_LABELS: Record<string, string> = {
 };
 const CHAIN_ID_TO_NAME: Record<string, ChainName> = {
   '1': 'ETHEREUM', '10': 'OPTIMISM', '56': 'BNB', '137': 'POLYGON',
-  '84532': 'BASE_SEPOLIA', '8453': 'BASE', '42161': 'ARBITRUM', '42220': 'CELO', '43114': 'AVAX',
+  '84532': 'BASE_SEPOLIA' as ChainName, '8453': 'BASE', '42161': 'ARBITRUM', '42220': 'CELO', '43114': 'AVAX',
 };
 function normalizeChain(raw: string | number | undefined): string {
   if (raw == null) return '';
