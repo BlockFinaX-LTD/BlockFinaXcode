@@ -34,7 +34,12 @@ export function isMainnet(): boolean {
 
 // No testnet networks currently configured. (Lisk Sepolia was the previous
 // testnet but Lisk support has been removed from the protocol.)
-export const TESTNET_NETWORKS: NetworkConfig[] = [];
+export const TESTNET_NETWORKS: NetworkConfig[] = [{
+  id: 84532, name: 'Base Sepolia', chainId: 84532,
+  rpcUrl: 'https://sepolia.base.org', symbol: 'ETH',
+  blockExplorerUrl: 'https://sepolia.basescan.org', isTestnet: true,
+  color: '#0052FF', icon: 'fas fa-circle',
+}];
 
 export const MAINNET_NETWORKS: NetworkConfig[] = [
   {

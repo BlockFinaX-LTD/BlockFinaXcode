@@ -1,3 +1,4 @@
+import { isWalletSandbox, sandboxTokenAddress } from "./wallet-environment";
 /**
  * Tokens - Token registry and ERC-20 contract helpers
  *
@@ -29,7 +30,9 @@ export const ERC20_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)"
 ];
 
-export const NETWORK_TOKENS: NetworkTokens = {
+export const NETWORK_TOKENS: NetworkTokens = isWalletSandbox ? {
+  84532: sandboxTokenAddress ? [{ symbol: 'sUSD', name: 'Sandbox USD', address: sandboxTokenAddress, decimals: 6, icon: '💵', color: '#2775CA' }] : [],
+} : {
   // Lisk (network IDs 1 + 2) was removed when smart-contract support for
   // Lisk was dropped. Supported networks: Base (3) and BSC (4).
   //

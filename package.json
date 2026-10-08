@@ -26,7 +26,9 @@
     "pricing:calibrate-garch": "tsx --env-file=.env server/pricing/scripts/calibrate-garch.ts",
     "pricing:backtest": "tsx --env-file=.env server/pricing/scripts/backtest.ts",
     "pricing:scan-onchain": "tsx server/pricing/scripts/scan-onchain-pairs.ts",
-    "pricing:scan-everything": "tsx server/pricing/scripts/scan-onchain-everything.ts"
+    "pricing:scan-everything": "tsx server/pricing/scripts/scan-onchain-everything.ts",
+    "build:wallet-sandbox": "cross-env VITE_NETWORK_MODE=testnet vite build --mode testnet && esbuild server/sandbox/wallet.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/wallet-sandbox.js",
+    "test:wallet-sandbox": "tsx --test server/sandbox/__tests__/wallet-app.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

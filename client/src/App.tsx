@@ -1,3 +1,4 @@
+import { isWalletSandbox, walletRiftKey, walletWidgetUrl } from "@/lib/wallet-environment";
 /**
  * Main Application Component
  *
@@ -87,7 +88,7 @@ import NotificationsPage from "@/pages/notifications";
  * issues a pk_; the moment they do, this becomes a config change and nothing
  * else needs touching.
  */
-const RIFT_API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || '').trim();
+const RIFT_API_KEY = walletRiftKey;
 
 // White-label sign-in: the widget is served from our own subdomain so the
 // Google sign-in screen reads "Sign in to BlockFinaX" instead of the partner
@@ -95,7 +96,7 @@ const RIFT_API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VI
 // changes. Override via VITE_RIFT_WIDGET_URL if we ever need to point back
 // at the partner-hosted widget for debugging.
 const RIFT_WIDGET_URL =
-  (import.meta.env.VITE_RIFT_WIDGET_URL || 'https://widget.blockfinax.com').trim();
+  walletWidgetUrl;
 
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
 const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards', '/verify'];
@@ -155,7 +156,7 @@ function RiftPostSigninSync() {
       // Fire-and-forget — ensures the dashboard user count reflects this
       // Rift account. The server upserts by address so repeat sign-ins on
       // the same address are idempotent no-ops.
-      if (user.accessToken) {
+      if (user.accessToken && !isWalletSandbox) {
         // Carry the referral code captured at /auth?ref=CODE (if any). The
         // server only attributes it for a genuinely new wallet, then clears it.
         let referralCode: string | null = null;
@@ -200,7 +201,7 @@ function Router() {
   return (
     <Switch>
       {/* Public */}
-      <Route path="/" component={Website} />
+      <Route path="/">{isWalletSandbox ? <Redirect to="/home" /> : <Website />}</Route>
       <Route path="/terms" component={TermsPage} />
       <Route path="/faq" component={FaqPage} />
       <Route path="/privacy" component={PrivacyPage} />
@@ -299,7 +300,7 @@ function FinaxMount() {
   const [location] = useLocation();
 
   const hidden = ["/admin", "/auth", "/sign/"].some((p) => location.startsWith(p));
-  if (hidden) return null;
+  if (hidden || isWalletSandbox) return null;
 
   const inApp = PROTECTED_ROUTES.some((p) => location === p || location.startsWith(p + "/"));
   return <FinaxChat scope={inApp && isAuthenticated ? "customer" : "public"} />;

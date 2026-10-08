@@ -1,3 +1,4 @@
+import { isWalletSandbox } from "@/lib/wallet-environment";
 /**
  * AppShell — chrome around every signed-in page, rebuilt to the new design.
  *
@@ -196,6 +197,10 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
 
         {/* ===== MAIN ===== */}
         <main className="main">
+          {isWalletSandbox && <div role="status" style={{ padding: '12px 20px', background: '#382d13', color: '#ffe19a', fontSize: 13, lineHeight: 1.5 }}>
+            <strong>TESTNET · Base Sepolia</strong> · Test tokens have no monetary value.
+            <div>Current BlockFinaX sign-in project. Market rates are synthetic fixtures. Test contracts and signing are pending.</div>
+          </div>}
           <header className="appbar">
             <div className="greeting">
               <div className="g1">{title}</div>

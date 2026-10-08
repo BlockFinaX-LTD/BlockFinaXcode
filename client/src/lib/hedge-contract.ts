@@ -1,3 +1,4 @@
+import { isWalletSandbox, walletDefaultChainId, sandboxTokenAddress, sandboxDiamondAddress, assertWalletTransactionsEnabled } from "./wallet-environment";
 /**
  * Hedge Contract Integration - Direct on-chain calls to the HedgeFacet
  *
@@ -13,37 +14,37 @@
 import { ethers } from 'ethers';
 
 // Default chain = Base
-export const DIAMOND_ADDRESS = '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef';
-export const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+export const DIAMOND_ADDRESS = isWalletSandbox ? sandboxDiamondAddress : '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef';
+export const USDC_ADDRESS = isWalletSandbox ? sandboxTokenAddress : '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
 export const PRECISION = 1e6;
 
-export const CHAIN_RPC_MAP: Record<number, string> = {
+export const CHAIN_RPC_MAP: Record<number, string> = isWalletSandbox ? { 84532: 'https://sepolia.base.org' } : {
   8453: 'https://mainnet.base.org',
   56:   'https://bsc-dataseed.binance.org',
 };
 
-export const CHAIN_EXPLORER_API_MAP: Record<number, string> = {
+export const CHAIN_EXPLORER_API_MAP: Record<number, string> = isWalletSandbox ? { 84532: 'https://base-sepolia.blockscout.com/api' } : {
   8453: 'https://base.blockscout.com/api',
   56:   'https://api.bscscan.com/api',
 };
 
-export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = {
+export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = isWalletSandbox ? { 84532: 6 } : {
   8453: 6,
   56:   18,
 };
 
-export const CHAIN_DIAMOND_MAP: Record<number, string> = {
+export const CHAIN_DIAMOND_MAP: Record<number, string> = isWalletSandbox ? { 84532: sandboxDiamondAddress } : {
   8453: '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',  // Base Mainnet
   56:   '0xaC939C0897981Abc0711ec4e37527F13106180fc',  // BSC Mainnet
 };
 
-export const CHAIN_USDC_MAP: Record<number, string> = {
+export const CHAIN_USDC_MAP: Record<number, string> = isWalletSandbox ? { 84532: sandboxTokenAddress } : {
   8453: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   56:   '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
 };
 
-export const CHAIN_USDT_MAP: Record<number, string> = {
+export const CHAIN_USDT_MAP: Record<number, string> = isWalletSandbox ? {} : {
   8453: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
   56:   '0x55d398326f99059fF775485246999027B3197955',
 };
@@ -52,12 +53,12 @@ export function getUsdtAddress(chainId: number): string {
   return CHAIN_USDT_MAP[chainId] || '';
 }
 
-export const CHAIN_SAFE_MAP: Record<number, string> = {
+export const CHAIN_SAFE_MAP: Record<number, string> = isWalletSandbox ? {} : {
   8453: '0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb',
   56:   '0x2a0ab363E01b518B189218e39f79Bfc3AE310807',
 };
 
-export const CHAIN_EXPLORER_MAP: Record<number, string> = {
+export const CHAIN_EXPLORER_MAP: Record<number, string> = isWalletSandbox ? { 84532: 'https://sepolia.basescan.org' } : {
   8453: 'https://basescan.org',
   56:   'https://bscscan.com',
 };
@@ -75,7 +76,7 @@ export function getSafeAddress(chainId: number): string {
 }
 
 export function getExplorerUrl(chainId: number): string {
-  return CHAIN_EXPLORER_MAP[chainId] || 'https://basescan.org';
+  return CHAIN_EXPLORER_MAP[chainId] || (isWalletSandbox ? 'https://sepolia.basescan.org' : 'https://basescan.org');
 }
 
 const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa26174543ad38431274eed5';
@@ -280,10 +281,11 @@ function fromTimestampOrNull(ts: bigint): Date | null {
 class HedgeContractManager {
   private provider: ethers.JsonRpcProvider | null = null;
   private timestampCache: Map<string, Date> = new Map();
-  private _chainId: number = 8453;   // default to Base
+  private _chainId: number = walletDefaultChainId;   // default to Base
 
   /** Switch the active chain. Call this whenever the user changes network. */
   setChain(chainId: number): void {
+    if (isWalletSandbox && chainId !== 84532) throw new Error('Sandbox supports only Base Sepolia.');
     if (this._chainId === chainId) return;
     this._chainId = chainId;
     this.provider = null;        // reset provider so next call uses new RPC
@@ -299,7 +301,7 @@ class HedgeContractManager {
   }
 
   get activeExplorerApi(): string {
-    return CHAIN_EXPLORER_API_MAP[this._chainId] || 'https://base.blockscout.com/api';
+    return CHAIN_EXPLORER_API_MAP[this._chainId] || (isWalletSandbox ? 'https://base-sepolia.blockscout.com/api' : 'https://base.blockscout.com/api');
   }
 
   get tokenDecimals(): number {
@@ -361,6 +363,7 @@ class HedgeContractManager {
     _gasBumpPct = 0,
     onStep?: (step: string) => void
   ): Promise<string> {
+    assertWalletTransactionsEnabled();
     const chainId = this._chainId;
 
     // Route the contract call through Rift's signer service.
@@ -750,6 +753,7 @@ class HedgeContractManager {
   }
 
   async getAllEvents(): Promise<HedgeEventData[]> {
+    if (isWalletSandbox && !sandboxDiamondAddress) return [];
     const contract = this.getReadContract();
     const MAX_SCAN = 500;
     // Public Base RPCs throttle aggressively, and ethers surfaces a throttled
@@ -877,6 +881,7 @@ class HedgeContractManager {
   }
 
   async getPositionsByWallet(address: string): Promise<HedgePositionData[]> {
+    if (isWalletSandbox && !sandboxDiamondAddress) return [];
     const contract = this.getReadContract();
     let ids: bigint[] = [];
     let timestamps: Map<number, Date> = new Map();
@@ -915,6 +920,7 @@ class HedgeContractManager {
   }
 
   async getDepositsByWallet(address: string): Promise<HedgeLpDepositData[]> {
+    if (isWalletSandbox && !sandboxDiamondAddress) return [];
     const contract = this.getReadContract();
     let ids: bigint[] = [];
     let timestamps: Map<number, Date> = new Map();
