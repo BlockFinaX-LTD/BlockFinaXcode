@@ -71,3 +71,19 @@ The Playwright e2e suites in `scripts/` cover the gating flows (`test-docs-bypas
 ## Where the contracts live
 
 See [BlockFinaX-LTD/v1protocol](https://github.com/BlockFinaX-LTD/v1protocol) for the on chain code. The server reads the Diamond via hand maintained ABI fragments in `server/`, so if you change a facet's external interface, the matching ABI fragment here needs to update.
+
+## Stellar wallet
+
+The Stellar testnet wallet is in [blockfinax-stellar-wallet/](blockfinax-stellar-wallet/README.md). It includes Google/email-code sign-in, passkey smart accounts, test funding and payments.
+
+Use Node 22.18 or newer:
+
+```sh
+cd blockfinax-stellar-wallet
+npm ci
+npm run setup:testnet
+# Configure Resend and Google in this folder’s ignored .env.
+npm run dev
+```
+
+Open http://localhost:5173. The wallet API runs on port 4100 with its own environment and local database. Its tests and build run in a separate GitHub workflow.
