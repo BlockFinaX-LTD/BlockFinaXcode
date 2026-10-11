@@ -1119,6 +1119,8 @@ const ADMIN_CHAINS = {
     chainId: 8453, hex: "0x2105", rpc: "https://mainnet.base.org",
     diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
     safe: "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
+    primaryFeeToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    primaryFeeSymbol: "USDC",
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     usdt: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
     usdcDecimals: 6, usdtDecimals: 6,
@@ -1132,6 +1134,8 @@ const ADMIN_CHAINS = {
     chainId: 56, hex: "0x38", rpc: "https://bsc-dataseed.binance.org",
     diamond: "0xaC939C0897981Abc0711ec4e37527F13106180fc",
     safe: "0x2a0ab363E01b518B189218e39f79Bfc3AE310807",
+    primaryFeeToken: "0x55d398326f99059fF775485246999027B3197955",
+    primaryFeeSymbol: "USDT",
     usdc: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
     usdt: "0x55d398326f99059fF775485246999027B3197955",
     usdcDecimals: 18, usdtDecimals: 18,
@@ -1149,6 +1153,7 @@ const SAFE_ABI = [
   "function nonce() view returns (uint256)",
   "function getThreshold() view returns (uint256)",
   "function getOwners() view returns (address[])",
+  "function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce) view returns (bytes32)",
   "function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes memory signatures) payable returns (bool)",
 ];
 
@@ -1317,7 +1322,7 @@ function ProtocolSection() {
         c.getHedgeFeeConfig().catch(() => null),
         c.isAllowedPaymentToken(cfg.usdc).catch(() => true),
         usdtAddr ? c.isAllowedPaymentToken(usdtAddr).catch(() => false) : Promise.resolve(false),
-        fetchTotalWithdrawn(cfg, cfg.usdc, cfg.usdcDecimals, token),
+        fetchTotalWithdrawn(cfg, cfg.primaryFeeToken, cfg.usdcDecimals, token),
         usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals, token) : Promise.resolve(0),
         c.owner().catch(() => ""),
       ]);
@@ -1358,22 +1363,34 @@ function ProtocolSection() {
     }
   };
 
-  const withdrawUsdc = () => run("Withdraw USDC fees", async () => {
-    const { contract } = await ensureChain(cfg);
-    const raw = await contract.getHedgePlatformFees();
-    if (BigInt(raw) === 0n) throw new Error("No USDC fees to withdraw.");
-    const tx = await contract.withdrawPlatformFees(raw);
-    await tx.wait();
-  });
+  const proposePrimaryFeeWithdrawal = async () => {
+    try {
+      const { ethers } = await import("ethers");
+      const contract = await readChainContract(cfg);
+      const raw = await contract.getHedgePlatformFees();
+      if (BigInt(raw) === 0n) throw new Error(`No ${cfg.primaryFeeSymbol} fees to withdraw.`);
+      const iface = new ethers.Interface(OWNER_ABI);
+      const data = iface.encodeFunctionData("withdrawPlatformFees", [raw]);
+      setSafeTxModal({ to: cfg.diamond, data, label: `Withdraw ${ethers.formatUnits(raw, cfg.usdcDecimals)} ${cfg.primaryFeeSymbol} to Treasury Safe` });
+    } catch (e: any) {
+      toast({ title: "Could not prepare withdrawal", description: e.message || String(e), variant: "destructive" });
+    }
+  };
 
-  const withdrawUsdt = () => run("Withdraw USDT fees", async () => {
-    if (!cfg.usdt) throw new Error("No USDT on this chain.");
-    const { contract } = await ensureChain(cfg);
-    const raw = await contract.getPlatformFeesByToken(cfg.usdt);
-    if (BigInt(raw) === 0n) throw new Error("No USDT fees to withdraw.");
-    const tx = await contract.withdrawPlatformFeesByToken(cfg.usdt, raw);
-    await tx.wait();
-  });
+  const proposeUsdtFeeWithdrawal = async () => {
+    try {
+      if (!cfg.usdt || cfg.usdt.toLowerCase() === cfg.primaryFeeToken.toLowerCase()) throw new Error("No separate USDT fee balance on this chain.");
+      const { ethers } = await import("ethers");
+      const contract = await readChainContract(cfg);
+      const raw = await contract.getPlatformFeesByToken(cfg.usdt);
+      if (BigInt(raw) === 0n) throw new Error("No USDT fees to withdraw.");
+      const iface = new ethers.Interface(OWNER_ABI);
+      const data = iface.encodeFunctionData("withdrawPlatformFeesByToken", [cfg.usdt, raw]);
+      setSafeTxModal({ to: cfg.diamond, data, label: `Withdraw ${ethers.formatUnits(raw, cfg.usdtDecimals)} USDT to Treasury Safe` });
+    } catch (e: any) {
+      toast({ title: "Could not prepare withdrawal", description: e.message || String(e), variant: "destructive" });
+    }
+  };
 
   const updateFees = () => run("Update fee config (direct EOA)", async () => {
     const { ethers, contract, signer } = await ensureChain(cfg);
@@ -1477,30 +1494,48 @@ function ProtocolSection() {
         nonce,
       };
 
-      const signature = await signer.signTypedData(domain, types, message);
-
-      if (Number(threshold) > 1) {
-        toast({
-          title: `Signed — needs ${threshold} signatures total`,
-          description: `This Safe requires ${threshold} confirmations. Collect other owner signatures to execute.`,
-        });
-        setSafeExecuting(false);
-        return;
-      }
-
-      // Threshold = 1 — execute immediately
-      const safeWithSigner = new ethers.Contract(cfg.safe, SAFE_ABI, signer);
-      const tx = await (safeWithSigner as any).execTransaction(
-        to, BigInt(0), data, 0, BigInt(0), BigInt(0), BigInt(0),
-        ethers.ZeroAddress, ethers.ZeroAddress,
-        signature,
+      const safeTx = {
+        to,
+        value: "0",
+        data,
+        operation: 0,
+        safeTxGas: "0",
+        baseGas: "0",
+        gasPrice: "0",
+        gasToken: ethers.ZeroAddress,
+        refundReceiver: ethers.ZeroAddress,
+        nonce: nonce.toString(),
+      };
+      const safeTxHash = await safe.getTransactionHash(
+        to, 0, data, 0, 0, 0, 0, ethers.ZeroAddress, ethers.ZeroAddress, nonce,
       );
-      await tx.wait();
-      toast({ title: "Transaction executed successfully via Safe" });
+      const signature = await signer.signTypedData(domain, types, message);
+      const serviceBase = cfg.chainId === 8453
+        ? "https://api.safe.global/tx-service/base/api/v1"
+        : "https://api.safe.global/tx-service/bnb/api/v1";
+      const response = await fetch(`${serviceBase}/safes/${cfg.safe}/multisig-transactions/`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          ...safeTx,
+          contractTransactionHash: safeTxHash,
+          sender: signerAddr,
+          signature,
+          origin: "BlockFinaX Admin Dashboard",
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Safe Transaction Service rejected the proposal (${response.status}): ${detail.slice(0, 300)}`);
+      }
+      toast({
+        title: "Safe transaction queued for approval",
+        description: `Hash ${safeTxHash}. Your signature was added; this Safe requires ${threshold} owner confirmations. No funds move until execution.`,
+      });
       setSafeTxModal(null);
       await load();
     } catch (e: any) {
-      toast({ title: "Safe execution failed", description: e.message || String(e), variant: "destructive" });
+      toast({ title: "Safe proposal failed", description: e.message || String(e), variant: "destructive" });
     } finally {
       setSafeExecuting(false);
     }
@@ -1631,8 +1666,8 @@ function ProtocolSection() {
           {/* Summary bar */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: `Total Earned (USDC · ${cfg.label})`, value: `$${(state.usdcWithdrawn + parseFloat(state.usdcFees === "—" ? "0" : state.usdcFees)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#1a4480]" },
-              { label: "Total Withdrawn (USDC)", value: `$${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-green-700" },
+              { label: `Total Earned (${cfg.primaryFeeSymbol} · ${cfg.label})`, value: `$${(state.usdcWithdrawn + parseFloat(state.usdcFees === "—" ? "0" : state.usdcFees)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#1a4480]" },
+              { label: `Total Withdrawn (${cfg.primaryFeeSymbol})`, value: `$${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-green-700" },
               { label: "Pending in Contract", value: `$${state.usdcFees === "—" ? "—" : state.usdcFees}`, color: "text-orange-600" },
             ].map(({ label, value, color }) => (
               <div key={label} className="rounded-lg bg-gray-50 p-3 text-center">
@@ -1648,22 +1683,22 @@ function ProtocolSection() {
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">USDC — Pending</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">{cfg.primaryFeeSymbol} — Pending</p>
                   <p className="text-2xl font-bold text-gray-900">{state.usdcFees === "—" ? "—" : `$${state.usdcFees}`}</p>
                 </div>
-                <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded">USDC</span>
+                <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{cfg.primaryFeeSymbol}</span>
               </div>
               <div className="flex items-center justify-between text-xs text-gray-500 border-t pt-2">
                 <span>All-time withdrawn</span>
                 <span className="font-semibold text-green-700">${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdc} disabled={busy !== null || state.usdcFees === "0.00" || state.usdcFees === "—"}>
-                {busy === "Withdraw USDC fees" ? "Sending…" : "Withdraw USDC to wallet"}
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposePrimaryFeeWithdrawal} disabled={state.loading || state.usdcFees === "—"}>
+                <Shield className="h-3 w-3 mr-1" />Propose {cfg.primaryFeeSymbol} withdrawal to Safe
               </Button>
             </div>
 
             {/* USDT */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+            {cfg.usdt.toLowerCase() !== cfg.primaryFeeToken.toLowerCase() && <div className="rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">USDT — Pending</p>
@@ -1675,14 +1710,14 @@ function ProtocolSection() {
                 <span>All-time withdrawn</span>
                 <span className="font-semibold text-green-700">${state.usdtWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={withdrawUsdt} disabled={busy !== null || state.usdtFees === "0.00" || state.usdtFees === "—"}>
-                {busy === "Withdraw USDT fees" ? "Sending…" : "Withdraw USDT to wallet"}
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposeUsdtFeeWithdrawal} disabled={state.loading || state.usdtFees === "—"}>
+                <Shield className="h-3 w-3 mr-1" />Propose USDT withdrawal to Safe
               </Button>
-            </div>
+            </div>}
           </div>
 
           <p className="text-xs text-gray-400 flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />Funds go to your connected wallet ({connectedLabel}). "All-time withdrawn" is sourced from on-chain token transfer history.
+            <CheckCircle className="h-3 w-3" />Withdrawals are proposed to the Treasury Safe ({shortAddr(cfg.safe)}). A Safe owner signs the proposal; the required owners approve and execute it in Safe.
           </p>
         </CardContent>
       </Card>
@@ -2002,8 +2037,8 @@ function ProtocolSection() {
           </DialogHeader>
           <div className="space-y-4 text-sm">
             <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-green-900 text-xs leading-relaxed">
-              <strong>Sign &amp; execute directly — no Safe web UI needed.</strong>
-              <p className="mt-1 text-green-800">Connect the MetaMask wallet that is a Safe owner, then click <strong>Sign &amp; Execute</strong>. MetaMask will ask you to sign the transaction — no browser extension or Safe app required. If your Safe needs only 1 signature it executes immediately.</p>
+              <strong>Queue a Safe proposal for owner approval.</strong>
+              <p className="mt-1 text-green-800">Connect a Safe owner wallet and click <strong>Sign &amp; Queue</strong>. MetaMask will request an off-chain signature and add the proposal to the Safe Transaction Service. No funds move here; the required owners must approve and execute it in Safe.</p>
             </div>
 
             <div className="space-y-3">
@@ -2046,9 +2081,9 @@ function ProtocolSection() {
                 onClick={() => safeTxModal && signAndExecSafe(safeTxModal.to, safeTxModal.data)}
               >
                 {safeExecuting ? (
-                  <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Signing…</>
+                  <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Queueing…</>
                 ) : (
-                  <><Shield className="h-3.5 w-3.5 mr-1.5" />Sign &amp; Execute</>
+                  <><Shield className="h-3.5 w-3.5 mr-1.5" />Sign &amp; Queue for Approval</>
                 )}
               </Button>
             </div>
