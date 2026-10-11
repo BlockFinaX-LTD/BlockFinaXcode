@@ -1179,9 +1179,27 @@ const TIMELOCK_ABI = [
   "function cancelCut(bytes32 proposalId)",
 ];
 
+async function getInjectedWalletProvider(): Promise<any | null> {
+  const win = window as any;
+  if (win.ethereum) return win.ethereum;
+
+  // EIP-6963 lets injected wallets announce themselves without claiming the
+  // global window.ethereum slot (common when multiple wallets are installed).
+  const announced: any[] = [];
+  const onAnnounce = (event: Event) => {
+    const detail = (event as CustomEvent).detail;
+    if (detail?.provider) announced.push(detail.provider);
+  };
+  window.addEventListener("eip6963:announceProvider", onAnnounce);
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise(resolve => setTimeout(resolve, 200));
+  window.removeEventListener("eip6963:announceProvider", onAnnounce);
+  return announced[0] || null;
+}
+
 async function ensureChain(cfg: AdminChainCfg) {
-  const eth = (window as any).ethereum;
-  if (!eth) throw new Error("MetaMask not found.");
+  const eth = await getInjectedWalletProvider();
+  if (!eth) throw new Error("No browser wallet detected. Enable a wallet that owns this Treasury Safe, then reload the dashboard.");
   await eth.request({ method: "eth_requestAccounts" });
   const chainId = parseInt(await eth.request({ method: "eth_chainId" }), 16);
   if (chainId !== cfg.chainId) {
@@ -1337,7 +1355,7 @@ function ProtocolSection() {
       } : null;
       if (feeConfig) setFeeForm({ creationFee: feeConfig.creationFee, hedgerFeeRate: feeConfig.hedgerFeeRate, hedgerPayoutFeeRate: feeConfig.hedgerPayoutFeeRate, lpProfitFeeRate: feeConfig.lpProfitFeeRate, creatorLoyaltyRate: feeConfig.creatorLoyaltyRate });
 
-      const eth = (window as any).ethereum;
+      const eth = await getInjectedWalletProvider();
       let wallet = "";
       if (eth) {
         const accounts: string[] = await eth.request({ method: "eth_accounts" });
@@ -1456,10 +1474,7 @@ function ProtocolSection() {
   const signAndExecSafe = async (to: string, data: string) => {
     setSafeExecuting(true);
     try {
-      await ensureChain(cfg);
-      const { ethers } = await import("ethers");
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
+      const { ethers, provider, signer } = await ensureChain(cfg);
       const signerAddr = (await signer.getAddress()).toLowerCase();
 
       const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
