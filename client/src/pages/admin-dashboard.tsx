@@ -1316,8 +1316,9 @@ function ProtocolSection() {
       const c = await readChainContract(cfg);
       const { ethers } = await import("ethers");
       const usdtAddr = cfg.usdt;
-      const [rawUsdc, rawUsdt, rawFees, usdcAllowed, usdtAllowed, usdcWithdrawn, usdtWithdrawn, diamondOwner] = await Promise.all([
+      const [rawLegacyFees, rawPrimaryTokenFees, rawUsdt, rawFees, usdcAllowed, usdtAllowed, usdcWithdrawn, usdtWithdrawn, diamondOwner] = await Promise.all([
         c.getHedgePlatformFees().catch(() => 0n),
+        c.getPlatformFeesByToken(cfg.primaryFeeToken).catch(() => 0n),
         usdtAddr ? c.getPlatformFeesByToken(usdtAddr).catch(() => 0n) : Promise.resolve(0n),
         c.getHedgeFeeConfig().catch(() => null),
         c.isAllowedPaymentToken(cfg.usdc).catch(() => true),
@@ -1326,6 +1327,7 @@ function ProtocolSection() {
         usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals, token) : Promise.resolve(0),
         c.owner().catch(() => ""),
       ]);
+      const rawPrimaryFees = BigInt(rawPrimaryTokenFees) > BigInt(rawLegacyFees) ? rawPrimaryTokenFees : rawLegacyFees;
       const feeConfig = rawFees ? {
         creationFee: (Number(rawFees[0]) / 1e6).toFixed(2),
         hedgerFeeRate: (Number(ethers.formatUnits(rawFees[1], 6)) * 100).toFixed(4),
@@ -1341,7 +1343,7 @@ function ProtocolSection() {
         const accounts: string[] = await eth.request({ method: "eth_accounts" });
         wallet = accounts[0] || "";
       }
-      setState(s => ({ ...s, usdcFees: fmtToken(BigInt(rawUsdc), cfg.usdcDecimals), usdtFees: fmtToken(BigInt(rawUsdt), cfg.usdtDecimals), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, diamondOwner: (diamondOwner as string).toLowerCase(), loading: false }));
+      setState(s => ({ ...s, usdcFees: fmtToken(BigInt(rawPrimaryFees), cfg.usdcDecimals), usdtFees: fmtToken(BigInt(rawUsdt), cfg.usdtDecimals), usdcWithdrawn, usdtWithdrawn, feeConfig, usdcAllowed, usdtAllowed, wallet, diamondOwner: (diamondOwner as string).toLowerCase(), loading: false }));
     } catch (e: any) {
       setState(s => ({ ...s, loading: false }));
       toast({ title: "Failed to load contract state", description: e.message, variant: "destructive" });
@@ -1367,10 +1369,17 @@ function ProtocolSection() {
     try {
       const { ethers } = await import("ethers");
       const contract = await readChainContract(cfg);
-      const raw = await contract.getHedgePlatformFees();
+      const [legacyRaw, tokenRaw] = await Promise.all([
+        contract.getHedgePlatformFees().catch(() => 0n),
+        contract.getPlatformFeesByToken(cfg.primaryFeeToken).catch(() => 0n),
+      ]);
+      const useTokenCounter = BigInt(tokenRaw) >= BigInt(legacyRaw);
+      const raw = useTokenCounter ? tokenRaw : legacyRaw;
       if (BigInt(raw) === 0n) throw new Error(`No ${cfg.primaryFeeSymbol} fees to withdraw.`);
       const iface = new ethers.Interface(OWNER_ABI);
-      const data = iface.encodeFunctionData("withdrawPlatformFees", [raw]);
+      const data = useTokenCounter
+        ? iface.encodeFunctionData("withdrawPlatformFeesByToken", [cfg.primaryFeeToken, raw])
+        : iface.encodeFunctionData("withdrawPlatformFees", [raw]);
       setSafeTxModal({ to: cfg.diamond, data, label: `Withdraw ${ethers.formatUnits(raw, cfg.usdcDecimals)} ${cfg.primaryFeeSymbol} to Treasury Safe` });
     } catch (e: any) {
       toast({ title: "Could not prepare withdrawal", description: e.message || String(e), variant: "destructive" });
