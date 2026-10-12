@@ -152,6 +152,10 @@ app.use(helmet({
         "https://relay.walletconnect.com",
         "wss://relay.walletconnect.com",
         "https://explorer-api.walletconnect.com",
+        // The bundled Reown modal (used by @walletconnect/ethereum-provider)
+        // loads the wallet catalog and chain RPC metadata from these origins.
+        "https://api.web3modal.org",
+        "https://rpc.walletconnect.org",
         "https://pulse.walletconnect.org",
         // Base
         "https://mainnet.base.org",
