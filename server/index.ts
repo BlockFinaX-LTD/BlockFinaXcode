@@ -143,6 +143,16 @@ app.use(helmet({
       fontSrc:        ["'self'", "data:", "https://fonts.gstatic.com"],
       connectSrc: [
         "'self'",
+        // Safe Transaction Service is called directly by the admin dashboard
+        // to inspect the Safe nonce, pending queue, and proposal status.
+        "https://api.safe.global",
+        // WalletConnect v2 uses its relay over WebSocket and the Explorer API
+        // to populate the QR wallet list. These origins must be present in
+        // connect-src or pairing fails under the production CSP.
+        "https://relay.walletconnect.com",
+        "wss://relay.walletconnect.com",
+        "https://explorer-api.walletconnect.com",
+        "https://pulse.walletconnect.org",
         // Base
         "https://mainnet.base.org",
         "https://sepolia.base.org",
