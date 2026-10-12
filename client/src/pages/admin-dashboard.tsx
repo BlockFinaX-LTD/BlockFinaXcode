@@ -1181,6 +1181,7 @@ const TIMELOCK_ABI = [
 
 async function getInjectedWalletProvider(): Promise<any | null> {
   const win = window as any;
+  if (win.__blockFinaXWalletConnectProvider) return win.__blockFinaXWalletConnectProvider;
   if (win.ethereum) return win.ethereum;
 
   // EIP-6963 lets injected wallets announce themselves without claiming the
@@ -1288,8 +1289,10 @@ function ProtocolSection() {
   const [oracleInput, setOracleInput] = useState("");
   const [feeForm, setFeeForm] = useState({ creationFee: "", hedgerFeeRate: "", hedgerPayoutFeeRate: "", lpProfitFeeRate: "", creatorLoyaltyRate: "" });
   const [feeFormOpen, setFeeFormOpen] = useState(false);
-  const [safeTxModal, setSafeTxModal] = useState<{ to: string; data: string; label: string } | null>(null);
+  const [safeTxModal, setSafeTxModal] = useState<{ to: string; data: string; label: string; nonce?: bigint; nonceRepair?: boolean } | null>(null);
   const [safeExecuting, setSafeExecuting] = useState(false);
+  const [walletConnecting, setWalletConnecting] = useState(false);
+  const [walletConnectActive, setWalletConnectActive] = useState(false);
 
   type TimelockProposal = {
     id: string;
@@ -1369,6 +1372,64 @@ function ProtocolSection() {
   };
 
   useEffect(() => { load(); }, [selectedChainKey]);
+
+  const connectWalletWithQr = async () => {
+    const projectId = (import.meta as any).env?.VITE_WALLETCONNECT_PROJECT_ID?.trim();
+    if (!projectId) {
+      toast({
+        title: "WalletConnect needs setup",
+        description: "The dashboard needs its WalletConnect Project ID configured before QR scanning can start.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setWalletConnecting(true);
+    try {
+      let wc = (window as any).__blockFinaXWalletConnectProvider;
+      if (!wc) {
+        const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
+        wc = await EthereumProvider.init({
+          projectId,
+          optionalChains: [cfg.chainId],
+          showQrModal: true,
+          rpcMap: { [cfg.chainId]: cfg.rpc },
+          metadata: {
+            name: "BlockFinaX Admin",
+            description: "Sign BlockFinaX Treasury Safe proposals",
+            url: window.location.origin,
+            icons: [],
+          },
+        });
+        (window as any).__blockFinaXWalletConnectProvider = wc;
+        wc.on("accountsChanged", (accounts: string[]) => {
+          setState(current => ({ ...current, wallet: accounts[0] || "" }));
+        });
+        wc.on("disconnect", () => {
+          delete (window as any).__blockFinaXWalletConnectProvider;
+          setWalletConnectActive(false);
+          setState(current => ({ ...current, wallet: "" }));
+        });
+      }
+      if (!wc.connected) await wc.connect({ chains: [cfg.chainId], rpcMap: { [cfg.chainId]: cfg.rpc } });
+      const accounts: string[] = await wc.request({ method: "eth_requestAccounts" });
+      if (!accounts.length) throw new Error("The wallet connected without providing an account.");
+      setWalletConnectActive(true);
+      await load();
+      toast({ title: "Wallet connected", description: `${shortAddr(accounts[0])}. Check that this is a Treasury Safe owner before signing.` });
+    } catch (e: any) {
+      toast({ title: "WalletConnect connection failed", description: e.message || String(e), variant: "destructive" });
+    } finally {
+      setWalletConnecting(false);
+    }
+  };
+
+  const disconnectQrWallet = async () => {
+    const wc = (window as any).__blockFinaXWalletConnectProvider;
+    try { await wc?.disconnect(); } catch { /* clear the local session either way */ }
+    delete (window as any).__blockFinaXWalletConnectProvider;
+    setWalletConnectActive(false);
+    setState(current => ({ ...current, wallet: "" }));
+  };
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -1471,18 +1532,57 @@ function ProtocolSection() {
     }
   };
 
-  const signAndExecSafe = async (to: string, data: string) => {
+  const prepareSafeNonceRepair = async () => {
+    try {
+      const { ethers } = await import("ethers");
+      const provider = new ethers.JsonRpcProvider(cfg.rpc);
+      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
+      const onChainNonce: bigint = await safe.nonce();
+      const serviceBase = cfg.chainId === 8453
+        ? "https://api.safe.global/tx-service/base/api/v1"
+        : "https://api.safe.global/tx-service/bnb/api/v1";
+      const response = await fetch(`${serviceBase}/safes/${cfg.safe}/multisig-transactions/?executed=false&limit=100`, {
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(`Could not safely inspect the Safe queue (${response.status}). Try again later or contact your Safe administrator.`);
+      const queue = await response.json();
+      const pending = Array.isArray(queue.results) ? queue.results : [];
+      const hasCurrentNonce = pending.some((tx: any) => BigInt(tx.nonce) === onChainNonce);
+      const hasLaterNonce = pending.some((tx: any) => BigInt(tx.nonce) > onChainNonce);
+      if (hasCurrentNonce) {
+        throw new Error(`The Safe already has a proposal at nonce ${onChainNonce}. Open that proposal in Safe; this repair is not needed.`);
+      }
+      if (!hasLaterNonce) {
+        throw new Error(`No later pending Safe transaction was found. The dashboard will not create a repair transaction without a confirmed nonce gap.`);
+      }
+      setSafeTxModal({
+        to: cfg.safe,
+        data: "0x",
+        label: `Repair Safe queue at nonce ${onChainNonce}`,
+        nonce: onChainNonce,
+        nonceRepair: true,
+      });
+    } catch (e: any) {
+      toast({ title: "Could not prepare Safe queue repair", description: e.message || String(e), variant: "destructive" });
+    }
+  };
+
+  const signAndExecSafe = async (to: string, data: string, requestedNonce?: bigint, nonceRepair = false) => {
     setSafeExecuting(true);
     try {
       const { ethers, provider, signer } = await ensureChain(cfg);
       const signerAddr = (await signer.getAddress()).toLowerCase();
 
       const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
-      const [nonce, threshold, owners]: [bigint, bigint, string[]] = await Promise.all([
+      const [onChainNonce, threshold, owners]: [bigint, bigint, string[]] = await Promise.all([
         safe.nonce(),
         safe.getThreshold(),
         safe.getOwners(),
       ]);
+      const nonce = requestedNonce ?? onChainNonce;
+      if (nonce !== onChainNonce) {
+        throw new Error(`Safe nonce changed while this dialog was open (now ${onChainNonce}). Close it and check the queue again.`);
+      }
 
       const ownerList: string[] = (owners as string[]).map((o: string) => o.toLowerCase());
       if (!ownerList.includes(signerAddr)) {
@@ -1553,8 +1653,8 @@ function ProtocolSection() {
         throw new Error(`Safe Transaction Service rejected the proposal (${response.status}): ${detail.slice(0, 300)}`);
       }
       toast({
-        title: "Safe transaction queued for approval",
-        description: `Hash ${safeTxHash}. Your signature was added; this Safe requires ${threshold} owner confirmations. No funds move until execution.`,
+        title: nonceRepair ? "Nonce repair queued for approval" : "Safe transaction queued for approval",
+        description: `Hash ${safeTxHash}. Your signature was added; this Safe requires ${threshold} owner confirmations. ${nonceRepair ? "This zero-value transaction moves no funds; execute it before the later withdrawal." : "No funds move until execution."}`,
       });
       setSafeTxModal(null);
       await load();
@@ -1701,6 +1801,21 @@ function ProtocolSection() {
             ))}
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-gray-50 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-900">Safe owner wallet</p>
+              <p className="text-xs text-gray-500">
+                {state.wallet ? `Connected: ${state.wallet}` : "Scan with your phone wallet to sign Safe proposals."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={connectWalletWithQr} disabled={walletConnecting || safeExecuting}>
+                {walletConnecting ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Connecting…</> : <><Wallet className="h-3.5 w-3.5 mr-1.5" />Connect wallet by QR</>}
+              </Button>
+              {walletConnectActive && <Button size="sm" variant="ghost" onClick={disconnectQrWallet} disabled={walletConnecting || safeExecuting}>Disconnect</Button>}
+            </div>
+          </div>
+
           {/* Token cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* USDC */}
@@ -1719,6 +1834,9 @@ function ProtocolSection() {
               <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposePrimaryFeeWithdrawal} disabled={state.loading || state.usdcFees === "—"}>
                 <Shield className="h-3 w-3 mr-1" />Propose {cfg.primaryFeeSymbol} withdrawal to Safe
               </Button>
+              {cfg.chainId === 8453 && <Button size="sm" variant="outline" className="w-full" onClick={prepareSafeNonceRepair} disabled={safeExecuting}>
+                <RefreshCw className="h-3 w-3 mr-1" />Check / repair Safe queue gap
+              </Button>}
             </div>
 
             {/* USDT */}
@@ -2060,9 +2178,14 @@ function ProtocolSection() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 text-sm">
-            <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-green-900 text-xs leading-relaxed">
-              <strong>Queue a Safe proposal for owner approval.</strong>
-              <p className="mt-1 text-green-800">Connect a Safe owner wallet and click <strong>Sign &amp; Queue</strong>. MetaMask will request an off-chain signature and add the proposal to the Safe Transaction Service. No funds move here; the required owners must approve and execute it in Safe.</p>
+            <div className={`rounded-lg border p-3 text-xs leading-relaxed ${safeTxModal?.nonceRepair ? "bg-amber-50 border-amber-200 text-amber-950" : "bg-green-50 border-green-200 text-green-900"}`}>
+              {safeTxModal?.nonceRepair ? <>
+                <strong>This is a zero-value Safe queue repair at nonce {safeTxModal.nonce?.toString()}.</strong>
+                <p className="mt-1">It sends 0 ETH from the Safe to itself and moves no tokens. Connect a Safe owner wallet and sign the proposal. The other required owners must approve it, then execute this repair in Safe before the withdrawal.</p>
+              </> : <>
+                <strong>Queue a Safe proposal for owner approval.</strong>
+                <p className="mt-1 text-green-800">Connect a Safe owner wallet and click <strong>Sign &amp; Queue</strong>. Your wallet will request an off-chain signature and add the proposal to the Safe Transaction Service. No funds move here; the required owners must approve and execute it in Safe.</p>
+              </>}
             </div>
 
             <div className="space-y-3">
@@ -2077,7 +2200,7 @@ function ProtocolSection() {
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Target (Diamond)</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Target {safeTxModal?.nonceRepair ? "(Safe itself)" : "(Diamond)"}</p>
                 <div className="flex items-center gap-2 bg-gray-50 rounded-lg border p-2.5">
                   <code className="text-xs font-mono flex-1 break-all text-gray-800">{safeTxModal?.to}</code>
                   <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" onClick={() => { navigator.clipboard.writeText(safeTxModal?.to || ""); toast({ title: "Copied" }); }}>
@@ -2102,7 +2225,7 @@ function ProtocolSection() {
               <Button
                 className="bg-[#1a4480] hover:bg-[#153a6e]"
                 disabled={safeExecuting}
-                onClick={() => safeTxModal && signAndExecSafe(safeTxModal.to, safeTxModal.data)}
+                onClick={() => safeTxModal && signAndExecSafe(safeTxModal.to, safeTxModal.data, safeTxModal.nonce, safeTxModal.nonceRepair)}
               >
                 {safeExecuting ? (
                   <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Queueing…</>
