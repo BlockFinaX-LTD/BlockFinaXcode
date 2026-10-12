@@ -151,6 +151,8 @@ app.use(helmet({
         // connect-src or pairing fails under the production CSP.
         "https://relay.walletconnect.com",
         "wss://relay.walletconnect.com",
+        // WalletConnect Core 2.21.x defaults to the .org relay host.
+        "wss://relay.walletconnect.org",
         "https://explorer-api.walletconnect.com",
         // The bundled Reown modal (used by @walletconnect/ethereum-provider)
         // loads the wallet catalog and chain RPC metadata from these origins.
