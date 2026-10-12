@@ -4,7 +4,6 @@ from playwright.sync_api import sync_playwright
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
-    ctx.route("**/replit.com/**", lambda r: r.abort())
     page = ctx.new_page()
 
     console_msgs = []

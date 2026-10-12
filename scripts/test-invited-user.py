@@ -101,7 +101,6 @@ print(f"\nSTEP E: drive browser to /auth?t=<signin> and check localStorage persi
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     ctx = browser.new_context()
-    ctx.route("**/replit.com/**", lambda r: r.abort())
     page = ctx.new_page()
 
     page.goto(f"{ORIGIN}/auth?t={signin_token}", wait_until="domcontentloaded", timeout=60000)
@@ -150,7 +149,6 @@ with sync_playwright() as p:
     # ── Step G: docs magic link click → /whitepaper ──────────────────
     print(f"\nSTEP G: drive browser to /whitepaper?t=<docs> and check storage + render")
     ctx2 = browser.new_context()
-    ctx2.route("**/replit.com/**", lambda r: r.abort())
     page2 = ctx2.new_page()
     page2.goto(f"{ORIGIN}/whitepaper?t={docs_token}", wait_until="domcontentloaded", timeout=60000)
     page2.wait_for_function(

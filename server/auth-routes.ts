@@ -158,7 +158,7 @@ setInterval(() => {
 
 function getAppOrigin(req: any): string {
   if (process.env.APP_URL) return process.env.APP_URL;
-  // Replit (and most reverse proxies) forward the real protocol via this header.
+  // Hosted platforms and reverse proxies forward the real protocol via this header.
   // Fall back to req.protocol only for plain localhost dev without a proxy.
   const proto =
     req.headers['x-forwarded-proto']?.split(',')[0].trim() ||

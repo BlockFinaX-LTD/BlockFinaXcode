@@ -64,9 +64,6 @@ pyproject.toml
 uv.lock
 main.py
 
-# ── Replit internal files — do not upload to GitHub ─────────────────────
-.replit
-replit.md
 .semgrep
 .local/
 .cache/

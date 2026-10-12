@@ -48,7 +48,6 @@ failures = []
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     ctx = browser.new_context()
-    ctx.route("**/replit.com/**", lambda r: r.abort())
     page = ctx.new_page()
     page.goto("http://localhost:5000/", wait_until="domcontentloaded", timeout=60000)
     page.wait_for_selector(".bfx-landing .hero", timeout=20000)

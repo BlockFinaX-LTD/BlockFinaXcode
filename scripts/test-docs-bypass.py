@@ -15,8 +15,6 @@ with sync_playwright() as p:
 
     console_logs = []
     page.on("console", lambda msg: console_logs.append(f"[{msg.type}] {msg.text}"))
-    # Block Replit dev banner — it times out and blocks "load"
-    ctx.route("**/replit.com/**", lambda r: r.abort())
 
     # ── Step 1: visit with the bypass key ────────────────────────────────
     print("STEP 1: visit /data-room?key=... and let the gate work")
