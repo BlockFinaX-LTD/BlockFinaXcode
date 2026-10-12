@@ -1390,7 +1390,7 @@ function ProtocolSection() {
         const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
         wc = await EthereumProvider.init({
           projectId,
-          optionalChains: [cfg.chainId],
+          chains: [cfg.chainId],
           showQrModal: true,
           rpcMap: { [cfg.chainId]: cfg.rpc },
           metadata: {
@@ -1410,13 +1410,25 @@ function ProtocolSection() {
           setState(current => ({ ...current, wallet: "" }));
         });
       }
-      if (!wc.connected) await wc.connect({ chains: [cfg.chainId], rpcMap: { [cfg.chainId]: cfg.rpc } });
+      if (!wc.connected) await wc.connect();
       const accounts: string[] = await wc.request({ method: "eth_requestAccounts" });
       if (!accounts.length) throw new Error("The wallet connected without providing an account.");
       setWalletConnectActive(true);
       await load();
       toast({ title: "Wallet connected", description: `${shortAddr(accounts[0])}. Check that this is a Treasury Safe owner before signing.` });
     } catch (e: any) {
+      // A failed pairing attempt must not leave the rejected provider cached.
+      // Reusing it on the next click keeps stale relay subscriptions alive;
+      // WalletConnect then accumulates listeners and repeats restore warnings.
+      const failedWc = (window as any).__blockFinaXWalletConnectProvider;
+      if (failedWc && !failedWc.session) {
+        try { failedWc.signer?.abortPairingAttempt?.(); } catch { /* best-effort relay cleanup */ }
+        try { await failedWc.disconnect?.(); } catch { /* discard failed session either way */ }
+        if ((window as any).__blockFinaXWalletConnectProvider === failedWc) {
+          delete (window as any).__blockFinaXWalletConnectProvider;
+        }
+      }
+      setWalletConnectActive(false);
       toast({ title: "WalletConnect connection failed", description: e.message || String(e), variant: "destructive" });
     } finally {
       setWalletConnecting(false);
