@@ -1410,7 +1410,10 @@ function ProtocolSection() {
           setState(current => ({ ...current, wallet: "" }));
         });
       }
-      if (!wc.connected) await wc.connect();
+      // `connected` only reports the relay socket state. It can be true before
+      // a wallet session has been paired, so request() would then fail with
+      // "Please call connect() before request()". Check the actual WC session.
+      if (!wc.session) await wc.connect();
       const accounts: string[] = await wc.request({ method: "eth_requestAccounts" });
       if (!accounts.length) throw new Error("The wallet connected without providing an account.");
       setWalletConnectActive(true);
