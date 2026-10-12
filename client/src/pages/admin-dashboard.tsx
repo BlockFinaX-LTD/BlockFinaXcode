@@ -1585,10 +1585,15 @@ function ProtocolSection() {
   const signAndExecSafe = async (to: string, data: string, requestedNonce?: bigint, nonceRepair = false) => {
     setSafeExecuting(true);
     try {
-      const { ethers, provider, signer } = await ensureChain(cfg);
+      const { ethers, signer } = await ensureChain(cfg);
       const signerAddr = (await signer.getAddress()).toLowerCase();
 
-      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
+      // Safe metadata and hashes are read-only; query the configured RPC
+      // directly instead of routing eth_call through the phone wallet. Some
+      // WalletConnect wallets let eth_signTypedData through but time out on
+      // these read requests, which otherwise prevents signing from starting.
+      const readProvider = new ethers.JsonRpcProvider(cfg.rpc);
+      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, readProvider);
       const [onChainNonce, threshold, owners]: [bigint, bigint, string[]] = await Promise.all([
         safe.nonce(),
         safe.getThreshold(),
