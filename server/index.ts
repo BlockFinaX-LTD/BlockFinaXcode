@@ -189,6 +189,8 @@ app.use(helmet({
       // a server redeploy.
       frameSrc: [
         "https://accounts.google.com",
+        // WalletConnect's verification prompt is embedded by the Reown modal.
+        "https://verify.walletconnect.org",
         "https://widget.blockfinax.com",
         "https://widget.riftfi.xyz",
         "https://*.riftfi.xyz",
