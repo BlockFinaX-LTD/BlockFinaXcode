@@ -1464,6 +1464,12 @@ function ProtocolSection() {
     return Array.isArray(payload.results) ? payload.results : Array.isArray(payload) ? payload : [];
   };
 
+  const getSafeConfirmations = async (row: any, safeTxHash: string) => {
+    const embedded = Array.isArray(row?.confirmations) ? row.confirmations : [];
+    if (embedded.length) return embedded;
+    return fetchSafeConfirmations(safeTxHash);
+  };
+
   const refreshSafeQueue = async (showToast = true) => {
     setSafeQueueLoading(true);
     try {
@@ -1481,17 +1487,14 @@ function ProtocolSection() {
         const hash = row.safeTxHash || row.transactionHash;
         if (!hash) return row;
         try {
-          const detailResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
-          if (!detailResponse.ok) throw new Error(`Safe proposal details returned ${detailResponse.status}.`);
-          const detail = await detailResponse.json();
-          // The transaction detail response can contain a stale empty
-          // `confirmations` array. Use the dedicated endpoint, which is also
-          // used when checking whether the connected owner already signed.
+          // The pending-transactions list already contains the SafeTx fields.
+          // Avoid a second detail request for each row: repeated detail calls
+          // trigger Safe API 429s and can hide a proposal that is executable.
           try {
-            const confirmations = await fetchSafeConfirmations(hash);
-            return { ...row, ...detail, confirmations, confirmationsError: "" };
+            const confirmations = await getSafeConfirmations(row, hash);
+            return { ...row, confirmations, confirmationsError: "" };
           } catch (e: any) {
-            return { ...row, ...detail, confirmations: [], confirmationsError: e.message || "Could not read owner confirmations." };
+            return { ...row, confirmations: [], confirmationsError: e.message || "Could not read owner confirmations." };
           }
         } catch (e: any) {
           return { ...row, confirmations: [], confirmationsError: e.message || "Could not load proposal details." };
@@ -1537,9 +1540,10 @@ function ProtocolSection() {
       const [onChainNonce, owners] = await Promise.all([safe.nonce(), safe.getOwners()]);
       if (!(owners as string[]).some(o => o.toLowerCase() === signerAddr)) throw new Error("Connected wallet is not an owner of this Safe.");
       if (BigInt(row.nonce) !== BigInt(onChainNonce)) throw new Error(`This proposal is nonce ${row.nonce}; the Safe currently requires nonce ${onChainNonce}. Resolve the earlier nonce first.`);
-      const detailsResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
-      if (!detailsResponse.ok) throw new Error(`Could not read proposal details (${detailsResponse.status}).`);
-      const tx = await detailsResponse.json();
+      // The queue list includes all SafeTx fields needed to hash and approve.
+      // Do not refetch the same transaction detail; Safe may rate-limit it.
+      const tx = { ...row, safeTxHash: hash };
+      if (!tx.to || tx.nonce === undefined || tx.nonce === null || !tx.safeTxHash) throw new Error("This queue entry is missing transaction fields. Refresh the Safe queue after the API limit clears.");
       const value = BigInt(tx.value || "0");
       const operation = Number(tx.operation || 0);
       const safeTxGas = BigInt(tx.safeTxGas || "0");
@@ -1549,7 +1553,7 @@ function ProtocolSection() {
       const refundReceiver = tx.refundReceiver || ethers.ZeroAddress;
       const computedHash = await safe.getTransactionHash(tx.to, value, tx.data || "0x", operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, BigInt(tx.nonce));
       if (String(computedHash).toLowerCase() !== String(hash).toLowerCase()) throw new Error("Safe Transaction Service details do not match the proposal hash. Refresh the queue and do not execute this entry.");
-      const confirmations: any[] = await fetchSafeConfirmations(hash);
+      const confirmations: any[] = await getSafeConfirmations(row, hash);
       if (confirmations.some((c: any) => (c.owner || c.signer)?.toLowerCase() === signerAddr)) {
         const signedOwners = confirmations.map((c: any) => c.owner || c.signer).filter(Boolean).join(", ");
         throw new Error(`Connected address ${ethers.getAddress(signerAddr)} has already confirmed this proposal. Confirmed owner(s): ${signedOwners}. Connect a different Safe owner to add another approval.`);
@@ -1578,9 +1582,10 @@ function ProtocolSection() {
       const [onChainNonce, threshold, owners] = await Promise.all([readSafe.nonce(), readSafe.getThreshold(), readSafe.getOwners()]);
       if (!(owners as string[]).some(o => o.toLowerCase() === signerAddr)) throw new Error("Connected wallet is not an owner of this Safe; connect a Safe owner to submit execution.");
       if (BigInt(row.nonce) !== BigInt(onChainNonce)) throw new Error(`Proposal nonce ${row.nonce} cannot execute yet. Safe on-chain nonce is ${onChainNonce}; execute the transaction at that nonce first.`);
-      const detailsResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
-      if (!detailsResponse.ok) throw new Error(`Could not load full Safe transaction (${detailsResponse.status}).`);
-      const tx = await detailsResponse.json();
+      // Use the transaction fields from the pending-queue response. The extra
+      // per-transaction details request was causing 429s and blocking execution.
+      const tx = { ...row, safeTxHash: hash };
+      if (!tx.to || tx.nonce === undefined || tx.nonce === null || !tx.safeTxHash) throw new Error("This queue entry is missing transaction fields. Refresh the Safe queue after the API limit clears.");
       const value = BigInt(tx.value || "0");
       const operation = Number(tx.operation || 0);
       const safeTxGas = BigInt(tx.safeTxGas || "0");
@@ -1590,7 +1595,10 @@ function ProtocolSection() {
       const refundReceiver = tx.refundReceiver || ethers.ZeroAddress;
       const computedHash = await readSafe.getTransactionHash(tx.to, value, tx.data || "0x", operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, BigInt(tx.nonce));
       if (String(computedHash).toLowerCase() !== String(hash).toLowerCase()) throw new Error("Safe Transaction Service details do not match the proposal hash. Refresh the queue and do not execute this entry.");
-      const confirmations: any[] = await fetchSafeConfirmations(hash);
+      const embeddedConfirmations: any[] = Array.isArray(row.confirmations) ? row.confirmations : [];
+      const confirmations: any[] = embeddedConfirmations.length >= Number(threshold)
+        ? embeddedConfirmations
+        : await getSafeConfirmations(row, hash);
       if (confirmations.length < Number(threshold)) throw new Error(`Needs ${threshold} owner approvals; Safe service currently has ${confirmations.length}.`);
       const ownerOrder = (owners as string[]).map((o: string) => o.toLowerCase());
       const signedBy = new Set<string>();
@@ -2054,6 +2062,7 @@ function ProtocolSection() {
                 const confirms = Array.isArray(tx.confirmations) ? tx.confirmations : [];
                 const isCurrent = safeQueueNonce !== null && String(tx.nonce) === safeQueueNonce;
                 const enough = confirms.length >= safeQueueThreshold;
+                const connectedAlreadyConfirmed = !!state.wallet && confirms.some((c: any) => (c.owner || c.signer)?.toLowerCase() === state.wallet.toLowerCase());
                 const isRepair = (tx.to || "").toLowerCase() === cfg.safe.toLowerCase() && (tx.data || "0x") === "0x" && String(tx.value || "0") === "0";
                 let decodedAction = isRepair ? "Zero-value Safe self-call (nonce gap replacement)" : `Contract call ${String(tx.data || "0x").slice(0, 10)}`;
                 let decodedArgs = "";
@@ -2074,8 +2083,8 @@ function ProtocolSection() {
                       <span className="text-xs text-gray-600">{tx.confirmationsError ? "Approvals unavailable" : `${confirms.length}/${safeQueueThreshold} owner approvals`}</span>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => approveSafeQueueTx(tx)} disabled={safeQueueBusy !== null || !state.wallet}>
-                        {safeQueueBusy === safeHash ? "Working…" : "Approve with connected owner"}
+                      <Button size="sm" variant="outline" onClick={() => approveSafeQueueTx(tx)} disabled={safeQueueBusy !== null || !state.wallet || connectedAlreadyConfirmed}>
+                        {safeQueueBusy === safeHash ? "Working…" : connectedAlreadyConfirmed ? "Already approved by this wallet" : "Approve with connected owner"}
                       </Button>
                       <Button size="sm" className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={() => executeSafeQueueTx(tx)} disabled={safeQueueBusy !== null || !isCurrent || !enough || !state.wallet}>
                         Execute on Base
