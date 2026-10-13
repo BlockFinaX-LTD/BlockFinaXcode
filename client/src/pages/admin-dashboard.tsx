@@ -1846,7 +1846,10 @@ function ProtocolSection() {
         body: JSON.stringify({
           ...safeTx,
           contractTransactionHash: safeTxHash,
-          sender: signerAddr,
+          // Safe Transaction Service validates EIP-55 checksums on `sender`.
+          // Keep the lowercase form for owner comparisons, but submit the
+          // checksummed address in the proposal payload.
+          sender: ethers.getAddress(signerAddr),
           signature,
           origin: "BlockFinaX Admin Dashboard",
         }),
