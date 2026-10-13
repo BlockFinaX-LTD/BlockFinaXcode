@@ -1482,10 +1482,20 @@ function ProtocolSection() {
         if (!hash) return row;
         try {
           const detailResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
-          const detail = detailResponse.ok ? await detailResponse.json() : {};
-          const confirmations = Array.isArray(detail.confirmations) ? detail.confirmations : await fetchSafeConfirmations(hash).catch(() => []);
-          return { ...row, ...detail, confirmations };
-        } catch { return row; }
+          if (!detailResponse.ok) throw new Error(`Safe proposal details returned ${detailResponse.status}.`);
+          const detail = await detailResponse.json();
+          // The transaction detail response can contain a stale empty
+          // `confirmations` array. Use the dedicated endpoint, which is also
+          // used when checking whether the connected owner already signed.
+          try {
+            const confirmations = await fetchSafeConfirmations(hash);
+            return { ...row, ...detail, confirmations, confirmationsError: "" };
+          } catch (e: any) {
+            return { ...row, ...detail, confirmations: [], confirmationsError: e.message || "Could not read owner confirmations." };
+          }
+        } catch (e: any) {
+          return { ...row, confirmations: [], confirmationsError: e.message || "Could not load proposal details." };
+        }
       }));
       detailed.sort((a: any, b: any) => Number(a.nonce) - Number(b.nonce));
       setSafeQueueNonce(onChainNonce.toString());
@@ -1540,7 +1550,10 @@ function ProtocolSection() {
       const computedHash = await safe.getTransactionHash(tx.to, value, tx.data || "0x", operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, BigInt(tx.nonce));
       if (String(computedHash).toLowerCase() !== String(hash).toLowerCase()) throw new Error("Safe Transaction Service details do not match the proposal hash. Refresh the queue and do not execute this entry.");
       const confirmations: any[] = await fetchSafeConfirmations(hash);
-      if (confirmations.some((c: any) => (c.owner || c.signer)?.toLowerCase() === signerAddr)) throw new Error("This owner has already confirmed the proposal.");
+      if (confirmations.some((c: any) => (c.owner || c.signer)?.toLowerCase() === signerAddr)) {
+        const signedOwners = confirmations.map((c: any) => c.owner || c.signer).filter(Boolean).join(", ");
+        throw new Error(`Connected address ${ethers.getAddress(signerAddr)} has already confirmed this proposal. Confirmed owner(s): ${signedOwners}. Connect a different Safe owner to add another approval.`);
+      }
       const typed = safeTypedData(ethers, tx, BigInt(tx.nonce));
       const signature = await signer.signTypedData(typed.domain, typed.types, typed.message);
       const post = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/confirmations/`, {
@@ -2058,7 +2071,7 @@ function ProtocolSection() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={isCurrent ? "default" : "outline"}>Nonce {tx.nonce}{isCurrent ? " · ready in order" : ""}</Badge>
                       <span className="text-sm font-medium text-gray-900">{decodedAction}</span>
-                      <span className="text-xs text-gray-600">{confirms.length}/{safeQueueThreshold} owner approvals</span>
+                      <span className="text-xs text-gray-600">{tx.confirmationsError ? "Approvals unavailable" : `${confirms.length}/${safeQueueThreshold} owner approvals`}</span>
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => approveSafeQueueTx(tx)} disabled={safeQueueBusy !== null || !state.wallet}>
@@ -2076,6 +2089,7 @@ function ProtocolSection() {
                     <p><strong>Safe tx hash:</strong> <code className="break-all">{safeHash}</code></p>
                     {decodedArgs && <p className="sm:col-span-2"><strong>Decoded withdrawal:</strong> {decodedArgs}</p>}
                   </div>
+                  {tx.confirmationsError && <p className="text-xs text-red-700">Could not load owner approvals: {tx.confirmationsError} Use Refresh Safe queue and retry.</p>}
                   <details className="text-xs">
                     <summary className="cursor-pointer font-medium text-gray-700">Show calldata and owner signatures</summary>
                     <div className="mt-2 space-y-2">
