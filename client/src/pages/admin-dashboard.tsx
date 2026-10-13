@@ -1155,6 +1155,8 @@ const SAFE_ABI = [
   "function getOwners() view returns (address[])",
   "function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce) view returns (bytes32)",
   "function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes memory signatures) payable returns (bool)",
+  "event ExecutionSuccess(bytes32 txHash, uint256 payment)",
+  "event ExecutionFailure(bytes32 txHash, uint256 payment)",
 ];
 
 const OWNER_ABI = [
@@ -1293,6 +1295,11 @@ function ProtocolSection() {
   const [safeExecuting, setSafeExecuting] = useState(false);
   const [walletConnecting, setWalletConnecting] = useState(false);
   const [walletConnectActive, setWalletConnectActive] = useState(false);
+  const [safeQueue, setSafeQueue] = useState<any[]>([]);
+  const [safeQueueNonce, setSafeQueueNonce] = useState<string | null>(null);
+  const [safeQueueThreshold, setSafeQueueThreshold] = useState<number>(2);
+  const [safeQueueLoading, setSafeQueueLoading] = useState(false);
+  const [safeQueueBusy, setSafeQueueBusy] = useState<string | null>(null);
 
   type TimelockProposal = {
     id: string;
@@ -1444,6 +1451,182 @@ function ProtocolSection() {
     delete (window as any).__blockFinaXWalletConnectProvider;
     setWalletConnectActive(false);
     setState(current => ({ ...current, wallet: "" }));
+  };
+
+  const safeServiceBase = cfg.chainId === 8453
+    ? "https://api.safe.global/tx-service/base/api/v1"
+    : "https://api.safe.global/tx-service/bnb/api/v1";
+
+  const fetchSafeConfirmations = async (safeTxHash: string) => {
+    const response = await fetch(`${safeServiceBase}/multisig-transactions/${safeTxHash}/confirmations/?limit=100`, { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error(`Could not load Safe owner signatures (${response.status}).`);
+    const payload = await response.json();
+    return Array.isArray(payload.results) ? payload.results : Array.isArray(payload) ? payload : [];
+  };
+
+  const refreshSafeQueue = async (showToast = true) => {
+    setSafeQueueLoading(true);
+    try {
+      const { ethers } = await import("ethers");
+      const provider = new ethers.JsonRpcProvider(cfg.rpc);
+      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
+      const [onChainNonce, threshold]: [bigint, bigint] = await Promise.all([safe.nonce(), safe.getThreshold()]);
+      const response = await fetch(`${safeServiceBase}/safes/${cfg.safe}/multisig-transactions/?executed=false&limit=100`, {
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(`Safe Transaction Service returned ${response.status}.`);
+      const payload = await response.json();
+      const rows = Array.isArray(payload.results) ? payload.results : [];
+      const detailed = await Promise.all(rows.slice(0, 20).map(async (row: any) => {
+        const hash = row.safeTxHash || row.transactionHash;
+        if (!hash) return row;
+        try {
+          const detailResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
+          const detail = detailResponse.ok ? await detailResponse.json() : {};
+          const confirmations = Array.isArray(detail.confirmations) ? detail.confirmations : await fetchSafeConfirmations(hash).catch(() => []);
+          return { ...row, ...detail, confirmations };
+        } catch { return row; }
+      }));
+      detailed.sort((a: any, b: any) => Number(a.nonce) - Number(b.nonce));
+      setSafeQueueNonce(onChainNonce.toString());
+      setSafeQueueThreshold(Number(threshold));
+      setSafeQueue(detailed);
+      if (showToast) toast({ title: "Safe queue refreshed", description: `On-chain nonce ${onChainNonce}; ${detailed.length} pending proposal(s).` });
+    } catch (e: any) {
+      if (showToast) toast({ title: "Could not load Safe queue", description: e.message || String(e), variant: "destructive" });
+    } finally {
+      setSafeQueueLoading(false);
+    }
+  };
+
+  useEffect(() => { refreshSafeQueue(false); }, [selectedChainKey]);
+
+  const safeTypedData = (ethers: any, tx: any, nonce: bigint) => ({
+    domain: { chainId: cfg.chainId, verifyingContract: cfg.safe },
+    types: { SafeTx: [
+      { name: "to", type: "address" }, { name: "value", type: "uint256" }, { name: "data", type: "bytes" },
+      { name: "operation", type: "uint8" }, { name: "safeTxGas", type: "uint256" }, { name: "baseGas", type: "uint256" },
+      { name: "gasPrice", type: "uint256" }, { name: "gasToken", type: "address" }, { name: "refundReceiver", type: "address" },
+      { name: "nonce", type: "uint256" },
+    ] },
+    message: {
+      to: tx.to, value: BigInt(tx.value || "0"), data: tx.data || "0x", operation: Number(tx.operation || 0),
+      safeTxGas: BigInt(tx.safeTxGas || "0"), baseGas: BigInt(tx.baseGas || "0"), gasPrice: BigInt(tx.gasPrice || "0"),
+      gasToken: tx.gasToken || ethers.ZeroAddress, refundReceiver: tx.refundReceiver || ethers.ZeroAddress, nonce,
+    },
+  });
+
+  const approveSafeQueueTx = async (row: any) => {
+    const hash = row.safeTxHash || row.transactionHash;
+    setSafeQueueBusy(hash || String(row.nonce));
+    try {
+      const { ethers, signer } = await ensureChain(cfg);
+      const signerAddr = (await signer.getAddress()).toLowerCase();
+      const provider = new ethers.JsonRpcProvider(cfg.rpc);
+      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
+      const [onChainNonce, owners] = await Promise.all([safe.nonce(), safe.getOwners()]);
+      if (!(owners as string[]).some(o => o.toLowerCase() === signerAddr)) throw new Error("Connected wallet is not an owner of this Safe.");
+      if (BigInt(row.nonce) !== BigInt(onChainNonce)) throw new Error(`This proposal is nonce ${row.nonce}; the Safe currently requires nonce ${onChainNonce}. Resolve the earlier nonce first.`);
+      const detailsResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
+      if (!detailsResponse.ok) throw new Error(`Could not read proposal details (${detailsResponse.status}).`);
+      const tx = await detailsResponse.json();
+      const value = BigInt(tx.value || "0");
+      const operation = Number(tx.operation || 0);
+      const safeTxGas = BigInt(tx.safeTxGas || "0");
+      const baseGas = BigInt(tx.baseGas || "0");
+      const gasPrice = BigInt(tx.gasPrice || "0");
+      const gasToken = tx.gasToken || ethers.ZeroAddress;
+      const refundReceiver = tx.refundReceiver || ethers.ZeroAddress;
+      const computedHash = await safe.getTransactionHash(tx.to, value, tx.data || "0x", operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, BigInt(tx.nonce));
+      if (String(computedHash).toLowerCase() !== String(hash).toLowerCase()) throw new Error("Safe Transaction Service details do not match the proposal hash. Refresh the queue and do not execute this entry.");
+      const confirmations: any[] = await fetchSafeConfirmations(hash);
+      if (confirmations.some((c: any) => (c.owner || c.signer)?.toLowerCase() === signerAddr)) throw new Error("This owner has already confirmed the proposal.");
+      const typed = safeTypedData(ethers, tx, BigInt(tx.nonce));
+      const signature = await signer.signTypedData(typed.domain, typed.types, typed.message);
+      const post = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/confirmations/`, {
+        method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ signature }),
+      });
+      if (!post.ok) throw new Error(`Safe rejected this confirmation (${post.status}): ${(await post.text()).slice(0, 300)}`);
+      toast({ title: "Safe owner approval added", description: `Proposal ${hash}.` });
+      await refreshSafeQueue(false);
+    } catch (e: any) {
+      toast({ title: "Could not approve Safe proposal", description: e.message || String(e), variant: "destructive" });
+    } finally { setSafeQueueBusy(null); }
+  };
+
+  const executeSafeQueueTx = async (row: any) => {
+    const hash = row.safeTxHash || row.transactionHash;
+    setSafeQueueBusy(hash || String(row.nonce));
+    try {
+      const { ethers, signer } = await ensureChain(cfg);
+      const signerAddr = (await signer.getAddress()).toLowerCase();
+      const readProvider = new ethers.JsonRpcProvider(cfg.rpc);
+      const readSafe = new ethers.Contract(cfg.safe, SAFE_ABI, readProvider);
+      const [onChainNonce, threshold, owners] = await Promise.all([readSafe.nonce(), readSafe.getThreshold(), readSafe.getOwners()]);
+      if (!(owners as string[]).some(o => o.toLowerCase() === signerAddr)) throw new Error("Connected wallet is not an owner of this Safe; connect a Safe owner to submit execution.");
+      if (BigInt(row.nonce) !== BigInt(onChainNonce)) throw new Error(`Proposal nonce ${row.nonce} cannot execute yet. Safe on-chain nonce is ${onChainNonce}; execute the transaction at that nonce first.`);
+      const detailsResponse = await fetch(`${safeServiceBase}/multisig-transactions/${hash}/`, { headers: { accept: "application/json" } });
+      if (!detailsResponse.ok) throw new Error(`Could not load full Safe transaction (${detailsResponse.status}).`);
+      const tx = await detailsResponse.json();
+      const value = BigInt(tx.value || "0");
+      const operation = Number(tx.operation || 0);
+      const safeTxGas = BigInt(tx.safeTxGas || "0");
+      const baseGas = BigInt(tx.baseGas || "0");
+      const gasPrice = BigInt(tx.gasPrice || "0");
+      const gasToken = tx.gasToken || ethers.ZeroAddress;
+      const refundReceiver = tx.refundReceiver || ethers.ZeroAddress;
+      const computedHash = await readSafe.getTransactionHash(tx.to, value, tx.data || "0x", operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, BigInt(tx.nonce));
+      if (String(computedHash).toLowerCase() !== String(hash).toLowerCase()) throw new Error("Safe Transaction Service details do not match the proposal hash. Refresh the queue and do not execute this entry.");
+      const confirmations: any[] = await fetchSafeConfirmations(hash);
+      if (confirmations.length < Number(threshold)) throw new Error(`Needs ${threshold} owner approvals; Safe service currently has ${confirmations.length}.`);
+      const ownerOrder = (owners as string[]).map((o: string) => o.toLowerCase());
+      const signedBy = new Set<string>();
+      const signatures = confirmations
+        .filter((c: any) => c.signature && c.owner && ownerOrder.includes(c.owner.toLowerCase()))
+        .sort((a: any, b: any) => {
+          const left = BigInt(a.owner.toLowerCase());
+          const right = BigInt(b.owner.toLowerCase());
+          return left < right ? -1 : left > right ? 1 : 0;
+        })
+        .filter((c: any) => { const key = c.owner.toLowerCase(); if (signedBy.has(key)) return false; signedBy.add(key); return true; })
+        .map((c: any) => c.signature.replace(/^0x/, ""));
+      if (signatures.length < Number(threshold)) throw new Error(`Safe has ${confirmations.length} confirmation record(s), but only ${signatures.length} usable owner signatures. Refresh the proposal in Safe and confirm again.`);
+      const packedSignatures = `0x${signatures.join("")}`;
+      const summary = (tx.data || "0x").slice(0, 10) === "0x72e53e24"
+        ? "withdrawPlatformFeesByToken"
+        : (tx.to || "").toLowerCase() === cfg.safe.toLowerCase() && (tx.data || "0x") === "0x"
+          ? "zero-value Safe self-call (nonce gap replacement)"
+          : `contract call ${String(tx.data || "0x").slice(0, 10)}`;
+      if (!window.confirm(`Execute Safe proposal at nonce ${tx.nonce}?\n\nAction: ${summary}\nTo: ${tx.to}\nValue: ${value.toString()} wei\nSafe transaction hash: ${hash}\n\nThe connected wallet will submit the on-chain execution and pay Base gas.`)) return;
+      const safe = new ethers.Contract(cfg.safe, SAFE_ABI, signer);
+      const args = [
+        tx.to, value, tx.data || "0x", operation, safeTxGas,
+        baseGas, gasPrice, gasToken,
+        refundReceiver, packedSignatures,
+      ] as const;
+      // Simulate first so a target-contract revert is shown before asking the owner wallet to pay gas.
+      try {
+        const simulationSucceeded = await safe.execTransaction.staticCall(...args);
+        if (!simulationSucceeded) throw new Error("Safe simulation returned false; the inner contract call would fail.");
+      }
+      catch (e: any) {
+        const reason = e?.reason || e?.shortMessage || e?.info?.error?.message || e?.message || String(e);
+        throw new Error(`On-chain simulation failed before submission: ${reason}`);
+      }
+      const response = await safe.execTransaction(...args);
+      toast({ title: "Safe execution submitted", description: `Transaction ${response.hash}. Waiting for Base confirmation.` });
+      const receipt = await response.wait();
+      if (!receipt || receipt.status !== 1) throw new Error(`Base transaction ${response.hash} failed. Open it in BaseScan for the execution receipt.`);
+      const iface = new ethers.Interface(SAFE_ABI);
+      const failure = receipt.logs.map((log: any) => { try { return iface.parseLog(log); } catch { return null; } }).find((ev: any) => ev?.name === "ExecutionFailure");
+      if (failure) throw new Error(`Safe transaction was included but its inner call failed. Safe hash ${failure.args.txHash}; execution ${response.hash}.`);
+      toast({ title: "Safe transaction executed", description: `Confirmed on Base: ${response.hash}` });
+      await refreshSafeQueue(false);
+      await load();
+    } catch (e: any) {
+      toast({ title: "Safe execution failed", description: e.message || String(e), variant: "destructive" });
+      await refreshSafeQueue(false);
+    } finally { setSafeQueueBusy(null); }
   };
 
   const run = async (label: string, fn: () => Promise<void>) => {
@@ -1678,6 +1861,7 @@ function ProtocolSection() {
       });
       setSafeTxModal(null);
       await load();
+      await refreshSafeQueue(false);
     } catch (e: any) {
       toast({ title: "Safe proposal failed", description: e.message || String(e), variant: "destructive" });
     } finally {
@@ -1834,6 +2018,73 @@ function ProtocolSection() {
               </Button>
               {walletConnectActive && <Button size="sm" variant="ghost" onClick={disconnectQrWallet} disabled={walletConnecting || safeExecuting}>Disconnect</Button>}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Treasury Safe queue — {cfg.label}</p>
+                <p className="text-xs text-gray-600">On-chain nonce: <strong>{safeQueueNonce ?? "not checked"}</strong> · Approval threshold: <strong>{safeQueueThreshold} owners</strong></p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => refreshSafeQueue()} disabled={safeQueueLoading || safeQueueBusy !== null}>
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${safeQueueLoading ? "animate-spin" : ""}`} />Refresh Safe queue
+              </Button>
+            </div>
+            {safeQueue.length === 0 ? (
+              <p className="text-xs text-gray-600">{safeQueueLoading ? "Reading on-chain nonce and Safe Transaction Service…" : "Refresh to load pending Safe proposals and their confirmations."}</p>
+            ) : <div className="space-y-3">
+              {safeQueue.map((tx: any, index: number) => {
+                const safeHash = tx.safeTxHash || tx.transactionHash || `nonce-${tx.nonce}`;
+                const confirms = Array.isArray(tx.confirmations) ? tx.confirmations : [];
+                const isCurrent = safeQueueNonce !== null && String(tx.nonce) === safeQueueNonce;
+                const enough = confirms.length >= safeQueueThreshold;
+                const isRepair = (tx.to || "").toLowerCase() === cfg.safe.toLowerCase() && (tx.data || "0x") === "0x" && String(tx.value || "0") === "0";
+                let decodedAction = isRepair ? "Zero-value Safe self-call (nonce gap replacement)" : `Contract call ${String(tx.data || "0x").slice(0, 10)}`;
+                let decodedArgs = "";
+                const calldata = String(tx.data || "0x");
+                if (calldata.slice(0, 10).toLowerCase() === "0x72e53e24" && calldata.length >= 138) {
+                  const tokenAddress = `0x${calldata.slice(34, 74)}`;
+                  const rawAmount = BigInt(`0x${calldata.slice(74, 138)}`);
+                  const decimals = tokenAddress.toLowerCase() === cfg.usdt.toLowerCase() ? cfg.usdtDecimals : cfg.usdcDecimals;
+                  const symbol = tokenAddress.toLowerCase() === cfg.usdt.toLowerCase() ? "USDT" : tokenAddress.toLowerCase() === cfg.usdc.toLowerCase() ? "USDC" : "token";
+                  decodedAction = "withdrawPlatformFeesByToken";
+                  decodedArgs = `${fmtToken(rawAmount, decimals)} ${symbol} · token ${tokenAddress}`;
+                }
+                return <div key={`${safeHash}-${index}`} className="rounded-md border bg-white p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={isCurrent ? "default" : "outline"}>Nonce {tx.nonce}{isCurrent ? " · ready in order" : ""}</Badge>
+                      <span className="text-sm font-medium text-gray-900">{decodedAction}</span>
+                      <span className="text-xs text-gray-600">{confirms.length}/{safeQueueThreshold} owner approvals</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => approveSafeQueueTx(tx)} disabled={safeQueueBusy !== null || !state.wallet}>
+                        {safeQueueBusy === safeHash ? "Working…" : "Approve with connected owner"}
+                      </Button>
+                      <Button size="sm" className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={() => executeSafeQueueTx(tx)} disabled={safeQueueBusy !== null || !isCurrent || !enough || !state.wallet}>
+                        Execute on Base
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid gap-1 text-xs text-gray-600 sm:grid-cols-2">
+                    <p><strong>To:</strong> <code className="break-all">{tx.to}</code></p>
+                    <p><strong>Value:</strong> {tx.value || "0"} wei</p>
+                    <p><strong>Operation:</strong> {Number(tx.operation || 0) === 0 ? "CALL" : "DELEGATECALL"}</p>
+                    <p><strong>Safe tx hash:</strong> <code className="break-all">{safeHash}</code></p>
+                    {decodedArgs && <p className="sm:col-span-2"><strong>Decoded withdrawal:</strong> {decodedArgs}</p>}
+                  </div>
+                  <details className="text-xs">
+                    <summary className="cursor-pointer font-medium text-gray-700">Show calldata and owner signatures</summary>
+                    <div className="mt-2 space-y-2">
+                      <div><p className="font-medium text-gray-600">Calldata</p><code className="block max-h-24 overflow-auto break-all rounded bg-gray-50 p-2">{tx.data || "0x"}</code></div>
+                      <div><p className="font-medium text-gray-600">Confirmations</p>{confirms.length ? confirms.map((c: any) => <p key={`${c.owner}-${c.submissionDate}`} className="break-all"><code>{c.owner}</code> · {c.signature ? "signature present" : "signature missing"}</p>) : <p>None reported by Safe Transaction Service.</p>}</div>
+                      {!isCurrent && <p className="text-amber-800">This proposal cannot execute yet: the Safe requires nonce {safeQueueNonce}. Execute the proposal at that nonce first.</p>}
+                      {isCurrent && !enough && <p className="text-amber-800">Collect {safeQueueThreshold - confirms.length} more owner approval(s) before executing.</p>}
+                    </div>
+                  </details>
+                </div>;
+              })}
+            </div>}
           </div>
 
           {/* Token cards */}
