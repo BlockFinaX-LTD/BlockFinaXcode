@@ -679,7 +679,7 @@ type BenchmarkRow = {
   expected: { observationDate: string; expectedAt: string }; latest: Fixing | null; previous: Fixing | null; notice?: string;
 };
 type BenchmarkDetail = BenchmarkRow & {
-  registry: { publicationTime?: string; timeZone: string; dayCountBasis: number; decimals: number; source: string; fallbackSource?: string; observationConvention: string };
+  registry: { website?: string; publicationTime?: string; timeZone: string; dayCountBasis: number; decimals: number; source: string; fallbackSource?: string; observationConvention: string };
 };
 
 const ADMINISTRATOR: Record<string, string> = { SOFR: 'Federal Reserve Bank of New York', KESONIA: 'Central Bank of Kenya' };
@@ -872,6 +872,9 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
           <Sum l="Precision" v={`${d.registry.decimals} decimal places`} />
           <Sum l="Day count" v={`Actual/${d.registry.dayCountBasis}`} />
           <Sum l="Source" v={SOURCE_NAME[d.registry.source] ?? d.registry.source} />
+          {d.registry.website && (
+            <Sum l="Official page" v={<a className="bx-link" href={d.registry.website} target="_blank" rel="noreferrer">{new URL(d.registry.website).hostname.replace(/^www\./, '')} ↗</a>} />
+          )}
           <Sum l="Data licence" v={d.licensing === 'CLEARED' ? 'Cleared for use' : 'Testnet only, being confirmed with the administrator'} />
           {d.notice && <p className="muted" style={{ fontSize: 12, margin: '12px 0 0' }}>{d.notice}</p>}
         </div>

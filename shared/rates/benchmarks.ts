@@ -28,6 +28,8 @@ export interface Benchmark {
   fallbackSource?: string;
   /** Third-party source for anomaly checks only; never the value. */
   validationSource?: string;
+  /** The administrator's public page for this benchmark. */
+  website?: string;
   /** Decimal places the administrator publishes (in percent). */
   decimals: number;
   /** Expected publication, local time "HH:MM" in `timeZone`. */
@@ -58,6 +60,7 @@ const daily = (b: Omit<Benchmark, "type" | "frequency" | "observationConvention"
 export const BENCHMARKS: Record<BenchmarkId, Benchmark> = {
   SOFR: daily({
     id: "SOFR", name: "Secured Overnight Financing Rate", currency: "USD", administrator: "FEDERAL_RESERVE_BANK_OF_NEW_YORK",
+    website: "https://www.newyorkfed.org/markets/reference-rates/sofr",
     source: "NEW_YORK_FED_API", fallbackSource: "NEW_YORK_FED_SEARCH", decimals: 2, publicationTime: "08:00", timeZone: "America/New_York",
     calendar: "US_FED", revisionCutoff: { kind: "SAME_DAY", time: "14:30" }, graceHours: 4, plausibleRange: [-2, 25],
     allowsNegative: true, allowsZero: true, dayCountBasis: 360, licensing: "CLEARED", enabled: false, testnet: true,
@@ -73,6 +76,7 @@ export const BENCHMARKS: Record<BenchmarkId, Benchmark> = {
   EURIBOR_6M: { id: "EURIBOR_6M", name: "Euro Interbank Offered Rate 6M", currency: "EUR", administrator: "EMMI", type: "TERM", tenor: "6M", frequency: "BUSINESS_DAILY", source: "EMMI", decimals: 3, publicationTime: "11:00", timeZone: "Europe/Brussels", observationConvention: "SAME_DAY", calendar: "TARGET2", revisionCutoff: { kind: "NONE" }, graceHours: 4, plausibleRange: [-2, 25], allowsNegative: true, allowsZero: true, dayCountBasis: 360, licensing: "BLOCKED", enabled: false, testnet: false },
   KESONIA: daily({
     id: "KESONIA", name: "Kenya Shilling Overnight Interbank Average", currency: "KES", administrator: "CENTRAL_BANK_OF_KENYA",
+    website: "https://www.centralbank.go.ke/kesonia/",
     source: "CBK_KESONIA_TABLE", decimals: 4, publicationTime: "09:00", timeZone: "Africa/Nairobi",
     // CBK publishes no correction policy; lock at 12:00 on the business day after publication (settlement rules section 3).
     calendar: "KE_CBK", revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 4, plausibleRange: [0, 40],
