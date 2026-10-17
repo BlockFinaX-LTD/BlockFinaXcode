@@ -13,7 +13,17 @@ import { toWalletRequest, type PreparedTransaction } from '@/lib/wallet-provider
 
 export type Direction = 'up' | 'down';
 
-const CURRENCY_NAMES: Record<string, string> = { NGN: 'Naira', GHS: 'Cedi', KES: 'Kenyan shilling', ZAR: 'Rand', EGP: 'Egyptian pound' };
+const CURRENCY_NAMES: Record<string, string> = {
+  NGN: 'Naira', GHS: 'Cedi', KES: 'Kenyan shilling', ZAR: 'Rand', EGP: 'Egyptian pound', XOF: 'West African CFA franc',
+  XAF: 'Central African CFA franc', MAD: 'Moroccan dirham', UGX: 'Ugandan shilling', TZS: 'Tanzanian shilling', RWF: 'Rwandan franc',
+  ETB: 'Ethiopian birr', ZMW: 'Zambian kwacha', MZN: 'Mozambican metical', BWP: 'Botswana pula', MUR: 'Mauritian rupee', TND: 'Tunisian dinar',
+};
+/** A pair as a reader names it: "Naira" for USD/NGN, "Naira per euro" for EUR/NGN. */
+export const pairName = (pair: string) => {
+  const base = pair.split('/')[0];
+  const name = CURRENCY_NAMES[quoteCcy(pair)] ?? quoteCcy(pair);
+  return base === 'USD' ? name : `${name} per ${base === 'EUR' ? 'euro' : base === 'GBP' ? 'pound' : base}`;
+};
 export const quoteCcy = (pair: string) => pair.split('/')[1] ?? pair;
 export const ccyName = (pair: string) => CURRENCY_NAMES[quoteCcy(pair)] ?? quoteCcy(pair);
 export const fmt = (v: string | number | null | undefined, dp = 2) =>

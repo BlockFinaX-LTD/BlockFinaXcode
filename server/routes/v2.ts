@@ -181,6 +181,13 @@ export function registerV2Routes(app: Express) {
     res.json(await (await getServices()).quotes.options(String(req.query.pair ?? ""), direction));
   }));
 
+  /** Live rates for the watchlist, with the change since the last daily close. */
+  app.get("/api/v2/rates", wrap(async (_req, res) => {
+    const s = await getServices();
+    const { watchlistRates } = await import("../domain/rates");
+    res.json({ rates: await watchlistRates((pair) => s.quotes.spot(pair)) });
+  }));
+
   /** Daily closes for a pair, oldest first (for rate charts). */
   app.get("/api/v2/history", wrap(async (req, res) => {
     const pair = String(req.query.pair ?? "");

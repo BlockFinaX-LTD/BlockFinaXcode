@@ -11,7 +11,7 @@ import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResul
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
-  ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
+  ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, type Direction,
 } from './shared';
 import { Flag, Loading, Spin, Sum, Tag } from './ui';
@@ -45,16 +45,25 @@ function useHistory(pair: string | null, days: number) {
   });
 }
 
-/** Rate and change since the previous daily close, for a list of pairs. */
+/** The rates watchlist (live rate, change since the last daily close), from one request. */
+function useWatchlist() {
+  return useQuery({
+    queryKey: ['v2-rates'],
+    queryFn: async () => (await api<{ rates: { pair: string; spot: number | null; change: number | null }[] }>('/api/v2/rates')).rates,
+    refetchInterval: 60_000,
+  });
+}
+
+/** Rate and change for specific pairs (falls back to a spot read for pairs off the watchlist). */
 function useRates(pairs: string[]) {
-  const spots = useQueries({ queries: pairs.map((p) => ({ queryKey: ['v2-spot', p], queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(p)}`)).spot), refetchInterval: 60_000 })) });
-  const hist = useQueries({ queries: pairs.map((p) => ({ queryKey: ['v2-history', p, 5], queryFn: async () => (await api<{ closes: { date: string; close: number }[] }>(`/api/v2/history?pair=${encodeURIComponent(p)}&days=5`)).closes, staleTime: 600_000 })) });
-  return pairs.map((pair, i) => {
-    const spot = spots[i].data;
-    const closes = hist[i].data ?? [];
-    const prev = closes.length >= 2 ? closes[closes.length - 2].close : closes[0]?.close;
-    const change = spot && prev ? spot / prev - 1 : null;
-    return { pair, spot, change };
+  const list = useWatchlist();
+  const missing = pairs.filter((p) => !(list.data ?? []).some((r) => r.pair === p));
+  const spots = useQueries({ queries: missing.map((p) => ({ queryKey: ['v2-spot', p], queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(p)}`)).spot), refetchInterval: 60_000 })) });
+  return pairs.map((pair) => {
+    const row = list.data?.find((r) => r.pair === pair);
+    if (row) return { pair, spot: row.spot ?? undefined, change: row.change };
+    const i = missing.indexOf(pair);
+    return { pair, spot: spots[i]?.data, change: null as number | null };
   });
 }
 
@@ -191,6 +200,8 @@ export function HedgerHome({ go }: { go: Go }) {
   const pairs = useMemo(() => Array.from(new Set((pools.data ?? []).map((p) => p.pair))), [pools.data]);
   const rates = useRates(pairs);
   const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
+  const watch = useWatchlist();
+  const watchRows = [...(watch.data ?? [])].sort((a, b) => Number(pairs.includes(b.pair)) - Number(pairs.includes(a.pair))).slice(0, 6);
   const exposure = active.reduce((s, h) => s + Number(h.position.notional), 0);
   const next = active.length ? Math.min(...active.map((h) => h.position.expiry)) : null;
   const activity = [...all].sort((a, b) => b.position.createdAt - a.position.createdAt).slice(0, 4);
@@ -244,11 +255,12 @@ export function HedgerHome({ go }: { go: Go }) {
           <button onClick={() => go('h-protect')}>Get started</button>
         </div>
         <div className="bx-card tight">
-          <div className="bx-card-h"><h2>Rates</h2><span className="muted" style={{ fontSize: 12 }}>1 USD in local currency</span></div>
-          {rates.map((r) => (
-            <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go('h-protect', { pair: r.pair })}>
-              <div className="grow"><div className="t">{r.pair}</div><div className="d">{ccyName(r.pair)}</div></div>
-              <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '...'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
+          <div className="bx-card-h"><h2>Rates</h2><button className="bx-link" onClick={() => go('h-rates')}>All rates</button></div>
+          {watch.isLoading ? <Loading /> : watchRows.map((r) => (
+            <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go(pairs.includes(r.pair) ? 'h-protect' : 'h-rates', pairs.includes(r.pair) ? { pair: r.pair } : undefined)}>
+              <Flag pair={r.pair} />
+              <div className="grow"><div className="t">{r.pair}</div><div className="d">{pairName(r.pair)}</div></div>
+              <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '-'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
             </div>
           ))}
         </div>
@@ -637,26 +649,36 @@ export function MyProtections({ go }: { go: Go }) {
 
 export function RatesPage({ go }: { go: Go }) {
   const pools = usePools();
-  const pairs = useMemo(() => Array.from(new Set((pools.data ?? []).map((p) => p.pair))), [pools.data]);
-  const rates = useRates(pairs);
-  const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr)) 140px' };
+  const covered = useMemo(() => new Set((pools.data ?? []).filter((p) => p.acceptingHedges).map((p) => p.pair)), [pools.data]);
+  const watch = useWatchlist();
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const rows = (watch.data ?? [])
+    .filter((r) => !term || `${r.pair} ${pairName(r.pair)}`.toLowerCase().includes(term))
+    .sort((a, b) => Number(covered.has(b.pair)) - Number(covered.has(a.pair)));
+  const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr)) 150px' };
   return (
     <main className="bx-main">
       <section className="bx-full">
         <div className="bx-card">
-          <div className="bx-card-h"><h2>Rates</h2><span className="muted" style={{ fontSize: 13 }}>1 USD in local currency · change since the last daily close</span></div>
-          {pools.isLoading ? <Loading /> : (
-            <>
+          <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
+            <div><h2>Rates</h2><div className="sub">Live rates for the currencies BlockFinaX customers trade in. Change is since the last daily close.</div></div>
+            <input className="bx-input" style={{ maxWidth: 260 }} aria-label="Search rates" placeholder="Search currency" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          {watch.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No currency matches.</div> : (
+            <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 620 }}>
               <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">Rate</span><span className="r">Change</span><span /></div>
-              {rates.map((r) => (
+              {rows.map((r) => (
                 <div key={r.pair} className="bx-li" style={cols}>
-                  <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{ccyName(r.pair)}</div><div className="d">{r.pair}</div></div></div>
-                  <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '...'}</div>
+                  <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{pairName(r.pair)}</div><div className="d">{r.pair} · 1 {r.pair.split('/')[0]} in {quoteCcy(r.pair)}</div></div></div>
+                  <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '-'}</div>
                   <div className="r"><ChangeText change={r.change} /></div>
-                  <div className="r"><button className="bx-btn small" onClick={() => go('h-protect', { pair: r.pair })}>Protect</button></div>
+                  <div className="r">{covered.has(r.pair)
+                    ? <button className="bx-btn small" onClick={() => go('h-protect', { pair: r.pair })}>Protect</button>
+                    : <span className="muted" style={{ fontSize: 12 }}>No cover yet</span>}</div>
                 </div>
               ))}
-            </>
+            </div></div>
           )}
         </div>
       </section>

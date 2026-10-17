@@ -9,8 +9,10 @@
  */
 import { seedDefaultClassifications } from "./data/classification";
 import { backfillPairWithRange, getCloseCount } from "./data/historical";
+import { WATCHLIST } from "../domain/rates";
 
-const DEFAULT_PAIRS = "USD/NGN,USD/GHS,USD/KES,USD/ZAR,USD/EGP";
+// The watchlist, minus GBP/GHS which Yahoo covers too sparsely to backfill.
+const DEFAULT_PAIRS = WATCHLIST.filter((p) => p !== "GBP/GHS").join(",");
 const ENOUGH_CLOSES = 250;
 
 export async function bootstrapTestnetPricing() {
