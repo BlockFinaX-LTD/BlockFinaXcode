@@ -49,7 +49,7 @@ function storeSessionToken(token: string | null) {
   } catch { /* storage unavailable: session lasts for this page only */ }
 }
 
-async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown): Promise<T> {
   const token = storedSessionToken();
   const res = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
@@ -205,3 +205,32 @@ export class PasskeyWalletProvider implements WalletProvider {
 }
 
 export const passkeyWalletProvider = new PasskeyWalletProvider();
+
+/** Network keys in the shape the wallet screens use ("stellar-testnet" -> "STELLAR_TESTNET"). */
+export const toScreenChain = (key: string) => key.toUpperCase().replace(/-/g, "_");
+export const fromScreenChain = (name: string) => name.toLowerCase().replace(/_/g, "-");
+
+/** Balances on every chain the user has an account on, in the screens' Balance shape. */
+export async function passkeyBalances() {
+  const [{ balances }, { chains }] = await Promise.all([
+    api<{ balances: { chain: string; symbol: string; amount: string | null }[] }>("/api/v2/balances"),
+    api<{ chains: { key: string; name: string }[] }>("/api/v2/chains"),
+  ]);
+  const names = new Map(chains.map((c) => [c.key, c.name]));
+  return balances.map((b) => ({
+    chain: toScreenChain(b.chain),
+    chainName: names.get(b.chain) ?? b.chain,
+    token: b.symbol,
+    amount: Number(b.amount ?? 0),
+  }));
+}
+
+/** Prepare and send a transfer with the passkey; returns the transaction hash. */
+export async function passkeySend(input: { chain: string; symbol: string; to: string; amount: string }, onStep?: (m: string) => void) {
+  const { toWalletRequest } = await import("../wallet-provider");
+  const chain = fromScreenChain(input.chain);
+  const { transactions } = await api<{ transactions: import("../wallet-provider").PreparedTransaction[] }>("/api/v2/transfers/prepare", { ...input, chain });
+  let hash = "";
+  for (const tx of transactions) hash = (await passkeyWalletProvider.sendTransaction(toWalletRequest(tx), onStep)).transactionHash;
+  return hash;
+}

@@ -6,7 +6,7 @@
  * are built from the on-chain contract spec, so no generated bindings are needed.
  */
 import { randomBytes } from "node:crypto";
-import { Keypair, contract, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { BASE_FEE, Keypair, Operation, StrKey, TransactionBuilder, contract, nativeToScVal, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import type { ChainConfig } from "@shared/chains/registry";
 import { fromRate, fromUnits, toRate, toUnits, STRUCTURE_CODE } from "@shared/domain/pool-economics";
 import {
@@ -163,8 +163,46 @@ export class StellarAdapter implements ChainAdapter {
   async getBalance(owner: string, symbol: string): Promise<string> {
     const a = this.chain.assets[symbol];
     if (!a) throw new ApplicationError("INVALID_REQUEST", `${symbol} not configured on ${this.chain.key}`);
-    const token = await this.client(a.addressOrContract);
-    return fromUnits(BigInt((await token.balance({ id: owner })).result), a.decimals);
+    try {
+      const { sim } = await this.simulateToken(a.addressOrContract, "balance", [nativeToScVal(owner, { type: "address" })]);
+      return fromUnits(BigInt(scValToNative(sim.result!.retval)), a.decimals);
+    } catch {
+      // An account with no trustline or no balance entry holds nothing.
+      return "0";
+    }
+  }
+
+  /**
+   * Stellar asset contracts publish no contract spec, so contract.Client cannot load
+   * them. Token calls are built and simulated directly.
+   */
+  private async simulateToken(token: string, method: string, args: xdr.ScVal[]) {
+    const source = await this.server.getAccount(this.sponsor);
+    const tx = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: this.chain.networkId })
+      .addOperation(Operation.invokeContractFunction({ contract: token, function: method, args }))
+      .setTimeout(300)
+      .build();
+    const sim = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) throw new Error(sim.error);
+    return { tx, sim };
+  }
+
+  async prepareTransfer(owner: string, to: string, symbol: string, amount: string): Promise<PreparedTransaction[]> {
+    const a = this.chain.assets[symbol];
+    if (!a) throw new ApplicationError("INVALID_REQUEST", `${symbol} not configured on ${this.chain.key}`);
+    if (!StrKey.isValidEd25519PublicKey(to) && !StrKey.isValidContract(to)) throw new ApplicationError("INVALID_REQUEST", "Enter a valid Stellar G or C address");
+    if (to === owner) throw new ApplicationError("INVALID_REQUEST", "You cannot send to your own address");
+    const units = toUnits(amount, a.decimals);
+    if (units <= BigInt(0)) throw new ApplicationError("INVALID_REQUEST", "Enter an amount above zero");
+    try {
+      const { tx, sim } = await this.simulateToken(a.addressOrContract, "transfer", [
+        nativeToScVal(owner, { type: "address" }), nativeToScVal(to, { type: "address" }), nativeToScVal(units, { type: "i128" }),
+      ]);
+      const assembled = rpc.assembleTransaction(tx, sim as rpc.Api.SimulateTransactionSuccessResponse).build();
+      return [{ chain: this.chain.key, family: "stellar", label: `Send ${amount} ${symbol}`, payload: { kind: "stellar", networkPassphrase: this.chain.networkId, xdr: assembled.toXDR() } }];
+    } catch (err) {
+      throw this.mapError(err);
+    }
   }
 
   async getOracleState(positionId: number): Promise<OracleRoundState> {
@@ -328,7 +366,7 @@ export class StellarAdapter implements ChainAdapter {
    * approved call on this pool contract authorized by `wallet`. Returns the transaction hash.
    */
   async relayUserTransaction(xdrEnvelope: string, wallet: string): Promise<TransactionStatus> {
-    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId);
+    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract));
     // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.
     const relayerUrl = this.env.STELLAR_RELAYER_URL;
     const relayerKey = this.env.STELLAR_RELAYER_API_KEY;

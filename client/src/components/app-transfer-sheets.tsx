@@ -28,12 +28,20 @@ import {
 } from 'lucide-react';
 import { CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChain } from '@/components/app-glyphs';
 import { explainTxError } from '@/lib/tx-errors';
+import { usesPasskeyWallet, usePasskeySession } from '@/lib/identity';
+import { passkeySend, toScreenChain } from '@/lib/wallets/passkey-wallet';
 
 const CHAIN_LABELS: Record<string, string> = {
   BASE_SEPOLIA: 'Base Sepolia', BASE: 'Base', POLYGON: 'Polygon', ARBITRUM: 'Arbitrum', ETHEREUM: 'Ethereum',
   BNB: 'BNB Chain', BSC: 'BNB Chain', OPTIMISM: 'Optimism', CELO: 'Celo',
-  AVAX: 'Avalanche',
+  AVAX: 'Avalanche', STELLAR_TESTNET: 'Stellar Testnet', STELLAR: 'Stellar',
 };
+
+const isStellarChain = (c: string) => normalizeChain(c).startsWith('STELLAR');
+/** A recipient address for the chosen network: 0x on EVM, G or C on Stellar. */
+function validRecipient(chain: string, to: string) {
+  return isStellarChain(chain) ? /^[GC][A-Z2-7]{55}$/.test(to) : /^0x[a-fA-F0-9]{40}$/.test(to);
+}
 const CHAIN_ID_TO_NAME: Record<string, ChainName> = {
   '1': 'ETHEREUM', '10': 'OPTIMISM', '56': 'BNB', '137': 'POLYGON',
   '84532': 'BASE_SEPOLIA' as ChainName, '8453': 'BASE', '42161': 'ARBITRUM', '42220': 'CELO', '43114': 'AVAX',
@@ -57,6 +65,8 @@ function txDisplay(chain: string, rawHash: string): { href: string; short: strin
 function explorerTx(chain: string, hash: string): string {
   const c = normalizeChain(chain);
   if (c === 'BASE_SEPOLIA') return `https://sepolia.basescan.org/tx/${hash}`;
+  if (c === 'STELLAR_TESTNET') return `https://stellar.expert/explorer/testnet/tx/${hash}`;
+  if (c === 'STELLAR') return `https://stellar.expert/explorer/public/tx/${hash}`;
   if (c === 'BASE') return `https://basescan.org/tx/${hash}`;
   if (c === 'BNB' || c === 'BSC') return `https://bscscan.com/tx/${hash}`;
   if (c === 'POLYGON') return `https://polygonscan.com/tx/${hash}`;
@@ -111,7 +121,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
   useEffect(() => {
     if (open) { refreshAll(); }
     else {
-      setTab('crypto'); setStep('form'); setChain('BASE'); setToken('USDC');
+      setTab('crypto'); setStep('form'); setChain((usesPasskeyWallet || isWalletSandbox ? 'BASE_SEPOLIA' : 'BASE') as ChainName); setToken('USDC');
       setTo(''); setAmount(''); setOtpCode(''); setPassword('');
       setOtpSent(false); setHash(null); setPicker(null);
     }
@@ -195,15 +205,17 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
     }
   };
 
-  const valid = /^0x[a-fA-F0-9]{40}$/.test(to) && checkAmount(amount, available, token).ok;
+  const valid = validRecipient(chain, to) && checkAmount(amount, available, token).ok;
 
   const review = () => {
-    if (!/^0x[a-fA-F0-9]{40}$/.test(to)) { toast({ title: 'Invalid address', description: 'Recipient must be a 0x… address', variant: 'destructive' }); return; }
+    if (!validRecipient(chain, to)) { toast({ title: 'Invalid address', description: isStellarChain(chain) ? 'Recipient must be a Stellar G… or C… address' : 'Recipient must be a 0x… address', variant: 'destructive' }); return; }
     const n = parseFloat(amount);
     if (isNaN(n) || n <= 0) { toast({ title: 'Invalid amount', variant: 'destructive' }); return; }
     const check = checkAmount(amount, available, token);
     if (!check.ok) { toast({ title: 'Check the amount', description: check.reason, variant: 'destructive' }); return; }
     setStep('authorize');
+    // The passkey wallet approves on the device; there is no code to send.
+    if (usesPasskeyWallet) { setDeviceSigning(true); return; }
     void (async () => {
       let onDevice = false;
       try {
@@ -242,6 +254,19 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   const submit = async () => {
+    if (usesPasskeyWallet) {
+      setSending(true);
+      try {
+        setHash(await passkeySend({ chain: normalizeChain(chain), symbol: token, to, amount }));
+        setStep('done');
+        refreshAll();
+      } catch (err: any) {
+        const e = explainTxError(err);
+        console.error('[transfer] passkey send:', e.detail, err);
+        toast({ title: e.title, description: err?.message || e.message, variant: 'destructive' });
+      } finally { setSending(false); }
+      return;
+    }
     if (!authMethod) { toast({ title: 'Not signed in', variant: 'destructive' }); return; }
     setSending(true);
     try {
@@ -343,7 +368,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
                 </div>
                 <div className="field">
                   <label>To</label>
-                  <input className="input" placeholder="Recipient 0x… address" value={to} onChange={(e) => setTo(e.target.value.trim())} />
+                  <input className="input" placeholder={isStellarChain(chain) ? 'Recipient G… or C… address' : 'Recipient 0x… address'} value={to} onChange={(e) => setTo(e.target.value.trim())} />
                 </div>
                 {!balLoading && owned.length === 0 && (
                   <p className="send-note"><Info /> No USDC/USDT to send yet. Fund your wallet to get started.</p>
@@ -386,7 +411,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
               <div className="brk-line"><span className="l">Network</span><span className="v">{chainNames.get(normalizeChain(chain)) || chain}</span></div>
               <div className="brk-line total"><span className="l">Gas</span><span className="v" style={{ color: 'var(--green)' }}>Sponsored</span></div>
             </div>
-            {!authMethod && <p className="send-note"><Info /> Auth method unknown — please sign in again.</p>}
+            {!authMethod && !usesPasskeyWallet && <p className="send-note"><Info /> Auth method unknown — please sign in again.</p>}
             {deviceSigning !== true && authMethod?.kind === 'password' && (
               <div className="field">
                 <label>Password</label>
@@ -397,7 +422,7 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
               <div className="field">
                 <label>Approval</label>
                 <p style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.75, margin: 0 }}>
-                  You'll approve this with {bioName}. No code needed.
+                  You'll approve this with {usesPasskeyWallet ? 'your passkey' : bioName}. No code needed.
                 </p>
               </div>
             )}
@@ -500,8 +525,27 @@ export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => 
 // ─────────────────────────────────────────────────────────────────────────
 // RECEIVE
 // ─────────────────────────────────────────────────────────────────────────
-export function AppReceiveSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { address } = useWallet();
+export function AppReceiveSheet(props: { open: boolean; onClose: () => void }) {
+  return usesPasskeyWallet ? <ReceiveSheet {...props} passkey /> : <ReceiveSheet {...props} />;
+}
+
+/** The passkey wallet's accounts as receive options, one per network. */
+function usePasskeyReceiveOptions(enabled: boolean) {
+  if (!enabled) return [] as { chain: string; label: string; address: string }[];
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { session } = usePasskeySession();
+  return (session?.accounts ?? []).map((a) => {
+    const key = toScreenChain(a.chain);
+    return { chain: key, label: CHAIN_LABELS[key] ?? a.chain, address: a.address };
+  });
+}
+
+function ReceiveSheet({ open, onClose, passkey = false }: { open: boolean; onClose: () => void; passkey?: boolean }) {
+  const { address: riftAddress } = useWallet();
+  const options = usePasskeyReceiveOptions(passkey);
+  const [net, setNet] = useState<string | null>(null);
+  const selected = options.find((o) => o.chain === net) ?? options[0];
+  const address = passkey ? selected?.address ?? null : riftAddress;
   const { toast } = useToast();
   const [tab, setTab] = useState<DestTab>('crypto');
   const [copied, setCopied] = useState(false);
@@ -533,6 +577,13 @@ export function AppReceiveSheet({ open, onClose }: { open: boolean; onClose: () 
           <button className={tab === 'momo' ? 'on' : ''} onClick={() => setTab('momo')}>Mobile money</button>
         </div>
 
+        {tab === 'crypto' && passkey && options.length > 1 && (
+          <div className="rtabs" style={{ marginBottom: 12 }}>
+            {options.map((o) => (
+              <button key={o.chain} className={selected?.chain === o.chain ? 'on' : ''} onClick={() => setNet(o.chain)}>{o.label}</button>
+            ))}
+          </div>
+        )}
         {tab === 'crypto' && (
           <div className="qr-wrap">
             <div className="qr">{address ? <QRCodeComponent value={address} size={160} /> : null}</div>
@@ -543,7 +594,7 @@ export function AppReceiveSheet({ open, onClose }: { open: boolean; onClose: () 
               </div>
               <button className="copy" onClick={copy} aria-label="Copy address">{copied ? <Check /> : <Copy />}</button>
             </div>
-            <p className="send-note"><Info /> {isWalletSandbox ? 'Only send test tokens on Base Sepolia to this address.' : 'Only send tokens on supported networks (Base, BNB Chain) to this address.'}</p>
+            <p className="send-note"><Info /> {passkey ? `Only send test USDC on ${selected?.label ?? 'this network'} to this address.` : isWalletSandbox ? 'Only send test tokens on Base Sepolia to this address.' : 'Only send tokens on supported networks (Base, BNB Chain) to this address.'}</p>
           </div>
         )}
 

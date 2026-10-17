@@ -239,6 +239,15 @@ export function registerV2Routes(app: Express) {
   }));
 
   /** Stellar: the user's passkey authorized the call; the platform pays the fee. */
+  /** Send a listed asset to another address on the same chain (the wallet's Send). */
+  app.post("/api/v2/transfers/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, symbol, to, amount } = req.body ?? {};
+    if (typeof chain !== "string" || typeof to !== "string" || typeof amount !== "string") throw new ApplicationError("INVALID_REQUEST", "chain, to and amount are required");
+    const owner = await ownerOn(s, await userId(req), chain);
+    res.json({ chain, transactions: await s.adapters.adapterFor(chain).prepareTransfer(owner, to.trim(), String(symbol ?? "USDC"), amount) });
+  }));
+
   app.post("/api/v2/transactions/relay", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, xdr } = req.body ?? {};

@@ -179,12 +179,20 @@ export async function getMe(): Promise<User | null> {
 }
 
 export function isLoggedIn(): boolean {
+  if (import.meta.env.VITE_WALLET_PROVIDER === 'passkey') {
+    try { return !!localStorage.getItem('bfx:passkey-session'); } catch { return false; }
+  }
   return rift.isAuthenticated();
 }
 
 // ── Wallet & balances ────────────────────────────────────────────────────
 
 export async function getChainBalances(chain?: ChainName): Promise<Balance[]> {
+  if (import.meta.env.VITE_WALLET_PROVIDER === 'passkey') {
+    const { passkeyBalances } = await import('./wallets/passkey-wallet');
+    const all = (await passkeyBalances()) as Balance[];
+    return chain ? all.filter((b) => b.chain === chain) : all;
+  }
   if (isWalletSandbox) {
     const address = getCachedUserSummary()?.address;
     if (!address) return [];

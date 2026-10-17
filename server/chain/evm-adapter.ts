@@ -248,6 +248,17 @@ export class EvmAdapter implements ChainAdapter {
     ];
   }
 
+  async prepareTransfer(owner: string, to: string, symbol: string, amount: string) {
+    const a = this.chain.assets[symbol];
+    if (!a) throw new ApplicationError("INVALID_REQUEST", `${symbol} not configured on ${this.chain.key}`);
+    if (!ethers.isAddress(to)) throw new ApplicationError("INVALID_REQUEST", "Enter a valid 0x address");
+    if (to.toLowerCase() === owner.toLowerCase()) throw new ApplicationError("INVALID_REQUEST", "You cannot send to your own address");
+    const units = toUnits(amount, a.decimals);
+    if (units <= BigInt(0)) throw new ApplicationError("INVALID_REQUEST", "Enter an amount above zero");
+    const data = new ethers.Interface(["function transfer(address,uint256)"]).encodeFunctionData("transfer", [ethers.getAddress(to), units]);
+    return [this.tx(`Send ${amount} ${symbol}`, a.addressOrContract, data)];
+  }
+
   async prepareHedge(owner: string, quote: ProtectionQuote) {
     const e = quote.executable as Record<string, string>;
     const pool = await this.getPool(Number(e.poolId));

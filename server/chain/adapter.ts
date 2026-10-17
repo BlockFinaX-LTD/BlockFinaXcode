@@ -81,6 +81,8 @@ export interface ChainAdapter {
   prepareWithdrawalRequest(owner: string, poolId: number, shares: string): Promise<PreparedTransaction[]>;
   prepareWithdrawalExecute(owner: string, requestId: number): Promise<PreparedTransaction[]>;
   prepareClaim(owner: string, positionId: number): Promise<PreparedTransaction[]>;
+  /** Send a listed asset from the user's account to another address on the same chain. */
+  prepareTransfer(owner: string, to: string, symbol: string, amount: string): Promise<PreparedTransaction[]>;
 
   // Platform operations.
   submitOraclePrice(positionId: number, price: string, signer: PlatformSigner): Promise<TransactionStatus>;
