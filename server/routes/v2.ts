@@ -197,6 +197,42 @@ export function registerV2Routes(app: Express) {
     res.json({ pair, closes: rows.map((r: any) => ({ date: String(r.date).slice(0, 10), close: Number(r.close) })) });
   }));
 
+  /**
+   * Chart points for a pair over a range. 1H, 6H and 24H use the FX oracle's own
+   * snapshots of the live rate (kept about 26 hours); longer ranges use stored daily
+   * closes. Long series are thinned to about 300 points.
+   */
+  app.get("/api/v2/chart", wrap(async (req, res) => {
+    const pair = String(req.query.pair ?? "");
+    const range = String(req.query.range ?? "1M").toUpperCase();
+    const HOURS: Record<string, number> = { "1H": 1, "6H": 6, "24H": 24 };
+    const DAYS: Record<string, number> = { "1M": 31, "3M": 92, "6M": 183, "1Y": 366, "5Y": 1827, "MAX": 20_000 };
+    let points: { t: string; v: number }[] = [];
+    if (HOURS[range]) {
+      const { db } = await import("../db");
+      const { rateSnapshots } = await import("@shared/schema");
+      const { and, asc, eq, gte } = await import("drizzle-orm");
+      const since = new Date(Date.now() - HOURS[range] * 3_600_000);
+      const rows = await db.select().from(rateSnapshots)
+        .where(and(eq(rateSnapshots.pair, pair), gte(rateSnapshots.recordedAt, since)))
+        .orderBy(asc(rateSnapshots.recordedAt));
+      points = rows.map((r) => ({ t: new Date(r.recordedAt).toISOString(), v: Number(r.rate) }));
+    } else {
+      const now = new Date();
+      const days = range === "YTD"
+        ? Math.ceil((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 1)) / 86_400_000) + 1
+        : DAYS[range] ?? 31;
+      const { getRecentCloses } = await import("../pricing/data/historical");
+      const rows = await getRecentCloses(pair, days);
+      const from = new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
+      points = rows.filter((r: any) => range === "MAX" || String(r.date) >= from)
+        .map((r: any) => ({ t: String(r.date).slice(0, 10), v: Number(r.close) }));
+    }
+    const step = Math.ceil(points.length / 300);
+    if (step > 1) points = points.filter((_, i) => i % step === 0 || i === points.length - 1);
+    res.json({ pair, range, intraday: Boolean(HOURS[range]), points });
+  }));
+
   app.get("/api/v2/spot", wrap(async (req, res) => {
     const pair = String(req.query.pair ?? "");
     res.json({ pair, spot: await (await getServices()).quotes.spot(pair) });

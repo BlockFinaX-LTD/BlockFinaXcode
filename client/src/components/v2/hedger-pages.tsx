@@ -36,14 +36,6 @@ function useSpot(pair: string | null) {
   });
 }
 
-function useHistory(pair: string | null, days: number) {
-  return useQuery({
-    queryKey: ['v2-history', pair, days],
-    enabled: Boolean(pair),
-    queryFn: async () => (await api<{ closes: { date: string; close: number }[] }>(`/api/v2/history?pair=${encodeURIComponent(pair!)}&days=${days}`)).closes,
-    staleTime: 600_000,
-  });
-}
 
 /** The rates watchlist (live rate, change since the last daily close), from one request. */
 function useWatchlist() {
@@ -296,12 +288,26 @@ function AvailableCover({ go }: { go: Go }) {
 
 // ── Protect ──────────────────────────────────────────────────────────────────
 
-const RANGES = [{ label: '1W', days: 7 }, { label: '1M', days: 30 }, { label: '3M', days: 90 }, { label: '1Y', days: 365 }];
+const RANGES = ['1H', '6H', '24H', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'MAX'] as const;
+type Range = (typeof RANGES)[number];
+
+/** Chart points: intraday ranges from live-rate snapshots, longer ones from daily closes. */
+function useChart(pair: string | null, range: Range) {
+  return useQuery({
+    queryKey: ['v2-chart', pair, range],
+    enabled: Boolean(pair),
+    queryFn: async () => (await api<{ points: { t: string; v: number }[] }>(`/api/v2/chart?pair=${encodeURIComponent(pair!)}&range=${range}`)).points,
+    staleTime: range.endsWith('H') ? 60_000 : 600_000,
+    refetchInterval: range.endsWith('H') ? 120_000 : false,
+  });
+}
 const AMOUNTS = [500, 1000, 5000, 10000];
 
-function RateChart({ closes, strike, cap }: { closes: { date: string; close: number }[]; strike: number | null; cap: number | null }) {
-  if (closes.length < 2) return <div className="bx-chart"><Loading label="Loading chart..." /></div>;
-  const values = closes.map((c) => c.close);
+function RateChart({ points, loading, strike, cap }: { points: { t: string; v: number }[]; loading: boolean; strike: number | null; cap: number | null }) {
+  if (points.length < 2) {
+    return <div className="bx-chart"><div className="bx-empty">{loading ? 'Loading chart...' : 'Not enough data for this range yet.'}</div></div>;
+  }
+  const values = points.map((c) => c.v);
   const marks = [strike, cap].filter((v): v is number => v !== null);
   const lo = Math.min(...values, ...marks), hi = Math.max(...values, ...marks);
   const span = hi - lo || 1;
@@ -348,11 +354,15 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const matching = available.filter((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
   useEffect(() => { if (poolChoice && !matching.some((p) => poolRef(p) === poolChoice)) setPoolChoice(null); }, [poolChoice, matching]);
 
-  const [range, setRange] = useState(30);
+  const [range, setRange] = useState<Range>('1M');
   const spot = useSpot(pair);
-  const history = useHistory(pair, range);
-  const closes = history.data ?? [];
-  const periodChange = closes.length >= 2 && spot.data ? spot.data / closes[0].close - 1 : null;
+  const chart = useChart(pair, range);
+  const points = chart.data ?? [];
+  // Intraday ranges share the live rate's source, so measure from the live rate; daily
+  // ranges measure close to close so two providers are never compared.
+  const periodChange = points.length >= 2
+    ? (range.endsWith('H') && spot.data ? spot.data : points[points.length - 1].v) / points[0].v - 1
+    : null;
 
   const options = useQuery({
     queryKey: ['v2-options', pair, direction],
@@ -452,11 +462,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
             <span className="num" style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em' }}>{spot.data ? fmtRate(spot.data) : '...'}</span>
             <span className="muted">{ccy} per 1 USD</span>
-            <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{RANGES.find((r) => r.days === range)?.label}</span>
+            <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
           </div>
-          <RateChart closes={closes} strike={strike} cap={structure === 'capped' ? cap : null} />
-          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-            {RANGES.map((r) => <button key={r.days} className={`bx-pill${range === r.days ? ' on' : ''}`} style={{ padding: '8px 14px' }} onClick={() => setRange(r.days)}>{r.label}</button>)}
+          <RateChart points={points} loading={chart.isLoading} strike={strike} cap={structure === 'capped' ? cap : null} />
+          <div className="bx-ranges" role="group" aria-label="Chart range">
+            {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
         </div>
 
