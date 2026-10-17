@@ -24,6 +24,7 @@ export interface StoredObservation {
   lastSeenAt: Date;
   onChainRound: number | null;
   onChainTx: string | null;
+  onChainContract?: string | null;
 }
 
 export interface FetchLog {
@@ -43,7 +44,7 @@ export interface RateRepository {
   range(benchmark: BenchmarkId, from: string, to: string): Promise<StoredObservation[]>;
   latest(benchmark: BenchmarkId): Promise<StoredObservation | null>;
   logFetch(f: FetchLog): Promise<void>;
-  markOnChain(benchmark: BenchmarkId, observationDate: string, round: number, tx: string): Promise<void>;
+  markOnChain(benchmark: BenchmarkId, observationDate: string, round: number, tx: string, contract?: string): Promise<void>;
 }
 
 export interface IngestSummary {
@@ -148,14 +149,22 @@ export interface ObservationView {
   onChain: { round: number; tx: string } | null;
 }
 
+/** On chain only if it formed on the rate-oracle contract in use now. */
+export function onCurrentChain(o: StoredObservation): boolean {
+  const current = process.env.STELLAR_RATE_ORACLE_CONTRACT;
+  if (o.onChainRound === null) return false;
+  return !current || o.onChainContract === current;
+}
+
 export function toView(o: StoredObservation, now = new Date()): ObservationView {
   const b = getBenchmark(o.benchmark);
+  const chained = onCurrentChain(o);
   return {
     benchmark: o.benchmark, currency: b.currency, observationDate: o.observationDate, observationDay: epochDay(o.observationDate),
     ratePercent: microToPercent(o.rateMicroPercent), rateMicroPercent: o.rateMicroPercent, status: o.status,
-    locked: o.onChainRound !== null || isLocked(b, o.observationDate, now),
+    locked: chained || isLocked(b, o.observationDate, now),
     source: o.source, sourceReference: o.sourceReference, firstSeenAt: o.firstSeenAt.toISOString(),
-    onChain: o.onChainRound !== null && o.onChainTx ? { round: o.onChainRound, tx: o.onChainTx } : null,
+    onChain: chained && o.onChainRound !== null && o.onChainTx ? { round: o.onChainRound, tx: o.onChainTx } : null,
   };
 }
 
@@ -207,9 +216,9 @@ export class InMemoryRateRepository implements RateRepository {
     return Array.from(this.rows.values()).filter((o) => o.benchmark === b).sort((x, y) => y.observationDate.localeCompare(x.observationDate))[0] ?? null;
   }
   async logFetch(f: FetchLog) { this.fetches.push(f); }
-  async markOnChain(b: BenchmarkId, d: string, round: number, tx: string) {
+  async markOnChain(b: BenchmarkId, d: string, round: number, tx: string, contract?: string) {
     const o = this.rows.get(this.key(b, d));
-    if (o) this.rows.set(this.key(b, d), { ...o, onChainRound: round, onChainTx: tx });
+    if (o) this.rows.set(this.key(b, d), { ...o, onChainRound: round, onChainTx: tx, onChainContract: contract ?? null });
   }
 }
 
@@ -218,7 +227,7 @@ function fromRow(r: typeof rateObservations.$inferSelect): StoredObservation {
     benchmark: r.benchmark as BenchmarkId, observationDate: r.observationDate, rateMicroPercent: Number(r.rateMicroPercent),
     source: r.source, sourceReference: r.sourceReference, status: r.status as StoredObservation["status"],
     revisions: (r.revisions as StoredObservation["revisions"]) ?? [], firstSeenAt: r.firstSeenAt, lastSeenAt: r.lastSeenAt,
-    onChainRound: r.onChainRound, onChainTx: r.onChainTx,
+    onChainRound: r.onChainRound, onChainTx: r.onChainTx, onChainContract: r.onChainContract,
   };
 }
 
@@ -233,7 +242,7 @@ export function drizzleRateRepository(db: any): RateRepository {
       const values = {
         benchmark: o.benchmark, observationDate: o.observationDate, rateMicroPercent: o.rateMicroPercent, source: o.source,
         sourceReference: o.sourceReference, status: o.status, revisions: o.revisions, firstSeenAt: o.firstSeenAt,
-        lastSeenAt: o.lastSeenAt, onChainRound: o.onChainRound, onChainTx: o.onChainTx,
+        lastSeenAt: o.lastSeenAt, onChainRound: o.onChainRound, onChainTx: o.onChainTx, onChainContract: o.onChainContract ?? null,
       };
       await db.insert(rateObservations).values(values)
         .onConflictDoUpdate({ target: [rateObservations.benchmark, rateObservations.observationDate], set: values });
@@ -254,8 +263,8 @@ export function drizzleRateRepository(db: any): RateRepository {
         accepted: f.accepted, rejected: f.rejected,
       });
     },
-    async markOnChain(b, d, round, tx) {
-      await db.update(rateObservations).set({ onChainRound: round, onChainTx: tx }).where(where(b, d));
+    async markOnChain(b, d, round, tx, contract) {
+      await db.update(rateObservations).set({ onChainRound: round, onChainTx: tx, onChainContract: contract ?? null }).where(where(b, d));
     },
   };
 }

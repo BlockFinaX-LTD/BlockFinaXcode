@@ -18,7 +18,15 @@ const POOL_METHODS = new Set([
 const WALLET_ARG: Record<string, number> = { create_pool: 0, deposit: 1, request_withdrawal: 1, buy_protection: 0 };
 const PERMISSIONLESS = new Set(["settle_position", "advance_settlement_cursor", "maintain_storage"]);
 
-export function inspectPoolCall(envelope: string, networkPassphrase: string, wallet: string, poolContract: string, tokens: string[] = []) {
+/** Another contract the relay may pay for, with its own method allowlist. */
+export interface ExtraContractPolicy {
+  contract: string;
+  methods: Set<string>;
+  walletArg: Record<string, number>;
+  permissionless: Set<string>;
+}
+
+export function inspectPoolCall(envelope: string, networkPassphrase: string, wallet: string, poolContract: string, tokens: string[] = [], extra: ExtraContractPolicy[] = []) {
   const tx = TransactionBuilder.fromXDR(envelope, networkPassphrase);
   if (!(tx instanceof Transaction) || tx.operations.length !== 1) throw new ApplicationError("UNAUTHORIZED", "Only one pool call is permitted");
   const op = tx.operations[0];
@@ -30,7 +38,12 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   const target = Address.fromScAddress(invoke.contractAddress()).toString();
   const args = invoke.args().map(scValToNative);
   const tokenTransfer = tokens.includes(target) && method === "transfer";
-  if (tokenTransfer) {
+  const policy = extra.find((e) => e.contract === target);
+  if (policy) {
+    if (!policy.methods.has(method)) throw new ApplicationError("UNAUTHORIZED", "Contract or method is not approved");
+    const arg = policy.walletArg[method];
+    if (arg !== undefined && args[arg] !== wallet) throw new ApplicationError("UNAUTHORIZED", "Call must use the connected wallet address");
+  } else if (tokenTransfer) {
     // A user sending a listed asset: from their own wallet, a positive amount, to someone else.
     if (args.length !== 3 || args[0] !== wallet || args[1] === wallet || typeof args[2] !== "bigint" || args[2] <= BigInt(0)) {
       throw new ApplicationError("UNAUTHORIZED", "Only a positive transfer from your wallet to another address is permitted");
@@ -38,11 +51,12 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   } else if (target !== poolContract || !POOL_METHODS.has(method)) {
     throw new ApplicationError("UNAUTHORIZED", "Contract or method is not approved");
   }
-  if (WALLET_ARG[method] !== undefined && !tokenTransfer && args[WALLET_ARG[method]] !== wallet) {
+  if (!policy && WALLET_ARG[method] !== undefined && !tokenTransfer && args[WALLET_ARG[method]] !== wallet) {
     throw new ApplicationError("UNAUTHORIZED", "Call must use the connected wallet address");
   }
   const auth = op.auth ?? [];
-  if (PERMISSIONLESS.has(method) && auth.length === 0) return { func: op.func, auth, method };
+  const permissionless = policy ? policy.permissionless.has(method) : PERMISSIONLESS.has(method);
+  if (permissionless && auth.length === 0) return { func: op.func, auth, method, target };
   if (
     auth.length !== 1 ||
     auth[0].credentials().switch().name !== "sorobanCredentialsAddressV2" ||
@@ -52,7 +66,7 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   if (root.function().switch().name !== "sorobanAuthorizedFunctionTypeContractFn" || !root.function().contractFn().toXDR().equals(invoke.toXDR())) {
     throw new ApplicationError("UNAUTHORIZED", "Authorization is not bound to this pool call");
   }
-  return { func: op.func, auth, method };
+  return { func: op.func, auth, method, target };
 }
 
 /** Submit an inspected call with the platform fee payer as source. Returns the hash once confirmed. */

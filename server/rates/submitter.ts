@@ -106,20 +106,20 @@ export class RateOracleSubmitter {
     const rows = await repo.range(benchmark, addDays(today, -LOOKBACK_DAYS), today);
     const out = { submitted: 0, recorded: 0, errors: [] as string[] };
     for (const o of rows) {
-      if (o.onChainRound !== null || !isLocked(b, o.observationDate, now)) continue;
+      if ((o.onChainRound !== null && o.onChainContract === this.cfg.contractId) || !isLocked(b, o.observationDate, now)) continue;
       try {
         const existing = await this.getFixing(benchmark, o.observationDate);
         if (existing) {
           if (Number(existing.rate_micro_percent) !== o.rateMicroPercent) {
             out.errors.push(`${benchmark} ${o.observationDate}: on-chain ${existing.rate_micro_percent} differs from stored ${o.rateMicroPercent}`);
           }
-          await repo.markOnChain(benchmark, o.observationDate, Number(existing.round), "existing");
+          await repo.markOnChain(benchmark, o.observationDate, Number(existing.round), "existing", this.cfg.contractId);
           out.recorded++;
           continue;
         }
         const result = await this.submit(benchmark, o.observationDate, o.rateMicroPercent);
         if (result) {
-          await repo.markOnChain(benchmark, o.observationDate, result.round, result.hash);
+          await repo.markOnChain(benchmark, o.observationDate, result.round, result.hash, this.cfg.contractId);
           out.submitted++;
         } else {
           out.errors.push(`${benchmark} ${o.observationDate}: quorum not reached`);

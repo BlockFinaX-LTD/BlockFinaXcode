@@ -25,6 +25,7 @@ import type { ChainAdapter, CreatePoolInput, OracleRoundState, PlatformSigner, P
 import { mapStellarError } from "./errors";
 import { stellarQuoteDigest, type StellarBuyParams } from "./stellar-quote";
 import { inspectPoolCall, relay } from "./stellar-relay";
+import { mapRatePoolError, RATE_POOL_POLICY } from "../rates/pools";
 
 const QUOTE_TTL_SECONDS = 120;
 type AnyClient = any;
@@ -408,7 +409,10 @@ export class StellarAdapter implements ChainAdapter {
    * approved call on this pool contract authorized by `wallet`. Returns the transaction hash.
    */
   async relayUserTransaction(xdrEnvelope: string, wallet: string): Promise<TransactionStatus> {
-    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract));
+    const ratePool = this.env.STELLAR_RATE_POOL_CONTRACT;
+    const extra = ratePool ? [{ contract: ratePool, ...RATE_POOL_POLICY }] : [];
+    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract), extra);
+    const fail = (err: unknown) => (ratePool && call.target === ratePool ? mapRatePoolError(err instanceof Error ? err.message : String(err)) : this.mapError(err));
     // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.
     const relayerUrl = this.env.STELLAR_RELAYER_URL;
     const relayerKey = this.env.STELLAR_RELAYER_API_KEY;
@@ -416,7 +420,7 @@ export class StellarAdapter implements ChainAdapter {
       const { RelayerClient } = await import("passkey-kit/server");
       const result = await new RelayerClient({ baseUrl: relayerUrl, apiKey: relayerKey })
         .send(call.func.toXDR("base64"), call.auth.map((a) => a.toXDR("base64")));
-      if (!result.success) throw this.mapError(new Error(result.error.message));
+      if (!result.success) throw fail(new Error(result.error.message));
       return { chain: this.chain.key, state: "CONFIRMED", hash: result.hash };
     }
     // Fallback: the platform fee payer submits and pays.
@@ -426,7 +430,7 @@ export class StellarAdapter implements ChainAdapter {
       const hash = await relay(this.server, this.chain.networkId, secret, call.func, call.auth);
       return { chain: this.chain.key, state: "SUBMITTED", hash };
     } catch (err) {
-      throw this.mapError(err);
+      throw fail(err);
     }
   }
 

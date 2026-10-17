@@ -24,6 +24,8 @@ export const rateObservations = pgTable("rate_observations", {
   /** Set once consensus accepts this value on chain. */
   onChainRound: integer("on_chain_round"),
   onChainTx: text("on_chain_tx"),
+  /** Rate-oracle contract the fixing formed on; a new contract starts over. */
+  onChainContract: text("on_chain_contract"),
 }, (t) => ({
   identity: uniqueIndex("rate_observations_identity").on(t.benchmark, t.observationDate),
 }));

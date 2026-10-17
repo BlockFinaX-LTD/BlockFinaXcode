@@ -35,6 +35,7 @@ import { RoutingEngine } from "../routing/engine";
 import { DirectProvider } from "../routing/providers";
 import { InMemoryRouteStore } from "../routing/types";
 import { getSession } from "../auth-routes";
+import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
 
 const STATUS: Partial<Record<ApplicationErrorCode, number>> = {
   UNAUTHORIZED: 401, POOL_NOT_FOUND: 404, CHAIN_NOT_ENABLED: 503, CHAIN_DRAINING: 409,
@@ -386,6 +387,75 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/transactions/:chain/:hash", wrap(async (req, res) => {
     const s = await getServices();
     res.json(await s.adapters.adapterFor(req.params.chain).getTransactionStatus(req.params.hash));
+  }));
+
+  // ── Interest-rate protection pools (Stellar testnet) ──────────────────────
+  //   GET  /api/v2/rate-pools                       POST /api/v2/rate-pools/quote
+  //   POST /api/v2/rate-pools/:id/buy/prepare       POST /api/v2/rate-pools/:id/deposits/prepare
+  //   GET  /api/v2/rate-protections                 POST /api/v2/rate-protections/:id/settle/prepare
+  let ratePoolCache: { at: number; pools: RatePoolView[] } | null = null;
+  const ratePools = () => {
+    const svc = RatePoolService.fromEnv();
+    if (!svc) throw new ApplicationError("CHAIN_NOT_ENABLED", "Interest-rate pools are not configured here");
+    return svc;
+  };
+  const listRatePools = async (fresh = false) => {
+    if (!fresh && ratePoolCache && Date.now() - ratePoolCache.at < 20_000) return ratePoolCache.pools;
+    ratePoolCache = { at: Date.now(), pools: await ratePools().listPools() };
+    return ratePoolCache.pools;
+  };
+  const ratePoolOr404 = async (id: number) => {
+    const pool = (await listRatePools()).find((p) => p.id === id);
+    if (!pool) throw new ApplicationError("POOL_NOT_FOUND", `No rate pool ${id}`);
+    return pool;
+  };
+  const intParam = (v: unknown, name: string) => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n <= 0) throw new ApplicationError("INVALID_REQUEST", `${name} must be a positive whole number`);
+    return n;
+  };
+
+  app.get("/api/v2/rate-pools", wrap(async (_req, res) => {
+    res.json({ pools: await listRatePools() });
+  }));
+
+  app.post("/api/v2/rate-pools/quote", wrap(async (req, res) => {
+    const pool = await ratePoolOr404(intParam(req.body?.poolId, "poolId"));
+    res.json(ratePools().quote(pool, intParam(req.body?.days, "days"), String(req.body?.notional ?? "")));
+  }));
+
+  app.post("/api/v2/rate-pools/:id/buy/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const wallet = await ownerOn(s, await userId(req), RATE_POOL_CHAIN as ChainKey);
+    const pool = await ratePoolOr404(intParam(req.params.id, "pool"));
+    const days = intParam(req.body?.days, "days");
+    const notional = String(req.body?.notional ?? "");
+    const q = ratePools().quote(pool, days, notional);
+    if (!q.enoughLiquidity) throw new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough liquidity in this pool for that amount");
+    const transactions = await ratePools().prepareBuy(wallet, pool.id, days, notional);
+    ratePoolCache = null;
+    res.json({ transactions, quote: q });
+  }));
+
+  app.post("/api/v2/rate-pools/:id/deposits/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const wallet = await ownerOn(s, await userId(req), RATE_POOL_CHAIN as ChainKey);
+    const pool = await ratePoolOr404(intParam(req.params.id, "pool"));
+    ratePoolCache = null;
+    res.json({ transactions: await ratePools().prepareDeposit(wallet, pool.id, String(req.body?.amount ?? "")) });
+  }));
+
+  app.get("/api/v2/rate-protections", wrap(async (req, res) => {
+    const s = await getServices();
+    const uid = await userId(req);
+    const book = await s.accounts.addressBook(uid);
+    const wallet = book[RATE_POOL_CHAIN as ChainKey];
+    res.json({ protections: wallet ? await ratePools().positionsOf(wallet) : [] });
+  }));
+
+  app.post("/api/v2/rate-protections/:id/settle/prepare", wrap(async (req, res) => {
+    await userId(req);
+    res.json({ transactions: await ratePools().prepareSettle(intParam(req.params.id, "protection")) });
   }));
 
   // Every /api/v2 failure leaves as a shared error code; raw chain messages stay in logs.

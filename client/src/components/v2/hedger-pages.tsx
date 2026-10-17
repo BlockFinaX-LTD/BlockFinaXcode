@@ -16,6 +16,7 @@ import {
 } from './shared';
 import { Flag, Loading, Spin, Sum, Tag } from './ui';
 import type { Go, Target } from './workspace';
+import { RateCoverPanel, RateMarkets, RateProtections } from './rate-pages';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
@@ -176,6 +177,7 @@ export function MarketsPage({ go }: { go: Go }) {
             </div></div>
           )}
         </div>
+        <RateMarkets go={go} />
       </section>
     </main>
   );
@@ -662,6 +664,7 @@ export function MyProtections({ go }: { go: Go }) {
             </div>
           )}
         </div>
+        <RateProtections />
       </section>
     </main>
   );
@@ -845,6 +848,8 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
           </>
         )}
       </div>
+
+      <RateCoverPanel benchmark={id} />
 
       <div className="bx-card" style={{ marginTop: 16 }}>
         <div className="bx-card-h"><div><h2>Recent fixings</h2><div className="sub">Each value is the official rate for one business day. It locks after the administrator's correction window, then goes on chain.</div></div></div>

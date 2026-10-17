@@ -22,6 +22,7 @@ async function ensureTables(): Promise<void> {
     status text NOT NULL DEFAULT 'PUBLISHED', revisions jsonb NOT NULL DEFAULT '[]'::jsonb,
     first_seen_at timestamp NOT NULL DEFAULT now(), last_seen_at timestamp NOT NULL DEFAULT now(),
     fetch_id integer, on_chain_round integer, on_chain_tx text)`);
+  await db.execute(sql`ALTER TABLE rate_observations ADD COLUMN IF NOT EXISTS on_chain_contract text`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS rate_observations_identity ON rate_observations (benchmark, observation_date)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS rate_fetches (
     id serial PRIMARY KEY, benchmark text NOT NULL, source text NOT NULL, url text NOT NULL,
