@@ -93,8 +93,9 @@ function usePoolOffers(pool: CurrencyPool) {
     const price = f === null ? null : (f / 1e6) * (t.markupBps / 10000);
     return { tenorDays: t.tenorDays, price, per1000: price === null ? null : 1000 * price * (1 + feeRate) };
   });
-  const prices = rows.map((r) => r.price).filter((p): p is number => p !== null);
-  return { rows, from: prices.length ? Math.min(...prices) : null, loading: fair.isLoading };
+  const priced = rows.filter((r) => r.price !== null);
+  const cheapest = priced.length ? priced.reduce((a, b) => (b.price! < a.price! ? b : a)) : null;
+  return { rows, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: fair.isLoading };
 }
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) 128px' };
@@ -105,13 +106,13 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
   const buy = (days?: number) => go('h-protect', { pair: pool.pair, direction, pool: poolRef(pool), days });
-  const types = [pool.structures.capped && 'Capped', pool.structures.open && 'Open'].filter(Boolean).join(' and ');
+  const types = [pool.structures.capped && 'Capped', pool.structures.open && 'Open'].filter(Boolean).join(' + ');
   return (
     <>
       <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
         <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{pool.pair} · {types}</div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
-        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>price from</div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
         <div className="r" style={{ fontSize: 13 }}>{pool.tenors.filter((t) => t.active).map((t) => t.tenorDays).sort((a, b) => a - b).join(', ')} days</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
           <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>Buy cover</button>
