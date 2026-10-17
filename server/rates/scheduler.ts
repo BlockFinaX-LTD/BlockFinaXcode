@@ -49,8 +49,11 @@ export function startRateOracleScheduler(): void {
       } catch (err) {
         console.warn(`[RateOracle] ${b.id} fetch failed: ${(err as Error).message}`);
       }
-      if (!submitter) continue;
-      // Locked values go on chain; values still inside their revision window wait.
+    }
+    if (!submitter) return;
+    // Then on chain, after every benchmark is stored: chain writes are slow and must not delay
+    // the rates people see. Locked values go on chain; values still open for correction wait.
+    for (const b of benchmarks) {
       const r = await submitter.sync(repo, b.id);
       if (r.submitted || r.recorded) console.log(`[RateOracle] ${b.id} on chain: ${r.submitted} submitted, ${r.recorded} already final`);
       for (const e of r.errors) console.warn(`[RateOracle] ${e}`);
