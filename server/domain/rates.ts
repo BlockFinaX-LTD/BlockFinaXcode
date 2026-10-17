@@ -3,9 +3,10 @@
  * and pound crosses most used for African trade. Every pair has a live rate from the
  * shared FX source.
  *
- * The daily change compares today's snapshot of that same live rate with the previous
- * day's (rate_snapshots). Stored pricing closes come from another provider and are
- * noisy for thinly traded currencies, so they are never used for the change shown.
+ * The 24-hour change compares the live rate with the FX oracle's own snapshot of the
+ * same source from about 24 hours earlier (rate_snapshots, written on every fetch).
+ * Without such a snapshot it is left empty: the stored pricing closes come from another
+ * provider and are noisy for thinly traded currencies, so they are never used here.
  */
 export const WATCHLIST = [
   "USD/NGN", "USD/GHS", "USD/KES", "USD/ZAR", "USD/EGP", "USD/XOF", "USD/XAF", "USD/MAD",
@@ -16,37 +17,21 @@ export const WATCHLIST = [
 export interface RateRow {
   pair: string;
   spot: number | null;
-  /** Today's live rate against the previous day's snapshot, or null before there is one. */
+  /** Change over about 24 hours, or null when there is no snapshot that old yet. */
   change: number | null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
-/** Record today's live rate for every watchlist pair (latest reading of the day wins). */
-export async function recordRateSnapshots(spot: (pair: string) => Promise<string>) {
-  const { db } = await import("../db");
-  const { rateSnapshots } = await import("@shared/rates-schema");
-  const day = today();
-  for (const pair of WATCHLIST) {
-    const rate = await spot(pair).catch(() => null);
-    if (!rate || !(Number(rate) > 0)) continue;
-    await db.insert(rateSnapshots).values({ pair, day, rate })
-      .onConflictDoUpdate({ target: [rateSnapshots.pair, rateSnapshots.day], set: { rate, takenAt: new Date() } });
-  }
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function watchlistRates(spot: (pair: string) => Promise<string>): Promise<RateRow[]> {
-  const { db } = await import("../db");
-  const { rateSnapshots } = await import("@shared/rates-schema");
-  const { and, desc, eq, lt } = await import("drizzle-orm");
-  const day = today();
+  const { storage } = await import("../storage");
+  const target = Date.now() - DAY_MS;
   return Promise.all(WATCHLIST.map(async (pair) => {
     const s = await spot(pair).then(Number).catch(() => null);
-    const [prev] = await db.select().from(rateSnapshots)
-      .where(and(eq(rateSnapshots.pair, pair), lt(rateSnapshots.day, day)))
-      .orderBy(desc(rateSnapshots.day)).limit(1)
-      .catch(() => [] as any[]);
-    const before = prev ? Number(prev.rate) : null;
+    const snap = await storage.getRateSnapshotBefore(pair, target + 15 * 60 * 1000).catch(() => undefined);
+    // Only a snapshot from roughly a day ago counts (not one from last week).
+    const usable = snap && new Date(snap.recordedAt).getTime() >= target - 6 * 60 * 60 * 1000;
+    const before = usable ? Number(snap!.rate) : null;
     return { pair, spot: s, change: s && before ? s / before - 1 : null };
   }));
 }
