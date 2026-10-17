@@ -21,7 +21,7 @@ export type Role = 'hedger' | 'underwriter';
 export type Page =
   | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'funds' | 'send' | 'account'
   | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw';
-export interface Target { pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number }
+export interface Target { pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
 export type Go = (page: Page, target?: Target) => void;
 
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
@@ -54,6 +54,7 @@ export function Workspace() {
   const [pair, setPair] = useState<string | null>(null);
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
+  const [ratesAt, setRatesAt] = useState<Target>({});
   const [, setLocation] = useLocation();
   const { session } = usePasskeySession();
   const balances = useUsdcBalances();
@@ -62,6 +63,7 @@ export function Workspace() {
     if (target?.pair !== undefined) setPair(target.pair);
     if (target?.pool !== undefined) setPool(target.pool);
     if (p === 'h-protect') setBuy(target ?? {});
+    if (p === 'h-rates') setRatesAt(target ?? {});
     setPage(p);
     window.scrollTo(0, 0);
   };
@@ -116,7 +118,7 @@ export function Workspace() {
         {page === 'h-markets' && <MarketsPage go={go} />}
         {page === 'h-protect' && <ProtectPage go={go} pair={buy.pair ?? pair} target={buy} />}
         {page === 'h-protections' && <MyProtections go={go} />}
-        {page === 'h-rates' && <RatesPage go={go} />}
+        {page === 'h-rates' && <RatesPage go={go} target={ratesAt} />}
         {page === 'funds' && <AddFunds />}
         {page === 'send' && <SendFunds />}
         {page === 'account' && <AccountPage />}

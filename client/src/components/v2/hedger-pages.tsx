@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronDown, ChevronUp, Shield } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Percent, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -193,6 +193,7 @@ export function HedgerHome({ go }: { go: Go }) {
   const rates = useRates(pairs);
   const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
   const watch = useWatchlist();
+  const benchmarks = useBenchmarks();
   const watchRows = [...(watch.data ?? [])].sort((a, b) => Number(pairs.includes(b.pair)) - Number(pairs.includes(a.pair))).slice(0, 6);
   const exposure = active.reduce((s, h) => s + Number(h.position.notional), 0);
   const next = active.length ? Math.min(...active.map((h) => h.position.expiry)) : null;
@@ -248,11 +249,22 @@ export function HedgerHome({ go }: { go: Go }) {
         </div>
         <div className="bx-card tight">
           <div className="bx-card-h"><h2>Rates</h2><button className="bx-link" onClick={() => go('h-rates')}>All rates</button></div>
+          <div className="bx-card-h" style={{ marginTop: 4 }}><span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>FX rates</span><button className="bx-link" style={{ fontSize: 12 }} onClick={() => go('h-rates', { rates: 'fx' })}>See all</button></div>
           {watch.isLoading ? <Loading /> : watchRows.map((r) => (
             <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go(pairs.includes(r.pair) ? 'h-protect' : 'h-rates', pairs.includes(r.pair) ? { pair: r.pair } : undefined)}>
               <Flag pair={r.pair} />
               <div className="grow"><div className="t">{r.pair}</div><div className="d">{pairName(r.pair)}</div></div>
               <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '-'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
+            </div>
+          ))}
+          <div className="bx-card-h" style={{ marginTop: 16 }}><span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>Interest rates</span><button className="bx-link" style={{ fontSize: 12 }} onClick={() => go('h-rates', { rates: 'ir' })}>See all</button></div>
+          {benchmarks.isLoading ? <Loading /> : !(benchmarks.data ?? []).length ? <div className="bx-empty">No benchmarks yet.</div> : (benchmarks.data ?? []).map((b) => (
+            <div key={b.id} className="bx-mini" style={{ cursor: 'pointer' }} role="button" tabIndex={0} aria-label={`Open ${b.id}`}
+              onClick={() => go('h-rates', { rates: 'ir', benchmark: b.id })}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go('h-rates', { rates: 'ir', benchmark: b.id }); } }}>
+              <span className="bx-ic"><Percent aria-hidden="true" /></span>
+              <div className="grow"><div className="t">{b.id}</div><div className="d">{b.currency} overnight rate</div></div>
+              <div style={{ textAlign: 'right' }}><div className="num t">{b.latest ? pctText(b.id, b.latest) : '-'}</div><div style={{ fontSize: 12 }}><BpChange bp={bpBetween(b.latest, b.previous)} /></div></div>
             </div>
           ))}
         </div>
@@ -871,7 +883,7 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
 type RatesTab = 'fx' | 'ir';
 const TAB_KEY = 'bfx-rates-tab';
 
-export function RatesPage({ go }: { go: Go }) {
+export function RatesPage({ go, target }: { go: Go; target?: Target }) {
   const [tab, setTabState] = useState<RatesTab>(() => {
     try { return (localStorage.getItem(TAB_KEY) as RatesTab) === 'ir' ? 'ir' : 'fx'; } catch { return 'fx'; }
   });
@@ -880,7 +892,12 @@ export function RatesPage({ go }: { go: Go }) {
     setBenchmark(null);
     try { localStorage.setItem(TAB_KEY, t); } catch { /* storage unavailable */ }
   };
-  const [benchmark, setBenchmark] = useState<string | null>(null);
+  const [benchmark, setBenchmark] = useState<string | null>(target?.benchmark ?? null);
+  // Arriving from Home: open the asked-for tab and benchmark.
+  useEffect(() => {
+    if (target?.rates) setTab(target.rates);
+    if (target?.benchmark) setBenchmark(target.benchmark);
+  }, [target]);
   return (
     <main className="bx-main">
       <section className="bx-full">
