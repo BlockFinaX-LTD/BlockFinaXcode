@@ -164,44 +164,56 @@ export function RateCoverPanel({ benchmark }: { benchmark: string }) {
   );
 }
 
-/** Interest-rate pools in Markets. */
-export function RateMarkets({ go }: { go: Go }) {
+/** Interest-rate pools: the Markets card, or a short list inside a Home card (`embedded`). */
+export function RateMarkets({ go, embedded, limit }: { go: Go; embedded?: boolean; limit?: number }) {
   const pools = useRatePools();
-  const rows = (pools.data ?? []).filter((p) => p.active && p.tenors.length);
+  const all = (pools.data ?? []).filter((p) => p.active && p.tenors.length);
+  const benchmarks = Array.from(new Set(all.map((p) => p.benchmark)));
+  const [filter, setFilter] = useState('all');
+  const rows = all.filter((p) => filter === 'all' || p.benchmark === filter).slice(0, limit ?? 100);
   const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 120px' };
-  if (pools.isError) return null;
+  const list = pools.isLoading ? <Loading /> : pools.isError ? <div className="bx-empty">Interest rate cover is unavailable right now.</div>
+    : !rows.length ? <div className="bx-empty">No interest rate cover is on sale right now.</div> : (
+      <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
+        <div className="bx-list-h" style={cols}><span>Cover</span><span className="r">Liquidity</span><span className="r">Strike today</span><span className="r">Lengths</span><span /></div>
+        {rows.map((p) => {
+          const l = rateCoverLabel(p.direction, p.benchmark);
+          return (
+            <div key={p.id} className="bx-li" style={cols}>
+              <div className="bx-who"><span className="bx-ic"><Percent aria-hidden="true" /></span><div><div className="t">{p.benchmark} {l.title.toLowerCase()}</div><div className="d">{l.who}</div></div></div>
+              <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(p.available)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
+              <div className="r num">{pct(p.strikePercent, 2)}</div>
+              <div className="r" style={{ fontSize: 13 }}>{p.tenors.map((t) => t.days).join(', ')} days</div>
+              <div className="r"><button className="bx-btn small" onClick={() => go('h-rates', { rates: 'ir', benchmark: p.benchmark })}>Buy cover</button></div>
+            </div>
+          );
+        })}
+      </div></div>
+    );
+  if (embedded) return list;
   return (
-    <div className="bx-card" style={{ marginTop: 16 }}>
-      <div className="bx-card-h"><div><h2>Interest rate cover</h2><div className="sub">Pools that pay when an official benchmark rate rises or falls past the strike.</div></div></div>
-      {pools.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No interest rate cover is on sale right now.</div> : (
-        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 720 }}>
-          <div className="bx-list-h" style={cols}><span>Cover</span><span className="r">Liquidity</span><span className="r">Strike today</span><span className="r">Lengths</span><span /></div>
-          {rows.map((p) => {
-            const l = rateCoverLabel(p.direction, p.benchmark);
-            return (
-              <div key={p.id} className="bx-li" style={cols}>
-                <div className="bx-who"><span className="bx-ic"><Percent aria-hidden="true" /></span><div><div className="t">{p.benchmark} {l.title.toLowerCase()}</div><div className="d">{l.who}</div></div></div>
-                <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(p.available)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
-                <div className="r num">{pct(p.strikePercent, 2)}</div>
-                <div className="r" style={{ fontSize: 13 }}>{p.tenors.map((t) => t.days).join(', ')} days</div>
-                <div className="r"><button className="bx-btn small" onClick={() => go('h-rates', { rates: 'ir', benchmark: p.benchmark })}>Buy cover</button></div>
-              </div>
-            );
-          })}
-        </div></div>
-      )}
+    <div className="bx-card">
+      <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
+        <div><h2>Interest rate cover</h2><div className="sub">Pools that pay when an official benchmark rate rises or falls past the strike.</div></div>
+        {benchmarks.length > 1 && (
+          <div className="bx-seg" style={{ width: 'auto' }}>
+            <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
+            {benchmarks.map((b) => <button key={b} className={filter === b ? 'on' : ''} onClick={() => setFilter(b)}>{b}</button>)}
+          </div>
+        )}
+      </div>
+      {list}
     </div>
   );
 }
 
-/** Interest-rate protections in My protections. */
-export function RateProtections() {
+/** Interest-rate protections: the My protections card, or active ones inside a Home card (`embedded`). */
+export function RateProtections({ go, embedded }: { go: Go; embedded?: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const list = useRateProtections();
   const [busy, setBusy] = useState<number | null>(null);
-  const rows = list.data ?? [];
-  if (list.isError || (!list.isLoading && !rows.length)) return null;
+  const rows = (list.data ?? []).filter((p) => !embedded || p.status === 'active' || p.status === 'settleable');
 
   const settle = async (id: number) => {
     try {
@@ -218,32 +230,37 @@ export function RateProtections() {
   };
 
   const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 150px' };
-  return (
-    <div className="bx-card" style={{ marginTop: 16 }}>
-      <div className="bx-card-h"><div><h2>Interest rate protections</h2><div className="sub">Settled from the official benchmark compounded over each protection.</div></div></div>
-      {list.isLoading ? <Loading /> : (
-        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 720 }}>
-          <div className="bx-list-h" style={cols}><span>Protection</span><span className="r">Protected</span><span className="r">Strike</span><span className="r">Expires</span><span className="r">Status</span></div>
-          {rows.map((p) => {
-            const l = rateCoverLabel(p.direction, p.benchmark);
-            return (
-              <div key={p.id} className="bx-li" style={cols}>
-                <div className="bx-who"><span className="bx-ic"><Percent aria-hidden="true" /></span><div><div className="t">{p.benchmark} {l.title.toLowerCase()}</div><div className="d">From {pct(p.startRatePercent, 4)} on {day(p.startDate)} · premium ${fmt(p.premium)}</div></div></div>
-                <div className="r num">${fmt(p.notional)}</div>
-                <div className="r num">{pct(p.strikePercent, 4)}</div>
-                <div className="r num">{dateOf(p.expiry)}</div>
-                <div className="r">
-                  {p.status === 'active' ? <Tag tone="green">Active</Tag>
-                    : p.status === 'settleable' ? <button className="bx-btn small" disabled={busy === p.id} onClick={() => settle(p.id)}>{busy === p.id ? <Spin /> : 'Settle'}</button>
-                    : p.status === 'refunded' ? <Tag tone="grey">Refunded</Tag>
-                    : Number(p.payout) > 0 ? <Tag tone="green">Paid ${fmt(p.payout!)}</Tag>
-                    : <Tag tone="grey">Expired · {pct(p.settlementRatePercent, 4)}</Tag>}
-                </div>
+  const body = list.isLoading ? <Loading /> : list.isError ? <div className="bx-empty">Interest rate protections are unavailable right now.</div>
+    : !rows.length ? (
+      <div className="bx-empty">No interest rate protection yet. <button className="bx-link" onClick={() => go('h-markets')}>See interest rate cover</button></div>
+    ) : (
+      <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
+        <div className="bx-list-h" style={cols}><span>Protection</span><span className="r">Protected</span><span className="r">Strike</span><span className="r">Expires</span><span className="r">Status</span></div>
+        {rows.map((p) => {
+          const l = rateCoverLabel(p.direction, p.benchmark);
+          return (
+            <div key={p.id} className="bx-li" style={cols}>
+              <div className="bx-who"><span className="bx-ic"><Percent aria-hidden="true" /></span><div><div className="t">{p.benchmark} {l.title.toLowerCase()}</div><div className="d">From {pct(p.startRatePercent, 4)} on {day(p.startDate)} · premium ${fmt(p.premium)}</div></div></div>
+              <div className="r num">${fmt(p.notional)}</div>
+              <div className="r num">{pct(p.strikePercent, 4)}</div>
+              <div className="r num">{dateOf(p.expiry)}</div>
+              <div className="r">
+                {p.status === 'active' ? <Tag tone="green">Active</Tag>
+                  : p.status === 'settleable' ? <button className="bx-btn small" disabled={busy === p.id} onClick={() => settle(p.id)}>{busy === p.id ? <Spin /> : 'Settle'}</button>
+                  : p.status === 'refunded' ? <Tag tone="grey">Refunded</Tag>
+                  : Number(p.payout) > 0 ? <Tag tone="green">Paid ${fmt(p.payout!)}</Tag>
+                  : <Tag tone="grey">Expired · {pct(p.settlementRatePercent, 4)}</Tag>}
               </div>
-            );
-          })}
-        </div></div>
-      )}
+            </div>
+          );
+        })}
+      </div></div>
+    );
+  if (embedded) return body;
+  return (
+    <div className="bx-card">
+      <div className="bx-card-h"><div><h2>Interest rate protections</h2><div className="sub">Settled from the official benchmark compounded over each protection.</div></div></div>
+      {body}
     </div>
   );
 }

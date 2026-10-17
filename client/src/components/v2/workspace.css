@@ -127,6 +127,8 @@
 .bx-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 96px; }
 .bx-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--soft); border-radius: 12px; padding: 4px; }
 .bx-seg button { border: 0; border-radius: 9px; padding: 10px; font-weight: 600; font-size: 14px; background: transparent; color: var(--muted); cursor: pointer; }
+.bx-seg.small { padding: 3px; border-radius: 10px; }
+.bx-seg.small button { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
 .bx-seg button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(15, 23, 41, 0.08); }
 .bx-big { text-align: center; }
 .bx-big label { display: block; color: var(--muted); font-size: 13px; }

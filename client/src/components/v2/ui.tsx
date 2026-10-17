@@ -1,5 +1,5 @@
 /** Building blocks for the BlockFinaX workspace. Styles live in workspace.css. */
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Info, Loader2 } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
 import { quoteCcy } from './shared';
@@ -48,4 +48,32 @@ export function Spin() {
 
 export function Loading({ label = 'Loading...' }: { label?: string }) {
   return <div className="bx-empty"><Spin /> {label}</div>;
+}
+
+// ── Asset class switch: FX or interest rates ─────────────────────────────────
+
+export type AssetClass = 'fx' | 'ir';
+const ASSET_CLASS_KEY = 'bfx-asset-class';
+
+function readAssetClass(): AssetClass {
+  try { return localStorage.getItem(ASSET_CLASS_KEY) === 'ir' ? 'ir' : 'fx'; } catch { return 'fx'; }
+}
+
+/** The asset class last chosen anywhere in the workspace, remembered per browser. */
+export function useAssetClass(): [AssetClass, (a: AssetClass) => void] {
+  const [value, setValue] = useState<AssetClass>(readAssetClass);
+  const set = (a: AssetClass) => {
+    setValue(a);
+    try { localStorage.setItem(ASSET_CLASS_KEY, a); } catch { /* storage unavailable */ }
+  };
+  return [value, set];
+}
+
+export function AssetClassTabs({ value, onChange, small }: { value: AssetClass; onChange: (a: AssetClass) => void; small?: boolean }) {
+  return (
+    <div className={`bx-seg${small ? ' small' : ''}`} role="tablist" aria-label="Asset class" style={small ? { width: 'auto' } : { maxWidth: 360, marginBottom: 16 }}>
+      <button role="tab" aria-selected={value === 'fx'} className={value === 'fx' ? 'on' : ''} onClick={() => onChange('fx')}>FX</button>
+      <button role="tab" aria-selected={value === 'ir'} className={value === 'ir' ? 'on' : ''} onClick={() => onChange('ir')}>Interest rates</button>
+    </div>
+  );
 }

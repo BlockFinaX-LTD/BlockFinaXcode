@@ -14,9 +14,9 @@ import {
   ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, type Direction,
 } from './shared';
-import { Flag, Loading, Spin, Sum, Tag } from './ui';
+import { AssetClassTabs, Flag, Loading, Spin, Sum, Tag, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
-import { RateCoverPanel, RateMarkets, RateProtections } from './rate-pages';
+import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
@@ -159,12 +159,14 @@ export function MarketsPage({ go }: { go: Go }) {
   const pairs = Array.from(new Set(open.map((p) => p.pair)));
   const [filter, setFilter] = useState<string>('all');
   const shown = open.filter((p) => filter === 'all' || p.pair === filter);
+  const [assetClass, setAssetClass] = useAssetClass();
   return (
     <main className="bx-main">
       <section className="bx-full">
-        <div className="bx-card">
+        <AssetClassTabs value={assetClass} onChange={setAssetClass} />
+        {assetClass === 'ir' ? <RateMarkets go={go} /> : <div className="bx-card">
           <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-            <div><h2>Markets</h2><div className="sub">Open pools you can buy cover from. Choose a pool to see its price for each length.</div></div>
+            <div><h2>FX cover</h2><div className="sub">Open pools you can buy currency cover from. Choose a pool to see its price for each length.</div></div>
             <div className="bx-seg" style={{ width: 'auto' }}>
               <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
               {pairs.map((p) => <button key={p} className={filter === p ? 'on' : ''} onClick={() => setFilter(p)}>{ccyName(p)}</button>)}
@@ -176,8 +178,7 @@ export function MarketsPage({ go }: { go: Go }) {
               {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
             </div></div>
           )}
-        </div>
-        <RateMarkets go={go} />
+        </div>}
       </section>
     </main>
   );
@@ -196,9 +197,14 @@ export function HedgerHome({ go }: { go: Go }) {
   const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
   const watch = useWatchlist();
   const benchmarks = useBenchmarks();
+  const rateProtections = useRateProtections();
+  const rateActive = (rateProtections.data ?? []).filter((p) => p.status === 'active');
+  const [protClass, setProtClass] = useAssetClass();
+  const [ratesClass, setRatesClass] = useAssetClass();
   const watchRows = [...(watch.data ?? [])].sort((a, b) => Number(pairs.includes(b.pair)) - Number(pairs.includes(a.pair))).slice(0, 6);
-  const exposure = active.reduce((s, h) => s + Number(h.position.notional), 0);
-  const next = active.length ? Math.min(...active.map((h) => h.position.expiry)) : null;
+  const exposure = active.reduce((s, h) => s + Number(h.position.notional), 0) + rateActive.reduce((s, p) => s + Number(p.notional), 0);
+  const expiries = [...active.map((h) => h.position.expiry), ...rateActive.map((p) => p.expiry)];
+  const next = expiries.length ? Math.min(...expiries) : null;
   const activity = [...all].sort((a, b) => b.position.createdAt - a.position.createdAt).slice(0, 4);
   const cols = { gridTemplateColumns: 'minmax(0, 2.2fr) repeat(3, minmax(0, 1fr))' };
 
@@ -211,14 +217,14 @@ export function HedgerHome({ go }: { go: Go }) {
           <div className="sub">USDC · network fees covered by BlockFinaX</div>
           <div className="bx-strip">
             <div><div className="k">Protected exposure</div><div className="v num">${fmt(exposure, 0)}</div></div>
-            <div><div className="k">Active protections</div><div className="v num">{active.length}</div></div>
+            <div><div className="k">Active protections</div><div className="v num">{active.length + rateActive.length}</div></div>
             <div><div className="k">Next expiry</div><div className="v num">{next ? `${daysLeft(next)} days` : '-'}</div>{next && <div className="s">{dateOf(next)}</div>}</div>
           </div>
         </div>
 
         <div className="bx-card">
-          <div className="bx-card-h"><h2>Your protections</h2><button className="bx-link" onClick={() => go('h-protections')}>View all</button></div>
-          {hedges.isLoading ? <Loading /> : !active.length ? (
+          <div className="bx-card-h" style={{ flexWrap: 'wrap' }}><h2>Your protections</h2><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><AssetClassTabs small value={protClass} onChange={setProtClass} /><button className="bx-link" onClick={() => go('h-protections')}>View all</button></div></div>
+          {protClass === 'ir' ? <RateProtections go={go} embedded /> : hedges.isLoading ? <Loading /> : !active.length ? (
             <div className="bx-empty">Nothing protected yet. <button className="bx-link" onClick={() => go('h-protect')}>Protect an exposure</button></div>
           ) : (
             <>
@@ -250,17 +256,15 @@ export function HedgerHome({ go }: { go: Go }) {
           <button onClick={() => go('h-protect')}>Get started</button>
         </div>
         <div className="bx-card tight">
-          <div className="bx-card-h"><h2>Rates</h2><button className="bx-link" onClick={() => go('h-rates')}>All rates</button></div>
-          <div className="bx-card-h" style={{ marginTop: 4 }}><span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>FX rates</span><button className="bx-link" style={{ fontSize: 12 }} onClick={() => go('h-rates', { rates: 'fx' })}>See all</button></div>
-          {watch.isLoading ? <Loading /> : watchRows.map((r) => (
+          <div className="bx-card-h"><h2>Rates</h2><button className="bx-link" onClick={() => go('h-rates', { rates: ratesClass })}>All rates</button></div>
+          <div style={{ marginBottom: 8 }}><AssetClassTabs small value={ratesClass} onChange={setRatesClass} /></div>
+          {ratesClass === 'fx' ? (watch.isLoading ? <Loading /> : watchRows.map((r) => (
             <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go(pairs.includes(r.pair) ? 'h-protect' : 'h-rates', pairs.includes(r.pair) ? { pair: r.pair } : undefined)}>
               <Flag pair={r.pair} />
               <div className="grow"><div className="t">{r.pair}</div><div className="d">{pairName(r.pair)}</div></div>
               <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '-'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
             </div>
-          ))}
-          <div className="bx-card-h" style={{ marginTop: 16 }}><span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>Interest rates</span><button className="bx-link" style={{ fontSize: 12 }} onClick={() => go('h-rates', { rates: 'ir' })}>See all</button></div>
-          {benchmarks.isLoading ? <Loading /> : !(benchmarks.data ?? []).length ? <div className="bx-empty">No benchmarks yet.</div> : (benchmarks.data ?? []).map((b) => (
+          ))) : benchmarks.isLoading ? <Loading /> : !(benchmarks.data ?? []).length ? <div className="bx-empty">No benchmarks yet.</div> : (benchmarks.data ?? []).map((b) => (
             <div key={b.id} className="bx-mini" style={{ cursor: 'pointer' }} role="button" tabIndex={0} aria-label={`Open ${b.id}`}
               onClick={() => go('h-rates', { rates: 'ir', benchmark: b.id })}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go('h-rates', { rates: 'ir', benchmark: b.id }); } }}>
@@ -287,10 +291,11 @@ export function HedgerHome({ go }: { go: Go }) {
 
 function AvailableCover({ go }: { go: Go }) {
   const { pools, open } = useOpenPools();
+  const [assetClass, setAssetClass] = useAssetClass();
   return (
     <div className="bx-card">
-      <div className="bx-card-h"><h2>Available cover</h2><button className="bx-link" onClick={() => go('h-markets')}>All markets</button></div>
-      {pools.isLoading ? <Loading /> : !open.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
+      <div className="bx-card-h" style={{ flexWrap: 'wrap' }}><h2>Available cover</h2><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><AssetClassTabs small value={assetClass} onChange={setAssetClass} /><button className="bx-link" onClick={() => go('h-markets')}>All markets</button></div></div>
+      {assetClass === 'ir' ? <RateMarkets go={go} embedded limit={5} /> : pools.isLoading ? <Loading /> : !open.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
           <MarketHeader />
           {open.slice(0, 5).map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
@@ -634,11 +639,13 @@ export function MyProtections({ go }: { go: Go }) {
       toast({ title: 'Not received', description: (err as Error).message, variant: 'destructive' });
     } finally { setBusy(null); }
   }
+  const [assetClass, setAssetClass] = useAssetClass();
   return (
     <main className="bx-main">
       <section className="bx-full">
-        <div className="bx-card">
-          <div className="bx-card-h"><h2>My protections</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>
+        <AssetClassTabs value={assetClass} onChange={setAssetClass} />
+        {assetClass === 'ir' ? <RateProtections go={go} /> : <div className="bx-card">
+          <div className="bx-card-h"><h2>FX protections</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>
           {hedges.isLoading ? <Loading /> : !all.length ? <div className="bx-empty">You have not bought protection yet.</div> : (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 720 }}>
@@ -663,8 +670,7 @@ export function MyProtections({ go }: { go: Go }) {
               </div>
             </div>
           )}
-        </div>
-        <RateProtections />
+        </div>}
       </section>
     </main>
   );
@@ -889,16 +895,12 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
 }
 
 type RatesTab = 'fx' | 'ir';
-const TAB_KEY = 'bfx-rates-tab';
 
 export function RatesPage({ go, target }: { go: Go; target?: Target }) {
-  const [tab, setTabState] = useState<RatesTab>(() => {
-    try { return (localStorage.getItem(TAB_KEY) as RatesTab) === 'ir' ? 'ir' : 'fx'; } catch { return 'fx'; }
-  });
+  const [tab, setTabState] = useAssetClass();
   const setTab = (t: RatesTab) => {
     setTabState(t);
     setBenchmark(null);
-    try { localStorage.setItem(TAB_KEY, t); } catch { /* storage unavailable */ }
   };
   const [benchmark, setBenchmark] = useState<string | null>(target?.benchmark ?? null);
   // Arriving from Home: open the asked-for tab and benchmark.
@@ -909,10 +911,7 @@ export function RatesPage({ go, target }: { go: Go; target?: Target }) {
   return (
     <main className="bx-main">
       <section className="bx-full">
-        <div className="bx-seg" role="tablist" aria-label="Asset class" style={{ maxWidth: 360, marginBottom: 16 }}>
-          <button role="tab" aria-selected={tab === 'fx'} className={tab === 'fx' ? 'on' : ''} onClick={() => setTab('fx')}>FX rates</button>
-          <button role="tab" aria-selected={tab === 'ir'} className={tab === 'ir' ? 'on' : ''} onClick={() => setTab('ir')}>Interest rates</button>
-        </div>
+        <AssetClassTabs value={tab} onChange={setTab} />
         {tab === 'fx' ? <FxRates go={go} />
           : benchmark ? <BenchmarkPage id={benchmark} back={() => setBenchmark(null)} />
           : <InterestRates open={setBenchmark} />}
