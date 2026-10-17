@@ -657,6 +657,64 @@ export function MyProtections({ go }: { go: Go }) {
 
 // ── Rates ────────────────────────────────────────────────────────────────────
 
+type Fixing = { observationDate: string; ratePercent: string; rateMicroPercent: number; status: string; locked: boolean; onChain: { round: number; tx: string } | null };
+type BenchmarkRow = {
+  id: string; name: string; currency: string; licensing: string; state: 'PUBLISHED' | 'PENDING' | 'DELAYED';
+  expected: { observationDate: string }; latest: Fixing | null; previous: Fixing | null; notice?: string;
+};
+
+const ADMINISTRATOR: Record<string, string> = { SOFR: 'Federal Reserve Bank of New York', KESONIA: 'Central Bank of Kenya' };
+const STELLAR_TX = 'https://stellar.expert/explorer/testnet/tx/';
+
+function fixingStatus(f: Fixing) {
+  if (f.onChain) return <Tag tone="green">On chain</Tag>;
+  if (!f.locked) return <Tag tone="amber">Open for correction</Tag>;
+  return <Tag tone="blue">Locked</Tag>;
+}
+
+/** Official interest-rate benchmarks from the rate oracle (testnet: SOFR and KESONIA). */
+function InterestRates() {
+  const q = useQuery({
+    queryKey: ['v2-benchmarks'],
+    queryFn: async () => (await api<{ benchmarks: BenchmarkRow[] }>('/api/v2/benchmarks')).benchmarks,
+    refetchInterval: 60_000,
+  });
+  const rows = q.data ?? [];
+  const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 150px' };
+  const notices = rows.map((r) => r.notice).filter(Boolean) as string[];
+  return (
+    <div className="bx-card" style={{ marginTop: 16 }}>
+      <div className="bx-card-h">
+        <div><h2>Interest rates</h2><div className="sub">Official overnight benchmarks, read from each central bank and agreed on chain by the oracle nodes. Change is against the previous business day.</div></div>
+      </div>
+      {q.isLoading ? <Loading /> : q.isError ? <div className="bx-empty">Interest rates are unavailable right now.</div> : !rows.length ? <div className="bx-empty">No benchmarks are in use here yet.</div> : (
+        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 680 }}>
+          <div className="bx-list-h" style={cols}><span>Benchmark</span><span className="r">Rate</span><span className="r">Change</span><span className="r">For business day</span><span className="r">Status</span></div>
+          {rows.map((r) => {
+            const bp = r.latest && r.previous ? (r.latest.rateMicroPercent - r.previous.rateMicroPercent) / 10_000 : null;
+            return (
+              <div key={r.id} className="bx-li" style={cols}>
+                <div className="bx-who"><div><div className="t">{r.id} <span className="muted" style={{ fontWeight: 400 }}>· {r.currency}</span></div><div className="d">{r.name} · {ADMINISTRATOR[r.id] ?? r.id}</div></div></div>
+                <div className="r num" style={{ fontWeight: 600 }}>{r.latest ? `${Number(r.latest.ratePercent).toFixed(r.id === 'SOFR' ? 2 : 4)}%` : '-'}</div>
+                <div className="r">{bp === null ? <span className="muted">-</span>
+                  : <span className={`num ${bp > 0 ? 'up' : bp < 0 ? 'down' : 'muted'}`} style={{ fontWeight: 600 }}>{bp > 0 ? '+' : ''}{bp.toFixed(2)} bp</span>}</div>
+                <div className="r num">{r.latest ? dateOf(Date.parse(`${r.latest.observationDate}T12:00:00Z`) / 1000) : '-'}</div>
+                <div className="r">
+                  {r.state === 'DELAYED' ? <Tag tone="amber">Delayed</Tag>
+                    : !r.latest ? <Tag tone="grey">Waiting</Tag>
+                    : r.latest.onChain ? <a href={STELLAR_TX + r.latest.onChain.tx} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{fixingStatus(r.latest)}</a>
+                    : fixingStatus(r.latest)}
+                </div>
+              </div>
+            );
+          })}
+        </div></div>
+      )}
+      {notices.map((n) => <p key={n} className="muted" style={{ fontSize: 12, margin: '12px 0 0' }}>{n}</p>)}
+    </div>
+  );
+}
+
 export function RatesPage({ go }: { go: Go }) {
   const pools = usePools();
   const covered = useMemo(() => new Set((pools.data ?? []).filter((p) => p.acceptingHedges).map((p) => p.pair)), [pools.data]);
@@ -691,6 +749,7 @@ export function RatesPage({ go }: { go: Go }) {
             </div></div>
           )}
         </div>
+        <InterestRates />
       </section>
     </main>
   );

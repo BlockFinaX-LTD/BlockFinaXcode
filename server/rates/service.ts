@@ -7,6 +7,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { activeBenchmarks, getBenchmark, microToPercent, type Benchmark, type BenchmarkId } from "@shared/rates/benchmarks";
 import { rateFetches, rateObservations } from "@shared/schema";
+import { addDays } from "./calendar";
 import { ADAPTERS, type FetchResult, type RateAdapter } from "./adapters";
 import { epochDay, freshness, isLocked, latestExpected, RateValidationError, validateObservation, type FreshnessState } from "./validate";
 
@@ -167,16 +168,21 @@ export interface BenchmarkStatus {
   expected: { observationDate: string; expectedAt: string; delayedAfter: string };
   state: FreshnessState;
   latest: ObservationView | null;
+  /** The observation before `latest`, for the daily change. */
+  previous: ObservationView | null;
 }
 
 export async function benchmarkStatus(repo: RateRepository, b: Benchmark, now = new Date()): Promise<BenchmarkStatus> {
   const exp = latestExpected(b, now);
   const [have, latest] = await Promise.all([repo.get(b.id, exp.observationDate), repo.latest(b.id)]);
+  const before = latest ? await repo.range(b.id, addDays(latest.observationDate, -14), addDays(latest.observationDate, -1)) : [];
+  const previous = before[before.length - 1] ?? null;
   return {
     id: b.id, name: b.name, currency: b.currency, administrator: b.administrator, licensing: b.licensing,
     expected: { observationDate: exp.observationDate, expectedAt: exp.expectedAt.toISOString(), delayedAfter: exp.delayedAfter.toISOString() },
     state: freshness(exp, Boolean(have), now),
     latest: latest ? toView(latest, now) : null,
+    previous: previous ? toView(previous, now) : null,
   };
 }
 
