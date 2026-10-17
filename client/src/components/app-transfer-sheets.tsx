@@ -29,7 +29,7 @@ import {
 import { CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChain } from '@/components/app-glyphs';
 import { explainTxError } from '@/lib/tx-errors';
 import { usesPasskeyWallet, usePasskeySession } from '@/lib/identity';
-import { passkeySend, toScreenChain } from '@/lib/wallets/passkey-wallet';
+import { api as passkeyApi, passkeySend, toScreenChain } from '@/lib/wallets/passkey-wallet';
 
 const CHAIN_LABELS: Record<string, string> = {
   BASE_SEPOLIA: 'Base Sepolia', BASE: 'Base', POLYGON: 'Polygon', ARBITRUM: 'Arbitrum', ETHEREUM: 'Ethereum',
@@ -546,6 +546,7 @@ function ReceiveSheet({ open, onClose, passkey = false }: { open: boolean; onClo
   const [net, setNet] = useState<string | null>(null);
   const selected = options.find((o) => o.chain === net) ?? options[0];
   const address = passkey ? selected?.address ?? null : riftAddress;
+  const [claiming, setClaiming] = useState(false);
   const { toast } = useToast();
   const [tab, setTab] = useState<DestTab>('crypto');
   const [copied, setCopied] = useState(false);
@@ -594,6 +595,19 @@ function ReceiveSheet({ open, onClose, passkey = false }: { open: boolean; onClo
               </div>
               <button className="copy" onClick={copy} aria-label="Copy address">{copied ? <Check /> : <Copy />}</button>
             </div>
+            {passkey && selected?.chain.startsWith('STELLAR') && (
+              <button className="btn btn-ghost" style={{ marginTop: 10 }} disabled={claiming} onClick={async () => {
+                setClaiming(true);
+                try {
+                  await passkeyApi('/api/wallet/faucet/usdc', {});
+                  toast({ title: 'Test USDC sent', description: '10 test USDC is on its way to your Stellar wallet.' });
+                } catch (e: any) {
+                  toast({ title: 'Faucet unavailable', description: e?.message, variant: 'destructive' });
+                } finally { setClaiming(false); }
+              }}>
+                {claiming ? <Loader2 className="spin" /> : null} Get 10 test USDC
+              </button>
+            )}
             <p className="send-note"><Info /> {passkey ? `Only send test USDC on ${selected?.label ?? 'this network'} to this address.` : isWalletSandbox ? 'Only send test tokens on Base Sepolia to this address.' : 'Only send tokens on supported networks (Base, BNB Chain) to this address.'}</p>
           </div>
         )}

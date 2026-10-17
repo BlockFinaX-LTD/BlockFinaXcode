@@ -36,9 +36,12 @@ import { EmailOtp, sendCode } from "./email-otp";
 import { chainRegistry } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
 import type { ChainConfig } from "@shared/chains/registry";
+import { toUnits } from "@shared/domain/pool-economics";
 import { passkeyOwner, smartAccountAddress } from "./evm-smart-account";
 import { deployStellarSmartAccount, PASSKEY_WALLET_WASM } from "./stellar-smart-account";
 import { EvmRelayer } from "./evm-relayer";
+import { Api as StellarApi, Server as StellarServer } from "@stellar/stellar-sdk/rpc";
+import { BASE_FEE, Keypair, Operation, TransactionBuilder, nativeToScVal } from "@stellar/stellar-sdk";
 
 export const passkeyWalletEnabled = () => process.env.WALLET_PROVIDER === "passkey";
 
@@ -309,7 +312,55 @@ export function registerPasskeyWalletRoutes(app: Express) {
     res.json({ chain: evm.key, hash: sent.hash, state: sent.success ? "CONFIRMED" : "FAILED" });
   }));
 
-  app.use(["/api/wallet/passkey", "/api/wallet/evm"], (err: any, _req: Request, res: Response, _next: NextFunction) => {
+  /**
+   * Testnet only: send 10 test USDC from the BlockFinaX faucet account to the user's
+   * Stellar wallet, once per user per day. Circle's faucet cannot pay contract (C)
+   * addresses, so testers are funded from this account instead.
+   */
+  const faucetClaims = new Map<string, number>();
+  app.post("/api/wallet/faucet/usdc", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    const secret = process.env.TESTNET_USDC_FAUCET_SECRET;
+    const { registry, stellar } = chains();
+    if (!secret || !stellar || registry.config.environment !== "testnet") throw httpError(503, "The test USDC faucet is not available here");
+    const day = `${userId}:${new Date().toISOString().slice(0, 10)}`;
+    if (faucetClaims.has(day)) throw httpError(429, "You already received test USDC today. Try again tomorrow.");
+    const accounts = await new AccountService(registry, await drizzleAccountRepository(registry)).accounts(userId);
+    const to = accounts.find((a) => a.chain === stellar.key)?.address;
+    if (!to) throw httpError(400, "Create your wallet passkey first");
+    const usdc = stellar.assets.USDC;
+    const faucet = Keypair.fromSecret(secret);
+    const server = new StellarServer(stellar.rpcUrls[0]);
+    faucetClaims.set(day, Date.now());
+    try {
+      let tx = new TransactionBuilder(await server.getAccount(faucet.publicKey()), { fee: BASE_FEE, networkPassphrase: stellar.networkId })
+        .addOperation(Operation.invokeContractFunction({
+          contract: usdc.addressOrContract,
+          function: "transfer",
+          args: [nativeToScVal(faucet.publicKey(), { type: "address" }), nativeToScVal(to, { type: "address" }), nativeToScVal(toUnits("10", usdc.decimals), { type: "i128" })],
+        }))
+        .setTimeout(60)
+        .build();
+      const sim = await server.simulateTransaction(tx);
+      if (StellarApi.isSimulationError(sim)) throw new Error(/balance|#10/i.test(sim.error) ? "The faucet is empty. Ask the BlockFinaX team to refill it." : sim.error);
+      tx = (await import("@stellar/stellar-sdk")).rpc.assembleTransaction(tx, sim).build();
+      tx.sign(faucet);
+      const sent = await server.sendTransaction(tx);
+      if (sent.status === "ERROR") throw new Error("Stellar rejected the faucet transfer");
+      for (let i = 0; i < 30; i++) {
+        const found = await server.getTransaction(sent.hash);
+        if (found.status === StellarApi.GetTransactionStatus.SUCCESS) return res.json({ chain: stellar.key, hash: sent.hash, amount: "10" });
+        if (found.status === StellarApi.GetTransactionStatus.FAILED) throw new Error("The faucet transfer failed");
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      throw new Error(`The faucet transfer is still pending: ${sent.hash}`);
+    } catch (err) {
+      faucetClaims.delete(day);
+      throw httpError(400, (err as Error).message);
+    }
+  }));
+
+  app.use(["/api/wallet/passkey", "/api/wallet/evm", "/api/wallet/faucet"], (err: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(err?.status ?? 400).json({ error: { code: err?.status === 401 ? "UNAUTHORIZED" : "WALLET_ERROR", message: err?.message ?? "Request failed" } });
   });
 }

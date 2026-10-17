@@ -36,6 +36,8 @@ Testnet uses the BlockFinaX passkey wallet instead of Rift. Users sign in with a
 
 BlockFinaX's allowlist still runs before anything is sent to a sponsor. If a sponsor setting is missing, the server falls back to its own relayer: `EVM_RELAYER_PRIVATE_KEY` (`0x54733B449882558214641D7a00fbF9C546bbF60B`, needs Base Sepolia ETH) and `STELLAR_FEE_PAYER_SECRET`. Stellar wallet deployment always uses the fee payer.
 
+Test USDC on Stellar: Circle's faucet cannot pay passkey (C) wallets, so testers use **Get 10 test USDC** in Receive. It pays from the BlockFinaX faucet account `GDDHDXGNMHSRPGP2GF6NJYGNZ22XYOR2PMWGF4TKZVFX6SHWQUUUEKI7` (`TESTNET_USDC_FAUCET_SECRET`), once per user per day. Refill it by sending Circle testnet USDC to that G address at https://faucet.circle.com.
+
 The server refuses to start in testnet mode unless both network settings say `testnet`, so a testnet deployment can never point at mainnet. Database tables are created on each testnet deploy; production skips that step.
 
 ## Stellar testnet contracts
