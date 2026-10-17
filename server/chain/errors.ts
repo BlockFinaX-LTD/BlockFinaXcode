@@ -8,6 +8,7 @@ import { ApplicationError, type ApplicationErrorCode } from "@shared/domain/type
 const EVM_REASONS: [string, ApplicationErrorCode][] = [
   ["Insufficient pool capacity", "INSUFFICIENT_LIQUIDITY"],
   ["Pool does not sell this direction", "DIRECTION_NOT_OFFERED"],
+  ["Strike closer to spot than the pool allows", "STRIKE_TOO_CLOSE"],
   ["Tenor not offered", "TENOR_DISABLED"],
   ["Tenor must be", "INVALID_TENOR"],
   ["Offer below", "INVALID_TENOR"],
@@ -62,7 +63,7 @@ const STELLAR_POOL_ERRORS: Record<number, ApplicationErrorCode> = {
   18: "SLIPPAGE_EXCEEDED", 19: "QUOTE_EXPIRED", 20: "QUOTE_USED", 21: "ORACLE_NOT_READY", 22: "ORACLE_PRICE_REJECTED",
   23: "POSITION_SETTLED", 24: "NOTHING_TO_CLAIM", 25: "NOTHING_TO_CLAIM", 26: "INSUFFICIENT_BALANCE",
   27: "INVALID_REQUEST", 28: "WITHDRAWAL_NOT_READY", 29: "WITHDRAWAL_NOT_READY", 30: "WITHDRAWAL_NOT_READY",
-  31: "INSUFFICIENT_LIQUIDITY", 32: "UNAUTHORIZED", 33: "CHAIN_NOT_ENABLED", 36: "ORACLE_NOT_READY", 37: "DIRECTION_NOT_OFFERED",
+  31: "INSUFFICIENT_LIQUIDITY", 32: "UNAUTHORIZED", 33: "CHAIN_NOT_ENABLED", 36: "ORACLE_NOT_READY", 37: "DIRECTION_NOT_OFFERED", 38: "STRIKE_TOO_CLOSE",
 };
 
 /** contracts/oracle-consensus Error enum, by number. */

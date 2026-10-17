@@ -116,7 +116,8 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/fair", wrap(async (req, res) => {
     const direction = req.query.direction === "down" ? "down" : "up";
     const tenors = String(req.query.tenors ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 365).slice(0, 16);
-    res.json(await (await getServices()).quotes.fairTable(String(req.query.pair ?? ""), direction, tenors));
+    const distance = Math.min(Math.max(Number(req.query.distance ?? 200) || 0, 0), 5000);
+    res.json(await (await getServices()).quotes.fairTable(String(req.query.pair ?? ""), direction, tenors, distance));
   }));
 
   /** Active cover sold by a pool, for the underwriter's risk view. */

@@ -81,10 +81,12 @@ function ChangeText({ change }: { change: number | null }) {
 function usePoolOffers(pool: CurrencyPool) {
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const tenors = pool.tenors.filter((t) => t.active).sort((a, b) => a.tenorDays - b.tenorDays);
+  // Priced at the closest strike this pool sells: its most protective cover.
+  const distance = pool.structures.minStrikeDistanceBps ?? 0;
   const fair = useQuery({
-    queryKey: ['v2-fair', pool.pair, direction, tenors.map((t) => t.tenorDays).join(',')],
+    queryKey: ['v2-fair', pool.pair, direction, tenors.map((t) => t.tenorDays).join(','), distance],
     enabled: tenors.length > 0,
-    queryFn: () => api<{ rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}`),
+    queryFn: () => api<{ reference: { strike: string }; rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}&distance=${distance}`),
     staleTime: 60_000,
   });
   const feeRate = pool.fees.hedgerFeeRateE6 / 1e6;
@@ -95,8 +97,10 @@ function usePoolOffers(pool: CurrencyPool) {
   });
   const priced = rows.filter((r) => r.price !== null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.price! < a.price! ? b : a)) : null;
-  return { rows, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: fair.isLoading };
+  return { rows, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: fair.isLoading, distance, strike: fair.data?.reference.strike ?? null };
 }
+
+const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${bps / 100}% away`);
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) 128px' };
 
@@ -110,7 +114,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
   return (
     <>
       <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
-        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{pool.pair} · {types}</div></div></div>
+        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{pool.pair} · {types} · {startsLabel(offers.distance)}</div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
         <div className="r" style={{ fontSize: 13 }}>{pool.tenors.filter((t) => t.active).map((t) => t.tenorDays).sort((a, b) => a - b).join(', ')} days</div>
@@ -131,7 +135,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
               <span className="r"><button className="bx-btn ghost small" onClick={() => buy(r.tenorDays)}>Buy</button></span>
             </div>
           ))}
-          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for cover starting 2% from today and capped 10% beyond, including the BlockFinaX fee. Your exact price is shown before you buy.</div>
+          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for this pool's closest cover: starting {offers.distance === 0 ? "at today's rate" : `${offers.distance / 100}% from today`}{offers.strike ? ` (${fmtRate(offers.strike)} ${quoteCcy(pool.pair)})` : ''}, capped 10% beyond, including the BlockFinaX fee. Cover starting further away costs less. Your exact price is shown before you buy.</div>
         </div>
       )}
     </>
@@ -360,7 +364,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const capMin = (pool?.structures.minCapDistanceBps ?? 300) / 100;
   const capMax = (pool?.structures.maxCapDistanceBps || 2000) / 100;
   const sign = direction === 'up' ? 1 : -1;
+  // The closest strike the pool(s) allow, set by their underwriters.
+  const minStartPct = (chosenPool ? chosenPool.structures.minStrikeDistanceBps ?? 0 : Math.min(...(matching.length ? matching.map((p) => p.structures.minStrikeDistanceBps ?? 0) : [0]))) / 100;
+  const startChoices = Array.from(new Set([minStartPct, minStartPct + 2, minStartPct + 5].map((v) => Math.round(v * 100) / 100)));
   const [startPct, setStartPct] = useState(2);
+  useEffect(() => { if (!startChoices.includes(startPct)) setStartPct(startChoices[0]); }, [startChoices.join(','), startPct]);
   const [capPct, setCapPct] = useState(10);
   useEffect(() => { setCapPct((c) => Math.min(Math.max(c, capMin), capMax)); }, [capMin, capMax]);
   const [structure, setStructure] = useState<'capped' | 'open'>('capped');
@@ -532,7 +540,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <div>
                 <span className="bx-label">Protection starts</span>
                 <div className="bx-seg">
-                  {[0, 2, 5].map((m) => <button key={m} className={startPct === m ? 'on' : ''} onClick={() => setStartPct(m)}>{m === 0 ? "Today's rate" : `${m}% away`}</button>)}
+                  {startChoices.map((m) => <button key={m} className={startPct === m ? 'on' : ''} onClick={() => setStartPct(m)}>{m === 0 ? "Today's rate" : `${m}% away`}</button>)}
                 </div>
               </div>
               <div>

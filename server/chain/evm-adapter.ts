@@ -96,6 +96,8 @@ export class EvmAdapter implements ChainAdapter {
       structures: {
         open: p.openEnabled, capped: p.cappedEnabled, minCapDistanceBps: Number(p.minCapDistanceBps),
         maxCapDistanceBps: Number(p.maxCapDistanceBps), openMaxPayoutBps: Number(p.openMaxPayoutBps),
+        // The Base facets do not store a strike minimum yet: any strike in the settlement band.
+        minStrikeDistanceBps: 0,
       },
       tenors: tenors.map((t) => ({ tenorDays: Number(t.tenorDays), active: t.active, markupBps: Number(t.markupBps) })),
       fees: {

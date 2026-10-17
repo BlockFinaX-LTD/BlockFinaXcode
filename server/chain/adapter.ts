@@ -51,7 +51,7 @@ export interface CreatePoolInput {
   /** The move the pool covers. Each pool sells one direction. */
   direction: "up" | "down";
   allowExternalLp: boolean;
-  structures: { open: boolean; capped: boolean; minCapDistanceBps: number; maxCapDistanceBps: number; openMaxPayoutBps: number };
+  structures: { open: boolean; capped: boolean; minCapDistanceBps: number; maxCapDistanceBps: number; openMaxPayoutBps: number; minStrikeDistanceBps?: number };
   tenors: TenorInput[];
   initialLiquidity: string;
 }

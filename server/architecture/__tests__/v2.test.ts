@@ -183,6 +183,17 @@ test("a quote only uses pools that sell the requested direction", async () => {
   assert.equal((await qs.options("USD/GHS", "up")).tenors.length, 1);
 });
 
+test("the underwriter's minimum strike distance is enforced before pricing", async () => {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const strict = { ...fakeAdapter("stellar", 7), listPools: async () => [{ ...pool("stellar", 7, 11613), structures: { ...pool("stellar", 7, 11613).structures, minStrikeDistanceBps: 500 } }] };
+  const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: strict }), pricer);
+  // Spot 11.2: strike 11.6 is 3.6% away, under the pool's 5% minimum.
+  await assert.rejects(qs.quote(request, { stellar: STELLAR_USER }), (e: ApplicationError) => e.code === "STRIKE_TOO_CLOSE" && /5%/.test(e.message));
+  // Strike 11.8 is 5.4% away: priced.
+  const ok = await qs.quote({ ...request, strike: "11.8", cap: "12.9" }, { stellar: STELLAR_USER });
+  assert.equal(ok.economic.strike, "11.8");
+});
+
 // ── Routing: multi-chain funding, withdrawal, failure ─────────────────────────
 
 function treasury(opts: { sourceFails?: boolean; payoutFails?: boolean } = {}): TreasuryPort {

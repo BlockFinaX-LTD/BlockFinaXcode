@@ -53,13 +53,13 @@ export class QuoteService {
 
   /**
    * BlockFinaX's fair price per tenor, for underwriters setting their offer. Priced on
-   * a reference cover (protection 2% from today, capped 10% beyond, 1,000 notional) so
-   * tenors compare on the same terms. Returned as a fraction of notional.
+   * a reference cover (protection `strikeDistanceBps` from today, default 2%, capped 10%
+   * beyond, 1,000 notional) so tenors compare on the same terms. Returned as a fraction of notional.
    */
-  async fairTable(pair: string, direction: "up" | "down", tenors: number[]) {
+  async fairTable(pair: string, direction: "up" | "down", tenors: number[], strikeDistanceBps = 200) {
     const spot = Number(await this.pricer.spot(pair));
     const sign = direction === "up" ? 1 : -1;
-    const strike = spot * (1 + sign * 0.02);
+    const strike = spot * (1 + (sign * strikeDistanceBps) / 10_000);
     const cap = strike * (1 + sign * 0.1);
     const rows = [];
     for (const tenorDays of tenors) {
@@ -105,13 +105,26 @@ export class QuoteService {
     const buyer = accounts[chain.key];
     if (!buyer) throw new ApplicationError("INVALID_REQUEST", `No ${chain.name} account yet; create one before buying protection`);
     const adapter = this.adapters.adapterFor(chain.key);
+    const spotNow = Number(await this.pricer.spot(req.pair));
+    const pools = await adapter.listPools();
 
-    const candidates = (await adapter.listPools())
+    const candidates = pools
       .map((pool) => ({ pool, tenor: pool.tenors.find((t) => t.tenorDays === req.tenorDays && t.active) }))
       .filter(({ pool, tenor }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
         && (!req.pool || formatResourceId(pool.ref) === req.pool)
+        && strikeDistanceBps(req, spotNow) >= (pool.structures.minStrikeDistanceBps ?? 0)
         && tenor && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
       .sort((a, b) => a.tenor!.markupBps - b.tenor!.markupBps);
+    if (candidates.length === 0) {
+      // Say so plainly when the only reason is that the strike is too close to today's rate.
+      const closest = pools
+        .filter((p) => p.pair === req.pair && p.acceptingHedges && (p.direction === "both" || p.direction === req.direction)
+          && (!req.pool || formatResourceId(p.ref) === req.pool) && p.tenors.some((t) => t.tenorDays === req.tenorDays && t.active))
+        .map((p) => p.structures.minStrikeDistanceBps ?? 0);
+      if (closest.length) {
+        throw new ApplicationError("STRIKE_TOO_CLOSE", `Protection must start at least ${Math.min(...closest) / 100}% from today's rate for this cover`);
+      }
+    }
     if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} ${req.direction === "up" ? "rising-rate" : "falling-rate"} protection on ${req.pair}`);
 
     let last: ApplicationError = new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
@@ -180,4 +193,9 @@ export async function enginePricer(): Promise<FairPricer> {
       return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot) };
     },
   };
+}
+
+/** How far the requested strike is from today's rate, in bps of spot. */
+function strikeDistanceBps(req: ProtectionRequest, spot: number) {
+  return spot > 0 ? (Math.abs(Number(req.strike) - spot) / spot) * 10_000 : 0;
 }

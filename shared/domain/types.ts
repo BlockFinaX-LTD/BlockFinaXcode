@@ -62,6 +62,7 @@ export interface TransactionStatus {
 export const APPLICATION_ERROR_CODES = [
   "INSUFFICIENT_LIQUIDITY",
   "DIRECTION_NOT_OFFERED",
+  "STRIKE_TOO_CLOSE",
   "INVALID_TENOR",
   "TENOR_DISABLED",
   "INVALID_CAP",
@@ -122,6 +123,8 @@ export interface PoolStructures {
   minCapDistanceBps: number;
   maxCapDistanceBps: number;
   openMaxPayoutBps: number;
+  /** The closest to spot a strike may be, in bps of spot (0 = at today's rate). Set by the underwriter. */
+  minStrikeDistanceBps: number;
 }
 
 export interface FeeRates {

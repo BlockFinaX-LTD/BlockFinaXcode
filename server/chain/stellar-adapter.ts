@@ -94,6 +94,7 @@ export class StellarAdapter implements ChainAdapter {
       structures: {
         open: p.structures.open_enabled, capped: p.structures.capped_enabled, minCapDistanceBps: p.structures.min_cap_distance_bps,
         maxCapDistanceBps: p.structures.max_cap_distance_bps, openMaxPayoutBps: p.structures.open_max_payout_bps,
+        minStrikeDistanceBps: p.structures.min_strike_distance_bps ?? 0,
       },
       tenors: p.tenors.map((t: any) => ({ tenorDays: t.tenor_days, active: t.active, markupBps: t.markup_bps })),
       fees: { hedgerFeeRateE6: p.hedger_fee_rate, payoutFeeRateE6: p.payout_fee_rate, lpProfitFeeRateE6: p.lp_profit_fee_rate, creatorShareE6: p.creator_share },
@@ -217,6 +218,7 @@ export class StellarAdapter implements ChainAdapter {
       structures: {
         open_enabled: s.open, capped_enabled: s.capped, min_cap_distance_bps: s.minCapDistanceBps,
         max_cap_distance_bps: s.maxCapDistanceBps, open_max_payout_bps: s.openMaxPayoutBps,
+        min_strike_distance_bps: s.minStrikeDistanceBps ?? 0,
       },
     });
   }
@@ -295,6 +297,7 @@ export class StellarAdapter implements ChainAdapter {
         open_enabled: input.structures.open, capped_enabled: input.structures.capped,
         min_cap_distance_bps: input.structures.minCapDistanceBps, max_cap_distance_bps: input.structures.maxCapDistanceBps,
         open_max_payout_bps: input.structures.openMaxPayoutBps,
+        min_strike_distance_bps: input.structures.minStrikeDistanceBps ?? 0,
       },
       tenors: input.tenors.map((t) => ({ tenor_days: t.tenorDays, active: t.active, markup_bps: t.markupBps })),
       initial_liquidity: toUnits(input.initialLiquidity, this.usdc.decimals),

@@ -60,11 +60,12 @@ function useBook() {
   return { pools, all, stakes, yours, isCreator };
 }
 
-function useFair(pair: string | null, direction: Direction, days: number[]) {
+/** Fair price per tenor, for cover starting `distanceBps` from today (the pool's closest strike). */
+function useFair(pair: string | null, direction: Direction, days: number[], distanceBps = 0) {
   return useQuery({
-    queryKey: ['v2-fair', pair, direction, days.join(',')],
+    queryKey: ['v2-fair', pair, direction, days.join(','), distanceBps],
     enabled: Boolean(pair) && days.length > 0,
-    queryFn: () => api<{ rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pair!)}&direction=${direction}&tenors=${days.join(',')}`),
+    queryFn: () => api<{ rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pair!)}&direction=${direction}&tenors=${days.join(',')}&distance=${distanceBps}`),
     staleTime: 60_000,
   });
 }
@@ -256,7 +257,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
   const direction: Direction = pool.direction === 'down' ? 'down' : 'up';
   const [extra, setExtra] = useState<number[]>([]);
   const days = Array.from(new Set([...pool.tenors.map((t) => t.tenorDays), ...extra])).sort((a, b) => a - b);
-  const fair = useFair(pool.pair, direction, days);
+  const fair = useFair(pool.pair, direction, days, pool.structures.minStrikeDistanceBps ?? 0);
   const fairOf = (d: number) => fair.data?.rows.find((r) => r.tenorDays === d)?.fairRateE6 ?? null;
   const [offers, setOffers] = useState<Record<number, string>>({});
   const [newDays, setNewDays] = useState('');
@@ -331,18 +332,22 @@ function ProtectionSettings({ pool, editable }: { pool: CurrencyPool; editable: 
   const [minCap, setMinCap] = useState(String(pool.structures.minCapDistanceBps / 100));
   const [maxCap, setMaxCap] = useState(String(pool.structures.maxCapDistanceBps / 100));
   const [openMax, setOpenMax] = useState(String(pool.structures.openMaxPayoutBps / 100));
+  const [minStrike, setMinStrike] = useState(String((pool.structures.minStrikeDistanceBps ?? 0) / 100));
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    setMinStrike(String((pool.structures.minStrikeDistanceBps ?? 0) / 100));
     setOpen(pool.structures.open); setCapped(pool.structures.capped);
     setMinCap(String(pool.structures.minCapDistanceBps / 100)); setMaxCap(String(pool.structures.maxCapDistanceBps / 100)); setOpenMax(String(pool.structures.openMaxPayoutBps / 100));
   }, [pool.ref.id]);
   const dirty = open !== pool.structures.open || capped !== pool.structures.capped || Number(minCap) * 100 !== pool.structures.minCapDistanceBps
-    || Number(maxCap) * 100 !== pool.structures.maxCapDistanceBps || Number(openMax) * 100 !== pool.structures.openMaxPayoutBps;
+    || Number(maxCap) * 100 !== pool.structures.maxCapDistanceBps || Number(openMax) * 100 !== pool.structures.openMaxPayoutBps
+    || Math.round(Number(minStrike) * 100) !== (pool.structures.minStrikeDistanceBps ?? 0);
   async function save() {
     setBusy(true);
     try {
       const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/structures/prepare`, {
         open, capped, minCapDistanceBps: Math.round(Number(minCap) * 100), maxCapDistanceBps: Math.round(Number(maxCap) * 100), openMaxPayoutBps: Math.round(Number(openMax) * 100),
+        minStrikeDistanceBps: Math.round(Number(minStrike) * 100),
       });
       await signAndSend(transactions, () => {});
       toast({ title: 'Protection settings saved' });
@@ -370,6 +375,11 @@ function ProtectionSettings({ pool, editable }: { pool: CurrencyPool; editable: 
           {open && <label className="bx-field" style={{ margin: 0 }}><span>Maximum payout, % of amount</span><input className="bx-input num" disabled={!editable} value={openMax} onChange={(e) => setOpenMax(e.target.value.replace(/[^0-9.]/g, ''))} /></label>}
         </div>
       </div>
+      <label className="bx-field" style={{ marginTop: 16, marginBottom: 0, maxWidth: 360 }}>
+        <span>Closest strike allowed (% from today's rate)</span>
+        <input className="bx-input num" disabled={!editable} value={minStrike} onChange={(e) => setMinStrike(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <span className="muted" style={{ fontSize: 12 }}>0 lets buyers start cover at today's rate. A higher number only sells cover that starts further away, which is less likely to pay out.</span>
+      </label>
     </div>
   );
 }
@@ -499,8 +509,9 @@ export function CreatePool({ go }: { go: Go }) {
   const [minCap, setMinCap] = useState('3');
   const [maxCap, setMaxCap] = useState('20');
   const [openMax, setOpenMax] = useState('30');
+  const [minStrike, setMinStrike] = useState('0');
   const [busy, setBusy] = useState<string | null>(null);
-  const fair = useFair(pair || null, direction, tenors.map((t) => t.tenorDays));
+  const fair = useFair(pair || null, direction, tenors.map((t) => t.tenorDays), Math.round(Number(minStrike || 0) * 100));
   const fairOf = (d: number) => fair.data?.rows.find((r) => r.tenorDays === d)?.fairRateE6 ?? null;
   useEffect(() => {
     setTenors((ts) => ts.map((t) => { const f = fairOf(t.tenorDays); return t.offerPct || !f ? t : { ...t, offerPct: ((f / 1e6) * 1.15 * 100).toFixed(2) }; }));
@@ -515,7 +526,7 @@ export function CreatePool({ go }: { go: Go }) {
   const problems = [
     !(Number(amount) >= 10) ? 'Commit at least $10' : total > have ? `You need $${fmt(total)} USDC on this network` : null,
     !tenors.some((t) => t.active) ? 'Turn on at least one tenor' : tenors.some((t) => markupOf(t) < MARKUP_MIN || markupOf(t) > MARKUP_MAX) ? 'Each offer must be 90% to 500% of the fair price' : null,
-    !openOn && !cappedOn ? 'Offer at least one protection type' : Number(maxCap) > 0 && Number(minCap) > Number(maxCap) ? 'The smallest cap must be below the largest' : null,
+    !openOn && !cappedOn ? 'Offer at least one protection type' : Number(maxCap) > 0 && Number(minCap) > Number(maxCap) ? 'The smallest cap must be below the largest' : !(Number(minStrike) >= 0 && Number(minStrike) <= 50) ? 'Closest strike must be 0% to 50%' : null,
     null,
   ];
 
@@ -525,7 +536,7 @@ export function CreatePool({ go }: { go: Go }) {
       if (network && hub && network !== hub) await routeFunding({ network, amount: String(total), hubName });
       const { transactions } = await api<{ transactions: PreparedTransaction[] }>('/api/v2/pools/prepare', {
         pair, direction, allowExternalLp: true, initialLiquidity: amount,
-        structures: { open: openOn, capped: cappedOn, minCapDistanceBps: Math.round(Number(minCap) * 100), maxCapDistanceBps: Math.round(Number(maxCap) * 100), openMaxPayoutBps: Math.round(Number(openMax) * 100) },
+        structures: { open: openOn, capped: cappedOn, minCapDistanceBps: Math.round(Number(minCap) * 100), maxCapDistanceBps: Math.round(Number(maxCap) * 100), openMaxPayoutBps: Math.round(Number(openMax) * 100), minStrikeDistanceBps: Math.round(Number(minStrike) * 100) },
         tenors: tenors.map((t) => ({ tenorDays: t.tenorDays, active: t.active, markupBps: markupOf(t) })),
       });
       await signAndSend(transactions, (m) => setBusy(m));
@@ -603,6 +614,11 @@ export function CreatePool({ go }: { go: Go }) {
                 <div className="sub" style={{ margin: '6px 0 12px' }}>Pays the whole move, up to your maximum.</div>
                 {openOn && <label className="bx-field" style={{ margin: 0 }}><span>Maximum payout, % of amount</span><input className="bx-input num" value={openMax} onChange={(e) => setOpenMax(e.target.value.replace(/[^0-9.]/g, ''))} /></label>}
               </div>
+              <label className="bx-field" style={{ ...box, margin: 0 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>Closest strike allowed</span>
+                <span className="sub" style={{ margin: '0 0 6px' }}>How close to today's rate cover may start. 0% sells cover from today's rate.</span>
+                <input className="bx-input num" value={minStrike} onChange={(e) => setMinStrike(e.target.value.replace(/[^0-9.]/g, ''))} />
+              </label>
             </div>
           )}
           {step === 3 && (
@@ -612,6 +628,7 @@ export function CreatePool({ go }: { go: Go }) {
               {tenors.filter((t) => t.active).map((t) => <Sum key={t.tenorDays} l={`${t.tenorDays}-day offer`} v={<span className="num">{t.offerPct}%</span>} />)}
               {cappedOn && <Sum l="Capped Protection" v={`caps ${minCap}% to ${maxCap}%`} />}
               {openOn && <Sum l="Open Protection" v={`max payout ${openMax}%`} />}
+              <Sum l="Closest strike allowed" v={Number(minStrike) === 0 ? "Today's rate" : `${minStrike}% from today`} />
             </div>
           )}
           {problems[step] && <p className="bx-error" style={{ marginTop: 12 }}>{problems[step]}</p>}

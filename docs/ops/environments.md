@@ -44,8 +44,8 @@ The server refuses to start in testnet mode unless both network settings say `te
 
 | Contract | Id |
 | --- | --- |
-| Currency pool | `CAQWW75Z3EOUSBOTZUV6RALNISJ43BIOOK7I4J7GADFDM4OER3FRR5EQ` (one direction per pool) |
-| Pool oracle | `CBR3OPEZQQI3GOCGVYIQJ75RUR4ODHS6EUPIYVTC5CTVODPMJEN5YZYW` |
+| Currency pool | `CC56AAARBPSBMOWEUFZGXR56HS5J5HBJMJRX6RZGG4NCJN3D2ID3MRZO` (one direction per pool, underwriter-set closest strike) |
+| Pool oracle | `CBQ2J5YKMVN6DLUMHNT5LYRT5NKDDFRPYLMVYT3OTQ2YMMTYIFMVZ3OW` |
 | Test USDC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
 Oracle policy: quorum 2 of 2, 1% tolerance, 900 s stale window, 300 s cooldown. Enabled pairs: USD/NGN, USD/GHS, USD/KES, USD/ZAR, USD/EGP.
