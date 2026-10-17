@@ -83,12 +83,17 @@ if (isNeon) {
   const { drizzle } = requireCJS("drizzle-orm/node-postgres");
   if (pg?.types?.setTypeParser) readNaiveTimestampsAsUtc(pg.types);
   const databaseSslCa = process.env.DATABASE_SSL_CA?.replace(/\\n/g, "\n");
+  // Testnet only: its database is reached over Railway's private network, which is
+  // encrypted and not reachable from the internet, and its certificate is self-signed
+  // for localhost. Production never takes this branch.
+  const testnetPrivateNetwork =
+    process.env.APP_ENV === "testnet" && new URL(url).hostname.endsWith(".railway.internal");
   _pool = new pg.Pool({
     connectionString: url,
     max: 3,
     idleTimeoutMillis: 15000,
     connectionTimeoutMillis: 5000,
-    ssl: {
+    ssl: testnetPrivateNetwork ? false : {
       rejectUnauthorized: process.env.NODE_ENV === "production",
       ...(databaseSslCa ? { ca: databaseSslCa } : {}),
     },
