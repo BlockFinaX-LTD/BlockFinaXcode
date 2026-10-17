@@ -5,17 +5,17 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Shield } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
+import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
-  ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pct, quoteCcy, signAndSend, useChains, useDebounced, usePools,
+  ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, type Direction,
 } from './shared';
 import { Flag, Loading, Spin, Sum, Tag } from './ui';
-import type { Go } from './workspace';
+import type { Go, Target } from './workspace';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
@@ -72,6 +72,109 @@ function ChangeText({ change }: { change: number | null }) {
   return <span className={`num ${change >= 0 ? 'up' : 'down'}`} style={{ fontWeight: 600 }}>{change >= 0 ? '+' : ''}{(change * 100).toFixed(2)}%</span>;
 }
 
+// ── Markets: open pools a hedger can buy from ────────────────────────────────
+
+/**
+ * A pool's price per tenor: BlockFinaX's fair price on a reference cover (protection
+ * 2% from today, capped 10% beyond) times the pool's markup, plus its hedger fee.
+ */
+function usePoolOffers(pool: CurrencyPool) {
+  const direction = pool.direction === 'down' ? 'down' : 'up';
+  const tenors = pool.tenors.filter((t) => t.active).sort((a, b) => a.tenorDays - b.tenorDays);
+  const fair = useQuery({
+    queryKey: ['v2-fair', pool.pair, direction, tenors.map((t) => t.tenorDays).join(',')],
+    enabled: tenors.length > 0,
+    queryFn: () => api<{ rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}`),
+    staleTime: 60_000,
+  });
+  const feeRate = pool.fees.hedgerFeeRateE6 / 1e6;
+  const rows = tenors.map((t) => {
+    const f = fair.data?.rows.find((r) => r.tenorDays === t.tenorDays)?.fairRateE6 ?? null;
+    const price = f === null ? null : (f / 1e6) * (t.markupBps / 10000);
+    return { tenorDays: t.tenorDays, price, per1000: price === null ? null : 1000 * price * (1 + feeRate) };
+  });
+  const prices = rows.map((r) => r.price).filter((p): p is number => p !== null);
+  return { rows, from: prices.length ? Math.min(...prices) : null, loading: fair.isLoading };
+}
+
+const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) 128px' };
+
+function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go; expandable?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const offers = usePoolOffers(pool);
+  const direction = pool.direction === 'down' ? 'down' : 'up';
+  const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
+  const buy = (days?: number) => go('h-protect', { pair: pool.pair, direction, pool: poolRef(pool), days });
+  const types = [pool.structures.capped && 'Capped', pool.structures.open && 'Open'].filter(Boolean).join(' and ');
+  return (
+    <>
+      <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
+        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{pool.pair} · {types}</div></div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>price from</div></div>
+        <div className="r" style={{ fontSize: 13 }}>{pool.tenors.filter((t) => t.active).map((t) => t.tenorDays).sort((a, b) => a - b).join(', ')} days</div>
+        <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>Buy cover</button>
+          {expandable && (open ? <ChevronUp size={16} className="muted" /> : <ChevronDown size={16} className="muted" />)}
+        </div>
+      </div>
+      {open && (
+        <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
+          <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>Length</span><span className="r">Ends</span><span className="r">Price</span><span className="r">Cost per $1,000</span><span /></div>
+          {offers.rows.map((r) => (
+            <div key={r.tenorDays} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}>
+              <span style={{ fontWeight: 600 }}>{r.tenorDays} days</span>
+              <span className="r">{dateIn(r.tenorDays)}</span>
+              <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
+              <span className="r num">{r.per1000 === null ? '-' : `$${fmt(r.per1000)}`}</span>
+              <span className="r"><button className="bx-btn ghost small" onClick={() => buy(r.tenorDays)}>Buy</button></span>
+            </div>
+          ))}
+          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for cover starting 2% from today and capped 10% beyond, including the BlockFinaX fee. Your exact price is shown before you buy.</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function MarketHeader() {
+  return <div className="bx-list-h" style={MARKET_COLS}><span>Cover</span><span className="r">Liquidity</span><span className="r">Premium</span><span className="r">Lengths</span><span /></div>;
+}
+
+function useOpenPools() {
+  const pools = usePools();
+  const open = (pools.data ?? []).filter((p) => p.acceptingHedges && Number(p.liquidity.capacity) > 0 && p.tenors.some((t) => t.active));
+  return { pools, open };
+}
+
+export function MarketsPage({ go }: { go: Go }) {
+  const { pools, open } = useOpenPools();
+  const pairs = Array.from(new Set(open.map((p) => p.pair)));
+  const [filter, setFilter] = useState<string>('all');
+  const shown = open.filter((p) => filter === 'all' || p.pair === filter);
+  return (
+    <main className="bx-main">
+      <section className="bx-full">
+        <div className="bx-card">
+          <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
+            <div><h2>Markets</h2><div className="sub">Open pools you can buy cover from. Choose a pool to see its price for each length.</div></div>
+            <div className="bx-seg" style={{ width: 'auto' }}>
+              <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
+              {pairs.map((p) => <button key={p} className={filter === p ? 'on' : ''} onClick={() => setFilter(p)}>{ccyName(p)}</button>)}
+            </div>
+          </div>
+          {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
+            <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 760 }}>
+              <MarketHeader />
+              {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
+            </div></div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 // ── Home ─────────────────────────────────────────────────────────────────────
 
 export function HedgerHome({ go }: { go: Go }) {
@@ -126,6 +229,7 @@ export function HedgerHome({ go }: { go: Go }) {
             </>
           )}
         </div>
+        <AvailableCover go={go} />
       </section>
 
       <aside className="bx-aside">
@@ -158,6 +262,21 @@ export function HedgerHome({ go }: { go: Go }) {
   );
 }
 
+function AvailableCover({ go }: { go: Go }) {
+  const { pools, open } = useOpenPools();
+  return (
+    <div className="bx-card">
+      <div className="bx-card-h"><h2>Available cover</h2><button className="bx-link" onClick={() => go('h-markets')}>All markets</button></div>
+      {pools.isLoading ? <Loading /> : !open.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
+        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
+          <MarketHeader />
+          {open.slice(0, 5).map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
+        </div></div>
+      )}
+    </div>
+  );
+}
+
 // ── Protect ──────────────────────────────────────────────────────────────────
 
 const RANGES = [{ label: '1W', days: 7 }, { label: '1M', days: 30 }, { label: '3M', days: 90 }, { label: '1Y', days: 365 }];
@@ -187,7 +306,7 @@ function RateChart({ closes, strike, cap }: { closes: { date: string; close: num
   );
 }
 
-export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | null }) {
+export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: string | null; target?: Target }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const pools = usePools();
@@ -203,8 +322,14 @@ export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | 
     const ds = new Set(available.filter((p) => p.pair === pair).map((p) => p.direction));
     return (['up', 'down'] as Direction[]).filter((d) => ds.has(d) || ds.has('both'));
   }, [available, pair]);
-  const [direction, setDirection] = useState<Direction>('up');
+  const [direction, setDirection] = useState<Direction>(target?.direction ?? 'up');
+  useEffect(() => { if (target?.direction) setDirection(target.direction); }, [target?.direction]);
   useEffect(() => { if (directions.length && !directions.includes(direction)) setDirection(directions[0]); }, [directions, direction]);
+  // The pool to buy from: one chosen in Markets, or null for the best price.
+  const [poolChoice, setPoolChoice] = useState<string | null>(target?.pool ?? null);
+  useEffect(() => { setPoolChoice(target?.pool ?? null); }, [target?.pool]);
+  const matching = available.filter((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
+  useEffect(() => { if (poolChoice && !matching.some((p) => poolRef(p) === poolChoice)) setPoolChoice(null); }, [poolChoice, matching]);
 
   const [range, setRange] = useState(30);
   const spot = useSpot(pair);
@@ -218,14 +343,19 @@ export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | 
     queryFn: () => api<{ tenors: { tenorDays: number; open: boolean; capped: boolean }[] }>(`/api/v2/options?pair=${encodeURIComponent(pair!)}&direction=${direction}`),
   });
   const [amount, setAmount] = useState('1000');
-  const [days, setDays] = useState<number | null>(null);
+  const [days, setDays] = useState<number | null>(target?.days ?? null);
+  useEffect(() => { if (target?.days) setDays(target.days); }, [target?.days]);
+  const chosenPool = matching.find((p) => poolRef(p) === poolChoice) ?? null;
+  // A chosen pool offers its own lengths and cover types; otherwise all pools combined.
+  const tenorList = chosenPool
+    ? chosenPool.tenors.filter((t) => t.active).map((t) => ({ tenorDays: t.tenorDays, open: chosenPool.structures.open, capped: chosenPool.structures.capped })).sort((a, b) => a.tenorDays - b.tenorDays)
+    : options.data?.tenors ?? [];
   useEffect(() => {
-    const ts = options.data?.tenors ?? [];
-    if (ts.length && !ts.some((t) => t.tenorDays === days)) setDays((ts.find((t) => t.tenorDays >= 14) ?? ts[0]).tenorDays);
-  }, [options.data, days]);
-  const tenor = options.data?.tenors.find((t) => t.tenorDays === days);
+    if (tenorList.length && !tenorList.some((t) => t.tenorDays === days)) setDays((tenorList.find((t) => t.tenorDays >= 14) ?? tenorList[0]).tenorDays);
+  }, [tenorList.map((t) => t.tenorDays).join(','), days]);
+  const tenor = tenorList.find((t) => t.tenorDays === days);
 
-  const pool = available.find((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
+  const pool = chosenPool ?? matching[0];
   const capMin = (pool?.structures.minCapDistanceBps ?? 300) / 100;
   const capMax = (pool?.structures.maxCapDistanceBps || 2000) / 100;
   const sign = direction === 'up' ? 1 : -1;
@@ -237,7 +367,7 @@ export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | 
   const strike = spot.data ? spot.data * (1 + (sign * startPct) / 100) : null;
   const cap = strike ? strike * (1 + (sign * capPct) / 100) : null;
 
-  const base = pair && days && strike && Number(amount) > 0 ? { pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6) } : null;
+  const base = pair && days && strike && Number(amount) > 0 ? { pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6), ...(poolChoice ? { pool: poolChoice } : {}) } : null;
   const cappedReq = useDebounced(base && cap && tenor?.capped ? JSON.stringify({ ...base, structure: 'capped', cap: cap.toFixed(6) }) : null, 350);
   const openReq = useDebounced(base && tenor?.open ? JSON.stringify({ ...base, structure: 'open' }) : null, 350);
   const [refresh, setRefresh] = useState(0);
@@ -375,6 +505,15 @@ export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | 
                   {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{name} {d === 'up' ? 'weakens' : 'strengthens'}</button>)}
                 </div>
               )}
+              {matching.length > 0 && (
+                <div>
+                  <label htmlFor="bx-pool" className="bx-label">Buying from</label>
+                  <select id="bx-pool" className="bx-select" value={poolChoice ?? ''} onChange={(ev) => setPoolChoice(ev.target.value || null)}>
+                    <option value="">Best price across pools</option>
+                    {matching.map((p) => <option key={poolRef(p)} value={poolRef(p)}>{exposureLabel(p.pair, direction).title} pool · ${fmt(p.liquidity.capacity, 0)} available</option>)}
+                  </select>
+                </div>
+              )}
               <div className="bx-big">
                 <label htmlFor="bx-amount">Amount to protect (USD)</label>
                 <input id="bx-amount" inputMode="decimal" value={`$${amount}`} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} />
@@ -385,7 +524,7 @@ export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | 
               <div>
                 <span className="bx-label">How long</span>
                 <div className="bx-pills wrap">
-                  {(options.data?.tenors ?? []).map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
+                  {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
                 </div>
                 {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Ends {dateIn(days)}</div>}
               </div>

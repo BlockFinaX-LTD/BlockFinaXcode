@@ -177,6 +177,9 @@ test("a quote only uses pools that sell the requested direction", async () => {
     (e: ApplicationError) => e.code === "TENOR_DISABLED" && /falling-rate/.test(e.message),
   );
   assert.deepEqual((await qs.options("USD/GHS", "down")).tenors, []);
+  // A request for one specific pool only uses that pool.
+  await assert.rejects(qs.quote({ ...request, pool: "stellar:c:pool/9" }, { stellar: STELLAR_USER }), (e: ApplicationError) => e.code === "TENOR_DISABLED");
+  assert.equal((await qs.quote({ ...request, pool: "stellar:c:pool/1" }, { stellar: STELLAR_USER })).economic.pool.id, "pool/1");
   assert.equal((await qs.options("USD/GHS", "up")).tenors.length, 1);
 });
 

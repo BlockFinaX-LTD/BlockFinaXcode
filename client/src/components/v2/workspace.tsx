@@ -7,25 +7,27 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowDown, ArrowUp, CircleUser, Home, Layers, LineChart, List, PlusCircle, Search, Shield, SlidersHorizontal, Wallet } from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleUser, Home, Layers, LineChart, List, PlusCircle, Search, Shield, SlidersHorizontal, Store, Wallet } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
 import { Flag } from './ui';
-import { HedgerHome, MyProtections, ProtectPage, RatesPage } from './hedger-pages';
+import { HedgerHome, MarketsPage, MyProtections, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, AddFunds, SendFunds } from './money-pages';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
 export type Page =
-  | 'h-home' | 'h-protect' | 'h-protections' | 'h-rates' | 'funds' | 'send' | 'account'
+  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'funds' | 'send' | 'account'
   | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw';
-export type Go = (page: Page, target?: { pair?: string; pool?: string }) => void;
+export interface Target { pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number }
+export type Go = (page: Page, target?: Target) => void;
 
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   hedger: [
     { page: 'h-home', label: 'Home', icon: <Home /> },
+    { page: 'h-markets', label: 'Markets', icon: <Store /> },
     { page: 'h-protect', label: 'Protect', icon: <Shield /> },
     { page: 'h-protections', label: 'My protections', icon: <List /> },
     { page: 'h-rates', label: 'Rates', icon: <LineChart /> },
@@ -51,6 +53,7 @@ export function Workspace() {
   const [page, setPage] = useState<Page>(role === 'hedger' ? 'h-home' : 'u-home');
   const [pair, setPair] = useState<string | null>(null);
   const [pool, setPool] = useState<string | null>(null);
+  const [buy, setBuy] = useState<Target>({});
   const [, setLocation] = useLocation();
   const { session } = usePasskeySession();
   const balances = useUsdcBalances();
@@ -58,6 +61,7 @@ export function Workspace() {
   const go: Go = (p, target) => {
     if (target?.pair !== undefined) setPair(target.pair);
     if (target?.pool !== undefined) setPool(target.pool);
+    if (p === 'h-protect') setBuy(target ?? {});
     setPage(p);
     window.scrollTo(0, 0);
   };
@@ -109,7 +113,8 @@ export function Workspace() {
         </header>
 
         {page === 'h-home' && <HedgerHome go={go} />}
-        {page === 'h-protect' && <ProtectPage go={go} pair={pair} />}
+        {page === 'h-markets' && <MarketsPage go={go} />}
+        {page === 'h-protect' && <ProtectPage go={go} pair={buy.pair ?? pair} target={buy} />}
         {page === 'h-protections' && <MyProtections go={go} />}
         {page === 'h-rates' && <RatesPage go={go} />}
         {page === 'funds' && <AddFunds />}

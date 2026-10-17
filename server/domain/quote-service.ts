@@ -22,6 +22,7 @@ import {
 } from "@shared/domain/pool-economics";
 import {
   ApplicationError,
+  formatResourceId,
   type ChainKey,
   type CurrencyPool,
   type EconomicQuote,
@@ -108,6 +109,7 @@ export class QuoteService {
     const candidates = (await adapter.listPools())
       .map((pool) => ({ pool, tenor: pool.tenors.find((t) => t.tenorDays === req.tenorDays && t.active) }))
       .filter(({ pool, tenor }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
+        && (!req.pool || formatResourceId(pool.ref) === req.pool)
         && tenor && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
       .sort((a, b) => a.tenor!.markupBps - b.tenor!.markupBps);
     if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} ${req.direction === "up" ? "rising-rate" : "falling-rate"} protection on ${req.pair}`);

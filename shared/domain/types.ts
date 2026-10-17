@@ -191,6 +191,8 @@ export interface ProtectionRequest {
   direction: Direction;
   strike: string;
   cap?: string;
+  /** Buy from this pool only ("chain:contract:pool/N"). Omitted: BlockFinaX picks the cheapest. */
+  pool?: string;
 }
 
 /** The economic quote, produced before any chain-specific signing or encoding. */
