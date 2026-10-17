@@ -20,7 +20,7 @@ const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
  * Server-side key. Prefers RIFT_SECRET_KEY, which must never carry a VITE_
  * prefix — that prefix is what puts a value into the public browser bundle.
  */
-const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || process.env.VITE_RIFT_API_KEY || "";
+const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || "";
 
 const CACHE_TTL_MS = 60_000; // 60s — short enough to honor revocations, long enough to absorb bursts
 const NEG_CACHE_TTL_MS = 5_000; // briefly cache rejections too so bad tokens don't pound Rift
@@ -57,7 +57,7 @@ function getBearerToken(req: Request): string | null {
 
 async function fetchRiftUser(accessToken: string): Promise<RiftAuthenticatedUser | null> {
   if (!RIFT_API_KEY) {
-    console.error("[rift-auth] VITE_RIFT_API_KEY is not set on the server");
+    console.error("[rift-auth] RIFT_SECRET_KEY or RIFT_API_KEY is not set on the server");
     return null;
   }
   try {
@@ -92,6 +92,9 @@ async function fetchRiftUser(accessToken: string): Promise<RiftAuthenticatedUser
  * Exported so non-middleware callers (admin login, etc.) can reuse it.
  */
 export async function verifyRiftAccessToken(accessToken: string): Promise<RiftAuthenticatedUser | null> {
+  // Testnet passkey wallet: the bearer token is a BlockFinaX session, and the user's
+  // address is their passkey smart account on the EVM network. Rift is not consulted.
+  if (process.env.WALLET_PROVIDER === "passkey") return passkeySessionUser(accessToken);
   const now = Date.now();
   const cached = cache.get(accessToken);
   if (cached && cached.expiresAt > now) return cached.user;
@@ -126,3 +129,25 @@ setInterval(() => {
   const now = Date.now();
   Array.from(cache.entries()).forEach(([k, v]) => { if (v.expiresAt < now) cache.delete(k); });
 }, 60_000).unref?.();
+
+async function passkeySessionUser(sessionToken: string): Promise<RiftAuthenticatedUser | null> {
+  const { getSession } = await import("../auth-routes");
+  const session = await getSession({ headers: { authorization: `Bearer ${sessionToken}` } });
+  if (!session?.userId) return null;
+  const { db } = await import("../db");
+  const { chainWalletAccounts } = await import("@shared/chain-wallet-schema");
+  const { userAccounts } = await import("@shared/auth-core-schema");
+  const { and, eq } = await import("drizzle-orm");
+  const [account] = await db.select().from(chainWalletAccounts)
+    .where(and(eq(chainWalletAccounts.userId, session.userId), eq(chainWalletAccounts.chainNamespace, "eip155"), eq(chainWalletAccounts.status, "active")))
+    .limit(1);
+  if (!account) return null;
+  const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, session.userId));
+  return {
+    address: account.address.toLowerCase(),
+    email: user?.email ?? null,
+    phoneNumber: null,
+    externalId: null,
+    user: `bfx-${session.userId}`,
+  };
+}

@@ -19,16 +19,6 @@ import { startDigestSweep } from "./agent/notify";
 import { startDepositSweep } from "./compliance/wallet-watch";
 import { startFollowUpSweep } from "./routes/leads";
 
-// Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
-const _originalExit = process.exit.bind(process);
-(process as any).exit = (code?: number) => {
-  if (code === 1) {
-    console.error('[Server] Suppressed exit(1) — keeping server alive');
-    return undefined as never;
-  }
-  return _originalExit(code as never);
-};
-
 const app = express();
 // No ETags — API responses set `Cache-Control: no-store` below; this prevents
 // any 304 Not Modified revalidation across the app.
@@ -168,6 +158,10 @@ app.use(helmet({
         "https://bsc-dataseed.binance.org",
         "https://data-seed-prebsc-1-s1.binance.org:8545",
         "https://api.bscscan.com",
+        // Stellar: the passkey wallet reads the network and signs Soroban
+        // authorizations in the browser (Passkey Kit), so it calls these directly.
+        "https://soroban-testnet.stellar.org",
+        "https://horizon-testnet.stellar.org",
         // Google OAuth
         "https://accounts.google.com",
         "https://oauth2.googleapis.com",
@@ -272,7 +266,38 @@ app.use((req, res, next) => {
   // ── Production environment guard ─────────────────────────────────────────
   // Fail loudly at startup if critical secrets are missing — better to crash
   // immediately than to silently serve a broken app to real users.
-  if (process.env.NODE_ENV === "production") {
+  // The testnet deployment (APP_ENV=testnet, testnet branch) has its own guard: it must
+  // never point at mainnet, and it runs without production keys or login providers.
+  const isTestnetDeployment = process.env.APP_ENV === "testnet";
+  if (process.env.NODE_ENV === "production" && isTestnetDeployment) {
+    const missing = ["DATABASE_URL", "ADMIN_PASSWORD"].filter(k => !process.env[k]);
+    if (missing.length > 0) {
+      console.error(`[Startup] FATAL: testnet is missing required environment variables: ${missing.join(", ")}`);
+      process.exit(1);
+    }
+    if (process.env.NETWORK_MODE !== "testnet" || process.env.BLOCKFINAX_ENV !== "testnet") {
+      console.error("[Startup] FATAL: a testnet deployment needs NETWORK_MODE=testnet and BLOCKFINAX_ENV=testnet.");
+      process.exit(1);
+      return;
+    }
+    // Testnet keeps its own database in step with shared/schema.ts on every start.
+    // Production never does this; its schema changes go through reviewed migrations.
+    const { spawnSync } = await import("node:child_process");
+    // One-time wipe of the disposable testnet database, armed only by setting
+    // TESTNET_RESET_DATABASE to today's UTC date (so a forgotten flag expires).
+    const dbHost = (() => { try { return new URL(process.env.DATABASE_URL!).hostname; } catch { return ""; } })();
+    if (process.env.TESTNET_RESET_DATABASE === new Date().toISOString().slice(0, 10) && dbHost.endsWith(".railway.internal")) {
+      console.warn("[Startup] TESTNET_RESET_DATABASE matches today: wiping the testnet database schema.");
+      const { pool } = await import("./db");
+      await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+    }
+    const push = spawnSync("npx", ["drizzle-kit", "push", "--force"], { stdio: "inherit", env: process.env });
+    if (push.status !== 0) {
+      console.error("[Startup] FATAL: testnet schema push failed.");
+      process.exit(1);
+      return;
+    }
+  } else if (process.env.NODE_ENV === "production") {
     const required = [
       "DATABASE_URL",
       "ADMIN_PASSWORD",
@@ -287,9 +312,12 @@ app.use((req, res, next) => {
       console.error(`[Startup] FATAL — missing required environment variables: ${missing.join(", ")}`);
       process.exit(1);
     }
-    // Warn if NETWORK_MODE is not explicitly set to mainnet in production
+    // Fail closed rather than serving a production UI backed by testnet-mode
+    // authorization and chain configuration.
     if (process.env.NETWORK_MODE !== "mainnet") {
-      console.warn("[Startup] WARNING — NETWORK_MODE is not 'mainnet'. Running in testnet mode in a production deployment.");
+      console.error("[Startup] FATAL — NETWORK_MODE must be explicitly set to 'mainnet' in production.");
+      process.exit(1);
+      return;
     }
   }
 
@@ -298,6 +326,8 @@ app.use((req, res, next) => {
     await initializeDatabase();
   } catch (error) {
     console.error("Database initialization failed:", error);
+    process.exit(1);
+    return;
   }
 
   // Register oracle node wallets on the Diamond (using deployer key, idempotent)
@@ -348,6 +378,12 @@ app.use((req, res, next) => {
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
   // No-op if TWELVEDATA_API_KEY is not configured.
   startDailyRefresh();
+  // Testnet has its own empty database: load the pricing history it needs, in the background.
+  if (process.env.APP_ENV === "testnet") {
+    void import("./pricing/testnet-bootstrap").then((m) => m.bootstrapTestnetPricing());
+    // Interest-rate benchmarks (SOFR, KESONIA) from official sources; testnet only until licensing clears.
+    void import("./rates/scheduler").then((m) => m.startRateOracleScheduler());
+  }
 
   // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.
   // Keeps DB status consistent even when ChainSync hasn't run or the oracle hasn't settled yet.
@@ -402,11 +438,13 @@ app.use((req, res, next) => {
   });
 
   process.on('uncaughtException', (err) => {
-    console.error('[uncaughtException] Server error (continuing):', err.message);
+    console.error('[uncaughtException] Fatal server error; exiting for supervisor restart:', err);
+    process.exit(1);
   });
 
   process.on('unhandledRejection', (reason) => {
-    console.error('[unhandledRejection] Unhandled promise rejection (continuing):', reason);
+    console.error('[unhandledRejection] Fatal unhandled rejection; exiting for supervisor restart:', reason);
+    process.exit(1);
   });
 
   // importantly only setup vite in development and after

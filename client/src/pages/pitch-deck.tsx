@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import logoPath from "@/assets/logo.png";
 import problemImagePath from "@/assets/problem-story.png";
 import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
+import { TAM, SAM, SOURCES_NOTE } from "@/lib/market-figures";
 
 const slides = [
   { id: 1, type: "cover" },
@@ -218,8 +219,8 @@ export default function PitchDeck() {
                       <p className="text-slate-300 text-sm mt-1">lost to currency swings · no affordable hedge</p>
                     </div>
                     <div className="bg-black/40 backdrop-blur-sm rounded-xl px-5 py-4 border border-white/10">
-                      <p className="text-4xl font-bold text-white">$35B+</p>
-                      <p className="text-slate-300 text-sm mt-1">destroyed every year · 7M+ African SMEs affected</p>
+                      <p className="text-4xl font-bold text-white">$1.4B</p>
+                      <p className="text-slate-300 text-sm mt-1">FX losses booked by 10 listed Nigerian firms in 2024 alone</p>
                     </div>
                   </motion.div>
                 </div>
@@ -248,7 +249,7 @@ export default function PitchDeck() {
                   ))}
                 </motion.div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="flex justify-center gap-6">
-                  {["Zero gas cost", "40+ FX pairs", "Auto-settlement", "On-chain & auditable"].map((item, idx) => (
+                  {["Gas sponsorship may be available", "Selected FX corridors", "Oracle-based on-chain settlement", "Transactions recorded on chain"].map((item, idx) => (
                     <div key={idx} className="bg-white/[0.04] rounded-full px-5 py-2 border border-white/[0.08]">
                       <p className="text-sm text-slate-400">{item}</p>
                     </div>
@@ -260,14 +261,14 @@ export default function PitchDeck() {
             {slide.type === "opportunity" && (
               <div className="space-y-8">
                 <div className="text-center">
-                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">$35B lost every year.</motion.h2>
-                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2 text-lg">To fees and currency swings. With no affordable fix.</motion.p>
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">Foreign exchange risk affects business cash flows.</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2 text-lg">The scale and direction of currency moves vary by corridor and period. Any market-size or volatility estimate should be checked against its cited source and date.</motion.p>
                 </div>
                 <div className="grid grid-cols-3 gap-6">
                   {[
-                    { label: "TAM", color: "text-blue-400", border: "border-blue-500/25", bg: "from-blue-500/10", val: "$210B", sub: "African cross-border volume" },
-                    { label: "SAM", color: "text-emerald-400", border: "border-emerald-500/25", bg: "from-emerald-500/10", val: "$35B", sub: "Value lost to fees + FX swings" },
-                    { label: "SOM", color: "text-purple-400", border: "border-purple-500/25", bg: "from-purple-500/10", val: "$2B", sub: `${fm.somRevenue}+ revenue by 2028` },
+                    { label: "TAM", color: "text-blue-400", border: "border-blue-500/25", bg: "from-blue-500/10", val: TAM.display, sub: "African merchandise trade, 2024" },
+                    { label: "SAM", color: "text-emerald-400", border: "border-emerald-500/25", bg: "from-emerald-500/10", val: SAM.display, sub: "Trade finance demand Africa cannot meet" },
+                    { label: "Revenue scenario", color: "text-purple-400", border: "border-purple-500/25", bg: "from-purple-500/10", val: fm.somRevenue, sub: "Model output, not market size or actual revenue" },
                   ].map((item, idx) => (
                     <motion.div key={idx} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 + idx * 0.1 }} className={`bg-gradient-to-b ${item.bg} to-transparent rounded-2xl p-8 border ${item.border} text-center`}>
                       <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${item.color}`}>{item.label}</p>
@@ -277,7 +278,7 @@ export default function PitchDeck() {
                   ))}
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="flex justify-center gap-8 text-center">
-                  {[["8.4%", "avg transfer fees"], ["7M+", "SMEs locked out"], ["0", "affordable hedging tools"]].map(([val, lbl], idx) => (
+                  {[["Not verified", "average corridor fees"], ["Not verified", "underserved business count"], ["Not assessed", "available competing products"]].map(([val, lbl], idx) => (
                     <div key={idx}>
                       <p className="text-2xl font-bold text-white">{val}</p>
                       <p className="text-xs text-slate-500 mt-1">{lbl}</p>
@@ -290,14 +291,14 @@ export default function PitchDeck() {
             {slide.type === "revenue" && (
               <div className="space-y-8">
                 <div className="text-center">
-                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">4 fee streams. Live from day one.</motion.h2>
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">Illustrative fee model</motion.h2>
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-4 gap-5">
                   {[
-                    { rate: "0.3%", label: "Transfer Fee", note: "Per payment", color: "text-blue-400", border: "border-blue-500/20" },
-                    { rate: "0.5%", label: "Hedge Entry", note: "On notional", color: "text-emerald-400", border: "border-emerald-500/20" },
-                    { rate: "1%", label: "Settlement", note: "On payouts + LP", color: "text-purple-400", border: "border-purple-500/20" },
-                    { rate: "$2", label: "Event Creation", note: "Flat per event", color: "text-amber-400", border: "border-amber-500/20" },
+                    { rate: "Model input", label: "Transfer fee", note: "Confirm current terms", color: "text-blue-400", border: "border-blue-500/20" },
+                    { rate: "Model input", label: "Hedge fees", note: "Basis and rate depend on deployment", color: "text-emerald-400", border: "border-emerald-500/20" },
+                    { rate: "Model input", label: "Settlement fees", note: "Confirm current contract config", color: "text-purple-400", border: "border-purple-500/20" },
+                    { rate: "Model input", label: "Event creation", note: "Confirm current contract config", color: "text-amber-400", border: "border-amber-500/20" },
                   ].map((item, idx) => (
                     <div key={idx} className={`bg-white/[0.04] rounded-2xl p-7 border ${item.border} text-center`}>
                       <p className={`text-5xl font-bold mb-3 ${item.color}`}>{item.rate}</p>
@@ -307,7 +308,7 @@ export default function PitchDeck() {
                   ))}
                 </motion.div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-r from-blue-500/[0.07] to-emerald-500/[0.07] border border-white/[0.07] rounded-xl p-5 text-center">
-                  <p className="text-xl font-semibold text-white">~0.225% blended rate + $25/event → <span className="text-emerald-400">{fm.somRevenue} revenue by 2028</span></p>
+                  <p className="text-xl font-semibold text-white">Illustrative model output: <span className="text-emerald-400">{fm.somRevenue}</span>. Assumptions are not live fees or actual revenue.</p>
                 </motion.div>
               </div>
             )}
@@ -315,8 +316,8 @@ export default function PitchDeck() {
             {slide.type === "competition" && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">A blind spot no one has fixed.</motion.h2>
-                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2">FX hedging for African SMEs. We own it.</motion.p>
+                  <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-bold text-white">A market opportunity to validate.</motion.h2>
+                  <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-slate-400 mt-2">Competitor coverage and customer demand require corridor-specific research.</motion.p>
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="overflow-hidden rounded-xl border border-white/[0.08]">
                   <table className="w-full text-sm">
@@ -331,18 +332,16 @@ export default function PitchDeck() {
                     </thead>
                     <tbody>
                       {[
-                        { feature: "40+ African FX pairs", us: true, banks: false, otc: false, defi: false },
-                        { feature: "No minimum ticket", us: true, banks: false, otc: false, defi: true },
-                        { feature: "SME accessible", us: true, banks: false, otc: false, defi: false },
-                        { feature: "Transparent & on-chain", us: true, banks: false, otc: false, defi: true },
-                        { feature: "Auto settlement", us: true, banks: false, otc: false, defi: false },
-                        { feature: "Real FX risk coverage", us: true, banks: true, otc: true, defi: false },
+                        { feature: "Minimum size", us: "Check selected market", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed" },
+                        { feature: "Supported corridors", us: "Check current network", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed" },
+                        { feature: "Eligibility and pricing", us: "Check current terms", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed" },
+                        { feature: "Settlement process", us: "Check contract and oracle state", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed" },
                       ].map((row, idx) => (
                         <tr key={idx} className="border-t border-white/[0.04]">
                           <td className="p-3 text-slate-300">{row.feature}</td>
                           {[row.us, row.banks, row.otc, row.defi].map((val, ci) => (
                             <td key={ci} className="p-3 text-center">
-                              {val ? <CheckCircle2 className={`w-4 h-4 mx-auto ${ci === 0 ? 'text-emerald-400' : 'text-slate-600'}`} /> : <span className="text-slate-700">—</span>}
+                              <span className={ci === 0 ? "text-slate-300" : "text-slate-500"}>{val}</span>
                             </td>
                           ))}
                         </tr>
@@ -351,7 +350,7 @@ export default function PitchDeck() {
                   </table>
                 </motion.div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-emerald-500/[0.07] border border-emerald-500/20 rounded-xl p-4 text-center">
-                  <p className="text-emerald-400 font-semibold">Banks want $100K+. OTC needs credit history. DeFi ignores Africa. We serve the 7M they lock out.</p>
+                  <p className="text-emerald-400 font-semibold">No validated competitor minimums or underserved-customer count are presented here.</p>
                 </motion.div>
               </div>
             )}
@@ -451,10 +450,10 @@ export default function PitchDeck() {
                 </div>
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-4 gap-5">
                   {[
-                    { label: "Now", dot: "bg-emerald-400", border: "border-emerald-500/25", bg: "bg-emerald-500/[0.07]", text: "text-emerald-400", items: ["Testnet live", "Payments + FX hedge working", "40+ FX pairs on oracle", "Community + referrals"] },
-                    { label: "Q2 2026", dot: "bg-blue-400", border: "border-blue-500/20", bg: "bg-white/[0.03]", text: "text-blue-400", items: ["2 security audits", "Multi-sig controls", "Mobile optimisation"] },
-                    { label: "Q3 2026", dot: "bg-purple-400", border: "border-purple-500/20", bg: "bg-white/[0.03]", text: "text-purple-400", items: ["Mainnet launch", "$5M+ LP seeded", "100+ active users"] },
-                    { label: "Q4 2026 – Q3 2027", dot: "bg-amber-400", border: "border-amber-500/20", bg: "bg-white/[0.03]", text: "text-amber-400", items: ["$50M+ volume", "Mobile apps", "Series A raise"] },
+                    { label: "Live chain state", dot: "bg-emerald-400", border: "border-emerald-500/25", bg: "bg-emerald-500/[0.07]", text: "text-emerald-400", items: ["Base and BNB Smart Chain Diamonds are deployed", "Current owner and Safe relationship: see live Data Room reads", "Oracle quorum and signer roster: see live Data Room reads"] },
+                    { label: "Before institutional capital", dot: "bg-blue-400", border: "border-blue-500/20", bg: "bg-white/[0.03]", text: "text-blue-400", items: ["Verify current bytecode against reviewed source", "Reconcile historical audit findings against current deployments", "Document enforced upgrade and settlement controls"] },
+                    { label: "Operating evidence", dot: "bg-purple-400", border: "border-purple-500/20", bg: "bg-white/[0.03]", text: "text-purple-400", items: ["Publish dated liquidity and user metrics with source", "Report oracle and settlement service availability", "Track completed transactions on chain"] },
+                    { label: "Forward plan", dot: "bg-amber-400", border: "border-amber-500/20", bg: "bg-white/[0.03]", text: "text-amber-400", items: ["Mobile optimisation", "Additional FX corridors subject to data and liquidity validation", "Fundraising milestones subject to operating results"] },
                   ].map((q, idx) => (
                     <div key={idx} className={`rounded-xl p-5 border ${q.border} ${q.bg}`}>
                       <div className="flex items-center gap-2 mb-4">

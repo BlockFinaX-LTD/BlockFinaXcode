@@ -51,7 +51,9 @@ Environment variables required in production:
 - `DEPLOYER_PRIVATE_KEY`, `TREASURY_POOL_PRIVATE_KEY`
 - `RESEND_API_KEY`, `SMTP_FROM`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- `VITE_RIFT_API_KEY` (client and server share this)
+- `VITE_RIFT_PUBLIC_KEY` (publishable browser key, `pk_…`; never place a secret key in a `VITE_` variable)
+- `RIFT_SECRET_KEY` (server-only Rift key)
+- `PUBLIC_APP_URL` (canonical HTTPS origin used for authentication links and WebAuthn)
 - `DOCS_BYPASS_KEY` for the docs gate shared key
 - `NETWORK_MODE=mainnet` for prod
 

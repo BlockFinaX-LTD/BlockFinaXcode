@@ -44,46 +44,18 @@ export default function Governance() {
         </P>
       </Section>
 
-      <Section n="02" id="custody" title="Fund custody guarantees">
+      <Section n="02" id="custody" title="Fund custody and verification limits">
         <P>
-          Before we talk about who can upgrade what, be precise about
-          how funds are held.
+          Source-level descriptions do not prove which custody and accounting
+          paths are active in a deployed Diamond. The active selector mapping,
+          current bytecode, token balances, accounting state and transaction
+          history all need to be checked together.
         </P>
-        <UL>
-          <li>
-            All user funds (LP capital, hedger premiums, reserved
-            payouts, platform fees) pool inside the Diamond. There is
-            no external treasury contract, no yield-vault sidecar, no
-            third-party custodian.
-          </li>
-          <li>
-            The contract tracks token balances by internal counter
-            (<CodeInline>tokenReserves</CodeInline>, per-token fee
-            counters, per-deposit shares) rather than by
-            <CodeInline>balanceOf</CodeInline>. Donation attacks and
-            rounding griefs can&apos;t shift accounting.
-          </li>
-          <li>
-            A shared reentrancy guard is applied across facets. External
-            token transfers happen last in every function that touches
-            state. Strict Check-Effects-Interactions.
-          </li>
-          <li>
-            The owner-only fee withdrawal path is upper-bounded by the
-            fee counter. It reverts if the owner tries to withdraw
-            more than the accrued fees.
-          </li>
-          <li>
-            <CodeInline>rescueERC20</CodeInline> exists for stray non-
-            payment tokens accidentally sent to the diamond. It
-            explicitly refuses to touch a whitelisted payment token.
-          </li>
-        </UL>
-        <Callout label="Application-layer guarantee">
-          At the code that&apos;s currently live, the owner cannot pull LP
-          capital, premiums, or reserved payouts through any normal
-          function. Fee withdrawal is the only value-out path, and
-          it&apos;s bounded.
+        <Callout kind="warn" label="No custody guarantee">
+          Do not assume only platform fees can leave the Diamond, or that a
+          Safe owner relationship prevents asset loss. Verify every active
+          transfer path and upgrade path against deployed bytecode and test the
+          relevant accounting invariants independently.
         </Callout>
       </Section>
 
@@ -95,32 +67,29 @@ export default function Governance() {
         <P>BlockFinaX ships two upgrade entrypoints.</P>
         <KV>
           <KVRow term="DiamondCutFacet">
-            The classic path. <CodeInline>diamondCut(cuts, init, data)</CodeInline> applies
-            immediately. Owner-only. Currently active on both mainnet
-            Diamonds.
+            The Diamond upgrade selector. The current implementation and
+            owner are read live in the Data Room; this lesson does not
+            assume that the selector is immediate or timelocked.
           </KVRow>
           <KVRow term="TimelockCutFacet">
-            A hardened variant. The same call schedules a proposal that
-            can only be executed after a 48-hour delay and expires 30
-            days in if unexecuted. An emergency cancel path exists.
-            Not yet installed.
+            A possible hardened variant. Whether it is deployed and
+            actually routes the upgrade selector must be verified from
+            current chain state and implementation code. A contract name
+            or deployment record alone does not establish an enforced delay.
           </KVRow>
         </KV>
         <P>
-          Wiring the timelock is the top of the security backlog. It&apos;s
-          the single change that most changes the trust profile of the
-          protocol. Every upgrade would become visible for 48 hours
-          before it applied, and a malicious upgrade would be publicly
-          watchable and cancellable.
+          An enforced timelock can provide an observation window, but its
+          presence and guarantees depend on the live selector routing and
+          implementation. Verify those before relying on a delay.
         </P>
         <Callout kind="warn" label="Where we are today">
-          Upgrade authority over the mainnet Diamond sits with a Gnosis
-          Safe requiring two of three signatures. No single key can change
-          the protocol. The timelock facet is deployed but not yet
-          installed, so an approved upgrade still applies immediately
-          rather than after a public delay. Wiring it is the next step. If
-          you&apos;re evaluating whether to underwrite a large position,
-          that is the material fact.
+          Check the Data Room&apos;s live governance read for the current
+          Diamond owner, whether the configured Safe controls it, and the
+          active upgrade-selector implementation. If a chain read is
+          unavailable, its governance status is unverified. A Safe that
+          exists or has signed a transaction is not necessarily the Diamond
+          owner, and the page does not infer a timelock from a facet name.
         </Callout>
       </Section>
 
@@ -145,12 +114,10 @@ export default function Governance() {
           </li>
         </UL>
         <P>
-          Oracle roster changes take effect immediately. Under the
-          current governance posture, a compromised owner key could
-          roster a malicious signer set and settle events at a
-          fabricated rate. The same timelock work above closes that
-          door. A rostered signer change would be watchable for 48
-          hours.
+          If an owner with immediate authority is compromised, it could
+          roster a malicious signer set. Whether a timelock protects such
+          changes depends on the active implementation and selector
+          routing; verify this on chain.
         </P>
       </Section>
 
@@ -158,13 +125,13 @@ export default function Governance() {
         <P>Being blunt about the trust surface today.</P>
         <OL>
           <li>
-            <strong>The deployer key</strong> can upgrade the protocol
-            to arbitrary code. Nothing on-chain prevents that today.
+            <strong>The active upgrade authority</strong> may be able to
+            replace protocol code. Check the live owner and upgrade path
+            before relying on assumptions about who can do so.
           </li>
           <li>
-            <strong>The oracle admin</strong> can, under the current
-            single-key path, settle an event at a chosen rate without
-            consensus.
+            <strong>Settlement authority</strong> depends on the live
+            oracle mode and consensus settings shown in the Data Room.
           </li>
           <li>
             <strong>The pricing engine</strong> is off-chain. Its

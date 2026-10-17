@@ -92,7 +92,7 @@ function getSessionToken(req: any): string | null {
   return req.headers['x-session-token'] || null;
 }
 
-async function getSession(req: any) {
+export async function getSession(req: any) {
   const token = getSessionToken(req);
   if (!token) return null;
   const [session] = await db
@@ -102,14 +102,14 @@ async function getSession(req: any) {
   return session || null;
 }
 
-async function createSession(userId: number, walletAddress?: string) {
+export async function createSession(userId: number, walletAddress?: string) {
   const sessionToken = generateToken(48);
   const expiresAt = sessionExpiry();
   await db.insert(authSessions).values({ sessionToken, userId, walletAddress: walletAddress || null, expiresAt });
   return sessionToken;
 }
 
-async function findOrCreateUser(email?: string, googleId?: string, name?: string, avatarUrl?: string) {
+export async function findOrCreateUser(email?: string, googleId?: string, name?: string, avatarUrl?: string) {
   if (email) {
     const [existing] = await db.select().from(userAccounts).where(eq(userAccounts.email, email));
     if (existing) {
@@ -156,17 +156,27 @@ setInterval(() => {
   for (const [k, exp] of oauthStateStore) if (exp < now) oauthStateStore.delete(k);
 }, 10 * 60 * 1000);
 
-function getAppOrigin(req: any): string {
-  if (process.env.APP_URL) return process.env.APP_URL;
-  // Hosted platforms and reverse proxies forward the real protocol via this header.
-  // Fall back to req.protocol only for plain localhost dev without a proxy.
+export function getAppOrigin(req: any): string {
+  const configured = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').trim();
+  if (configured) {
+    const url = new URL(configured);
+    if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
+      throw new Error('PUBLIC_APP_URL must use HTTPS in production');
+    }
+    return url.origin;
+  }
+  // Never derive production authentication origins from request headers.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('PUBLIC_APP_URL is required in production');
+  }
+  // Local development only: hosted origin values can be absent here.
   const proto =
     req.headers['x-forwarded-proto']?.split(',')[0].trim() ||
     req.protocol;
   return `${proto}://${req.get('host')}`;
 }
 
-function getRpId(req: any): string {
+export function getRpId(req: any): string {
   try {
     return new URL(getAppOrigin(req)).hostname;
   } catch {
@@ -294,7 +304,7 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // ── POST /api/auth/magic-link ─────────────────────────────────────────────
-  app.post('/api/auth/magic-link', async (req, res) => {
+  app.post('/api/auth/magic-link', strictLimiter, async (req, res) => {
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: 'Valid email required' });
@@ -317,10 +327,14 @@ export function registerAuthRoutes(app: Express) {
     const magicUrl = `${appUrl}/auth/verify?token=${verifyToken}`;
     const result   = await sendMagicLinkEmail(email, magicUrl);
     if (!result.sent) {
-      console.log(`[Auth] Magic link (not sent — ${result.error}): ${magicUrl}`);
+      verifyHashToPollToken.delete(tokenHash);
+      await db.delete(magicLinks).where(eq(magicLinks.token, tokenHash));
+      // Never put a bearer login URL in application logs or API responses.
+      console.error(`[Auth] Magic link delivery failed: ${result.error || "provider unavailable"}`);
+      return res.status(503).json({ ok: false, message: "Email delivery is temporarily unavailable." });
     }
 
-    res.json({ ok: true, sent: result.sent, error: result.error, pollToken });
+    res.json({ ok: true, sent: true, pollToken });
   });
 
   // ── GET /api/auth/verify/:token ────────────────────────────────────────────
@@ -364,27 +378,11 @@ export function registerAuthRoutes(app: Express) {
     res.json({ ok: true, sessionToken: entry.sessionToken });
   });
 
-  // ── POST /api/auth/stytch ─────────────────────────────────────────────────
-  // Client sends Stytch session JWT + email after successful OTP verification.
-  // We decode (not fully verify — Stytch JWKS verification is Lit's job on the
-  // client) and create our own session so the user has backend access.
-  app.post('/api/auth/stytch', async (req, res) => {
-    const { sessionJwt, email } = req.body;
-    if (!sessionJwt || !email) return res.status(400).json({ message: 'sessionJwt and email required' });
-
-    // Lightweight JWT decode to pull out the Stytch user_id. Full verification
-    // happens on the Lit nodes via their Stytch JWKS check.
-    let stytchUserId: string | null = null;
-    try {
-      const payload = JSON.parse(Buffer.from(sessionJwt.split('.')[1], 'base64url').toString('utf8'));
-      stytchUserId = payload.sub || payload['https://stytch.com/session']?.user_id || null;
-    } catch {
-      return res.status(400).json({ message: 'Invalid Stytch JWT' });
-    }
-
-    const user = await findOrCreateUser(email, `stytch:${stytchUserId}`, null as any, null as any);
-    const sessionToken = await createSession(user.id);
-    res.json({ ok: true, sessionToken, user: { id: user.id, email: user.email, name: user.name } });
+  // This legacy endpoint accepted unverified client-supplied JWT claims and
+  // email addresses. Keep it explicitly unavailable until server-side Stytch
+  // session verification is implemented; decoding a JWT is not authentication.
+  app.post('/api/auth/stytch', (_req, res) => {
+    res.status(410).json({ message: 'This sign-in method is temporarily unavailable.' });
   });
 
   // ── POST /api/auth/google ─────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { isWalletSandbox, walletDefaultChainId, sandboxTokenAddress, sandboxDiamondAddress, assertWalletTransactionsEnabled } from "./wallet-environment";
 /**
  * Hedge Contract Integration - Direct on-chain calls to the HedgeFacet
  *
@@ -11,39 +12,40 @@
  *          buyProtection, depositLiquidity, claimPayout, withdrawLiquidity, and more.
  */
 import { ethers } from 'ethers';
+import { CURRENCY_POOL_ABI, type PoolStructures, type PoolTenor, type StructureName } from '@shared/currency-pool';
 
 // Default chain = Base
-export const DIAMOND_ADDRESS = '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef';
-export const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+export const DIAMOND_ADDRESS = isWalletSandbox ? sandboxDiamondAddress : '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef';
+export const USDC_ADDRESS = isWalletSandbox ? sandboxTokenAddress : '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 export const USDT_ADDRESS_SEPOLIA: string = "0x05D032ac25d322df992303dCa074EE7392C117b9";
 export const PRECISION = 1e6;
 
-export const CHAIN_RPC_MAP: Record<number, string> = {
+export const CHAIN_RPC_MAP: Record<number, string> = isWalletSandbox ? { 84532: 'https://sepolia.base.org' } : {
   8453: 'https://mainnet.base.org',
   56:   'https://bsc-dataseed.binance.org',
 };
 
-export const CHAIN_EXPLORER_API_MAP: Record<number, string> = {
+export const CHAIN_EXPLORER_API_MAP: Record<number, string> = isWalletSandbox ? { 84532: 'https://base-sepolia.blockscout.com/api' } : {
   8453: 'https://base.blockscout.com/api',
   56:   'https://api.bscscan.com/api',
 };
 
-export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = {
+export const CHAIN_TOKEN_DECIMALS_MAP: Record<number, number> = isWalletSandbox ? { 84532: 6 } : {
   8453: 6,
   56:   18,
 };
 
-export const CHAIN_DIAMOND_MAP: Record<number, string> = {
+export const CHAIN_DIAMOND_MAP: Record<number, string> = isWalletSandbox ? { 84532: sandboxDiamondAddress } : {
   8453: '0xbCC51E62C4948FD35ab505bd71804C849601e4Ef',  // Base Mainnet
   56:   '0xaC939C0897981Abc0711ec4e37527F13106180fc',  // BSC Mainnet
 };
 
-export const CHAIN_USDC_MAP: Record<number, string> = {
+export const CHAIN_USDC_MAP: Record<number, string> = isWalletSandbox ? { 84532: sandboxTokenAddress } : {
   8453: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   56:   '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
 };
 
-export const CHAIN_USDT_MAP: Record<number, string> = {
+export const CHAIN_USDT_MAP: Record<number, string> = isWalletSandbox ? {} : {
   8453: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
   56:   '0x55d398326f99059fF775485246999027B3197955',
 };
@@ -52,12 +54,12 @@ export function getUsdtAddress(chainId: number): string {
   return CHAIN_USDT_MAP[chainId] || '';
 }
 
-export const CHAIN_SAFE_MAP: Record<number, string> = {
+export const CHAIN_SAFE_MAP: Record<number, string> = isWalletSandbox ? {} : {
   8453: '0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb',
   56:   '0x2a0ab363E01b518B189218e39f79Bfc3AE310807',
 };
 
-export const CHAIN_EXPLORER_MAP: Record<number, string> = {
+export const CHAIN_EXPLORER_MAP: Record<number, string> = isWalletSandbox ? { 84532: 'https://sepolia.basescan.org' } : {
   8453: 'https://basescan.org',
   56:   'https://bscscan.com',
 };
@@ -75,7 +77,7 @@ export function getSafeAddress(chainId: number): string {
 }
 
 export function getExplorerUrl(chainId: number): string {
-  return CHAIN_EXPLORER_MAP[chainId] || 'https://basescan.org';
+  return CHAIN_EXPLORER_MAP[chainId] || (isWalletSandbox ? 'https://sepolia.basescan.org' : 'https://basescan.org');
 }
 
 const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa26174543ad38431274eed5';
@@ -280,10 +282,11 @@ function fromTimestampOrNull(ts: bigint): Date | null {
 class HedgeContractManager {
   private provider: ethers.JsonRpcProvider | null = null;
   private timestampCache: Map<string, Date> = new Map();
-  private _chainId: number = 8453;   // default to Base
+  private _chainId: number = walletDefaultChainId;   // default to Base
 
   /** Switch the active chain. Call this whenever the user changes network. */
   setChain(chainId: number): void {
+    if (isWalletSandbox && chainId !== 84532) throw new Error('Sandbox supports only Base Sepolia.');
     if (this._chainId === chainId) return;
     this._chainId = chainId;
     this.provider = null;        // reset provider so next call uses new RPC
@@ -299,7 +302,7 @@ class HedgeContractManager {
   }
 
   get activeExplorerApi(): string {
-    return CHAIN_EXPLORER_API_MAP[this._chainId] || 'https://base.blockscout.com/api';
+    return CHAIN_EXPLORER_API_MAP[this._chainId] || (isWalletSandbox ? 'https://base-sepolia.blockscout.com/api' : 'https://base.blockscout.com/api');
   }
 
   get tokenDecimals(): number {
@@ -361,53 +364,14 @@ class HedgeContractManager {
     _gasBumpPct = 0,
     onStep?: (step: string) => void
   ): Promise<string> {
-    const chainId = this._chainId;
-
-    // Route the contract call through Rift's signer service.
-    // The user's smart wallet (managed by Rift) signs + broadcasts, gasless.
-    const { chainIdToRift, signerSendTransaction } = await import('./rift-client');
-    const { requestTxAuth } = await import('./tx-auth');
-
-    const chainName = chainIdToRift(chainId);
-    if (!chainName) {
-      throw new Error(`Chain ${chainId} is not supported by Rift.`);
-    }
-
-    // A migrated wallet signs on the device: the proof is bound to this exact
-    // operation, so nothing reusable is typed in and nothing reusable is
-    // cached. trySignWithV3 returns null when the wallet has not migrated,
-    // which is the only case that still needs a one-time code.
-    const { trySignWithV3 } = await import('./v3-sign');
-    const v3Hash = await trySignWithV3(
-      { chain: chainName, to, data: calldata, value: value.toString() },
-      { title: 'Approve this transaction', onStep },
+    // Rift's signing path (device signing, else a one-time credential) lives in the
+    // Rift wallet provider, the canonical WalletProvider for EVM (Architecture v2.0).
+    const { activeEvmWalletProvider } = await import('./identity');
+    const result = await (await activeEvmWalletProvider()).sendTransaction(
+      { kind: 'evm_transaction', chainId: this._chainId, to, data: calldata, value: value.toString() },
+      onStep,
     );
-    if (v3Hash) return v3Hash;
-
-    onStep?.('Authorizing transaction...');
-    const auth = await requestTxAuth(
-      'Authorize on-chain action',
-      'Enter your credential to submit this transaction. The code is valid for 5 minutes.'
-    );
-
-    onStep?.('Submitting transaction...');
-    try {
-      const { hash } = await signerSendTransaction(
-        { chain: chainName, to, data: calldata, value: value.toString() },
-        auth,
-      );
-      if (!hash) throw new Error('Rift returned no transaction hash');
-      return hash;
-    } catch (err: any) {
-      // If auth was rejected (wrong OTP/password), clear the cache so the next
-      // attempt re-prompts instead of silently failing on the stale credential.
-      const msg = String(err?.message || err || '').toLowerCase();
-      if (msg.includes('unauthorized') || msg.includes('invalid code') || msg.includes('invalid otp') || msg.includes('invalid password')) {
-        const { clearCachedTxAuth } = await import('./tx-auth');
-        clearCachedTxAuth();
-      }
-      throw err;
-    }
+    return result.transactionHash;
   }
 
   /**
@@ -750,6 +714,7 @@ class HedgeContractManager {
   }
 
   async getAllEvents(): Promise<HedgeEventData[]> {
+    if (isWalletSandbox && !sandboxDiamondAddress) return [];
     const contract = this.getReadContract();
     const MAX_SCAN = 500;
     // Public Base RPCs throttle aggressively, and ethers surfaces a throttled
@@ -877,6 +842,7 @@ class HedgeContractManager {
   }
 
   async getPositionsByWallet(address: string): Promise<HedgePositionData[]> {
+    if (isWalletSandbox && !sandboxDiamondAddress) return [];
     const contract = this.getReadContract();
     let ids: bigint[] = [];
     let timestamps: Map<number, Date> = new Map();
@@ -915,6 +881,7 @@ class HedgeContractManager {
   }
 
   async getDepositsByWallet(address: string): Promise<HedgeLpDepositData[]> {
+    if (isWalletSandbox && !sandboxDiamondAddress) return [];
     const contract = this.getReadContract();
     let ids: bigint[] = [];
     let timestamps: Map<number, Date> = new Map();
@@ -1359,6 +1326,151 @@ class HedgeContractManager {
     onStep?.('Waiting for confirmation...');
     await this.waitForTx(txHash);
     return txHash;
+  }
+
+  // ── Currency pools ───────────────────────────────────────────────────────
+  // One shared liquidity balance per currency, sold across tenors the underwriter
+  // chooses. The ABI and the contract's pricing arithmetic live in
+  // @shared/currency-pool so the app, the server and the chain agree to the last
+  // unit. See docs/architecture/currency-pools.md.
+
+  getPoolReadContract(): ethers.Contract {
+    return new ethers.Contract(this.activeDiamond, CURRENCY_POOL_ABI, this.getProvider());
+  }
+
+  private async poolTx(
+    signer: ethers.Wallet,
+    method: string,
+    args: unknown[],
+    label: string,
+    onStep?: (s: string) => void,
+  ): Promise<string> {
+    await this.ensureGas(signer.address);
+    const calldata = new ethers.Interface(CURRENCY_POOL_ABI).encodeFunctionData(method, args);
+    onStep?.(label);
+    const txHash = await this.sendContractTx(signer, this.activeDiamond, calldata, BigInt(0), 0, onStep);
+    onStep?.('Waiting for confirmation...');
+    await this.waitForTx(txHash);
+    return txHash;
+  }
+
+  private async poolToken(poolId: number): Promise<string> {
+    const pool = await this.getPoolReadContract().getCurrencyPool(poolId);
+    return pool.paymentToken as string;
+  }
+
+  async createCurrencyPool(
+    signer: ethers.Wallet,
+    p: {
+      underlying: string;
+      allowExternalLp: boolean;
+      structures: PoolStructures;
+      tenors: PoolTenor[];
+      /** Human amount, e.g. "500000". */
+      initialLiquidity: string;
+    },
+    onStep?: (s: string) => void,
+  ): Promise<string> {
+    const token = CHAIN_USDC_MAP[this._chainId] || USDC_ADDRESS;
+    await this.approveToken(signer, token, p.initialLiquidity, onStep);
+    return this.poolTx(signer, 'createCurrencyPool', [{
+      underlying: p.underlying,
+      paymentToken: ethers.ZeroAddress,
+      allowExternalLp: p.allowExternalLp,
+      structures: p.structures,
+      tenors: p.tenors,
+      initialLiquidity: ethers.parseUnits(p.initialLiquidity, this.tokenDecimals),
+    }], 'Creating pool...', onStep);
+  }
+
+  /** Add a tenor, or change one's offer or status. Running hedges are unaffected. */
+  async setPoolTenor(signer: ethers.Wallet, poolId: number, tenor: PoolTenor, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'setPoolTenor', [poolId, tenor], 'Updating tenor...', onStep);
+  }
+
+  async setPoolStructures(signer: ethers.Wallet, poolId: number, st: PoolStructures, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'setPoolStructures', [poolId, st], 'Updating protection types...', onStep);
+  }
+
+  async setCurrencyPoolSettings(
+    signer: ethers.Wallet, poolId: number, acceptingHedges: boolean, allowExternalLp: boolean,
+    onStep?: (s: string) => void,
+  ) {
+    return this.poolTx(signer, 'setCurrencyPoolSettings', [poolId, acceptingHedges, allowExternalLp], 'Updating pool...', onStep);
+  }
+
+  async poolDeposit(signer: ethers.Wallet, poolId: number, amount: string, onStep?: (s: string) => void) {
+    await this.approveToken(signer, await this.poolToken(poolId), amount, onStep);
+    return this.poolTx(signer, 'poolDeposit', [poolId, ethers.parseUnits(amount, this.tokenDecimals)], 'Depositing...', onStep);
+  }
+
+  async requestPoolWithdrawal(signer: ethers.Wallet, poolId: number, shares: bigint, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'requestPoolWithdrawal', [poolId, shares], 'Requesting withdrawal...', onStep);
+  }
+
+  async cancelPoolWithdrawal(signer: ethers.Wallet, requestId: number, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'cancelPoolWithdrawal', [requestId], 'Cancelling withdrawal...', onStep);
+  }
+
+  async executePoolWithdrawal(signer: ethers.Wallet, requestId: number, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'executePoolWithdrawal', [requestId], 'Withdrawing...', onStep);
+  }
+
+  async claimPoolPayout(signer: ethers.Wallet, positionId: number, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'claimPoolPayout', [positionId], 'Claiming payout...', onStep);
+  }
+
+  async withdrawPoolCreatorEarnings(signer: ethers.Wallet, poolId: number, onStep?: (s: string) => void) {
+    return this.poolTx(signer, 'withdrawPoolCreatorEarnings', [poolId], 'Withdrawing earnings...', onStep);
+  }
+
+  /** Price and sign a hedger's exact terms. A refusal comes back as { ok: false, reason }. */
+  async quotePoolProtection(req: {
+    /** Leave out to let the engine pick the cheapest pool with room on `pair`. */
+    poolId?: number;
+    pair?: string;
+    buyer: string;
+    notional: number;
+    tenorDays: number;
+    structure: StructureName;
+    strikeAbove: boolean;
+    strike: number;
+    cap?: number;
+  }): Promise<any> {
+    const res = await fetch('/api/pricing/pool-quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...req, chainId: this._chainId }),
+    });
+    return res.json();
+  }
+
+  /** Tenors and structures on sale for a pair, for the hedger's pickers. */
+  async poolOptions(pair: string): Promise<{
+    pair: string;
+    tenors: { tenorDays: number; open: boolean; capped: boolean; maxPayoutAvailable: number }[];
+  }> {
+    const res = await fetch(`/api/pricing/pool-options?chainId=${this._chainId}&pair=${encodeURIComponent(pair)}`);
+    return res.json();
+  }
+
+  /**
+   * Buy using a quote from quotePoolProtection. maxCost is the quoted total exactly:
+   * the only thing that can change the price after quoting is the underwriter editing
+   * the tenor's offer, and then the hedger should see the new price rather than pay it.
+   */
+  async buyPoolProtection(
+    signer: ethers.Wallet,
+    quote: { buyParams: Record<string, unknown>; totalCost: string; quoteExpiresAt: string },
+    onStep?: (s: string) => void,
+  ): Promise<string> {
+    const poolId = Number(quote.buyParams.poolId);
+    await this.approveToken(signer, await this.poolToken(poolId), ethers.formatUnits(BigInt(quote.totalCost), this.tokenDecimals), onStep);
+    return this.poolTx(signer, 'buyPoolProtection', [{
+      ...quote.buyParams,
+      maxCost: BigInt(quote.totalCost),
+      deadline: BigInt(quote.quoteExpiresAt),
+    }], 'Buying protection...', onStep);
   }
 }
 

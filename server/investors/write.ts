@@ -9,23 +9,9 @@
  * email, gets repeated in the deck, and is found in diligence. A founder caught
  * inflating one figure has every other figure re-examined.
  *
- * So the numbers are computed from the chain and the database at send time and
- * handed to the writer as the only figures it may use. It may not round them
- * up, project from them, annualise them, or describe them as more than they
- * are. Eleven settled pools is eleven settled pools.
- *
- * ## Why being small is said out loud
- *
- * The real position is eleven pools on two pairs and no revenue worth naming.
- * A pre-seed investor knows what pre-seed looks like and is not deceived by
- * omission, only irritated by it. The thing that distinguishes this from the
- * other twenty emails in their inbox is not scale, it is that the contract has
- * settled real money to real people on mainnet, which most pre-seed pitches
- * cannot say at all.
- *
- * The price history is the other genuine asset. Nearly half a million daily
- * closes back to 1996 is why the engine can price a pair that no bank quotes,
- * and it is the sort of thing that is hard to acquire and easy to verify.
+ * Only use figures supplied to this request. Their source, time window, and
+ * meaning must be checked before sending; this module does not prove that a
+ * figure is current or that a transaction settled customer funds.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -56,20 +42,15 @@ export interface InvestorDraft {
 }
 
 const SYSTEM = `You write the first email to an investor, as Anthony Kumako,
-founder of BlockFinaX. He is raising pre-seed.
+founder of BlockFinaX. Do not assume a fundraising round or stage.
 
 ## What BlockFinaX is
 
-It helps businesses protect themselves against currency volatility. A business
-in Ghana or Nigeria pays for protection against a move past an agreed level by
-an agreed date. Other people put up capital, take the other side, and earn that
-payment. If the move happens the business is paid the difference automatically
-against a published rate, with no claim and no assessor. It settles in
-stablecoins on Base.
-
-It exists because a bank will not sell a $50,000 forward to a small importer:
-the credit assessment costs more than the bank earns on the trade. So the
-businesses most exposed to a currency move are the ones with no way to cover it.
+BlockFinaX is developing blockchain-based tools for foreign-exchange risk
+management and cross-border payments. Do not claim that a market, corridor,
+settlement flow, token, fee or feature is currently available unless that fact
+is supplied with current verification for this email. Do not make claims about
+competitors' minimums or access to hedging.
 
 ## The only numbers you may use
 
@@ -87,14 +68,10 @@ number re-examined.
 
 ## Say the stage plainly
 
-The honest position is early: a small number of pools, two currency pairs, and
-no revenue worth naming. Say so. A pre-seed investor knows what pre-seed looks
-like and is not fooled by omission, only irritated by it.
-
-What actually distinguishes this from the rest of their inbox is that the
-contract has settled real money to real people on mainnet, which most pre-seed
-pitches cannot claim at all, and that the pricing runs on a long daily price
-history that is hard to acquire and easy to verify.
+Use only current figures and operating evidence provided with the request.
+Do not state customer counts, markets, revenue, settlements, corporate status
+or funding stage from memory or from this prompt. If the request has no current
+evidence for a claim, omit it or say it is unverified.
 
 ## The email
 
@@ -112,11 +89,11 @@ reads as a mail merge, which is worse than saying nothing. Open on the problem
 instead, or say plainly that you are writing on the chance it fits. Never invent
 admiration for a portfolio company you have not been told about.
 
-Two or three lines on the problem and what exists today. The problem is the
-interesting part: the businesses with the most currency exposure are the ones
-banks will not quote.
+Two or three lines on the problem and what exists today. Do not generalize
+about bank access or competitor coverage without evidence for the specific
+market and prospect.
 
-One or two lines of what is actually built and settled, using the given figures.
+One or two lines describing only what current evidence in the request supports.
 
 One clear ask. A short call, or an offer to send the deck. One ask, no
 alternatives, no calendar link, no attachment.
@@ -136,8 +113,8 @@ back", "game changer", "disrupting", "massive market", "no brainer", "TAM",
 "10x", "unicorn", "revolutionary". Also banned: parametric, protocol,
 infrastructure play, on-chain as an adjective. Describe what it does.
 
-Never claim regulatory status. BlockFinaX is pre-licence with a Bank of Ghana
-sandbox application filed. If it is relevant, say exactly that.
+Never claim regulatory status unless the current status and supporting official
+evidence are supplied with the request.
 
 Never promise a return.
 
@@ -179,11 +156,10 @@ export async function writeInvestorEmail(
   ].filter(Boolean).join("\n");
 
   const numbers = [
-    `Cover pools created and settled on Base mainnet: ${t.poolsSettled}`,
-    `Currency pairs covered so far: ${t.pairs}`,
-    `Daily closing prices held for pricing: ${t.closes.toLocaleString()}, going back to ${t.historyFrom}`,
-    `Revenue: none worth naming yet. Do not imply otherwise.`,
-    `Users: not a figure you have been given. Do not state one.`,
+    `Pools created and settled: ${t.poolsSettled} (include only if this input is current, verified, and its meaning is clear)`,
+    `Currency pairs: ${t.pairs} (include only if this input is current and verified)`,
+    `Price observations: ${t.closes}; history start: ${t.historyFrom} (include only if current and verified)`,
+    `No revenue, user, partnership, funding, or settlement claim is supplied here. Do not infer that any are zero or nonzero.`,
   ].join("\n");
 
   try {

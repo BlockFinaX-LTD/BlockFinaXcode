@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { getAdminDocsSession } from '@/lib/admin-docs-session';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 
 // Investor sessions are in memory. Re-establish one from the durable docs
 // credential before the data room or whitepaper checks it after a restart.

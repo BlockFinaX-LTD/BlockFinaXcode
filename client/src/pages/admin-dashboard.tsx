@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/api-client";
 import { hedgeContract, type HedgeFeeConfig, USDC_ADDRESS, USDT_ADDRESS_SEPOLIA } from "@/lib/hedge-contract";
 import { getAuthMethod, sendCrypto, sendOtp, getCachedUserSummary } from "@/lib/rift-client";
-import { useRift } from "@rift-finance/react";
+import { useIdentity as useRift } from '@/lib/identity';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1224,8 +1224,24 @@ async function ensureChain(cfg: AdminChainCfg) {
 
 async function readChainContract(cfg: AdminChainCfg) {
   const { ethers } = await import("ethers");
-  const provider = new ethers.JsonRpcProvider(cfg.rpc);
+  const provider = new ethers.JsonRpcProvider(cfg.rpc, cfg.chainId, { staticNetwork: true });
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== cfg.chainId) {
+    throw new Error(`RPC returned chain ${network.chainId}; expected ${cfg.chainId} (${cfg.label}).`);
+  }
   return new ethers.Contract(cfg.diamond, OWNER_ABI, provider);
+}
+
+async function readDiamondOwner(cfg: AdminChainCfg, provider: any): Promise<string> {
+  const { ethers } = await import("ethers");
+  const baseSlot = BigInt(ethers.id("diamond.standard.diamond.storage"));
+  const ownerWord = await provider.getStorage(cfg.diamond, ethers.toBeHex(baseSlot + 4n, 32));
+  const owner = ethers.getAddress("0x" + ownerWord.slice(-40));
+  const routedOwner = await new ethers.Contract(cfg.diamond, OWNER_ABI, provider).owner().catch(() => null);
+  if (routedOwner && ethers.getAddress(routedOwner) !== owner) {
+    throw new Error("owner() does not match the standard Diamond ownership storage slot; refusing to infer authority.");
+  }
+  return owner;
 }
 
 function fmtToken(raw: bigint, decimals: number) {
@@ -1272,6 +1288,20 @@ function ProtocolSection() {
   const { token } = useAdminToken();
   const [selectedChainKey, setSelectedChainKey] = useState<AdminChainKey>("base");
   const cfg = ADMIN_CHAINS[selectedChainKey];
+  const assertSafeControlsDiamond = async (contract: any) => {
+    const provider = contract.runner?.provider;
+    if (!provider) throw new Error("Could not verify the chain provider for the Safe ownership check.");
+    const owner = (await readDiamondOwner(cfg, provider)).toLowerCase();
+    if (owner !== cfg.safe.toLowerCase()) {
+      throw new Error(`Configured Safe ${cfg.safe} is not the current Diamond owner (${owner}). A Safe proposal would fail the contract's owner check.`);
+    }
+    if (!provider || await provider.getCode(cfg.safe) === "0x") {
+      throw new Error(`Configured Safe ${cfg.safe} has no verified contract code on ${cfg.label}.`);
+    }
+    const { ethers } = await import("ethers");
+    const safe = new ethers.Contract(cfg.safe, SAFE_ABI, provider);
+    await Promise.all([safe.getOwners(), safe.getThreshold()]);
+  };
   const [backupBusy, setBackupBusy] = useState(false);
   const [oracleNodes, setOracleNodes] = useState<{ label: string; address: string | null; configured: boolean }[]>([]);
 
@@ -1353,7 +1383,7 @@ function ProtocolSection() {
         usdtAddr ? c.isAllowedPaymentToken(usdtAddr).catch(() => false) : Promise.resolve(false),
         fetchTotalWithdrawn(cfg, cfg.primaryFeeToken, cfg.usdcDecimals, token),
         usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals, token) : Promise.resolve(0),
-        c.owner().catch(() => ""),
+        readDiamondOwner(cfg, c.runner.provider).catch(() => ""),
       ]);
       const rawPrimaryFees = BigInt(rawPrimaryTokenFees) > BigInt(rawLegacyFees) ? rawPrimaryTokenFees : rawLegacyFees;
       const feeConfig = rawFees ? {
@@ -1667,6 +1697,7 @@ function ProtocolSection() {
     try {
       const { ethers } = await import("ethers");
       const contract = await readChainContract(cfg);
+      await assertSafeControlsDiamond(contract);
       const [legacyRaw, tokenRaw] = await Promise.all([
         contract.getHedgePlatformFees().catch(() => 0n),
         contract.getPlatformFeesByToken(cfg.primaryFeeToken).catch(() => 0n),
@@ -1689,6 +1720,7 @@ function ProtocolSection() {
       if (!cfg.usdt || cfg.usdt.toLowerCase() === cfg.primaryFeeToken.toLowerCase()) throw new Error("No separate USDT fee balance on this chain.");
       const { ethers } = await import("ethers");
       const contract = await readChainContract(cfg);
+      await assertSafeControlsDiamond(contract);
       const raw = await contract.getPlatformFeesByToken(cfg.usdt);
       if (BigInt(raw) === 0n) throw new Error("No USDT fees to withdraw.");
       const iface = new ethers.Interface(OWNER_ABI);
@@ -1700,11 +1732,14 @@ function ProtocolSection() {
   };
 
   const updateFees = () => run("Update fee config (direct EOA)", async () => {
-    const { ethers, contract, signer } = await ensureChain(cfg);
+    const { ethers, contract, signer, provider } = await ensureChain(cfg);
     const signerAddr = (await signer.getAddress()).toLowerCase();
-    const onChainOwner = (await contract.owner().catch(() => "")).toLowerCase();
-    if (onChainOwner && signerAddr !== onChainOwner) {
-      throw new Error(`Wrong wallet — Diamond owner is ${onChainOwner} but MetaMask is using ${signerAddr}. Use "Send via Safe" instead.`);
+    const onChainOwner = (await readDiamondOwner(cfg, provider)).toLowerCase();
+    if (signerAddr !== onChainOwner) {
+      const ownerIsSafe = onChainOwner === cfg.safe.toLowerCase();
+      throw new Error(ownerIsSafe
+        ? `The Diamond owner is the configured Safe (${cfg.safe}); this direct wallet transaction cannot satisfy onlyOwner.`
+        : `Connected wallet ${signerAddr} is not the current Diamond owner ${onChainOwner}. The configured Safe is not the owner, so a Safe proposal would not satisfy onlyOwner either.`);
     }
     const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
     const tx = await contract.initializeHedgeFees(
@@ -1724,6 +1759,7 @@ function ProtocolSection() {
   const genSafeFeeTx = async () => {
     try {
       const { ethers } = await import("ethers");
+      await assertSafeControlsDiamond(await readChainContract(cfg));
       const iface = new ethers.Interface(OWNER_ABI);
       const p = (pct: string) => ethers.parseUnits((parseFloat(pct) / 100).toFixed(8), 6);
       const calldata = iface.encodeFunctionData("initializeHedgeFees", [
@@ -1743,6 +1779,7 @@ function ProtocolSection() {
   const genSafeOracleTx = async (address: string) => {
     try {
       const { ethers } = await import("ethers");
+      await assertSafeControlsDiamond(await readChainContract(cfg));
       const iface = new ethers.Interface(OWNER_ABI);
       const calldata = iface.encodeFunctionData("addOracle", [address]);
       setSafeTxModal({ to: cfg.diamond, data: calldata, label: `Add Oracle ${shortAddr(address)}` });
@@ -1789,6 +1826,9 @@ function ProtocolSection() {
   const signAndExecSafe = async (to: string, data: string, requestedNonce?: bigint, nonceRepair = false) => {
     setSafeExecuting(true);
     try {
+      if (to.toLowerCase() === cfg.diamond.toLowerCase()) {
+        await assertSafeControlsDiamond(await readChainContract(cfg));
+      }
       const { ethers, signer } = await ensureChain(cfg);
       const signerAddr = (await signer.getAddress()).toLowerCase();
 
@@ -1909,6 +1949,9 @@ function ProtocolSection() {
 
   const connectedLabel = state.wallet ? shortAddr(state.wallet) : "Not connected";
   const ownerLabel = state.diamondOwner ? shortAddr(state.diamondOwner) : "—";
+  const safeControlsDiamond = state.diamondOwner
+    ? state.diamondOwner.toLowerCase() === cfg.safe.toLowerCase()
+    : null;
   const walletIsOwner = state.wallet && state.diamondOwner
     ? state.wallet.toLowerCase() === state.diamondOwner.toLowerCase()
     : null;
@@ -1945,11 +1988,14 @@ function ProtocolSection() {
             <span className="text-gray-400">|</span>
             <span className="text-gray-500">Your wallet: <span className="font-mono font-medium text-gray-800">{state.wallet || "not connected"}</span></span>
           </div>
-          {walletIsOwner === false && (
+          {walletIsOwner === false && safeControlsDiamond !== true && (
             <p className="text-red-700 font-medium flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
               Wrong wallet — MetaMask is connected to <span className="font-mono">{connectedLabel}</span> but the Diamond owner is <span className="font-mono">{ownerLabel}</span>. Switch MetaMask to the owner wallet before sending any transaction.
             </p>
+          )}
+          {walletIsOwner === false && safeControlsDiamond === true && (
+            <p className="text-amber-800 font-medium">The Safe is the Diamond owner. Use the Safe flow with a Safe owner wallet; this connected address is not itself the Diamond owner address.</p>
           )}
           {walletIsOwner === true && (
             <p className="text-green-700 font-medium">Wallet matches contract owner — ready to sign transactions.</p>
@@ -2128,7 +2174,7 @@ function ProtocolSection() {
                 <span>All-time withdrawn</span>
                 <span className="font-semibold text-green-700">${state.usdcWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposePrimaryFeeWithdrawal} disabled={state.loading || state.usdcFees === "—"}>
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposePrimaryFeeWithdrawal} disabled={state.loading || state.usdcFees === "—" || safeControlsDiamond !== true} title={safeControlsDiamond !== true ? "The configured Safe must be verified as Diamond owner before proposing an onlyOwner withdrawal." : undefined}>
                 <Shield className="h-3 w-3 mr-1" />Propose {cfg.primaryFeeSymbol} withdrawal to Safe
               </Button>
               {cfg.chainId === 8453 && <Button size="sm" variant="outline" className="w-full" onClick={prepareSafeNonceRepair} disabled={safeExecuting}>
@@ -2149,14 +2195,14 @@ function ProtocolSection() {
                 <span>All-time withdrawn</span>
                 <span className="font-semibold text-green-700">${state.usdtWithdrawn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposeUsdtFeeWithdrawal} disabled={state.loading || state.usdtFees === "—"}>
+              <Button size="sm" className="w-full bg-[#1a4480] hover:bg-[#153a6e]" onClick={proposeUsdtFeeWithdrawal} disabled={state.loading || state.usdtFees === "—" || safeControlsDiamond !== true} title={safeControlsDiamond !== true ? "The configured Safe must be verified as Diamond owner before proposing an onlyOwner withdrawal." : undefined}>
                 <Shield className="h-3 w-3 mr-1" />Propose USDT withdrawal to Safe
               </Button>
             </div>}
           </div>
 
           <p className="text-xs text-gray-400 flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />Withdrawals are proposed to the Treasury Safe ({shortAddr(cfg.safe)}). A Safe owner signs the proposal; the required owners approve and execute it in Safe.
+            <CheckCircle className="h-3 w-3" />{safeControlsDiamond === true ? `The configured Safe (${shortAddr(cfg.safe)}) is the live Diamond owner. Withdrawals can be proposed to it; required Safe owners approve and execute.` : safeControlsDiamond === false ? `Safe withdrawal proposals are disabled: the configured Safe is not the live Diamond owner (${ownerLabel}).` : "Safe withdrawal proposals are disabled until the live Diamond owner is verified."}
           </p>
         </CardContent>
       </Card>
@@ -2222,19 +2268,20 @@ function ProtocolSection() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Button className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={genSafeFeeTx}>
+                    <Button className="bg-[#1a4480] hover:bg-[#153a6e]" onClick={genSafeFeeTx} disabled={safeControlsDiamond !== true}>
                       Send via Safe
                     </Button>
-                    <Button variant="outline" onClick={updateFees} disabled={busy !== null || walletIsOwner !== true} title={walletIsOwner !== true ? "Only works when your EOA is the Diamond owner" : ""}>
+                    <Button variant="outline" onClick={updateFees} disabled={busy !== null || walletIsOwner !== true} title={walletIsOwner !== true ? "Only works when the connected wallet is the Diamond owner" : ""}>
                       {busy === "Update fee config (direct EOA)" ? "Sending tx…" : "Send direct (EOA only)"}
                     </Button>
                   </div>
-                  {walletIsOwner !== true && (
+                  {walletIsOwner === false && safeControlsDiamond === true && (
                     <p className="text-xs text-amber-700 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" />
-                      Diamond owner is a Safe — use "Send via Safe" to generate the transaction.
+                      Diamond owner is this Safe — use "Send via Safe" to generate the transaction.
                     </p>
                   )}
+                  {safeControlsDiamond === false && <p className="text-xs text-red-700">The configured Safe is not the current Diamond owner. Safe proposals for owner-only fee changes are disabled.</p>}
                 </div>
               )}
             </div>

@@ -96,7 +96,7 @@ class MainnetGuard {
 
   validateChainId(chainId: number): TransactionCheck {
     if (!isMainnet()) {
-      return { allowed: true };
+      return chainId === 84532 ? { allowed: true } : { allowed: false, reason: 'Only Base Sepolia (84532) is allowed in the sandbox.' };
     }
 
     const SUPPORTED_MAINNET_CHAINS: Record<number, string> = {

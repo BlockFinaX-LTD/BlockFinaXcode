@@ -7,8 +7,8 @@
 
 import { ethers } from "ethers";
 
-const USDC_ADDRESS = "0xf52Ad63619Bf9cFeF510341ac6b4038554399562";
-const BASE_SEPOLIA_RPC = "https://sepolia.base.org";
+const USDC_ADDRESS = process.env.BASE_SEPOLIA_USDC_ADDRESS || "";
+const BASE_SEPOLIA_RPC = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 
 // ERC20 ABI for transfer function
 const ERC20_ABI = [
@@ -37,6 +37,7 @@ export class UnstakeManager {
     userAddress: string;
     amount: string;
   }): Promise<{ txHash: string }> {
+    if (!USDC_ADDRESS) throw new Error("BASE_SEPOLIA_USDC_ADDRESS must be configured before unstaking");
     if (!this.treasuryWallet) {
       throw new Error("Treasury Pool wallet not initialized. Missing TREASURY_POOL_PRIVATE_KEY.");
     }

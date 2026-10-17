@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Clock, Lock, CheckCircle, XCircle } from 'lucide-react';

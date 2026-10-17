@@ -15,12 +15,14 @@ This document outlines how the current oracle works, its known limitations, and 
 
 ### How It Works
 
-BlockFinaX uses a **custodial push oracle** model. The platform backend fetches prices from multiple external APIs on a 5-minute polling cycle and submits settlement prices directly to the Diamond smart contract when a strike condition is met.
+BlockFinaX uses a **custodial push oracle** model. The backend fetches prices on a 5-minute polling cycle and submits settlement prices to the Diamond smart contract when a strike condition is met.
 
 **Data Sources (Current):**
-- FX Rates: ExchangeRate-API (two endpoints, equal-weight averaged)
+- FX Rates: ExchangeRate-API Open Access (`open.er-api.com`)
 - Commodities: Yahoo Finance (metals, energy, agriculture)
 - Crypto: CoinGecko (BTC, ETH, BNB, SOL, XRP, ADA)
+
+Additional FX providers will be evaluated and integrated as suitable coverage becomes available.
 
 **Settlement Flow:**
 1. Backend polls rates every 5 minutes
@@ -125,7 +127,7 @@ This phase transforms BlockFinaX from a consumer of oracle data into a **provide
 | Risk | Current Mitigation | Future Mitigation |
 |---|---|---|
 | Key compromise | Secure environment variable storage | HSM + multi-signer (Phase 2) |
-| Bad data from API | Dual-source averaging | Circuit breaker + 3-source validation |
+| Bad data from API | Response-success and positive-rate checks | Additional source validation and circuit breaker |
 | Server downtime | Manual restart procedure | Redundant servers (Phase 2) |
 | Regulatory classification | Transparent documentation | Multi-signer decentralization (Phase 2) |
 | No decentralized alternative | Custom oracle with roadmap | BlockFinaX Oracle Network (Phase 3) |

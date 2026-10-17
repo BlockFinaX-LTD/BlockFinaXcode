@@ -8,12 +8,15 @@
  */
 
 import { Switch, Route, Redirect, useLocation } from "wouter";
+import { isWalletSandbox, walletRiftKey, walletWidgetUrl } from "@/lib/wallet-environment";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { RiftProvider, RiftAuth, useRift } from "@rift-finance/react";
+import { RiftAuth } from "@rift-finance/react";
+import { IdentityProvider, useIdentity as useRift, usesPasskeyWallet } from "@/lib/identity";
+import { storedSessionToken } from "@/lib/wallets/passkey-wallet";
 import { RiftTokenBridge } from "@/lib/rift-token-bridge";
 import { getMe, setCachedUserSummary, clearLocalRiftState } from "@/lib/rift-client";
 import { TxAuthDialog } from "@/components/wallet/tx-auth-dialog";
@@ -25,7 +28,6 @@ import { useToast } from "@/hooks/use-toast";
 import Website from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
-import { InvestorGate } from "@/components/investor-gate";
 import DataRoom from "@/pages/data-room";
 import TractionShare from "@/pages/traction-share";
 import TermsPage from "@/pages/terms";
@@ -53,13 +55,10 @@ import FinancialModel from "@/pages/financial-model";
 // Private beta gating
 import ApplyPage from "@/pages/apply";
 import TechnicalDocs from "@/pages/docs-technical";
-import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
 import LiquidityProviderPage from "@/pages/liquidity-provider";
 import HedgerPage from "@/pages/hedger";
 import AcademyRoute from "@/pages/academy";
-import { DocsSessionRecovery } from "@/components/docs-session-recovery";
-import { DocsGate } from "@/components/docs-gate";
 
 // Counterparty signing portal. Public by design — authenticated by the
 // bearer token in the emailed link, not by a BlockFinaX account.
@@ -87,7 +86,7 @@ import NotificationsPage from "@/pages/notifications";
  * issues a pk_; the moment they do, this becomes a config change and nothing
  * else needs touching.
  */
-const RIFT_API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || '').trim();
+const RIFT_API_KEY = walletRiftKey;
 
 // White-label sign-in: the widget is served from our own subdomain so the
 // Google sign-in screen reads "Sign in to BlockFinaX" instead of the partner
@@ -95,7 +94,7 @@ const RIFT_API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VI
 // changes. Override via VITE_RIFT_WIDGET_URL if we ever need to point back
 // at the partner-hosted widget for debugging.
 const RIFT_WIDGET_URL =
-  (import.meta.env.VITE_RIFT_WIDGET_URL || 'https://widget.blockfinax.com').trim();
+  walletWidgetUrl;
 
 // Routes that require Rift login. Unauthenticated visits redirect to /auth.
 const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', '/wallet', '/rewards', '/verify'];
@@ -106,6 +105,7 @@ const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', 
 // to /auth on every cold reload.
 function hasStoredRiftSession(): boolean {
   if (typeof window === 'undefined') return false;
+  if (usesPasskeyWallet) return !!storedSessionToken();
   try { return !!window.localStorage.getItem('rift:identity'); } catch { return false; }
 }
 
@@ -155,7 +155,7 @@ function RiftPostSigninSync() {
       // Fire-and-forget — ensures the dashboard user count reflects this
       // Rift account. The server upserts by address so repeat sign-ins on
       // the same address are idempotent no-ops.
-      if (user.accessToken) {
+      if (user.accessToken && !isWalletSandbox) {
         // Carry the referral code captured at /auth?ref=CODE (if any). The
         // server only attributes it for a genuinely new wallet, then clears it.
         let referralCode: string | null = null;
@@ -181,26 +181,13 @@ function RiftPostSigninSync() {
 // (AuthGuard redirects unauthenticated visitors to /auth) but the post
 // sign-in approval wall is gone.
 
-// Docs gate: the whitepaper, docs index, and pitch deck only render once the
-// visitor has a valid magic-link token. The gate intercepts and shows a
-// "request access" form otherwise. Docs stay gated.
-const TechnicalDocsGated = () => <DocsGate><TechnicalDocs /></DocsGate>;
-const DocsIndexGated  = () => <DocsGate><DocsIndex /></DocsGate>;
-const PitchGated      = () => <DocsGate><PitchDeck /></DocsGate>;
-// The whitepaper is an investor document, not a marketing page. It sits under
-// /data-room and admits only a live data-room session — no magic link, no
-// admin bypass, and no entry from the public navigation.
-const WhitepaperGated = () => <DocsSessionRecovery><InvestorGate><Whitepaper /></InvestorGate></DocsSessionRecovery>;
-
-// Recover approved docs sessions before entering the data room. Visitors
-// without a docs credential can still use its existing password screen.
-const DataRoomGated   = () => <DocsSessionRecovery><DataRoom /></DocsSessionRecovery>;
+// Document routes are public; no sign-in or access approval is required.
 
 function Router() {
   return (
     <Switch>
       {/* Public */}
-      <Route path="/" component={Website} />
+      <Route path="/">{isWalletSandbox ? <Redirect to="/home" /> : <Website />}</Route>
       <Route path="/terms" component={TermsPage} />
       <Route path="/faq" component={FaqPage} />
       <Route path="/privacy" component={PrivacyPage} />
@@ -208,7 +195,7 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPage} />
       <Route path="/predict" component={PredictPage} />
       <Route path="/apply" component={ApplyPage} />
-      <Route path="/docs/request" component={DocsRequestPage} />
+      <Route path="/docs/request"><Redirect to="/docs" /></Route>
       <Route path="/liquidity-provider" component={LiquidityProviderPage} />
       <Route path="/hedger" component={HedgerPage} />
 
@@ -225,14 +212,15 @@ function Router() {
       {/* Auth — open to anyone. Rift widget renders unconditionally so new
           users can sign up without an invitation. */}
       <Route path="/auth" component={Auth} />
+      <Route path="/auth/google/done" component={Auth} />
 
       {/* Docs — gated by per-request magic-link token */}
-      <Route path="/docs/technical" component={TechnicalDocsGated} />
-      <Route path="/docs" component={DocsIndexGated} />
-      <Route path="/pitch" component={PitchGated} />
+      <Route path="/docs/technical" component={TechnicalDocs} />
+      <Route path="/docs" component={DocsIndex} />
+      <Route path="/pitch" component={PitchDeck} />
       <Route path="/traction/:key" component={TractionShare} />
-      <Route path="/data-room" component={DataRoomGated} />
-      <Route path="/data-room/whitepaper" component={WhitepaperGated} />
+      <Route path="/data-room" component={DataRoom} />
+      <Route path="/data-room/whitepaper" component={Whitepaper} />
       {/* Old public path. Kept as a redirect so shared links and bookmarks
           land in the data room rather than on a 404. */}
       <Route path="/whitepaper"><Redirect to="/data-room/whitepaper" /></Route>
@@ -299,7 +287,7 @@ function FinaxMount() {
   const [location] = useLocation();
 
   const hidden = ["/admin", "/auth", "/sign/"].some((p) => location.startsWith(p));
-  if (hidden) return null;
+  if (hidden || isWalletSandbox) return null;
 
   const inApp = PROTECTED_ROUTES.some((p) => location === p || location.startsWith(p + "/"));
   return <FinaxChat scope={inApp && isAuthenticated ? "customer" : "public"} />;
@@ -310,13 +298,13 @@ function App() {
     // `persist` keeps the session in storage across reloads so signed-in users
     // don't get bounced back to /auth on refresh. Combined with the isReady
     // gate in AuthGuard, the redirect only fires after rehydration completes.
-    <RiftProvider apiKey={RIFT_API_KEY} widgetUrl={RIFT_WIDGET_URL} persist>
+    <IdentityProvider apiKey={RIFT_API_KEY} widgetUrl={RIFT_WIDGET_URL}>
       <RiftTokenBridge />
-      <RiftPostSigninSync />
+      {!usesPasskeyWallet && <RiftPostSigninSync />}
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <RiftAuthMount />
+          {!usesPasskeyWallet && <RiftAuthMount />}
           <AuthGuard />
           <TxAuthDialog />
           <V3SignDialog />
@@ -325,7 +313,7 @@ function App() {
           <FinaxMount />
         </TooltipProvider>
       </QueryClientProvider>
-    </RiftProvider>
+    </IdentityProvider>
   );
 }
 

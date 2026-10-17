@@ -8,6 +8,7 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
+    "test": "find server shared client/src -name \"*.test.ts\" -not -path \"*/node_modules/*\" -print0 | xargs -0 tsx --test",
     "db:push": "drizzle-kit push",
     "pricing:test": "tsx --test server/pricing/__tests__/*.test.ts",
     "predict:test": "tsx --test server/predict/__tests__/*.test.ts",
@@ -26,7 +27,9 @@
     "pricing:calibrate-garch": "tsx --env-file=.env server/pricing/scripts/calibrate-garch.ts",
     "pricing:backtest": "tsx --env-file=.env server/pricing/scripts/backtest.ts",
     "pricing:scan-onchain": "tsx server/pricing/scripts/scan-onchain-pairs.ts",
-    "pricing:scan-everything": "tsx server/pricing/scripts/scan-onchain-everything.ts"
+    "pricing:scan-everything": "tsx server/pricing/scripts/scan-onchain-everything.ts",
+    "build:wallet-sandbox": "cross-env VITE_NETWORK_MODE=testnet vite build --mode testnet && esbuild server/sandbox/wallet.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/wallet-sandbox.js",
+    "test:wallet-sandbox": "tsx --test server/sandbox/__tests__/wallet-app.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -67,6 +70,7 @@
     "@rift-finance/wallet": "^1.4.26",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
+    "@stellar/stellar-sdk": "^16.0.1",
     "@tanstack/react-query": "^5.60.5",
     "@types/crypto-js": "^4.2.2",
     "@types/memoizee": "^0.4.12",
@@ -74,6 +78,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/swagger-ui-express": "^4.1.8",
     "@walletconnect/ethereum-provider": "^2.21.1",
+    "buffer": "6.0.3",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
@@ -107,6 +112,8 @@
     "multer": "^2.1.1",
     "next-themes": "^0.4.6",
     "openid-client": "^6.5.0",
+    "passkey-kit": "0.14.0",
+    "passkey-kit-sdk": "0.8.0",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "qrcode": "^1.5.4",

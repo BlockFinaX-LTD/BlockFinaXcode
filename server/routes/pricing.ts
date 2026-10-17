@@ -3,6 +3,9 @@
  *
  *   POST /api/pricing/quote     — get a fair-premium quote for a hedge event
  *   POST /api/pricing/validate  — is this a premium anyone should be allowed to sell?
+ *   POST /api/pricing/pool-quote         currency pools: price and sign a hedger's terms
+ *   GET  /api/pricing/pool-options       currency pools: what is on sale for a pair
+ *   POST /api/pricing/pool-tenor-prices  currency pools: fair vs offer per tenor
  *   GET  /api/pricing/health    — diagnostic: USD rate cache, last close per pair
  *
  * The quote endpoint is read-only and unsigned (no wallet signature required) —
@@ -13,6 +16,7 @@
 import type { Express } from "express";
 import { quote } from "../pricing/quote";
 import { quotePurchase } from "../pricing/quote-purchase";
+import { quotePoolBuy, tenorFairPrices, poolTenorFairPrices, poolOptions, readNormalizedPool, readNormalizedPositions } from "../pricing/pool-quote";
 import { signPurchaseQuote } from "../pricing/signer";
 import { validateLpPremium } from "../pricing/implied-vol";
 import { db } from "../db";
@@ -231,6 +235,108 @@ export function registerPricingRoutes(app: Express): void {
     } catch (err) {
       const reason = err instanceof Error ? err.message : "internal pricing error";
       return res.status(400).json({ ok: false, reason });
+    }
+  });
+
+  // ── POST /api/pricing/pool-quote ────────────────────────────────────────
+  //
+  // A hedger's exact terms on a currency pool, priced and signed for
+  // buyPoolProtection. A refusal (tenor off, cap out of bounds, not enough
+  // capacity) is a 200 with ok:false so the app can show the reason.
+  app.post("/api/pricing/pool-quote", async (req, res) => {
+    try {
+      const b = req.body ?? {};
+      const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+      if (!isNum(b.chainId)) {
+        return res.status(400).json({ ok: false, reason: "chainId is required" });
+      }
+      const hasPool = Number.isInteger(b.poolId) && b.poolId > 0;
+      if (!hasPool && typeof b.pair !== "string") {
+        return res.status(400).json({ ok: false, reason: "Pass a currency pair (or a specific poolId)" });
+      }
+      if (typeof b.buyer !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(b.buyer)) {
+        return res.status(400).json({ ok: false, reason: "buyer (wallet address) is required" });
+      }
+      if (!isNum(b.notional) || b.notional <= 0) {
+        return res.status(400).json({ ok: false, reason: "notional must be a positive number" });
+      }
+      if (!Number.isInteger(b.tenorDays) || b.tenorDays < 1 || b.tenorDays > 365) {
+        return res.status(400).json({ ok: false, reason: "tenorDays must be 1 to 365" });
+      }
+      if (b.structure !== "open" && b.structure !== "capped") {
+        return res.status(400).json({ ok: false, reason: "structure must be 'open' or 'capped'" });
+      }
+      if (typeof b.strikeAbove !== "boolean" || !isNum(b.strike) || b.strike <= 0) {
+        return res.status(400).json({ ok: false, reason: "strikeAbove and strike are required" });
+      }
+      if (b.cap !== undefined && (!isNum(b.cap) || b.cap <= 0)) {
+        return res.status(400).json({ ok: false, reason: "cap must be a positive number" });
+      }
+      return res.json(await quotePoolBuy(b));
+    } catch (err) {
+      return res.status(400).json({ ok: false, reason: err instanceof Error ? err.message : "internal pricing error" });
+    }
+  });
+
+  // ── GET /api/pricing/pool-options?chainId=8453&pair=USD/GHS ─────────────
+  //
+  // The durations and structures any pool is selling on a pair, and the
+  // largest hedge one pool can take, for the hedger's pickers.
+  app.get("/api/pricing/pool-options", async (req, res) => {
+    try {
+      const chainId = Number(req.query.chainId);
+      const pair = String(req.query.pair ?? "");
+      if (!Number.isFinite(chainId) || !pair) {
+        return res.status(400).json({ ok: false, reason: "chainId and pair are required" });
+      }
+      return res.json(await poolOptions(chainId, pair));
+    } catch (err) {
+      return res.status(400).json({ ok: false, reason: err instanceof Error ? err.message : "internal pricing error" });
+    }
+  });
+
+  // ── Currency pools, read in the shape the Stellar wallet server also returns ──
+  app.get("/api/pools/:chainId/pool/:poolId", async (req, res) => {
+    try {
+      return res.json(await readNormalizedPool(Number(req.params.chainId), Number(req.params.poolId)));
+    } catch (err) {
+      return res.status(400).json({ ok: false, reason: err instanceof Error ? err.message : "read failed" });
+    }
+  });
+  app.get("/api/pools/:chainId/positions/:hedger", async (req, res) => {
+    try {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(req.params.hedger)) return res.status(400).json({ ok: false, reason: "invalid address" });
+      return res.json({ positions: await readNormalizedPositions(Number(req.params.chainId), req.params.hedger) });
+    } catch (err) {
+      return res.status(400).json({ ok: false, reason: err instanceof Error ? err.message : "read failed" });
+    }
+  });
+
+  // ── POST /api/pricing/pool-tenor-prices ─────────────────────────────────
+  //
+  // Fair vs offer price per tenor at a reference strike, for the underwriter.
+  // Pass { chainId, poolId } for an existing pool, or { pair, tenors } while
+  // creating one.
+  app.post("/api/pricing/pool-tenor-prices", async (req, res) => {
+    try {
+      const b = req.body ?? {};
+      const structure = b.structure === "open" ? "open" : "capped";
+      const strikeAbove = b.strikeAbove !== false;
+      if (Number.isInteger(b.poolId) && typeof b.chainId === "number") {
+        return res.json(await poolTenorFairPrices({
+          chainId: b.chainId, poolId: b.poolId, structure, strikeAbove,
+          refStrikeBps: b.refStrikeBps, refCapBps: b.refCapBps,
+        }));
+      }
+      if (typeof b.pair !== "string" || !Array.isArray(b.tenors) || b.tenors.length === 0) {
+        return res.status(400).json({ ok: false, reason: "Pass chainId + poolId, or pair + tenors" });
+      }
+      return res.json(await tenorFairPrices({
+        pair: b.pair, tenors: b.tenors, structure, strikeAbove,
+        refStrikeBps: b.refStrikeBps, refCapBps: b.refCapBps, openMaxPayoutBps: b.openMaxPayoutBps,
+      }));
+    } catch (err) {
+      return res.status(400).json({ ok: false, reason: err instanceof Error ? err.message : "internal pricing error" });
     }
   });
 

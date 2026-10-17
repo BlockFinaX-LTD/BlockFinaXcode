@@ -1,3 +1,4 @@
+import { isWalletSandbox, walletRiftKey } from "@/lib/wallet-environment";
 /**
  * auth.tsx — Sign in / sign up via the Rift hosted widget
  *
@@ -14,13 +15,18 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift, usesPasskeyWallet } from '@/lib/identity';
+import { PasskeyAuth } from '@/components/wallet/passkey-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Gift } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
 export default function Auth() {
+  return usesPasskeyWallet ? <PasskeyAuth /> : <RiftAuthPage />;
+}
+
+function RiftAuthPage() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, open, error } = useRift();
   const [refCode, setRefCode] = useState('');
@@ -60,13 +66,15 @@ export default function Auth() {
           <div className="space-y-1">
             <h1 className="bfx-display text-[20px] font-semibold tracking-tight">BlockFinaX</h1>
             <p className="text-[12.5px] text-muted-foreground">Cross-border payments &amp; cover</p>
+            {isWalletSandbox && <p className="text-xs text-amber-500">TESTNET · Base Sepolia · Test tokens only</p>}
+            {isWalletSandbox && !walletRiftKey && <p className="text-xs text-muted-foreground">Testing sign-in is awaiting the project’s publishable key.</p>}
           </div>
 
           <div className="flex flex-col items-stretch gap-2 mt-4 w-full">
-            <Button className="w-full h-11 rounded-xl" onClick={() => open({ mode: 'signin' })}>
+            <Button className="w-full h-11 rounded-xl" disabled={isWalletSandbox && !walletRiftKey} onClick={() => open({ mode: 'signin' })}>
               Sign in
             </Button>
-            <Button variant="outline" className="w-full h-11 rounded-xl" onClick={() => open({ mode: 'signup' })}>
+            <Button variant="outline" className="w-full h-11 rounded-xl" disabled={isWalletSandbox && !walletRiftKey} onClick={() => open({ mode: 'signup' })}>
               Create account
             </Button>
           </div>

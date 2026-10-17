@@ -57,11 +57,11 @@ export default function TermsPage() {
           </Section>
 
           <Section title="4. Nature of the Protocol">
-            <p>The BlockFinaX protocol is non-custodial and decentralised. This means:</p>
+            <p>BlockFinaX is an application that interacts with upgradeable on-chain contracts and off-chain services. Custody, settlement paths and transaction requirements depend on the specific wallet, chain and contract used:</p>
             <ul>
-              <li><strong>You control your funds.</strong> All assets are held in audited smart contracts on-chain, not by BlockFinaX.</li>
-              <li><strong>Smart contracts are immutable once deployed.</strong> Transactions are final and cannot be reversed by BlockFinaX or any third party.</li>
-              <li><strong>The protocol streams reference prices from external oracles.</strong> No physical delivery of any underlying asset (currency, commodity, or cryptocurrency) ever occurs. All settlements are cash-settled in USDC.</li>
+              <li><strong>Understand custody for each transaction.</strong> Where a transaction uses an on-chain contract, control and settlement depend on the connected wallet and the specific deployed contract. Upgradeability, contract code, oracle, liquidity and network risks may apply. Check the current contract address and status before transacting.</li>
+              <li><strong>Contracts may be upgradeable.</strong> Confirmed transactions are generally irreversible, but protocol code and controls may be changed by the on-chain upgrade authority.</li>
+              <li><strong>Settlement depends on oracle inputs and an on-chain transaction.</strong> No physical delivery of an underlying asset occurs. The settlement token depends on the chain and event configuration.</li>
               <li><strong>The protocol is peer-to-peer.</strong> Hedgers and liquidity providers transact directly with one another through smart contracts. BlockFinaX does not match orders or act as a market maker.</li>
             </ul>
           </Section>
@@ -69,7 +69,7 @@ export default function TermsPage() {
           <Section title="5. Risk Disclosures">
             <p>Use of the protocol involves significant risks. You acknowledge and accept the following:</p>
             <ul>
-              <li><strong>Smart contract risk.</strong> Despite security audits, smart contracts may contain bugs or vulnerabilities that could result in the partial or total loss of funds.</li>
+              <li><strong>Smart contract risk.</strong> Security reviews have defined scope and do not guarantee safety. The historical review described in the Data Room covered a retired deployment and is not evidence that current deployments were audited. Contracts may contain bugs or vulnerabilities that result in partial or total loss of funds.</li>
               <li><strong>Oracle risk.</strong> Price feeds used for settlement are sourced from third-party providers. Oracle manipulation, latency, or failure could result in incorrect or missed settlements.</li>
               <li><strong>FX and market risk.</strong> The value of reference assets can move dramatically, resulting in the loss of premiums paid or capital deposited.</li>
               <li><strong>Liquidity risk.</strong> Liquidity pools may be insufficient to cover payouts in extreme market conditions.</li>
@@ -83,15 +83,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="7. Fees">
-            <p>The protocol charges the following fees, which are applied automatically by smart contracts:</p>
-            <ul>
-              <li>Event creation fee: $25 on Base</li>
-              <li>Hedger entry fee: 5% of the premium paid</li>
-              <li>Payout fee: 2% deducted at claim</li>
-              <li>Liquidity provider profit fee: 2% deducted at claim</li>
-              <li>Creator loyalty fee: 5% share of all protocol fees on their event</li>
-              <li>Wallet transfer fee: 0.3% (minimum $0.50)</li>
-            </ul>
+            <p>Fees are configured on chain and may vary by network, event and transaction type. The app should show the applicable amount before a transaction is submitted; verify the quoted fee and token in your wallet before signing.</p>
             <p>All fees are non-refundable once a transaction is submitted to the blockchain.</p>
           </Section>
 
