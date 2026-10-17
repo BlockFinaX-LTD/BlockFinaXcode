@@ -257,7 +257,7 @@ export function HedgerHome({ go }: { go: Go }) {
           {!activity.length ? <div className="bx-empty">No activity yet.</div> : activity.map(({ position: p, pair, settlement: s }) => (
             <div key={s.position} className="bx-mini">
               <span className="bx-ic"><Shield aria-hidden="true" /></span>
-              <div className="grow"><div className="t">{s.status === 'claimed' ? 'Payout received' : 'Protected'} {exposureLabel(pair, p.direction).title.toLowerCase()}</div><div className="d">{dateOf(p.createdAt)}</div></div>
+              <div className="grow"><div className="t">{s.status === 'claimed' ? 'Payout received' : 'Bought'} · {exposureLabel(pair, p.direction).title}</div><div className="d">{dateOf(p.createdAt)}</div></div>
               <div className={`num t ${s.status === 'claimed' ? 'up' : ''}`}>{s.status === 'claimed' ? `+$${fmt(s.netPayout)}` : `-$${fmt(Number(p.premium) + Number(p.fee))}`}</div>
             </div>
           ))}
@@ -472,7 +472,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             <div style={{ textAlign: 'center', padding: '12px 0' }}>
               <CheckCircle2 style={{ width: 48, height: 48, color: 'var(--green)' }} />
               <h3 style={{ fontSize: 18, margin: '10px 0 4px' }}>Your exposure is protected</h3>
-              <p className="muted">${fmt(amount, 0)} of {exposureLabel(pair, direction).title.toLowerCase()} risk, until {days ? dateIn(days) : ''}.</p>
+              <p className="muted">${fmt(amount, 0)} of USD {exposureLabel(pair, direction).flow} protected until {days ? dateIn(days) : ''}.</p>
               <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
                 <button className="bx-btn block" onClick={() => go('h-home')}>Go to home</button>
                 <button className="bx-btn ghost block" onClick={() => setMode('build')}>Protect another</button>
@@ -511,7 +511,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             <>
               {directions.length > 1 && (
                 <div className="bx-seg">
-                  {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{name} {d === 'up' ? 'weakens' : 'strengthens'}</button>)}
+                  {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{exposureLabel(pair, d).kind}</button>)}
                 </div>
               )}
               {matching.length > 0 && (
@@ -519,7 +519,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                   <label htmlFor="bx-pool" className="bx-label">Buying from</label>
                   <select id="bx-pool" className="bx-select" value={poolChoice ?? ''} onChange={(ev) => setPoolChoice(ev.target.value || null)}>
                     <option value="">Best price across pools</option>
-                    {matching.map((p) => <option key={poolRef(p)} value={poolRef(p)}>{exposureLabel(p.pair, direction).title} pool · ${fmt(p.liquidity.capacity, 0)} available</option>)}
+                    {matching.map((p) => <option key={poolRef(p)} value={poolRef(p)}>Pool {p.poolId} · ${fmt(p.liquidity.capacity, 0)} available · {startsLabel(p.structures.minStrikeDistanceBps ?? 0)}</option>)}
                   </select>
                 </div>
               )}

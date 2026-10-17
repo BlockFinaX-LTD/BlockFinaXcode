@@ -26,7 +26,7 @@ type Stake = { shares: string; value: string };
 type Withdrawal = { chain: string; requestId: number; poolId: number; shares: string; unlockAt: number; status: string };
 
 const sharePrice = (p: CurrencyPool) => (Number(p.totalShares) > 0 ? Number(p.liquidity.nav) / Number(p.totalShares) : 1);
-const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${ccyName(p.pair)}, both directions` : exposureLabel(p.pair, p.direction).title);
+const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${ccyName(p.pair)}, both directions` : exposureLabel(p.pair, p.direction).cover);
 const shortDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const inDays = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000));
 
@@ -540,7 +540,7 @@ export function CreatePool({ go }: { go: Go }) {
         tenors: tenors.map((t) => ({ tenorDays: t.tenorDays, active: t.active, markupBps: markupOf(t) })),
       });
       await signAndSend(transactions, (m) => setBusy(m));
-      toast({ title: 'Pool created', description: `${exposureLabel(pair, direction).title} pool is live.` });
+      toast({ title: 'Pool created', description: `Your ${exposureLabel(pair, direction).cover} pool is live.` });
       for (const k of ['v2-pools', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
       go('u-pools');
     } catch (e) {
@@ -563,7 +563,7 @@ export function CreatePool({ go }: { go: Go }) {
             <>
               <label className="bx-field"><span>Underwrite</span>
                 <select className="bx-select" value={key} onChange={(e) => setKey(e.target.value)}>
-                  {exposures.map((k) => { const [p, d] = k.split(':') as [string, Direction]; return <option key={k} value={k}>{exposureLabel(p, d).title} ({p})</option>; })}
+                  {exposures.map((k) => { const [p, d] = k.split(':') as [string, Direction]; return <option key={k} value={k}>{exposureLabel(p, d).cover} ({p})</option>; })}
                 </select>
               </label>
               {pair && <div className="sub" style={{ marginTop: -8, marginBottom: 16 }}>You pay out if the {ccyName(pair)} {exposureLabel(pair, direction).verb} past what buyers chose, and earn their premiums otherwise.</div>}
@@ -623,7 +623,7 @@ export function CreatePool({ go }: { go: Go }) {
           )}
           {step === 3 && (
             <div className="bx-sums" style={{ borderTop: 0 }}>
-              <Sum l="Underwrite" v={exposureLabel(pair, direction).title} />
+              <Sum l="Underwrite" v={exposureLabel(pair, direction).cover} />
               <Sum l="Committed liquidity" v={<span className="num">${fmt(amount)}</span>} />
               {tenors.filter((t) => t.active).map((t) => <Sum key={t.tenorDays} l={`${t.tenorDays}-day offer`} v={<span className="num">{t.offerPct}%</span>} />)}
               {cappedOn && <Sum l="Capped Protection" v={`caps ${minCap}% to ${maxCap}%`} />}
@@ -643,7 +643,7 @@ export function CreatePool({ go }: { go: Go }) {
       <aside className="bx-aside">
         <div className="bx-panel">
           <div style={{ fontSize: 16, fontWeight: 600 }}>Pool summary</div>
-          {pair && <div className="bx-who"><Flag pair={pair} /><div><div className="t">{exposureLabel(pair, direction).title}</div><div className="d">{pair}</div></div></div>}
+          {pair && <div className="bx-who"><Flag pair={pair} /><div><div className="t">{exposureLabel(pair, direction).cover}</div><div className="d">{pair}</div></div></div>}
           <div className="bx-sums">
             <Sum l="Liquidity" v={<span className="num">${fmt(amount)}</span>} />
             <Sum l="Funding network" v={chains.data?.chains.find((c) => c.key === (network ?? hub))?.name ?? '-'} />

@@ -24,12 +24,17 @@ export const dateOf = (unixSeconds: number) => new Date(unixSeconds * 1000).toLo
 export const dateIn = (days: number) => new Date(Date.now() + days * 86_400_000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 export const poolRef = (p: CurrencyPool) => `${p.ref.chain}:${p.ref.contract}:${p.ref.id}`;
 
-/** An exposure as the user thinks of it: the currency and the move that hurts them. */
+/**
+ * How a direction is named, by audience.
+ *   Hedgers think in business flows: payables (USD to pay) and receivables (USD to receive).
+ *   Underwriters see the risk their capital backs: depreciation or appreciation cover.
+ * `verb` is for plain explanations ("if the naira weakens past your strike").
+ */
 export function exposureLabel(pair: string, d: Direction | 'both') {
   const name = ccyName(pair);
   return d === 'down'
-    ? { title: `${name} strengthening`, who: 'You earn in USD and convert to ' + quoteCcy(pair), verb: 'strengthens' }
-    : { title: `${name} weakening`, who: 'You pay in USD or hold ' + quoteCcy(pair), verb: 'weakens' };
+    ? { title: `${name} receivables protection`, kind: 'Receivables protection', flow: 'receivables', who: 'For USD you will receive', cover: `${name} appreciation cover`, verb: 'strengthens' }
+    : { title: `${name} payables protection`, kind: 'Payables protection', flow: 'payables', who: 'For USD you have to pay', cover: `${name} depreciation cover`, verb: 'weakens' };
 }
 
 
