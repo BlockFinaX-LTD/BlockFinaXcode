@@ -262,7 +262,21 @@ app.use((req, res, next) => {
   // ── Production environment guard ─────────────────────────────────────────
   // Fail loudly at startup if critical secrets are missing — better to crash
   // immediately than to silently serve a broken app to real users.
-  if (process.env.NODE_ENV === "production") {
+  // The testnet deployment (APP_ENV=testnet, testnet branch) has its own guard: it must
+  // never point at mainnet, and it runs without production keys or login providers.
+  const isTestnetDeployment = process.env.APP_ENV === "testnet";
+  if (process.env.NODE_ENV === "production" && isTestnetDeployment) {
+    const missing = ["DATABASE_URL", "ADMIN_PASSWORD"].filter(k => !process.env[k]);
+    if (missing.length > 0) {
+      console.error(`[Startup] FATAL: testnet is missing required environment variables: ${missing.join(", ")}`);
+      process.exit(1);
+    }
+    if (process.env.NETWORK_MODE !== "testnet" || process.env.BLOCKFINAX_ENV !== "testnet") {
+      console.error("[Startup] FATAL: a testnet deployment needs NETWORK_MODE=testnet and BLOCKFINAX_ENV=testnet.");
+      process.exit(1);
+      return;
+    }
+  } else if (process.env.NODE_ENV === "production") {
     const required = [
       "DATABASE_URL",
       "ADMIN_PASSWORD",
