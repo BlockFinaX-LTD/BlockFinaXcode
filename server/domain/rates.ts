@@ -1,7 +1,7 @@
 /**
  * The rates watchlist: currencies BlockFinaX users trade in, against USD, plus the euro
  * and pound crosses most used for African trade. Every pair here has a live rate from
- * the shared FX source; the change is against the last stored daily close.
+ * the shared FX source; the change is the last day's move between stored daily closes.
  */
 export const WATCHLIST = [
   "USD/NGN", "USD/GHS", "USD/KES", "USD/ZAR", "USD/EGP", "USD/XOF", "USD/XAF", "USD/MAD",
@@ -12,7 +12,7 @@ export const WATCHLIST = [
 export interface RateRow {
   pair: string;
   spot: number | null;
-  /** Fraction since the last stored daily close, or null without history. */
+  /** The last day's move (latest close vs the one before), or null without history. */
   change: number | null;
 }
 
@@ -23,7 +23,10 @@ export async function watchlistRates(spot: (pair: string) => Promise<string>): P
       spot(pair).then(Number).catch(() => null),
       getRecentCloses(pair, 2).catch(() => [] as any[]),
     ]);
-    const prev = closes.length ? Number(closes[closes.length - 1].close) : null;
-    return { pair, spot: s, change: s && prev ? s / prev - 1 : null };
+    // Change compares two daily closes from the same source. Comparing the live rate
+    // (one provider) with a close (another) shows the providers' gap, not a move.
+    const last = closes.length >= 2 ? Number(closes[closes.length - 1].close) : null;
+    const before = closes.length >= 2 ? Number(closes[closes.length - 2].close) : null;
+    return { pair, spot: s, change: last && before ? last / before - 1 : null };
   }));
 }
