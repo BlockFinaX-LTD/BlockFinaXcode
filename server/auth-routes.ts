@@ -109,7 +109,7 @@ export async function createSession(userId: number, walletAddress?: string) {
   return sessionToken;
 }
 
-async function findOrCreateUser(email?: string, googleId?: string, name?: string, avatarUrl?: string) {
+export async function findOrCreateUser(email?: string, googleId?: string, name?: string, avatarUrl?: string) {
   if (email) {
     const [existing] = await db.select().from(userAccounts).where(eq(userAccounts.email, email));
     if (existing) {

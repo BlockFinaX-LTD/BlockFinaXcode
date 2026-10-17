@@ -1,15 +1,19 @@
 /**
  * The BlockFinaX passkey wallet on the main backend (testnet, WALLET_PROVIDER=passkey).
  *
- * One passkey is the user's login and the owner of their smart accounts:
+ * Sign in with an email code or Google; then one passkey owns the user's smart accounts
+ * and approves every transaction. Returning users may also sign in with the passkey.
  *   - Stellar: a Passkey Kit smart account, deployed at signup by the fee payer
  *   - EVM (Base Sepolia): a Coinbase Smart Wallet, counterfactual until its first
  *     transaction, which the BlockFinaX relayer submits and pays for
  *
  * Routes
  *   GET  /api/wallet/passkey/config
- *   POST /api/wallet/passkey/signup/options   { name? }
- *   POST /api/wallet/passkey/signup/verify    { flow, response }
+ *   POST /api/wallet/auth/email/start         { email }
+ *   POST /api/wallet/auth/email/verify        { email, requestId, code }
+ *   (Google uses /api/auth/google/start, then /auth/google/done in the app)
+ *   POST /api/wallet/passkey/register/options  (Bearer session)
+ *   POST /api/wallet/passkey/register/verify   { flow, response } (Bearer session)
  *   POST /api/wallet/passkey/signin/options
  *   POST /api/wallet/passkey/signin/verify    { flow, response }
  *   GET  /api/wallet/passkey/me                (Bearer session)
@@ -27,7 +31,8 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { userAccounts } from "@shared/auth-core-schema";
 import { walletPasskeys, type WalletPasskey } from "@shared/chain-wallet-schema";
-import { createSession, getAppOrigin, getRpId, getSession } from "../auth-routes";
+import { createSession, findOrCreateUser, getAppOrigin, getRpId, getSession } from "../auth-routes";
+import { EmailOtp, sendCode } from "./email-otp";
 import { chainRegistry } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
 import type { ChainConfig } from "@shared/chains/registry";
@@ -86,11 +91,19 @@ async function requireUser(req: Request) {
   return session.userId;
 }
 
-async function passkeyFor(userId: number): Promise<WalletPasskey> {
+async function findPasskey(userId: number): Promise<WalletPasskey | null> {
   const [row] = await db.select().from(walletPasskeys).where(eq(walletPasskeys.userId, userId)).limit(1);
-  if (!row) throw httpError(404, "No passkey wallet for this account");
+  return row ?? null;
+}
+
+async function passkeyFor(userId: number): Promise<WalletPasskey> {
+  const row = await findPasskey(userId);
+  if (!row) throw httpError(404, "Create your wallet passkey first");
   return row;
 }
+
+const otp = new EmailOtp(randomBytes(32).toString("hex"));
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Make sure the user has an account on every signup chain. Safe to call repeatedly. */
 async function provision(userId: number, passkey: WalletPasskey) {
@@ -141,23 +154,53 @@ export function registerPasskeyWalletRoutes(app: Express) {
   });
   if (!passkeyWalletEnabled()) return;
 
-  app.post("/api/wallet/passkey/signup/options", wrap(async (req, res) => {
-    const name = typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 80) : "";
-    const userHandle = randomBytes(16).toString("base64url");
+  app.post("/api/wallet/auth/email/start", wrap(async (req, res) => {
+    const email = String(req.body?.email ?? "").trim().toLowerCase();
+    if (!EMAIL.test(email) || email.length > 254) throw httpError(400, "Enter a valid email address");
+    const { requestId, code } = otp.issue(email);
+    try {
+      await sendCode(email, code, requestId);
+    } catch (err) {
+      otp.cancel(email);
+      throw err;
+    }
+    res.json({ requestId });
+  }));
+
+  app.post("/api/wallet/auth/email/verify", wrap(async (req, res) => {
+    const email = String(req.body?.email ?? "").trim().toLowerCase();
+    try {
+      otp.verify(email, String(req.body?.requestId ?? ""), String(req.body?.code ?? "").trim());
+    } catch (err) {
+      throw httpError(400, (err as Error).message);
+    }
+    const user = await findOrCreateUser(email);
+    const sessionToken = await createSession(user.id);
+    res.json({ sessionToken });
+  }));
+
+  /** Create the wallet passkey for a signed-in user, then their smart accounts. */
+  app.post("/api/wallet/passkey/register/options", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    if (await findPasskey(userId)) throw httpError(409, "Your wallet passkey already exists. Approve transactions with it.");
+    const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, userId));
     const options = await generateRegistrationOptions({
       rpName: "BlockFinaX",
       rpID: getRpId(req),
-      userName: name || "BlockFinaX testnet",
-      userID: toBytes(userHandle),
+      userName: user?.email || user?.name || `BlockFinaX user ${userId}`,
+      userID: new TextEncoder().encode(`bfx-${userId}`),
       attestationType: "none",
       supportedAlgorithmIDs: [-7],
       authenticatorSelection: { residentKey: "required", userVerification: "required" },
     });
-    res.json({ flow: putChallenge({ challenge: options.challenge, name, userHandle }), options });
+    res.json({ flow: putChallenge({ challenge: options.challenge, userHandle: String(userId) }), options });
   }));
 
-  app.post("/api/wallet/passkey/signup/verify", wrap(async (req, res) => {
+  app.post("/api/wallet/passkey/register/verify", wrap(async (req, res) => {
+    const userId = await requireUser(req);
     const pending = takeChallenge(req.body?.flow);
+    if (pending.userHandle !== String(userId)) throw httpError(400, "This passkey request belongs to another session");
+    if (await findPasskey(userId)) throw httpError(409, "Your wallet passkey already exists");
     const verified = await verifyRegistrationResponse({
       response: req.body?.response,
       expectedChallenge: pending.challenge,
@@ -172,10 +215,8 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const x = key.get(-2) as Uint8Array;
     const y = key.get(-3) as Uint8Array;
     if (x?.length !== 32 || y?.length !== 32) throw httpError(400, "Invalid passkey public key");
-
-    const [user] = await db.insert(userAccounts).values({ name: pending.name || null }).returning();
     const [passkey] = await db.insert(walletPasskeys).values({
-      userId: user.id,
+      userId,
       credentialId: credential.id,
       publicKey: Buffer.from(credential.publicKey).toString("base64"),
       x: ethers.hexlify(x),
@@ -183,9 +224,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       counter: credential.counter,
       transports: JSON.stringify(credential.transports ?? []),
     }).returning();
-    const sessionToken = await createSession(user.id);
-    const provisioned = await provision(user.id, passkey);
-    res.json({ sessionToken, user: { id: user.id, name: user.name }, credentialId: passkey.credentialId, ...provisioned });
+    res.json({ credentialId: passkey.credentialId, ...(await provision(userId, passkey)) });
   }));
 
   app.post("/api/wallet/passkey/signin/options", wrap(async (req, res) => {
@@ -216,11 +255,10 @@ export function registerPasskeyWalletRoutes(app: Express) {
 
   app.get("/api/wallet/passkey/me", wrap(async (req, res) => {
     const userId = await requireUser(req);
-    const passkey = await passkeyFor(userId);
+    const passkey = await findPasskey(userId);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, userId));
-    const { registry } = chains();
-    const accounts = await new AccountService(registry, await drizzleAccountRepository(registry)).accounts(userId);
-    res.json({ user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey.credentialId, accounts });
+    const accounts = passkey ? (await provision(userId, passkey)).accounts : [];
+    res.json({ user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey?.credentialId ?? null, accounts });
   }));
 
   app.post("/api/wallet/evm/prepare", wrap(async (req, res) => {

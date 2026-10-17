@@ -212,6 +212,7 @@ function Router() {
       {/* Auth — open to anyone. Rift widget renders unconditionally so new
           users can sign up without an invitation. */}
       <Route path="/auth" component={Auth} />
+      <Route path="/auth/google/done" component={Auth} />
 
       {/* Docs — gated by per-request magic-link token */}
       <Route path="/docs/technical" component={TechnicalDocs} />

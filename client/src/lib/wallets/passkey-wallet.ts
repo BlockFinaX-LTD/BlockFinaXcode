@@ -1,7 +1,8 @@
 /**
  * The BlockFinaX passkey wallet in the browser (testnet, VITE_WALLET_PROVIDER=passkey).
  *
- * One passkey signs the user in and approves transactions on every chain:
+ * Users sign in with an email code or Google. Their passkey then owns their smart
+ * accounts and approves transactions on every chain (it can also sign them back in):
  *   - Base Sepolia: the server prepares a UserOperation for the user's Coinbase Smart
  *     Wallet; the passkey signs its hash; the BlockFinaX relayer submits and pays gas.
  *   - Stellar: the passkey signs the smart account's authorization entries (Passkey Kit);
@@ -26,7 +27,7 @@ export interface PasskeyAccount {
 export interface PasskeySession {
   sessionToken: string;
   user: { id: number; name: string | null; email?: string | null };
-  credentialId: string;
+  credentialId: string | null;
   accounts: PasskeyAccount[];
 }
 
@@ -66,13 +67,42 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
 let configPromise: Promise<WalletConfig> | null = null;
 export const walletConfig = () => (configPromise ??= api<WalletConfig>("/api/wallet/passkey/config"));
 
-/** Create a passkey, the BlockFinaX account it signs in to, and the user's smart accounts. */
-export async function signUpWithPasskey(name?: string): Promise<PasskeySession> {
-  const { flow, options } = await api<{ flow: string; options: any }>("/api/wallet/passkey/signup/options", { name });
+/** Step 1 of email sign-in: send a six-digit code. */
+export async function startEmailSignIn(email: string): Promise<string> {
+  const { requestId } = await api<{ requestId: string }>("/api/wallet/auth/email/start", { email });
+  return requestId;
+}
+
+/** Step 2 of email sign-in: check the code and start a session. */
+export async function finishEmailSignIn(email: string, requestId: string, code: string): Promise<PasskeySession | null> {
+  const { sessionToken } = await api<{ sessionToken: string }>("/api/wallet/auth/email/verify", { email, requestId, code });
+  storeSessionToken(sessionToken);
+  return currentPasskeySession();
+}
+
+/** Google sign-in starts on the server and returns to /auth/google/done#token=... */
+export function startGoogleSignIn() {
+  window.location.assign("/api/auth/google/start");
+}
+
+/** Read the session token Google sign-in left in the URL fragment, then clear it. */
+export function acceptGoogleRedirect(): boolean {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("token");
+  if (!token) return false;
+  storeSessionToken(token);
+  history.replaceState(null, "", "/auth");
+  return true;
+}
+
+/** Create the wallet passkey for the signed-in user; this creates their smart accounts. */
+export async function createWalletPasskey(): Promise<PasskeySession & { errors?: string[] }> {
+  const { flow, options } = await api<{ flow: string; options: any }>("/api/wallet/passkey/register/options", {});
   const response = await startRegistration({ optionsJSON: options });
-  const session = await api<PasskeySession>("/api/wallet/passkey/signup/verify", { flow, response });
-  storeSessionToken(session.sessionToken);
-  return session;
+  const created = await api<{ errors?: string[] }>("/api/wallet/passkey/register/verify", { flow, response });
+  const session = await currentPasskeySession();
+  if (!session) throw new Error("Your session ended. Sign in again.");
+  return { ...session, errors: created.errors };
 }
 
 /** Sign in with an existing passkey (the browser offers the user's saved passkeys). */
@@ -165,7 +195,7 @@ export class PasskeyWalletProvider implements WalletProvider {
     }
     const session = await currentPasskeySession();
     const account = session?.accounts.find((a) => a.chain === request.networkKey);
-    if (!session || !account) throw new Error("No Stellar account for this wallet");
+    if (!session?.credentialId || !account) throw new Error("No Stellar account for this wallet");
     onStep?.("Approve with your passkey...");
     const signedXdr = await signStellarAuth(request.transactionXdr, session.credentialId, account.address);
     onStep?.("Submitting transaction...");

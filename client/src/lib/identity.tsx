@@ -39,6 +39,8 @@ export interface Identity {
 }
 
 interface PasskeyIdentity extends Identity {
+  /** Signed in (email, Google or passkey), whether or not the wallet passkey exists yet. */
+  signedIn: boolean;
   session: PasskeySession | null;
   setSession: (session: PasskeySession | null) => void;
   ready: boolean;
@@ -74,7 +76,9 @@ function PasskeyIdentityProvider({ children }: { children: ReactNode }) {
     session,
     setSession,
     ready,
-    isAuthenticated: Boolean(session),
+    signedIn: Boolean(session),
+    // The app opens once the wallet exists: signed in and holding a passkey account.
+    isAuthenticated: Boolean(session?.credentialId && session.accounts.length > 0),
     error,
     user: session
       ? {
