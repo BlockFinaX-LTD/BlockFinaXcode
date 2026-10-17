@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/api-client";
 import { hedgeContract, type HedgeFeeConfig, USDC_ADDRESS, USDT_ADDRESS_SEPOLIA } from "@/lib/hedge-contract";
 import { getAuthMethod, sendCrypto, sendOtp, getCachedUserSummary } from "@/lib/rift-client";
-import { useRift } from "@rift-finance/react";
+import { useIdentity as useRift } from '@/lib/identity';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

@@ -92,6 +92,9 @@ async function fetchRiftUser(accessToken: string): Promise<RiftAuthenticatedUser
  * Exported so non-middleware callers (admin login, etc.) can reuse it.
  */
 export async function verifyRiftAccessToken(accessToken: string): Promise<RiftAuthenticatedUser | null> {
+  // Testnet passkey wallet: the bearer token is a BlockFinaX session, and the user's
+  // address is their passkey smart account on the EVM network. Rift is not consulted.
+  if (process.env.WALLET_PROVIDER === "passkey") return passkeySessionUser(accessToken);
   const now = Date.now();
   const cached = cache.get(accessToken);
   if (cached && cached.expiresAt > now) return cached.user;
@@ -126,3 +129,25 @@ setInterval(() => {
   const now = Date.now();
   Array.from(cache.entries()).forEach(([k, v]) => { if (v.expiresAt < now) cache.delete(k); });
 }, 60_000).unref?.();
+
+async function passkeySessionUser(sessionToken: string): Promise<RiftAuthenticatedUser | null> {
+  const { getSession } = await import("../auth-routes");
+  const session = await getSession({ headers: { authorization: `Bearer ${sessionToken}` } });
+  if (!session?.userId) return null;
+  const { db } = await import("../db");
+  const { chainWalletAccounts } = await import("@shared/chain-wallet-schema");
+  const { userAccounts } = await import("@shared/auth-core-schema");
+  const { and, eq } = await import("drizzle-orm");
+  const [account] = await db.select().from(chainWalletAccounts)
+    .where(and(eq(chainWalletAccounts.userId, session.userId), eq(chainWalletAccounts.chainNamespace, "eip155"), eq(chainWalletAccounts.status, "active")))
+    .limit(1);
+  if (!account) return null;
+  const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, session.userId));
+  return {
+    address: account.address.toLowerCase(),
+    email: user?.email ?? null,
+    phoneNumber: null,
+    externalId: null,
+    user: `bfx-${session.userId}`,
+  };
+}

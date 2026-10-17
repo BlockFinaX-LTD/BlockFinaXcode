@@ -43,6 +43,12 @@ Providers today:
 | Rift | `client/src/lib/wallets/rift-provider.ts` | Base, BSC, Base Sepolia | Rift smart account (v3 signer, then auth request, then signer send) |
 | Stellar passkey | `client/src/lib/wallets/stellar-passkey-provider.ts` | Stellar | Passkey signs the Soroban authorization; the backend relay pays the fee |
 
+| BlockFinaX passkey (testnet) | `client/src/lib/wallets/passkey-wallet.ts`, `server/wallet/*` | Stellar testnet and Base Sepolia | One P-256 passkey owns a Passkey Kit smart account on Stellar and a Coinbase Smart Wallet on Base Sepolia. The passkey also signs the user in. BlockFinaX pays fees on both chains: the Stellar fee payer, and on EVM its own ERC-4337 bundler submitting zero-gas-price UserOperations to EntryPoint v0.6 |
+
+The testnet deployment selects the passkey wallet with `WALLET_PROVIDER=passkey` (server) and `VITE_WALLET_PROVIDER=passkey` (build). Screens read the signed-in user through `client/src/lib/identity.tsx`, which passes Rift through unchanged on production. On testnet the server accepts a BlockFinaX session wherever it accepts a Rift token, resolving the user's address to their EVM smart account.
+
+The EVM relayer sponsors only approved calls: approve and transfer on the chain's listed tokens, and any call to the chain's BlockFinaX contracts. ETH value is refused, each prepared operation is single use, expires after five minutes and belongs to one user, and each user has a daily cap (`EVM_RELAYER_DAILY_OPS`, default 50).
+
 A partner's own wallet or custody is a third kind: it skips Wallet Providers and signs the `PreparedTransaction` payloads itself.
 
 ## 3. Wallet Session

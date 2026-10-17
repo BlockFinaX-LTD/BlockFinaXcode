@@ -9,6 +9,7 @@
 | Liquidity hub | Stellar testnet | Base |
 | Database | Its own testnet Postgres | Production Postgres |
 | Keys | Testnet-only keys, never shared with production | Production keys |
+| Wallet | BlockFinaX passkey wallet (Stellar and Base Sepolia) | Rift |
 
 ## How a change reaches production
 
@@ -24,7 +25,9 @@ Step 4. When the checks are green, merge it. Railway deploys `main` to productio
 
 ## Testnet settings
 
-Set on the `blockfinax-testnet` service in Railway: `APP_ENV=testnet`, `NETWORK_MODE=testnet`, `VITE_NETWORK_MODE=testnet`, `BLOCKFINAX_ENV=testnet`, `DATABASE_URL`, `ADMIN_PASSWORD`, `PUBLIC_APP_URL`, `STELLAR_FEE_PAYER_SECRET`, `POOL_PRICING_SECRET`.
+Set on the `blockfinax-testnet` service in Railway: `APP_ENV=testnet`, `NETWORK_MODE=testnet`, `VITE_NETWORK_MODE=testnet`, `BLOCKFINAX_ENV=testnet`, `DATABASE_URL`, `ADMIN_PASSWORD`, `PUBLIC_APP_URL`, `STELLAR_FEE_PAYER_SECRET`, `POOL_PRICING_SECRET`, `WALLET_PROVIDER=passkey`, `VITE_WALLET_PROVIDER=passkey`, `EVM_RELAYER_PRIVATE_KEY`.
+
+Testnet uses the BlockFinaX passkey wallet instead of Rift: one passkey signs in and controls a Stellar smart account and a Base Sepolia smart account. The Base Sepolia relayer (`0x54733B449882558214641D7a00fbF9C546bbF60B`) pays gas for users' transactions and needs Base Sepolia ETH from a faucet.
 
 The server refuses to start in testnet mode unless both network settings say `testnet`, so a testnet deployment can never point at mainnet. Database tables are created on each testnet deploy; production skips that step.
 

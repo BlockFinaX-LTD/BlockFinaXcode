@@ -366,8 +366,8 @@ class HedgeContractManager {
   ): Promise<string> {
     // Rift's signing path (device signing, else a one-time credential) lives in the
     // Rift wallet provider, the canonical WalletProvider for EVM (Architecture v2.0).
-    const { riftWalletProvider } = await import('./wallets/rift-provider');
-    const result = await riftWalletProvider.sendTransaction(
+    const { activeEvmWalletProvider } = await import('./identity');
+    const result = await (await activeEvmWalletProvider()).sendTransaction(
       { kind: 'evm_transaction', chainId: this._chainId, to, data: calldata, value: value.toString() },
       onStep,
     );

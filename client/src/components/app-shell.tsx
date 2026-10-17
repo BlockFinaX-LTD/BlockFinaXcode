@@ -16,7 +16,7 @@ import { isWalletSandbox } from "@/lib/wallet-environment";
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Shield, TrendingUp, Search, Bell, Moon, Sun, User } from 'lucide-react';
 // Same brand mark as the landing-page nav (served from /public).

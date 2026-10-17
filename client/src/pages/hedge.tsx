@@ -14,7 +14,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import { AppShell } from '@/components/app-shell';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';

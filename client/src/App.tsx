@@ -14,7 +14,9 @@ import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { RiftProvider, RiftAuth, useRift } from "@rift-finance/react";
+import { RiftAuth } from "@rift-finance/react";
+import { IdentityProvider, useIdentity as useRift, usesPasskeyWallet } from "@/lib/identity";
+import { storedSessionToken } from "@/lib/wallets/passkey-wallet";
 import { RiftTokenBridge } from "@/lib/rift-token-bridge";
 import { getMe, setCachedUserSummary, clearLocalRiftState } from "@/lib/rift-client";
 import { TxAuthDialog } from "@/components/wallet/tx-auth-dialog";
@@ -103,6 +105,7 @@ const PROTECTED_ROUTES = ['/home', '/hedge', '/tasks', '/profile', '/settings', 
 // to /auth on every cold reload.
 function hasStoredRiftSession(): boolean {
   if (typeof window === 'undefined') return false;
+  if (usesPasskeyWallet) return !!storedSessionToken();
   try { return !!window.localStorage.getItem('rift:identity'); } catch { return false; }
 }
 
@@ -294,13 +297,13 @@ function App() {
     // `persist` keeps the session in storage across reloads so signed-in users
     // don't get bounced back to /auth on refresh. Combined with the isReady
     // gate in AuthGuard, the redirect only fires after rehydration completes.
-    <RiftProvider apiKey={RIFT_API_KEY} widgetUrl={RIFT_WIDGET_URL} persist>
+    <IdentityProvider apiKey={RIFT_API_KEY} widgetUrl={RIFT_WIDGET_URL}>
       <RiftTokenBridge />
-      <RiftPostSigninSync />
+      {!usesPasskeyWallet && <RiftPostSigninSync />}
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <RiftAuthMount />
+          {!usesPasskeyWallet && <RiftAuthMount />}
           <AuthGuard />
           <TxAuthDialog />
           <V3SignDialog />
@@ -309,7 +312,7 @@ function App() {
           <FinaxMount />
         </TooltipProvider>
       </QueryClientProvider>
-    </RiftProvider>
+    </IdentityProvider>
   );
 }
 

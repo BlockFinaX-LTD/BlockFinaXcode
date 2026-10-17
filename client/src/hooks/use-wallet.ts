@@ -8,7 +8,7 @@ import { isWalletSandbox, walletDefaultChainId } from "@/lib/wallet-environment"
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import {
   getMe as riftGetMe,
   clearLocalRiftState,

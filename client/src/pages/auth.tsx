@@ -15,13 +15,18 @@ import { isWalletSandbox, walletRiftKey } from "@/lib/wallet-environment";
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift, usesPasskeyWallet } from '@/lib/identity';
+import { PasskeyAuth } from '@/components/wallet/passkey-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Gift } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
 export default function Auth() {
+  return usesPasskeyWallet ? <PasskeyAuth /> : <RiftAuthPage />;
+}
+
+function RiftAuthPage() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, open, error } = useRift();
   const [refCode, setRefCode] = useState('');

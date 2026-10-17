@@ -102,7 +102,7 @@ export async function getSession(req: any) {
   return session || null;
 }
 
-async function createSession(userId: number, walletAddress?: string) {
+export async function createSession(userId: number, walletAddress?: string) {
   const sessionToken = generateToken(48);
   const expiresAt = sessionExpiry();
   await db.insert(authSessions).values({ sessionToken, userId, walletAddress: walletAddress || null, expiresAt });
@@ -156,7 +156,7 @@ setInterval(() => {
   for (const [k, exp] of oauthStateStore) if (exp < now) oauthStateStore.delete(k);
 }, 10 * 60 * 1000);
 
-function getAppOrigin(req: any): string {
+export function getAppOrigin(req: any): string {
   const configured = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').trim();
   if (configured) {
     const url = new URL(configured);
@@ -176,7 +176,7 @@ function getAppOrigin(req: any): string {
   return `${proto}://${req.get('host')}`;
 }
 
-function getRpId(req: any): string {
+export function getRpId(req: any): string {
   try {
     return new URL(getAppOrigin(req)).hostname;
   } catch {

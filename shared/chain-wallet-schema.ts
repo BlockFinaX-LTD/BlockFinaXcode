@@ -131,3 +131,33 @@ export type ChainWalletAccount = typeof chainWalletAccounts.$inferSelect;
 export type NewChainWalletAccount = z.infer<typeof insertChainWalletAccountSchema>;
 export type ChainTransaction = typeof chainTransactions.$inferSelect;
 export type NewChainTransaction = z.infer<typeof insertChainTransactionSchema>;
+
+/**
+ * Passkeys that control a user's BlockFinaX smart accounts (testnet wallet).
+ * Holds the public key only; the private key never leaves the user's device.
+ * One P-256 passkey owns a Stellar smart account and a Base smart account.
+ */
+export const walletPasskeys = pgTable(
+  "wallet_passkeys",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userAccounts.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull(),
+    /** COSE public key, base64. */
+    publicKey: text("public_key").notNull(),
+    /** Uncompressed P-256 point coordinates, 0x-prefixed hex (32 bytes each). */
+    x: text("x").notNull(),
+    y: text("y").notNull(),
+    counter: integer("counter").notNull().default(0),
+    transports: text("transports").notNull().default("[]"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    credentialUnique: uniqueIndex("wallet_passkeys_credential_uq").on(table.credentialId),
+    userIndex: index("wallet_passkeys_user_idx").on(table.userId),
+  }),
+);
+
+export type WalletPasskey = typeof walletPasskeys.$inferSelect;
