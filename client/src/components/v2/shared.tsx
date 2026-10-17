@@ -5,10 +5,8 @@
  * chain details behind "Advanced details". Everything is USDC and network fees are
  * sponsored.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { FlagSvg } from '@/components/app-glyphs';
 import type { CurrencyPool } from '@shared/domain/types';
 import { api, passkeyBalances, passkeyWalletProvider } from '@/lib/wallets/passkey-wallet';
 import { toWalletRequest, type PreparedTransaction } from '@/lib/wallet-provider';
@@ -34,59 +32,10 @@ export function exposureLabel(pair: string, d: Direction | 'both') {
     : { title: `${name} weakening`, who: 'You pay in USD or hold ' + quoteCcy(pair), verb: 'weakens' };
 }
 
-export function Flag({ pair }: { pair: string }) {
-  return <span className="mkt-fl"><FlagSvg code={quoteCcy(pair)} /></span>;
-}
 
-export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
-  return (
-    <div className="pool-stat">
-      <div className="l">{label}</div>
-      <div className="v tnum">{value}</div>
-      {sub ? <div className="l" style={{ marginTop: 2 }}>{sub}</div> : null}
-    </div>
-  );
-}
 
-/** A horizontal bar split into labelled parts, for simple risk visuals. */
-export function SplitBar({ parts }: { parts: { label: string; value: number; color: string }[] }) {
-  const total = parts.reduce((s, p) => s + p.value, 0) || 1;
-  return (
-    <div>
-      <div style={{ display: 'flex', height: 10, borderRadius: 6, overflow: 'hidden', background: 'var(--bg-3, #eee)' }}>
-        {parts.map((p) => <div key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
-      </div>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6, fontSize: 12, color: 'var(--tx-3)' }}>
-        {parts.map((p) => (
-          <span key={p.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <i style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: 'inline-block' }} />{p.label}: {fmt(p.value)}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-export function Advanced({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ marginTop: 10 }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 0, padding: 0, color: 'var(--tx-3)', fontSize: 12, cursor: 'pointer' }}>
-        {open ? <ChevronUp style={{ width: 14 }} /> : <ChevronDown style={{ width: 14 }} />} Advanced details
-      </button>
-      {open && <div className="brk" style={{ marginTop: 6 }}>{children}</div>}
-    </div>
-  );
-}
 
-export function Line({ l, v, total, good }: { l: ReactNode; v: ReactNode; total?: boolean; good?: boolean }) {
-  return (
-    <div className={`brk-line${total ? ' total' : ''}`}>
-      <span className="l">{l}</span>
-      <span className="v" style={good ? { color: 'var(--green)' } : undefined}>{v}</span>
-    </div>
-  );
-}
 
 /** Sign and submit prepared transactions with the passkey wallet, in order. */
 export async function signAndSend(transactions: PreparedTransaction[], onStep: (m: string) => void) {

@@ -1,10 +1,11 @@
 /**
- * Hedger pages: Dashboard, Create Protection (three steps) and My Protections.
- * "What do you want to protect?" BlockFinaX picks the pool and network.
+ * Hedger pages: Home, Protect (currency page with a docked Protect panel), My
+ * protections and Rates. BlockFinaX picks the pool and network; the chain stays out
+ * of sight except under Advanced details.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CalendarDays, CheckCircle2, FileText, ShieldCheck, Wallet } from 'lucide-react';
+import { CheckCircle2, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -13,7 +14,7 @@ import {
   ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pct, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, type Direction,
 } from './shared';
-import { Card, Ccy, Loading, Row, Spin, StatCard, Steps, Tag } from './ui';
+import { Flag, Loading, Spin, Sum, Tag } from './ui';
 import type { Go } from './workspace';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
@@ -26,182 +27,225 @@ function useHedges() {
   });
 }
 
-function useSpots(pairs: string[]) {
-  const qs = useQueries({
-    queries: pairs.map((pair) => ({
-      queryKey: ['v2-spot', pair],
-      queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(pair)}`)).spot),
-      refetchInterval: 60_000,
-    })),
+function useSpot(pair: string | null) {
+  return useQuery({
+    queryKey: ['v2-spot', pair],
+    enabled: Boolean(pair),
+    queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(pair!)}`)).spot),
+    refetchInterval: 60_000,
   });
-  return new Map(pairs.map((p, i) => [p, qs[i].data]));
 }
 
-/** What an active protection would pay if it ended at today's rate. */
-function payoutToday(p: ProtectionPosition, spot: number | undefined) {
-  if (!spot) return null;
-  const strike = Number(p.strike), cap = Number(p.cap), notional = Number(p.notional), entry = Number(p.spot);
-  const moved = p.direction === 'up' ? Math.min(spot, cap) - strike : strike - Math.max(spot, cap);
-  return Math.max(0, Math.min(Number(p.maxPayout), (notional * moved) / entry));
+function useHistory(pair: string | null, days: number) {
+  return useQuery({
+    queryKey: ['v2-history', pair, days],
+    enabled: Boolean(pair),
+    queryFn: async () => (await api<{ closes: { date: string; close: number }[] }>(`/api/v2/history?pair=${encodeURIComponent(pair!)}&days=${days}`)).closes,
+    staleTime: 600_000,
+  });
+}
+
+/** Rate and change since the previous daily close, for a list of pairs. */
+function useRates(pairs: string[]) {
+  const spots = useQueries({ queries: pairs.map((p) => ({ queryKey: ['v2-spot', p], queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(p)}`)).spot), refetchInterval: 60_000 })) });
+  const hist = useQueries({ queries: pairs.map((p) => ({ queryKey: ['v2-history', p, 5], queryFn: async () => (await api<{ closes: { date: string; close: number }[] }>(`/api/v2/history?pair=${encodeURIComponent(p)}&days=5`)).closes, staleTime: 600_000 })) });
+  return pairs.map((pair, i) => {
+    const spot = spots[i].data;
+    const closes = hist[i].data ?? [];
+    const prev = closes.length >= 2 ? closes[closes.length - 2].close : closes[0]?.close;
+    const change = spot && prev ? spot / prev - 1 : null;
+    return { pair, spot, change };
+  });
 }
 
 const daysLeft = (expiry: number) => Math.max(0, Math.ceil((expiry - Date.now() / 1000) / 86_400));
 
-// ── Dashboard ────────────────────────────────────────────────────────────────
+function payoutToday(p: ProtectionPosition, spot: number | undefined) {
+  if (!spot) return null;
+  const strike = Number(p.strike), cap = Number(p.cap), entry = Number(p.spot);
+  const moved = p.direction === 'up' ? Math.min(spot, cap) - strike : strike - Math.max(spot, cap);
+  return Math.max(0, Math.min(Number(p.maxPayout), (Number(p.notional) * moved) / entry));
+}
 
-export function HedgerDashboard({ go }: { go: Go }) {
+function ChangeText({ change }: { change: number | null }) {
+  if (change === null) return <span className="muted">-</span>;
+  return <span className={`num ${change >= 0 ? 'up' : 'down'}`} style={{ fontWeight: 600 }}>{change >= 0 ? '+' : ''}{(change * 100).toFixed(2)}%</span>;
+}
+
+// ── Home ─────────────────────────────────────────────────────────────────────
+
+export function HedgerHome({ go }: { go: Go }) {
   const balances = useUsdcBalances();
   const hedges = useHedges();
-  const active = (hedges.data ?? []).filter((h) => h.settlement.status === 'pending');
-  const spots = useSpots(Array.from(new Set(active.map((h) => h.pair))));
+  const pools = usePools();
+  const all = hedges.data ?? [];
+  const active = all.filter((h) => h.settlement.status === 'pending');
+  const pairs = useMemo(() => Array.from(new Set((pools.data ?? []).map((p) => p.pair))), [pools.data]);
+  const rates = useRates(pairs);
+  const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
   const exposure = active.reduce((s, h) => s + Number(h.position.notional), 0);
   const next = active.length ? Math.min(...active.map((h) => h.position.expiry)) : null;
+  const activity = [...all].sort((a, b) => b.position.createdAt - a.position.createdAt).slice(0, 4);
+  const cols = { gridTemplateColumns: 'minmax(0, 2.2fr) repeat(3, minmax(0, 1fr))' };
 
   return (
-    <>
-      <div className="bx-grid bx-stats">
-        <StatCard label="Available balance" value={`$${fmt(balances.data?.total)}`} sub="USDC" icon={<Wallet />} />
-        <StatCard label="Protected exposure" value={`$${fmt(exposure, 0)}`} sub={`${active.length ? 'across ' + new Set(active.map((h) => h.pair)).size + ' currencies' : 'nothing protected yet'}`} icon={<ShieldCheck />} />
-        <StatCard label="Active protections" value={active.length} icon={<FileText />} />
-        <StatCard label="Next expiry" value={next ? `${daysLeft(next)} days` : '-'} sub={next ? dateOf(next) : undefined} icon={<CalendarDays />} tone="a" />
-      </div>
-      <div className="bx-cta"><button className="bx-btn primary big" onClick={() => go('h-protect')}>Protect an Exposure <ArrowRight /></button></div>
-      <Card title="Your active protections" action={<button className="bx-link" onClick={() => go('h-protections')}>View all →</button>}>
-        {hedges.isLoading ? <Loading /> : !active.length ? (
-          <div className="bx-empty">No active protections. Protect an exposure to get started.</div>
-        ) : (
-          <ProtectionTable rows={active} spots={spots} />
-        )}
-      </Card>
-    </>
+    <main className="bx-main">
+      <section className="bx-col">
+        <div className="bx-card">
+          <div className="bx-hero-k">Your balance</div>
+          <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
+          <div className="sub">USDC · network fees covered by BlockFinaX</div>
+          <div className="bx-strip">
+            <div><div className="k">Protected exposure</div><div className="v num">${fmt(exposure, 0)}</div></div>
+            <div><div className="k">Active protections</div><div className="v num">{active.length}</div></div>
+            <div><div className="k">Next expiry</div><div className="v num">{next ? `${daysLeft(next)} days` : '-'}</div>{next && <div className="s">{dateOf(next)}</div>}</div>
+          </div>
+        </div>
+
+        <div className="bx-card">
+          <div className="bx-card-h"><h2>Your protections</h2><button className="bx-link" onClick={() => go('h-protections')}>View all</button></div>
+          {hedges.isLoading ? <Loading /> : !active.length ? (
+            <div className="bx-empty">Nothing protected yet. <button className="bx-link" onClick={() => go('h-protect')}>Protect an exposure</button></div>
+          ) : (
+            <>
+              <div className="bx-list-h" style={cols}><span>Exposure</span><span className="r">Protected</span><span className="r">Expires</span><span className="r">Payout today</span></div>
+              {active.map(({ position: p, pair, settlement: s }) => (
+                <div key={s.position} className="bx-li click" style={cols} onClick={() => go('h-protections')}>
+                  <div className="bx-who">
+                    <Flag pair={pair} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Capped'}</div>
+                      <div className="d">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div>
+                    </div>
+                  </div>
+                  <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
+                  <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{daysLeft(p.expiry)} days</div></div>
+                  <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(payoutToday(p, spotOf(pair)) ?? 0)}</div><div className="up" style={{ fontSize: 12, fontWeight: 600 }}>Active</div></div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </section>
+
+      <aside className="bx-aside">
+        <div className="bx-cta">
+          <h3>Protect an exposure</h3>
+          <p>Lock in today's rate for a payment or receivable. Pay a premium in USDC, and get paid if the rate moves against you.</p>
+          <button onClick={() => go('h-protect')}>Get started</button>
+        </div>
+        <div className="bx-card tight">
+          <div className="bx-card-h"><h2>Rates</h2><span className="muted" style={{ fontSize: 12 }}>1 USD in local currency</span></div>
+          {rates.map((r) => (
+            <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go('h-protect', { pair: r.pair })}>
+              <div className="grow"><div className="t">{r.pair}</div><div className="d">{ccyName(r.pair)}</div></div>
+              <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '...'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
+            </div>
+          ))}
+        </div>
+        <div className="bx-card tight">
+          <h2 style={{ marginBottom: 4 }}>Recent activity</h2>
+          {!activity.length ? <div className="bx-empty">No activity yet.</div> : activity.map(({ position: p, pair, settlement: s }) => (
+            <div key={s.position} className="bx-mini">
+              <span className="bx-ic"><Shield aria-hidden="true" /></span>
+              <div className="grow"><div className="t">{s.status === 'claimed' ? 'Payout received' : 'Protected'} {exposureLabel(pair, p.direction).title.toLowerCase()}</div><div className="d">{dateOf(p.createdAt)}</div></div>
+              <div className={`num t ${s.status === 'claimed' ? 'up' : ''}`}>{s.status === 'claimed' ? `+$${fmt(s.netPayout)}` : `-$${fmt(Number(p.premium) + Number(p.fee))}`}</div>
+            </div>
+          ))}
+        </div>
+      </aside>
+    </main>
   );
 }
 
-function ProtectionTable({ rows, spots, onClaim, busy }: { rows: Hedge[]; spots: Map<string, number | undefined>; onClaim?: (ref: string) => void; busy?: string | null }) {
+// ── Protect ──────────────────────────────────────────────────────────────────
+
+const RANGES = [{ label: '1W', days: 7 }, { label: '1M', days: 30 }, { label: '3M', days: 90 }, { label: '1Y', days: 365 }];
+const AMOUNTS = [500, 1000, 5000, 10000];
+
+function RateChart({ closes, strike, cap }: { closes: { date: string; close: number }[]; strike: number | null; cap: number | null }) {
+  if (closes.length < 2) return <div className="bx-chart"><Loading label="Loading chart..." /></div>;
+  const values = closes.map((c) => c.close);
+  const marks = [strike, cap].filter((v): v is number => v !== null);
+  const lo = Math.min(...values, ...marks), hi = Math.max(...values, ...marks);
+  const span = hi - lo || 1;
+  const y = (v: number) => 228 - ((v - lo) / span) * 216;
+  const x = (i: number) => (i / (values.length - 1)) * 800;
+  const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const rising = values[values.length - 1] >= values[0];
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="bx-table">
-        <thead>
-          <tr><th>Exposure</th><th>Protection</th><th className="num">Amount</th><th>Expiry</th><th>Status</th><th className="num">Est. payout (today)</th>{onClaim && <th />}</tr>
-        </thead>
-        <tbody>
-          {rows.map(({ position: p, pair, settlement: s }) => {
-            const active = s.status === 'pending';
-            const today = active ? payoutToday(p, spots.get(pair)) : Number(s.netPayout);
-            return (
-              <tr key={s.position}>
-                <td><Ccy pair={pair} /></td>
-                <td>{p.direction === 'up' ? 'Above' : 'Below'} {fmtRate(p.strike)}<div className="sub">{p.structure === 'capped' ? `Capped at ${fmtRate(p.cap)}` : 'Open'}</div></td>
-                <td className="num">${fmt(p.notional, 0)}</td>
-                <td>{dateOf(p.expiry)}<div className="sub">{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></td>
-                <td>{active ? <Tag tone="green">Active</Tag> : s.status === 'settled_claimable' ? <Tag tone="blue">Payout ready</Tag> : s.status === 'claimed' ? <Tag tone="grey">Paid</Tag> : <Tag tone="grey">Expired</Tag>}</td>
-                <td className="num">{today === null ? '-' : `$${fmt(today)}`}</td>
-                {onClaim && <td className="num">{s.status === 'settled_claimable' && <button className="bx-btn primary small" disabled={busy === s.position} onClick={() => onClaim(s.position)}>{busy === s.position ? <Spin /> : 'Receive'}</button>}</td>}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="bx-chart">
+      <svg role="img" aria-label={`Rate over the selected period, ${rising ? 'rising' : 'falling'}`} viewBox="0 0 800 240" preserveAspectRatio="none">
+        {[60, 120, 180].map((g) => <line key={g} x1="0" y1={g} x2="800" y2={g} stroke="#eceef2" strokeDasharray="4 6" />)}
+        <path d={`${line} L800 240 L0 240 Z`} fill="#1f5fe0" fillOpacity="0.07" />
+        <path d={line} fill="none" stroke="#1f5fe0" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {strike !== null && <line x1="0" y1={y(strike)} x2="800" y2={y(strike)} stroke="#e0a03a" strokeWidth="1.5" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
+        {cap !== null && <line x1="0" y1={y(cap)} x2="800" y2={y(cap)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {strike !== null && <span className="bx-strike-tag" style={{ top: `calc(${(y(strike) / 240) * 100}% - 22px)` }}>Your strike {fmtRate(strike)}</span>}
     </div>
   );
 }
 
-export function MyProtections({ go }: { go: Go }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const hedges = useHedges();
-  const all = hedges.data ?? [];
-  const spots = useSpots(Array.from(new Set(all.map((h) => h.pair))));
-  const [busy, setBusy] = useState<string | null>(null);
-  async function claim(ref: string) {
-    setBusy(ref);
-    try {
-      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/hedges/${encodeURIComponent(ref)}/claim/prepare`, {});
-      await signAndSend(transactions, () => {});
-      toast({ title: 'Payout received', description: 'The USDC is in your account.' });
-      for (const k of ['v2-hedges', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
-    } catch (e) {
-      toast({ title: 'Not received', description: (e as Error).message, variant: 'destructive' });
-    } finally { setBusy(null); }
-  }
-  return (
-    <Card title="All protections" action={<button className="bx-btn primary small" onClick={() => go('h-protect')}>Protect an Exposure</button>}>
-      {hedges.isLoading ? <Loading /> : !all.length ? <div className="bx-empty">You have not bought protection yet.</div> : <ProtectionTable rows={all} spots={spots} onClaim={claim} busy={busy} />}
-    </Card>
-  );
-}
-
-// ── Create Protection ────────────────────────────────────────────────────────
-
-const AMOUNT_CHIPS = [100, 500, 1000, 5000];
-
-export function ProtectFlow({ go }: { go: Go }) {
+export function ProtectPage({ go, pair: initialPair }: { go: Go; pair: string | null }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const pools = usePools();
   const chains = useChains();
   const balances = useUsdcBalances();
-  const [step, setStep] = useState(0);
 
-  const exposures = useMemo(() => {
-    const seen = new Map<string, { pair: string; direction: Direction }>();
-    for (const p of pools.data ?? []) {
-      if (!p.acceptingHedges || Number(p.liquidity.capacity) <= 0) continue;
-      for (const d of (p.direction === 'both' ? ['up', 'down'] : [p.direction]) as Direction[]) seen.set(`${p.pair}:${d}`, { pair: p.pair, direction: d });
-    }
-    return Array.from(seen.values());
-  }, [pools.data]);
-  const [exposureKey, setExposureKey] = useState<string>('');
-  useEffect(() => { if (!exposureKey && exposures[0]) setExposureKey(`${exposures[0].pair}:${exposures[0].direction}`); }, [exposures, exposureKey]);
-  const [pair, direction] = (exposureKey || ':up').split(':') as [string, Direction];
-  const [amount, setAmount] = useState('1000');
-  const [days, setDays] = useState<number | null>(null);
+  const available = useMemo(() => (pools.data ?? []).filter((p) => p.acceptingHedges && Number(p.liquidity.capacity) > 0), [pools.data]);
+  const pairs = useMemo(() => Array.from(new Set(available.map((p) => p.pair))), [available]);
+  const [pair, setPair] = useState<string | null>(initialPair);
+  useEffect(() => { if (initialPair) setPair(initialPair); }, [initialPair]);
+  useEffect(() => { if ((!pair || !pairs.includes(pair)) && pairs[0]) setPair(pairs[0]); }, [pairs, pair]);
+  const directions = useMemo(() => {
+    const ds = new Set(available.filter((p) => p.pair === pair).map((p) => p.direction));
+    return (['up', 'down'] as Direction[]).filter((d) => ds.has(d) || ds.has('both'));
+  }, [available, pair]);
+  const [direction, setDirection] = useState<Direction>('up');
+  useEffect(() => { if (directions.length && !directions.includes(direction)) setDirection(directions[0]); }, [directions, direction]);
+
+  const [range, setRange] = useState(30);
+  const spot = useSpot(pair);
+  const history = useHistory(pair, range);
+  const closes = history.data ?? [];
+  const periodChange = closes.length >= 2 && spot.data ? spot.data / closes[0].close - 1 : null;
 
   const options = useQuery({
     queryKey: ['v2-options', pair, direction],
     enabled: Boolean(pair),
-    queryFn: () => api<{ tenors: { tenorDays: number; open: boolean; capped: boolean }[] }>(`/api/v2/options?pair=${encodeURIComponent(pair)}&direction=${direction}`),
+    queryFn: () => api<{ tenors: { tenorDays: number; open: boolean; capped: boolean }[] }>(`/api/v2/options?pair=${encodeURIComponent(pair!)}&direction=${direction}`),
   });
+  const [amount, setAmount] = useState('1000');
+  const [days, setDays] = useState<number | null>(null);
   useEffect(() => {
     const ts = options.data?.tenors ?? [];
     if (ts.length && !ts.some((t) => t.tenorDays === days)) setDays((ts.find((t) => t.tenorDays >= 14) ?? ts[0]).tenorDays);
   }, [options.data, days]);
   const tenor = options.data?.tenors.find((t) => t.tenorDays === days);
 
-  const spot = useQuery({
-    queryKey: ['v2-spot', pair],
-    enabled: Boolean(pair),
-    queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(pair)}`)).spot),
-    refetchInterval: 60_000,
-  });
-  const pool = (pools.data ?? []).find((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
+  const pool = available.find((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
   const capMin = (pool?.structures.minCapDistanceBps ?? 300) / 100;
   const capMax = (pool?.structures.maxCapDistanceBps || 2000) / 100;
   const sign = direction === 'up' ? 1 : -1;
-
-  const [strikeText, setStrikeText] = useState('');
-  useEffect(() => { if (spot.data && !strikeText) setStrikeText((spot.data * (1 + sign * 0.02)).toFixed(2)); }, [spot.data, strikeText, sign]);
-  useEffect(() => { setStrikeText(''); }, [pair, direction]);
-  const strike = Number(strikeText) > 0 ? Number(strikeText) : null;
+  const [startPct, setStartPct] = useState(2);
   const [capPct, setCapPct] = useState(10);
   useEffect(() => { setCapPct((c) => Math.min(Math.max(c, capMin), capMax)); }, [capMin, capMax]);
-  const cap = strike ? strike * (1 + (sign * capPct) / 100) : null;
-  const [structure, setStructure] = useState<'open' | 'capped'>('capped');
+  const [structure, setStructure] = useState<'capped' | 'open'>('capped');
   useEffect(() => { if (tenor && !tenor[structure]) setStructure(tenor.capped ? 'capped' : 'open'); }, [tenor, structure]);
+  const strike = spot.data ? spot.data * (1 + (sign * startPct) / 100) : null;
+  const cap = strike ? strike * (1 + (sign * capPct) / 100) : null;
 
   const base = pair && days && strike && Number(amount) > 0 ? { pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6) } : null;
   const cappedReq = useDebounced(base && cap && tenor?.capped ? JSON.stringify({ ...base, structure: 'capped', cap: cap.toFixed(6) }) : null, 350);
   const openReq = useDebounced(base && tenor?.open ? JSON.stringify({ ...base, structure: 'open' }) : null, 350);
   const [refresh, setRefresh] = useState(0);
-  const quoteQuery = (req: string | null) => ({
-    queryKey: ['v2-quote', req, refresh],
-    enabled: step >= 1 && Boolean(req),
-    retry: false,
-    queryFn: () => api<ProtectionQuote>('/api/v2/quotes', JSON.parse(req!)),
-  });
-  const capped = useQuery(quoteQuery(cappedReq));
-  const open = useQuery(quoteQuery(openReq));
+  const q = (req: string | null) => ({ queryKey: ['v2-quote', req, refresh], enabled: Boolean(req), retry: false, queryFn: () => api<ProtectionQuote>('/api/v2/quotes', JSON.parse(req!)) });
+  const capped = useQuery(q(cappedReq));
+  const open = useQuery(q(openReq));
   const chosen = structure === 'capped' ? capped : open;
+  const e = chosen.data?.economic;
   const [left, setLeft] = useState(0);
   useEffect(() => {
     if (!chosen.data) return;
@@ -213,186 +257,261 @@ export function ProtectFlow({ go }: { go: Go }) {
 
   const hub = chains.data?.activeLiquidityHub;
   const onHub = usdcOn(balances.data?.rows, hub);
+  const [mode, setMode] = useState<'build' | 'review' | 'done'>('build');
   const [busy, setBusy] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-  const ccy = quoteCcy(pair);
+  useEffect(() => { setMode((m) => (m === 'done' ? m : 'build')); }, [pair, direction]);
 
   async function confirm() {
-    const q = chosen.data;
-    if (!q) return;
+    const quote = chosen.data;
+    if (!quote) return;
     if (left < 5) { setRefresh((n) => n + 1); return; }
-    if (onHub < Number(q.economic.totalCost)) {
-      toast({ title: 'Not enough USDC', description: `This needs ${fmt(q.economic.totalCost)} USDC. Add funds first.`, variant: 'destructive' });
+    if (onHub < Number(quote.economic.totalCost)) {
+      toast({ title: 'Not enough USDC', description: `This needs $${fmt(quote.economic.totalCost)} USDC. Add funds first.`, variant: 'destructive' });
       return;
     }
     setBusy('Preparing...');
     try {
-      const { transactions } = await api<{ transactions: PreparedTransaction[] }>('/api/v2/hedges/prepare', { quote: q });
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>('/api/v2/hedges/prepare', { quote });
       await signAndSend(transactions, (m) => setBusy(m));
-      setDone(true);
+      setMode('done');
       for (const k of ['v2-hedges', 'v2-pools', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
-    } catch (e) {
-      toast({ title: 'Protection not placed', description: (e as Error).message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Protection not placed', description: (err as Error).message, variant: 'destructive' });
     } finally { setBusy(null); }
   }
 
-  if (done) {
-    return (
-      <Card>
-        <div className="bx-empty" style={{ color: 'var(--bx-text)' }}>
-          <CheckCircle2 style={{ width: 48, height: 48, color: 'var(--bx-green)' }} />
-          <h2 style={{ fontSize: 20, margin: '10px 0 4px' }}>Your exposure is protected</h2>
-          <p className="bx-muted">{fmt(amount, 0)} USDC of {exposureLabel(pair, direction).title.toLowerCase()} risk, until {days ? dateIn(days) : ''}.</p>
-          <div className="bx-actions" style={{ justifyContent: 'center' }}>
-            <button className="bx-btn ghost" onClick={() => { setDone(false); setStep(0); }}>Protect another</button>
-            <button className="bx-btn primary" onClick={() => go('h-dashboard')}>Go to dashboard</button>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  if (pools.isLoading) return <Loading />;
-  if (!exposures.length) return <Card><div className="bx-empty">No protection is available right now. Please check back soon.</div></Card>;
+  if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
+  if (!pair) return <main className="bx-main"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No protection is on sale right now. Please check back soon.</div></div></section></main>;
+  const ccy = quoteCcy(pair);
+  const name = ccyName(pair);
 
   return (
-    <>
-      <Steps labels={['Exposure', 'Protection', 'Review']} current={step} />
-
-      {step === 0 && (
-        <>
-          <div className="bx-grid bx-two">
-            <Card title="What are you protecting?">
-              <div className="bx-field">
-                <label>Currency exposure</label>
-                <select className="bx-select" value={exposureKey} onChange={(e) => setExposureKey(e.target.value)}>
-                  {exposures.map((x) => <option key={`${x.pair}:${x.direction}`} value={`${x.pair}:${x.direction}`}>{quoteCcy(x.pair)} · {exposureLabel(x.pair, x.direction).title}</option>)}
-                </select>
-                <span className="bx-muted">{exposureLabel(pair, direction).who}</span>
-              </div>
-              <div className="bx-field">
-                <label>Amount (USD)</label>
-                <input className="bx-input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
-                <div className="bx-chips">
-                  {AMOUNT_CHIPS.map((c) => <button key={c} className={`bx-chip${Number(amount) === c ? ' on' : ''}`} onClick={() => setAmount(String(c))}>${c.toLocaleString()}</button>)}
-                </div>
-              </div>
-            </Card>
-            <Card title="How long do you need protection?">
-              {options.isLoading ? <Loading /> : (
-                <div className="bx-tiles">
-                  {(options.data?.tenors ?? []).map((t) => (
-                    <button key={t.tenorDays} className={`bx-tile${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>
-                      {t.tenorDays} days<span className="d">until {dateIn(t.tenorDays)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <p className="bx-muted" style={{ marginTop: 12 }}>Only lengths underwriters offer right now are shown.</p>
-            </Card>
-          </div>
-          <div className="bx-actions"><button className="bx-btn primary" disabled={!days || !(Number(amount) > 0)} onClick={() => setStep(1)}>Continue <ArrowRight /></button></div>
-        </>
-      )}
-
-      {step === 1 && (
-        <>
-          <div className="bx-grid bx-two">
-            <Card>
-              <div className="bx-muted">Current USD/{ccy}</div>
-              <div style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{spot.data ? fmtRate(spot.data) : '...'}</div>
-              <div className="bx-muted">1 USD in {ccyName(pair)}</div>
-            </Card>
-            <Card>
-              <div className="bx-field" style={{ marginBottom: 0 }}>
-                <label>Protection starts {direction === 'up' ? 'above' : 'below'}</label>
-                <input className="bx-input" inputMode="decimal" value={strikeText} onChange={(e) => setStrikeText(e.target.value.replace(/[^0-9.]/g, ''))} />
-                <span className="bx-muted">You are covered if 1 USD {direction === 'up' ? 'rises above' : 'falls below'} this rate.</span>
-              </div>
-            </Card>
-          </div>
-          <div className="bx-grid bx-two" style={{ marginTop: 14 }}>
-            {tenor?.open && (
-              <button className={`bx-option${structure === 'open' ? ' on' : ''}`} onClick={() => setStructure('open')}>
-                <div className="t">Open Protection</div>
-                <div className="d">Covers the whole move past your rate, up to the pool's maximum payout.</div>
-                <div className="bx-rows" style={{ marginTop: 12 }}>
-                  <Row l="Premium" v={open.data ? `${pct(open.data.economic.offerRateE6 / 1e6)} · $${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'} />
-                  <Row l="Maximum protection available" v={open.data ? `$${fmt(open.data.economic.maxPayout)}` : '-'} />
-                </div>
-                {open.error && <p className="bx-error">{(open.error as Error).message}</p>}
-              </button>
-            )}
-            {tenor?.capped && (
-              <div className={`bx-option${structure === 'capped' ? ' on' : ''}`} onClick={() => setStructure('capped')} role="button">
-                <div className="t">Capped Protection</div>
-                <div className="d">Covers the move between {strike ? fmtRate(strike) : 'your rate'} and a maximum rate you choose.</div>
-                <div className="bx-rows" style={{ marginTop: 12 }}>
-                  <Row l="Premium" v={capped.data ? `${pct(capped.data.economic.offerRateE6 / 1e6)} · $${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'} />
-                  <Row l="Maximum protection" v={capped.data ? `$${fmt(capped.data.economic.maxPayout)}` : '-'} />
-                </div>
-                <div className="bx-field" style={{ marginTop: 12, marginBottom: 0 }}>
-                  <label>Maximum protected rate (cap): <b style={{ color: 'var(--bx-text)' }}>{cap ? fmtRate(cap) : '-'}</b></label>
-                  <input className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(e) => { setCapPct(Number(e.target.value)); setStructure('capped'); }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }} className="bx-muted">
-                    <span>Lower cap = cheaper</span><span>Higher cap = more protection</span>
-                  </div>
-                </div>
-                {capped.error && <p className="bx-error">{(capped.error as Error).message}</p>}
-              </div>
+    <main className="bx-main">
+      <section className="bx-col">
+        <div className="bx-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <Flag pair={pair} large />
+            <div><div style={{ fontSize: 22, fontWeight: 600 }}>{name}</div><div className="muted">{pair}</div></div>
+            {pairs.length > 1 && (
+              <select className="bx-select" style={{ marginLeft: 'auto', width: 'auto' }} aria-label="Currency" value={pair} onChange={(ev) => setPair(ev.target.value)}>
+                {pairs.map((p) => <option key={p} value={p}>{ccyName(p)} ({p})</option>)}
+              </select>
             )}
           </div>
-          <div className="bx-actions">
-            <button className="bx-btn ghost" onClick={() => setStep(0)}>Back</button>
-            <button className="bx-btn primary" disabled={!chosen.data} onClick={() => setStep(2)}>Review <ArrowRight /></button>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
+            <span className="num" style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em' }}>{spot.data ? fmtRate(spot.data) : '...'}</span>
+            <span className="muted">{ccy} per 1 USD</span>
+            <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{RANGES.find((r) => r.days === range)?.label}</span>
           </div>
-        </>
-      )}
+          <RateChart closes={closes} strike={strike} cap={structure === 'capped' ? cap : null} />
+          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            {RANGES.map((r) => <button key={r.days} className={`bx-pill${range === r.days ? ' on' : ''}`} style={{ padding: '8px 14px' }} onClick={() => setRange(r.days)}>{r.label}</button>)}
+          </div>
+        </div>
 
-      {step === 2 && chosen.data && (() => {
-        const e = chosen.data.economic;
-        return (
-          <div className="bx-grid bx-wide">
-            <Card title="Review Protection">
-              <p style={{ marginTop: -4, marginBottom: 12 }}>You are protecting <b>${fmt(e.notional, 0)}</b> of {ccy} exposure.</p>
-              <div className="bx-rows">
-                <Row l="Current rate" v={fmtRate(e.spot)} />
-                <Row l="Protection starts" v={fmtRate(e.strike)} />
-                <Row l="Protection type" v={e.structure === 'open' ? 'Open' : 'Capped'} />
-                {e.structure === 'capped' && <Row l="Maximum protected rate" v={fmtRate(e.cap)} />}
-                <Row l="Duration" v={`${e.tenorDays} days`} />
-                <Row l="Expiry" v={dateIn(e.tenorDays)} />
-                <Row l="Maximum protection" v={`$${fmt(e.maxPayout)}`} />
-                <Row l="Premium" v={`${pct(e.offerRateE6 / 1e6)} ($${fmt(e.premium)})`} />
-                <Row l="Execution cost" v={`$${fmt(e.hedgerFee)}`} />
-                <Row l="Network fees" v="Covered by BlockFinaX" good />
-                <Row l="Total" v={`$${fmt(e.totalCost)}`} total />
+        <div className="bx-card">
+          <h2 style={{ marginBottom: 14 }}>How protection works</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
+            {[
+              ['Choose your cover', 'Pick an amount, how long you need it, and where protection starts.'],
+              ['Pay once in USDC', 'The premium is the whole cost. Network fees are covered by BlockFinaX.'],
+              ['Get paid if it moves', `If the ${name} ${direction === 'up' ? 'weakens' : 'strengthens'} past your strike at expiry, you receive the difference.`],
+            ].map(([t, d], i) => (
+              <div key={t}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--blue-soft)', color: 'var(--blue)', display: 'grid', placeItems: 'center', fontWeight: 700 }}>{i + 1}</div>
+                <div style={{ fontWeight: 600, marginTop: 10 }}>{t}</div>
+                <p className="muted" style={{ fontSize: 14, lineHeight: 1.5, margin: '4px 0 0' }}>{d}</p>
               </div>
-              <div className="bx-actions">
-                <button className="bx-btn ghost" onClick={() => setStep(1)}>Back</button>
-                <button className="bx-btn primary" disabled={!!busy} onClick={confirm}>{busy ? <><Spin /> {busy}</> : left < 5 ? 'Refresh price' : 'Confirm Protection'}</button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <aside className="bx-aside" aria-label="Protect">
+        <div className="bx-panel">
+          {mode === 'done' ? (
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              <CheckCircle2 style={{ width: 48, height: 48, color: 'var(--green)' }} />
+              <h3 style={{ fontSize: 18, margin: '10px 0 4px' }}>Your exposure is protected</h3>
+              <p className="muted">${fmt(amount, 0)} of {exposureLabel(pair, direction).title.toLowerCase()} risk, until {days ? dateIn(days) : ''}.</p>
+              <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+                <button className="bx-btn block" onClick={() => go('h-home')}>Go to home</button>
+                <button className="bx-btn ghost block" onClick={() => setMode('build')}>Protect another</button>
               </div>
-            </Card>
-            <Card title="Payment">
-              <div className="bx-rows">
-                <Row l="You pay" v={`$${fmt(e.totalCost)} USDC`} />
-                <Row l="Your balance" v={`$${fmt(onHub)} USDC`} />
-                <Row l="Price held for" v={`${left}s`} />
+            </div>
+          ) : mode === 'review' && e ? (
+            <>
+              <div><div style={{ fontSize: 18, fontWeight: 600 }}>Review protection</div><div className="muted" style={{ fontSize: 13, marginTop: 2 }}>You are protecting ${fmt(e.notional, 0)} of {ccy} exposure.</div></div>
+              <div className="bx-sums" style={{ borderTop: 0, paddingTop: 0 }}>
+                <Sum l="Current rate" v={<span className="num">{fmtRate(e.spot)}</span>} />
+                <Sum l="Protection starts" v={<span className="num">{fmtRate(e.strike)}</span>} />
+                <Sum l="Protection type" v={e.structure === 'open' ? 'Open' : 'Capped'} />
+                {e.structure === 'capped' && <Sum l="Maximum protected rate" v={<span className="num">{fmtRate(e.cap)}</span>} />}
+                <Sum l="Duration" v={`${e.tenorDays} days`} />
+                <Sum l="Expiry" v={dateIn(e.tenorDays)} />
+                <Sum l="Most you can receive" v={<span className="num">${fmt(e.maxPayout)}</span>} />
+                <Sum l="Premium" v={<span className="num">{pct(e.offerRateE6 / 1e6)} (${fmt(e.premium)})</span>} />
+                <Sum l="Execution cost" v={<span className="num">${fmt(e.hedgerFee)}</span>} />
+                <Sum l="Network fees" v="Covered" good />
+                <Sum l="Total" v={<span className="num">${fmt(e.totalCost)}</span>} total />
               </div>
-              {onHub < Number(e.totalCost) && <p className="bx-note warn" style={{ marginTop: 12 }}>Your balance is too low. Add funds, then come back.</p>}
-              <details style={{ marginTop: 14 }}>
-                <summary className="bx-muted" style={{ cursor: 'pointer' }}>Advanced details</summary>
-                <div className="bx-rows" style={{ marginTop: 8 }}>
-                  <Row l="Fair price" v={pct(e.fairRateE6 / 1e6, 3)} />
-                  <Row l="Offered price" v={pct(e.offerRateE6 / 1e6, 3)} />
-                  <Row l="Settlement network" v={chains.data?.chains.find((c) => c.key === e.executionChain)?.name ?? e.executionChain} />
-                  <Row l="Pool" v={`${e.pool.contract.slice(0, 6)}...${e.pool.contract.slice(-4)} · ${e.pool.id}`} />
+              <details>
+                <summary className="muted" style={{ cursor: 'pointer', fontSize: 13 }}>Advanced details</summary>
+                <div style={{ marginTop: 6 }}>
+                  <Sum l="Fair price" v={pct(e.fairRateE6 / 1e6, 3)} />
+                  <Sum l="Settlement network" v={chains.data?.chains.find((c) => c.key === e.executionChain)?.name ?? e.executionChain} />
+                  <Sum l="Pool" v={`${e.pool.contract.slice(0, 6)}...${e.pool.contract.slice(-4)} · ${e.pool.id}`} />
                 </div>
               </details>
-            </Card>
-          </div>
-        );
-      })()}
-    </>
+              {onHub < Number(e.totalCost) && <p className="bx-error">Your balance (${fmt(onHub)}) is too low. Add funds first.</p>}
+              <button className="bx-btn block" disabled={!!busy} onClick={confirm}>{busy ? <><Spin /> {busy}</> : left < 5 ? 'Refresh price' : 'Confirm protection'}</button>
+              <button className="bx-btn ghost block" disabled={!!busy} onClick={() => setMode('build')}>Back</button>
+              <div className="bx-hint">Price held for {left} seconds · approve with your passkey</div>
+            </>
+          ) : (
+            <>
+              {directions.length > 1 && (
+                <div className="bx-seg">
+                  {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{name} {d === 'up' ? 'weakens' : 'strengthens'}</button>)}
+                </div>
+              )}
+              <div className="bx-big">
+                <label htmlFor="bx-amount">Amount to protect (USD)</label>
+                <input id="bx-amount" inputMode="decimal" value={`$${amount}`} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} />
+                <div className="bx-pills" style={{ marginTop: 8 }}>
+                  {AMOUNTS.map((a) => <button key={a} className={`bx-pill${Number(amount) === a ? ' on' : ''}`} onClick={() => setAmount(String(a))}>{a >= 1000 ? `$${a / 1000}K` : `$${a}`}</button>)}
+                </div>
+              </div>
+              <div>
+                <span className="bx-label">How long</span>
+                <div className="bx-pills wrap">
+                  {(options.data?.tenors ?? []).map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
+                </div>
+                {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Ends {dateIn(days)}</div>}
+              </div>
+              <div>
+                <span className="bx-label">Protection starts</span>
+                <div className="bx-seg">
+                  {[0, 2, 5].map((m) => <button key={m} className={startPct === m ? 'on' : ''} onClick={() => setStartPct(m)}>{m === 0 ? "Today's rate" : `${m}% away`}</button>)}
+                </div>
+              </div>
+              <div>
+                <span className="bx-label">Cover type</span>
+                <div className="bx-choice">
+                  {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Capped</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
+                  {tenor?.open !== false && <button className={structure === 'open' ? 'on' : ''} onClick={() => setStructure('open')}><div className="t">Open</div><div className="p num">{open.data ? `$${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'}</div></button>}
+                </div>
+              </div>
+              {structure === 'capped' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><label htmlFor="bx-cap" className="muted">Maximum protected rate</label><span className="num" style={{ fontWeight: 600 }}>{cap ? fmtRate(cap) : '-'}</span></div>
+                  <input id="bx-cap" className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(ev) => setCapPct(Number(ev.target.value))} />
+                  <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>Lower cap: cheaper</span><span>Higher cap: more protection</span></div>
+                </div>
+              )}
+              <div className="bx-sums">
+                <Sum l={`Protection starts ${direction === 'up' ? 'above' : 'below'}`} v={<span className="num">{strike ? fmtRate(strike) : '-'}</span>} />
+                <Sum l="Most you can receive" v={<span className="num">{e ? `$${fmt(e.maxPayout)}` : '-'}</span>} />
+                <Sum l="Premium" v={<span className="num">{e ? `$${fmt(e.premium)}` : '-'}</span>} />
+                <Sum l="Execution cost" v={<span className="num">{e ? `$${fmt(e.hedgerFee)}` : '-'}</span>} />
+                <Sum l="Network fees" v="Covered" good />
+                <Sum l="Total" v={<span className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</span>} total />
+              </div>
+              {chosen.error && <p className="bx-error">{(chosen.error as Error).message}</p>}
+              <button className="bx-btn block" disabled={!e} onClick={() => setMode('review')}>Review protection</button>
+              <div className="bx-hint">{e ? `Price held for ${left} seconds · ` : ''}approve with your passkey</div>
+            </>
+          )}
+        </div>
+      </aside>
+    </main>
+  );
+}
+
+// ── My protections ───────────────────────────────────────────────────────────
+
+export function MyProtections({ go }: { go: Go }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const hedges = useHedges();
+  const all = hedges.data ?? [];
+  const rates = useRates(Array.from(new Set(all.map((h) => h.pair))));
+  const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
+  const [busy, setBusy] = useState<string | null>(null);
+  const cols = { gridTemplateColumns: 'minmax(0, 2.2fr) repeat(4, minmax(0, 1fr))' };
+  async function claim(ref: string) {
+    setBusy(ref);
+    try {
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/hedges/${encodeURIComponent(ref)}/claim/prepare`, {});
+      await signAndSend(transactions, () => {});
+      toast({ title: 'Payout received', description: 'The USDC is in your account.' });
+      for (const k of ['v2-hedges', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
+    } catch (err) {
+      toast({ title: 'Not received', description: (err as Error).message, variant: 'destructive' });
+    } finally { setBusy(null); }
+  }
+  return (
+    <main className="bx-main">
+      <section className="bx-full">
+        <div className="bx-card">
+          <div className="bx-card-h"><h2>My protections</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>
+          {hedges.isLoading ? <Loading /> : !all.length ? <div className="bx-empty">You have not bought protection yet.</div> : (
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: 720 }}>
+                <div className="bx-list-h" style={cols}><span>Exposure</span><span className="r">Protected</span><span className="r">Expiry</span><span className="r">Payout</span><span className="r">Status</span></div>
+                {all.map(({ position: p, pair, settlement: s }) => {
+                  const active = s.status === 'pending';
+                  const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
+                  return (
+                    <div key={s.position} className="bx-li" style={cols}>
+                      <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Capped'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
+                      <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
+                      <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
+                      <div className="r num" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>
+                      <div className="r">
+                        {active ? <Tag tone="green">Active</Tag> : s.status === 'settled_claimable'
+                          ? <button className="bx-btn small" disabled={busy === s.position} onClick={() => claim(s.position)}>{busy === s.position ? <Spin /> : 'Receive payout'}</button>
+                          : s.status === 'claimed' ? <Tag tone="grey">Paid</Tag> : <Tag tone="grey">Expired</Tag>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+// ── Rates ────────────────────────────────────────────────────────────────────
+
+export function RatesPage({ go }: { go: Go }) {
+  const pools = usePools();
+  const pairs = useMemo(() => Array.from(new Set((pools.data ?? []).map((p) => p.pair))), [pools.data]);
+  const rates = useRates(pairs);
+  const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr)) 140px' };
+  return (
+    <main className="bx-main">
+      <section className="bx-full">
+        <div className="bx-card">
+          <div className="bx-card-h"><h2>Rates</h2><span className="muted" style={{ fontSize: 13 }}>1 USD in local currency · change since the last daily close</span></div>
+          {pools.isLoading ? <Loading /> : (
+            <>
+              <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">Rate</span><span className="r">Change</span><span /></div>
+              {rates.map((r) => (
+                <div key={r.pair} className="bx-li" style={cols}>
+                  <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{ccyName(r.pair)}</div><div className="d">{r.pair}</div></div></div>
+                  <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '...'}</div>
+                  <div className="r"><ChangeText change={r.change} /></div>
+                  <div className="r"><button className="bx-btn small" onClick={() => go('h-protect', { pair: r.pair })}>Protect</button></div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </section>
+    </main>
   );
 }

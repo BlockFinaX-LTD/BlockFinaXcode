@@ -180,6 +180,15 @@ export function registerV2Routes(app: Express) {
     res.json(await (await getServices()).quotes.options(String(req.query.pair ?? ""), direction));
   }));
 
+  /** Daily closes for a pair, oldest first (for rate charts). */
+  app.get("/api/v2/history", wrap(async (req, res) => {
+    const pair = String(req.query.pair ?? "");
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 5), 400);
+    const { getRecentCloses } = await import("../pricing/data/historical");
+    const rows = await getRecentCloses(pair, days);
+    res.json({ pair, closes: rows.map((r: any) => ({ date: String(r.date).slice(0, 10), close: Number(r.close) })) });
+  }));
+
   app.get("/api/v2/spot", wrap(async (req, res) => {
     const pair = String(req.query.pair ?? "");
     res.json({ pair, spot: await (await getServices()).quotes.spot(pair) });
