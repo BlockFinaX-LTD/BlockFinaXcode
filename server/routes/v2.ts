@@ -112,6 +112,55 @@ export function registerV2Routes(app: Express) {
     res.json({ chain: hub.key, pairs, creationFee: await s.adapters.adapterFor(hub.key).getPoolCreationFee() });
   }));
 
+  /** Fair price per tenor for a pair and direction (underwriter offer setting). */
+  app.get("/api/v2/fair", wrap(async (req, res) => {
+    const direction = req.query.direction === "down" ? "down" : "up";
+    const tenors = String(req.query.tenors ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 365).slice(0, 16);
+    res.json(await (await getServices()).quotes.fairTable(String(req.query.pair ?? ""), direction, tenors));
+  }));
+
+  /** Active cover sold by a pool, for the underwriter's risk view. */
+  app.get("/api/v2/pools/:ref/positions", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id } = idOf(req.params.ref, "pool");
+    res.json({ positions: await s.adapters.adapterFor(chain).listActivePositions(id) });
+  }));
+
+  /** Change a pool's protection types and limits. */
+  app.post("/api/v2/pools/:ref/structures/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id } = idOf(req.params.ref, "pool");
+    const owner = await ownerOn(s, await userId(req), chain);
+    res.json({ transactions: await s.adapters.adapterFor(chain).prepareSetStructures(owner, id, req.body) });
+  }));
+
+  /** Give notice to withdraw shares from a pool. */
+  app.post("/api/v2/pools/:ref/withdrawals/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id } = idOf(req.params.ref, "pool");
+    const owner = await ownerOn(s, await userId(req), chain);
+    res.json({ transactions: await s.adapters.adapterFor(chain).prepareWithdrawalRequest(owner, id, String(req.body?.shares ?? "")) });
+  }));
+
+  /** The user's withdrawal requests on every settling chain. */
+  app.get("/api/v2/withdrawals", wrap(async (req, res) => {
+    const s = await getServices();
+    const book = await s.accounts.addressBook(await userId(req));
+    const out = [];
+    for (const chain of chainRegistry()!.settlementNetworks()) {
+      if (!book[chain.key]) continue;
+      for (const w of await s.adapters.adapterFor(chain.key).listWithdrawals(book[chain.key])) out.push({ chain: chain.key, ...w });
+    }
+    res.json({ withdrawals: out });
+  }));
+
+  /** Complete a withdrawal whose notice has ended. */
+  app.post("/api/v2/withdrawals/:chain/:id/execute/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const owner = await ownerOn(s, await userId(req), req.params.chain);
+    res.json({ transactions: await s.adapters.adapterFor(req.params.chain).prepareWithdrawalExecute(owner, Number(req.params.id)) });
+  }));
+
   /** The signed-in user's stake in a pool. */
   app.get("/api/v2/pools/:ref/lp", wrap(async (req, res) => {
     const s = await getServices();

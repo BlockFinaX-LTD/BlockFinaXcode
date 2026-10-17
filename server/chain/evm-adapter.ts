@@ -21,7 +21,7 @@ import {
   type TransactionStatus,
 } from "@shared/domain/types";
 import { signPoolBuyQuote } from "../pricing/signer";
-import type { ChainAdapter, CreatePoolInput, OracleRoundState, PlatformSigner, PreparedTransaction, TenorInput } from "./adapter";
+import type { ChainAdapter, CreatePoolInput, OracleRoundState, PlatformSigner, PreparedTransaction, TenorInput, WithdrawalRequestView } from "./adapter";
 import { mapEvmError } from "./errors";
 
 const ERC20_ABI = [
@@ -269,6 +269,26 @@ export class EvmAdapter implements ChainAdapter {
     return { shares: fromUnits(shares, pool.asset.decimals), value: fromUnits(value, pool.asset.decimals) };
   }
 
+  async listWithdrawals(owner: string): Promise<WithdrawalRequestView[]> {
+    if (!this.diamondAddress) return [];
+    const ids: bigint[] = await this.pools.getLpPoolWithdrawalIds(owner);
+    const decimals = this.chain.assets.USDC?.decimals ?? 6;
+    const out: WithdrawalRequestView[] = [];
+    for (const id of ids) {
+      const r = await this.pools.getPoolWithdrawal(id);
+      out.push({
+        requestId: Number(r.id), poolId: Number(r.poolId), shares: fromUnits(r.shares, decimals),
+        requestedAt: Number(r.requestedAt), unlockAt: Number(r.unlockAt),
+        status: r.executed ? "executed" : r.cancelled ? "cancelled" : "pending",
+      });
+    }
+    return out;
+  }
+
+  async prepareSetStructures(_owner: string, poolId: number, s: CreatePoolInput["structures"]) {
+    return [this.poolCall("Update protection settings", "setPoolStructures", [poolId, [s.open, s.capped, s.minCapDistanceBps, s.maxCapDistanceBps, s.openMaxPayoutBps]])];
+  }
+
   async getPoolCreationFee() {
     const fees = await new ethers.Contract(this.diamond, FEE_ABI, this.provider).getHedgeFeeConfig();
     return fromUnits(fees.creationFee, this.chain.assets.USDC?.decimals ?? 6);
@@ -296,7 +316,8 @@ export class EvmAdapter implements ChainAdapter {
   }
 
   async prepareWithdrawalRequest(_owner: string, poolId: number, shares: string) {
-    return [this.poolCall("Request withdrawal", "requestPoolWithdrawal", [poolId, BigInt(shares)])];
+    const pool = await this.getPool(poolId);
+    return [this.poolCall("Request withdrawal", "requestPoolWithdrawal", [poolId, toUnits(shares, pool.asset.decimals)])];
   }
 
   async prepareWithdrawalExecute(_owner: string, requestId: number) {

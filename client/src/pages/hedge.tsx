@@ -15,7 +15,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useIdentity as useRift, usesPasskeyWallet } from '@/lib/identity';
-import { CoverV2 } from '@/components/hedge/cover-v2';
+import { CoverHome } from '@/components/v2/cover-home';
 import { AppShell } from '@/components/app-shell';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';
@@ -403,7 +403,7 @@ export default function Hedge() {
   if (usesPasskeyWallet) {
     return (
       <AppShell active="cover" greeting={{ title: 'Cover', subtitle: 'Protect against currency moves, or earn by underwriting' }}>
-        <CoverV2 />
+        <CoverHome />
       </AppShell>
     );
   }

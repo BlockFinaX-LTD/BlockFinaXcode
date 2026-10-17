@@ -37,6 +37,15 @@ export interface TenorInput {
   markupBps: number;
 }
 
+export interface WithdrawalRequestView {
+  requestId: number;
+  poolId: number;
+  shares: string;
+  requestedAt: number;
+  unlockAt: number;
+  status: "pending" | "executed" | "cancelled";
+}
+
 export interface CreatePoolInput {
   pair: string;
   /** The move the pool covers. Each pool sells one direction. */
@@ -85,6 +94,10 @@ export interface ChainAdapter {
   prepareClaim(owner: string, positionId: number): Promise<PreparedTransaction[]>;
   /** An LP's shares in a pool and what they are worth now, in the pool asset. */
   getLpPosition(poolId: number, owner: string): Promise<{ shares: string; value: string }>;
+  /** The LP's withdrawal requests across pools on this chain. Shares and value in the pool asset. */
+  listWithdrawals(owner: string): Promise<WithdrawalRequestView[]>;
+  /** Change which protection types a pool sells and their limits (pool creator only). */
+  prepareSetStructures(owner: string, poolId: number, s: CreatePoolInput["structures"]): Promise<PreparedTransaction[]>;
   /** The one-off fee for creating a pool, in the pool asset. */
   getPoolCreationFee(): Promise<string>;
   /** Send a listed asset from the user's account to another address on the same chain. */

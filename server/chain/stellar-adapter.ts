@@ -21,7 +21,7 @@ import {
   type ProtectionQuote,
   type TransactionStatus,
 } from "@shared/domain/types";
-import type { ChainAdapter, CreatePoolInput, OracleRoundState, PlatformSigner, PreparedTransaction, TenorInput } from "./adapter";
+import type { ChainAdapter, CreatePoolInput, OracleRoundState, PlatformSigner, PreparedTransaction, TenorInput, WithdrawalRequestView } from "./adapter";
 import { mapStellarError } from "./errors";
 import { stellarQuoteDigest, type StellarBuyParams } from "./stellar-quote";
 import { inspectPoolCall, relay } from "./stellar-relay";
@@ -194,6 +194,33 @@ export class StellarAdapter implements ChainAdapter {
     return { shares: fromUnits(BigInt(shares ?? 0), this.usdc.decimals), value: fromUnits(BigInt(value ?? 0), this.usdc.decimals) };
   }
 
+  async listWithdrawals(owner: string): Promise<WithdrawalRequestView[]> {
+    // Request ids are global and sequential; walk them until the first missing one.
+    const c = await this.client(this.poolId);
+    const out: WithdrawalRequestView[] = [];
+    for (let id = 1; id <= 500; id++) {
+      let r: any;
+      try { r = unwrap((await c.get_withdrawal({ request_id: id })).result); } catch { break; }
+      if (!r || r.lp !== owner) continue;
+      out.push({
+        requestId: r.id, poolId: r.pool_id, shares: fromUnits(BigInt(r.shares), this.usdc.decimals),
+        requestedAt: Number(r.requested_at), unlockAt: Number(r.unlock_at),
+        status: r.executed ? "executed" : r.cancelled ? "cancelled" : "pending",
+      });
+    }
+    return out;
+  }
+
+  prepareSetStructures(_owner: string, poolId: number, s: CreatePoolInput["structures"]) {
+    return this.prepare("Update protection settings", "set_structures", {
+      pool_id: poolId,
+      structures: {
+        open_enabled: s.open, capped_enabled: s.capped, min_cap_distance_bps: s.minCapDistanceBps,
+        max_cap_distance_bps: s.maxCapDistanceBps, open_max_payout_bps: s.openMaxPayoutBps,
+      },
+    });
+  }
+
   async getPoolCreationFee() {
     const cfg = unwrap((await (await this.client(this.poolId)).get_configuration()).result);
     return fromUnits(BigInt(cfg[8]), this.usdc.decimals);
@@ -296,7 +323,7 @@ export class StellarAdapter implements ChainAdapter {
   }
 
   prepareWithdrawalRequest(owner: string, poolId: number, shares: string) {
-    return this.prepare("Request withdrawal", "request_withdrawal", { pool_id: poolId, lp: owner, shares: BigInt(shares) });
+    return this.prepare("Request withdrawal", "request_withdrawal", { pool_id: poolId, lp: owner, shares: toUnits(shares, this.usdc.decimals) });
   }
 
   prepareWithdrawalExecute(_owner: string, requestId: number) {

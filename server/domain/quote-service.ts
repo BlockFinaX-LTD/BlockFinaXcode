@@ -50,6 +50,28 @@ export class QuoteService {
     return this.pricer.spot(pair);
   }
 
+  /**
+   * BlockFinaX's fair price per tenor, for underwriters setting their offer. Priced on
+   * a reference cover (protection 2% from today, capped 10% beyond, 1,000 notional) so
+   * tenors compare on the same terms. Returned as a fraction of notional.
+   */
+  async fairTable(pair: string, direction: "up" | "down", tenors: number[]) {
+    const spot = Number(await this.pricer.spot(pair));
+    const sign = direction === "up" ? 1 : -1;
+    const strike = spot * (1 + sign * 0.02);
+    const cap = strike * (1 + sign * 0.1);
+    const rows = [];
+    for (const tenorDays of tenors) {
+      try {
+        const f = await this.pricer.fair({ pair, notional: "1000", tenorDays, structure: "capped", direction, strike: strike.toFixed(6), cap: cap.toFixed(6) } as any);
+        rows.push({ tenorDays, fairRateE6: f.fairRateE6 });
+      } catch {
+        rows.push({ tenorDays, fairRateE6: null });
+      }
+    }
+    return { pair, direction, spot: String(spot), reference: { strike: strike.toFixed(6), cap: cap.toFixed(6) }, rows };
+  }
+
   /** Tenors and structures on sale for a pair, optionally for one direction only. */
   async options(pair: string, direction?: "up" | "down") {
     const chain = this.chains.executionNetworkFor();
