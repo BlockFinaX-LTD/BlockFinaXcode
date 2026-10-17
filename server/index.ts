@@ -374,6 +374,10 @@ app.use((req, res, next) => {
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
   // No-op if TWELVEDATA_API_KEY is not configured.
   startDailyRefresh();
+  // Testnet has its own empty database: load the pricing history it needs, in the background.
+  if (process.env.APP_ENV === "testnet") {
+    void import("./pricing/testnet-bootstrap").then((m) => m.bootstrapTestnetPricing());
+  }
 
   // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.
   // Keeps DB status consistent even when ChainSync hasn't run or the oracle hasn't settled yet.

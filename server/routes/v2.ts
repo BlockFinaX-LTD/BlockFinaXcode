@@ -114,6 +114,11 @@ export function registerV2Routes(app: Express) {
     res.json(await (await getServices()).quotes.options(String(req.query.pair ?? "")));
   }));
 
+  app.get("/api/v2/spot", wrap(async (req, res) => {
+    const pair = String(req.query.pair ?? "");
+    res.json({ pair, spot: await (await getServices()).quotes.spot(pair) });
+  }));
+
   app.post("/api/v2/quotes", wrap(async (req, res) => {
     const s = await getServices();
     const uid = await userId(req);
@@ -144,7 +149,7 @@ export function registerV2Routes(app: Express) {
       const adapter = s.adapters.adapterFor(chain.key);
       for (const p of await adapter.listPositions(book[chain.key])) {
         const pool = await adapter.getPool(p.poolId);
-        out.push({ position: p, settlement: settlementResult(p, pool.fees.payoutFeeRateE6, pool.asset.decimals) });
+        out.push({ position: p, pair: pool.pair, settlement: settlementResult(p, pool.fees.payoutFeeRateE6, pool.asset.decimals) });
       }
     }
     res.json({ hedges: out });

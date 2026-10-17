@@ -14,7 +14,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { useIdentity as useRift } from '@/lib/identity';
+import { useIdentity as useRift, usesPasskeyWallet } from '@/lib/identity';
+import { CoverV2 } from '@/components/hedge/cover-v2';
 import { AppShell } from '@/components/app-shell';
 import { useWallet } from '@/hooks/use-wallet';
 import { useToast } from '@/hooks/use-toast';
@@ -394,7 +395,22 @@ function RowSkeleton() {
   );
 }
 
+/**
+ * The passkey-wallet build trades on the currency-pool model through /api/v2 (the
+ * liquidity hub, signed quotes, passkey approval). Production keeps the screen below.
+ */
 export default function Hedge() {
+  if (usesPasskeyWallet) {
+    return (
+      <AppShell active="cover" greeting={{ title: 'Cover', subtitle: 'Protect against currency moves, or earn by underwriting' }}>
+        <CoverV2 />
+      </AppShell>
+    );
+  }
+  return <LegacyHedge />;
+}
+
+function LegacyHedge() {
   const { wallet, settings, updateSettings } = useWallet();
   const { getAccessToken } = useRift();
   const { toast } = useToast();

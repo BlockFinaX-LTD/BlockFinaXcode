@@ -45,6 +45,11 @@ export class QuoteService {
   ) {}
 
   /** Which tenors and structures are on sale for a pair, on the Execution Network. */
+  /** Today's spot rate for a pair, from the shared FX source. */
+  spot(pair: string): Promise<string> {
+    return this.pricer.spot(pair);
+  }
+
   async options(pair: string) {
     const chain = this.chains.executionNetworkFor();
     const pools = (await this.adapters.adapterFor(chain.key).listPools()).filter((p) => p.pair === pair && p.acceptingHedges);
