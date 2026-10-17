@@ -378,6 +378,20 @@ app.use((req, res, next) => {
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
   // No-op if TWELVEDATA_API_KEY is not configured.
   startDailyRefresh();
+  // Snapshot the live watchlist rates hourly; the daily change shown to users compares them.
+  // Testnet only until production's database has the rate_snapshots table (a reviewed migration).
+  if (process.env.APP_ENV === "testnet") void (async () => {
+    const { recordRateSnapshots } = await import("./domain/rates");
+    const { getRate } = await import("./fx-oracle");
+    const spot = async (pair: string) => {
+      const r = await getRate(pair);
+      if (!r) throw new Error(`No rate for ${pair}`);
+      return String(r.rate);
+    };
+    const run = () => recordRateSnapshots(spot).catch((err) => console.warn("[rates] snapshot failed:", (err as Error).message));
+    setTimeout(run, 20_000);
+    setInterval(run, 60 * 60 * 1000);
+  })();
   // Testnet has its own empty database: load the pricing history it needs, in the background.
   if (process.env.APP_ENV === "testnet") {
     void import("./pricing/testnet-bootstrap").then((m) => m.bootstrapTestnetPricing());

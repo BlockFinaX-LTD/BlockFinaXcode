@@ -662,7 +662,7 @@ export function RatesPage({ go }: { go: Go }) {
       <section className="bx-full">
         <div className="bx-card">
           <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-            <div><h2>Rates</h2><div className="sub">Live rates for the currencies BlockFinaX customers trade in. Change is the last day's move between daily closes.</div></div>
+            <div><h2>Rates</h2><div className="sub">Live rates for the currencies BlockFinaX customers trade in. Change is against yesterday's rate.</div></div>
             <input className="bx-input" style={{ maxWidth: 260 }} aria-label="Search rates" placeholder="Search currency" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           {watch.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No currency matches.</div> : (

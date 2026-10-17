@@ -23,6 +23,7 @@ export * from "./compliance-schema";
 export * from "./lead-schema";
 export * from "./notification-schema";
 export * from "./chain-wallet-schema";
+export * from "./rates-schema";
 
 // ── Auth: user accounts ───────────────────────────────────────────────────────
 // ── Auth: email magic links ───────────────────────────────────────────────────
