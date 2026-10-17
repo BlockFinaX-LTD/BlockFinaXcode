@@ -279,6 +279,14 @@ app.use((req, res, next) => {
     // Testnet keeps its own database in step with shared/schema.ts on every start.
     // Production never does this; its schema changes go through reviewed migrations.
     const { spawnSync } = await import("node:child_process");
+    // One-time wipe of the disposable testnet database, armed only by setting
+    // TESTNET_RESET_DATABASE to today's UTC date (so a forgotten flag expires).
+    const dbHost = (() => { try { return new URL(process.env.DATABASE_URL!).hostname; } catch { return ""; } })();
+    if (process.env.TESTNET_RESET_DATABASE === new Date().toISOString().slice(0, 10) && dbHost.endsWith(".railway.internal")) {
+      console.warn("[Startup] TESTNET_RESET_DATABASE matches today: wiping the testnet database schema.");
+      const { pool } = await import("./db");
+      await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+    }
     const push = spawnSync("npx", ["drizzle-kit", "push", "--force"], { stdio: "inherit", env: process.env });
     if (push.status !== 0) {
       console.error("[Startup] FATAL: testnet schema push failed.");
