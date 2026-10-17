@@ -276,6 +276,15 @@ app.use((req, res, next) => {
       process.exit(1);
       return;
     }
+    // Testnet keeps its own database in step with shared/schema.ts on every start.
+    // Production never does this; its schema changes go through reviewed migrations.
+    const { spawnSync } = await import("node:child_process");
+    const push = spawnSync("npx", ["drizzle-kit", "push", "--force"], { stdio: "inherit", env: process.env });
+    if (push.status !== 0) {
+      console.error("[Startup] FATAL: testnet schema push failed.");
+      process.exit(1);
+      return;
+    }
   } else if (process.env.NODE_ENV === "production") {
     const required = [
       "DATABASE_URL",

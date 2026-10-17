@@ -5,9 +5,6 @@
     "buildCommand": "npm run build && npx esbuild server/multi-oracle/run-oracle-a.ts server/multi-oracle/run-oracle-b.ts server/multi-oracle/run-oracle-c.ts --platform=node --packages=external --bundle --format=esm --outdir=dist/multi-oracle"
   },
   "deploy": {
-    "preDeployCommand": [
-      "sh -c 'if [ \"$BLOCKFINAX_ENV\" = \"testnet\" ]; then npx drizzle-kit push --force; else echo \"no schema push outside testnet\"; fi'"
-    ],
     "startCommand": "npm start",
     "restartPolicyType": "ON_FAILURE"
   }
