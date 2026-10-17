@@ -80,7 +80,7 @@ function evmRelayer(evm: ChainConfig): EvmRelayer {
     tokens: Object.values(evm.assets).map((a) => a.addressOrContract),
     contracts,
     dailyOpsPerUser: Number(process.env.EVM_RELAYER_DAILY_OPS || 50),
-  });
+  }, Date.now, process.env.EVM_PAYMASTER_URL || undefined);
   relayer = { chain: evm.key, instance };
   return instance;
 }

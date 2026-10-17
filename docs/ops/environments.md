@@ -25,9 +25,16 @@ Step 4. When the checks are green, merge it. Railway deploys `main` to productio
 
 ## Testnet settings
 
-Set on the `blockfinax-testnet` service in Railway: `APP_ENV=testnet`, `NETWORK_MODE=testnet`, `VITE_NETWORK_MODE=testnet`, `BLOCKFINAX_ENV=testnet`, `DATABASE_URL`, `ADMIN_PASSWORD`, `PUBLIC_APP_URL`, `STELLAR_FEE_PAYER_SECRET`, `POOL_PRICING_SECRET`, `WALLET_PROVIDER=passkey`, `VITE_WALLET_PROVIDER=passkey`, `EVM_RELAYER_PRIVATE_KEY`.
+Set on the `blockfinax-testnet` service in Railway: `APP_ENV=testnet`, `NETWORK_MODE=testnet`, `VITE_NETWORK_MODE=testnet`, `BLOCKFINAX_ENV=testnet`, `DATABASE_URL`, `ADMIN_PASSWORD`, `PUBLIC_APP_URL`, `STELLAR_FEE_PAYER_SECRET`, `POOL_PRICING_SECRET`, `WALLET_PROVIDER=passkey`, `VITE_WALLET_PROVIDER=passkey`, `EVM_PAYMASTER_URL`, `STELLAR_RELAYER_URL`, `STELLAR_RELAYER_API_KEY`, `EVM_RELAYER_PRIVATE_KEY` (fallback).
 
-Testnet uses the BlockFinaX passkey wallet instead of Rift. Users sign in with an email code (Resend, `RESEND_API_KEY`, `SMTP_FROM`) or Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, with `https://blockfinax-testnet-testnet.up.railway.app/api/auth/google/callback` registered as a redirect URI), then create a passkey that controls a Stellar smart account and a Base Sepolia smart account. The Base Sepolia relayer (`0x54733B449882558214641D7a00fbF9C546bbF60B`) pays gas for users' transactions and needs Base Sepolia ETH from a faucet.
+Testnet uses the BlockFinaX passkey wallet instead of Rift. Users sign in with an email code (Resend, `RESEND_API_KEY`, `SMTP_FROM`) or Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, with `https://blockfinax-testnet-testnet.up.railway.app/api/auth/google/callback` registered as a redirect URI), then create a passkey that controls a Stellar smart account and a Base Sepolia smart account. Fees are paid by third-party sponsors, so users never hold gas tokens:
+
+| Chain | Sponsor | Settings |
+| --- | --- | --- |
+| Base Sepolia | Coinbase Developer Platform paymaster and bundler (ERC-4337 v0.6, ERC-7677) | `EVM_PAYMASTER_URL` (the `base-sepolia` endpoint) |
+| Stellar testnet | OpenZeppelin Relayer Channels | `STELLAR_RELAYER_URL`, `STELLAR_RELAYER_API_KEY` |
+
+BlockFinaX's allowlist still runs before anything is sent to a sponsor. If a sponsor setting is missing, the server falls back to its own relayer: `EVM_RELAYER_PRIVATE_KEY` (`0x54733B449882558214641D7a00fbF9C546bbF60B`, needs Base Sepolia ETH) and `STELLAR_FEE_PAYER_SECRET`. Stellar wallet deployment always uses the fee payer.
 
 The server refuses to start in testnet mode unless both network settings say `testnet`, so a testnet deployment can never point at mainnet. Database tables are created on each testnet deploy; production skips that step.
 

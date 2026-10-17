@@ -328,9 +328,20 @@ export class StellarAdapter implements ChainAdapter {
    * approved call on this pool contract authorized by `wallet`. Returns the transaction hash.
    */
   async relayUserTransaction(xdrEnvelope: string, wallet: string): Promise<TransactionStatus> {
+    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId);
+    // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.
+    const relayerUrl = this.env.STELLAR_RELAYER_URL;
+    const relayerKey = this.env.STELLAR_RELAYER_API_KEY;
+    if (relayerUrl && relayerKey) {
+      const { RelayerClient } = await import("passkey-kit/server");
+      const result = await new RelayerClient({ baseUrl: relayerUrl, apiKey: relayerKey })
+        .send(call.func.toXDR("base64"), call.auth.map((a) => a.toXDR("base64")));
+      if (!result.success) throw this.mapError(new Error(result.error.message));
+      return { chain: this.chain.key, state: "CONFIRMED", hash: result.hash };
+    }
+    // Fallback: the platform fee payer submits and pays.
     const secret = this.env.STELLAR_FEE_PAYER_SECRET;
     if (!secret) throw new ApplicationError("CHAIN_NOT_ENABLED", "Stellar fee sponsor is not configured");
-    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId);
     try {
       const hash = await relay(this.server, this.chain.networkId, secret, call.func, call.auth);
       return { chain: this.chain.key, state: "SUBMITTED", hash };
