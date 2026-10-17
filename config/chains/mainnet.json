@@ -1,0 +1,43 @@
+{
+  "environment": "mainnet",
+  "activeLiquidityHub": "base",
+  "chains": [
+    {
+      "key": "base",
+      "family": "evm",
+      "name": "Base",
+      "networkId": "8453",
+      "rpcUrls": ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
+      "explorer": "https://basescan.org",
+      "state": "ACTIVE",
+      "provisionAtSignup": true,
+      "contracts": { "currencyPool": "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef" },
+      "assets": { "USDC": { "decimals": 6, "addressOrContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" } }
+    },
+    {
+      "key": "bsc",
+      "family": "evm",
+      "name": "BNB Smart Chain",
+      "networkId": "56",
+      "rpcUrls": ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
+      "explorer": "https://bscscan.com",
+      "state": "ACCESS_ONLY",
+      "contracts": { "currencyPool": "0xaC939C0897981Abc0711ec4e37527F13106180fc" },
+      "assets": {
+        "USDC": { "decimals": 18, "addressOrContract": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" },
+        "USDT": { "decimals": 18, "addressOrContract": "0x55d398326f99059fF775485246999027B3197955" }
+      }
+    },
+    {
+      "key": "stellar",
+      "family": "stellar",
+      "name": "Stellar",
+      "networkId": "Public Global Stellar Network ; September 2015",
+      "rpcUrls": [],
+      "explorer": "https://stellar.expert/explorer/public",
+      "state": "DISABLED",
+      "contracts": {},
+      "assets": {}
+    }
+  ]
+}

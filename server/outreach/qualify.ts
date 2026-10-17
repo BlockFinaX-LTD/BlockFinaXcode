@@ -49,13 +49,11 @@ export interface PersonInput {
 
 const SYSTEM = `You qualify LinkedIn accounts as leads for BlockFinaX.
 
-BlockFinaX helps businesses protect themselves against currency volatility. The
-customers are importers, exporters and their finance people in Ghana, Nigeria,
-Kenya and South Africa, whose banks will not sell them a forward because the
-ticket is too small to justify the credit assessment. Businesses pay for
-protection against a move past an agreed level by an agreed date; other people
-take the other side and earn that payment. Payouts are automatic against a
-published rate, with no claim and no assessor.
+BlockFinaX is developing tools for foreign-exchange risk management and
+cross-border payments. Do not assume a prospect's exposure, provider access,
+eligibility or product fit from their country, industry or job title. Do not
+claim automatic payouts, published rates or competitor limitations without
+current, source-backed evidence.
 
 Sort each account into one of five kinds. The kind matters more than the score,
 because it decides what a good outcome even looks like.

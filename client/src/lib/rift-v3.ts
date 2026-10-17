@@ -1,3 +1,4 @@
+import { walletSigningUrl, walletRiftKey, isWalletSandbox, assertWalletTransactionsEnabled } from "./wallet-environment";
 /**
  * Rift V3 — device-bound signing.
  *
@@ -34,9 +35,9 @@
  * VITE_RIFT_WALLET_PREFIX=/v1 and everything moves together.
  */
 
-const API_BASE = (import.meta.env.VITE_RIFT_API_BASE || "https://service.riftfi.xyz").replace(/\/$/, "");
+const API_BASE = walletSigningUrl.replace(/\/$/, "");
 const WALLET_PREFIX = (import.meta.env.VITE_RIFT_WALLET_PREFIX || "").replace(/\/$/, "");
-const API_KEY = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || "").trim();
+const API_KEY = walletRiftKey;
 
 /**
  * Who is offered the upgrade.
@@ -58,6 +59,7 @@ const ROLLOUT = (import.meta.env.VITE_V3_ROLLOUT || "anthonykumako@blockfinax.co
   .filter(Boolean);
 
 export function v3RolloutAllows(email: string | null | undefined): boolean {
+  if (isWalletSandbox) return false;
   if (ROLLOUT.includes("all")) return true;
   if (!email) return false;
   return ROLLOUT.includes(email.trim().toLowerCase());
@@ -293,6 +295,7 @@ async function call<T>(
   accessToken: string,
   init?: { method?: string; body?: unknown },
 ): Promise<T> {
+  assertWalletTransactionsEnabled();
   const res = await fetch(`${API_BASE}${path}`, {
     method: init?.method ?? "GET",
     headers: {

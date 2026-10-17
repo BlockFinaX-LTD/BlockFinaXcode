@@ -1,0 +1,46 @@
+name: CI
+
+# testnet is where every change lands first; main is production.
+# A change reaches main only through a pull request from testnet with this check passing.
+on:
+  push:
+    branches: [testnet, main]
+  pull_request:
+    branches: [testnet, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Placeholder so modules that read it at import time load; no test opens a connection.
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  promotion-source:
+    # Production only accepts changes that were tested on testnet first.
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull request must come from testnet
+        run: |
+          if [ "${{ github.head_ref }}" != "testnet" ]; then
+            echo "Pull requests into main must come from the testnet branch (got '${{ github.head_ref }}')."
+            exit 1
+          fi

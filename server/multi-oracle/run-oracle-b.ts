@@ -18,6 +18,7 @@
  */
 
 import { OracleNode, PriceMap } from "./oracle-node";
+import { fetchExchangeRateApiFxPrices } from "./fx-source";
 
 const RPC_URL =
   process.env.ORACLE_RPC_URL || "https://mainnet.base.org";
@@ -83,19 +84,6 @@ const YAHOO_TICKERS: Record<string, string> = {
   "XWH/USD": "ZW=F",
 };
 
-async function fetchFxRates(base: string): Promise<Record<string, number>> {
-  try {
-    const res = await fetch(
-      `https://api.exchangerate-api.com/v4/latest/${base}`
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return data.rates ?? {};
-  } catch {
-    return {};
-  }
-}
-
 async function fetchCryptoPrices(): Promise<Record<string, number>> {
   const result: Record<string, number> = {};
   await Promise.all(
@@ -130,15 +118,7 @@ async function fetchYahooPrice(ticker: string): Promise<number | null> {
 async function fetchPrices(): Promise<PriceMap> {
   const prices: PriceMap = {};
 
-  const bases = [...new Set(Object.values(FX_PAIRS).map((p) => p.base))];
-  const fxResults = await Promise.all(bases.map((b) => fetchFxRates(b)));
-  const fxByBase: Record<string, Record<string, number>> = {};
-  bases.forEach((b, i) => { fxByBase[b] = fxResults[i]; });
-
-  for (const [pair, { base, quote }] of Object.entries(FX_PAIRS)) {
-    const rate = fxByBase[base]?.[quote];
-    if (rate && rate > 0) prices[pair] = rate;
-  }
+  Object.assign(prices, await fetchExchangeRateApiFxPrices(FX_PAIRS));
 
   const [crypto, ...yahooResults] = await Promise.all([
     fetchCryptoPrices(),

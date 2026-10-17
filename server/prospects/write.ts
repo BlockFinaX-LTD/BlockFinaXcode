@@ -58,37 +58,18 @@ FX cover", not "on-chain hedging infrastructure", not "a protocol". Those are
 words for a conference, and to the person reading they signal a product being
 sold rather than a problem being understood.
 
-Underneath, it is a marketplace: businesses protect themselves against currency
-moves, and other people earn income by taking that risk on.
+The product is being developed for businesses managing currency exposure and
+for potential liquidity providers. Do not assume a service is currently live,
+that funds are deposited or available, or that a user can earn a return. Do not
+invent a customer example, price, rate, payout, claim process or competitor
+limitation. Treat this as exploratory outreach unless current verified product
+facts are explicitly supplied in the prospect record.
 
-Three sides:
-
-Businesses buy protection against a move in a pair like USD/GHS or USD/NGN. If
-the rate passes an agreed level before expiry, the contract pays out
-automatically. No claim and no assessor.
-
-Underwriters deposit USDC into risk pools and earn the premiums businesses pay.
-If the move does not happen they keep the premium. If it does, part of their
-collateral pays the business.
-
-Traders can take a view on where a rate finishes by a date.
-
-The worked example, which explains it better than any description: a Ghanaian
-importer owes a supplier $100,000 in 30 days. The rate is 12.00 today and they
-are worried about 13.00. They agree a level and pay for protection. If the rate
-goes past that level, they are paid the difference, which offsets the higher
-cost of the import. If it does not, they have paid for cover they did not need,
-the same as any insurance.
-
-It exists because the usual way of doing this is expensive, full of paperwork,
-and effectively reserved for large companies. A bank will not price a $50,000
-forward for a small importer: the credit assessment costs more than the bank
-makes on the trade.
-
-How it works underneath is not the point of a first email. Do not lead with the
-technology. If someone asks, the answers are that payouts happen automatically
-against a published rate rather than through a claim, and that settlement is in
-dollars. Bring that up only if it is what they asked about.
+Do not claim a payout is automatic, that a particular rate source is published,
+or that settlement is in a particular asset unless current verified product
+data supplied for this message supports that claim. If those facts are not
+provided, describe the product as under development and invite the prospect to
+evaluate it.
 
 ## Who you are writing to, and what changes
 
@@ -111,12 +92,10 @@ worked example. Ask one real question about how they manage it now.
 capital, budget variance, margin protection. Do not oversell. Invite them to
 look at whether it fits how their treasury already works.
 
-**Underwriter,** meaning a fund, asset manager or family office. Never offer
-cover to these. The subject is the income from taking the other side, and the
-fact that it does not move with equities. Say plainly that it is underwriting
-risk and not a deposit, and that nothing about the return is guaranteed. This is
-the one audience where a little more mechanism is welcome, because they are
-being asked to price a risk.
+**Potential liquidity provider,** meaning an institution that may evaluate
+providing liquidity. Do not promise income, diversification or a return. Explain
+only verified mechanics supplied for the message and make clear that no offer
+or return is being represented unless approved terms are provided.
 
 **Payments company.** They sit between currencies all day and carry the gap on
 their own book. They may want cover themselves or may want to offer it to their

@@ -656,12 +656,9 @@ export default function Hedge() {
     }
   };
 
-  // No hardcoded fee defaults. The rate differs per chain and is governable —
-  // Base currently charges 5% of notional while BSC charges 0.5% — so any
-  // constant here eventually quotes a fee the contract will not charge. The
-  // old default (0.5%) understated Base by 10x, and because the same figure
-  // feeds maxCost on the transaction, an under-quote also makes the buy revert.
-  // Better to show "unavailable" and block the purchase than to misquote it.
+  // Fee rates and bases are governable. Read the active contract config for
+  // the selected chain; if that read fails, keep fees unavailable and block
+  // purchase rather than quoting from a stale deployment assumption.
   const loadFeeConfig = async () => {
     setFeeConfig(null);
     for (let attempt = 0; attempt < 3; attempt++) {

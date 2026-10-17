@@ -1,3 +1,4 @@
+import { isWalletSandbox, walletRiftKey, walletSdkUrl, assertWalletTransactionsEnabled } from "./wallet-environment";
 /**
  * rift-client.ts — Wallet SDK wrapper (auth is handled by @rift-finance/react)
  *
@@ -36,7 +37,7 @@ const AUTH_METHOD_KEY = 'bfx_rift_auth_method';    // {kind, email|phoneNumber|e
  * issues a pk_; the moment they do, this becomes a config change and nothing
  * else needs touching.
  */
-const apiKey = (import.meta.env.VITE_RIFT_PUBLIC_KEY || import.meta.env.VITE_RIFT_API_KEY || '').trim();
+const apiKey = walletRiftKey;
 
 // Hosts that answer Rift API calls but send no Access-Control-Allow-Origin for
 // http://localhost. In dev these are rewritten through our own server (see
@@ -94,7 +95,8 @@ if (typeof window !== 'undefined' && !(window as any).__riftNoCachePatched) {
 // Singleton Rift wallet client — bearer token is set by RiftTokenBridge.
 export const rift = new Rift({
   apiKey,
-  environment: Environment.PRODUCTION,
+  environment: isWalletSandbox ? Environment.DEVELOPMENT : Environment.PRODUCTION,
+  baseUrl: walletSdkUrl,
 });
 
 // ── Identity surface ─────────────────────────────────────────────────────
@@ -183,11 +185,19 @@ export function isLoggedIn(): boolean {
 // ── Wallet & balances ────────────────────────────────────────────────────
 
 export async function getChainBalances(chain?: ChainName): Promise<Balance[]> {
+  if (isWalletSandbox) {
+    const address = getCachedUserSummary()?.address;
+    if (!address) return [];
+    const response = await fetch(`/api/sandbox/balances/${encodeURIComponent(address)}`);
+    if (!response.ok) throw new Error('Unable to read testnet balances');
+    return (await response.json()).balances;
+  }
   const res = await rift.wallet.getChainBalance(chain ? { chain } : undefined);
   return res?.data || [];
 }
 
 export async function getTokenBalance(token: TokenSymbol, chain?: ChainName): Promise<Balance[]> {
+  if (isWalletSandbox) return (await getChainBalances()).filter(b => b.token === token);
   const res = await rift.wallet.getTokenBalance({ token, chain });
   return res?.data || [];
 }
@@ -203,6 +213,7 @@ export interface UserToken {
 }
 
 export async function getUserTokens(): Promise<UserToken[]> {
+  if (isWalletSandbox) return [];
   const res = await rift.assets.getUserTokens();
   return (res?.data as UserToken[]) || [];
 }
@@ -215,6 +226,7 @@ export async function getOwnedBalances(): Promise<Balance[]> {
 // ── OTPs (for tx authorization — auth login OTPs live in the widget) ─────
 
 export async function sendOtp(target: { email?: string; phone?: string }) {
+  assertWalletTransactionsEnabled();
   if (target.email) return rift.auth.sendOtp({ email: target.email });
   if (target.phone) return rift.auth.sendOtp({ phone: target.phone });
   throw new Error('email or phone required');
@@ -223,10 +235,12 @@ export async function sendOtp(target: { email?: string; phone?: string }) {
 // ── Transactions ─────────────────────────────────────────────────────────
 
 export async function sendCrypto(req: TransactionRequest) {
+  assertWalletTransactionsEnabled();
   return rift.transactions.send(req);
 }
 
 export async function getHistory(req?: TransactionHistoryRequest) {
+  if (isWalletSandbox) return { transactions: [] };
   return rift.transactions.getHistory(req);
 }
 
@@ -234,10 +248,12 @@ export async function getHistory(req?: TransactionHistoryRequest) {
 // SDK returns `{ deposits: Deposit[] }` (or sometimes the bare array); caller
 // should normalize.
 export async function getDeposits() {
+  if (isWalletSandbox) return { deposits: [] };
   return (rift as any).deposits.getAllDeposits();
 }
 
 export async function getFee(req: { recipient: string; amount: string; chain: ChainName; token: TokenSymbol }) {
+  assertWalletTransactionsEnabled();
   return rift.transactions.getFee(req as any);
 }
 
@@ -274,6 +290,7 @@ export async function signerSendTransaction(
   args: SignerTxArgs,
   auth: SignerAuth
 ): Promise<{ hash: string; raw: any }> {
+  assertWalletTransactionsEnabled();
   const res = await (rift.signer as any).sendTransaction({
     chain: args.chain,
     transactionData: {

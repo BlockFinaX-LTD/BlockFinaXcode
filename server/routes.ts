@@ -30,6 +30,7 @@ import { registerCommunityRoutes } from "./routes/community";
 import { registerRiftProxy } from "./routes/rift-proxy";
 import { registerMercuryoRoutes } from "./routes/mercuryo";
 import { registerPricingRoutes } from "./routes/pricing";
+import { registerV2Routes } from "./routes/v2";
 import { registerPredictRoutes } from "./routes/predict";
 import { registerFundingRoutes } from "./routes/funding";
 import { registerContentRoutes } from "./routes/content";
@@ -70,6 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCommunityRoutes(app);
   registerMercuryoRoutes(app);
   registerPricingRoutes(app);
+  registerV2Routes(app);
   registerPredictRoutes(app);
   registerFundingRoutes(app);
   registerContentRoutes(app);

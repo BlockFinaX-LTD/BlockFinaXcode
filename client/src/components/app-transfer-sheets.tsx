@@ -1,3 +1,4 @@
+import { isWalletSandbox, sandboxSigningMessage } from "@/lib/wallet-environment";
 /**
  * app-transfer-sheets — Send / Receive bottom sheets for the redesigned Home,
  * styled with the design's `.sheet` / `.picker` classes.
@@ -29,13 +30,13 @@ import { CoinSvg, NetSvg, coinKeyForSymbol, netKeyForChain } from '@/components/
 import { explainTxError } from '@/lib/tx-errors';
 
 const CHAIN_LABELS: Record<string, string> = {
-  BASE: 'Base', POLYGON: 'Polygon', ARBITRUM: 'Arbitrum', ETHEREUM: 'Ethereum',
+  BASE_SEPOLIA: 'Base Sepolia', BASE: 'Base', POLYGON: 'Polygon', ARBITRUM: 'Arbitrum', ETHEREUM: 'Ethereum',
   BNB: 'BNB Chain', BSC: 'BNB Chain', OPTIMISM: 'Optimism', CELO: 'Celo',
   AVAX: 'Avalanche',
 };
 const CHAIN_ID_TO_NAME: Record<string, ChainName> = {
   '1': 'ETHEREUM', '10': 'OPTIMISM', '56': 'BNB', '137': 'POLYGON',
-  '8453': 'BASE', '42161': 'ARBITRUM', '42220': 'CELO', '43114': 'AVAX',
+  '84532': 'BASE_SEPOLIA' as ChainName, '8453': 'BASE', '42161': 'ARBITRUM', '42220': 'CELO', '43114': 'AVAX',
 };
 function normalizeChain(raw: string | number | undefined): string {
   if (raw == null) return '';
@@ -55,6 +56,7 @@ function txDisplay(chain: string, rawHash: string): { href: string; short: strin
 }
 function explorerTx(chain: string, hash: string): string {
   const c = normalizeChain(chain);
+  if (c === 'BASE_SEPOLIA') return `https://sepolia.basescan.org/tx/${hash}`;
   if (c === 'BASE') return `https://basescan.org/tx/${hash}`;
   if (c === 'BNB' || c === 'BSC') return `https://bscscan.com/tx/${hash}`;
   if (c === 'POLYGON') return `https://polygonscan.com/tx/${hash}`;
@@ -81,11 +83,12 @@ function ComingSoon({ label }: { label: string }) {
 // ─────────────────────────────────────────────────────────────────────────
 export function AppSendSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  useEffect(() => { if (open && isWalletSandbox) toast({ title: 'Testnet transfers pending', description: sandboxSigningMessage }); }, [open]);
   const { balances, refreshAll, isLoading: balLoading } = useRiftBalances();
 
   const [tab, setTab] = useState<DestTab>('crypto');
   const [step, setStep] = useState<Step>('form');
-  const [chain, setChain] = useState<ChainName>('BASE');
+  const [chain, setChain] = useState<ChainName>(isWalletSandbox ? 'BASE_SEPOLIA' as ChainName : 'BASE');
   const [token, setToken] = useState<TokenSymbol>('USDC');
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
@@ -540,7 +543,7 @@ export function AppReceiveSheet({ open, onClose }: { open: boolean; onClose: () 
               </div>
               <button className="copy" onClick={copy} aria-label="Copy address">{copied ? <Check /> : <Copy />}</button>
             </div>
-            <p className="send-note"><Info /> Only send tokens on supported networks (Base, BNB Chain) to this address.</p>
+            <p className="send-note"><Info /> {isWalletSandbox ? 'Only send test tokens on Base Sepolia to this address.' : 'Only send tokens on supported networks (Base, BNB Chain) to this address.'}</p>
           </div>
         )}
 

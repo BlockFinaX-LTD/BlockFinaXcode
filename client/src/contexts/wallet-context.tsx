@@ -22,25 +22,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Auto-connect with demo wallet for contract functionality
-    const demoAddress = "0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d";
-    setAddress(demoAddress);
-    setIsConnected(true);
-    sessionStorage.setItem('wallet_address', demoAddress);
+    const ethereum = (window as Window & { ethereum?: { request: (args: { method: string }) => Promise<unknown>; on?: (event: string, cb: (...args: unknown[]) => void) => void; removeListener?: (event: string, cb: (...args: unknown[]) => void) => void } }).ethereum;
+    if (!ethereum) return;
+    const syncAccounts = (accounts: unknown) => {
+      const account = Array.isArray(accounts) && typeof accounts[0] === 'string' ? accounts[0] : null;
+      setAddress(account);
+      setIsConnected(Boolean(account));
+    };
+    const onAccountsChanged = (accounts: unknown) => syncAccounts(accounts);
+    void ethereum.request({ method: 'eth_accounts' }).then(syncAccounts).catch(() => syncAccounts([]));
+    ethereum.on?.('accountsChanged', onAccountsChanged);
+    return () => ethereum.removeListener?.('accountsChanged', onAccountsChanged);
   }, []);
 
   const connect = async () => {
-    // For demo purposes, use a fixed address
-    const demoAddress = "0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d";
-    setAddress(demoAddress);
+    const ethereum = (window as Window & { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
+    if (!ethereum) throw new Error('No injected wallet was found. Install or open a wallet to connect.');
+    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const account = Array.isArray(accounts) && typeof accounts[0] === 'string' ? accounts[0] : null;
+    if (!account) throw new Error('The wallet returned no connected account.');
+    setAddress(account);
     setIsConnected(true);
-    sessionStorage.setItem('wallet_address', demoAddress);
   };
 
   const disconnect = () => {
     setAddress(null);
     setIsConnected(false);
-    sessionStorage.removeItem('wallet_address');
   };
 
   return (

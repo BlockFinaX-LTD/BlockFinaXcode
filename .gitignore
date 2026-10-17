@@ -99,3 +99,6 @@ BlockFinaX-Audit-V2-Report.html
 
 # stray probe scripts at repo root
 /*.mjs
+
+# Partner sandbox secrets and local runtime
+/tmp/sandbox/

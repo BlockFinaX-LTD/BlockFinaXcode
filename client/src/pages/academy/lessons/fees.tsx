@@ -126,33 +126,16 @@ export default function Fees() {
 
       <Section n="05" id="take" title="What the protocol keeps">
         <P>
-          Fees accrue inside the diamond, tracked per payment token.
-          Owner-only functions read the current balance and withdraw
-          up to it.
+          Fee balance views and withdrawal functions depend on the live
+          selector routing and token-specific accounting. Confirm the
+          current ABI, active implementation, balance and accrued fee
+          counter before creating a withdrawal transaction.
         </P>
-        <UL>
-          <li>
-            <CodeInline>getPlatformFeesByToken(token)</CodeInline> reads
-            the withdrawable balance in any allowed payment token.
-          </li>
-          <li>
-            <CodeInline>withdrawPlatformFeesByToken(token, amount)</CodeInline> pulls
-            up to that balance. Bounded by the fee counters. The owner
-            cannot touch LP capital, premiums, or reserved payouts
-            through this path.
-          </li>
-        </UL>
-        <Callout label="Application-layer guarantee">
-          Fee withdrawal is upper-bounded on-chain by an internal
-          counter that only increments when fees are levied. The owner
-          can&apos;t &quot;accidentally&quot; drain a pool via this function. It will
-          revert.
-        </Callout>
-        <Callout kind="warn" label="Caveat at the governance layer">
-          Whoever owns the diamond can also upgrade it. The
-          application-layer bound holds until the code changes. Lesson
-          11 covers the upgrade story and what stands between an
-          upgrade and a malicious drain.
+        <Callout kind="warn" label="No withdrawal guarantee">
+          A method name, ABI entry or internal counter is not proof that a
+          withdrawal is safe or that LP capital and liabilities are protected.
+          Verify the deployed code and reconcile balances and liabilities; an
+          upgrade can change behavior.
         </Callout>
       </Section>
     </>

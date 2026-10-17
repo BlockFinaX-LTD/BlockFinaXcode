@@ -6,9 +6,9 @@ export default function HowBlockFinaXWorks() {
       <LessonTag>Lesson 02 · How BlockFinaX works</LessonTag>
       <H1>How BlockFinaX works</H1>
       <Lead>
-        Four roles, one on-chain contract, one lifecycle. This lesson
-        stitches the pieces together end to end so the deep-dive lessons
-        that follow have somewhere to land.
+        This lesson describes the intended roles and transaction flow.
+        Active functions and behavior vary by network and deployed facet;
+        confirm them from live chain data before relying on this overview.
       </Lead>
 
       <Section n="01" id="shape" title="The main pieces">
@@ -33,8 +33,8 @@ export default function HowBlockFinaXWorks() {
             reserved.
           </KVRow>
           <KVRow term="Payment tokens">
-            USDC on Base. Every pool is denominated in a payment token,
-            fixed at creation.
+            The payment token depends on the network and is fixed for an
+            event at creation. Check the token address shown before signing.
           </KVRow>
         </KV>
       </Section>
@@ -57,9 +57,11 @@ export default function HowBlockFinaXWorks() {
             claims a payout.
           </KVRow>
           <KVRow term="Oracle">
-            One or more independent signers registered with the protocol.
-            After expiry they post the settlement rate. Consensus
-            triggers settlement automatically.
+            Registered signer addresses submit rates after expiry. Their
+            independence is not established by registration alone. When
+            multi-signer mode is active and quorum agrees, an oracle
+            transaction settles the event. Check the live mode and quorum
+            in the Data Room.
           </KVRow>
         </KV>
       </Section>
@@ -89,10 +91,12 @@ export default function HowBlockFinaXWorks() {
             the strike. Both settlement paths enforce this on-chain.
           </Step>
           <Step title="Settle">
-            At or after expiry, either the single-key admin (current
-            deployment) or a quorum of oracle signers posts the
-            settlement rate. If it&apos;s in the money, payouts are computed.
-            If not, all reserved capital returns to the pool.
+            At or after expiry, the settlement path depends on the live
+            contract configuration. The current authority mode, oracle
+            roster and quorum are shown in the Data Room&apos;s live governance
+            read. A successful settlement transaction then determines payouts.
+            If the required oracle transaction or quorum is unavailable,
+            settlement can be delayed.
           </Step>
           <Step title="Claim and withdraw">
             Winning hedgers call <CodeInline>claimPayout</CodeInline>.
@@ -104,35 +108,25 @@ export default function HowBlockFinaXWorks() {
         </Steps>
       </Section>
 
-      <Section n="04" id="solvency" title="Why pools are always solvent">
+      <Section n="04" id="solvency" title="Collateral checks and remaining risks">
         <P>
-          The single most important design choice is this. The pool&apos;s
-          solvency is checked at the moment of every
-          <CodeInline>buyProtection</CodeInline>, not at expiry. If the
-          pool can&apos;t reserve the buyer&apos;s worst-case payout out of
-          unencumbered liquidity, the purchase reverts.
+          The intended design uses available liquidity and position payout
+          limits when evaluating a purchase. Do not treat this lesson, an
+          indexer value, or a single balance read as proof that all liabilities
+          are fully backed. That requires review of the active facet bytecode,
+          token balances, accounting counters, every open position, and the
+          relevant transaction history.
         </P>
-        <P>Consequences worth internalising:</P>
+        <P>Even a verified purchase-time check would not remove every risk:</P>
         <UL>
-          <li>
-            LPs cannot lose more than the pool holds. There is no
-            outstanding claim without matching on-chain reserves.
-          </li>
-          <li>
-            Pools have real capacity limits. A small pool cannot
-            underwrite a large notional even if the LP would like the
-            premium. This is a feature.
-          </li>
-          <li>
-            Utilisation, the fraction of the pool that is reserved, is a
-            first-class metric for LPs. Lesson 09 turns it into a sizing
-            rule.
-          </li>
+          <li>Token behavior, accounting defects, upgrades, oracle inputs and failed execution can affect outcomes.</li>
+          <li>Pool liquidity and notional are different measures; neither alone establishes the amount owed or available.</li>
+          <li>Reconcile on-chain balances and liabilities before treating any displayed capacity as withdrawable or safe to underwrite.</li>
         </UL>
-        <Callout label="Guarantee">
-          At any block between event creation and expiry, the pool&apos;s
-          on-chain balance is at least the sum of all reserved payouts
-          across every active hedger position on that event.
+        <Callout kind="warn" label="No solvency guarantee">
+          The codebase and live registry have not been shown here to provide
+          independent proof that all positions are covered. Do not describe
+          pools as always solvent or payouts as guaranteed.
         </Callout>
       </Section>
 

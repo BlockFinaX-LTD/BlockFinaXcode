@@ -169,26 +169,12 @@ async function get24hChangeFromDB(pair: string, currentRate: number): Promise<nu
 
 const CACHE_TTL = 5 * 60 * 1000;
 const API_URL = "https://open.er-api.com/v6/latest";
-const BACKUP_API_URL = "https://api.exchangerate-api.com/v4/latest";
 
 // Per-fetch timeout for any external rate provider. 3s is aggressive but the
 // quote endpoint is user-facing and the values are cached for 5 minutes — if
 // a provider is slow, we'd rather fail this attempt fast and let the cache
 // fill from the next one.
 const FETCH_TIMEOUT_MS = 3_000;
-
-async function fetchRatesFromBackupSource(base: string): Promise<Record<string, number>> {
-  try {
-    const response = await fetch(`${BACKUP_API_URL}/${base}`, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error(`Backup API returned ${response.status}`);
-    const data = await response.json();
-    return data.rates ?? {};
-  } catch {
-    return {};
-  }
-}
 
 // Settlement chains — read from env vars so Railway configuration controls which chains are active.
 // Base + BSC only. Lisk was removed when smart-contract support was dropped.
@@ -369,16 +355,11 @@ async function refreshAllRates(): Promise<Record<string, FXRate>> {
   const bases = Array.from(new Set(Object.values(FX_PAIRS).map(p => p.base)));
   const allRates: Record<string, Record<string, number>> = {};
 
-  const backupRates: Record<string, Record<string, number>> = {};
-
   const [cryptoPrices, commodityPrices] = await Promise.all([
     fetchCryptoPrices(),
     fetchCommodityPrices(),
     ...bases.map(async (base) => {
       allRates[base] = await fetchRatesForBase(base);
-    }),
-    ...bases.map(async (base) => {
-      backupRates[base] = await fetchRatesFromBackupSource(base);
     }),
   ]);
 
@@ -386,15 +367,9 @@ async function refreshAllRates(): Promise<Record<string, FXRate>> {
 
   const fxEntries = Object.entries(FX_PAIRS)
     .map(([pair, { base, quote }]) => {
-      const primary = allRates[base]?.[quote];
-      const backup = backupRates[base]?.[quote];
-      const available = [primary, backup].filter((v): v is number => !!v && v > 0);
-      if (available.length === 0) return null;
-      const rate = available.reduce((a, b) => a + b, 0) / available.length;
-      const source = available.length === 2
-        ? "open.er-api.com + exchangerate-api.com (avg)"
-        : available[0] === primary ? "open.er-api.com" : "exchangerate-api.com";
-      return { pair, rate, source };
+      const rate = allRates[base]?.[quote];
+      if (!rate || rate <= 0 || !Number.isFinite(rate)) return null;
+      return { pair, rate, source: "ExchangeRate-API (open.er-api.com)" };
     })
     .filter((e): e is { pair: string; rate: number; source: string } => e !== null && !!e.rate);
 

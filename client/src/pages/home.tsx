@@ -1,3 +1,4 @@
+import { isWalletSandbox } from "@/lib/wallet-environment";
 /**
  * Home — rebuilt to the new design (app/Home.html).
  *
@@ -326,7 +327,7 @@ export default function HomePage() {
         <span className="ri"><Gift /></span>
         <div className="rc">
           <div className="rt">Refer &amp; earn</div>
-          <div className="rs">Invite a friend — you both get 50 points in rewards.</div>
+          <div className="rs">{isWalletSandbox ? 'Referral rewards are not configured in this test environment.' : 'Invite a friend — you both get 50 points in rewards.'}</div>
         </div>
         <button className="rx" onClick={() => setLocation('/tasks?tab=referrals')}>
           Invite <ArrowRight />
@@ -339,7 +340,7 @@ export default function HomePage() {
           {/* live rates */}
           <div className="sec">
             <div className="sec-h">
-              <h2>Live rates</h2>
+              <h2>{isWalletSandbox ? 'Test rates' : 'Live rates'}</h2>
               <div className="seg">
                 <button className={rateGroup === 'fx' ? 'on' : ''} onClick={() => setRateGroup('fx')}>FX</button>
                 <button className={rateGroup === 'cmd' ? 'on' : ''} onClick={() => setRateGroup('cmd')}>Commodities</button>

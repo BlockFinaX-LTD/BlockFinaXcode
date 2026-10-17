@@ -19,16 +19,6 @@ import { startDigestSweep } from "./agent/notify";
 import { startDepositSweep } from "./compliance/wallet-watch";
 import { startFollowUpSweep } from "./routes/leads";
 
-// Prevent non-fatal internal errors (e.g. Vite build warnings) from killing the server process
-const _originalExit = process.exit.bind(process);
-(process as any).exit = (code?: number) => {
-  if (code === 1) {
-    console.error('[Server] Suppressed exit(1) — keeping server alive');
-    return undefined as never;
-  }
-  return _originalExit(code as never);
-};
-
 const app = express();
 // No ETags — API responses set `Cache-Control: no-store` below; this prevents
 // any 304 Not Modified revalidation across the app.
@@ -287,9 +277,12 @@ app.use((req, res, next) => {
       console.error(`[Startup] FATAL — missing required environment variables: ${missing.join(", ")}`);
       process.exit(1);
     }
-    // Warn if NETWORK_MODE is not explicitly set to mainnet in production
+    // Fail closed rather than serving a production UI backed by testnet-mode
+    // authorization and chain configuration.
     if (process.env.NETWORK_MODE !== "mainnet") {
-      console.warn("[Startup] WARNING — NETWORK_MODE is not 'mainnet'. Running in testnet mode in a production deployment.");
+      console.error("[Startup] FATAL — NETWORK_MODE must be explicitly set to 'mainnet' in production.");
+      process.exit(1);
+      return;
     }
   }
 
@@ -298,6 +291,8 @@ app.use((req, res, next) => {
     await initializeDatabase();
   } catch (error) {
     console.error("Database initialization failed:", error);
+    process.exit(1);
+    return;
   }
 
   // Register oracle node wallets on the Diamond (using deployer key, idempotent)
@@ -402,11 +397,13 @@ app.use((req, res, next) => {
   });
 
   process.on('uncaughtException', (err) => {
-    console.error('[uncaughtException] Server error (continuing):', err.message);
+    console.error('[uncaughtException] Fatal server error; exiting for supervisor restart:', err);
+    process.exit(1);
   });
 
   process.on('unhandledRejection', (reason) => {
-    console.error('[unhandledRejection] Unhandled promise rejection (continuing):', reason);
+    console.error('[unhandledRejection] Fatal unhandled rejection; exiting for supervisor restart:', reason);
+    process.exit(1);
   });
 
   // importantly only setup vite in development and after

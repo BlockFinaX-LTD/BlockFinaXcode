@@ -5,10 +5,6 @@
  *   - Neon Postgres URLs (host contains ".neon.tech") → @neondatabase/serverless via WebSocket
  *   - Everything else (Railway proxy, local Postgres, AWS RDS, etc.) → standard `pg` over TCP
  *
- * Why: Railway's monorail.proxy.rlwy.net uses a wildcard cert (*.up.railway.app) that
- * doesn't match the proxy hostname, so Neon's WebSocket cert pinning fails. The standard
- * `pg` driver lets us pass `rejectUnauthorized: false` to skip hostname verification.
- *
  * Both drivers expose a Pool-shaped interface that drizzle's adapters consume identically;
  * downstream code uses `db` and never sees the underlying driver choice.
  */
@@ -79,17 +75,23 @@ if (isNeon) {
   });
   _db = drizzle({ client: _pool, schema });
 } else {
-  // Standard pg over TCP — for Railway proxy, local dev, RDS, etc.
-  // rejectUnauthorized:false because Railway's proxy cert doesn't match the proxy hostname.
+  // Standard pg over TCP. In production, certificate verification is mandatory.
+  // DATABASE_SSL_CA may provide the trusted CA bundle for a private database
+  // certificate. Configure a database hostname that matches its certificate;
+  // do not disable TLS verification to work around a hostname mismatch.
   const pg = requireCJS("pg");
   const { drizzle } = requireCJS("drizzle-orm/node-postgres");
   if (pg?.types?.setTypeParser) readNaiveTimestampsAsUtc(pg.types);
+  const databaseSslCa = process.env.DATABASE_SSL_CA?.replace(/\\n/g, "\n");
   _pool = new pg.Pool({
     connectionString: url,
     max: 3,
     idleTimeoutMillis: 15000,
     connectionTimeoutMillis: 5000,
-    ssl: { rejectUnauthorized: false },
+    ssl: {
+      rejectUnauthorized: process.env.NODE_ENV === "production",
+      ...(databaseSslCa ? { ca: databaseSslCa } : {}),
+    },
   });
   _db = drizzle(_pool, { schema });
 }

@@ -1,0 +1,30 @@
+{
+  "environment": "testnet",
+  "activeLiquidityHub": "stellar-testnet",
+  "chains": [
+    {
+      "key": "stellar-testnet",
+      "family": "stellar",
+      "name": "Stellar Testnet",
+      "networkId": "Test SDF Network ; September 2015",
+      "rpcUrls": ["https://soroban-testnet.stellar.org"],
+      "explorer": "https://stellar.expert/explorer/testnet",
+      "state": "ACTIVE",
+      "provisionAtSignup": true,
+      "contracts": {},
+      "assets": { "USDC": { "decimals": 7, "addressOrContract": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" } }
+    },
+    {
+      "key": "base-sepolia",
+      "family": "evm",
+      "name": "Base Sepolia",
+      "networkId": "84532",
+      "rpcUrls": ["https://sepolia.base.org"],
+      "explorer": "https://sepolia.basescan.org",
+      "state": "ACCESS_ONLY",
+      "provisionAtSignup": true,
+      "contracts": {},
+      "assets": { "USDC": { "decimals": 6, "addressOrContract": "0x036CbD53842c5426634e7929541eC2318f3dCF7e" } }
+    }
+  ]
+}

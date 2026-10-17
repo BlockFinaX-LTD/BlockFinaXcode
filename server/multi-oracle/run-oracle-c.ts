@@ -1,14 +1,13 @@
 /**
  * run-oracle-c.ts — Oracle Node C
  *
- * Data sources: Frankfurter API (ECB data, free, no key) for major FX pairs,
+ * Data sources: ExchangeRate-API (one shared FX source across all oracle nodes),
  *               Kraken public API for crypto (free, no key, accessible from cloud IPs),
  *               Yahoo Finance for commodities.
  *
- * Note on FX coverage: Frankfurter only covers major currency pairs (EUR, USD,
- * GBP, JPY etc.) from ECB data — it does NOT cover exotic African pairs like GHS,
- * NGN, KES. Oracle C will only submit for pairs it has reliable data for.
- * This is intentional — partial coverage is better than submitting bad data.
+ * FX source limitation: all three signers currently rely on the same provider.
+ * Quorum protects against signer/key failures, not a bad or unavailable provider.
+ * Add independent providers as separately configured sources in a later change.
  *
  * Required env vars:
  *   ORACLE_KEY_C       — Private key for Oracle C wallet
@@ -23,6 +22,7 @@
  */
 
 import { OracleNode, PriceMap } from "./oracle-node";
+import { fetchExchangeRateApiFxPrices } from "./fx-source";
 
 const RPC_URL =
   process.env.ORACLE_RPC_URL || "https://mainnet.base.org";
@@ -36,11 +36,11 @@ if (!DIAMOND_ADDRESS) throw new Error("DIAMOND_ADDRESS env var required");
 if (!ORACLE_KEY_C) throw new Error("ORACLE_KEY_C env var required");
 
 // ============================================================
-//           FX — Frankfurter (ECB — major pairs only)
+//               FX — ExchangeRate-API (single source)
 // ============================================================
 
-// African FX pairs fetched from ExchangeRate-API (open.er-api.com) as a tertiary source.
-// These supplement Oracle A & B's coverage of the same pairs.
+// This node uses the same initial FX source as Oracle A and B. Frankfurter is
+// intentionally not counted as an independent source for settlement here.
 const ERAPI_PAIRS: Record<string, { base: string; quote: string }> = {
   "USD/GHS": { base: "USD", quote: "GHS" },
   "USD/NGN": { base: "USD", quote: "NGN" },
@@ -53,7 +53,7 @@ const ERAPI_PAIRS: Record<string, { base: string; quote: string }> = {
   "USD/TND": { base: "USD", quote: "TND" },
 };
 
-// Only pairs that Frankfurter reliably covers via ECB data.
+// Additional configured pairs queried from the same ExchangeRate-API source.
 const FRANKFURTER_PAIRS: Record<string, { from: string; to: string }> = {
   "EUR/USD": { from: "EUR", to: "USD" },
   "GBP/USD": { from: "GBP", to: "USD" },
@@ -94,36 +94,6 @@ const YAHOO_TICKERS: Record<string, string> = {
   "XCF/USD": "KC=F",
   "XWH/USD": "ZW=F",
 };
-
-async function fetchFrankfurterRates(): Promise<Record<string, number>> {
-  try {
-    const bases = [...new Set(Object.values(FRANKFURTER_PAIRS).map((p) => p.from))];
-    const results: Record<string, number> = {};
-
-    await Promise.all(
-      bases.map(async (base) => {
-        try {
-          const res = await fetch(`https://api.frankfurter.app/latest?from=${base}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (!data.rates) return;
-
-          for (const [pair, { from, to }] of Object.entries(FRANKFURTER_PAIRS)) {
-            if (from === base && data.rates[to]) {
-              results[pair] = data.rates[to];
-            }
-          }
-        } catch {
-          // Partial failure acceptable — skip this base
-        }
-      })
-    );
-
-    return results;
-  } catch {
-    return {};
-  }
-}
 
 async function fetchKrakenPrices(): Promise<Record<string, number>> {
   try {
@@ -170,41 +140,21 @@ async function fetchYahooPrice(ticker: string): Promise<number | null> {
   }
 }
 
-async function fetchErApiRates(): Promise<Record<string, number>> {
-  try {
-    const bases = [...new Set(Object.values(ERAPI_PAIRS).map((p) => p.base))];
-    const results: Record<string, number> = {};
-    await Promise.all(
-      bases.map(async (base) => {
-        try {
-          const res = await fetch(`https://open.er-api.com/v6/latest/${base}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data.result !== "success") return;
-          for (const [pair, { base: b, quote }] of Object.entries(ERAPI_PAIRS)) {
-            if (b === base && data.rates[quote]) results[pair] = data.rates[quote];
-          }
-        } catch { /* skip */ }
-      })
-    );
-    return results;
-  } catch {
-    return {};
-  }
-}
-
 async function fetchPrices(): Promise<PriceMap> {
   const prices: PriceMap = {};
 
-  const [fxRates, erApiRates, cryptoPrices, ...yahooResults] = await Promise.all([
-    fetchFrankfurterRates(),
-    fetchErApiRates(),
+  const FX_SOURCE_PAIRS = {
+    ...ERAPI_PAIRS,
+    ...Object.fromEntries(Object.entries(FRANKFURTER_PAIRS).map(([pair, p]) => [pair, { base: p.from, quote: p.to }])),
+  };
+
+  const [fxRates, cryptoPrices, ...yahooResults] = await Promise.all([
+    fetchExchangeRateApiFxPrices(FX_SOURCE_PAIRS),
     fetchKrakenPrices(),
     ...Object.entries(YAHOO_TICKERS).map(([, ticker]) => fetchYahooPrice(ticker)),
   ]);
 
   Object.assign(prices, fxRates);
-  Object.assign(prices, erApiRates);
   Object.assign(prices, cryptoPrices);
 
   const yahooPairs = Object.keys(YAHOO_TICKERS);

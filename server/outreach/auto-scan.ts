@@ -105,6 +105,32 @@ export async function runAutoScan(opts: {
   const searched = outcomes.map(o => ({ query: o.query, fetched: o.fetched, error: o.error }));
   const allFailed = outcomes.length > 0 && outcomes.every(o => o.error);
 
+  /**
+   * Say which kind of failure it was.
+   *
+   * Every error used to be reported as "failed to reach the provider", including
+   * the ones where the provider answered immediately and told us exactly what was
+   * wrong. A 402 carrying "not-enough-usage-to-run-paid-actor" means the account
+   * is out of credit, and calling that a connectivity failure sends the reader to
+   * rotate an API key that was never the problem.
+   *
+   * The provider layer already keeps the status and the body. This only has to
+   * stop discarding what it captured.
+   */
+  const errors = outcomes.map(o => o.error || "").filter(Boolean);
+  const outOfCredit = errors.some(e => /not-enough-usage|exceed your remaining usage|\b402\b/i.test(e));
+  const rejected = errors.some(e => /provider returned (4|5)\d\d/i.test(e));
+  const unreachable = errors.some(e => /could not reach|timed out/i.test(e));
+
+  const failureNote = outOfCredit
+    ? "The scraping provider refused the job: the account is out of credit. " +
+      "Top up the Apify balance. A new API token will not help, the limit is on the account."
+    : rejected
+      ? `The provider was reached and refused the request. First error: ${errors[0].slice(0, 200)}`
+      : unreachable
+        ? "Could not reach the provider. Check network access and that APIFY_TOKEN is set."
+        : "Every search failed.";
+
   await recordScanAt(new Date(), opts.by || "scheduler");
 
   if (!merged.length) {
@@ -112,7 +138,7 @@ export async function runAutoScan(opts: {
       drafted: 0, relevant: 0, considered: 0, fetched, drafts: [],
       plan: plan.searches, plannerFallback: plan.fallback, searched,
       note: allFailed
-        ? "Every search failed to reach the provider."
+        ? failureNote
         : "LinkedIn returned nothing for any of the planned searches.",
     };
   }

@@ -20,6 +20,7 @@ docs/
 | [protocol-v2-advance-specification.md](architecture/protocol-v2-advance-specification.md) | Full spec of the v2 protocol design |
 | [range-strike-lp-token-design.md](architecture/range-strike-lp-token-design.md) | Design rationale for range payouts and LP shares |
 | [oracle-strategy.md](architecture/oracle-strategy.md) | Multi-signer oracle consensus design |
+| [currency-pools.md](architecture/currency-pools.md) | Shared-liquidity currency pools: tenors, fair vs offer pricing, Open and Capped cover, LP notice periods |
 
 ## explainers/ — How the code works
 

@@ -42,6 +42,7 @@ test("wallets cannot be reassigned", () => {
 const from = Address.contract(Buffer.alloc(32, 1)).toString();
 const other = Address.contract(Buffer.alloc(32, 2)).toString();
 const token = Asset.native().contractId(Networks.TESTNET);
+const usdc = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 const source = Keypair.random().publicKey();
 function envelope(
   sender = from,
@@ -93,7 +94,7 @@ function envelope(
 }
 test("sponsorship accepts only the signed wallet approved token transfer", () => {
   assert.equal(
-    inspectPayment(envelope(), Networks.TESTNET, from, token).amount,
+    inspectPayment(envelope(), Networks.TESTNET, from, [token]).amount,
     10000000n,
   );
   for (const bad of [
@@ -105,5 +106,18 @@ test("sponsorship accepts only the signed wallet approved token transfer", () =>
     envelope(from, other, 1n, token, "transfer", other),
     envelope(from, from),
   ])
-    assert.throws(() => inspectPayment(bad, Networks.TESTNET, from, token));
+    assert.throws(() => inspectPayment(bad, Networks.TESTNET, from, [token]));
+});
+test("sponsorship accepts the configured testnet USDC contract only when allowlisted", () => {
+  const payment = inspectPayment(
+    envelope(from, other, 2_5000000n, usdc),
+    Networks.TESTNET,
+    from,
+    [token, usdc],
+  );
+  assert.equal(payment.amount, 2_5000000n);
+  assert.equal(payment.token, usdc);
+  assert.throws(() =>
+    inspectPayment(envelope(from, other, 1n, usdc), Networks.TESTNET, from, [token]),
+  );
 });
