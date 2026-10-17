@@ -656,66 +656,59 @@ export function MyProtections({ go }: { go: Go }) {
 }
 
 // ── Rates ────────────────────────────────────────────────────────────────────
+// Two asset classes: FX rates and interest rates. Interest-rate rows open a benchmark page.
 
-type Fixing = { observationDate: string; ratePercent: string; rateMicroPercent: number; status: string; locked: boolean; onChain: { round: number; tx: string } | null };
+type Fixing = {
+  observationDate: string; ratePercent: string; rateMicroPercent: number; status: string; locked: boolean;
+  source: string; onChain: { round: number; tx: string } | null;
+};
 type BenchmarkRow = {
-  id: string; name: string; currency: string; licensing: string; state: 'PUBLISHED' | 'PENDING' | 'DELAYED';
-  expected: { observationDate: string }; latest: Fixing | null; previous: Fixing | null; notice?: string;
+  id: string; name: string; currency: string; administrator: string; licensing: string; state: 'PUBLISHED' | 'PENDING' | 'DELAYED';
+  expected: { observationDate: string; expectedAt: string }; latest: Fixing | null; previous: Fixing | null; notice?: string;
+};
+type BenchmarkDetail = BenchmarkRow & {
+  registry: { publicationTime?: string; timeZone: string; dayCountBasis: number; decimals: number; source: string; fallbackSource?: string; observationConvention: string };
 };
 
 const ADMINISTRATOR: Record<string, string> = { SOFR: 'Federal Reserve Bank of New York', KESONIA: 'Central Bank of Kenya' };
+const SOURCE_NAME: Record<string, string> = {
+  NEW_YORK_FED_API: 'New York Fed Markets API', NEW_YORK_FED_SEARCH: 'New York Fed Markets API (search)', CBK_KESONIA_TABLE: 'Central Bank of Kenya website',
+};
 const STELLAR_TX = 'https://stellar.expert/explorer/testnet/tx/';
+const isTxHash = (tx: string) => /^[0-9a-f]{64}$/.test(tx);
+const dayLabel = (iso: string) => dateOf(Date.parse(`${iso}T12:00:00Z`) / 1000);
+const pctText = (id: string, f: Fixing) => `${Number(f.ratePercent).toFixed(id === 'SOFR' ? 2 : 4)}%`;
 
-function fixingStatus(f: Fixing) {
-  if (f.onChain) return <Tag tone="green">On chain</Tag>;
-  if (!f.locked) return <Tag tone="amber">Open for correction</Tag>;
-  return <Tag tone="blue">Locked</Tag>;
-}
-
-/** Official interest-rate benchmarks from the rate oracle (testnet: SOFR and KESONIA). */
-function InterestRates() {
-  const q = useQuery({
+function useBenchmarks() {
+  return useQuery({
     queryKey: ['v2-benchmarks'],
     queryFn: async () => (await api<{ benchmarks: BenchmarkRow[] }>('/api/v2/benchmarks')).benchmarks,
     refetchInterval: 60_000,
   });
-  const rows = q.data ?? [];
-  const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 150px' };
-  const notices = rows.map((r) => r.notice).filter(Boolean) as string[];
-  return (
-    <div className="bx-card" style={{ marginTop: 16 }}>
-      <div className="bx-card-h">
-        <div><h2>Interest rates</h2><div className="sub">Official overnight benchmarks, read from each central bank and agreed on chain by the oracle nodes. Change is against the previous business day.</div></div>
-      </div>
-      {q.isLoading ? <Loading /> : q.isError ? <div className="bx-empty">Interest rates are unavailable right now.</div> : !rows.length ? <div className="bx-empty">No benchmarks are in use here yet.</div> : (
-        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 680 }}>
-          <div className="bx-list-h" style={cols}><span>Benchmark</span><span className="r">Rate</span><span className="r">Change</span><span className="r">For business day</span><span className="r">Status</span></div>
-          {rows.map((r) => {
-            const bp = r.latest && r.previous ? (r.latest.rateMicroPercent - r.previous.rateMicroPercent) / 10_000 : null;
-            return (
-              <div key={r.id} className="bx-li" style={cols}>
-                <div className="bx-who"><div><div className="t">{r.id} <span className="muted" style={{ fontWeight: 400 }}>· {r.currency}</span></div><div className="d">{r.name} · {ADMINISTRATOR[r.id] ?? r.id}</div></div></div>
-                <div className="r num" style={{ fontWeight: 600 }}>{r.latest ? `${Number(r.latest.ratePercent).toFixed(r.id === 'SOFR' ? 2 : 4)}%` : '-'}</div>
-                <div className="r">{bp === null ? <span className="muted">-</span>
-                  : <span className={`num ${bp > 0 ? 'up' : bp < 0 ? 'down' : 'muted'}`} style={{ fontWeight: 600 }}>{bp > 0 ? '+' : ''}{bp.toFixed(2)} bp</span>}</div>
-                <div className="r num">{r.latest ? dateOf(Date.parse(`${r.latest.observationDate}T12:00:00Z`) / 1000) : '-'}</div>
-                <div className="r">
-                  {r.state === 'DELAYED' ? <Tag tone="amber">Delayed</Tag>
-                    : !r.latest ? <Tag tone="grey">Waiting</Tag>
-                    : r.latest.onChain && /^[0-9a-f]{64}$/.test(r.latest.onChain.tx) ? <a href={STELLAR_TX + r.latest.onChain.tx} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{fixingStatus(r.latest)}</a>
-                    : fixingStatus(r.latest)}
-                </div>
-              </div>
-            );
-          })}
-        </div></div>
-      )}
-      {notices.map((n) => <p key={n} className="muted" style={{ fontSize: 12, margin: '12px 0 0' }}>{n}</p>)}
-    </div>
-  );
 }
 
-export function RatesPage({ go }: { go: Go }) {
+function BpChange({ bp }: { bp: number | null }) {
+  if (bp === null) return <span className="muted">-</span>;
+  return <span className={`num ${bp > 0 ? 'up' : bp < 0 ? 'down' : 'muted'}`} style={{ fontWeight: 600 }}>{bp > 0 ? '+' : ''}{bp.toFixed(2)} bp</span>;
+}
+
+const bpBetween = (a: Fixing | null | undefined, b: Fixing | null | undefined) => (a && b ? (a.rateMicroPercent - b.rateMicroPercent) / 10_000 : null);
+
+function FixingStatus({ f }: { f: Fixing }) {
+  const tag = f.onChain ? <Tag tone="green">On chain</Tag> : !f.locked ? <Tag tone="amber">Open for correction</Tag> : <Tag tone="blue">Locked</Tag>;
+  if (f.onChain && isTxHash(f.onChain.tx)) {
+    return <a href={STELLAR_TX + f.onChain.tx} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>{tag}</a>;
+  }
+  return tag;
+}
+
+function BenchmarkState({ r }: { r: BenchmarkRow }) {
+  if (r.state === 'DELAYED') return <Tag tone="amber">Delayed</Tag>;
+  if (!r.latest) return <Tag tone="grey">Waiting</Tag>;
+  return <FixingStatus f={r.latest} />;
+}
+
+function FxRates({ go }: { go: Go }) {
   const pools = usePools();
   const covered = useMemo(() => new Set((pools.data ?? []).filter((p) => p.acceptingHedges).map((p) => p.pair)), [pools.data]);
   const watch = useWatchlist();
@@ -726,30 +719,178 @@ export function RatesPage({ go }: { go: Go }) {
     .sort((a, b) => Number(covered.has(b.pair)) - Number(covered.has(a.pair)));
   const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr)) 150px' };
   return (
+    <div className="bx-card">
+      <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
+        <div><h2>FX rates</h2><div className="sub">Live exchange rates for the currencies BlockFinaX customers trade in. Change is over the last 24 hours.</div></div>
+        <input className="bx-input" style={{ maxWidth: 260 }} aria-label="Search FX rates" placeholder="Search currency" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      {watch.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No currency matches.</div> : (
+        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 620 }}>
+          <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">Rate</span><span className="r">Change</span><span /></div>
+          {rows.map((r) => (
+            <div key={r.pair} className="bx-li" style={cols}>
+              <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{pairName(r.pair)}</div><div className="d">{r.pair} · 1 {r.pair.split('/')[0]} in {quoteCcy(r.pair)}</div></div></div>
+              <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '-'}</div>
+              <div className="r"><ChangeText change={r.change} /></div>
+              <div className="r">{covered.has(r.pair)
+                ? <button className="bx-btn small" onClick={() => go('h-protect', { pair: r.pair })}>Protect</button>
+                : <span className="muted" style={{ fontSize: 12 }}>No cover yet</span>}</div>
+            </div>
+          ))}
+        </div></div>
+      )}
+    </div>
+  );
+}
+
+function InterestRates({ open }: { open: (id: string) => void }) {
+  const q = useBenchmarks();
+  const rows = q.data ?? [];
+  const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 160px' };
+  const notices = Array.from(new Set(rows.map((r) => r.notice).filter(Boolean) as string[]));
+  return (
+    <div className="bx-card">
+      <div className="bx-card-h">
+        <div><h2>Interest rates</h2><div className="sub">Official overnight benchmarks, read from each central bank and agreed on chain by the oracle nodes. Change is against the previous business day. Select a benchmark for its history.</div></div>
+      </div>
+      {q.isLoading ? <Loading /> : q.isError ? <div className="bx-empty">Interest rates are unavailable right now.</div> : !rows.length ? <div className="bx-empty">No benchmarks are in use here yet.</div> : (
+        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
+          <div className="bx-list-h" style={cols}><span>Benchmark</span><span className="r">Rate</span><span className="r">Change</span><span className="r">For business day</span><span className="r">Status</span></div>
+          {rows.map((r) => (
+            <div
+              key={r.id} className="bx-li click" style={cols} role="button" tabIndex={0} aria-label={`Open ${r.id}`}
+              onClick={() => open(r.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(r.id); } }}
+            >
+              <div className="bx-who"><div><div className="t">{r.id} <span className="muted" style={{ fontWeight: 400 }}>· {r.currency}</span></div><div className="d">{r.name} · {ADMINISTRATOR[r.id] ?? r.administrator}</div></div></div>
+              <div className="r num" style={{ fontWeight: 600 }}>{r.latest ? pctText(r.id, r.latest) : '-'}</div>
+              <div className="r"><BpChange bp={bpBetween(r.latest, r.previous)} /></div>
+              <div className="r num">{r.latest ? dayLabel(r.latest.observationDate) : '-'}</div>
+              <div className="r"><BenchmarkState r={r} /></div>
+            </div>
+          ))}
+        </div></div>
+      )}
+      {notices.map((n) => <p key={n} className="muted" style={{ fontSize: 12, margin: '12px 0 0' }}>{n}</p>)}
+    </div>
+  );
+}
+
+const IR_RANGES = [{ k: '1M', days: 31 }, { k: '3M', days: 92 }, { k: '6M', days: 183 }, { k: '1Y', days: 366 }] as const;
+
+function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
+  const [range, setRange] = useState<(typeof IR_RANGES)[number]['k']>('3M');
+  const detail = useQuery({
+    queryKey: ['v2-benchmark', id],
+    queryFn: () => api<BenchmarkDetail>(`/api/v2/benchmarks/${id}`),
+    refetchInterval: 60_000,
+  });
+  const days = IR_RANGES.find((r) => r.k === range)!.days;
+  const history = useQuery({
+    queryKey: ['v2-benchmark-obs', id],
+    // One year of fixings serves every range; ranges filter it locally.
+    queryFn: async () => {
+      const to = new Date().toISOString().slice(0, 10);
+      const from = new Date(Date.now() - 366 * 86_400_000).toISOString().slice(0, 10);
+      return (await api<{ observations: Fixing[] }>(`/api/v2/benchmarks/${id}/observations?from=${from}&to=${to}`)).observations;
+    },
+    refetchInterval: 300_000,
+  });
+  const all = history.data ?? [];
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const shown = all.filter((o) => o.observationDate >= since);
+  const points = shown.map((o) => ({ t: o.observationDate, v: o.rateMicroPercent / 1_000_000 }));
+  const d = detail.data;
+  const latest = d?.latest ?? null;
+  const first = shown[0];
+  const rangeBp = latest && first ? bpBetween(latest, first) : null;
+  const recent = [...all].reverse().slice(0, 15);
+  const cols = { gridTemplateColumns: 'minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)) 160px' };
+
+  return (
+    <>
+      <button className="bx-link" onClick={back} style={{ marginBottom: 12 }}>← Interest rates</button>
+      <div className="bx-card">
+        {detail.isLoading || !d ? <Loading /> : (
+          <>
+            <div className="bx-card-h" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div>
+                <div className="muted" style={{ fontSize: 13 }}>{d.name} · {d.currency}</div>
+                <h2 style={{ fontSize: 32, margin: '4px 0' }} className="num">{latest ? pctText(id, latest) : '-'}</h2>
+                <div style={{ fontSize: 14 }}>
+                  <BpChange bp={bpBetween(d.latest, d.previous)} /> <span className="muted">vs previous business day · for {latest ? dayLabel(latest.observationDate) : '-'}</span>
+                </div>
+              </div>
+              <BenchmarkState r={d} />
+            </div>
+            <RateChart points={points} loading={history.isLoading} strike={null} cap={null} />
+            <div className="bx-ranges" role="group" aria-label="Chart range">
+              {IR_RANGES.map((r) => <button key={r.k} className={range === r.k ? 'on' : ''} aria-pressed={range === r.k} onClick={() => setRange(r.k)}>{r.k}</button>)}
+            </div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+              {shown.length < 2 ? 'History builds up as the oracle records each business day.'
+                : <>Over {range}: <BpChange bp={rangeBp} /> across {shown.length} business days.</>}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="bx-card" style={{ marginTop: 16 }}>
+        <div className="bx-card-h"><div><h2>Recent fixings</h2><div className="sub">Each value is the official rate for one business day. It locks after the administrator's correction window, then goes on chain.</div></div></div>
+        {history.isLoading ? <Loading /> : !recent.length ? <div className="bx-empty">No fixings recorded yet.</div> : (
+          <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 560 }}>
+            <div className="bx-list-h" style={cols}><span>Business day</span><span className="r">Rate</span><span className="r">Change</span><span className="r">Status</span></div>
+            {recent.map((o, i) => (
+              <div key={o.observationDate} className="bx-li" style={cols}>
+                <div className="num">{dayLabel(o.observationDate)}</div>
+                <div className="r num" style={{ fontWeight: 600 }}>{pctText(id, o)}</div>
+                <div className="r"><BpChange bp={bpBetween(o, recent[i + 1])} /></div>
+                <div className="r"><FixingStatus f={o} /></div>
+              </div>
+            ))}
+          </div></div>
+        )}
+      </div>
+
+      {d && (
+        <div className="bx-card" style={{ marginTop: 16 }}>
+          <div className="bx-card-h"><h2>About {id}</h2></div>
+          <Sum l="Administrator" v={ADMINISTRATOR[id] ?? d.administrator} />
+          <Sum l="Published" v={d.registry.publicationTime ? `Business days around ${d.registry.publicationTime} (${d.registry.timeZone.replace('_', ' ')})` : 'On decision'} />
+          <Sum l="Each value is for" v={d.registry.observationConvention === 'PREVIOUS_BUSINESS_DAY' ? 'The previous business day' : 'The publication day'} />
+          <Sum l="Precision" v={`${d.registry.decimals} decimal places`} />
+          <Sum l="Day count" v={`Actual/${d.registry.dayCountBasis}`} />
+          <Sum l="Source" v={SOURCE_NAME[d.registry.source] ?? d.registry.source} />
+          <Sum l="Data licence" v={d.licensing === 'CLEARED' ? 'Cleared for use' : 'Testnet only, being confirmed with the administrator'} />
+          {d.notice && <p className="muted" style={{ fontSize: 12, margin: '12px 0 0' }}>{d.notice}</p>}
+        </div>
+      )}
+    </>
+  );
+}
+
+type RatesTab = 'fx' | 'ir';
+const TAB_KEY = 'bfx-rates-tab';
+
+export function RatesPage({ go }: { go: Go }) {
+  const [tab, setTabState] = useState<RatesTab>(() => {
+    try { return (localStorage.getItem(TAB_KEY) as RatesTab) === 'ir' ? 'ir' : 'fx'; } catch { return 'fx'; }
+  });
+  const setTab = (t: RatesTab) => {
+    setTabState(t);
+    setBenchmark(null);
+    try { localStorage.setItem(TAB_KEY, t); } catch { /* storage unavailable */ }
+  };
+  const [benchmark, setBenchmark] = useState<string | null>(null);
+  return (
     <main className="bx-main">
       <section className="bx-full">
-        <div className="bx-card">
-          <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-            <div><h2>Rates</h2><div className="sub">Live rates for the currencies BlockFinaX customers trade in. Change is over the last 24 hours.</div></div>
-            <input className="bx-input" style={{ maxWidth: 260 }} aria-label="Search rates" placeholder="Search currency" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-          {watch.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No currency matches.</div> : (
-            <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 620 }}>
-              <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">Rate</span><span className="r">Change</span><span /></div>
-              {rows.map((r) => (
-                <div key={r.pair} className="bx-li" style={cols}>
-                  <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{pairName(r.pair)}</div><div className="d">{r.pair} · 1 {r.pair.split('/')[0]} in {quoteCcy(r.pair)}</div></div></div>
-                  <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '-'}</div>
-                  <div className="r"><ChangeText change={r.change} /></div>
-                  <div className="r">{covered.has(r.pair)
-                    ? <button className="bx-btn small" onClick={() => go('h-protect', { pair: r.pair })}>Protect</button>
-                    : <span className="muted" style={{ fontSize: 12 }}>No cover yet</span>}</div>
-                </div>
-              ))}
-            </div></div>
-          )}
+        <div className="bx-seg" role="tablist" aria-label="Asset class" style={{ maxWidth: 360, marginBottom: 16 }}>
+          <button role="tab" aria-selected={tab === 'fx'} className={tab === 'fx' ? 'on' : ''} onClick={() => setTab('fx')}>FX rates</button>
+          <button role="tab" aria-selected={tab === 'ir'} className={tab === 'ir' ? 'on' : ''} onClick={() => setTab('ir')}>Interest rates</button>
         </div>
-        <InterestRates />
+        {tab === 'fx' ? <FxRates go={go} />
+          : benchmark ? <BenchmarkPage id={benchmark} back={() => setBenchmark(null)} />
+          : <InterestRates open={setBenchmark} />}
       </section>
     </main>
   );

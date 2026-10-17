@@ -63,7 +63,7 @@ export function startRateOracleScheduler(): void {
     } catch (err) {
       console.warn(`[RateOracle] could not prepare tables: ${(err as Error).message}`);
     }
-    void run(30);
+    void run(260); // about a year of business days, for the benchmark charts
     setInterval(() => void run(5), POLL_MS);
   }, 30_000);
 }
