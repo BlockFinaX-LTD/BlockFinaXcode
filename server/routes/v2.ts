@@ -207,7 +207,9 @@ export function registerV2Routes(app: Express) {
     for (const chain of chainRegistry()!.all()) {
       if (!book[chain.key] || chain.state === "DISABLED") continue;
       for (const symbol of Object.keys(chain.assets)) {
-        rows.push({ chain: chain.key, symbol, amount: await s.adapters.adapterFor(chain.key).getBalance(book[chain.key], symbol).catch(() => null) });
+        // One chain failing must not hide balances on the others.
+        const amount = await Promise.resolve().then(() => s.adapters.adapterFor(chain.key).getBalance(book[chain.key], symbol)).catch(() => null);
+        rows.push({ chain: chain.key, symbol, amount });
       }
     }
     res.json({ balances: rows });

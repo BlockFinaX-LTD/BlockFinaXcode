@@ -49,19 +49,28 @@ const QUOTE_TTL_SECONDS = 120;
 
 export class EvmAdapter implements ChainAdapter {
   readonly provider: ethers.JsonRpcProvider;
-  private readonly diamond: string;
-  private readonly pools: ethers.Contract;
+  private readonly diamondAddress: string | null;
+  private poolContract: ethers.Contract | null = null;
   private readonly iface = new ethers.Interface(CURRENCY_POOL_ABI as unknown as string[]);
   private readonly events = new ethers.Interface(EVENT_ABI);
   private readonly chainId: number;
 
   constructor(readonly chain: ChainConfig, provider?: ethers.JsonRpcProvider) {
     if (chain.family !== "evm") throw new Error(`${chain.key} is not an EVM chain`);
-    if (!chain.contracts.currencyPool) throw new Error(`${chain.key} has no currency-pool contract`);
     this.chainId = Number(chain.networkId);
-    this.diamond = chain.contracts.currencyPool;
+    // A funding-only chain (ACCESS_ONLY) may have no pool contract: balances and
+    // transfers still work there, and pool features refuse with a clear error.
+    this.diamondAddress = chain.contracts.currencyPool ?? null;
     this.provider = provider ?? new ethers.JsonRpcProvider(chain.rpcUrls[0], this.chainId, { staticNetwork: ethers.Network.from(this.chainId) });
-    this.pools = new ethers.Contract(this.diamond, CURRENCY_POOL_ABI as unknown as string[], this.provider);
+  }
+
+  private get diamond(): string {
+    if (!this.diamondAddress) throw new ApplicationError("CHAIN_NOT_ENABLED", `${this.chain.name} has no BlockFinaX pool contract`);
+    return this.diamondAddress;
+  }
+
+  private get pools(): ethers.Contract {
+    return (this.poolContract ??= new ethers.Contract(this.diamond, CURRENCY_POOL_ABI as unknown as string[], this.provider));
   }
 
   // ── Domain mapping ──────────────────────────────────────────────────────────
@@ -129,6 +138,7 @@ export class EvmAdapter implements ChainAdapter {
   }
 
   async listPools(): Promise<CurrencyPool[]> {
+    if (!this.diamondAddress) return [];
     const count = Number(await this.pools.getCurrencyPoolCount());
     const out: CurrencyPool[] = [];
     for (let id = 1; id <= count; id++) out.push(await this.getPool(id));
@@ -142,6 +152,7 @@ export class EvmAdapter implements ChainAdapter {
   }
 
   async listPositions(owner: string): Promise<ProtectionPosition[]> {
+    if (!this.diamondAddress) return [];
     const ids: bigint[] = await this.pools.getHedgerPoolPositionIds(owner);
     const out: ProtectionPosition[] = [];
     for (const id of [...ids].reverse().slice(0, 100)) out.push(await this.getPosition(Number(id)));
