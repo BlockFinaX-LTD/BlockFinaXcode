@@ -19,3 +19,5 @@
 - Extend expiry to the new meeting date (rejected: open-ended capital lock for underwriters).
 
 **Consequences.** The app must show scheduled decision dates and warn when a protection expires before the next decision. Pricing models decision probabilities per meeting within the protection window.
+
+**Amendment (2026-10-17, testnet build).** The oracle now records the policy rate in force at 17:00 local time on every weekday, using each decision's effective date. Policy-rate protection on testnet settles on that daily series **compounded over the protection**, the same way as the overnight benchmarks, instead of on the single value on the expiry date. The "rate in force" definition above still decides each day's value, so postponed and emergency meetings are handled the same way. Compounding matches how a loan priced off the policy rate accrues, and it means one pool contract serves both kinds of benchmark. A single-fixing settlement mode can be added later if borrowers need it.

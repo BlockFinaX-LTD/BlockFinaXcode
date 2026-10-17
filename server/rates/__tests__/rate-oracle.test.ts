@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { activeBenchmarks, getBenchmark, microToPercent, percentToMicro } from "@shared/rates/benchmarks";
-import { parseKesonia, parseSofr, SourceError, type FetchResult, type RateAdapter } from "../adapters";
+import { inForceSeries, parseBoeCsv, parseDayMonYear, parseEstr, parseGhanaPolicyTable, parseKesonia, parseNofr, parseNyFed, parseSofr, SourceError, type FetchResult, type RateAdapter } from "../adapters";
 import { businessDaysBetween, isBusinessDay, previousBusinessDay, zonedInstant } from "../calendar";
 import { InMemoryRateRepository, benchmarkStatus, ingest, refreshBenchmark } from "../service";
 import { epochDay, expectationFor, fromEpochDay, isLocked, latestExpected, RateValidationError, validateObservation, type RawObservation } from "../validate";
@@ -41,8 +41,10 @@ test("percent strings convert exactly to micro-percent and back", () => {
   assert.throws(() => percentToMicro("1e2"));
 });
 
-test("only SOFR and KESONIA run on testnet; nothing is enabled for production", () => {
-  assert.deepEqual(activeBenchmarks(true).map((b) => b.id).sort(), ["KESONIA", "SOFR"]);
+test("testnet runs nine benchmarks, no Treasury bill; nothing is enabled for production", () => {
+  assert.deepEqual(activeBenchmarks(true).map((b) => b.id).sort(),
+    ["EFFR", "ESTR", "GHS_INTERBANK", "GHS_MPR", "KESONIA", "KES_CBR", "NOFR", "SOFR", "UK_BANK_RATE"]);
+  assert.ok(!activeBenchmarks(true).some((b) => b.id.includes("TBILL")));
   assert.deepEqual(activeBenchmarks(false), []);
 });
 
@@ -245,4 +247,60 @@ test("values from the official fallback are accepted and attributed to it", asyn
   const s = await refreshBenchmark(repo, "SOFR", viaFallback);
   assert.equal(s.accepted, 1);
   assert.equal((await repo.get("SOFR", "2026-10-15"))?.source, "NEW_YORK_FED_SEARCH");
+});
+
+// ── New markets ──────────────────────────────────────────────────────────────
+
+test("EFFR follows the Fed's own calendar: published on Good Friday, unlike SOFR", () => {
+  const effr = parseNyFed(JSON.stringify({ refRates: [{ effectiveDate: "2026-04-03", type: "EFFR", percentRate: 3.64 }] }), "NEW_YORK_FED_EFFR_API", "u", "EFFR");
+  assert.equal(validateObservation(effr[0], NOW).rateMicroPercent, 3_640_000);
+  rejects(() => validateObservation(raw("SOFR", "2026-04-03", "3.65"), NOW), "NOT_BUSINESS_DAY");
+});
+
+test("ESTR: parses the ECB SDMX JSON, three decimals", () => {
+  const body = JSON.stringify({
+    dataSets: [{ series: { "0:0:0": { observations: { "0": [2.439], "1": [2.44] } } } }],
+    structure: { dimensions: { observation: [{ values: [{ id: "2026-10-14" }, { id: "2026-10-15" }] }] } },
+  });
+  const rows = parseEstr(body, "ECB_DATA_API", "u");
+  assert.equal(rows[0].observationDate, "2026-10-15");
+  assert.equal(validateObservation(rows[1], NOW).rateMicroPercent, 2_439_000);
+});
+
+test("NOFR: parses the CBN API dates", () => {
+  const rows = parseNofr(JSON.stringify([{ ratedate: "October-15-2026", nofr: "20.00" }, { ratedate: "June-1-2026", nofr: "22.50" }]), "CBN_NOFR_API", "u");
+  assert.deepEqual(rows.map((r) => r.observationDate), ["2026-10-15", "2026-06-01"]);
+  assert.equal(validateObservation(rows[0], NOW).ratePercent, "20.000000");
+  assert.throws(() => parseNofr(JSON.stringify([{ ratedate: "15/10/2026", nofr: "20" }]), "CBN_NOFR_API", "u"), SourceError);
+});
+
+test("Ghana dates and the Bank of Ghana policy table", () => {
+  assert.equal(parseDayMonYear("16 Oct 2026"), "2026-10-16");
+  assert.equal(parseDayMonYear("2026-10-16"), null);
+  const html = `<table class="wpDataTable"><tr><th>Meeting No.</th></tr>
+    <tr><td>131</td><td>July 20 – 22, 2026</td><td>22 Jul 2026</td><td>14.0</td></tr>
+    <tr><td>132</td><td>September 23 – 24, 2026</td><td>24 Sep 2026</td><td>14.0</td></tr></table>`;
+  assert.deepEqual(parseGhanaPolicyTable(html, "BOG_POLICY_TABLE"), [
+    { effectiveDate: "2026-07-22", ratePercent: "14.00" }, { effectiveDate: "2026-09-24", ratePercent: "14.00" },
+  ]);
+});
+
+test("a policy rate becomes the rate in force on each weekday, from its effective date", () => {
+  const decisions = [{ effectiveDate: "2026-10-07", ratePercent: "8.75" }, { effectiveDate: "2026-10-14", ratePercent: "9.25" }];
+  // Friday 16 Oct, 18:00 Nairobi: today counts.
+  const rows = inForceSeries("KES_CBR", decisions, 20, "CBK_CBR_TABLE", "u", new Date("2026-10-16T15:00:00Z"));
+  assert.deepEqual(rows.map((r) => [r.observationDate, r.ratePercent]), [
+    ["2026-10-16", "9.25"], ["2026-10-15", "9.25"], ["2026-10-14", "9.25"],
+    ["2026-10-13", "8.75"], ["2026-10-12", "8.75"], ["2026-10-09", "8.75"], ["2026-10-08", "8.75"], ["2026-10-07", "8.75"],
+  ]);
+  // Before 17:00 local, today is not yet observed.
+  const early = inForceSeries("KES_CBR", decisions, 1, "CBK_CBR_TABLE", "u", new Date("2026-10-16T10:00:00Z"));
+  assert.equal(early[0].observationDate, "2026-10-15");
+  assert.equal(validateObservation(rows[0], new Date("2026-10-16T15:00:00Z")).rateMicroPercent, 9_250_000);
+});
+
+test("Bank of England CSV becomes Bank Rate in force", () => {
+  const decisions = parseBoeCsv("DATE,IUDBEDR\n15 Oct 2026,3.75\n16 Oct 2026,3.75", "BOE_IADB_BANK_RATE");
+  assert.deepEqual(decisions[1], { effectiveDate: "2026-10-16", ratePercent: "3.75" });
+  assert.throws(() => parseBoeCsv("DATE,OTHER\n", "BOE_IADB_BANK_RATE"), SourceError);
 });

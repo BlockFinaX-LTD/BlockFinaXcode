@@ -12,7 +12,7 @@
 
 ## Verdict
 
-**RATE ORACLE V1 READY FOR TESTING** on Stellar testnet, for **SOFR and KESONIA only**.
+**RATE ORACLE V1 READY FOR TESTING** on Stellar testnet, for nine benchmarks (section 6). Treasury bill rates are deliberately excluded.
 
 It is **not ready for production**. The blockers are listed in section 4. Nothing here prices or settles an interest-rate protection yet; that is the next stage (market type and payout formula).
 
@@ -79,3 +79,29 @@ Interest-rate protection pools:
 - pricing per the [pricing integration](pricing-integration-v1.0.md) plan
 
 These read fixings by observation day from this contract.
+
+## 6. Benchmarks on testnet (update, 2026-10-17)
+
+| ID | Market | Kind | Official source | Calendar | Basis |
+| --- | --- | --- | --- | --- | --- |
+| SOFR | USD | Overnight | New York Fed Markets API | US bond market (SIFMA) | 360 |
+| EFFR | USD | Overnight | New York Fed Markets API | Fedwire (open on Good Friday) | 360 |
+| ESTR | EUR | Overnight | ECB Data Portal (SDMX) | TARGET2 | 360 |
+| KESONIA | KES | Overnight | Central Bank of Kenya table | Kenya | 365 |
+| NOFR | NGN | Overnight | Central Bank of Nigeria API | Nigeria | 360 |
+| GHS_INTERBANK | GHS | Overnight | Bank of Ghana interbank table (same-day) | Ghana | 365 |
+| KES_CBR | KES | Policy, in force each weekday | Central Bank of Kenya CBR table | Weekdays | 365 |
+| GHS_MPR | GHS | Policy, in force each weekday | Bank of Ghana policy rate history (effective dates) | Weekdays | 365 |
+| UK_BANK_RATE | GBP | Policy, in force each weekday | Bank of England database (IUDBEDR) | Weekdays | 365 |
+
+Calendars for Ghana, Nigeria, TARGET2 and Fedwire were derived from the gaps in each source's own history; future dates are provisional.
+
+Not built, and why:
+- **South Africa (ZARONIA, repo rate):** the SARB data service did not respond from our network.
+- **Egypt, Morocco, Uganda, Rwanda, Tanzania, Zambia, Mauritius, Botswana, BCEAO:** no machine-readable official source was found yet.
+- **Nigeria MPR:** CBN publishes it only monthly, about two months late; NOFR covers Nigeria instead.
+- **SONIA:** needs a Bank of England licence for redistribution.
+- **Treasury bill rates:** excluded by product decision.
+
+Kenya CBR uses the MPC meeting date in the CBK table as the effective date; confirm against CBK statements.
+Policy-rate protection compounds the daily rate in force (ADR-RATE-005 amendment).

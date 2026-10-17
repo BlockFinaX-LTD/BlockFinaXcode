@@ -269,7 +269,7 @@ export function HedgerHome({ go }: { go: Go }) {
               onClick={() => go('h-rates', { rates: 'ir', benchmark: b.id })}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go('h-rates', { rates: 'ir', benchmark: b.id }); } }}>
               <span className="bx-ic"><Percent aria-hidden="true" /></span>
-              <div className="grow"><div className="t">{b.id}</div><div className="d">{b.currency} overnight rate</div></div>
+              <div className="grow"><div className="t">{b.id}</div><div className="d">{kindLabel(b)}</div></div>
               <div style={{ textAlign: 'right' }}><div className="num t">{b.latest ? pctText(b.id, b.latest) : '-'}</div><div style={{ fontSize: 12 }}><BpChange bp={bpBetween(b.latest, b.previous)} /></div></div>
             </div>
           ))}
@@ -685,25 +685,40 @@ type Fixing = {
 };
 type BenchmarkRow = {
   id: string; name: string; currency: string; administrator: string; licensing: string; state: 'PUBLISHED' | 'PENDING' | 'DELAYED';
+  type: string; decimals: number;
   expected: { observationDate: string; expectedAt: string }; latest: Fixing | null; previous: Fixing | null; notice?: string;
 };
 type BenchmarkDetail = BenchmarkRow & {
   registry: { website?: string; publicationTime?: string; timeZone: string; dayCountBasis: number; decimals: number; source: string; fallbackSource?: string; observationConvention: string };
 };
 
-const ADMINISTRATOR: Record<string, string> = { SOFR: 'Federal Reserve Bank of New York', KESONIA: 'Central Bank of Kenya' };
+const ADMINISTRATOR: Record<string, string> = {
+  FEDERAL_RESERVE_BANK_OF_NEW_YORK: 'Federal Reserve Bank of New York', CENTRAL_BANK_OF_KENYA: 'Central Bank of Kenya',
+  CENTRAL_BANK_OF_NIGERIA: 'Central Bank of Nigeria', BANK_OF_GHANA: 'Bank of Ghana', EUROPEAN_CENTRAL_BANK: 'European Central Bank',
+  BANK_OF_ENGLAND: 'Bank of England',
+};
+const adminName = (code: string) => ADMINISTRATOR[code] ?? code;
+const DECIMALS: Record<string, number> = {};
+const kindLabel = (r: { type: string; currency: string }) => `${r.currency} ${r.type === 'POLICY' ? 'policy rate' : 'overnight rate'}`;
 const SOURCE_NAME: Record<string, string> = {
   NEW_YORK_FED_API: 'New York Fed Markets API', NEW_YORK_FED_SEARCH: 'New York Fed Markets API (search)', CBK_KESONIA_TABLE: 'Central Bank of Kenya website',
+  NEW_YORK_FED_EFFR_API: 'New York Fed Markets API', ECB_DATA_API: 'ECB Data Portal', CBN_NOFR_API: 'Central Bank of Nigeria website',
+  BOG_INTERBANK_TABLE: 'Bank of Ghana website', BOG_POLICY_TABLE: 'Bank of Ghana policy rate history', CBK_CBR_TABLE: 'Central Bank of Kenya website',
+  BOE_IADB_BANK_RATE: 'Bank of England database',
 };
 const STELLAR_TX = 'https://stellar.expert/explorer/testnet/tx/';
 const isTxHash = (tx: string) => /^[0-9a-f]{64}$/.test(tx);
 const dayLabel = (iso: string) => dateOf(Date.parse(`${iso}T12:00:00Z`) / 1000);
-const pctText = (id: string, f: Fixing) => `${Number(f.ratePercent).toFixed(id === 'SOFR' ? 2 : 4)}%`;
+const pctText = (id: string, f: Fixing) => `${Number(f.ratePercent).toFixed(DECIMALS[id] ?? 2)}%`;
 
 function useBenchmarks() {
   return useQuery({
     queryKey: ['v2-benchmarks'],
-    queryFn: async () => (await api<{ benchmarks: BenchmarkRow[] }>('/api/v2/benchmarks')).benchmarks,
+    queryFn: async () => {
+      const rows = (await api<{ benchmarks: BenchmarkRow[] }>('/api/v2/benchmarks')).benchmarks;
+      for (const r of rows) DECIMALS[r.id] = r.decimals;
+      return rows;
+    },
     refetchInterval: 60_000,
   });
 }
@@ -772,7 +787,7 @@ function InterestRates({ open }: { open: (id: string) => void }) {
   return (
     <div className="bx-card">
       <div className="bx-card-h">
-        <div><h2>Interest rates</h2><div className="sub">Official overnight benchmarks, read from each central bank and agreed on chain by the oracle nodes. Change is against the previous business day. Select a benchmark for its history.</div></div>
+        <div><h2>Interest rates</h2><div className="sub">Official overnight rates and central bank policy rates, read from each administrator and agreed on chain by the oracle nodes. Change is against the previous business day. Select a rate for its history.</div></div>
       </div>
       {q.isLoading ? <Loading /> : q.isError ? <div className="bx-empty">Interest rates are unavailable right now.</div> : !rows.length ? <div className="bx-empty">No benchmarks are in use here yet.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
@@ -782,7 +797,7 @@ function InterestRates({ open }: { open: (id: string) => void }) {
               key={r.id} className="bx-li click" style={cols} role="button" tabIndex={0} aria-label={`Open ${r.id}`}
               onClick={() => open(r.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(r.id); } }}
             >
-              <div className="bx-who"><div><div className="t">{r.id} <span className="muted" style={{ fontWeight: 400 }}>· {r.currency}</span></div><div className="d">{r.name} · {ADMINISTRATOR[r.id] ?? r.administrator}</div></div></div>
+              <div className="bx-who"><div><div className="t">{r.id} <span className="muted" style={{ fontWeight: 400 }}>· {r.currency}</span></div><div className="d">{r.name} · {adminName(r.administrator)}</div></div></div>
               <div className="r num" style={{ fontWeight: 600 }}>{r.latest ? pctText(r.id, r.latest) : '-'}</div>
               <div className="r"><BpChange bp={bpBetween(r.latest, r.previous)} /></div>
               <div className="r num">{r.latest ? dayLabel(r.latest.observationDate) : '-'}</div>
@@ -824,8 +839,6 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
   const latest = d?.latest ?? null;
   const first = shown[0];
   const rangeBp = latest && first ? bpBetween(latest, first) : null;
-  const recent = [...all].reverse().slice(0, 15);
-  const cols = { gridTemplateColumns: 'minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)) 160px' };
 
   return (
     <>
@@ -857,29 +870,13 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
 
       <RateCoverPanel benchmark={id} />
 
-      <div className="bx-card" style={{ marginTop: 16 }}>
-        <div className="bx-card-h"><div><h2>Recent fixings</h2><div className="sub">Each value is the official rate for one business day. It locks after the administrator's correction window, then goes on chain.</div></div></div>
-        {history.isLoading ? <Loading /> : !recent.length ? <div className="bx-empty">No fixings recorded yet.</div> : (
-          <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 560 }}>
-            <div className="bx-list-h" style={cols}><span>Business day</span><span className="r">Rate</span><span className="r">Change</span><span className="r">Status</span></div>
-            {recent.map((o, i) => (
-              <div key={o.observationDate} className="bx-li" style={cols}>
-                <div className="num">{dayLabel(o.observationDate)}</div>
-                <div className="r num" style={{ fontWeight: 600 }}>{pctText(id, o)}</div>
-                <div className="r"><BpChange bp={bpBetween(o, recent[i + 1])} /></div>
-                <div className="r"><FixingStatus f={o} /></div>
-              </div>
-            ))}
-          </div></div>
-        )}
-      </div>
-
       {d && (
         <div className="bx-card" style={{ marginTop: 16 }}>
           <div className="bx-card-h"><h2>About {id}</h2></div>
-          <Sum l="Administrator" v={ADMINISTRATOR[id] ?? d.administrator} />
-          <Sum l="Published" v={d.registry.publicationTime ? `Business days around ${d.registry.publicationTime} (${d.registry.timeZone.replace('_', ' ')})` : 'On decision'} />
-          <Sum l="Each value is for" v={d.registry.observationConvention === 'PREVIOUS_BUSINESS_DAY' ? 'The previous business day' : 'The publication day'} />
+          <Sum l="Administrator" v={adminName(d.administrator)} />
+          <Sum l="Type" v={d.type === 'POLICY' ? 'Central bank policy rate' : 'Overnight market rate'} />
+          <Sum l="Published" v={d.type === 'POLICY' ? 'When the central bank decides; recorded each weekday after 17:00 local time' : `Business days around ${d.registry.publicationTime} (${d.registry.timeZone.replace('_', ' ')})`} />
+          <Sum l="Each value is for" v={d.registry.observationConvention === 'PREVIOUS_BUSINESS_DAY' ? 'The previous business day' : d.type === 'POLICY' ? 'The rate in force that day' : 'The same business day'} />
           <Sum l="Precision" v={`${d.registry.decimals} decimal places`} />
           <Sum l="Day count" v={`Actual/${d.registry.dayCountBasis}`} />
           <Sum l="Source" v={SOURCE_NAME[d.registry.source] ?? d.registry.source} />

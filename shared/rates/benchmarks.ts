@@ -7,13 +7,14 @@
  */
 
 export type BenchmarkId =
-  | "SOFR" | "SONIA" | "EURIBOR_1M" | "EURIBOR_3M" | "EURIBOR_6M" | "KESONIA" | "NOFR"
-  | "GHS_REFERENCE_RATE" | "GHS_TBILL_91D" | "ZARONIA" | "KES_CBR" | "GHS_MPR" | "NGN_MPR" | "ZAR_REPO";
+  | "SOFR" | "EFFR" | "ESTR" | "SONIA" | "EURIBOR_1M" | "EURIBOR_3M" | "EURIBOR_6M" | "KESONIA" | "NOFR" | "GHS_INTERBANK"
+  | "GHS_REFERENCE_RATE" | "GHS_TBILL_91D" | "ZARONIA" | "KES_CBR" | "GHS_MPR" | "NGN_MPR" | "ZAR_REPO" | "UK_BANK_RATE";
 
 export type BenchmarkType = "DAILY_OVERNIGHT" | "TERM" | "MONTHLY_REFERENCE" | "AUCTION" | "POLICY";
 export type ObservationConvention = "SAME_DAY" | "PREVIOUS_BUSINESS_DAY" | "EFFECTIVE_DATE" | "AUCTION_DATE" | "IN_FORCE_ON_DATE";
 export type LicensingStatus = "CLEARED" | "NEEDS_LICENCE" | "UNCONFIRMED" | "BLOCKED" | "PUBLIC_ANNOUNCEMENT";
-export type CalendarId = "US_FED" | "UK_LONDON" | "TARGET2" | "KE_CBK" | "NG_CBN" | "GH" | "ZA_SARB";
+/** WEEKDAYS: every Monday to Friday, used for a policy rate "in force" on each day. */
+export type CalendarId = "US_FED" | "US_FEDWIRE" | "UK_LONDON" | "TARGET2" | "KE_CBK" | "NG_CBN" | "GH" | "ZA_SARB" | "WEEKDAYS";
 
 export interface Benchmark {
   id: BenchmarkId;
@@ -53,7 +54,7 @@ export interface Benchmark {
   testnet: boolean;
 }
 
-const daily = (b: Omit<Benchmark, "type" | "frequency" | "observationConvention">): Benchmark => ({
+const daily = (b: Omit<Benchmark, "type" | "frequency" | "observationConvention"> & { observationConvention?: ObservationConvention }): Benchmark => ({
   type: "DAILY_OVERNIGHT", frequency: "BUSINESS_DAILY", observationConvention: "PREVIOUS_BUSINESS_DAY", ...b,
 });
 
@@ -84,9 +85,33 @@ export const BENCHMARKS: Record<BenchmarkId, Benchmark> = {
   }),
   NOFR: daily({
     id: "NOFR", name: "Nigerian Overnight Financing Rate", currency: "NGN", administrator: "CENTRAL_BANK_OF_NIGERIA",
-    source: "CBN_NOFR", decimals: 2, publicationTime: "10:00", timeZone: "Africa/Lagos", calendar: "NG_CBN",
-    revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 4, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false,
-    dayCountBasis: 360, licensing: "UNCONFIRMED", enabled: false, testnet: false,
+    website: "https://www.cbn.gov.ng/rates/NOF_Rates.html",
+    source: "CBN_NOFR_API", decimals: 2, publicationTime: "10:00", timeZone: "Africa/Lagos", calendar: "NG_CBN",
+    revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 8, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false,
+    dayCountBasis: 360, licensing: "UNCONFIRMED", enabled: false, testnet: true,
+  }),
+  GHS_INTERBANK: daily({
+    id: "GHS_INTERBANK", name: "Ghana Interbank Rate", currency: "GHS", administrator: "BANK_OF_GHANA",
+    website: "https://www.bog.gov.gh/treasury-and-the-markets/interbank-interest-rates/",
+    // The Bank of Ghana posts each day's rate the same day.
+    observationConvention: "SAME_DAY",
+    source: "BOG_INTERBANK_TABLE", decimals: 2, publicationTime: "18:00", timeZone: "Africa/Accra", calendar: "GH",
+    revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 18, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false,
+    dayCountBasis: 365, licensing: "UNCONFIRMED", enabled: false, testnet: true,
+  }),
+  EFFR: daily({
+    id: "EFFR", name: "Effective Federal Funds Rate", currency: "USD", administrator: "FEDERAL_RESERVE_BANK_OF_NEW_YORK",
+    website: "https://www.newyorkfed.org/markets/reference-rates/effr",
+    source: "NEW_YORK_FED_EFFR_API", decimals: 2, publicationTime: "09:00", timeZone: "America/New_York",
+    calendar: "US_FEDWIRE", revisionCutoff: { kind: "SAME_DAY", time: "14:30" }, graceHours: 4, plausibleRange: [-2, 25],
+    allowsNegative: true, allowsZero: true, dayCountBasis: 360, licensing: "CLEARED", enabled: false, testnet: true,
+  }),
+  ESTR: daily({
+    id: "ESTR", name: "Euro Short-Term Rate (€STR)", currency: "EUR", administrator: "EUROPEAN_CENTRAL_BANK",
+    website: "https://www.ecb.europa.eu/stats/financial_markets_and_interest_rates/euro_short-term_rate/html/index.en.html",
+    source: "ECB_DATA_API", decimals: 3, publicationTime: "08:00", timeZone: "Europe/Berlin", calendar: "TARGET2",
+    revisionCutoff: { kind: "SAME_DAY", time: "09:00" }, graceHours: 4, plausibleRange: [-2, 25], allowsNegative: true, allowsZero: true,
+    dayCountBasis: 360, licensing: "UNCONFIRMED", enabled: false, testnet: true,
   }),
   GHS_REFERENCE_RATE: { id: "GHS_REFERENCE_RATE", name: "Ghana Reference Rate", currency: "GHS", administrator: "GHANA_ASSOCIATION_OF_BANKS", type: "MONTHLY_REFERENCE", frequency: "MONTHLY", source: "GAB_NOTICE", decimals: 2, timeZone: "Africa/Accra", observationConvention: "EFFECTIVE_DATE", calendar: "GH", revisionCutoff: { kind: "NONE" }, graceHours: 240, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false, dayCountBasis: 365, licensing: "UNCONFIRMED", enabled: false, testnet: false },
   GHS_TBILL_91D: { id: "GHS_TBILL_91D", name: "Government of Ghana 91-day Treasury bill", currency: "GHS", administrator: "BANK_OF_GHANA", type: "AUCTION", tenor: "91D", frequency: "WEEKLY_AUCTION", source: "BOG_AUCTION_RESULTS", decimals: 4, timeZone: "Africa/Accra", observationConvention: "AUCTION_DATE", calendar: "GH", revisionCutoff: { kind: "NONE" }, graceHours: 72, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false, dayCountBasis: 365, licensing: "UNCONFIRMED", enabled: false, testnet: false },
@@ -96,9 +121,28 @@ export const BENCHMARKS: Record<BenchmarkId, Benchmark> = {
     revisionCutoff: { kind: "SAME_DAY", time: "12:00" }, graceHours: 4, plausibleRange: [0, 30], allowsNegative: false, allowsZero: false,
     dayCountBasis: 365, licensing: "UNCONFIRMED", enabled: false, testnet: false,
   }),
-  KES_CBR: { id: "KES_CBR", name: "Central Bank Rate (Kenya)", currency: "KES", administrator: "CENTRAL_BANK_OF_KENYA", type: "POLICY", frequency: "ON_DECISION", source: "CBK_MPC_STATEMENT", decimals: 2, timeZone: "Africa/Nairobi", observationConvention: "IN_FORCE_ON_DATE", calendar: "KE_CBK", revisionCutoff: { kind: "NONE" }, graceHours: 0, plausibleRange: [0, 40], allowsNegative: false, allowsZero: false, dayCountBasis: 365, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: false },
-  GHS_MPR: { id: "GHS_MPR", name: "Monetary Policy Rate (Ghana)", currency: "GHS", administrator: "BANK_OF_GHANA", type: "POLICY", frequency: "ON_DECISION", source: "BOG_MPC_STATEMENT", decimals: 2, timeZone: "Africa/Accra", observationConvention: "IN_FORCE_ON_DATE", calendar: "GH", revisionCutoff: { kind: "NONE" }, graceHours: 0, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false, dayCountBasis: 365, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: false },
+  KES_CBR: {
+    id: "KES_CBR", name: "Central Bank Rate (Kenya)", currency: "KES", administrator: "CENTRAL_BANK_OF_KENYA", type: "POLICY", frequency: "BUSINESS_DAILY",
+    website: "https://www.centralbank.go.ke/rates/central-bank-rate/",
+    source: "CBK_CBR_TABLE", decimals: 2, publicationTime: "17:00", timeZone: "Africa/Nairobi", observationConvention: "IN_FORCE_ON_DATE",
+    calendar: "WEEKDAYS", revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 24, plausibleRange: [0, 40],
+    allowsNegative: false, allowsZero: true, dayCountBasis: 365, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: true,
+  },
+  GHS_MPR: {
+    id: "GHS_MPR", name: "Monetary Policy Rate (Ghana)", currency: "GHS", administrator: "BANK_OF_GHANA", type: "POLICY", frequency: "BUSINESS_DAILY",
+    website: "https://www.bog.gov.gh/monetary-policy/policy-rate-trends/",
+    source: "BOG_POLICY_TABLE", decimals: 2, publicationTime: "17:00", timeZone: "Africa/Accra", observationConvention: "IN_FORCE_ON_DATE",
+    calendar: "WEEKDAYS", revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 24, plausibleRange: [0, 60],
+    allowsNegative: false, allowsZero: true, dayCountBasis: 365, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: true,
+  },
   NGN_MPR: { id: "NGN_MPR", name: "Monetary Policy Rate (Nigeria)", currency: "NGN", administrator: "CENTRAL_BANK_OF_NIGERIA", type: "POLICY", frequency: "ON_DECISION", source: "CBN_MPC_COMMUNIQUE", decimals: 2, timeZone: "Africa/Lagos", observationConvention: "IN_FORCE_ON_DATE", calendar: "NG_CBN", revisionCutoff: { kind: "NONE" }, graceHours: 0, plausibleRange: [0, 60], allowsNegative: false, allowsZero: false, dayCountBasis: 360, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: false },
+  UK_BANK_RATE: {
+    id: "UK_BANK_RATE", name: "Bank Rate (United Kingdom)", currency: "GBP", administrator: "BANK_OF_ENGLAND", type: "POLICY", frequency: "BUSINESS_DAILY",
+    website: "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate",
+    source: "BOE_IADB_BANK_RATE", decimals: 2, publicationTime: "17:00", timeZone: "Europe/London", observationConvention: "IN_FORCE_ON_DATE",
+    calendar: "WEEKDAYS", revisionCutoff: { kind: "NEXT_BUSINESS_DAY", time: "12:00" }, graceHours: 24, plausibleRange: [-2, 25],
+    allowsNegative: true, allowsZero: true, dayCountBasis: 365, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: true,
+  },
   ZAR_REPO: { id: "ZAR_REPO", name: "Repurchase rate (South Africa)", currency: "ZAR", administrator: "SOUTH_AFRICAN_RESERVE_BANK", type: "POLICY", frequency: "ON_DECISION", source: "SARB_MPC_STATEMENT", decimals: 2, timeZone: "Africa/Johannesburg", observationConvention: "IN_FORCE_ON_DATE", calendar: "ZA_SARB", revisionCutoff: { kind: "NONE" }, graceHours: 0, plausibleRange: [0, 30], allowsNegative: false, allowsZero: false, dayCountBasis: 365, licensing: "PUBLIC_ANNOUNCEMENT", enabled: false, testnet: false },
 };
 

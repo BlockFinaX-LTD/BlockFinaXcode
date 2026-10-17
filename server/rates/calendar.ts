@@ -39,7 +39,58 @@ const KE_CBK: HolidayList = {
   ],
 };
 
-const CALENDARS: Partial<Record<CalendarId, HolidayList>> = { US_FED, KE_CBK };
+// Federal Reserve (Fedwire) holidays, when EFFR is not published. Unlike the bond market, the
+// Fed is open on Good Friday, and a Saturday holiday is not moved to Friday.
+const US_FEDWIRE: HolidayList = {
+  confirmed: [
+    "2025-01-01", "2025-01-20", "2025-02-17", "2025-05-26", "2025-06-19", "2025-07-04", "2025-09-01", "2025-10-13",
+    "2025-11-11", "2025-11-27", "2025-12-25",
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-05-25", "2026-06-19", "2026-09-07", "2026-10-12",
+  ],
+  provisional: [
+    "2026-11-11", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-05-31", "2027-07-05", "2027-09-06", "2027-10-11", "2027-11-11", "2027-11-25",
+  ],
+};
+
+// TARGET2 closing days (when €STR is not published).
+const TARGET2: HolidayList = {
+  confirmed: [
+    "2025-01-01", "2025-04-18", "2025-04-21", "2025-05-01", "2025-12-25", "2025-12-26",
+    "2026-01-01", "2026-04-03", "2026-04-06", "2026-05-01",
+  ],
+  provisional: ["2026-12-25", "2027-01-01", "2027-03-26", "2027-03-29"],
+};
+
+// Ghana public holidays, from the gaps in the Bank of Ghana interbank series.
+const GH: HolidayList = {
+  confirmed: [
+    "2025-01-01", "2025-01-07", "2025-03-06", "2025-03-31", "2025-04-01", "2025-04-18", "2025-04-21", "2025-05-01",
+    "2025-06-06", "2025-07-04", "2025-09-22", "2025-12-05", "2025-12-25", "2025-12-26",
+    "2026-01-01", "2026-01-09", "2026-03-06", "2026-03-20", "2026-03-23", "2026-04-03", "2026-04-06", "2026-05-01",
+    "2026-05-27", "2026-07-03", "2026-09-21",
+  ],
+  provisional: [
+    "2026-12-04", "2026-12-25",
+    "2027-01-01", "2027-01-07", "2027-03-08", "2027-03-10", "2027-03-26", "2027-03-29", "2027-05-17", "2027-07-01",
+    "2027-08-04", "2027-09-21", "2027-12-03", "2027-12-27", "2027-12-28",
+  ],
+};
+
+// Nigeria public holidays, from the gaps in the CBN NOFR series (published since April 2026).
+const NG_CBN: HolidayList = {
+  confirmed: ["2026-05-01", "2026-05-27", "2026-05-28", "2026-06-12", "2026-08-25", "2026-10-01"],
+  provisional: [
+    "2026-12-25", "2026-12-28",
+    "2027-01-01", "2027-03-10", "2027-03-11", "2027-03-26", "2027-03-29", "2027-05-03", "2027-05-17", "2027-05-18",
+    "2027-06-14", "2027-08-16", "2027-10-01", "2027-12-27", "2027-12-28",
+  ],
+};
+
+// A policy rate is in force every day; observations are taken each weekday.
+const WEEKDAYS: HolidayList = { confirmed: [], provisional: [] };
+
+const CALENDARS: Partial<Record<CalendarId, HolidayList>> = { US_FED, US_FEDWIRE, KE_CBK, TARGET2, GH, NG_CBN, WEEKDAYS };
 
 /** Years each calendar covers; outside them every weekday counts as a business day and is flagged. */
 export const CALENDAR_COVERAGE = { from: "2025-01-01", to: "2027-12-31" };

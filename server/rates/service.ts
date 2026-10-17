@@ -174,6 +174,8 @@ export interface BenchmarkStatus {
   currency: string;
   administrator: string;
   licensing: string;
+  type: string;
+  decimals: number;
   expected: { observationDate: string; expectedAt: string; delayedAfter: string };
   state: FreshnessState;
   latest: ObservationView | null;
@@ -188,6 +190,7 @@ export async function benchmarkStatus(repo: RateRepository, b: Benchmark, now = 
   const previous = before[before.length - 1] ?? null;
   return {
     id: b.id, name: b.name, currency: b.currency, administrator: b.administrator, licensing: b.licensing,
+    type: b.type, decimals: b.decimals,
     expected: { observationDate: exp.observationDate, expectedAt: exp.expectedAt.toISOString(), delayedAfter: exp.delayedAfter.toISOString() },
     state: freshness(exp, Boolean(have), now),
     latest: latest ? toView(latest, now) : null,
