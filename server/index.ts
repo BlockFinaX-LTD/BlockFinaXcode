@@ -381,6 +381,8 @@ app.use((req, res, next) => {
   // Testnet has its own empty database: load the pricing history it needs, in the background.
   if (process.env.APP_ENV === "testnet") {
     void import("./pricing/testnet-bootstrap").then((m) => m.bootstrapTestnetPricing());
+    // Interest-rate benchmarks (SOFR, KESONIA) from official sources; testnet only until licensing clears.
+    void import("./rates/scheduler").then((m) => m.startRateOracleScheduler());
   }
 
   // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.

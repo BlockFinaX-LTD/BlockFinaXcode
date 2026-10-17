@@ -31,6 +31,7 @@ import { registerRiftProxy } from "./routes/rift-proxy";
 import { registerMercuryoRoutes } from "./routes/mercuryo";
 import { registerPricingRoutes } from "./routes/pricing";
 import { registerV2Routes } from "./routes/v2";
+import { registerRateOracleRoutes } from "./routes/rate-oracle";
 import { registerPasskeyWalletRoutes } from "./wallet/passkey-routes";
 import { registerPredictRoutes } from "./routes/predict";
 import { registerFundingRoutes } from "./routes/funding";
@@ -73,6 +74,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMercuryoRoutes(app);
   registerPricingRoutes(app);
   registerV2Routes(app);
+  registerRateOracleRoutes(app);
   registerPasskeyWalletRoutes(app);
   registerPredictRoutes(app);
   registerFundingRoutes(app);
