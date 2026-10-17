@@ -702,7 +702,7 @@ function InterestRates() {
                 <div className="r">
                   {r.state === 'DELAYED' ? <Tag tone="amber">Delayed</Tag>
                     : !r.latest ? <Tag tone="grey">Waiting</Tag>
-                    : r.latest.onChain ? <a href={STELLAR_TX + r.latest.onChain.tx} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{fixingStatus(r.latest)}</a>
+                    : r.latest.onChain && /^[0-9a-f]{64}$/.test(r.latest.onChain.tx) ? <a href={STELLAR_TX + r.latest.onChain.tx} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{fixingStatus(r.latest)}</a>
                     : fixingStatus(r.latest)}
                 </div>
               </div>
