@@ -147,9 +147,13 @@ async function signStellarAuth(transactionXdr: string, credentialId: string, con
   const invoke = op.body().invokeHostFunctionOp();
   const signed: InstanceType<typeof xdr.SorobanAuthorizationEntry>[] = [];
   for (const entry of invoke.auth()) {
+    // Simulation returns V1 address credentials; PasskeyKit upgrades them to V2
+    // (address-bound) before signing, which is the only form the relay accepts.
     const creds = entry.credentials();
-    const ours = creds.switch().name === "sorobanCredentialsAddressV2"
-      && Address.fromScAddress(creds.addressV2().address()).toString() === contract;
+    const kind = creds.switch().name;
+    const address = kind === "sorobanCredentialsAddressV2" ? creds.addressV2().address()
+      : kind === "sorobanCredentialsAddress" ? creds.address().address() : null;
+    const ours = address !== null && Address.fromScAddress(address).toString() === contract;
     signed.push(ours ? await kit.signAuthEntry(entry) : entry);
   }
   invoke.auth(signed);
