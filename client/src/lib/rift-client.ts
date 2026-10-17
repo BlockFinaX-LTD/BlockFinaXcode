@@ -151,6 +151,8 @@ export function clearCachedUserSummary(): void {
  * dialog knows what to prompt for.
  */
 export async function getMe(): Promise<User | null> {
+  // The passkey-wallet build has no Rift account; its session token is not a Rift token.
+  if (import.meta.env.VITE_WALLET_PROVIDER === 'passkey') return null;
   if (!rift.isAuthenticated()) return null;
   try {
     const res = await rift.auth.getUser();

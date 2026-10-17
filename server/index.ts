@@ -158,6 +158,10 @@ app.use(helmet({
         "https://bsc-dataseed.binance.org",
         "https://data-seed-prebsc-1-s1.binance.org:8545",
         "https://api.bscscan.com",
+        // Stellar: the passkey wallet reads the network and signs Soroban
+        // authorizations in the browser (Passkey Kit), so it calls these directly.
+        "https://soroban-testnet.stellar.org",
+        "https://horizon-testnet.stellar.org",
         // Google OAuth
         "https://accounts.google.com",
         "https://oauth2.googleapis.com",
