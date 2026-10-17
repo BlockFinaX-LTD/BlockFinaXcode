@@ -50,9 +50,11 @@ export class QuoteService {
     return this.pricer.spot(pair);
   }
 
-  async options(pair: string) {
+  /** Tenors and structures on sale for a pair, optionally for one direction only. */
+  async options(pair: string, direction?: "up" | "down") {
     const chain = this.chains.executionNetworkFor();
-    const pools = (await this.adapters.adapterFor(chain.key).listPools()).filter((p) => p.pair === pair && p.acceptingHedges);
+    const pools = (await this.adapters.adapterFor(chain.key).listPools())
+      .filter((p) => p.pair === pair && p.acceptingHedges && (!direction || p.direction === "both" || p.direction === direction));
     const rows = new Map<number, { open: boolean; capped: boolean; capacity: number }>();
     for (const p of pools) {
       for (const t of p.tenors.filter((x) => x.active)) {
@@ -83,9 +85,10 @@ export class QuoteService {
 
     const candidates = (await adapter.listPools())
       .map((pool) => ({ pool, tenor: pool.tenors.find((t) => t.tenorDays === req.tenorDays && t.active) }))
-      .filter(({ pool, tenor }) => pool.pair === req.pair && pool.acceptingHedges && tenor && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
+      .filter(({ pool, tenor }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
+        && tenor && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
       .sort((a, b) => a.tenor!.markupBps - b.tenor!.markupBps);
-    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} protection on ${req.pair}`);
+    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} ${req.direction === "up" ? "rising-rate" : "falling-rate"} protection on ${req.pair}`);
 
     let last: ApplicationError = new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
     for (const { pool, tenor } of candidates) {

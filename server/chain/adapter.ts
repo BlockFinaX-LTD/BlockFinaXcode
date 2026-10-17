@@ -39,6 +39,8 @@ export interface TenorInput {
 
 export interface CreatePoolInput {
   pair: string;
+  /** The move the pool covers. Each pool sells one direction. */
+  direction: "up" | "down";
   allowExternalLp: boolean;
   structures: { open: boolean; capped: boolean; minCapDistanceBps: number; maxCapDistanceBps: number; openMaxPayoutBps: number };
   tenors: TenorInput[];
@@ -81,6 +83,10 @@ export interface ChainAdapter {
   prepareWithdrawalRequest(owner: string, poolId: number, shares: string): Promise<PreparedTransaction[]>;
   prepareWithdrawalExecute(owner: string, requestId: number): Promise<PreparedTransaction[]>;
   prepareClaim(owner: string, positionId: number): Promise<PreparedTransaction[]>;
+  /** An LP's shares in a pool and what they are worth now, in the pool asset. */
+  getLpPosition(poolId: number, owner: string): Promise<{ shares: string; value: string }>;
+  /** The one-off fee for creating a pool, in the pool asset. */
+  getPoolCreationFee(): Promise<string>;
   /** Send a listed asset from the user's account to another address on the same chain. */
   prepareTransfer(owner: string, to: string, symbol: string, amount: string): Promise<PreparedTransaction[]>;
 

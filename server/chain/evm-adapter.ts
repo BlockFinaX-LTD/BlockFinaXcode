@@ -90,6 +90,8 @@ export class EvmAdapter implements ChainAdapter {
     const amt = (v: bigint) => fromUnits(BigInt(v), asset.decimals);
     return {
       ref: this.ref("pool", p.id), chain: this.chain.key, poolId: Number(p.id), creator: p.creator, pair: p.underlying, asset,
+      // The Base facets do not store a direction yet: their pools sell both.
+      direction: "both",
       acceptingHedges: p.acceptingHedges, allowExternalLp: p.allowExternalLp,
       structures: {
         open: p.openEnabled, capped: p.cappedEnabled, minCapDistanceBps: Number(p.minCapDistanceBps),
@@ -105,6 +107,7 @@ export class EvmAdapter implements ChainAdapter {
         free: amt(liq.free), holdback: amt(liq.holdback), capacity: amt(liq.capacity),
       },
       creatorEarnings: amt(p.creatorEarnings), activePositions: Number(p.activePositions), latestExpiry: Number(p.latestExpiry),
+      totalShares: amt(p.totalShares), createdAt: Number(p.createdAt),
     };
   }
 
@@ -257,6 +260,18 @@ export class EvmAdapter implements ChainAdapter {
       ...(await this.approval(owner, pool.asset.addressOrContract, units, pool.asset.symbol)),
       this.poolCall("Add liquidity", "poolDeposit", [poolId, units]),
     ];
+  }
+
+  async getLpPosition(poolId: number, owner: string) {
+    const pool = await this.getPool(poolId);
+    const [shares, value] = await new ethers.Contract(this.diamond, ["function getPoolLpPosition(uint256,address) view returns (uint256,uint256)"], this.provider)
+      .getPoolLpPosition(poolId, owner);
+    return { shares: fromUnits(shares, pool.asset.decimals), value: fromUnits(value, pool.asset.decimals) };
+  }
+
+  async getPoolCreationFee() {
+    const fees = await new ethers.Contract(this.diamond, FEE_ABI, this.provider).getHedgeFeeConfig();
+    return fromUnits(fees.creationFee, this.chain.assets.USDC?.decimals ?? 6);
   }
 
   async prepareTransfer(owner: string, to: string, symbol: string, amount: string) {

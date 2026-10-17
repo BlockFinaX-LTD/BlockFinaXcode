@@ -128,7 +128,7 @@ test("every chain's transaction runs through one lifecycle", async () => {
 
 function pool(chain: string, decimals: number, markup: number): CurrencyPool {
   return {
-    ref: { chain, contract: "c", id: "pool/1" }, chain, poolId: 1, creator: "x", pair: "USD/GHS",
+    ref: { chain, contract: "c", id: "pool/1" }, chain, poolId: 1, creator: "x", pair: "USD/GHS", direction: "up",
     asset: { symbol: "USDC", chain, decimals, addressOrContract: "t" }, acceptingHedges: true, allowExternalLp: true,
     structures: { open: true, capped: true, minCapDistanceBps: 300, maxCapDistanceBps: 2000, openMaxPayoutBps: 3000 },
     tenors: [{ tenorDays: 14, active: true, markupBps: markup }],
@@ -167,6 +167,17 @@ test("one quote service prices the same economic quote on either chain", async (
   assert.equal(onBase.economic.maxPayout, "8035.714285");
   assert.equal(onStellar.economic.maxPayout, "8035.7142857");
   await assert.rejects(new QuoteService(after, adapters(after), pricer).quote(request, { base: EVM_USER }), /No Stellar account/);
+});
+
+test("a quote only uses pools that sell the requested direction", async () => {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: fakeAdapter("stellar", 7) }), pricer);
+  await assert.rejects(
+    qs.quote({ ...request, direction: "down", strike: "10.8", cap: "10" }, { stellar: STELLAR_USER }),
+    (e: ApplicationError) => e.code === "TENOR_DISABLED" && /falling-rate/.test(e.message),
+  );
+  assert.deepEqual((await qs.options("USD/GHS", "down")).tenors, []);
+  assert.equal((await qs.options("USD/GHS", "up")).tenors.length, 1);
 });
 
 // ── Routing: multi-chain funding, withdrawal, failure ─────────────────────────
@@ -286,6 +297,7 @@ test("EVM reverts and Soroban errors map to the same application errors", () => 
     ["Quote expired (signed > 120s ago)", 19, "QUOTE_EXPIRED"],
     ["Position already settled", 23, "POSITION_SETTLED"],
     ["Protocol is paused", 8, "PAUSED"],
+    ["Pool does not sell this direction", 37, "DIRECTION_NOT_OFFERED"],
   ];
   for (const [reason, n, code] of pairs) {
     assert.equal(mapEvmError(new Error(`execution reverted: "${reason}"`)).code, code);

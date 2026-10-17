@@ -61,6 +61,7 @@ export interface TransactionStatus {
 
 export const APPLICATION_ERROR_CODES = [
   "INSUFFICIENT_LIQUIDITY",
+  "DIRECTION_NOT_OFFERED",
   "INVALID_TENOR",
   "TENOR_DISABLED",
   "INVALID_CAP",
@@ -136,6 +137,8 @@ export interface CurrencyPool {
   poolId: number;
   creator: string;
   pair: string;
+  /** The move the pool covers: "up" (rate rises, quote currency weakens) or "down". "both" only on pools created before the one-direction rule. */
+  direction: Direction | "both";
   asset: Asset;
   acceptingHedges: boolean;
   allowExternalLp: boolean;
@@ -144,6 +147,10 @@ export interface CurrencyPool {
   fees: FeeRates;
   liquidity: { cash: string; reserved: string; deferredPremium: string; nav: string; free: string; holdback: string; capacity: string };
   creatorEarnings: string;
+  /** LP shares outstanding; nav / totalShares is the value of one share (1.0 at creation). */
+  totalShares: string;
+  /** Unix seconds. */
+  createdAt: number;
   activePositions: number;
   latestExpiry: number;
 }

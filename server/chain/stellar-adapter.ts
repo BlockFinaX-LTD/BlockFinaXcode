@@ -89,6 +89,7 @@ export class StellarAdapter implements ChainAdapter {
     const amt = (v: bigint) => fromUnits(BigInt(v), this.usdc.decimals);
     return {
       ref: this.ref("pool", p.id), chain: this.chain.key, poolId: p.id, creator: p.creator, pair: p.pair, asset: this.usdc,
+      direction: p.direction === 1 ? "up" : p.direction === 2 ? "down" : "both",
       acceptingHedges: p.accepting_hedges, allowExternalLp: p.allow_external_lp,
       structures: {
         open: p.structures.open_enabled, capped: p.structures.capped_enabled, minCapDistanceBps: p.structures.min_cap_distance_bps,
@@ -101,6 +102,7 @@ export class StellarAdapter implements ChainAdapter {
         free: amt(liq.free), holdback: amt(liq.holdback), capacity: amt(liq.capacity),
       },
       creatorEarnings: amt(p.creator_earnings), activePositions: p.active_positions, latestExpiry: Number(p.latest_expiry),
+      totalShares: amt(p.total_shares), createdAt: Number(p.created_at),
     };
   }
 
@@ -187,6 +189,16 @@ export class StellarAdapter implements ChainAdapter {
     return { tx, sim };
   }
 
+  async getLpPosition(poolId: number, owner: string) {
+    const [shares, value] = unwrap((await (await this.client(this.poolId)).get_lp_position({ pool_id: poolId, lp: owner })).result);
+    return { shares: fromUnits(BigInt(shares ?? 0), this.usdc.decimals), value: fromUnits(BigInt(value ?? 0), this.usdc.decimals) };
+  }
+
+  async getPoolCreationFee() {
+    const cfg = unwrap((await (await this.client(this.poolId)).get_configuration()).result);
+    return fromUnits(BigInt(cfg[8]), this.usdc.decimals);
+  }
+
   async prepareTransfer(owner: string, to: string, symbol: string, amount: string): Promise<PreparedTransaction[]> {
     const a = this.chain.assets[symbol];
     if (!a) throw new ApplicationError("INVALID_REQUEST", `${symbol} not configured on ${this.chain.key}`);
@@ -251,7 +263,7 @@ export class StellarAdapter implements ChainAdapter {
 
   prepareCreatePool(owner: string, input: CreatePoolInput) {
     return this.prepare("Create pool", "create_pool", {
-      creator: owner, pair: input.pair, allow_external_lp: input.allowExternalLp,
+      creator: owner, pair: input.pair, direction: input.direction === "down" ? 2 : 1, allow_external_lp: input.allowExternalLp,
       structures: {
         open_enabled: input.structures.open, capped_enabled: input.structures.capped,
         min_cap_distance_bps: input.structures.minCapDistanceBps, max_cap_distance_bps: input.structures.maxCapDistanceBps,

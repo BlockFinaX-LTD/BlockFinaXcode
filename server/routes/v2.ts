@@ -104,6 +104,22 @@ export function registerV2Routes(app: Express) {
     res.json({ pools });
   }));
 
+  /** What creating a pool on the hub involves: the pairs on offer and the creation fee. */
+  app.get("/api/v2/pools/setup", wrap(async (_req, res) => {
+    const s = await getServices();
+    const hub = chainRegistry()!.hub;
+    const pairs = (process.env.POOL_PAIRS || "USD/NGN,USD/GHS,USD/KES,USD/ZAR,USD/EGP").split(",").map((p) => p.trim()).filter(Boolean);
+    res.json({ chain: hub.key, pairs, creationFee: await s.adapters.adapterFor(hub.key).getPoolCreationFee() });
+  }));
+
+  /** The signed-in user's stake in a pool. */
+  app.get("/api/v2/pools/:ref/lp", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id } = idOf(req.params.ref, "pool");
+    const owner = await ownerOn(s, await userId(req), chain);
+    res.json(await s.adapters.adapterFor(chain).getLpPosition(id, owner));
+  }));
+
   app.get("/api/v2/pools/:ref", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id } = idOf(req.params.ref, "pool");
@@ -111,7 +127,8 @@ export function registerV2Routes(app: Express) {
   }));
 
   app.get("/api/v2/options", wrap(async (req, res) => {
-    res.json(await (await getServices()).quotes.options(String(req.query.pair ?? "")));
+    const direction = req.query.direction === "up" || req.query.direction === "down" ? req.query.direction : undefined;
+    res.json(await (await getServices()).quotes.options(String(req.query.pair ?? ""), direction));
   }));
 
   app.get("/api/v2/spot", wrap(async (req, res) => {
