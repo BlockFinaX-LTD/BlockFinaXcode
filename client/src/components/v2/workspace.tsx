@@ -5,9 +5,9 @@
  *   Hedger: "What do you want to protect?"
  *   Underwriter: "How do you want your capital exposed?"
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowDown, ArrowUp, CircleUser, Home, Layers, LineChart, List, PlusCircle, Search, Shield, SlidersHorizontal, Store, Wallet } from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleUser, Home, Layers, LineChart, List, Menu, PlusCircle, Search, Shield, SlidersHorizontal, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -44,6 +44,40 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   ],
 };
 
+/** Pages on the phone tab bar; everything else sits under More. */
+const TABS: Record<Role, Page[]> = {
+  hedger: ['h-home', 'h-markets', 'h-protect', 'h-protections'],
+  underwriter: ['u-home', 'u-pools', 'u-create', 'u-risk'],
+};
+const SHORT: Partial<Record<Page, string>> = { 'h-protections': 'Protections', 'u-create': 'Create', 'u-risk': 'Risk' };
+
+/**
+ * On phones, list rows stack into cards, so each cell needs its column name. This copies the
+ * names from each list header onto the cells below it (CSS shows them only on small screens).
+ */
+function useListLabels(root: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const label = () => {
+      el.querySelectorAll<HTMLElement>('.bx-list-h').forEach((head) => {
+        const names = Array.from(head.children).map((c) => (c.textContent ?? '').trim());
+        let row = head.nextElementSibling as HTMLElement | null;
+        while (row && row.classList.contains('bx-li')) {
+          Array.from(row.children).forEach((cell, i) => {
+            if (i > 0 && names[i] && cell.getAttribute('data-label') !== names[i]) cell.setAttribute('data-label', names[i]);
+          });
+          row = row.nextElementSibling as HTMLElement | null;
+        }
+      });
+    };
+    label();
+    const obs = new MutationObserver(label);
+    obs.observe(el, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [root]);
+}
+
 function readRole(): Role {
   try { return localStorage.getItem('bfx:cover-role') === 'underwriter' ? 'underwriter' : 'hedger'; } catch { return 'hedger'; }
 }
@@ -72,6 +106,10 @@ export function Workspace() {
     setPage(r === 'hedger' ? 'h-home' : 'u-home');
     try { localStorage.setItem('bfx:cover-role', r); } catch { /* per-viewer convenience */ }
   };
+  const [more, setMore] = useState(false);
+  const content = useRef<HTMLDivElement>(null);
+  useListLabels(content);
+  const goTab = (p: Page) => { setMore(false); go(p); };
   const initials = (session?.user.name || session?.user.email || 'BX').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 
   return (
@@ -94,8 +132,9 @@ export function Workspace() {
         </div>
       </nav>
 
-      <div className="bx-content">
+      <div className="bx-content" ref={content}>
         <header className="bx-top">
+          <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
             <span className="bx-balance-pill num bx-hide-sm">${fmt(balances.data?.total)} USDC</span>
@@ -110,6 +149,7 @@ export function Workspace() {
                 <button className="bx-btn" onClick={() => go('u-create')}>Create pool</button>
               </>
             )}
+            <span className="bx-balance-pill num bx-show-sm">${fmt(balances.data?.total, 2)}</span>
             <button className="bx-avatar" aria-label="Account" onClick={() => go('account')}>{initials}</button>
           </div>
         </header>
@@ -129,6 +169,37 @@ export function Workspace() {
         {page === 'u-risk' && <RiskPage go={go} poolRef={pool} />}
         {page === 'u-withdraw' && <WithdrawCapital go={go} poolRef={pool} />}
       </div>
+
+      <nav className="bx-tabs" aria-label="Main">
+        {TABS[role].map((p) => {
+          const n = NAV[role].find((x) => x.page === p)!;
+          return (
+            <button key={p} className={`${page === p && !more ? 'on' : ''}${p === 'h-protect' || p === 'u-create' ? ' primary' : ''}`} onClick={() => goTab(p)}>
+              {n.icon}<span>{SHORT[p] ?? n.label}</span>
+            </button>
+          );
+        })}
+        <button className={more || !TABS[role].includes(page) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
+          {more ? <X /> : <Menu />}<span>More</span>
+        </button>
+      </nav>
+
+      {more && (
+        <div className="bx-sheet-bg" onClick={() => setMore(false)}>
+          <div className="bx-sheet" role="dialog" aria-label="More" onClick={(e) => e.stopPropagation()}>
+            <div className="bx-roles">
+              <button className={role === 'hedger' ? 'on' : ''} onClick={() => { switchRole('hedger'); setMore(false); }}>Hedger</button>
+              <button className={role === 'underwriter' ? 'on' : ''} onClick={() => { switchRole('underwriter'); setMore(false); }}>Underwriter</button>
+            </div>
+            {NAV[role].filter((n) => !TABS[role].includes(n.page)).map((n) => (
+              <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
+            ))}
+            <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Account</button>
+            <button className="bx-nav" onClick={() => setLocation('/home')}><Wallet />Back to wallet</button>
+            <div className="bx-testnet" style={{ marginTop: 8 }}>Testnet · test USDC only</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
