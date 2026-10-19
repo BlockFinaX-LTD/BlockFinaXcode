@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowUp, CircleUser, LogOut, Home, Layers, LineChart, List, Menu, Search, Shield, SlidersHorizontal, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, CircleUser, LogOut, Home, Layers, LineChart, List, Menu, Search, Shield, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -36,7 +36,6 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   underwriter: [
     { page: 'u-home', label: 'Home', icon: <Home /> },
     { page: 'u-pools', label: 'My pools', icon: <Layers /> },
-    { page: 'u-pool', label: 'Tenor pricing', icon: <SlidersHorizontal /> },
     { page: 'u-risk', label: 'Risk and exposure', icon: <LineChart /> },
     { page: 'u-withdraw', label: 'Withdraw capital', icon: <ArrowUp /> },
     { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
@@ -50,7 +49,7 @@ const TABS: Record<Role, Page[]> = {
 };
 const SHORT: Partial<Record<Page, string>> = { 'h-protections': 'Protections', 'u-risk': 'Risk' };
 /** Pages reached from another page keep that page highlighted in the menu. */
-const PARENT: Partial<Record<Page, Page>> = { 'u-create': 'u-pools' };
+const PARENT: Partial<Record<Page, Page>> = { 'u-create': 'u-pools', 'u-pool': 'u-pools' };
 
 /**
  * On phones, list rows stack into cards, so each cell needs its column name. This copies the
