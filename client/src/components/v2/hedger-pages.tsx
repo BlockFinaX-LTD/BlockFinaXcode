@@ -322,28 +322,122 @@ function useChart(pair: string | null, range: Range) {
 }
 const AMOUNTS = [500, 1000, 5000, 10000];
 
-function RateChart({ points, loading, strike, cap }: { points: { t: string; v: number }[]; loading: boolean; strike: number | null; cap: number | null }) {
+/** Decimal places that keep neighbouring axis labels distinct for a given step. */
+function decimalsFor(step: number) {
+  if (!(step > 0)) return 2;
+  return Math.min(6, Math.max(0, Math.ceil(-Math.log10(step)) + 1));
+}
+
+const fmtAxis = (v: number, dp: number) => v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+
+function fmtWhen(t: string) {
+  const d = new Date(t.length === 10 ? `${t}T12:00:00Z` : t);
+  if (Number.isNaN(d.getTime())) return t;
+  return t.length === 10
+    ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Price chart in the classic wallet's style: scaled to the price itself so small moves show,
+ * the axis on the right, a BlockFinaX watermark behind the line, and a readout on hover.
+ *
+ * The strike and cap never stretch the scale. A strike inside or near the price range is drawn
+ * as a line; one far away is pinned to the edge as a tag, so the history keeps its shape.
+ */
+function RateChart({ points, loading, strike, cap, label, unit }: {
+  points: { t: string; v: number }[]; loading: boolean; strike: number | null; cap: number | null; label?: string; unit?: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
   if (points.length < 2) {
     return <div className="bx-chart"><div className="bx-empty">{loading ? 'Loading chart...' : 'Not enough data for this range yet.'}</div></div>;
   }
-  const values = points.map((c) => c.v);
-  const marks = [strike, cap].filter((v): v is number => v !== null);
-  const lo = Math.min(...values, ...marks), hi = Math.max(...values, ...marks);
-  const span = hi - lo || 1;
-  const y = (v: number) => 228 - ((v - lo) / span) * 216;
-  const x = (i: number) => (i / (values.length - 1)) * 800;
+  const VW = 800, VH = 260, PL = 8, PR = 72, PT = 14, PB = 14;
+  const iw = VW - PL - PR, ih = VH - PT - PB;
+  const values = points.map((p) => p.v);
+  const dLo = Math.min(...values), dHi = Math.max(...values);
+  const span = dHi - dLo;
+  // A strike counts toward the scale only when it sits close to where the price has been.
+  const near = (v: number | null) => v !== null && Number.isFinite(v) && v >= dLo - span * 0.6 && v <= dHi + span * 0.6;
+  const lo0 = Math.min(dLo, near(strike) ? strike! : dLo);
+  const hi0 = Math.max(dHi, near(strike) ? strike! : dHi);
+  const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0) * 0.002 || 1;
+  const lo = lo0 - pad, hi = hi0 + pad;
+  const x = (i: number) => PL + (i / (values.length - 1)) * iw;
+  const y = (v: number) => PT + (1 - (v - lo) / (hi - lo)) * ih;
   const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(values.length - 1).toFixed(1)} ${PT + ih} L${PL} ${PT + ih} Z`;
+  const ticks = [0, 1, 2, 3, 4].map((k) => lo + ((hi - lo) * k) / 4);
+  const dp = decimalsFor((hi - lo) / 4);
   const rising = values[values.length - 1] >= values[0];
+  const stroke = '#1f5fe0';
+
+  const inside = (v: number | null) => v !== null && Number.isFinite(v) && v >= lo && v <= hi;
+  const edgeTag = (v: number | null, name: string) => {
+    if (v === null || !Number.isFinite(v) || inside(v)) return null;
+    const above = v > hi;
+    return (
+      <span className="bx-strike-tag" style={above ? { top: 4 } : { bottom: 4 }}>
+        {name} {fmtAxis(v, dp)} {above ? '↑' : '↓'}
+      </span>
+    );
+  };
+
+  const onMove = (clientX: number, el: SVGSVGElement) => {
+    const box = el.getBoundingClientRect();
+    if (!box.width) return;
+    const vx = ((clientX - box.left) / box.width) * VW;
+    const i = Math.round(((vx - PL) / iw) * (values.length - 1));
+    setHover(Math.max(0, Math.min(values.length - 1, i)));
+  };
+  const h = hover === null ? null : points[hover];
+
   return (
     <div className="bx-chart">
-      <svg role="img" aria-label={`Rate over the selected period, ${rising ? 'rising' : 'falling'}`} viewBox="0 0 800 240" preserveAspectRatio="none">
-        {[60, 120, 180].map((g) => <line key={g} x1="0" y1={g} x2="800" y2={g} stroke="#eceef2" strokeDasharray="4 6" />)}
-        <path d={`${line} L800 240 L0 240 Z`} fill="#1f5fe0" fillOpacity="0.07" />
-        <path d={line} fill="none" stroke="#1f5fe0" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        {strike !== null && <line x1="0" y1={y(strike)} x2="800" y2={y(strike)} stroke="#e0a03a" strokeWidth="1.5" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
-        {cap !== null && <line x1="0" y1={y(cap)} x2="800" y2={y(cap)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
+      {h && (
+        <div className="bx-chart-read">
+          <span className="num" style={{ fontWeight: 600 }}>{fmtAxis(h.v, Math.max(dp, 2))}{unit ? ` ${unit}` : ''}</span>
+          <span className="muted">{fmtWhen(h.t)}</span>
+        </div>
+      )}
+      <svg
+        role="img" aria-label={`${label ?? 'Rate'} over the selected period, ${rising ? 'rising' : 'falling'}`}
+        viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none" style={{ touchAction: 'pan-y' }}
+        onMouseMove={(e) => onMove(e.clientX, e.currentTarget)} onMouseLeave={() => setHover(null)}
+        onTouchStart={(e) => e.touches[0] && onMove(e.touches[0].clientX, e.currentTarget)}
+        onTouchMove={(e) => e.touches[0] && onMove(e.touches[0].clientX, e.currentTarget)}
+        onTouchEnd={() => setHover(null)}
+      >
+        <defs>
+          <linearGradient id="bx-chart-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((v, k) => (
+          <line key={k} x1={PL} y1={y(v)} x2={VW - PR} y2={y(v)} stroke="#eceef2" vectorEffect="non-scaling-stroke" />
+        ))}
+        <path d={area} fill="url(#bx-chart-fill)" />
+        <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        {inside(cap) && <line x1={PL} y1={y(cap!)} x2={VW - PR} y2={y(cap!)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
+        {inside(strike) && <line x1={PL} y1={y(strike!)} x2={VW - PR} y2={y(strike!)} stroke="#e0a03a" strokeWidth="1.5" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
+        {hover !== null && (
+          <g pointerEvents="none">
+            <line x1={x(hover)} y1={PT} x2={x(hover)} y2={PT + ih} stroke="#9aa2af" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          </g>
+        )}
       </svg>
-      {strike !== null && <span className="bx-strike-tag" style={{ top: `calc(${(y(strike) / 240) * 100}% - 22px)` }}>Your strike {fmtRate(strike)}</span>}
+      {/* HTML overlays: crisp text and round dots, unaffected by the stretched viewBox. */}
+      <div className="bx-chart-mark" aria-hidden="true">
+        <div className="b">BlockFinaX</div>
+        {label && <div className="s">{label} · blockfinax.com</div>}
+      </div>
+      <div className="bx-chart-axis" aria-hidden="true">
+        {ticks.map((v, k) => <span key={k} style={{ top: `${(y(v) / VH) * 100}%` }}>{fmtAxis(v, dp)}</span>)}
+      </div>
+      <span className="bx-chart-dot" style={{ left: `${(x(hover ?? values.length - 1) / VW) * 100}%`, top: `${(y(values[hover ?? values.length - 1]) / VH) * 100}%` }} />
+      {inside(strike) && <span className="bx-strike-tag" style={{ top: `calc(${(y(strike!) / VH) * 100}% - 22px)`, right: 76 }}>Strike {fmtAxis(strike!, dp)}</span>}
+      {edgeTag(strike, 'Strike')}
     </div>
   );
 }
@@ -483,7 +577,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             <span className="muted">{ccy} per 1 USD</span>
             <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
           </div>
-          <RateChart points={points} loading={chart.isLoading} strike={strike} cap={structure === 'capped' ? cap : null} />
+          <RateChart points={points} loading={chart.isLoading} strike={strike} cap={structure === 'capped' ? cap : null} label={`${pair} · ${range}`} unit={ccy} />
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
@@ -857,7 +951,7 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
               </div>
               <BenchmarkState r={d} />
             </div>
-            <RateChart points={points} loading={history.isLoading} strike={null} cap={null} />
+            <RateChart points={points} loading={history.isLoading} strike={null} cap={null} label={`${id} · ${range}`} unit="%" />
             <div className="bx-ranges" role="group" aria-label="Chart range">
               {IR_RANGES.map((r) => <button key={r.k} className={range === r.k ? 'on' : ''} aria-pressed={range === r.k} onClick={() => setRange(r.k)}>{r.k}</button>)}
             </div>
