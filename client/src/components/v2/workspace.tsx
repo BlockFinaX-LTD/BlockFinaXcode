@@ -89,7 +89,7 @@ export function Workspace() {
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
   const [ratesAt, setRatesAt] = useState<Target>({});
-  const [walletMode, setWalletMode] = useState<WalletMode>('deposit');
+  const [walletMode, setWalletMode] = useState<WalletMode>('none');
   const [, setLocation] = useLocation();
   const { session } = usePasskeySession();
   const balances = useUsdcBalances();
@@ -99,7 +99,7 @@ export function Workspace() {
     if (target?.pool !== undefined) setPool(target.pool);
     if (p === 'h-protect') setBuy(target ?? {});
     if (p === 'h-rates') setRatesAt(target ?? {});
-    if (p === 'wallet') setWalletMode(target?.wallet ?? 'deposit');
+    if (p === 'wallet') setWalletMode(target?.wallet ?? 'none');
     setPage(p);
     window.scrollTo(0, 0);
   };

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Check, Copy, LogOut } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Copy, LogOut, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
@@ -34,7 +34,16 @@ function Balances() {
   );
 }
 
-function DepositCard() {
+function CardHead({ title, sub, onCancel }: { title: string; sub: string; onCancel: () => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
+      <div><h2 style={{ marginBottom: 6 }}>{title}</h2><div className="sub">{sub}</div></div>
+      <button className="bx-btn ghost small" onClick={onCancel} aria-label={`Cancel ${title.toLowerCase()}`}><X /> Cancel</button>
+    </div>
+  );
+}
+
+function DepositCard({ onCancel }: { onCancel: () => void }) {
   const accounts = useAccounts();
   const chains = useChains();
   const hub = chains.data?.activeLiquidityHub;
@@ -44,8 +53,7 @@ function DepositCard() {
   const acct = accounts.find((a) => a.chain === chain) ?? null;
   return (
     <div className="bx-card">
-      <h2 style={{ marginBottom: 6 }}>Deposit USDC</h2>
-      <div className="sub" style={{ marginBottom: 18 }}>Send USDC to your BlockFinaX account from an exchange or another wallet.</div>
+      <CardHead title="Deposit USDC" sub="Send USDC to your BlockFinaX account from an exchange or another wallet." onCancel={onCancel} />
       <div className="bx-seg" style={{ marginBottom: 20 }}>
         {accounts.map((a) => <button key={a.chain} className={chain === a.chain ? 'on' : ''} onClick={() => { setChain(a.chain); setCopied(false); }}>{a.name}</button>)}
       </div>
@@ -88,7 +96,7 @@ function FaucetCard() {
   );
 }
 
-function WithdrawPanel() {
+function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const accounts = useAccounts();
@@ -117,8 +125,7 @@ function WithdrawPanel() {
 
   return (
     <div className="bx-card">
-      <h2 style={{ marginBottom: 6 }}>Withdraw USDC</h2>
-      <div className="sub" style={{ marginBottom: 18 }}>Send USDC to an exchange or another wallet. Transfers cannot be reversed, so check the address and network.</div>
+      <CardHead title="Withdraw USDC" sub="Send USDC to an exchange or another wallet. Transfers cannot be reversed, so check the address and network." onCancel={onCancel} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
           <span className="bx-label">Network</span>
@@ -142,13 +149,14 @@ function WithdrawPanel() {
   );
 }
 
-export type WalletMode = 'deposit' | 'withdraw';
+export type WalletMode = 'none' | 'deposit' | 'withdraw';
 
-/** One place for money: the balance, then deposit or withdraw. */
-export function WalletPage({ mode: initial = 'deposit' }: { mode?: WalletMode }) {
+/** One place for money: the balance first; deposit or withdraw opens only when asked for. */
+export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
   const balances = useUsdcBalances();
   const [mode, setMode] = useState<WalletMode>(initial);
   useEffect(() => setMode(initial), [initial]);
+  const close = () => setMode('none');
   return (
     <main className="bx-main">
       <section className="bx-col">
@@ -156,16 +164,18 @@ export function WalletPage({ mode: initial = 'deposit' }: { mode?: WalletMode })
           <div className="bx-hero-k">Wallet balance</div>
           <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
           <div className="sub">USDC · network fees covered by BlockFinaX</div>
-          <div className="bx-seg" role="tablist" aria-label="Wallet action" style={{ marginTop: 20, maxWidth: 360 }}>
-            <button role="tab" aria-selected={mode === 'deposit'} className={mode === 'deposit' ? 'on' : ''} onClick={() => setMode('deposit')}><ArrowDown size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Deposit</button>
-            <button role="tab" aria-selected={mode === 'withdraw'} className={mode === 'withdraw' ? 'on' : ''} onClick={() => setMode('withdraw')}><ArrowUp size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Withdraw</button>
+          <div className="bx-wallet-actions">
+            <button className={`bx-btn${mode === 'deposit' ? '' : mode === 'none' ? '' : ' ghost'}`} onClick={() => setMode('deposit')} aria-pressed={mode === 'deposit'}><ArrowDown /> Deposit</button>
+            <button className={`bx-btn${mode === 'withdraw' ? '' : ' ghost'}`} onClick={() => setMode('withdraw')} aria-pressed={mode === 'withdraw'}><ArrowUp /> Withdraw</button>
           </div>
         </div>
-        {mode === 'deposit' ? <DepositCard /> : <WithdrawPanel />}
+        {mode === 'deposit' && <DepositCard onCancel={close} />}
+        {mode === 'withdraw' && <WithdrawPanel onCancel={close} />}
+        {mode === 'none' && <Balances />}
       </section>
       <aside className="bx-aside">
-        <Balances />
-        {mode === 'deposit' && <FaucetCard />}
+        {mode !== 'none' && <Balances />}
+        <FaucetCard />
       </aside>
     </main>
   );

@@ -160,6 +160,8 @@
 .bx-btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--line-2); }
 .bx-btn.ghost:hover { background: var(--soft); }
 .bx-btn.small { padding: 7px 14px; min-height: 34px; font-size: 13px; }
+.bx-wallet-actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+.bx-wallet-actions .bx-btn { min-width: 150px; }
 .bx-btn svg { width: 16px; height: 16px; }
 .bx-note { display: flex; gap: 8px; align-items: flex-start; background: #f2f6ff; color: #1b3f99; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
 .bx-note.warn { background: var(--amber-soft); color: var(--amber-text); }
@@ -252,6 +254,7 @@
   }
   .bx-li > :has(> .bx-btn), .bx-li > :has(> div > .bx-btn) { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
   .bx-li .bx-btn.small { flex: 1; min-height: 42px; }
+  .bx-wallet-actions .bx-btn { flex: 1; min-width: 0; }
   .bx-who .d { white-space: normal; }
 
   /* Bottom tab bar */
