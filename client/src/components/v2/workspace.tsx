@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowUp, CircleUser, LogOut, Home, Layers, LineChart, List, Menu, PlusCircle, Search, Shield, SlidersHorizontal, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, CircleUser, LogOut, Home, Layers, LineChart, List, Menu, Search, Shield, SlidersHorizontal, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -36,7 +36,6 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   underwriter: [
     { page: 'u-home', label: 'Home', icon: <Home /> },
     { page: 'u-pools', label: 'My pools', icon: <Layers /> },
-    { page: 'u-create', label: 'Create pool', icon: <PlusCircle /> },
     { page: 'u-pool', label: 'Tenor pricing', icon: <SlidersHorizontal /> },
     { page: 'u-risk', label: 'Risk and exposure', icon: <LineChart /> },
     { page: 'u-withdraw', label: 'Withdraw capital', icon: <ArrowUp /> },
@@ -47,9 +46,11 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
 /** Pages on the phone tab bar; everything else sits under More. */
 const TABS: Record<Role, Page[]> = {
   hedger: ['h-home', 'h-markets', 'h-protect', 'h-protections'],
-  underwriter: ['u-home', 'u-pools', 'u-create', 'u-risk'],
+  underwriter: ['u-home', 'u-pools', 'u-risk', 'wallet'],
 };
-const SHORT: Partial<Record<Page, string>> = { 'h-protections': 'Protections', 'u-create': 'Create', 'u-risk': 'Risk' };
+const SHORT: Partial<Record<Page, string>> = { 'h-protections': 'Protections', 'u-risk': 'Risk' };
+/** Pages reached from another page keep that page highlighted in the menu. */
+const PARENT: Partial<Record<Page, Page>> = { 'u-create': 'u-pools' };
 
 /**
  * On phones, list rows stack into cards, so each cell needs its column name. This copies the
@@ -124,7 +125,7 @@ export function Workspace() {
         </div>
         <div className="bx-navs">
           {NAV[role].map((n) => (
-            <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
+            <button key={n.page} className={`bx-nav${page === n.page || PARENT[page] === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
           ))}
         </div>
         <div className="bx-rail-foot">
@@ -175,12 +176,12 @@ export function Workspace() {
         {TABS[role].map((p) => {
           const n = NAV[role].find((x) => x.page === p)!;
           return (
-            <button key={p} className={`${page === p && !more ? 'on' : ''}${p === 'h-protect' || p === 'u-create' ? ' primary' : ''}`} onClick={() => goTab(p)}>
+            <button key={p} className={`${(page === p || PARENT[page] === p) && !more ? 'on' : ''}${p === 'h-protect' ? ' primary' : ''}`} onClick={() => goTab(p)}>
               {n.icon}<span>{SHORT[p] ?? n.label}</span>
             </button>
           );
         })}
-        <button className={more || !TABS[role].includes(page) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
+        <button className={more || !(TABS[role].includes(page) || TABS[role].includes(PARENT[page] as Page)) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
           {more ? <X /> : <Menu />}<span>More</span>
         </button>
       </nav>
