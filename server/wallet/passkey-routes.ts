@@ -27,7 +27,7 @@ import {
   generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { decodeCredentialPublicKey } from "@simplewebauthn/server/helpers";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { userAccounts } from "@shared/auth-core-schema";
 import { walletPasskeys, type WalletPasskey } from "@shared/chain-wallet-schema";
@@ -37,7 +37,7 @@ import { chainRegistry } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
 import type { ChainConfig } from "@shared/chains/registry";
 import { toUnits } from "@shared/domain/pool-economics";
-import { passkeyOwner, smartAccountAddress } from "./evm-smart-account";
+import { accountInterface, passkeyOwner, smartAccountAddress } from "./evm-smart-account";
 import { deployStellarSmartAccount, PASSKEY_WALLET_WASM } from "./stellar-smart-account";
 import { EvmRelayer } from "./evm-relayer";
 import { Api as StellarApi, Server as StellarServer } from "@stellar/stellar-sdk/rpc";
@@ -94,10 +94,47 @@ async function requireUser(req: Request) {
   return session.userId;
 }
 
+// ── Backup passkeys ──────────────────────────────────────────────────────────
+// A user's first passkey is the primary: it created the smart accounts. Backups are added as
+// extra owners on Base (Coinbase Smart Wallet addOwnerPublicKey) and extra signers on Stellar
+// (Passkey Kit add_signer), each approved by an active passkey. A backup is "active" only once
+// both chains hold it, and only active passkeys can sign in or approve transactions.
+
+/** Columns added after launch; created here because the startup schema push can stop early. */
+let columnsReady: Promise<void> | null = null;
+function ensurePasskeyColumns() {
+  columnsReady ??= (async () => {
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS label text`);
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'primary'`);
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'`);
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS evm_owner_index integer NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS evm_owner boolean NOT NULL DEFAULT true`);
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS stellar_signer boolean NOT NULL DEFAULT true`);
+  })().catch((err) => { columnsReady = null; throw err; });
+  return columnsReady;
+}
+
+/** The primary passkey: the one the smart accounts were created from. */
 async function findPasskey(userId: number): Promise<WalletPasskey | null> {
-  const [row] = await db.select().from(walletPasskeys).where(eq(walletPasskeys.userId, userId)).limit(1);
+  await ensurePasskeyColumns();
+  const [row] = await db.select().from(walletPasskeys)
+    .where(and(eq(walletPasskeys.userId, userId), eq(walletPasskeys.role, "primary")))
+    .orderBy(asc(walletPasskeys.id)).limit(1);
   return row ?? null;
 }
+
+/** Every passkey that may sign in and approve transactions. */
+async function activePasskeys(userId: number): Promise<WalletPasskey[]> {
+  await ensurePasskeyColumns();
+  return db.select().from(walletPasskeys)
+    .where(and(eq(walletPasskeys.userId, userId), eq(walletPasskeys.status, "active")))
+    .orderBy(asc(walletPasskeys.id));
+}
+
+const passkeyView = (p: WalletPasskey) => ({
+  credentialId: p.credentialId, label: p.label ?? (p.role === "primary" ? "First passkey" : "Backup passkey"),
+  role: p.role, status: p.status, createdAt: p.createdAt, onBase: p.evmOwner, onStellar: p.stellarSigner,
+});
 
 async function passkeyFor(userId: number): Promise<WalletPasskey> {
   const row = await findPasskey(userId);
@@ -231,6 +268,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
   }));
 
   app.post("/api/wallet/passkey/signin/options", wrap(async (req, res) => {
+    await ensurePasskeyColumns();
     const options = await generateAuthenticationOptions({ rpID: getRpId(req), userVerification: "required" });
     res.json({ flow: putChallenge({ challenge: options.challenge }), options });
   }));
@@ -240,6 +278,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const response = req.body?.response;
     const [passkey] = await db.select().from(walletPasskeys).where(eq(walletPasskeys.credentialId, String(response?.id ?? ""))).limit(1);
     if (!passkey) throw httpError(400, "This passkey is not registered with BlockFinaX testnet");
+    if (passkey.status !== "active") throw httpError(400, "This backup passkey is not set up yet. Finish adding it from your other device.");
     const result = await verifyAuthenticationResponse({
       response,
       expectedChallenge: pending.challenge,
@@ -252,7 +291,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     await db.update(walletPasskeys).set({ counter: result.authenticationInfo.newCounter }).where(eq(walletPasskeys.id, passkey.id));
     const sessionToken = await createSession(passkey.userId);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, passkey.userId));
-    const provisioned = await provision(passkey.userId, passkey);
+    const provisioned = await provision(passkey.userId, (await findPasskey(passkey.userId)) ?? passkey);
     res.json({ sessionToken, user: { id: user.id, name: user.name }, credentialId: passkey.credentialId, ...provisioned });
   }));
 
@@ -261,7 +300,8 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const passkey = await findPasskey(userId);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, userId));
     const accounts = passkey ? (await provision(userId, passkey)).accounts : [];
-    res.json({ user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey?.credentialId ?? null, accounts });
+    const passkeys = await db.select().from(walletPasskeys).where(eq(walletPasskeys.userId, userId)).orderBy(asc(walletPasskeys.id));
+    res.json({ user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey?.credentialId ?? null, accounts, passkeys: passkeys.map(passkeyView) });
   }));
 
   app.post("/api/wallet/evm/prepare", wrap(async (req, res) => {
@@ -279,7 +319,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const options = await generateAuthenticationOptions({
       rpID: getRpId(req),
       challenge: ethers.getBytes(prepared.hash),
-      allowCredentials: [{ id: passkey.credentialId, transports: JSON.parse(passkey.transports) }],
+      allowCredentials: (await activePasskeys(userId)).filter((p) => p.evmOwner).map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
       userVerification: "required",
     });
     res.json({ id: prepared.id, hash: prepared.hash, options });
@@ -289,11 +329,11 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const userId = await requireUser(req);
     const { evm } = chains();
     if (!evm) throw httpError(400, "No EVM network is enabled for this wallet");
-    const passkey = await passkeyFor(userId);
     const relay = evmRelayer(evm);
     const pending = relay.take(String(req.body?.id ?? ""), userId);
     const response = req.body?.response;
-    if (response?.id !== passkey.credentialId) throw httpError(401, "Approve with the passkey that owns this wallet");
+    const passkey = (await activePasskeys(userId)).find((p) => p.credentialId === response?.id && p.evmOwner);
+    if (!passkey) throw httpError(401, "Approve with a passkey that owns this wallet");
     const result = await verifyAuthenticationResponse({
       response,
       expectedChallenge: Buffer.from(ethers.getBytes(pending.hash)).toString("base64url"),
@@ -308,8 +348,161 @@ export function registerPasskeyWalletRoutes(app: Express) {
       authenticatorData: toBytes(response.response.authenticatorData),
       clientDataJSON: Buffer.from(response.response.clientDataJSON, "base64url").toString("utf8"),
       signature: toBytes(response.response.signature),
+      ownerIndex: passkey.evmOwnerIndex,
     });
     res.json({ chain: evm.key, hash: sent.hash, state: sent.success ? "CONFIRMED" : "FAILED" });
+  }));
+
+  // ── Backup passkeys ─────────────────────────────────────────────────────
+
+  /** Register a backup passkey (on this device or a security key). It starts as pending. */
+  app.post("/api/wallet/passkeys/backup/options", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    if (!(await findPasskey(userId))) throw httpError(400, "Create your first passkey before adding a backup");
+    const all = await db.select().from(walletPasskeys).where(eq(walletPasskeys.userId, userId));
+    if (all.length >= 5) throw httpError(400, "You can have up to five passkeys");
+    const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, userId));
+    const label = String(req.body?.label ?? "").trim().slice(0, 40) || "Backup passkey";
+    const options = await generateRegistrationOptions({
+      rpName: "BlockFinaX",
+      rpID: getRpId(req),
+      userName: `${user?.email || user?.name || `user ${userId}`} (${label})`,
+      userID: new TextEncoder().encode(`bfx-${userId}`),
+      attestationType: "none",
+      supportedAlgorithmIDs: [-7],
+      excludeCredentials: all.map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
+      authenticatorSelection: { residentKey: "required", userVerification: "required" },
+    });
+    res.json({ flow: putChallenge({ challenge: options.challenge, userHandle: String(userId), name: label }), options });
+  }));
+
+  app.post("/api/wallet/passkeys/backup/verify", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    const pending = takeChallenge(req.body?.flow);
+    if (pending.userHandle !== String(userId)) throw httpError(400, "This passkey request belongs to another session");
+    const verified = await verifyRegistrationResponse({
+      response: req.body?.response,
+      expectedChallenge: pending.challenge,
+      expectedOrigin: getAppOrigin(req),
+      expectedRPID: getRpId(req),
+      requireUserVerification: true,
+    });
+    if (!verified.verified || !verified.registrationInfo) throw httpError(400, "Passkey registration failed");
+    const credential = verified.registrationInfo.credential;
+    const key = decodeCredentialPublicKey(credential.publicKey) as unknown as Map<number, unknown>;
+    if (key.get(3) !== -7 || key.get(-1) !== 1) throw httpError(400, "A P-256 passkey is required");
+    const x = key.get(-2) as Uint8Array;
+    const y = key.get(-3) as Uint8Array;
+    if (x?.length !== 32 || y?.length !== 32) throw httpError(400, "Invalid passkey public key");
+    await ensurePasskeyColumns();
+    const [row] = await db.insert(walletPasskeys).values({
+      userId, credentialId: credential.id, publicKey: Buffer.from(credential.publicKey).toString("base64"),
+      x: ethers.hexlify(x), y: ethers.hexlify(y), counter: credential.counter, transports: JSON.stringify(credential.transports ?? []),
+      label: pending.name ?? "Backup passkey", role: "backup", status: "pending", evmOwner: false, stellarSigner: false,
+    }).returning();
+    // The Stellar wallet needs the uncompressed key (0x04 || x || y) to add it as a signer.
+    res.json({ passkey: passkeyView(row), stellarPublicKey: Buffer.concat([Buffer.from([4]), Buffer.from(x), Buffer.from(y)]).toString("base64url") });
+  }));
+
+  async function backupFor(userId: number, credentialId: string): Promise<WalletPasskey> {
+    await ensurePasskeyColumns();
+    const [row] = await db.select().from(walletPasskeys)
+      .where(and(eq(walletPasskeys.userId, userId), eq(walletPasskeys.credentialId, credentialId))).limit(1);
+    if (!row || row.role !== "backup") throw httpError(404, "Backup passkey not found");
+    return row;
+  }
+
+  /** Base: an operation adding the backup as an owner, approved by an active passkey. */
+  app.post("/api/wallet/passkeys/:credentialId/base/prepare", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    const { registry, evm } = chains();
+    if (!evm) throw httpError(400, "No EVM network is enabled for this wallet");
+    const backup = await backupFor(userId, req.params.credentialId);
+    if (backup.evmOwner) return res.json({ done: true });
+    const primary = await passkeyFor(userId);
+    const accounts = await new AccountService(registry, await drizzleAccountRepository(registry)).accounts(userId);
+    const sender = accounts.find((a) => a.chain === evm.key)?.address;
+    if (!sender) throw httpError(400, `No ${evm.name} account yet`);
+    const data = accountInterface.encodeFunctionData("addOwnerPublicKey", [ethers.zeroPadValue(backup.x, 32), ethers.zeroPadValue(backup.y, 32)]);
+    const prepared = await evmRelayer(evm).prepare({
+      userId, sender, owner: passkeyOwner(primary.x, primary.y), calls: [{ target: sender, value: BigInt(0), data }], ownerChange: true,
+    });
+    const options = await generateAuthenticationOptions({
+      rpID: getRpId(req),
+      challenge: ethers.getBytes(prepared.hash),
+      allowCredentials: (await activePasskeys(userId)).filter((p) => p.evmOwner).map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
+      userVerification: "required",
+    });
+    res.json({ done: false, id: prepared.id, hash: prepared.hash, options });
+  }));
+
+  /**
+   * Check both chains and activate the backup once each holds it. Base is read on chain
+   * (isOwnerPublicKey); Stellar is checked from the confirmed add_signer transaction.
+   */
+  app.post("/api/wallet/passkeys/:credentialId/finalize", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    const { registry, evm, stellar } = chains();
+    const backup = await backupFor(userId, req.params.credentialId);
+    const accounts = await new AccountService(registry, await drizzleAccountRepository(registry)).accounts(userId);
+    const updates: Partial<WalletPasskey> = {};
+
+    if (evm && !backup.evmOwner) {
+      const address = accounts.find((a) => a.chain === evm.key)?.address;
+      const provider = new ethers.JsonRpcProvider(evm.rpcUrls[0], Number(evm.networkId), { staticNetwork: ethers.Network.from(Number(evm.networkId)) });
+      if (address && (await provider.getCode(address)) !== "0x") {
+        const call = (fn: string, args: unknown[]) => provider.call({ to: address, data: accountInterface.encodeFunctionData(fn, args) })
+          .then((r) => accountInterface.decodeFunctionResult(fn, r));
+        const x32 = ethers.zeroPadValue(backup.x, 32), y32 = ethers.zeroPadValue(backup.y, 32);
+        const [isOwner] = await call("isOwnerPublicKey", [x32, y32]);
+        if (isOwner) {
+          const [next] = await call("nextOwnerIndex", []);
+          const wanted = ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "bytes32"], [x32, y32]).toLowerCase();
+          for (let i = Number(next) - 1; i >= 0; i--) {
+            const [owner] = await call("ownerAtIndex", [i]);
+            if (String(owner).toLowerCase() === wanted) { updates.evmOwnerIndex = i; updates.evmOwner = true; break; }
+          }
+        }
+      }
+    } else if (!evm) {
+      updates.evmOwner = true;
+    }
+
+    const stellarHash = typeof req.body?.stellarHash === "string" ? req.body.stellarHash : null;
+    if (stellar && !backup.stellarSigner && stellarHash && /^[0-9a-f]{64}$/.test(stellarHash)) {
+      const wallet = accounts.find((a) => a.chain === stellar.key)?.address;
+      const server = new StellarServer(stellar.rpcUrls[0]);
+      const tx = await server.getTransaction(stellarHash);
+      if (tx.status === StellarApi.GetTransactionStatus.SUCCESS && wallet) {
+        const op = tx.envelopeXdr.v1().tx().operations()[0]?.body().invokeHostFunctionOp();
+        const invoke = op?.hostFunction().invokeContract();
+        const { Address, scValToNative } = await import("@stellar/stellar-sdk");
+        const target = invoke ? Address.fromScAddress(invoke.contractAddress()).toString() : "";
+        const fn = invoke?.functionName().toString();
+        const arg = invoke ? scValToNative(invoke.args()[0]) : null;
+        // Signer::Secp256r1(key_id, public_key, ...): the key id must be this passkey's credential id.
+        const keyId = Array.isArray(arg) && arg[1] ? Buffer.from(arg[1]).toString("base64url") : null;
+        if (target === wallet && fn === "add_signer" && keyId === backup.credentialId) updates.stellarSigner = true;
+      }
+    } else if (!stellar) {
+      updates.stellarSigner = true;
+    }
+
+    const evmDone = updates.evmOwner ?? backup.evmOwner;
+    const stellarDone = updates.stellarSigner ?? backup.stellarSigner;
+    if (evmDone && stellarDone) updates.status = "active";
+    if (Object.keys(updates).length) await db.update(walletPasskeys).set(updates).where(eq(walletPasskeys.id, backup.id));
+    const [row] = await db.select().from(walletPasskeys).where(eq(walletPasskeys.id, backup.id));
+    res.json({ passkey: passkeyView(row) });
+  }));
+
+  /** Forget a backup that never finished setup. Active passkeys stay: removing an owner is not built yet. */
+  app.post("/api/wallet/passkeys/:credentialId/cancel", wrap(async (req, res) => {
+    const userId = await requireUser(req);
+    const backup = await backupFor(userId, req.params.credentialId);
+    if (backup.evmOwner || backup.stellarSigner) throw httpError(400, "This passkey is already on your wallet and cannot be cancelled");
+    await db.delete(walletPasskeys).where(eq(walletPasskeys.id, backup.id));
+    res.json({ ok: true });
   }));
 
   /**

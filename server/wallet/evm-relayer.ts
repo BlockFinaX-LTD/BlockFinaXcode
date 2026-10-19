@@ -20,7 +20,7 @@
  */
 import { ethers } from "ethers";
 import {
-  ENTRY_POINT_V06, callDataFor, decodeCalls, dummySignature, encodeWebAuthnSignature, entryPointInterface,
+  ADD_OWNER_SELECTOR, ENTRY_POINT_V06, callDataFor, decodeCalls, dummySignature, encodeWebAuthnSignature, entryPointInterface,
   initCodeFor, userOpHash, userOpTuple, type Call, type UserOperation,
 } from "./evm-smart-account";
 
@@ -39,6 +39,8 @@ interface Pending {
   op: UserOperation;
   hash: string;
   expiresAt: number;
+  /** Set only for a server-built backup-passkey operation: allows addOwnerPublicKey on the account itself. */
+  ownerChange?: boolean;
 }
 
 export class EvmRelayer {
@@ -66,8 +68,17 @@ export class EvmRelayer {
   }
 
   /** Throws unless every call is allowed for sponsorship. */
-  checkCalls(calls: Call[]) {
+  checkCalls(calls: Call[], ownerChange?: { sender: string }) {
     if (calls.length === 0 || calls.length > 4) throw new Error("A transaction must contain one to four calls");
+    if (ownerChange) {
+      // Exactly one call: the account adding an owner to itself, with no value.
+      const [c] = calls;
+      if (calls.length !== 1 || c.value !== BigInt(0) || c.target.toLowerCase() !== ownerChange.sender.toLowerCase()
+        || c.data.slice(0, 10).toLowerCase() !== ADD_OWNER_SELECTOR.toLowerCase()) {
+        throw new Error("Only adding a passkey owner is sponsored here");
+      }
+      return;
+    }
     const tokens = this.policy.tokens.map((a) => a.toLowerCase());
     const contracts = this.policy.contracts.map((a) => a.toLowerCase());
     for (const c of calls) {
@@ -81,8 +92,8 @@ export class EvmRelayer {
     }
   }
 
-  async prepare(input: { userId: number; sender: string; owner: string; calls: Call[] }): Promise<{ id: string; hash: string }> {
-    this.checkCalls(input.calls);
+  async prepare(input: { userId: number; sender: string; owner: string; calls: Call[]; ownerChange?: boolean }): Promise<{ id: string; hash: string }> {
+    this.checkCalls(input.calls, input.ownerChange ? { sender: input.sender } : undefined);
     const day = `${input.userId}:${new Date(this.now()).toISOString().slice(0, 10)}`;
     if ((this.daily.get(day) ?? 0) >= this.policy.dailyOpsPerUser) throw new Error("Daily sponsored transaction limit reached");
 
@@ -106,7 +117,7 @@ export class EvmRelayer {
     const hash = userOpHash(op, this.chainId);
     const id = ethers.hexlify(ethers.randomBytes(16));
     this.sweep();
-    this.pending.set(id, { userId: input.userId, op, hash, expiresAt: this.now() + 5 * 60_000 });
+    this.pending.set(id, { userId: input.userId, op, hash, expiresAt: this.now() + 5 * 60_000, ownerChange: input.ownerChange });
     return { id, hash };
   }
 
@@ -117,11 +128,11 @@ export class EvmRelayer {
     if (!p || p.expiresAt < this.now()) throw new Error("This transaction expired. Please try again.");
     if (p.userId !== userId) throw new Error("This transaction belongs to another user");
     // Re-check policy on what will actually run.
-    this.checkCalls(decodeCalls(p.op.callData));
+    this.checkCalls(decodeCalls(p.op.callData), p.ownerChange ? { sender: p.op.sender } : undefined);
     return p;
   }
 
-  async submit(p: Pending, assertion: { authenticatorData: Uint8Array; clientDataJSON: string; signature: Uint8Array }): Promise<{ hash: string; success: boolean }> {
+  async submit(p: Pending, assertion: { authenticatorData: Uint8Array; clientDataJSON: string; signature: Uint8Array; ownerIndex?: number }): Promise<{ hash: string; success: boolean }> {
     const op = { ...p.op, signature: encodeWebAuthnSignature(assertion) };
     const day = `${p.userId}:${new Date(this.now()).toISOString().slice(0, 10)}`;
     this.daily.set(day, (this.daily.get(day) ?? 0) + 1);

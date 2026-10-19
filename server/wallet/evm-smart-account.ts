@@ -31,7 +31,15 @@ export const factoryInterface = new ethers.Interface([
 export const accountInterface = new ethers.Interface([
   "function execute(address target, uint256 value, bytes data)",
   "function executeBatch((address target, uint256 value, bytes data)[] calls)",
+  // Owner management (Coinbase Smart Wallet MultiOwnable), for backup passkeys.
+  "function addOwnerPublicKey(bytes32 x, bytes32 y)",
+  "function isOwnerPublicKey(bytes32 x, bytes32 y) view returns (bool)",
+  "function nextOwnerIndex() view returns (uint256)",
+  "function ownerAtIndex(uint256 index) view returns (bytes)",
 ]);
+
+/** The selector of addOwnerPublicKey, the only self-call the relayer sponsors. */
+export const ADD_OWNER_SELECTOR = accountInterface.getFunction("addOwnerPublicKey")!.selector;
 export const entryPointInterface = new ethers.Interface([
   "function getNonce(address sender, uint192 key) view returns (uint256)",
   `function getUserOpHash(${USER_OP} userOp) view returns (bytes32)`,

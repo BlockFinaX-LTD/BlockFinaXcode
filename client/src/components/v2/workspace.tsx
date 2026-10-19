@@ -15,6 +15,7 @@ import { Flag } from './ui';
 import { HedgerHome, MarketsPage, MyProtections, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
+import { AgentChat } from './agent-chat';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
@@ -183,6 +184,8 @@ export function Workspace() {
         {page === 'u-risk' && <RiskPage go={go} poolRef={pool} />}
         {page === 'u-withdraw' && <WithdrawCapital go={go} poolRef={pool} />}
       </div>
+
+      <AgentChat />
 
       <nav className="bx-tabs" aria-label="Main">
         {TABS[role].map((p) => {

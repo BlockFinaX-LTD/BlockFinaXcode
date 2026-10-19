@@ -152,6 +152,16 @@ export const walletPasskeys = pgTable(
     y: text("y").notNull(),
     counter: integer("counter").notNull().default(0),
     transports: text("transports").notNull().default("[]"),
+    /** Name the user gave it, e.g. "iPhone" or "YubiKey". */
+    label: text("label"),
+    /** primary (created the smart accounts) or backup. */
+    role: text("role").notNull().default("primary"),
+    /** pending until every chain's wallet holds it, then active. */
+    status: text("status").notNull().default("active"),
+    /** Owner index on the Coinbase Smart Wallet (0 for the primary). */
+    evmOwnerIndex: integer("evm_owner_index").notNull().default(0),
+    evmOwner: boolean("evm_owner").notNull().default(true),
+    stellarSigner: boolean("stellar_signer").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

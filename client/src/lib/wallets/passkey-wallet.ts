@@ -24,11 +24,32 @@ export interface PasskeyAccount {
   isPrimary: boolean;
 }
 
+export interface PasskeyInfo {
+  credentialId: string;
+  label: string;
+  role: "primary" | "backup";
+  status: "active" | "pending";
+  createdAt: string;
+  onBase: boolean;
+  onStellar: boolean;
+}
+
 export interface PasskeySession {
   sessionToken: string;
   user: { id: number; name: string | null; email?: string | null };
+  /** The passkey this device signs with: the one used here last, else the primary. */
   credentialId: string | null;
   accounts: PasskeyAccount[];
+  passkeys?: PasskeyInfo[];
+}
+
+/** Which of the user's passkeys lives on this device, remembered when it is used here. */
+const DEVICE_CREDENTIAL_KEY = "bfx:device-passkey";
+function rememberDeviceCredential(id: string | null | undefined) {
+  try { if (id) localStorage.setItem(DEVICE_CREDENTIAL_KEY, id); } catch { /* per-device convenience */ }
+}
+function deviceCredential(): string | null {
+  try { return localStorage.getItem(DEVICE_CREDENTIAL_KEY); } catch { return null; }
 }
 
 interface WalletConfig {
@@ -99,7 +120,8 @@ export function acceptGoogleRedirect(): boolean {
 export async function createWalletPasskey(): Promise<PasskeySession & { errors?: string[] }> {
   const { flow, options } = await api<{ flow: string; options: any }>("/api/wallet/passkey/register/options", {});
   const response = await startRegistration({ optionsJSON: options });
-  const created = await api<{ errors?: string[] }>("/api/wallet/passkey/register/verify", { flow, response });
+  const created = await api<{ errors?: string[]; credentialId?: string }>("/api/wallet/passkey/register/verify", { flow, response });
+  rememberDeviceCredential(created.credentialId ?? response.id);
   const session = await currentPasskeySession();
   if (!session) throw new Error("Your session ended. Sign in again.");
   return { ...session, errors: created.errors };
@@ -111,6 +133,7 @@ export async function signInWithPasskey(): Promise<PasskeySession> {
   const response = await startAuthentication({ optionsJSON: options });
   const session = await api<PasskeySession>("/api/wallet/passkey/signin/verify", { flow, response });
   storeSessionToken(session.sessionToken);
+  rememberDeviceCredential(session.credentialId);
   return session;
 }
 
@@ -119,7 +142,9 @@ export async function currentPasskeySession(): Promise<PasskeySession | null> {
   if (!token) return null;
   try {
     const me = await api<Omit<PasskeySession, "sessionToken">>("/api/wallet/passkey/me");
-    return { ...me, sessionToken: token };
+    const local = deviceCredential();
+    const usable = me.passkeys?.some((p) => p.credentialId === local && p.status === "active");
+    return { ...me, credentialId: usable ? local : me.credentialId, sessionToken: token };
   } catch {
     storeSessionToken(null);
     return null;
@@ -158,6 +183,69 @@ async function signStellarAuth(transactionXdr: string, credentialId: string, con
   }
   invoke.auth(signed);
   return envelope.toXDR("base64");
+}
+
+/**
+ * Add a backup passkey for recovery. Steps, each approved by a passkey the user already has:
+ *   1. create the new passkey (this device, another phone via QR, or a security key);
+ *   2. add it as an owner of the Base smart wallet;
+ *   3. add it as a signer of the Stellar smart wallet;
+ *   4. the server checks both chains and activates it.
+ */
+export async function addBackupPasskey(label: string, onStep?: WalletStep): Promise<PasskeyInfo> {
+  const session = await currentPasskeySession();
+  if (!session?.credentialId) throw new Error("Sign in with your passkey first");
+  const cfg = await walletConfig();
+
+  onStep?.("Create the backup passkey...");
+  const { flow, options } = await api<{ flow: string; options: any }>("/api/wallet/passkeys/backup/options", { label });
+  const created = await startRegistration({ optionsJSON: options });
+  const { passkey, stellarPublicKey } = await api<{ passkey: PasskeyInfo; stellarPublicKey: string }>("/api/wallet/passkeys/backup/verify", { flow, response: created });
+  const id = encodeURIComponent(passkey.credentialId);
+
+  if (cfg.evm) {
+    const base = await api<{ done: boolean; id?: string; options?: any }>(`/api/wallet/passkeys/${id}/base/prepare`, {});
+    if (!base.done) {
+      onStep?.("Approve with your current passkey (Base)...");
+      const approval = await startAuthentication({ optionsJSON: base.options });
+      onStep?.("Adding it to your Base wallet...");
+      const sent = await api<{ state: string; hash: string }>("/api/wallet/evm/submit", { id: base.id, response: approval });
+      if (sent.state !== "CONFIRMED") throw new Error(`Adding the passkey on Base failed: ${sent.hash}`);
+    }
+  }
+
+  let stellarHash: string | undefined;
+  const stellar = cfg.stellar ? session.accounts.find((a) => a.chain === cfg.stellar!.chain) : undefined;
+  if (cfg.stellar && stellar) {
+    onStep?.("Approve with your current passkey (Stellar)...");
+    const { Buffer } = await import("buffer");
+    (globalThis as any).Buffer ??= Buffer;
+    const { PasskeyKit, SignerStore } = await import("passkey-kit");
+    const kit = new PasskeyKit({ rpcUrl: cfg.stellar.rpcUrl, networkPassphrase: cfg.stellar.networkPassphrase, walletWasmHash: cfg.stellar.walletWasmHash });
+    await kit.connectWallet({ keyId: session.credentialId, getContractId: async () => stellar.address });
+    const tx = await kit.addSecp256r1(passkey.credentialId, stellarPublicKey, undefined, SignerStore.Persistent);
+    const signed = await signStellarAuth(tx.built!.toXDR(), session.credentialId, stellar.address);
+    onStep?.("Adding it to your Stellar wallet...");
+    stellarHash = (await api<{ hash: string }>("/api/v2/transactions/relay", { chain: cfg.stellar.chain, xdr: signed })).hash;
+  }
+
+  onStep?.("Confirming on both networks...");
+  for (let i = 0; i < 15; i++) {
+    const { passkey: now } = await api<{ passkey: PasskeyInfo }>(`/api/wallet/passkeys/${id}/finalize`, { stellarHash });
+    if (now.status === "active") return now;
+    await new Promise((ok) => setTimeout(ok, 2_000));
+  }
+  throw new Error("The backup passkey was added but not confirmed yet. Check again in a minute.");
+}
+
+/** Remove a backup passkey whose setup did not finish. */
+export async function cancelBackupPasskey(credentialId: string) {
+  await api(`/api/wallet/passkeys/${encodeURIComponent(credentialId)}/cancel`, {});
+}
+
+/** Retry confirmation for a backup passkey left pending (for example after a slow network). */
+export async function finalizeBackupPasskey(credentialId: string) {
+  return (await api<{ passkey: PasskeyInfo }>(`/api/wallet/passkeys/${encodeURIComponent(credentialId)}/finalize`, {})).passkey;
 }
 
 export class PasskeyWalletProvider implements WalletProvider {

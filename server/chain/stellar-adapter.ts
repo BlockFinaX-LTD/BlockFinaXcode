@@ -411,6 +411,8 @@ export class StellarAdapter implements ChainAdapter {
   async relayUserTransaction(xdrEnvelope: string, wallet: string): Promise<TransactionStatus> {
     const ratePool = this.env.STELLAR_RATE_POOL_CONTRACT;
     const extra = ratePool ? [{ contract: ratePool, ...RATE_POOL_POLICY }] : [];
+    // The user's own smart wallet may add a backup passkey as a signer (authorized by itself).
+    extra.push({ contract: wallet, methods: new Set(["add_signer"]), walletArg: {}, permissionless: new Set<string>() });
     const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract), extra);
     const fail = (err: unknown) => (ratePool && call.target === ratePool ? mapRatePoolError(err instanceof Error ? err.message : String(err)) : this.mapError(err));
     // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.

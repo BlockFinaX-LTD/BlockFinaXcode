@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { ethers } from "ethers";
 import { EvmRelayer } from "../evm-relayer";
-import { callDataFor, decodeCalls, encodeWebAuthnSignature, parseDerSignature, passkeyOwner, userOpHash, type UserOperation } from "../evm-smart-account";
+import { accountInterface, callDataFor, decodeCalls, encodeWebAuthnSignature, parseDerSignature, passkeyOwner, userOpHash, type UserOperation } from "../evm-smart-account";
 
 const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const POOL = "0x000000000000000000000000000000000000b0b0";
@@ -84,4 +84,28 @@ test("prepared operations are single use, expire, and belong to one user", async
   const c = await r.prepare({ userId: 1, sender: "0xD30E185Dcf335FFEf6e4C0D334201230b171E04d", owner, calls: [call] });
   now += 6 * 60_000;
   assert.throws(() => r.take(c.id, 1), /expired/);
+});
+
+test("relayer sponsors adding a passkey owner only on the account itself, and only when marked", () => {
+  const r = relayer();
+  const sender = "0x00000000000000000000000000000000000a11ce";
+  const add = accountInterface.encodeFunctionData("addOwnerPublicKey", [ethers.zeroPadValue("0x01", 32), ethers.zeroPadValue("0x02", 32)]);
+  // Allowed: one self-call to addOwnerPublicKey, no value.
+  r.checkCalls([{ target: sender, value: BigInt(0), data: add }], { sender });
+  // Not allowed without the server's owner-change flag.
+  assert.throws(() => r.checkCalls([{ target: sender, value: BigInt(0), data: add }]), /not approved/);
+  // Not allowed on another account, with value, with another method, or bundled with other calls.
+  assert.throws(() => r.checkCalls([{ target: POOL, value: BigInt(0), data: add }], { sender }), /Only adding a passkey owner/);
+  assert.throws(() => r.checkCalls([{ target: sender, value: BigInt(1), data: add }], { sender }), /Only adding a passkey owner/);
+  assert.throws(() => r.checkCalls([{ target: sender, value: BigInt(0), data: accountInterface.encodeFunctionData("execute", [POOL, 0, "0x"]) }], { sender }), /Only adding a passkey owner/);
+  assert.throws(() => r.checkCalls([{ target: sender, value: BigInt(0), data: add }, { target: USDC, value: BigInt(0), data: erc20.encodeFunctionData("transfer", [POOL, 1]) }], { sender }), /Only adding a passkey owner/);
+});
+
+test("WebAuthn signature carries the approving passkey's owner index", () => {
+  const authenticatorData = new Uint8Array(37);
+  const clientDataJSON = '{"type":"webauthn.get","challenge":"abc","origin":"https://x"}';
+  const der = new Uint8Array([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02]);
+  const enc = encodeWebAuthnSignature({ authenticatorData, clientDataJSON, signature: der, ownerIndex: 3 });
+  const [wrapped] = ethers.AbiCoder.defaultAbiCoder().decode(["tuple(uint256 ownerIndex, bytes signatureData)"], enc);
+  assert.equal(Number(wrapped.ownerIndex), 3);
 });

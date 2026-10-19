@@ -3,15 +3,15 @@
  * because it is where USDC enters or leaves BlockFinaX.
  */
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Check, Copy, LogOut, X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowDown, ArrowUp, Check, Copy, KeyRound, LogOut, Plus, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
-import { api, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
+import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
 import { fmt, useChains, useUsdcBalances, usdcOn } from './shared';
-import { Note, Spin, Sum } from './ui';
+import { Loading, Note, Spin, Sum, Tag } from './ui';
 
 function useAccounts() {
   const { session } = usePasskeySession();
@@ -181,6 +181,234 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
   );
 }
 
+// ── Account: profile, verification, passkeys and recovery ──────────────────
+
+interface Standing {
+  tier: number; tierDef: { name: string; description: string; cashMovedUsd: number; payoutExposureUsd: number };
+  kycStatus: string; cashMovedUsd: number; payoutExposureUsd: number; cashRemainingUsd: number; exposureRemainingUsd: number; windowDays: number;
+  tiers: { tier: number; name: string; cashMovedUsd: number; requires: string[]; description: string }[];
+  prefill: Record<string, string>;
+  submission: { id: number; status: string; requestedTier: number; submittedAt: string; reviewedAt: string | null; notes: string | null } | null;
+}
+
+const STATUS_TEXT: Record<string, [string, 'green' | 'amber' | 'grey' | 'blue']> = {
+  submitted: ['Submitted, waiting for review', 'blue'], in_review: ['In review', 'amber'], approved: ['Approved', 'green'], rejected: ['Not approved', 'grey'],
+};
+
+function VerificationCard() {
+  const q = useQuery({ queryKey: ['compliance-me'], queryFn: () => api<Standing>('/api/compliance/me'), retry: false });
+  const [open, setOpen] = useState(false);
+  const d = q.data;
+  const pending = d?.submission && ['submitted', 'in_review'].includes(d.submission.status);
+  const nextTier = d ? Math.min(3, d.tier + 1) : 1;
+  return (
+    <div className="bx-card">
+      <div className="bx-card-h">
+        <div><h2>Verification</h2><div className="sub">Your verification level sets how much you can move and protect in any {d?.windowDays ?? 30} days.</div></div>
+        {d && <Tag tone={d.tier >= 2 ? 'green' : d.tier === 1 ? 'blue' : 'amber'}>{d.tierDef.name}</Tag>}
+      </div>
+      {q.isLoading ? <Loading /> : q.isError ? <div className="bx-empty">Verification is unavailable right now.</div> : d && (
+        <>
+          {d.tier > 0 && (
+            <div className="bx-sums" style={{ borderTop: 0 }}>
+              <Sum l="Moved (30 days)" v={<span className="num">${fmt(d.cashMovedUsd)} of ${fmt(d.tierDef.cashMovedUsd, 0)}</span>} />
+              <Sum l="Protection exposure" v={<span className="num">${fmt(d.payoutExposureUsd)} of ${fmt(d.tierDef.payoutExposureUsd, 0)}</span>} />
+            </div>
+          )}
+          {d.tier === 0 && !pending && <Note warn>You need to verify before you can buy protection or provide liquidity.</Note>}
+          {d.submission && (
+            <div style={{ marginTop: 12 }}>
+              <Sum l={`Request for ${d.tiers.find((t) => t.tier === d.submission!.requestedTier)?.name ?? 'a higher level'}`} v={<Tag tone={STATUS_TEXT[d.submission.status]?.[1] ?? 'grey'}>{STATUS_TEXT[d.submission.status]?.[0] ?? d.submission.status}</Tag>} />
+              {d.submission.notes && <Note warn>{d.submission.notes}</Note>}
+            </div>
+          )}
+          {!pending && d.tier < 3 && !open && (
+            <button className="bx-btn" style={{ marginTop: 16 }} onClick={() => setOpen(true)}>{d.tier === 0 ? 'Verify now' : 'Raise my limits'}</button>
+          )}
+          {open && <VerificationForm standing={d} initialTier={nextTier} onDone={() => { setOpen(false); void q.refetch(); }} onCancel={() => setOpen(false)} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+const ID_TYPES = ['Ghana Card', 'Passport', 'National ID', "Driver's licence"];
+const MAX_FILE = 4 * 1024 * 1024;
+
+function VerificationForm({ standing, initialTier, onDone, onCancel }: { standing: Standing; initialTier: number; onDone: () => void; onCancel: () => void }) {
+  const { toast } = useToast();
+  const { session } = usePasskeySession();
+  const p = standing.prefill;
+  const [tier, setTier] = useState(initialTier);
+  const [entity, setEntity] = useState<'individual' | 'business'>(p.companyName ? 'business' : 'individual');
+  const [f, setF] = useState<Record<string, string>>({
+    fullName: p.fullName ?? session?.user.name ?? '', email: p.email ?? session?.user.email ?? '', phone: p.phone ?? '', country: p.country ?? '',
+    nationality: p.nationality ?? '', dateOfBirth: p.dateOfBirth ?? '', address: p.address ?? '', idType: p.idType ?? ID_TYPES[0], idNumber: p.idNumber ?? '',
+    companyName: p.companyName ?? '', registrationNumber: '', beneficialOwners: '', sourceOfFunds: '', sourceOfWealth: '', expectedMonthlyVolume: '',
+  });
+  const [pep, setPep] = useState(false);
+  const [docs, setDocs] = useState<{ label: string; filename: string; mime: string; dataUrl: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const set = (k: string) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const field = (k: string, label: string, props: Record<string, unknown> = {}) => (
+    <label className="bx-field"><span>{label}</span><input className="bx-input" value={f[k]} onChange={set(k)} {...props} /></label>
+  );
+  const addDoc = (label: string) => (e: { target: HTMLInputElement }) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FILE) { toast({ title: 'File too large', description: 'Upload a file under 4 MB.', variant: 'destructive' }); return; }
+    const reader = new FileReader();
+    reader.onload = () => setDocs((d) => [...d.filter((x) => x.label !== label), { label, filename: file.name, mime: file.type || 'application/octet-stream', dataUrl: String(reader.result) }]);
+    reader.readAsDataURL(file);
+  };
+  const docInput = (label: string) => (
+    <label className="bx-field"><span>{label}{docs.some((d) => d.label === label) ? ' · added' : ''}</span>
+      <input className="bx-input" type="file" accept="image/*,application/pdf" onChange={addDoc(label)} /></label>
+  );
+
+  async function submit() {
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = { requestedTier: tier, entityType: entity, isPep: pep, documents: docs };
+      for (const [k, v] of Object.entries(f)) if (v.trim()) body[k] = v.trim();
+      await api('/api/compliance/submit', body);
+      toast({ title: 'Verification submitted', description: 'We will review it and email you.' });
+      onDone();
+    } catch (e) {
+      toast({ title: 'Not submitted', description: (e as Error).message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  }
+
+  const needs = standing.tiers.find((t) => t.tier === tier)?.requires ?? [];
+  return (
+    <div style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 18 }}>
+      <div className="bx-card-h" style={{ marginBottom: 14 }}>
+        <h2 style={{ fontSize: 16 }}>Verification details</h2>
+        <button className="bx-btn ghost small" onClick={onCancel}><X /> Cancel</button>
+      </div>
+      <span className="bx-label">Who is this account for?</span>
+      <div className="bx-seg" style={{ marginBottom: 16 }}>
+        <button className={entity === 'individual' ? 'on' : ''} onClick={() => setEntity('individual')}>An individual</button>
+        <button className={entity === 'business' ? 'on' : ''} onClick={() => setEntity('business')}>A business</button>
+      </div>
+      <span className="bx-label">Level</span>
+      <div className="bx-seg" style={{ marginBottom: 8 }}>
+        {standing.tiers.filter((t) => t.tier > standing.tier).map((t) => (
+          <button key={t.tier} className={tier === t.tier ? 'on' : ''} onClick={() => setTier(t.tier)}>{t.name} · ${fmt(t.cashMovedUsd, 0)}</button>
+        ))}
+      </div>
+      {needs.length > 0 && <div className="sub" style={{ marginBottom: 16 }}>Needs: {needs.join(', ')}.</div>}
+
+      {entity === 'business' && (
+        <>
+          <h3 style={{ fontSize: 14, margin: '8px 0 10px' }}>Business details</h3>
+          {field('companyName', 'Registered company name')}
+          {field('registrationNumber', 'Registration number')}
+          {tier >= 3 && (
+            <label className="bx-field"><span>Beneficial owners (10% or more): name, share, nationality</span>
+              <textarea className="bx-input" rows={3} value={f.beneficialOwners} onChange={set('beneficialOwners')} /></label>
+          )}
+          <h3 style={{ fontSize: 14, margin: '8px 0 10px' }}>The person applying</h3>
+        </>
+      )}
+      {field('fullName', 'Full legal name')}
+      {field('email', 'Email', { type: 'email' })}
+      {field('phone', 'Phone number', { type: 'tel' })}
+      {field('country', 'Country of residence')}
+      <label className="bx-field"><span>ID type</span>
+        <select className="bx-select" value={f.idType} onChange={set('idType')}>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
+      {field('idNumber', 'ID number')}
+      {tier >= 2 && (
+        <>
+          {field('dateOfBirth', 'Date of birth', { type: 'date' })}
+          {field('nationality', 'Nationality')}
+          {field('address', 'Residential address')}
+          {field('sourceOfFunds', 'Source of funds (for example: business revenue, salary)')}
+          {field('expectedMonthlyVolume', 'Expected monthly volume (USD)')}
+          {docInput('Photo ID document')}
+          {docInput('Proof of address')}
+        </>
+      )}
+      {tier >= 3 && (
+        <>
+          {field('sourceOfWealth', 'Source of wealth')}
+          {entity === 'business' && docInput('Certificate of incorporation')}
+          {entity === 'business' && docInput('Directors and shareholders register')}
+        </>
+      )}
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0 16px', fontSize: 14 }}>
+        <input type="checkbox" checked={pep} onChange={(e) => setPep(e.target.checked)} />
+        I am, or am closely related to, a politically exposed person
+      </label>
+      <button className="bx-btn block" disabled={busy || f.fullName.trim().length < 2} onClick={submit}>{busy ? <><Spin /> Submitting...</> : 'Submit for review'}</button>
+    </div>
+  );
+}
+
+function PasskeysCard() {
+  const { toast } = useToast();
+  const { session, setSession } = usePasskeySession();
+  const [label, setLabel] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const passkeys = session?.passkeys ?? [];
+  const refresh = async () => { const s = await currentPasskeySession(); if (s) setSession(s); };
+  const backups = passkeys.filter((p) => p.role === 'backup' && p.status === 'active').length;
+
+  async function add() {
+    setBusy('Starting...');
+    try {
+      await addBackupPasskey(label.trim() || 'Backup passkey', (m) => setBusy(m));
+      toast({ title: 'Backup passkey added', description: 'It can now sign in and approve transactions.' });
+      setAdding(false);
+      setLabel('');
+    } catch (e) {
+      toast({ title: 'Backup passkey not added', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setBusy(null);
+      await refresh();
+    }
+  }
+
+  return (
+    <div className="bx-card">
+      <div className="bx-card-h">
+        <div><h2>Passkeys and recovery</h2><div className="sub">Passkeys approve every transaction and own your wallet. Add a backup on another phone or a security key, so losing one device never locks you out.</div></div>
+        <Tag tone={backups > 0 ? 'green' : 'amber'}>{backups > 0 ? 'Recovery on' : 'No backup'}</Tag>
+      </div>
+      {passkeys.length === 0 ? <div className="bx-empty">No passkey yet.</div> : passkeys.map((p) => (
+        <div key={p.credentialId} className="bx-mini">
+          <span className="bx-ic"><KeyRound aria-hidden="true" /></span>
+          <div className="grow">
+            <div className="t">{p.label}{p.credentialId === session?.credentialId ? ' · this device' : ''}</div>
+            <div className="d">{p.role === 'primary' ? 'First passkey' : 'Backup'} · added {new Date(p.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+              {p.status === 'pending' ? ` · Base ${p.onBase ? 'done' : 'pending'}, Stellar ${p.onStellar ? 'done' : 'pending'}` : ''}</div>
+          </div>
+          {p.status === 'active' ? <Tag tone="green">Active</Tag> : (
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button className="bx-btn ghost small" disabled={!!busy} onClick={async () => { try { await finalizeBackupPasskey(p.credentialId); } finally { await refresh(); } }}>Check</button>
+              {!p.onBase && !p.onStellar && <button className="bx-btn ghost small" disabled={!!busy} onClick={async () => { await cancelBackupPasskey(p.credentialId); await refresh(); }}>Remove</button>}
+            </span>
+          )}
+        </div>
+      ))}
+      {!adding ? (
+        <button className="bx-btn" style={{ marginTop: 16 }} onClick={() => setAdding(true)}><Plus /> Add backup passkey</button>
+      ) : (
+        <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+          <label className="bx-field"><span>Name it (for example "Work phone" or "YubiKey")</span>
+            <input className="bx-input" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} /></label>
+          <Note>Your browser will offer to save it on this device, on another phone by scanning a QR code, or on a security key. You then approve twice with your current passkey: once for Base and once for Stellar. Network fees are covered.</Note>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button className="bx-btn" disabled={!!busy} onClick={add}>{busy ? <><Spin /> {busy}</> : 'Create backup passkey'}</button>
+            <button className="bx-btn ghost" disabled={!!busy} onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AccountPage() {
   const { session, setSession } = usePasskeySession();
   const accounts = useAccounts();
@@ -193,10 +421,11 @@ export function AccountPage() {
           <div className="bx-sums" style={{ borderTop: 0 }}>
             <Sum l="Name" v={session?.user.name || '-'} />
             <Sum l="Email" v={session?.user.email || '-'} />
-            <Sum l="Transaction approval" v="Passkey on this device" />
           </div>
           <button className="bx-btn ghost" style={{ marginTop: 12 }} onClick={async () => { await signOutPasskey(); setSession(null); setLocation('/auth'); }}><LogOut /> Sign out</button>
         </div>
+        <VerificationCard />
+        <PasskeysCard />
       </section>
       <aside className="bx-aside">
         <div className="bx-card tight">
@@ -204,7 +433,7 @@ export function AccountPage() {
           <div className="bx-sums" style={{ borderTop: 0 }}>
             {accounts.map((a) => <Sum key={a.chain} l={a.name} v={<span className="num" style={{ fontSize: 12 }}>{a.address.slice(0, 8)}...{a.address.slice(-6)}</span>} />)}
           </div>
-          <div className="sub">Your passkey controls every account. BlockFinaX never holds your keys.</div>
+          <div className="sub">Your passkeys control every account. BlockFinaX never holds your keys.</div>
         </div>
       </aside>
     </main>
