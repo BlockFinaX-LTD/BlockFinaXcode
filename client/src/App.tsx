@@ -229,6 +229,12 @@ function Router() {
           No allowlist check after sign-in: anyone with a Rift session can
           use the app. */}
       {/* Wallet page retired — its functions live on Home now. Old links/bookmarks redirect. */}
+      {/* Passkey wallet (testnet): the workspace is the one app, so the classic wallet's
+          pages and the retired Earn section lead there. */}
+      {usesPasskeyWallet && <Route path="/wallet"><Redirect to="/hedge" /></Route>}
+      {usesPasskeyWallet && <Route path="/home"><Redirect to="/hedge" /></Route>}
+      {usesPasskeyWallet && <Route path="/tasks"><Redirect to="/hedge" /></Route>}
+      {usesPasskeyWallet && <Route path="/rewards"><Redirect to="/hedge" /></Route>}
       <Route path="/wallet"><Redirect to="/home" /></Route>
       <Route path="/home" component={HomePage} />
       <Route path="/hedge" component={Hedge} />

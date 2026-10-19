@@ -2,7 +2,7 @@ import { isWalletSandbox } from "@/lib/wallet-environment";
 /**
  * AppShell — chrome around every signed-in page, rebuilt to the new design.
  *
- *   - Sidebar (desktop ≥761px): brand + Home / Cover / Earn
+ *   - Sidebar (desktop ≥761px): brand + Home / Cover
  *   - Appbar (sticky): greeting, account pill, live market search (⌘K),
  *     theme toggle, notifications
  *   - Mobile tab bar: same three routes
@@ -190,7 +190,6 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
           <nav className="sb-nav">
             {navItem('home', '/home', 'Home', LayoutDashboard)}
             {navItem('cover', '/hedge', 'Cover', Shield)}
-            {navItem('earn', '/tasks', 'Earn', TrendingUp)}
             {navItem('profile', '/profile', 'Profile', User)}
           </nav>
         </aside>
@@ -277,10 +276,7 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
       </div>
 
       {/* ===== BOTTOM TAB BAR (mobile) =====
-           Three destinations, not four. Earn moved under Profile: it is a
-           place you visit occasionally, and it was taking a quarter of the
-           bar from Home, Cover and Profile, which are the daily ones. Its
-           route is unchanged, so any link to /tasks still lands. */}
+           Three destinations: Home, Cover and Profile. Earn was retired. */}
       <nav className="tabbar">
         <Link href="/home" className={`tab${active === 'home' ? ' on' : ''}`}>
           <LayoutDashboard /><span className="tl">Home</span>

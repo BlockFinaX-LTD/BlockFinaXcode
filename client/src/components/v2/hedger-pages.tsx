@@ -415,7 +415,7 @@ function RateChart({ points, loading, strike, cap, label, unit }: {
           </linearGradient>
         </defs>
         {ticks.map((v, k) => (
-          <line key={k} x1={PL} y1={y(v)} x2={VW - PR} y2={y(v)} stroke="#eceef2" vectorEffect="non-scaling-stroke" />
+          <line key={k} x1={PL} y1={y(v)} x2={VW - PR} y2={y(v)} stroke="var(--line)" vectorEffect="non-scaling-stroke" />
         ))}
         <path d={area} fill="url(#bx-chart-fill)" />
         <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />

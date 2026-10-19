@@ -322,18 +322,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* refer */}
-      <div className="refer reveal in">
-        <span className="ri"><Gift /></span>
-        <div className="rc">
-          <div className="rt">Refer &amp; earn</div>
-          <div className="rs">{isWalletSandbox ? 'Referral rewards are not configured in this test environment.' : 'Invite a friend — you both get 50 points in rewards.'}</div>
-        </div>
-        <button className="rx" onClick={() => setLocation('/tasks?tab=referrals')}>
-          Invite <ArrowRight />
-        </button>
-      </div>
-
       {/* main grid */}
       <div className="maingrid reveal in">
         <div className="col">

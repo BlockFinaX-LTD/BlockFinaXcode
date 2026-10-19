@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowUp, CircleUser, LogOut, Home, Layers, LineChart, List, Menu, Search, Shield, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, CircleUser, GraduationCap, Home, Layers, LineChart, List, Menu, Moon, Search, Shield, Store, Sun, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -78,6 +78,12 @@ function useListLabels(root: RefObject<HTMLElement | null>) {
   }, [root]);
 }
 
+type Theme = 'light' | 'dark';
+const THEME_KEY = 'bfx-theme';
+function readTheme(): Theme {
+  try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
+}
+
 function readRole(): Role {
   try { return localStorage.getItem('bfx:cover-role') === 'underwriter' ? 'underwriter' : 'hedger'; } catch { return 'hedger'; }
 }
@@ -109,13 +115,19 @@ export function Workspace() {
     try { localStorage.setItem('bfx:cover-role', r); } catch { /* per-viewer convenience */ }
   };
   const [more, setMore] = useState(false);
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  const flipTheme = () => setTheme((t) => {
+    const next: Theme = t === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* per-viewer convenience */ }
+    return next;
+  });
   const content = useRef<HTMLDivElement>(null);
   useListLabels(content);
   const goTab = (p: Page) => { setMore(false); go(p); };
   const initials = (session?.user.name || session?.user.email || 'BX').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 
   return (
-    <div className="bx">
+    <div className="bx" data-theme={theme}>
       <nav className="bx-rail" aria-label="Main">
         <div className="bx-brand"><img src={logoPath} alt="" />BlockFinaX</div>
         <div className="bx-roles">
@@ -130,7 +142,7 @@ export function Workspace() {
         <div className="bx-rail-foot">
           <div className="bx-testnet">Testnet · test USDC only</div>
           <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><CircleUser />Account</button>
-          <button className="bx-nav" onClick={() => setLocation('/home')}><LogOut />Classic wallet</button>
+          <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
         </div>
       </nav>
 
@@ -152,6 +164,7 @@ export function Workspace() {
               </>
             )}
             <button className="bx-balance-pill num bx-show-sm" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
+            <button className="bx-icon-btn" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={flipTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</button>
             <button className="bx-avatar" aria-label="Account" onClick={() => go('account')}>{initials}</button>
           </div>
         </header>
@@ -196,7 +209,7 @@ export function Workspace() {
               <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
             ))}
             <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Account</button>
-            <button className="bx-nav" onClick={() => setLocation('/home')}><LogOut />Classic wallet</button>
+            <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
             <div className="bx-testnet" style={{ marginTop: 8 }}>Testnet · test USDC only</div>
           </div>
         </div>
