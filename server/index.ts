@@ -383,6 +383,8 @@ app.use((req, res, next) => {
     void import("./pricing/testnet-bootstrap").then((m) => m.bootstrapTestnetPricing());
     // Interest-rate benchmarks (SOFR, KESONIA) from official sources; testnet only until licensing clears.
     void import("./rates/scheduler").then((m) => m.startRateOracleScheduler());
+    // Expired currency-pool hedges on Stellar (current and legacy contracts) get prices and settle.
+    void import("./domain/oracle-runner").then((m) => m.startPoolOracleRunner());
   }
 
   // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.

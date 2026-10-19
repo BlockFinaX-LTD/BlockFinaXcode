@@ -81,7 +81,7 @@ function idOf(ref: string, kind: "pool" | "position") {
   const r = parseResourceId(ref);
   const [k, n] = r.id.split("/");
   if (k !== kind || !Number.isInteger(Number(n))) throw new ApplicationError("INVALID_REQUEST", `Not a ${kind} id: ${ref}`);
-  return { chain: r.chain, id: Number(n) };
+  return { chain: r.chain, id: Number(n), contract: r.contract };
 }
 
 /** The user's own address on a chain, or a clear error asking them to add one. */
@@ -101,7 +101,7 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/pools", wrap(async (req, res) => {
     const s = await getServices();
     const keys = req.query.chain ? [String(req.query.chain)] : chainRegistry()!.settlementNetworks().map((c) => c.key);
-    const pools = (await Promise.all(keys.map((k) => s.adapters.adapterFor(k).listPools()))).flat();
+    const pools = (await Promise.all(keys.flatMap((k) => s.adapters.adaptersFor(k).map((a) => a.listPools())))).flat();
     res.json({ pools });
   }));
 
@@ -124,24 +124,37 @@ export function registerV2Routes(app: Express) {
   /** Active cover sold by a pool, for the underwriter's risk view. */
   app.get("/api/v2/pools/:ref/positions", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
-    res.json({ positions: await s.adapters.adapterFor(chain).listActivePositions(id) });
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    res.json({ positions: await s.adapters.adapterForContract(chain, contract).listActivePositions(id) });
   }));
 
   /** Change a pool's protection types and limits. */
   app.post("/api/v2/pools/:ref/structures/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    if (s.adapters.adapterForContract(chain, contract) !== s.adapters.adapterFor(chain)) {
+      throw new ApplicationError("INVALID_REQUEST", "This pool is on an earlier contract and is closed to new money. Withdraw from it, then use a current pool.");
+    }
     const owner = await ownerOn(s, await userId(req), chain);
-    res.json({ transactions: await s.adapters.adapterFor(chain).prepareSetStructures(owner, id, req.body) });
+    res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareSetStructures(owner, id, req.body) });
   }));
 
   /** Give notice to withdraw shares from a pool. */
   app.post("/api/v2/pools/:ref/withdrawals/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
     const owner = await ownerOn(s, await userId(req), chain);
-    res.json({ transactions: await s.adapters.adapterFor(chain).prepareWithdrawalRequest(owner, id, String(req.body?.shares ?? "")) });
+    res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareWithdrawalRequest(owner, id, String(req.body?.shares ?? "")) });
+  }));
+
+  /** Underwriter preferences on per-hedge pools: back new sales or not, and the longest tenor. */
+  app.post("/api/v2/pools/:ref/preferences/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    const owner = await ownerOn(s, await userId(req), chain);
+    const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { prepareLpPreferences?: (o: string, p: number, b: boolean, t: number) => Promise<unknown> };
+    if (!adapter.prepareLpPreferences) throw new ApplicationError("INVALID_REQUEST", "This pool does not support underwriter preferences");
+    res.json({ transactions: await adapter.prepareLpPreferences(owner, id, req.body?.backing !== false, Number(req.body?.maxTenorDays ?? 0) || 0) });
   }));
 
   /** The user's withdrawal requests on every settling chain. */
@@ -151,7 +164,10 @@ export function registerV2Routes(app: Express) {
     const out = [];
     for (const chain of chainRegistry()!.settlementNetworks()) {
       if (!book[chain.key]) continue;
-      for (const w of await s.adapters.adapterFor(chain.key).listWithdrawals(book[chain.key])) out.push({ chain: chain.key, ...w });
+      for (const adapter of s.adapters.adaptersFor(chain.key)) {
+        const contract = (adapter as unknown as { chain?: { contracts?: { currencyPool?: string } } }).chain?.contracts?.currencyPool;
+        for (const w of await adapter.listWithdrawals(book[chain.key])) out.push({ chain: chain.key, contract, ...w });
+      }
     }
     res.json({ withdrawals: out });
   }));
@@ -160,21 +176,22 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/withdrawals/:chain/:id/execute/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const owner = await ownerOn(s, await userId(req), req.params.chain);
-    res.json({ transactions: await s.adapters.adapterFor(req.params.chain).prepareWithdrawalExecute(owner, Number(req.params.id)) });
+    const contract = typeof req.query.contract === "string" ? req.query.contract : (req.body?.contract as string | undefined);
+    res.json({ transactions: await s.adapters.adapterForContract(req.params.chain, contract).prepareWithdrawalExecute(owner, Number(req.params.id)) });
   }));
 
   /** The signed-in user's stake in a pool. */
   app.get("/api/v2/pools/:ref/lp", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
     const owner = await ownerOn(s, await userId(req), chain);
-    res.json(await s.adapters.adapterFor(chain).getLpPosition(id, owner));
+    res.json(await s.adapters.adapterForContract(chain, contract).getLpPosition(id, owner));
   }));
 
   app.get("/api/v2/pools/:ref", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
-    res.json(await s.adapters.adapterFor(chain).getPool(id));
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    res.json(await s.adapters.adapterForContract(chain, contract).getPool(id));
   }));
 
   app.get("/api/v2/options", wrap(async (req, res) => {
@@ -266,10 +283,11 @@ export function registerV2Routes(app: Express) {
     const out = [];
     for (const chain of chainRegistry()!.settlementNetworks()) {
       if (!book[chain.key]) continue;
-      const adapter = s.adapters.adapterFor(chain.key);
-      for (const p of await adapter.listPositions(book[chain.key])) {
-        const pool = await adapter.getPool(p.poolId);
-        out.push({ position: p, pair: pool.pair, settlement: settlementResult(p, pool.fees.payoutFeeRateE6, pool.asset.decimals) });
+      for (const adapter of s.adapters.adaptersFor(chain.key)) {
+        for (const p of await adapter.listPositions(book[chain.key])) {
+          const pool = await adapter.getPool(p.poolId);
+          out.push({ position: p, pair: pool.pair, settlement: settlementResult(p, pool.fees.payoutFeeRateE6, pool.asset.decimals) });
+        }
       }
     }
     res.json({ hedges: out });
@@ -277,8 +295,8 @@ export function registerV2Routes(app: Express) {
 
   app.get("/api/v2/hedges/:ref", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "position");
-    const adapter = s.adapters.adapterFor(chain);
+    const { chain, id, contract } = idOf(req.params.ref, "position");
+    const adapter = s.adapters.adapterForContract(chain, contract);
     const p = await adapter.getPosition(id);
     const pool = await adapter.getPool(p.poolId);
     res.json({ position: p, settlement: settlementResult(p, pool.fees.payoutFeeRateE6, pool.asset.decimals) });
@@ -286,9 +304,9 @@ export function registerV2Routes(app: Express) {
 
   app.post("/api/v2/hedges/:ref/claim/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "position");
+    const { chain, id, contract } = idOf(req.params.ref, "position");
     const owner = await ownerOn(s, await userId(req), chain);
-    res.json({ transactions: await s.adapters.adapterFor(chain).prepareClaim(owner, id) });
+    res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareClaim(owner, id) });
   }));
 
   app.post("/api/v2/pools/prepare", wrap(async (req, res) => {
@@ -300,17 +318,23 @@ export function registerV2Routes(app: Express) {
 
   app.post("/api/v2/pools/:ref/tenors/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    if (s.adapters.adapterForContract(chain, contract) !== s.adapters.adapterFor(chain)) {
+      throw new ApplicationError("INVALID_REQUEST", "This pool is on an earlier contract and is closed to new money. Withdraw from it, then use a current pool.");
+    }
     const owner = await ownerOn(s, await userId(req), chain);
-    res.json({ transactions: await s.adapters.adapterFor(chain).prepareSetTenor(owner, id, req.body) });
+    res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareSetTenor(owner, id, req.body) });
   }));
 
   app.post("/api/v2/pools/:ref/deposits/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const { chain, id } = idOf(req.params.ref, "pool");
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
     chainRegistry()!.require(chain, "lpDeposits");
+    if (s.adapters.adapterForContract(chain, contract) !== s.adapters.adapterFor(chain)) {
+      throw new ApplicationError("INVALID_REQUEST", "This pool is on an earlier contract and is closed to new money. Withdraw from it, then use a current pool.");
+    }
     const owner = await ownerOn(s, await userId(req), chain);
-    res.json({ transactions: await s.adapters.adapterFor(chain).prepareDeposit(owner, id, String(req.body?.amount)) });
+    res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareDeposit(owner, id, String(req.body?.amount)) });
   }));
 
   app.get("/api/v2/accounts", wrap(async (req, res) => {

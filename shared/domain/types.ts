@@ -135,6 +135,8 @@ export interface FeeRates {
 }
 
 export interface CurrencyPool {
+  /** On an earlier contract: shown for withdrawals and running hedges only. */
+  legacy?: boolean;
   ref: ResourceId;
   chain: ChainKey;
   poolId: number;

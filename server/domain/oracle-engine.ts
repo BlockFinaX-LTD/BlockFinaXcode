@@ -15,7 +15,7 @@
 import type { ChainRegistry } from "@shared/chains/registry";
 import type { ChainKey, ProtectionPosition } from "@shared/domain/types";
 import type { AdapterRegistry } from "../chain";
-import type { PlatformSigner } from "../chain/adapter";
+import type { ChainAdapter, PlatformSigner } from "../chain/adapter";
 
 export const ORACLE_POLICY = { staleSeconds: 900, cooldownSeconds: 300, pollSeconds: 300, maxDeviation: 0.07 } as const;
 
@@ -49,16 +49,19 @@ export interface OracleEngineDeps {
 export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngineState): Promise<OracleCycleReport> {
   const report: OracleCycleReport = { submitted: [], settled: [], skipped: [], failed: [] };
   const now = deps.now();
-  const due: { chain: ChainKey; position: ProtectionPosition; pair: string }[] = [];
+  const due: { chain: ChainKey; adapter: ChainAdapter; position: ProtectionPosition; pair: string }[] = [];
 
   for (const chain of deps.chains.settlementNetworks()) {
     if (!deps.signerFor(chain.key)) continue;
     try {
-      const adapter = deps.adapters.adapterFor(chain.key);
-      for (const pool of await adapter.listPools()) {
-        if (pool.activePositions === 0) continue;
-        for (const p of await adapter.listActivePositions(pool.poolId)) {
-          if (p.expiry <= now) due.push({ chain: chain.key, position: p, pair: pool.pair });
+      // The current pool contract and any legacy ones still holding hedges.
+      const adapters = typeof deps.adapters.adaptersFor === "function" ? deps.adapters.adaptersFor(chain.key) : [deps.adapters.adapterFor(chain.key)];
+      for (const adapter of adapters) {
+        for (const pool of await adapter.listPools()) {
+          if (pool.activePositions === 0) continue;
+          for (const p of await adapter.listActivePositions(pool.poolId)) {
+            if (p.expiry <= now) due.push({ chain: chain.key, adapter, position: p, pair: pool.pair });
+          }
         }
       }
     } catch (err) {
@@ -75,9 +78,11 @@ export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngin
     return report;
   }
 
-  for (const { chain, position, pair } of due) {
-    const key = `${chain}:${position.positionId}`;
-    const adapter = deps.adapters.adapterFor(chain);
+  for (const { chain, adapter, position, pair } of due) {
+    // Position ids restart on each contract, so the contract is part of the key.
+    const contract = position.ref?.contract;
+    const isCurrent = !contract || contract === deps.chains.get(chain).contracts.currencyPool;
+    const key = isCurrent ? `${chain}:${position.positionId}` : `${chain}:${contract}:${position.positionId}`;
     const signer = deps.signerFor(chain)!;
     try {
       if ((await adapter.getOracleState(position.positionId)).resolved) {

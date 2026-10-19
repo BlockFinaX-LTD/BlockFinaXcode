@@ -35,6 +35,12 @@ export interface ChainConfig {
     currencyPool?: string;
     /** Stellar only: the oracle-consensus instance reserved for pools. */
     poolOracle?: string;
+    /**
+     * Earlier pool contracts on this chain that still hold hedges or underwriter money.
+     * They sell nothing new; their hedges still show, settle and pay, and underwriters can
+     * withdraw.
+     */
+    legacy?: { currencyPool: string; poolOracle?: string }[];
   };
   /** Settlement assets on this chain, by symbol. */
   assets: Record<string, Omit<Asset, "chain" | "symbol">>;

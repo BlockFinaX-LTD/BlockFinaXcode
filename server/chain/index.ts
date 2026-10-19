@@ -18,6 +18,28 @@ export class AdapterRegistry {
 
   constructor(readonly chains: ChainRegistry, private readonly overrides: Partial<Record<ChainKey, ChainAdapter>> = {}) {}
 
+  private legacyCache = new Map<string, ChainAdapter>();
+
+  /** The adapter for a contract on a chain: the current one, or a legacy contract's. */
+  adapterForContract(key: ChainKey, contract?: string): ChainAdapter {
+    const chain = this.chains.get(key);
+    if (!contract || contract === chain.contracts.currencyPool || chain.family !== "stellar") return this.adapterFor(key);
+    const old = chain.contracts.legacy?.find((l) => l.currencyPool === contract);
+    if (!old) throw new ApplicationError("POOL_NOT_FOUND", `Unknown pool contract ${contract} on ${chain.name}`);
+    const cacheKey = `${key}:${contract}`;
+    const hit = this.legacyCache.get(cacheKey);
+    if (hit) return hit;
+    const adapter = new StellarAdapter({ ...chain, contracts: { currencyPool: old.currencyPool, poolOracle: old.poolOracle } }, process.env, true);
+    this.legacyCache.set(cacheKey, adapter);
+    return adapter;
+  }
+
+  /** The current adapter first, then one per legacy contract. */
+  adaptersFor(key: ChainKey): ChainAdapter[] {
+    const chain = this.chains.get(key);
+    return [this.adapterFor(key), ...(chain.contracts.legacy ?? []).map((l) => this.adapterForContract(key, l.currencyPool))];
+  }
+
   adapterFor(key: ChainKey): ChainAdapter {
     const override = this.overrides[key];
     if (override) return override;

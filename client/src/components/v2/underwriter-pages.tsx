@@ -22,11 +22,16 @@ import type { Go } from './workspace';
 
 const MARKUP_MIN = 9000;
 const MARKUP_MAX = 50000;
-type Stake = { shares: string; value: string };
-type Withdrawal = { chain: string; requestId: number; poolId: number; shares: string; unlockAt: number; status: string };
+/** Per-hedge underwriting (current Stellar pools): each underwriter's own balances in USDC. */
+type LpAccount = { free: string; reserved: string; earned: string; paid: string; pendingWithdraw: string; withdrawable: string; backing: boolean; maxTenorDays: number };
+type Stake = { shares: string; value: string; account?: LpAccount };
+type Withdrawal = { chain: string; contract?: string; requestId: number; poolId: number; shares: string; unlockAt: number; status: string };
+
+/** A withdrawal's USDC amount: share-based on legacy pools, already USDC on current ones. */
+const withdrawalUsd = (w: Withdrawal, p: CurrencyPool | undefined) => Number(w.shares) * (p?.legacy ? sharePrice(p) : 1);
 
 const sharePrice = (p: CurrencyPool) => (Number(p.totalShares) > 0 ? Number(p.liquidity.nav) / Number(p.totalShares) : 1);
-const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${ccyName(p.pair)}, both directions` : exposureLabel(p.pair, p.direction).cover);
+const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${ccyName(p.pair)}, both directions` : exposureLabel(p.pair, p.direction).cover) + (p.legacy ? ' (earlier contract)' : '');
 const shortDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const inDays = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000));
 
@@ -84,7 +89,7 @@ function PoolRows({ pools, stakes, go }: { pools: CurrencyPool[]; stakes: Map<st
   return (
     <div style={{ overflowX: 'auto' }}>
       <div style={{ minWidth: 640 }}>
-        <div className="bx-list-h" style={POOL_COLS}><span>Pool</span><span className="r">Liquidity</span><span className="r">In use</span><span className="r">Share value</span><span className="r">Your capital</span></div>
+        <div className="bx-list-h" style={POOL_COLS}><span>Pool</span><span className="r">Liquidity</span><span className="r">In use</span><span className="r">Your premiums</span><span className="r">Your capital</span></div>
         {pools.map((p) => {
           const nav = Number(p.liquidity.nav);
           const used = nav > 0 ? Number(p.liquidity.reserved) / nav : 0;
@@ -94,7 +99,9 @@ function PoolRows({ pools, stakes, go }: { pools: CurrencyPool[]; stakes: Map<st
               <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t">{poolName(p)}</div><div className="d">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Capped', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</div></div></div>
               <div className="r num" style={{ fontWeight: 600 }}>${fmt(nav, 0)}</div>
               <div className="r"><div className="num" style={{ fontWeight: 600 }}>{pct(used, 0)}</div><div className="bx-bar thin" style={{ width: 64, marginLeft: 'auto', marginTop: 6 }}><i style={{ width: `${used * 100}%`, background: 'var(--blue)' }} /></div></div>
-              <div className="r num" style={{ fontWeight: 600 }}>{sharePrice(p).toFixed(4)}<div className={growth >= 0 ? 'up' : 'down'} style={{ fontSize: 12 }}>{growth >= 0 ? '+' : ''}{pct(growth)}</div></div>
+              {stakes.get(poolRef(p))?.account
+                ? <div className="r num up" style={{ fontWeight: 600 }}>+${fmt(stakes.get(poolRef(p))!.account!.earned)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>paid out ${fmt(stakes.get(poolRef(p))!.account!.paid)}</div></div>
+                : <div className="r num" style={{ fontWeight: 600 }}>{sharePrice(p).toFixed(4)}<div className={growth >= 0 ? 'up' : 'down'} style={{ fontSize: 12 }}>{growth >= 0 ? '+' : ''}{pct(growth)}</div></div>}
               <div className="r num" style={{ fontWeight: 600 }}>${fmt(stakes.get(poolRef(p))?.value ?? 0)}</div>
             </div>
           );
@@ -118,8 +125,14 @@ export function UnderwriterHome({ go }: { go: Go }) {
     if (value <= 0) continue;
     const share = value / (Number(p.liquidity.nav) || 1);
     committed += value;
-    reserved += Number(p.liquidity.reserved) * share;
-    earned += Number(s!.shares) * (sharePrice(p) - 1);
+    if (s?.account) {
+      // Exact: this underwriter's own reserve and the premiums paid to them.
+      reserved += Number(s.account.reserved);
+      earned += Number(s.account.earned) - Number(s.account.paid);
+    } else {
+      reserved += Number(p.liquidity.reserved) * share;
+      earned += Number(s!.shares) * (sharePrice(p) - 1);
+    }
     hedges += p.activePositions;
     for (const pos of positions.get(poolRef(p)) ?? []) byTenor.set(pos.tenorDays, (byTenor.get(pos.tenorDays) ?? 0) + Number(pos.maxPayout) * share);
     for (const [d, v] of releasesOf(positions.get(poolRef(p)) ?? [], share)) releases.set(d, (releases.get(d) ?? 0) + v);
@@ -401,6 +414,51 @@ function FundingSelect({ value, onChange }: { value: string | null; onChange: (k
   );
 }
 
+/** One underwriter's money in a per-hedge pool. */
+function LpBreakdown({ account }: { account: LpAccount }) {
+  return (
+    <div className="bx-sums" style={{ borderTop: 0 }}>
+      <Sum l="Free (withdraw any time)" v={<span className="num">${fmt(account.free)}</span>} />
+      <Sum l="Reserved for protection you back" v={<span className="num">${fmt(account.reserved)}</span>} />
+      <Sum l="Premiums paid to you" v={<span className="num up">+${fmt(account.earned)}</span>} />
+      <Sum l="Payouts you covered" v={<span className="num">${fmt(account.paid)}</span>} />
+    </div>
+  );
+}
+
+/** Whether this underwriter's free money backs new sales, and the longest protection it backs. */
+function BackingPreferences({ pool, account, tenors }: { pool: CurrencyPool; account: LpAccount; tenors: number[] }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  async function save(backing: boolean, maxTenorDays: number) {
+    setBusy(true);
+    try {
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/preferences/prepare`, { backing, maxTenorDays });
+      await signAndSend(transactions, () => {});
+      toast({ title: 'Preferences saved' });
+      void qc.invalidateQueries({ queryKey: ['v2-lp'] });
+    } catch (e) {
+      toast({ title: 'Not saved', description: (e as Error).message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  }
+  return (
+    <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div><div style={{ fontWeight: 600, fontSize: 14 }}>Back new protection</div><div className="muted" style={{ fontSize: 12 }}>Off: your free money backs no new sales. Protection you already back keeps its reserve.</div></div>
+        <Toggle on={account.backing} disabled={busy} label="Back new protection" onChange={(v) => save(v, account.maxTenorDays)} />
+      </div>
+      <label className="bx-field" style={{ marginTop: 12, marginBottom: 0 }}>
+        <span>Longest protection I back</span>
+        <select className="bx-select" disabled={busy || !account.backing} value={account.maxTenorDays} onChange={(e) => save(true, Number(e.target.value))}>
+          <option value={0}>Any length the pool offers</option>
+          {tenors.map((d) => <option key={d} value={d}>Up to {d} days</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; initialMode?: 'add' | 'withdraw' }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -416,8 +474,9 @@ function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; ini
   const hubName = chains.data?.chains.find((c) => c.key === hub)?.name;
   const price = sharePrice(pool);
   const mine = Number(stake.data?.value ?? 0);
-  const available = mode === 'add' ? usdcOn(balances.data?.rows, network ?? hub) : mine;
-  const pending = (withdrawals.data ?? []).filter((w) => w.poolId === pool.poolId && w.chain === pool.chain && w.status === 'pending');
+  const acct = stake.data?.account;
+  const available = mode === 'add' ? usdcOn(balances.data?.rows, network ?? hub) : acct ? Number(acct.withdrawable) : mine;
+  const pending = (withdrawals.data ?? []).filter((w) => w.poolId === pool.poolId && w.chain === pool.chain && (!w.contract || w.contract === pool.ref.contract) && w.status === 'pending');
   const after = mode === 'add' ? mine + Number(amount || 0) : Math.max(0, mine - Number(amount || 0));
   const navAfter = Number(pool.liquidity.nav) + (mode === 'add' ? Number(amount || 0) : -Number(amount || 0));
 
@@ -434,16 +493,16 @@ function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; ini
       await signAndSend(transactions, (m) => setBusy(m));
       toast({ title: 'Liquidity added', description: `$${fmt(amount)} committed to ${poolName(pool)}.` });
     } else {
-      const shares = (Number(amount) / price).toFixed(7);
+      const shares = acct ? Number(amount).toFixed(7) : (Number(amount) / price).toFixed(7);
       const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/withdrawals/prepare`, { shares });
       await signAndSend(transactions, (m) => setBusy(m));
-      toast({ title: 'Withdrawal requested', description: 'Your capital is released when the cover it backs has ended.' });
+      toast({ title: 'Withdrawal requested', description: acct ? 'Your free money is ready to withdraw now.' : 'Your capital is released when the cover it backs has ended.' });
     }
     setAmount('');
     for (const k of ['v2-pools', 'v2-lp', 'v2-usdc-all', 'v2-withdrawals']) void qc.invalidateQueries({ queryKey: [k] });
   });
   const complete = (w: Withdrawal) => run(`w${w.requestId}`, async () => {
-    const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/withdrawals/${w.chain}/${w.requestId}/execute/prepare`, {});
+    const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/withdrawals/${w.chain}/${w.requestId}/execute/prepare${w.contract ? `?contract=${w.contract}` : ''}`, {});
     await signAndSend(transactions, () => {});
     toast({ title: 'Capital withdrawn', description: 'The USDC is in your account.' });
     for (const k of ['v2-withdrawals', 'v2-lp', 'v2-pools', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
@@ -462,7 +521,8 @@ function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; ini
           {[0.25, 0.5, 0.75, 1].map((f) => <button key={f} className="bx-pill" onClick={() => setAmount((Math.floor(available * f * 100) / 100).toString())}>{f === 1 ? 'Max' : `${f * 100}%`}</button>)}
         </div>
       </div>
-      {mode === 'add' ? <FundingSelect value={network} onChange={setNetwork} /> : <Note>Capital backing active protection is released when that protection ends.</Note>}
+      {mode === 'add' ? <FundingSelect value={network} onChange={setNetwork} /> : <Note>{acct ? 'You can withdraw your free money now. Money reserved for protection you back returns to free when that protection ends.' : 'Capital backing active protection is released when that protection ends.'}</Note>}
+      {acct && <LpBreakdown account={acct} />}
       <div className="bx-sums">
         <Sum l="Available" v={<span className="num">${fmt(available)}</span>} />
         <Sum l="Your capital after" v={<span className="num">${fmt(after)}</span>} />
@@ -472,12 +532,13 @@ function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; ini
       <button className="bx-btn block" disabled={!!busy || !(Number(amount) > 0) || Number(amount) > available || (mode === 'add' && !pool.allowExternalLp)} onClick={submit}>
         {busy && !busy.startsWith('w') ? <><Spin /> {busy}</> : mode === 'add' ? 'Add liquidity' : 'Request withdrawal'}
       </button>
-      {mode === 'add' && !pool.allowExternalLp && <div className="bx-hint">This pool is closed to new underwriters.</div>}
+      {mode === 'add' && !pool.allowExternalLp && <div className="bx-hint">{pool.legacy ? 'This pool is on an earlier contract and takes no new money.' : 'This pool is closed to new underwriters.'}</div>}
+      {acct && <BackingPreferences pool={pool} account={acct} tenors={pool.tenors.filter((t) => t.active).map((t) => t.tenorDays)} />}
       {pending.length > 0 && (
         <div className="bx-sums">
           {pending.map((w) => {
             const ready = w.unlockAt <= Date.now() / 1000;
-            return <Sum key={w.requestId} l={`$${fmt(Number(w.shares) * price)} ${ready ? 'ready' : `releases ${dateOf(w.unlockAt)}`}`} v={ready ? <button className="bx-btn small" disabled={busy === `w${w.requestId}`} onClick={() => complete(w)}>{busy === `w${w.requestId}` ? <Spin /> : 'Withdraw'}</button> : <Tag tone="amber">Pending</Tag>} />;
+            return <Sum key={w.requestId} l={`$${fmt(withdrawalUsd(w, pool))} ${ready ? 'ready' : `releases ${dateOf(w.unlockAt)}`}`} v={ready ? <button className="bx-btn small" disabled={busy === `w${w.requestId}`} onClick={() => complete(w)}>{busy === `w${w.requestId}` ? <Spin /> : 'Withdraw'}</button> : <Tag tone="amber">Pending</Tag>} />;
           })}
         </div>
       )}
@@ -719,7 +780,7 @@ export function WithdrawCapital({ go, poolRef: initial }: { go: Go; poolRef: str
   useEffect(() => { if ((!ref || !invested.some((p) => poolRef(p) === ref)) && invested[0]) setRef(poolRef(invested[0])); }, [invested, ref]);
   const pool = invested.find((p) => poolRef(p) === ref) ?? null;
   const withdrawals = useQuery({ queryKey: ['v2-withdrawals'], queryFn: async () => (await api<{ withdrawals: Withdrawal[] }>('/api/v2/withdrawals')).withdrawals, refetchInterval: 30_000 });
-  const poolOf = (w: Withdrawal) => all.find((p) => p.poolId === w.poolId && p.chain === w.chain);
+  const poolOf = (w: Withdrawal) => all.find((p) => p.poolId === w.poolId && p.chain === w.chain && (!w.contract || p.ref.contract === w.contract));
   const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' };
   if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
   return (
@@ -735,7 +796,7 @@ export function WithdrawCapital({ go, poolRef: initial }: { go: Go; poolRef: str
                 return (
                   <div key={`${w.chain}-${w.requestId}`} className="bx-li" style={cols}>
                     <div className="bx-who">{p && <Flag pair={p.pair} />}<div className="t">{p ? poolName(p) : `Pool ${w.poolId}`}</div></div>
-                    <div className="r num" style={{ fontWeight: 600 }}>${fmt(Number(w.shares) * (p ? sharePrice(p) : 1))}</div>
+                    <div className="r num" style={{ fontWeight: 600 }}>${fmt(withdrawalUsd(w, p))}</div>
                     <div className="r">{w.status === 'executed' ? <Tag tone="grey">Withdrawn</Tag> : w.status === 'cancelled' ? <Tag tone="grey">Cancelled</Tag> : w.unlockAt <= Date.now() / 1000 ? <Tag tone="green">Ready</Tag> : <Tag tone="amber">Releases {dateOf(w.unlockAt)}</Tag>}</div>
                   </div>
                 );

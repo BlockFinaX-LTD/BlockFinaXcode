@@ -68,6 +68,18 @@ export interface OracleRoundState {
   consensusPrice: string | null;
 }
 
+/** An underwriter's money in one pool, on contracts with per-hedge underwriting (Stellar). */
+export interface LpAccountView {
+  free: string;
+  reserved: string;
+  earned: string;
+  paid: string;
+  pendingWithdraw: string;
+  withdrawable: string;
+  backing: boolean;
+  maxTenorDays: number;
+}
+
 export interface ChainAdapter {
   readonly chain: ChainConfig;
 
@@ -93,7 +105,7 @@ export interface ChainAdapter {
   prepareWithdrawalExecute(owner: string, requestId: number): Promise<PreparedTransaction[]>;
   prepareClaim(owner: string, positionId: number): Promise<PreparedTransaction[]>;
   /** An LP's shares in a pool and what they are worth now, in the pool asset. */
-  getLpPosition(poolId: number, owner: string): Promise<{ shares: string; value: string }>;
+  getLpPosition(poolId: number, owner: string): Promise<{ shares: string; value: string; account?: LpAccountView }>;
   /** The LP's withdrawal requests across pools on this chain. Shares and value in the pool asset. */
   listWithdrawals(owner: string): Promise<WithdrawalRequestView[]>;
   /** Change which protection types a pool sells and their limits (pool creator only). */

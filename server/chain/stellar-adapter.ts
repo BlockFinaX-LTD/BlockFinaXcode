@@ -21,7 +21,7 @@ import {
   type ProtectionQuote,
   type TransactionStatus,
 } from "@shared/domain/types";
-import type { ChainAdapter, CreatePoolInput, OracleRoundState, PlatformSigner, PreparedTransaction, TenorInput, WithdrawalRequestView } from "./adapter";
+import type { ChainAdapter, CreatePoolInput, LpAccountView, OracleRoundState, PlatformSigner, PreparedTransaction, TenorInput, WithdrawalRequestView } from "./adapter";
 import { mapStellarError } from "./errors";
 import { stellarQuoteDigest, type StellarBuyParams } from "./stellar-quote";
 import { inspectPoolCall, relay } from "./stellar-relay";
@@ -52,7 +52,8 @@ export class StellarAdapter implements ChainAdapter {
   private readonly server: rpc.Server;
   private clients = new Map<string, Promise<AnyClient>>();
 
-  constructor(readonly chain: ChainConfig, private readonly env: NodeJS.ProcessEnv = process.env) {
+  /** A legacy adapter reads, settles and pays out an earlier contract, and sells nothing. */
+  constructor(readonly chain: ChainConfig, private readonly env: NodeJS.ProcessEnv = process.env, readonly legacy = false) {
     if (chain.family !== "stellar") throw new Error(`${chain.key} is not a Stellar chain`);
     if (!chain.contracts.currencyPool) throw new Error(`${chain.key} has no currency-pool contract`);
     this.poolId = chain.contracts.currencyPool;
@@ -91,7 +92,8 @@ export class StellarAdapter implements ChainAdapter {
     return {
       ref: this.ref("pool", p.id), chain: this.chain.key, poolId: p.id, creator: p.creator, pair: p.pair, asset: this.usdc,
       direction: p.direction === 1 ? "up" : p.direction === 2 ? "down" : "both",
-      acceptingHedges: p.accepting_hedges, allowExternalLp: p.allow_external_lp,
+      acceptingHedges: this.legacy ? false : p.accepting_hedges, allowExternalLp: this.legacy ? false : p.allow_external_lp,
+      legacy: this.legacy || undefined,
       structures: {
         open: p.structures.open_enabled, capped: p.structures.capped_enabled, minCapDistanceBps: p.structures.min_cap_distance_bps,
         maxCapDistanceBps: p.structures.max_cap_distance_bps, openMaxPayoutBps: p.structures.open_max_payout_bps,
@@ -192,8 +194,31 @@ export class StellarAdapter implements ChainAdapter {
   }
 
   async getLpPosition(poolId: number, owner: string) {
-    const [shares, value] = unwrap((await (await this.client(this.poolId)).get_lp_position({ pool_id: poolId, lp: owner })).result);
-    return { shares: fromUnits(BigInt(shares ?? 0), this.usdc.decimals), value: fromUnits(BigInt(value ?? 0), this.usdc.decimals) };
+    const c = await this.client(this.poolId);
+    const [shares, value] = unwrap((await c.get_lp_position({ pool_id: poolId, lp: owner })).result);
+    const out: { shares: string; value: string; account?: LpAccountView } = {
+      shares: fromUnits(BigInt(shares ?? 0), this.usdc.decimals), value: fromUnits(BigInt(value ?? 0), this.usdc.decimals),
+    };
+    // Contracts with per-hedge underwriting expose the breakdown; earlier ones do not.
+    if (typeof c.get_lp_account === "function") {
+      const a = (await c.get_lp_account({ pool_id: poolId, lp: owner })).result;
+      if (a) {
+        const amt = (v: bigint) => fromUnits(BigInt(v), this.usdc.decimals);
+        out.account = {
+          free: amt(a.free), reserved: amt(a.reserved), earned: amt(a.earned), paid: amt(a.paid),
+          pendingWithdraw: amt(a.pending_withdraw), backing: Boolean(a.backing), maxTenorDays: Number(a.max_tenor_days),
+          withdrawable: amt(BigInt(a.free) - BigInt(a.pending_withdraw)),
+        };
+      }
+    }
+    return out;
+  }
+
+  /** Whether this underwriter's free money backs new sales, and the longest tenor it backs. */
+  prepareLpPreferences(owner: string, poolId: number, backing: boolean, maxTenorDays: number) {
+    return this.prepare(backing ? "Update backing preferences" : "Stop backing new protection", "set_lp_preferences", {
+      pool_id: poolId, lp: owner, backing, max_tenor_days: Math.max(0, Math.min(365, Math.floor(maxTenorDays))),
+    });
   }
 
   async listWithdrawals(owner: string): Promise<WithdrawalRequestView[]> {
