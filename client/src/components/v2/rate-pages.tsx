@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import { dateOf, fmt, signAndSend, useUsdcBalances, usdcOn } from './shared';
-import { Loading, Spin, Sum, Tag } from './ui';
+import { Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag } from './ui';
 import type { Go } from './workspace';
 
 export interface RatePool {
@@ -44,6 +44,7 @@ export function useRatePools() {
   return useQuery({
     queryKey: ['v2-rate-pools'],
     queryFn: async () => (await api<{ pools: RatePool[] }>('/api/v2/rate-pools')).pools,
+    enabled: SHOW_INTEREST_RATES,
     refetchInterval: 30_000,
     retry: false,
   });
@@ -53,6 +54,7 @@ export function useRateProtections() {
   return useQuery({
     queryKey: ['v2-rate-protections'],
     queryFn: async () => (await api<{ protections: RateProtection[] }>('/api/v2/rate-protections')).protections,
+    enabled: SHOW_INTEREST_RATES,
     refetchInterval: 30_000,
     retry: false,
   });

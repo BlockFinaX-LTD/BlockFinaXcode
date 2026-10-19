@@ -14,7 +14,7 @@ import {
   ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, type Direction,
 } from './shared';
-import { AssetClassTabs, Flag, Loading, Spin, Sum, Tag, useAssetClass } from './ui';
+import { AssetClassTabs, Flag, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 
@@ -166,7 +166,7 @@ export function MarketsPage({ go }: { go: Go }) {
         <AssetClassTabs value={assetClass} onChange={setAssetClass} />
         {assetClass === 'ir' ? <RateMarkets go={go} /> : <div className="bx-card">
           <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-            <div><h2>FX cover</h2><div className="sub">Open pools you can buy currency cover from. Choose a pool to see its price for each length.</div></div>
+            <div><h2>{SHOW_INTEREST_RATES ? 'FX cover' : 'Markets'}</h2><div className="sub">Open pools you can buy currency cover from. Choose a pool to see its price for each length.</div></div>
             <div className="bx-seg" style={{ width: 'auto' }}>
               <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
               {pairs.map((p) => <button key={p} className={filter === p ? 'on' : ''} onClick={() => setFilter(p)}>{ccyName(p)}</button>)}
@@ -645,7 +645,7 @@ export function MyProtections({ go }: { go: Go }) {
       <section className="bx-full">
         <AssetClassTabs value={assetClass} onChange={setAssetClass} />
         {assetClass === 'ir' ? <RateProtections go={go} /> : <div className="bx-card">
-          <div className="bx-card-h"><h2>FX protections</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>
+          <div className="bx-card-h"><h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>
           {hedges.isLoading ? <Loading /> : !all.length ? <div className="bx-empty">You have not bought protection yet.</div> : (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 720 }}>
@@ -714,6 +714,7 @@ const pctText = (id: string, f: Fixing) => `${Number(f.ratePercent).toFixed(DECI
 function useBenchmarks() {
   return useQuery({
     queryKey: ['v2-benchmarks'],
+    enabled: SHOW_INTEREST_RATES,
     queryFn: async () => {
       const rows = (await api<{ benchmarks: BenchmarkRow[] }>('/api/v2/benchmarks')).benchmarks;
       for (const r of rows) DECIMALS[r.id] = r.decimals;
@@ -757,7 +758,7 @@ function FxRates({ go }: { go: Go }) {
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-        <div><h2>FX rates</h2><div className="sub">Live exchange rates for the currencies BlockFinaX customers trade in. Change is over the last 24 hours.</div></div>
+        <div><h2>{SHOW_INTEREST_RATES ? 'FX rates' : 'Rates'}</h2><div className="sub">Live exchange rates for the currencies BlockFinaX customers trade in. Change is over the last 24 hours.</div></div>
         <input className="bx-input" style={{ maxWidth: 260 }} aria-label="Search FX rates" placeholder="Search currency" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {watch.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No currency matches.</div> : (
@@ -899,7 +900,7 @@ export function RatesPage({ go, target }: { go: Go; target?: Target }) {
     setTabState(t);
     setBenchmark(null);
   };
-  const [benchmark, setBenchmark] = useState<string | null>(target?.benchmark ?? null);
+  const [benchmark, setBenchmark] = useState<string | null>(SHOW_INTEREST_RATES ? target?.benchmark ?? null : null);
   // Arriving from Home: open the asked-for tab and benchmark.
   useEffect(() => {
     if (target?.rates) setTab(target.rates);

@@ -53,9 +53,16 @@ export function Loading({ label = 'Loading...' }: { label?: string }) {
 // ── Asset class switch: FX or interest rates ─────────────────────────────────
 
 export type AssetClass = 'fx' | 'ir';
+
+/**
+ * Interest-rate protection is hidden from the workspace for now (the oracle and pools keep
+ * running on testnet). Set to true to bring back every interest-rate screen and switch.
+ */
+export const SHOW_INTEREST_RATES = false;
 const ASSET_CLASS_KEY = 'bfx-asset-class';
 
 function readAssetClass(): AssetClass {
+  if (!SHOW_INTEREST_RATES) return 'fx';
   try { return localStorage.getItem(ASSET_CLASS_KEY) === 'ir' ? 'ir' : 'fx'; } catch { return 'fx'; }
 }
 
@@ -63,6 +70,7 @@ function readAssetClass(): AssetClass {
 export function useAssetClass(): [AssetClass, (a: AssetClass) => void] {
   const [value, setValue] = useState<AssetClass>(readAssetClass);
   const set = (a: AssetClass) => {
+    if (!SHOW_INTEREST_RATES) return;
     setValue(a);
     try { localStorage.setItem(ASSET_CLASS_KEY, a); } catch { /* storage unavailable */ }
   };
@@ -70,6 +78,7 @@ export function useAssetClass(): [AssetClass, (a: AssetClass) => void] {
 }
 
 export function AssetClassTabs({ value, onChange, small }: { value: AssetClass; onChange: (a: AssetClass) => void; small?: boolean }) {
+  if (!SHOW_INTEREST_RATES) return null;
   return (
     <div className={`bx-seg${small ? ' small' : ''}`} role="tablist" aria-label="Asset class" style={small ? { width: 'auto' } : { maxWidth: 360, marginBottom: 16 }}>
       <button role="tab" aria-selected={value === 'fx'} className={value === 'fx' ? 'on' : ''} onClick={() => onChange('fx')}>FX</button>
