@@ -7,21 +7,21 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowDown, ArrowUp, CircleUser, Home, Layers, LineChart, List, Menu, PlusCircle, Search, Shield, SlidersHorizontal, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, CircleUser, LogOut, Home, Layers, LineChart, List, Menu, PlusCircle, Search, Shield, SlidersHorizontal, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
 import { Flag } from './ui';
 import { HedgerHome, MarketsPage, MyProtections, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
-import { AccountPage, AddFunds, SendFunds } from './money-pages';
+import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
 export type Page =
-  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'funds' | 'send' | 'account'
+  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account'
   | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw';
-export interface Target { pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
+export interface Target { wallet?: 'deposit' | 'withdraw'; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
 export type Go = (page: Page, target?: Target) => void;
 
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
@@ -31,8 +31,7 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
     { page: 'h-protect', label: 'Protect', icon: <Shield /> },
     { page: 'h-protections', label: 'My protections', icon: <List /> },
     { page: 'h-rates', label: 'Rates', icon: <LineChart /> },
-    { page: 'funds', label: 'Add funds', icon: <ArrowDown /> },
-    { page: 'send', label: 'Withdraw', icon: <ArrowUp /> },
+    { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
   ],
   underwriter: [
     { page: 'u-home', label: 'Home', icon: <Home /> },
@@ -40,7 +39,8 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
     { page: 'u-create', label: 'Create pool', icon: <PlusCircle /> },
     { page: 'u-pool', label: 'Tenor pricing', icon: <SlidersHorizontal /> },
     { page: 'u-risk', label: 'Risk and exposure', icon: <LineChart /> },
-    { page: 'u-withdraw', label: 'Withdraw', icon: <ArrowUp /> },
+    { page: 'u-withdraw', label: 'Withdraw capital', icon: <ArrowUp /> },
+    { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
   ],
 };
 
@@ -89,6 +89,7 @@ export function Workspace() {
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
   const [ratesAt, setRatesAt] = useState<Target>({});
+  const [walletMode, setWalletMode] = useState<WalletMode>('deposit');
   const [, setLocation] = useLocation();
   const { session } = usePasskeySession();
   const balances = useUsdcBalances();
@@ -98,6 +99,7 @@ export function Workspace() {
     if (target?.pool !== undefined) setPool(target.pool);
     if (p === 'h-protect') setBuy(target ?? {});
     if (p === 'h-rates') setRatesAt(target ?? {});
+    if (p === 'wallet') setWalletMode(target?.wallet ?? 'deposit');
     setPage(p);
     window.scrollTo(0, 0);
   };
@@ -128,7 +130,7 @@ export function Workspace() {
         <div className="bx-rail-foot">
           <div className="bx-testnet">Testnet · test USDC only</div>
           <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><CircleUser />Account</button>
-          <button className="bx-nav" onClick={() => setLocation('/home')}><Wallet />Back to wallet</button>
+          <button className="bx-nav" onClick={() => setLocation('/home')}><LogOut />Classic wallet</button>
         </div>
       </nav>
 
@@ -137,10 +139,10 @@ export function Workspace() {
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
-            <span className="bx-balance-pill num bx-hide-sm">${fmt(balances.data?.total)} USDC</span>
+            <button className="bx-balance-pill num bx-hide-sm" onClick={() => go('wallet')}>${fmt(balances.data?.total)} USDC</button>
             {role === 'hedger' ? (
               <>
-                <button className="bx-btn ghost bx-hide-sm" onClick={() => go('funds')}>Add funds</button>
+                <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>
                 <button className="bx-btn" onClick={() => go('h-protect')}>Protect an exposure</button>
               </>
             ) : (
@@ -149,7 +151,7 @@ export function Workspace() {
                 <button className="bx-btn" onClick={() => go('u-create')}>Create pool</button>
               </>
             )}
-            <span className="bx-balance-pill num bx-show-sm">${fmt(balances.data?.total, 2)}</span>
+            <button className="bx-balance-pill num bx-show-sm" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
             <button className="bx-avatar" aria-label="Account" onClick={() => go('account')}>{initials}</button>
           </div>
         </header>
@@ -159,8 +161,7 @@ export function Workspace() {
         {page === 'h-protect' && <ProtectPage go={go} pair={buy.pair ?? pair} target={buy} />}
         {page === 'h-protections' && <MyProtections go={go} />}
         {page === 'h-rates' && <RatesPage go={go} target={ratesAt} />}
-        {page === 'funds' && <AddFunds />}
-        {page === 'send' && <SendFunds />}
+        {page === 'wallet' && <WalletPage mode={walletMode} />}
         {page === 'account' && <AccountPage />}
         {page === 'u-home' && <UnderwriterHome go={go} />}
         {page === 'u-pools' && <MyPools go={go} />}
@@ -195,7 +196,7 @@ export function Workspace() {
               <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
             ))}
             <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Account</button>
-            <button className="bx-nav" onClick={() => setLocation('/home')}><Wallet />Back to wallet</button>
+            <button className="bx-nav" onClick={() => setLocation('/home')}><LogOut />Classic wallet</button>
             <div className="bx-testnet" style={{ marginTop: 8 }}>Testnet · test USDC only</div>
           </div>
         </div>
