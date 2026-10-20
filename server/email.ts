@@ -38,7 +38,7 @@ if (process.env.NODE_ENV === 'production' && !/@blockfinax\.com>?\s*$/.test(FROM
   );
 }
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'amschel@blockfinax.com,anthonykumako@blockfinax.com')
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'anthonykumako@blockfinax.com')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
