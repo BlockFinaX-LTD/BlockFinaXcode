@@ -5,8 +5,7 @@
  */
 import { useState, type FormEvent } from 'react';
 import { Link } from 'wouter';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Mail, PlayCircle } from 'lucide-react';
-import { LaunchLink } from '@/lib/demo-link';
+import { ArrowLeft, ArrowRight, BookOpen, Check, Mail } from 'lucide-react';
 
 const ENQUIRIES = [
   'General enquiries',
@@ -78,9 +77,9 @@ export default function ContactPage() {
             <Link href="/" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 no-underline px-3 py-2 rounded-full">
               <ArrowLeft className="h-4 w-4" /> Home
             </Link>
-            <LaunchLink href="/hedge" className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#1a4480] hover:bg-[#153a6e] no-underline px-5 py-2.5 rounded-full transition-colors">
-              Launch demo <ArrowRight className="h-4 w-4" />
-            </LaunchLink>
+            <Link href="/hedge" className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#1a4480] hover:bg-[#153a6e] no-underline px-5 py-2.5 rounded-full transition-colors">
+              Launch App <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </header>
@@ -98,10 +97,6 @@ export default function ContactPage() {
               <Mail className="h-5 w-5 text-[#1a4480]" />
               <span><span className="block text-sm font-semibold">Email us</span><span className="block text-sm text-gray-500">hello@blockfinax.com</span></span>
             </a>
-            <LaunchLink href="/hedge" className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3 no-underline text-[#0a0e1a] hover:border-gray-200 hover:bg-gray-50 transition">
-              <PlayCircle className="h-5 w-5 text-[#1a4480]" />
-              <span><span className="block text-sm font-semibold">Try the demo</span><span className="block text-sm text-gray-500">The full product with test USDC</span></span>
-            </LaunchLink>
             <a href="https://docs.blockfinax.com/stellar/intro" className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3 no-underline text-[#0a0e1a] hover:border-gray-200 hover:bg-gray-50 transition">
               <BookOpen className="h-5 w-5 text-[#1a4480]" />
               <span><span className="block text-sm font-semibold">Read the docs</span><span className="block text-sm text-gray-500">For businesses, partners and developers</span></span>

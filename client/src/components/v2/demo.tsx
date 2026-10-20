@@ -1,5 +1,5 @@
 /**
- * The public demo (demo.blockfinax.com): a banner that says it runs on test money, and the
+ * The public demo (testnet.blockfinax.com): a banner that says it runs on test money, and the
  * Contact sales form for anyone who wants live protection.
  */
 import { useEffect, useState } from 'react';

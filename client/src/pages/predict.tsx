@@ -12,7 +12,6 @@
  * quietly while a commit does not.
  */
 import { Link } from 'wouter';
-import { LaunchLink } from '@/lib/demo-link';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 
 export default function PredictPage() {
@@ -29,9 +28,9 @@ export default function PredictPage() {
             <Link href="/" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 no-underline px-3 py-2 rounded-full">
               <ArrowLeft className="h-4 w-4" /> Home
             </Link>
-            <LaunchLink href="/hedge" className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#1a4480] hover:bg-[#153a6e] no-underline px-5 py-2.5 rounded-full transition-colors">
-              Launch demo <ArrowRight className="h-4 w-4" />
-            </LaunchLink>
+            <Link href="/hedge" className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#1a4480] hover:bg-[#153a6e] no-underline px-5 py-2.5 rounded-full transition-colors">
+              Launch App <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </header>

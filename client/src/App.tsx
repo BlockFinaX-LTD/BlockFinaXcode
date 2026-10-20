@@ -10,7 +10,6 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { isWalletSandbox, walletRiftKey, walletWidgetUrl } from "@/lib/wallet-environment";
 import { useEffect, useState } from "react";
-import { DEMO_URL, isAppPath, isWebsiteHost } from "@/lib/demo-link";
 import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -185,19 +184,8 @@ function RiftPostSigninSync() {
 
 // Document routes are public; no sign-in or access approval is required.
 
-/** On the public website the product is not served: app pages open in the demo instead. */
-function SendAppPagesToDemo() {
-  const [location] = useLocation();
-  useEffect(() => {
-    if (isWebsiteHost() && isAppPath(location)) window.location.replace(`${DEMO_URL}${location}${window.location.search}`);
-  }, [location]);
-  return null;
-}
-
 function Router() {
   return (
-    <>
-    <SendAppPagesToDemo />
     <Switch>
       {/* Public */}
       <Route path="/">{isWalletSandbox ? <Redirect to="/home" /> : <Website />}</Route>
@@ -267,7 +255,6 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
-    </>
   );
 }
 

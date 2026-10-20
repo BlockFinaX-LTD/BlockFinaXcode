@@ -1,5 +1,4 @@
 import { Link, useRoute } from "wouter";
-import { LaunchLink } from "@/lib/demo-link";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -42,21 +41,21 @@ function SiteNav({ blogActive }: { blogActive?: boolean }) {
               </button>
               {productsOpen && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 shadow-lg rounded-xl py-1">
-                  <LaunchLink href="/hedge" className="block px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors no-underline flex items-center gap-2">
+                  <Link href="/home" className="block px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors no-underline flex items-center gap-2">
                     <Wallet className="h-4 w-4 text-gray-400" /> Wallet
-                  </LaunchLink>
-                  <LaunchLink href="/hedge" className="block px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors no-underline flex items-center gap-2">
+                  </Link>
+                  <Link href="/hedge" className="block px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors no-underline flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-gray-400" /> Hedge
-                  </LaunchLink>
+                  </Link>
                 </div>
               )}
             </div>
             <Link href="/blog" className={`text-sm transition-colors no-underline ${blogActive ? 'text-[#1a4480] font-semibold' : 'text-gray-500 hover:text-gray-900'}`}>Blog</Link>
-            <LaunchLink href="/hedge" className="no-underline">
+            <Link href="/home" className="no-underline">
               <Button size="sm" className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 text-sm font-medium">
-                Launch demo
+                Launch App
               </Button>
-            </LaunchLink>
+            </Link>
           </div>
 
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 hover:bg-gray-50 rounded-lg transition-colors">
@@ -73,16 +72,16 @@ function SiteNav({ blogActive }: { blogActive?: boolean }) {
                 </button>
                 {mobileProductsOpen && (
                   <div className="pl-6 space-y-1">
-                    <LaunchLink href="/hedge" onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg no-underline">Wallet</LaunchLink>
-                    <LaunchLink href="/hedge" onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg no-underline">Hedge</LaunchLink>
+                    <Link href="/home" onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg no-underline">Wallet</Link>
+                    <Link href="/hedge" onClick={() => setMobileMenuOpen(false)} className="block w-full text-left py-2 px-3 text-sm text-gray-500 hover:text-gray-900 rounded-lg no-underline">Hedge</Link>
                   </div>
                 )}
               </div>
               <Link href="/blog" onClick={() => setMobileMenuOpen(false)} className={`block w-full text-left px-3 py-2 text-sm rounded-lg transition-colors no-underline ${blogActive ? 'text-[#1a4480] font-semibold bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>Blog</Link>
               <div className="px-3 pt-2">
-                <LaunchLink href="/hedge" className="no-underline">
-                  <Button className="w-full bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full font-medium" size="sm">Launch demo</Button>
-                </LaunchLink>
+                <Link href="/home" className="no-underline">
+                  <Button className="w-full bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full font-medium" size="sm">Launch App</Button>
+                </Link>
               </div>
             </div>
           </div>
