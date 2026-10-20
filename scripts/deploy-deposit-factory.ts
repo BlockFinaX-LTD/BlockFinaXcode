@@ -4,6 +4,8 @@
  *
  *   Paid by an account with ETH (a one-time deployment):
  *     DEPLOYER_PRIVATE_KEY=... npx tsx scripts/deploy-deposit-factory.ts base-sepolia [minAmount6]
+ *   Sponsored by the configured paymasters (EVM_RELAYER_PRIVATE_KEY's platform account):
+ *     SPONSORED=1 EVM_RELAYER_PRIVATE_KEY=... EVM_PAYMASTER_FALLBACK_URL=... npx tsx scripts/deploy-deposit-factory.ts base-sepolia
  *   Print the addresses without deploying:
  *     PLAN_ONLY=1 npx tsx scripts/deploy-deposit-factory.ts base-sepolia [minAmount6]
  *
@@ -14,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { ethers } from "ethers";
 import { StrKey } from "@stellar/stellar-sdk";
 import { ChainRegistry } from "../shared/chains/registry";
+import { PlatformSubmitter } from "../server/routing/deposit-addresses";
 
 const DEPLOYER = "0x4e59b44847b379578588920ca78fbf26c0b4956c";
 const SALT = ethers.id("blockfinax.stellar-deposit.v1");
@@ -42,10 +45,15 @@ async function deploy(name: string, initCode: string) {
     console.log(`${name} will be at`, address);
     return address;
   }
-  if (!payer) throw new Error("Set DEPLOYER_PRIVATE_KEY (an account with a little ETH) or PLAN_ONLY=1");
-  const tx = await payer.sendTransaction({ to: DEPLOYER, data: ethers.concat([SALT, initCode]) });
-  const receipt = await tx.wait();
-  console.log(`${name} deploy tx`, tx.hash, receipt?.status === 1 ? "ok" : "FAILED");
+  if (process.env.SPONSORED === "1") {
+    const sent = await new PlatformSubmitter(evm, [DEPLOYER]).send([{ target: DEPLOYER, data: ethers.concat([SALT, initCode]) }]);
+    console.log(`${name} deploy tx`, sent.hash, sent.success ? "ok" : "FAILED");
+  } else {
+    if (!payer) throw new Error("Set DEPLOYER_PRIVATE_KEY (an account with a little ETH), SPONSORED=1, or PLAN_ONLY=1");
+    const tx = await payer.sendTransaction({ to: DEPLOYER, data: ethers.concat([SALT, initCode]) });
+    const receipt = await tx.wait();
+    console.log(`${name} deploy tx`, tx.hash, receipt?.status === 1 ? "ok" : "FAILED");
+  }
   for (let i = 0; i < 10 && (await provider.getCode(address)) === "0x"; i++) await new Promise((r) => setTimeout(r, 2000));
   if ((await provider.getCode(address)) === "0x") throw new Error(`${name} not found after deployment`);
   console.log(`${name} deployed`, address);
