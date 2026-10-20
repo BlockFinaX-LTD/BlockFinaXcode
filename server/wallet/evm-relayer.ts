@@ -2,8 +2,10 @@
  * ERC-4337 submission for users' passkey smart accounts.
  *
  * Two sponsors:
- *   - a third-party bundler and paymaster (ERC-7677, e.g. Coinbase Developer Platform)
- *     when `bundlerUrl` is set: the paymaster pays gas and bills BlockFinaX off-chain
+ *   - third-party bundlers and paymasters (ERC-7677: Coinbase Developer Platform, Pimlico)
+ *     when bundler URLs are set: the paymaster pays gas and bills BlockFinaX off-chain.
+ *     Several may be listed; each operation is sponsored by the first that accepts it, and
+ *     is sent to that same provider, because the user signs its sponsorship.
  *   - otherwise BlockFinaX's own bundler: the relayer key calls handleOps with a zero
  *     gas price and pays the network fee itself
  *
@@ -41,6 +43,20 @@ interface Pending {
   expiresAt: number;
   /** Set only for a server-built backup-passkey operation: allows addOwnerPublicKey on the account itself. */
   ownerChange?: boolean;
+  /** Which bundler sponsored it; the operation must be sent there. */
+  bundler?: number;
+}
+
+/**
+ * Bundler and paymaster URLs for a chain, in order of preference, from EVM_PAYMASTER_URL and
+ * EVM_PAYMASTER_FALLBACK_URL. `{chainId}` in a URL is replaced with the chain id, so one Pimlico
+ * URL serves every chain. Coinbase's paymaster serves Base only, so it is skipped elsewhere.
+ */
+export function paymasterUrls(chainId: number, env: NodeJS.ProcessEnv = process.env): string[] {
+  return [env.EVM_PAYMASTER_URL, env.EVM_PAYMASTER_FALLBACK_URL]
+    .filter((u): u is string => Boolean(u && u.trim()))
+    .map((u) => u.trim().replace(/\{chainId\}/g, String(chainId)))
+    .filter((u) => !u.includes("developer.coinbase.com") || chainId === 8453 || chainId === 84532);
 }
 
 export class EvmRelayer {
@@ -48,7 +64,7 @@ export class EvmRelayer {
   private readonly daily = new Map<string, number>();
   private queue: Promise<unknown> = Promise.resolve();
 
-  private readonly bundler: ethers.JsonRpcProvider | null;
+  private readonly bundlers: { url: string; rpc: ethers.JsonRpcProvider }[];
 
   constructor(
     private readonly provider: ethers.Provider,
@@ -56,11 +72,17 @@ export class EvmRelayer {
     private readonly signer: ethers.Signer | null,
     private readonly policy: RelayerPolicy,
     private readonly now: () => number = Date.now,
-    bundlerUrl?: string,
+    bundlerUrls?: string | string[],
   ) {
-    this.bundler = bundlerUrl
-      ? new ethers.JsonRpcProvider(bundlerUrl, chainId, { staticNetwork: ethers.Network.from(chainId), batchMaxCount: 1 })
-      : null;
+    const urls = (Array.isArray(bundlerUrls) ? bundlerUrls : bundlerUrls ? [bundlerUrls] : []).filter(Boolean);
+    this.bundlers = urls.map((url) => ({
+      url,
+      rpc: new ethers.JsonRpcProvider(url, chainId, { staticNetwork: ethers.Network.from(chainId), batchMaxCount: 1 }),
+    }));
+  }
+
+  private get bundler() {
+    return this.bundlers.length > 0;
   }
 
   get sponsor(): "paymaster" | "relayer" {
@@ -113,11 +135,25 @@ export class EvmRelayer {
       paymasterAndData: "0x",
       signature: dummySignature(),
     };
-    if (this.bundler) await this.sponsorWithPaymaster(op);
+    let bundler: number | undefined;
+    if (this.bundler) {
+      const errors: string[] = [];
+      for (let i = 0; i < this.bundlers.length && bundler === undefined; i++) {
+        const attempt = { ...op };
+        try {
+          await this.sponsorWithPaymaster(attempt, i);
+          Object.assign(op, attempt);
+          bundler = i;
+        } catch (err) {
+          errors.push(`${new URL(this.bundlers[i].url).host}: ${(err as Error).message.slice(0, 160)}`);
+        }
+      }
+      if (bundler === undefined) throw new Error(`No paymaster would sponsor this transaction. ${errors.join(" | ")}`);
+    }
     const hash = userOpHash(op, this.chainId);
     const id = ethers.hexlify(ethers.randomBytes(16));
     this.sweep();
-    this.pending.set(id, { userId: input.userId, op, hash, expiresAt: this.now() + 5 * 60_000, ownerChange: input.ownerChange });
+    this.pending.set(id, { userId: input.userId, op, hash, expiresAt: this.now() + 5 * 60_000, ownerChange: input.ownerChange, bundler });
     return { id, hash };
   }
 
@@ -136,7 +172,7 @@ export class EvmRelayer {
     const op = { ...p.op, signature: encodeWebAuthnSignature(assertion) };
     const day = `${p.userId}:${new Date(this.now()).toISOString().slice(0, 10)}`;
     this.daily.set(day, (this.daily.get(day) ?? 0) + 1);
-    if (this.bundler) return this.submitToBundler(op, p.hash);
+    if (this.bundler) return this.submitToBundler(op, p.hash, p.bundler ?? 0);
     if (!this.signer) throw new Error("The EVM relayer is not configured");
     return this.serialized(async () => {
       const beneficiary = await this.signer!.getAddress();
@@ -161,7 +197,7 @@ export class EvmRelayer {
   async submitWithOwnerKey(p: Pending, owner: ethers.Wallet, ownerIndex = 0): Promise<{ hash: string; success: boolean }> {
     const sig = owner.signingKey.sign(p.hash).serialized;
     const op = { ...p.op, signature: ethers.AbiCoder.defaultAbiCoder().encode(["tuple(uint256 ownerIndex, bytes signatureData)"], [[ownerIndex, sig]]) };
-    if (this.bundler) return this.submitToBundler(op, p.hash);
+    if (this.bundler) return this.submitToBundler(op, p.hash, p.bundler ?? 0);
     throw new Error("Platform operations need a paymaster (EVM_PAYMASTER_URL)");
   }
 
@@ -170,12 +206,19 @@ export class EvmRelayer {
    * paymaster data. The passkey signs the hash of the op including paymasterAndData, so
    * the paymaster's sponsorship and gas limits are fixed before the user approves.
    */
-  private async sponsorWithPaymaster(op: UserOperation) {
-    const bundler = this.bundler!;
+  private async sponsorWithPaymaster(op: UserOperation, index: number) {
+    const { url, rpc: bundler } = this.bundlers[index];
     const chainHex = ethers.toQuantity(this.chainId);
-    const fees = await bundler.getFeeData();
-    op.maxFeePerGas = ((fees.maxFeePerGas ?? fees.gasPrice ?? BigInt(0)) * BigInt(12)) / BigInt(10);
-    op.maxPriorityFeePerGas = fees.maxPriorityFeePerGas ?? op.maxFeePerGas;
+    if (url.includes("pimlico.io")) {
+      // Pimlico requires its own gas price, or the bundler rejects the operation as underpriced.
+      const price = await bundler.send("pimlico_getUserOperationGasPrice", []);
+      op.maxFeePerGas = BigInt(price.fast.maxFeePerGas);
+      op.maxPriorityFeePerGas = BigInt(price.fast.maxPriorityFeePerGas);
+    } else {
+      const fees = await bundler.getFeeData();
+      op.maxFeePerGas = ((fees.maxFeePerGas ?? fees.gasPrice ?? BigInt(0)) * BigInt(12)) / BigInt(10);
+      op.maxPriorityFeePerGas = fees.maxPriorityFeePerGas ?? op.maxFeePerGas;
+    }
     const stub = await bundler.send("pm_getPaymasterStubData", [toRpc(op), ENTRY_POINT_V06, chainHex, {}]);
     op.paymasterAndData = stub.paymasterAndData;
     const gas = await bundler.send("eth_estimateUserOperationGas", [toRpc(op), ENTRY_POINT_V06]);
@@ -189,8 +232,8 @@ export class EvmRelayer {
     }
   }
 
-  private async submitToBundler(op: UserOperation, hash: string): Promise<{ hash: string; success: boolean }> {
-    const bundler = this.bundler!;
+  private async submitToBundler(op: UserOperation, hash: string, index: number): Promise<{ hash: string; success: boolean }> {
+    const bundler = this.bundlers[index].rpc;
     const sent: string = await bundler.send("eth_sendUserOperation", [toRpc(op), ENTRY_POINT_V06]);
     if (sent.toLowerCase() !== hash.toLowerCase()) throw new Error("The bundler accepted a different operation than the one approved");
     for (let i = 0; i < 60; i++) {

@@ -109,3 +109,18 @@ test("WebAuthn signature carries the approving passkey's owner index", () => {
   const [wrapped] = ethers.AbiCoder.defaultAbiCoder().decode(["tuple(uint256 ownerIndex, bytes signatureData)"], enc);
   assert.equal(Number(wrapped.ownerIndex), 3);
 });
+
+test("paymaster URLs: Coinbase first, Pimlico as fallback, Coinbase only on Base", async () => {
+  const { paymasterUrls } = await import("../evm-relayer");
+  const env = {
+    EVM_PAYMASTER_URL: "https://api.developer.coinbase.com/rpc/v1/base-sepolia/KEY",
+    EVM_PAYMASTER_FALLBACK_URL: "https://api.pimlico.io/v2/{chainId}/rpc?apikey=P",
+  } as NodeJS.ProcessEnv;
+  assert.deepEqual(paymasterUrls(84532, env), [
+    "https://api.developer.coinbase.com/rpc/v1/base-sepolia/KEY",
+    "https://api.pimlico.io/v2/84532/rpc?apikey=P",
+  ]);
+  // Arbitrum: Coinbase does not serve it, Pimlico does.
+  assert.deepEqual(paymasterUrls(42161, env), ["https://api.pimlico.io/v2/42161/rpc?apikey=P"]);
+  assert.deepEqual(paymasterUrls(84532, {} as NodeJS.ProcessEnv), []);
+});

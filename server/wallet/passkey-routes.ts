@@ -39,7 +39,7 @@ import type { ChainConfig } from "@shared/chains/registry";
 import { toUnits } from "@shared/domain/pool-economics";
 import { accountInterface, passkeyOwner, smartAccountAddress } from "./evm-smart-account";
 import { deployStellarSmartAccount, PASSKEY_WALLET_WASM } from "./stellar-smart-account";
-import { EvmRelayer } from "./evm-relayer";
+import { EvmRelayer, paymasterUrls } from "./evm-relayer";
 import { Api as StellarApi, Server as StellarServer } from "@stellar/stellar-sdk/rpc";
 import { BASE_FEE, Keypair, Operation, TransactionBuilder, nativeToScVal } from "@stellar/stellar-sdk";
 
@@ -84,7 +84,7 @@ function evmRelayer(evm: ChainConfig): EvmRelayer {
     tokens: Object.values(evm.assets).map((a) => a.addressOrContract),
     contracts,
     dailyOpsPerUser: Number(process.env.EVM_RELAYER_DAILY_OPS || 50),
-  }, Date.now, process.env.EVM_PAYMASTER_URL || undefined);
+  }, Date.now, paymasterUrls(Number(evm.networkId)));
   relayer = { chain: evm.key, instance };
   return instance;
 }

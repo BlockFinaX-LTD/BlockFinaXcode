@@ -17,7 +17,7 @@ import path from "node:path";
 import { ethers } from "ethers";
 import type { ChainConfig, ChainRegistry } from "@shared/chains/registry";
 import { fromUnits, toUnits } from "@shared/domain/pool-economics";
-import { EvmRelayer } from "../wallet/evm-relayer";
+import { EvmRelayer, paymasterUrls } from "../wallet/evm-relayer";
 import { smartAccountAddress } from "../wallet/evm-smart-account";
 import type { RoutingEngine } from "./engine";
 import type { RouteStore } from "./types";
@@ -68,12 +68,12 @@ export class PlatformSubmitter {
   private readonly relayer: EvmRelayer;
   private account: string | null = null;
 
-  constructor(private readonly chain: ChainConfig, allowed: string[], secret = process.env.EVM_RELAYER_PRIVATE_KEY, paymaster = process.env.EVM_PAYMASTER_URL) {
-    if (!secret || !paymaster) throw new Error("EVM_RELAYER_PRIVATE_KEY and EVM_PAYMASTER_URL are required");
+  constructor(private readonly chain: ChainConfig, allowed: string[], secret = process.env.EVM_RELAYER_PRIVATE_KEY, paymasters = paymasterUrls(Number(chain.networkId))) {
+    if (!secret || paymasters.length === 0) throw new Error("EVM_RELAYER_PRIVATE_KEY and a paymaster (EVM_PAYMASTER_URL or EVM_PAYMASTER_FALLBACK_URL) are required");
     const id = Number(chain.networkId);
     this.provider = new ethers.JsonRpcProvider(chain.rpcUrls[0], id, { staticNetwork: ethers.Network.from(id) });
     this.owner = new ethers.Wallet(secret);
-    this.relayer = new EvmRelayer(this.provider, id, null, { tokens: [], contracts: allowed, dailyOpsPerUser: 10_000 }, Date.now, paymaster);
+    this.relayer = new EvmRelayer(this.provider, id, null, { tokens: [], contracts: allowed, dailyOpsPerUser: 10_000 }, Date.now, paymasters);
   }
 
   get ownerBytes() {
