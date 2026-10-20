@@ -419,6 +419,20 @@ export function registerV2Routes(app: Express) {
     res.json({ route: routeView(route) });
   }));
 
+  /**
+   * The user's personal deposit addresses on funding networks. USDC sent there is moved to
+   * their hub wallet automatically; nothing to sign. Only the canonical USDC is ever moved.
+   */
+  app.get("/api/v2/deposit-addresses", wrap(async (req, res) => {
+    const s = await getServices();
+    const book = await s.accounts.addressBook(await userId(req));
+    const hub = chainRegistry()!.hub;
+    const wallet = book[hub.key];
+    if (!wallet) throw new ApplicationError("INVALID_REQUEST", `No ${hub.name} account yet`);
+    const { depositAddressesFor } = await import("../routing/deposit-addresses");
+    res.json({ hub: { chain: hub.key, name: hub.name, address: wallet }, deposits: depositAddressesFor(chainRegistry()!, wallet) });
+  }));
+
   app.get("/api/v2/routing", wrap(async (req, res) => {
     const s = await getServices();
     res.json({ routes: (await s.routing.store.listByUser(String(await userId(req)))).map(routeView) });

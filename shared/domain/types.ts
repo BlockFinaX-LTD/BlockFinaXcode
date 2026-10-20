@@ -268,7 +268,9 @@ export type RoutingState =
   | "ACTION_COMPLETED"
   | "FAILED"
   | "RECOVERY_REQUIRED"
-  | "REFUNDED";
+  | "REFUNDED"
+  /** The source transaction was never sent: nothing moved. */
+  | "CANCELLED";
 
 // ── Events ────────────────────────────────────────────────────────────────────
 

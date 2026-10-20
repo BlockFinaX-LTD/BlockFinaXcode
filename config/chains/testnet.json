@@ -57,7 +57,10 @@
       "cctp": {
         "domain": 6,
         "tokenMessenger": "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA",
-        "messageTransmitter": "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275"
+        "messageTransmitter": "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275",
+        "depositFactory": "0x05672D3bD02b1ebBFA6F4f5C104A7f2b7d0a2291",
+        "depositImplementation": "0x937a715805Bd525CBBF2817f5Eb184a322D7016c",
+        "depositMinAmount": "1000000"
       }
     }
   ],

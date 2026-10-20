@@ -10,7 +10,7 @@ import type { RouteRecord, RouteStore } from "./types";
 
 type Query = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-const DONE = ["ACTION_COMPLETED", "REFUNDED"];
+const DONE = ["ACTION_COMPLETED", "REFUNDED", "CANCELLED"];
 
 export async function ensureRoutingTables(query: Query) {
   await query(`CREATE TABLE IF NOT EXISTS routing_routes (

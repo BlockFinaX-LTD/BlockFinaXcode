@@ -137,6 +137,24 @@ export class RoutingEngine {
     return route;
   }
 
+  /** Record a route whose source transaction BlockFinaX submits itself (a deposit-address flush). */
+  async track(req: RouteRequest, quote: RoutingQuote): Promise<RouteRecord> {
+    this.provider(quote.provider);
+    const route: RouteRecord = { id: randomUUID(), request: req, quote, state: "REQUESTED", history: [], createdAt: this.clock(), trackingId: `deposit:${req.sender}` };
+    this.move(route, "REQUESTED");
+    await this.store.save(route);
+    return route;
+  }
+
+  /** Close a route whose source transaction was never sent, so nothing waits on it. */
+  async cancel(id: string, note: string): Promise<RouteRecord> {
+    const route = await this.require(id);
+    if (route.state !== "REQUESTED" || route.sourceTxHash) throw new ApplicationError("INVALID_REQUEST", "Only a transfer that has not started can be cancelled");
+    this.move(route, "CANCELLED", note);
+    await this.store.save(route);
+    return route;
+  }
+
   /** The next source-chain step, for routes whose first step had to confirm before it. */
   async continueRoute(id: string, userId: string) {
     const route = await this.require(id);

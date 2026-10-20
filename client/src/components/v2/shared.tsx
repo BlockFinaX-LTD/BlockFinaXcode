@@ -152,6 +152,7 @@ export async function runTransfer(input: { kind: 'fund' | 'withdraw'; network: s
 export function transferStatus(r: RouteView): { label: string; tone: 'green' | 'amber' | 'grey' | 'blue' } {
   if (r.state === 'ACTION_COMPLETED' || r.state === 'DESTINATION_CONFIRMED' || r.state === 'ACTION_PENDING') return { label: 'Arrived', tone: 'green' };
   if (r.state === 'REFUNDED') return { label: 'Refunded', tone: 'grey' };
+  if (r.state === 'CANCELLED') return { label: 'Not sent', tone: 'grey' };
   if (r.state === 'RECOVERY_REQUIRED') return { label: 'Retrying delivery', tone: 'amber' };
   if (r.state === 'REQUESTED' && !r.sourceTxHash) return { label: 'Not approved', tone: 'grey' };
   return { label: 'Moving', tone: 'blue' };

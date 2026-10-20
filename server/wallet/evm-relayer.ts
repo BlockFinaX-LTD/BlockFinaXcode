@@ -92,7 +92,7 @@ export class EvmRelayer {
     }
   }
 
-  async prepare(input: { userId: number; sender: string; owner: string; calls: Call[]; ownerChange?: boolean }): Promise<{ id: string; hash: string }> {
+  async prepare(input: { userId: number; sender: string; owner: string; calls: Call[]; ownerChange?: boolean; callGasLimit?: bigint }): Promise<{ id: string; hash: string }> {
     this.checkCalls(input.calls, input.ownerChange ? { sender: input.sender } : undefined);
     const day = `${input.userId}:${new Date(this.now()).toISOString().slice(0, 10)}`;
     if ((this.daily.get(day) ?? 0) >= this.policy.dailyOpsPerUser) throw new Error("Daily sponsored transaction limit reached");
@@ -105,7 +105,7 @@ export class EvmRelayer {
       nonce,
       initCode: deployed ? "0x" : initCodeFor(input.owner),
       callData: callDataFor(input.calls),
-      callGasLimit: BigInt(500_000),
+      callGasLimit: input.callGasLimit ?? BigInt(500_000),
       verificationGasLimit: BigInt(deployed ? 400_000 : 1_000_000),
       preVerificationGas: BigInt(60_000),
       maxFeePerGas: BigInt(0),
@@ -154,6 +154,18 @@ export class EvmRelayer {
   }
 
   /**
+   * Submit an operation for a smart account owned by a platform key (not a passkey), such as
+   * the account that triggers deposit-address flushes. The signature is the Coinbase Smart
+   * Wallet SignatureWrapper around an ECDSA signature of the operation hash.
+   */
+  async submitWithOwnerKey(p: Pending, owner: ethers.Wallet, ownerIndex = 0): Promise<{ hash: string; success: boolean }> {
+    const sig = owner.signingKey.sign(p.hash).serialized;
+    const op = { ...p.op, signature: ethers.AbiCoder.defaultAbiCoder().encode(["tuple(uint256 ownerIndex, bytes signatureData)"], [[ownerIndex, sig]]) };
+    if (this.bundler) return this.submitToBundler(op, p.hash);
+    throw new Error("Platform operations need a paymaster (EVM_PAYMASTER_URL)");
+  }
+
+  /**
    * ERC-7677: get stub paymaster data, estimate gas with the bundler, then get the final
    * paymaster data. The passkey signs the hash of the op including paymasterAndData, so
    * the paymaster's sponsorship and gas limits are fixed before the user approves.
@@ -169,7 +181,8 @@ export class EvmRelayer {
     const gas = await bundler.send("eth_estimateUserOperationGas", [toRpc(op), ENTRY_POINT_V06]);
     op.callGasLimit = (BigInt(gas.callGasLimit) * BigInt(12)) / BigInt(10);
     op.verificationGasLimit = (BigInt(gas.verificationGasLimit) * BigInt(13)) / BigInt(10);
-    op.preVerificationGas = (BigInt(gas.preVerificationGas) * BigInt(11)) / BigInt(10);
+    // Base prices L1 data into preVerificationGas, and it moves between estimate and send.
+    op.preVerificationGas = (BigInt(gas.preVerificationGas) * BigInt(3)) / BigInt(2);
     if (!stub.isFinal) {
       const final = await bundler.send("pm_getPaymasterData", [toRpc(op), ENTRY_POINT_V06, chainHex, {}]);
       op.paymasterAndData = final.paymasterAndData;

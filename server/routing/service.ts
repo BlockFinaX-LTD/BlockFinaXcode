@@ -9,12 +9,25 @@ import { RoutingEngine } from "./engine";
 import { CctpProvider, DirectProvider } from "./providers";
 import { CircleCctpPort } from "./cctp";
 import { DbRouteStore, PersistentLedger, ensureRoutingTables } from "./store";
+import { DepositWatcher, depositChains, type DepositWallet } from "./deposit-addresses";
 import type { RouteRecord, RoutingProvider } from "./types";
 
 export interface RoutingService {
   engine: RoutingEngine;
   store: DbRouteStore;
   cctpEnabled: boolean;
+  port: CircleCctpPort | null;
+  /** Deposit-address watchers, one per funding network that has a deposit factory. */
+  watchers: DepositWatcher[];
+}
+
+/** Every user's hub wallet: the destination their deposit addresses are bound to. */
+async function hubWallets(chains: ChainRegistry): Promise<DepositWallet[]> {
+  const { rows } = await query(
+    `SELECT user_id, address FROM chain_wallet_accounts WHERE network_key = $1 AND status = 'active'`,
+    [chains.hub.key],
+  );
+  return rows.map((r: any) => ({ userId: String(r.user_id), stellarWallet: String(r.address) }));
 }
 
 let service: Promise<RoutingService> | null = null;
@@ -35,10 +48,21 @@ export function routingService(chains: ChainRegistry, adapters: AdapterRegistry)
       for (const c of chains.all()) if (c.cctp && c.state !== "DISABLED") domains[c.key] = c.cctp.domain;
       const cctpEnabled = Object.keys(domains).length >= 2 && Boolean(chains.config.cctpAttestationUrl);
       const providers: RoutingProvider[] = [new DirectProvider()];
-      if (cctpEnabled) providers.push(new CctpProvider(new CircleCctpPort(chains, adapters, chains.config.cctpAttestationUrl!), domains));
+      const port = cctpEnabled ? new CircleCctpPort(chains, adapters, chains.config.cctpAttestationUrl!) : null;
+      if (port) providers.push(new CctpProvider(port, domains));
       // Funds that arrive are credited to the user's wallet by the transfer itself.
       const engine = new RoutingEngine(chains, providers, store, ledger, async () => "completed");
-      return { engine, store, cctpEnabled };
+      const watchers = port
+        ? depositChains(chains).map((chain) => new DepositWatcher(chains, chain, engine, store, () => hubWallets(chains), async (amount) => {
+            const { maxFee } = await port.estimate({
+              userId: "0", kind: "fund", sourceChain: chain.key, destinationChain: chains.hub.key,
+              asset: chains.asset(chain.key, "USDC"), destinationAsset: chains.asset(chains.hub.key, "USDC"),
+              amount, sender: "", recipient: "", action: { type: "credit" },
+            });
+            return maxFee;
+          }))
+        : [];
+      return { engine, store, cctpEnabled, port, watchers };
     })();
     service.catch(() => { service = null; });
   }
@@ -78,7 +102,11 @@ export function startRoutingWorker(load: () => Promise<{ chains: ChainRegistry; 
     running = true;
     try {
       const { chains, adapters } = await load();
-      const { engine, store } = await routingService(chains, adapters);
+      const { engine, store, watchers } = await routingService(chains, adapters);
+      // Deposit addresses first, so a new deposit's route is followed in this same cycle.
+      for (const w of watchers) {
+        try { await w.scan(); } catch (err) { console.warn(`[Deposits] scan failed: ${(err as Error).message}`); }
+      }
       for (const route of await store.listOpen()) {
         try {
           if (route.state === "RECOVERY_REQUIRED") {

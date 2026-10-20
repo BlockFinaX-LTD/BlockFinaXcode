@@ -43,32 +43,64 @@ function CardHead({ title, sub, onCancel }: { title: string; sub: string; onCanc
   );
 }
 
+interface DepositAddresses {
+  hub: { chain: string; name: string; address: string };
+  deposits: { chain: string; name: string; address: string; assets: string[]; minimum: string }[];
+}
+
 function DepositCard({ onCancel }: { onCancel: () => void }) {
   const accounts = useAccounts();
   const chains = useChains();
+  const balances = useUsdcBalances();
   const hub = chains.data?.activeLiquidityHub;
+  const deposits = useQuery({ queryKey: ['v2-deposit-addresses'], queryFn: () => api<DepositAddresses>('/api/v2/deposit-addresses'), staleTime: 300_000, retry: false });
   const [chain, setChain] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!chain && accounts[0]) setChain(accounts.some((a) => a.chain === hub) ? hub! : accounts[0].chain); }, [accounts, chain, hub]);
-  const acct = accounts.find((a) => a.chain === chain) ?? null;
+  useEffect(() => { if (!chain && hub) setChain(hub); }, [chain, hub]);
+  // Networks: the hub (direct) and every network with a personal deposit address.
+  const options = [
+    ...(deposits.data ? [{ chain: deposits.data.hub.chain, name: deposits.data.hub.name }] : accounts.filter((a) => a.chain === hub)),
+    ...(deposits.data?.deposits ?? []).map((d) => ({ chain: d.chain, name: d.name })),
+  ];
+  const routed = deposits.data?.deposits.find((d) => d.chain === chain) ?? null;
+  const address = routed?.address ?? (chain === hub ? deposits.data?.hub.address ?? accounts.find((a) => a.chain === hub)?.address : undefined);
+  const name = options.find((o) => o.chain === chain)?.name ?? 'this network';
+  const hubName = deposits.data?.hub.name ?? 'your BlockFinaX account';
+  const leftover = routed ? usdcOn(balances.data?.rows, routed.chain) : 0;
   return (
     <div className="bx-card">
       <CardHead title="Deposit USDC" sub="Send USDC to your BlockFinaX account from an exchange or another wallet." onCancel={onCancel} />
-      <div className="bx-seg" style={{ marginBottom: 20 }}>
-        {accounts.map((a) => <button key={a.chain} className={chain === a.chain ? 'on' : ''} onClick={() => { setChain(a.chain); setCopied(false); }}>{a.name}</button>)}
+      <span className="bx-label">Where are you sending from?</span>
+      <div className="bx-seg" style={{ marginBottom: 6 }}>
+        {options.map((o) => <button key={o.chain} className={chain === o.chain ? 'on' : ''} onClick={() => { setChain(o.chain); setCopied(false); }}>{o.name}</button>)}
       </div>
-      {acct && (
+      <div className="bx-hint" style={{ marginBottom: 20 }}>Sending from an exchange? Choose the network the exchange uses.</div>
+      {deposits.isLoading ? <Loading /> : address && (
         <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={acct.address} size={168} /></div>
+          <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={address} size={168} /></div>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div className="muted" style={{ fontSize: 13 }}>Your {acct.name} address</div>
-            <div className="num" style={{ fontSize: 14, wordBreak: 'break-all', margin: '6px 0 14px' }}>{acct.address}</div>
-            <button className="bx-btn ghost" onClick={async () => { await navigator.clipboard.writeText(acct.address); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy address'}</button>
+            <div className="muted" style={{ fontSize: 13 }}>Your {name} deposit address</div>
+            <div className="num" style={{ fontSize: 14, wordBreak: 'break-all', margin: '6px 0 14px' }}>{address}</div>
+            <button className="bx-btn ghost" onClick={async () => { await navigator.clipboard.writeText(address); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy address'}</button>
           </div>
         </div>
       )}
-      <div style={{ marginTop: 20 }}><Note>Send only USDC on {acct?.name ?? 'this network'} to this address. Network fees are covered by BlockFinaX.</Note></div>
-      {acct && hub && acct.chain !== hub && chains.data?.chains.find((c) => c.key === acct.chain)?.cctp && <MoveToHub network={acct.chain} networkName={acct.name} />}
+      <div style={{ marginTop: 20 }}><Note warn={Boolean(routed)}>Send only USDC on {name} to this address. Other tokens and other networks are not credited.</Note></div>
+      {routed && (<>
+        <div style={{ marginTop: 18 }}>
+          <h3 style={{ margin: '0 0 4px 0' }}>What happens next</h3>
+          <div className="sub">Nothing to approve. Your USDC is moved automatically.</div>
+        </div>
+        <div className="bx-sums" style={{ marginTop: 8 }}>
+          <Sum l="1. We detect your USDC on" v={name} />
+          <Sum l="2. Circle moves it to" v={hubName} />
+          <Sum l="Arrives in" v="About a minute" />
+          <Sum l="Circle fee" v="About 0.01%" />
+          <Sum l="Network fees" v="Covered" good />
+          <Sum l="Minimum" v={<span className="num">${routed.minimum}</span>} />
+        </div>
+      </>)}
+      {routed && leftover > 0 && <MoveToHub network={routed.chain} networkName={`your ${routed.name} wallet`} />}
     </div>
   );
 }

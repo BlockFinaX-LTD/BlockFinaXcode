@@ -53,7 +53,18 @@ export interface ChainConfig {
    * TokenMessengerMinter, MessageTransmitter and the CctpForwarder that delivers minted USDC
    * to any Stellar address.
    */
-  cctp?: { domain: number; tokenMessenger: string; messageTransmitter: string; forwarder?: string };
+  cctp?: {
+    domain: number;
+    tokenMessenger: string;
+    messageTransmitter: string;
+    forwarder?: string;
+    /** EVM: StellarDepositFactory, which gives each user a deposit address that forwards to the hub. */
+    depositFactory?: string;
+    /** EVM: the StellarDeposit implementation every deposit address is a clone of. */
+    depositImplementation?: string;
+    /** Smallest USDC amount (six-decimal units) the deposit contract will forward. */
+    depositMinAmount?: string;
+  };
 }
 
 export interface ChainRegistryConfig {
