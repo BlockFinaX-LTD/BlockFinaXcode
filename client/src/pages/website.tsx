@@ -15,6 +15,7 @@
  */
 
 import { Link } from 'wouter';
+import { LaunchLink } from '@/lib/demo-link';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
@@ -663,9 +664,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             >
               {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <Link href="/hedge" className="btn btn-primary btn-sm">
-              Launch App <span className="arrow">→</span>
-            </Link>
+            <LaunchLink href="/hedge" className="btn btn-primary btn-sm">
+              Launch demo <span className="arrow">→</span>
+            </LaunchLink>
           </div>
           <button
             type="button"
@@ -736,9 +737,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-ctas">
-            <Link href="/hedge" className="btn btn-primary" onClick={closeMobile}>
-              Launch App <span className="arrow">→</span>
-            </Link>
+            <LaunchLink href="/hedge" className="btn btn-primary" onClick={closeMobile}>
+              Launch demo <span className="arrow">→</span>
+            </LaunchLink>
           </div>
         </div>
       )}
@@ -765,9 +766,9 @@ function Hero() {
               The market to discover, trade and hedge FX risk in emerging markets.
             </p>
             <div className="hero-ctas">
-              <Link href="/hedge" className="btn btn-primary">
-                Launch App <span className="arrow">→</span>
-              </Link>
+              <LaunchLink href="/hedge" className="btn btn-primary">
+                Launch demo <span className="arrow">→</span>
+              </LaunchLink>
             </div>
           </div>
           <div className="hero-visual">
@@ -796,9 +797,9 @@ function UseSection({ theme }: { theme: Theme }) {
               <div className="feat-name">Hedge <span className="feat-pill">PROTECT</span></div>
               <p>Hedge FX risk to protect your capital.</p>
               <div className="feat-actions">
-                <Link href="/hedge" className="feat-btn primary">
+                <LaunchLink href="/hedge" className="feat-btn primary">
                   Hedge <span className="arrow">→</span>
-                </Link>
+                </LaunchLink>
                 <Link href="/learn/hedging-101" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
@@ -810,9 +811,9 @@ function UseSection({ theme }: { theme: Theme }) {
               <div className="feat-name">Yield <span className="feat-pill">EARN</span></div>
               <p>Earn premiums on idle stablecoins.</p>
               <div className="feat-actions">
-                <Link href="/hedge" className="feat-btn primary">
+                <LaunchLink href="/hedge" className="feat-btn primary">
                   Yield <span className="arrow">→</span>
-                </Link>
+                </LaunchLink>
                 <Link href="/learn/underwriting-101" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
@@ -1068,9 +1069,9 @@ function MarketsSection() {
               <text className="lbl" x="245" y="178">Rate →</text>
             </svg>
             <p>Buy cover and get paid out when the rate moves against you.</p>
-            <Link href="/hedge" className="acard-cta">
+            <LaunchLink href="/hedge" className="acard-cta">
               Buy cover <span className="arrow">→</span>
-            </Link>
+            </LaunchLink>
           </article>
 
           <article className="acard t-azure">
@@ -1092,9 +1093,9 @@ function MarketsSection() {
               <text className="lbl" x="245" y="178">Rate →</text>
             </svg>
             <p>Set a strike and expiry, underwrite the risk, and earn the premium.</p>
-            <Link href="/hedge" className="acard-cta">
+            <LaunchLink href="/hedge" className="acard-cta">
               Underwrite <span className="arrow">→</span>
-            </Link>
+            </LaunchLink>
           </article>
 
           <article className="acard t-indigo">
@@ -1150,9 +1151,9 @@ function TailCTA() {
         <h2>Hedge FX risk, or predict it.</h2>
         <p>Buy protection against currency moves, or predict where a rate is headed.</p>
         <div className="hero-ctas">
-          <Link href="/hedge" className="btn btn-primary">
-            Launch App <span className="arrow">→</span>
-          </Link>
+          <LaunchLink href="/hedge" className="btn btn-primary">
+            Launch demo <span className="arrow">→</span>
+          </LaunchLink>
         </div>
       </div>
     </section>
