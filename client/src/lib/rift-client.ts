@@ -152,7 +152,7 @@ export function clearCachedUserSummary(): void {
  */
 export async function getMe(): Promise<User | null> {
   // The passkey-wallet build has no Rift account; its session token is not a Rift token.
-  if (import.meta.env.VITE_WALLET_PROVIDER === 'passkey') return null;
+  if (import.meta.env.VITE_WALLET_PROVIDER !== 'rift') return null;
   if (!rift.isAuthenticated()) return null;
   try {
     const res = await rift.auth.getUser();
@@ -181,7 +181,7 @@ export async function getMe(): Promise<User | null> {
 }
 
 export function isLoggedIn(): boolean {
-  if (import.meta.env.VITE_WALLET_PROVIDER === 'passkey') {
+  if (import.meta.env.VITE_WALLET_PROVIDER !== 'rift') {
     try { return !!localStorage.getItem('bfx:passkey-session'); } catch { return false; }
   }
   return rift.isAuthenticated();
@@ -190,7 +190,7 @@ export function isLoggedIn(): boolean {
 // ── Wallet & balances ────────────────────────────────────────────────────
 
 export async function getChainBalances(chain?: ChainName): Promise<Balance[]> {
-  if (import.meta.env.VITE_WALLET_PROVIDER === 'passkey') {
+  if (import.meta.env.VITE_WALLET_PROVIDER !== 'rift') {
     const { passkeyBalances } = await import('./wallets/passkey-wallet');
     const all = (await passkeyBalances()) as Balance[];
     return chain ? all.filter((b) => b.chain === chain) : all;

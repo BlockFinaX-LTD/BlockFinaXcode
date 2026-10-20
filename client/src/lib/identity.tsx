@@ -1,11 +1,11 @@
 /**
  * Who is signed in, independent of the wallet provider.
  *
- * Production (default) uses Rift: this module passes useRift() through unchanged.
- * Testnet (VITE_WALLET_PROVIDER=passkey) uses the BlockFinaX passkey wallet: the same
+ * The BlockFinaX passkey wallet is the default everywhere: the same
  * shape is filled from the passkey session, with `address` set to the user's smart
  * account on the EVM network and `accessToken` set to the BlockFinaX session token
  * (the server accepts it wherever it accepts a Rift token on that deployment).
+ * The legacy Rift wallet runs only when VITE_WALLET_PROVIDER=rift is set explicitly.
  *
  * The provider choice is fixed at build time, so the hook order never changes.
  */
@@ -17,7 +17,7 @@ import {
 import type { WalletProvider } from "./wallet-provider";
 
 export const walletProviderKind: "rift" | "passkey" =
-  import.meta.env.VITE_WALLET_PROVIDER === "passkey" ? "passkey" : "rift";
+  import.meta.env.VITE_WALLET_PROVIDER === "rift" ? "rift" : "passkey";
 export const usesPasskeyWallet = walletProviderKind === "passkey";
 
 export interface IdentityUser {

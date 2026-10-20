@@ -88,12 +88,14 @@ if (isNeon) {
   // for localhost. Production never takes this branch.
   const testnetPrivateNetwork =
     process.env.APP_ENV === "testnet" && new URL(url).hostname.endsWith(".railway.internal");
+  // A database on this computer (local development) has no TLS.
+  const localDatabase = ["localhost", "127.0.0.1"].includes(new URL(url).hostname);
   _pool = new pg.Pool({
     connectionString: url,
     max: 3,
     idleTimeoutMillis: 15000,
     connectionTimeoutMillis: 5000,
-    ssl: testnetPrivateNetwork ? false : {
+    ssl: testnetPrivateNetwork || localDatabase ? false : {
       rejectUnauthorized: process.env.NODE_ENV === "production",
       ...(databaseSslCa ? { ca: databaseSslCa } : {}),
     },

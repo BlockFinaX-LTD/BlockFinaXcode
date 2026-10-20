@@ -43,7 +43,8 @@ import { EvmRelayer, paymasterUrls } from "./evm-relayer";
 import { Api as StellarApi, Server as StellarServer } from "@stellar/stellar-sdk/rpc";
 import { BASE_FEE, Keypair, Operation, TransactionBuilder, nativeToScVal } from "@stellar/stellar-sdk";
 
-export const passkeyWalletEnabled = () => process.env.WALLET_PROVIDER === "passkey";
+/** The passkey wallet is the default; the legacy Rift wallet only with WALLET_PROVIDER=rift. */
+export const passkeyWalletEnabled = () => process.env.WALLET_PROVIDER !== "rift";
 
 const challenges = new Map<string, { challenge: string; expiresAt: number; name?: string; userHandle?: string }>();
 function putChallenge(value: { challenge: string; name?: string; userHandle?: string }) {

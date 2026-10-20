@@ -94,7 +94,7 @@ async function fetchRiftUser(accessToken: string): Promise<RiftAuthenticatedUser
 export async function verifyRiftAccessToken(accessToken: string): Promise<RiftAuthenticatedUser | null> {
   // Testnet passkey wallet: the bearer token is a BlockFinaX session, and the user's
   // address is their passkey smart account on the EVM network. Rift is not consulted.
-  if (process.env.WALLET_PROVIDER === "passkey") return passkeySessionUser(accessToken);
+  if (process.env.WALLET_PROVIDER !== "rift") return passkeySessionUser(accessToken);
   const now = Date.now();
   const cached = cache.get(accessToken);
   if (cached && cached.expiresAt > now) return cached.user;
