@@ -502,13 +502,61 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // The closest strike the pool(s) allow, set by their underwriters.
   const minStartPct = (chosenPool ? chosenPool.structures.minStrikeDistanceBps ?? 0 : Math.min(...(matching.length ? matching.map((p) => p.structures.minStrikeDistanceBps ?? 0) : [0]))) / 100;
   const startChoices = Array.from(new Set([minStartPct, minStartPct + 2, minStartPct + 5].map((v) => Math.round(v * 100) / 100)));
-  const [startPct, setStartPct] = useState(2);
-  useEffect(() => { if (!startChoices.includes(startPct)) setStartPct(startChoices[0]); }, [startChoices.join(','), startPct]);
+  // The strike, typed either as a % from today's rate or as a rate. Whichever the user typed
+  // last stays fixed when the live rate moves; the other follows.
+  const [pctText, setPctText] = useState('2');
+  const [rateText, setRateText] = useState('');
+  const [anchor, setAnchor] = useState<'pct' | 'rate'>('pct');
+  const rateDp = (v: number) => (v >= 100 ? 2 : 4);
+  const rateFromPct = (pctV: number) => (spot.data ? spot.data * (1 + (sign * pctV) / 100) : null);
+  const pctFromRate = (r: number) => (spot.data ? (sign * (r / spot.data - 1)) * 100 : null);
+  useEffect(() => {
+    if (!spot.data) return;
+    if (anchor === 'pct') {
+      const r = rateFromPct(Number(pctText));
+      if (r && Number.isFinite(r)) setRateText(r.toFixed(rateDp(r)));
+    } else {
+      const v = pctFromRate(Number(rateText));
+      if (v !== null && Number.isFinite(v)) setPctText(String(Math.round(v * 100) / 100));
+    }
+  }, [spot.data, direction]);
+  // A pool's closest strike may be further than the current entry: move up to it.
+  useEffect(() => { if (Number(pctText) < minStartPct) choosePct(minStartPct); }, [minStartPct]);
+  function choosePct(v: number) {
+    setAnchor('pct');
+    setPctText(String(v));
+    const r = rateFromPct(v);
+    if (r) setRateText(r.toFixed(rateDp(r)));
+  }
+  function typePct(text: string) {
+    const clean = text.replace(/[^0-9.]/g, '');
+    setAnchor('pct');
+    setPctText(clean);
+    const r = rateFromPct(Number(clean));
+    if (clean !== '' && r && Number.isFinite(r)) setRateText(r.toFixed(rateDp(r)));
+  }
+  function typeRate(text: string) {
+    const clean = text.replace(/[^0-9.]/g, '');
+    setAnchor('rate');
+    setRateText(clean);
+    const v = pctFromRate(Number(clean));
+    if (clean !== '' && v !== null && Number.isFinite(v)) setPctText(String(Math.round(v * 100) / 100));
+  }
+  const startPct = Number(pctText);
+  // The contracts accept a strike between today's rate and 2x (rising) or 0.5x (falling) it.
+  const maxStartPct = direction === 'up' ? 99 : 49;
+  const strikeError = !spot.data ? null
+    : pctText === '' || rateText === '' ? 'Enter a strike'
+    : !Number.isFinite(startPct) ? 'Enter a number'
+    : startPct < 0 ? `The strike must be ${direction === 'up' ? 'above' : 'below'} today's rate for this cover`
+    : startPct < minStartPct ? `This pool's closest strike is ${minStartPct}% from today's rate`
+    : startPct > maxStartPct ? `The strike can be at most ${maxStartPct}% from today's rate`
+    : null;
   const [capPct, setCapPct] = useState(10);
   useEffect(() => { setCapPct((c) => Math.min(Math.max(c, capMin), capMax)); }, [capMin, capMax]);
   const [structure, setStructure] = useState<'capped' | 'open'>('capped');
   useEffect(() => { if (tenor && !tenor[structure]) setStructure(tenor.capped ? 'capped' : 'open'); }, [tenor, structure]);
-  const strike = spot.data ? spot.data * (1 + (sign * startPct) / 100) : null;
+  const strike = spot.data && !strikeError ? (anchor === 'rate' ? Number(rateText) : spot.data * (1 + (sign * startPct) / 100)) : null;
   const cap = strike ? strike * (1 + (sign * capPct) / 100) : null;
 
   const base = pair && days && strike && Number(amount) > 0 ? { pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6), ...(poolChoice ? { pool: poolChoice } : {}) } : null;
@@ -674,9 +722,22 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               </div>
               <div>
                 <span className="bx-label">{hint("Protection starts")}</span>
-                <div className="bx-seg">
-                  {startChoices.map((m) => <button key={m} className={startPct === m ? 'on' : ''} onClick={() => setStartPct(m)}>{m === 0 ? "Today's rate" : `${m}% away`}</button>)}
+                <div className="bx-strike-in">
+                  <label className="bx-field" style={{ margin: 0 }}>
+                    <span>% from today's rate</span>
+                    <span className="bx-input-unit"><input className="bx-input num" inputMode="decimal" aria-label="Strike, percent from today's rate" value={pctText} onChange={(ev) => typePct(ev.target.value)} /><span>%</span></span>
+                  </label>
+                  <label className="bx-field" style={{ margin: 0 }}>
+                    <span>Strike rate</span>
+                    <span className="bx-input-unit"><input className="bx-input num" inputMode="decimal" aria-label={`Strike rate, ${ccy} per USD`} value={rateText} onChange={(ev) => typeRate(ev.target.value)} /><span>{ccy}</span></span>
+                  </label>
                 </div>
+                <div className="bx-pills" style={{ marginTop: 8 }}>
+                  {startChoices.map((m) => <button key={m} className={`bx-pill${startPct === m ? ' on' : ''}`} onClick={() => choosePct(m)}>{m === 0 ? "Today's rate" : `${m}%`}</button>)}
+                </div>
+                {!spot.data ? null : strikeError
+                  ? <div className="bx-error" style={{ marginTop: 6 }}>{strikeError}</div>
+                  : <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Pays if the rate {direction === 'up' ? 'rises above' : 'falls below'} {fmtRate(strike ?? 0)} {ccy}. Further away costs less.</div>}
               </div>
               <div>
                 <span className="bx-label">{hint("Cover type")}</span>

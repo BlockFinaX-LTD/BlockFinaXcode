@@ -175,6 +175,11 @@
 .bx-pill { border: 1px solid var(--line-2); background: var(--panel); color: var(--text); border-radius: 999px; padding: 9px 4px; font-weight: 600; font-size: 13px; min-height: 40px; cursor: pointer; }
 .bx-pill.on { background: var(--blue-soft); border-color: var(--blue-line); color: var(--blue); }
 .bx-label { color: var(--muted); font-size: 13px; margin-bottom: 8px; display: block; }
+.bx-strike-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 10px; }
+.bx-input-unit { display: flex; align-items: center; border: 1px solid var(--line-2); border-radius: 12px; background: var(--panel); padding-right: 12px; }
+.bx-input-unit:focus-within { outline: 2px solid var(--blue-soft); border-color: var(--blue); }
+.bx-input-unit .bx-input { border: 0; outline: none; background: transparent; }
+.bx-input-unit > span { color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .bx-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .bx-choice button { text-align: left; border: 1px solid var(--line-2); background: var(--panel); border-radius: 12px; padding: 12px; cursor: pointer; }
 .bx-choice button.on { border: 2px solid var(--blue); background: #f5f8ff; padding: 11px; }
