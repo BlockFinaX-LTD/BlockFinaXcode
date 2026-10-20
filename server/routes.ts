@@ -12,6 +12,7 @@
  *   community — /api/tasks, /api/referrals, /api/terms, /api/articles
  */
 
+import { registerSalesRoutes } from "./routes/sales";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -85,6 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAgentChatRoutes(app);
   registerComplianceRoutes(app);
   registerLeadRoutes(app);
+  registerSalesRoutes(app);
   registerSignatureRoutes(app);
   registerNotificationRoutes(app);
   await registerProtocolRoutes(app);

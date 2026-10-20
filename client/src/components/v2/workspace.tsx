@@ -5,6 +5,7 @@
  *   Hedger: "What do you want to protect?"
  *   Underwriter: "How do you want your capital exposed?"
  */
+import { ContactSales, DemoBanner } from './demo';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { ArrowUp, CircleUser, GraduationCap, Home, Layers, LineChart, List, Menu, Moon, Search, Shield, Store, Sun, Wallet, X } from 'lucide-react';
@@ -143,13 +144,15 @@ export function Workspace() {
           ))}
         </div>
         <div className="bx-rail-foot">
-          <div className="bx-testnet">Testnet · test USDC only</div>
+          <div className="bx-testnet">Demo · test USDC only</div>
           <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><CircleUser />Account</button>
           <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
         </div>
       </nav>
 
       <div className="bx-content" ref={content}>
+        <DemoBanner />
+        <ContactSales />
         <header className="bx-top">
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
           <SearchBox role={role} go={go} />

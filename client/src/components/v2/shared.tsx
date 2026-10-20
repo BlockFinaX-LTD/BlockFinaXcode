@@ -161,7 +161,7 @@ export function transferStatus(r: RouteView): { label: string; tone: 'green' | '
 export function useChains() {
   return useQuery({
     queryKey: ['v2-chains'],
-    queryFn: () => api<{ activeLiquidityHub: string; chains: ChainInfo[] }>('/api/v2/chains'),
+    queryFn: () => api<{ environment?: string; activeLiquidityHub: string; chains: ChainInfo[] }>('/api/v2/chains'),
     staleTime: 300_000,
   });
 }
@@ -202,4 +202,14 @@ export async function routeFunding(input: { network: string; amount: string; hub
   } catch {
     throw new Error(`Funding from another network is being switched on. For now, please fund from ${input.hubName ?? 'the main network'}.`);
   }
+}
+
+/** The public demo: the testnet deployment, with test money only. */
+export function useIsDemo() {
+  return useChains().data?.environment === 'testnet';
+}
+
+/** Open the Contact sales form from anywhere in the app. */
+export function openContactSales(source: string) {
+  window.dispatchEvent(new CustomEvent('bfx:contact-sales', { detail: { source } }));
 }

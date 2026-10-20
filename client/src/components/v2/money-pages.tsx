@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
 import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
-import { fmt, runTransfer, transferStatus, useChains, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
+import { fmt, runTransfer, transferStatus, useChains, useIsDemo, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 
 function useAccounts() {
@@ -49,6 +49,7 @@ interface DepositAddresses {
 }
 
 function DepositCard({ onCancel }: { onCancel: () => void }) {
+  const demo = useIsDemo();
   const accounts = useAccounts();
   const chains = useChains();
   const balances = useUsdcBalances();
@@ -86,6 +87,11 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
         </div>
       )}
       <div style={{ marginTop: 20 }}><Note warn={Boolean(routed)}>Send only USDC on {name} to this address. Other tokens and other networks are not credited.</Note></div>
+      {demo && routed && (
+        <div className="bx-error" style={{ marginTop: 10 }}>
+          Demo: send only <b>test</b> USDC on {name}. Real USDC sent on Base mainnet to this address cannot be recovered.
+        </div>
+      )}
       {routed && (<>
         <div style={{ marginTop: 18 }}>
           <h3 style={{ margin: '0 0 4px 0' }}>What happens next</h3>
@@ -271,6 +277,7 @@ export type WalletMode = 'none' | 'deposit' | 'withdraw';
 
 /** One place for money: the balance first; deposit or withdraw opens only when asked for. */
 export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
+  const demo = useIsDemo();
   const balances = useUsdcBalances();
   const [mode, setMode] = useState<WalletMode>(initial);
   useEffect(() => setMode(initial), [initial]);
@@ -281,7 +288,7 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
         <div className="bx-card">
           <div className="bx-hero-k">Wallet balance</div>
           <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
-          <div className="sub">USDC · network fees covered by BlockFinaX</div>
+          <div className="sub">{demo ? 'Test USDC (demo)' : 'USDC'} · network fees covered by BlockFinaX</div>
           <div className="bx-wallet-actions">
             <button className={`bx-btn${mode === 'deposit' ? '' : mode === 'none' ? '' : ' ghost'}`} onClick={() => setMode('deposit')} aria-pressed={mode === 'deposit'}><ArrowDown /> Deposit</button>
             <button className={`bx-btn${mode === 'withdraw' ? '' : ' ghost'}`} onClick={() => setMode('withdraw')} aria-pressed={mode === 'withdraw'}><ArrowUp /> Withdraw</button>

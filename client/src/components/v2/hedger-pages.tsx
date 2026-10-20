@@ -12,7 +12,7 @@ import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
   ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
-  useUsdcBalances, usdcOn, type Direction,
+  useUsdcBalances, usdcOn, useIsDemo, openContactSales, type Direction,
 } from './shared';
 import { AssetClassTabs, Flag, hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
@@ -625,6 +625,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
 }
 
 export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: string | null; target?: Target }) {
+  const demo = useIsDemo();
   const { toast } = useToast();
   const qc = useQueryClient();
   const pools = usePools();
@@ -840,6 +841,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <CheckCircle2 style={{ width: 48, height: 48, color: 'var(--green)' }} />
               <h3 style={{ fontSize: 18, margin: '10px 0 4px' }}>Your exposure is protected</h3>
               <p className="muted">${fmt(amount, 0)} of USD {exposureLabel(pair, direction).flow} protected until {days ? dateIn(days) : ''}.</p>
+              {demo && (
+                <div className="bx-demo-done">
+                  This was a demo with test USDC. To protect real payments, <button className="bx-link" onClick={() => openContactSales('protect-done')}>talk to our sales team</button>.
+                </div>
+              )}
               <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
                 <button className="bx-btn block" onClick={() => go('h-home')}>Go to home</button>
                 <button className="bx-btn ghost block" onClick={() => setMode('build')}>Protect another</button>
