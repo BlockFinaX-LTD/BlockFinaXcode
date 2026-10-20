@@ -85,10 +85,10 @@ export default function ContactPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-5 grid lg:grid-cols-2 lg:divide-x divide-gray-100">
+      <main className="max-w-6xl mx-auto px-5 grid grid-cols-1 lg:grid-cols-2 lg:divide-x divide-gray-100">
         {/* Left: who we are */}
-        <section className="pt-14 pb-10 lg:pt-20 lg:pr-14">
-          <h1 className="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.02]">Contact BlockFinaX</h1>
+        <section className="min-w-0 pt-14 pb-10 lg:pt-20 lg:pr-14">
+          <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.02] break-words">Contact BlockFinaX</h1>
           <p className="mt-6 text-lg text-gray-500 leading-relaxed max-w-md">
             Get in touch about protecting your business, providing liquidity, integrating the protocol or another enquiry.
           </p>
@@ -110,7 +110,7 @@ export default function ContactPage() {
         </section>
 
         {/* Right: the form */}
-        <section className="pt-6 pb-20 lg:pt-20 lg:pl-14">
+        <section className="min-w-0 pt-6 pb-20 lg:pt-20 lg:pl-14">
           {state === 'sent' ? (
             <div className="rounded-2xl border border-gray-100 p-8 text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#1a4480]/10">
