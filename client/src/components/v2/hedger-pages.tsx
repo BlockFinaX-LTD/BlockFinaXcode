@@ -230,7 +230,7 @@ export function HedgerHome({ go }: { go: Go }) {
             <>
               <div className="bx-list-h" style={cols}><span>{hint("Exposure")}</span><span className="r">{hint("Protected")}</span><span className="r">{hint("Expires")}</span><span className="r">{hint("Payout today")}</span></div>
               {active.map(({ position: p, pair, settlement: s }) => (
-                <div key={s.position} className="bx-li click" style={cols} onClick={() => go('h-protections')}>
+                <div key={s.position} className="bx-li click" style={cols} onClick={() => go('pair', { pair, position: markKey(p) })}>
                   <div className="bx-who">
                     <Flag pair={pair} />
                     <div style={{ minWidth: 0 }}>
@@ -259,7 +259,7 @@ export function HedgerHome({ go }: { go: Go }) {
           <div className="bx-card-h"><h2>Rates</h2><button className="bx-link" onClick={() => go('h-rates', { rates: ratesClass })}>All rates</button></div>
           <div style={{ marginBottom: 8 }}><AssetClassTabs small value={ratesClass} onChange={setRatesClass} /></div>
           {ratesClass === 'fx' ? (watch.isLoading ? <Loading /> : watchRows.map((r) => (
-            <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go(pairs.includes(r.pair) ? 'h-protect' : 'h-rates', pairs.includes(r.pair) ? { pair: r.pair } : undefined)}>
+            <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go('pair', { pair: r.pair })}>
               <Flag pair={r.pair} />
               <div className="grow"><div className="t">{r.pair}</div><div className="d">{pairName(r.pair)}</div></div>
               <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '-'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
@@ -338,15 +338,35 @@ function fmtWhen(t: string) {
     : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+/** A position drawn on a pair's chart. `pay`: where a hedger is paid. `risk`: where an underwriter pays. */
+export interface ChartMark {
+  key: string;
+  label: string;
+  tone: 'pay' | 'risk';
+  strike: number;
+  cap: number | null;
+  /** The rate when the position was opened. */
+  entry?: number;
+  /** Unix seconds: opened and expiry. */
+  from?: number;
+  to?: number;
+}
+
+const toSec = (t: string) => Date.parse(t.length === 10 ? `${t}T12:00:00Z` : t) / 1000;
+const shortDay = (sec: number) => new Date(sec * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
 /**
  * Price chart in the classic wallet's style: scaled to the price itself so small moves show,
  * the axis on the right, a BlockFinaX watermark behind the line, and a readout on hover.
  *
- * The strike and cap never stretch the scale. A strike inside or near the price range is drawn
- * as a line; one far away is pinned to the edge as a tag, so the history keeps its shape.
+ * Positions are drawn on top. The focused one shows its strike, cap, the band where it pays
+ * (green for a hedger, red for an underwriter), the rate it was opened at, when it was opened
+ * and when it expires; the rest show a faint strike line. Strikes and caps far from the price
+ * never stretch the scale; they are pinned to the edge as tags so the history keeps its shape.
  */
-function RateChart({ points, loading, strike, cap, label, unit }: {
+function RateChart({ points, loading, strike, cap, label, unit, marks = [], focus }: {
   points: { t: string; v: number }[]; loading: boolean; strike: number | null; cap: number | null; label?: string; unit?: string;
+  marks?: ChartMark[]; focus?: string | null;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   if (points.length < 2) {
@@ -356,28 +376,32 @@ function RateChart({ points, loading, strike, cap, label, unit }: {
   const iw = VW - PL - PR, ih = VH - PT - PB;
   const values = points.map((p) => p.v);
   const dLo = Math.min(...values), dHi = Math.max(...values);
-  const span = dHi - dLo;
-  // A strike counts toward the scale only when it sits close to where the price has been.
-  const near = (v: number | null) => v !== null && Number.isFinite(v) && v >= dLo - span * 0.6 && v <= dHi + span * 0.6;
-  const lo0 = Math.min(dLo, near(strike) ? strike! : dLo);
-  const hi0 = Math.max(dHi, near(strike) ? strike! : dHi);
+  const span = dHi - dLo || Math.abs(dHi) * 0.01;
+  const focused = marks.find((m) => m.key === focus) ?? (focus === undefined && marks.length === 1 ? marks[0] : null);
+  // Levels count toward the scale only when they sit close to where the price has been.
+  const near = (v: number | null | undefined, k = 0.6) => v !== null && v !== undefined && Number.isFinite(v) && v >= dLo - span * k && v <= dHi + span * k;
+  const pull = [strike, focused?.strike, focused?.entry].filter((v) => near(v, focused ? 1.5 : 0.6)) as number[];
+  const lo0 = Math.min(dLo, ...pull), hi0 = Math.max(dHi, ...pull);
   const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0) * 0.002 || 1;
   const lo = lo0 - pad, hi = hi0 + pad;
   const x = (i: number) => PL + (i / (values.length - 1)) * iw;
   const y = (v: number) => PT + (1 - (v - lo) / (hi - lo)) * ih;
+  const clampY = (v: number) => Math.min(PT + ih, Math.max(PT, y(v)));
   const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
   const area = `${line} L${x(values.length - 1).toFixed(1)} ${PT + ih} L${PL} ${PT + ih} Z`;
   const ticks = [0, 1, 2, 3, 4].map((k) => lo + ((hi - lo) * k) / 4);
   const dp = decimalsFor((hi - lo) / 4);
   const rising = values[values.length - 1] >= values[0];
   const stroke = '#1f5fe0';
+  const t0 = toSec(points[0].t), t1 = toSec(points[points.length - 1].t);
+  const xAt = (sec: number) => (sec < t0 || sec > t1 ? null : PL + ((sec - t0) / Math.max(1, t1 - t0)) * iw);
 
-  const inside = (v: number | null) => v !== null && Number.isFinite(v) && v >= lo && v <= hi;
-  const edgeTag = (v: number | null, name: string) => {
-    if (v === null || !Number.isFinite(v) || inside(v)) return null;
+  const inside = (v: number | null | undefined) => v !== null && v !== undefined && Number.isFinite(v) && v >= lo && v <= hi;
+  const edgeTag = (v: number | null | undefined, name: string, slot = 0) => {
+    if (v === null || v === undefined || !Number.isFinite(v) || inside(v)) return null;
     const above = v > hi;
     return (
-      <span className="bx-strike-tag" style={above ? { top: 4 } : { bottom: 4 }}>
+      <span key={name} className="bx-strike-tag" style={above ? { top: 4 + slot * 24 } : { bottom: 4 + slot * 24 }}>
         {name} {fmtAxis(v, dp)} {above ? '↑' : '↓'}
       </span>
     );
@@ -391,6 +415,9 @@ function RateChart({ points, loading, strike, cap, label, unit }: {
     setHover(Math.max(0, Math.min(values.length - 1, i)));
   };
   const h = hover === null ? null : points[hover];
+  const zone = focused?.tone === 'risk' ? '#e23b57' : '#12a05a';
+  const fx = focused?.from !== undefined ? xAt(focused.from) : null;
+  const tx = focused?.to !== undefined ? xAt(focused.to) : null;
 
   return (
     <div className="bx-chart">
@@ -401,7 +428,7 @@ function RateChart({ points, loading, strike, cap, label, unit }: {
         </div>
       )}
       <svg
-        role="img" aria-label={`${label ?? 'Rate'} over the selected period, ${rising ? 'rising' : 'falling'}`}
+        role="img" aria-label={`${label ?? 'Rate'} over the selected period, ${rising ? 'rising' : 'falling'}${focused ? `, with ${focused.label} marked` : ''}`}
         viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none" style={{ touchAction: 'pan-y' }}
         onMouseMove={(e) => onMove(e.clientX, e.currentTarget)} onMouseLeave={() => setHover(null)}
         onTouchStart={(e) => e.touches[0] && onMove(e.touches[0].clientX, e.currentTarget)}
@@ -417,8 +444,24 @@ function RateChart({ points, loading, strike, cap, label, unit }: {
         {ticks.map((v, k) => (
           <line key={k} x1={PL} y1={y(v)} x2={VW - PR} y2={y(v)} stroke="var(--line)" vectorEffect="non-scaling-stroke" />
         ))}
+        {/* The focused position's band: where it pays (hedger) or where the pool pays (underwriter). */}
+        {focused && (() => {
+          const top = clampY(Math.max(focused.strike, focused.cap ?? (focused.strike > (focused.entry ?? focused.strike) ? hi : lo)));
+          const bot = clampY(Math.min(focused.strike, focused.cap ?? (focused.strike > (focused.entry ?? focused.strike) ? hi : lo)));
+          const left = fx ?? PL;
+          return <rect x={left} y={top} width={Math.max(0, VW - PR - left)} height={Math.max(0, bot - top)} fill={zone} opacity="0.1" />;
+        })()}
         <path d={area} fill="url(#bx-chart-fill)" />
         <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        {/* Other positions: a faint strike line each. */}
+        {marks.filter((m) => m !== focused && inside(m.strike)).map((m) => (
+          <line key={m.key} x1={PL} y1={y(m.strike)} x2={VW - PR} y2={y(m.strike)} stroke={m.tone === 'risk' ? '#e23b57' : '#12a05a'} strokeWidth="1" strokeDasharray="2 6" opacity="0.5" vectorEffect="non-scaling-stroke" />
+        ))}
+        {focused && inside(focused.cap) && <line x1={PL} y1={y(focused.cap!)} x2={VW - PR} y2={y(focused.cap!)} stroke={zone} strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
+        {focused && inside(focused.entry) && <line x1={PL} y1={y(focused.entry!)} x2={VW - PR} y2={y(focused.entry!)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />}
+        {focused && inside(focused.strike) && <line x1={PL} y1={y(focused.strike)} x2={VW - PR} y2={y(focused.strike)} stroke="#e0a03a" strokeWidth="1.6" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
+        {fx !== null && <line x1={fx} y1={PT} x2={fx} y2={PT + ih} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+        {tx !== null && <line x1={tx} y1={PT} x2={tx} y2={PT + ih} stroke={zone} strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
         {inside(cap) && <line x1={PL} y1={y(cap!)} x2={VW - PR} y2={y(cap!)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
         {inside(strike) && <line x1={PL} y1={y(strike!)} x2={VW - PR} y2={y(strike!)} stroke="#e0a03a" strokeWidth="1.5" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
         {hover !== null && (
@@ -438,7 +481,125 @@ function RateChart({ points, loading, strike, cap, label, unit }: {
       <span className="bx-chart-dot" style={{ left: `${(x(hover ?? values.length - 1) / VW) * 100}%`, top: `${(y(values[hover ?? values.length - 1]) / VH) * 100}%` }} />
       {inside(strike) && <span className="bx-strike-tag" style={{ top: `calc(${(y(strike!) / VH) * 100}% - 22px)`, right: 76 }}>Strike {fmtAxis(strike!, dp)}</span>}
       {edgeTag(strike, 'Strike')}
+      {focused && inside(focused.strike) && <span className="bx-strike-tag" style={{ top: `calc(${(y(focused.strike) / VH) * 100}% - 22px)`, right: 76 }}>Strike {fmtAxis(focused.strike, dp)}</span>}
+      {focused && inside(focused.cap) && <span className="bx-level-tag" style={{ top: `calc(${(y(focused.cap!) / VH) * 100}% - 22px)`, right: 76, color: zone }}>{focused.tone === 'risk' ? 'Max you pay' : 'Max payout'} {fmtAxis(focused.cap!, dp)}</span>}
+      {focused && inside(focused.entry) && <span className="bx-level-tag" style={{ top: `calc(${(y(focused.entry!) / VH) * 100}% + 4px)`, left: 8 }}>{focused.tone === 'risk' ? 'Backed at' : 'Bought at'} {fmtAxis(focused.entry!, dp)}</span>}
+      {focused && edgeTag(focused.strike, 'Strike')}
+      {focused && edgeTag(focused.cap, focused.tone === 'risk' ? 'Max you pay' : 'Max payout', 1)}
+      {focused && fx !== null && <span className="bx-level-tag" style={{ bottom: 2, left: `calc(${(fx / VW) * 100}% + 4px)` }}>{focused.tone === 'risk' ? 'Backed' : 'Bought'} {shortDay(focused.from!)}</span>}
+      {focused?.to !== undefined && (tx !== null
+        ? <span className="bx-level-tag" style={{ bottom: 2, left: `calc(${(tx / VW) * 100}% + 4px)`, color: zone }}>Expires {shortDay(focused.to)}</span>
+        : focused.to > t1 && <span className="bx-level-tag" style={{ bottom: 2, right: 76, color: zone }}>Expires {shortDay(focused.to)} →</span>)}
     </div>
+  );
+}
+
+// ── Pair page: one pair's chart with your positions on it ───────────────────
+
+/** A hedger's protection as a chart mark: the band where it pays them. */
+export function hedgeMark(p: ProtectionPosition, label: string): ChartMark {
+  return { key: `${p.ref.chain}:${p.ref.contract}:${p.ref.id}`, label, tone: 'pay', strike: Number(p.strike), cap: Number(p.cap), entry: Number(p.spot), from: p.createdAt, to: p.expiry };
+}
+
+/** The same protection seen by an underwriter: the band where their pool pays. */
+export function riskMark(p: ProtectionPosition, label: string): ChartMark {
+  return { ...hedgeMark(p, label), tone: 'risk' };
+}
+
+const markKey = (p: ProtectionPosition) => `${p.ref.chain}:${p.ref.contract}:${p.ref.id}`;
+const POS_COLS = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr))' };
+
+type Stake = { value: string; account?: { reserved: string } };
+
+/** Protections backed by pools of this pair where the signed-in user has money. */
+function useUnderwrittenOn(pair: string, enabled: boolean) {
+  const pools = usePools();
+  const ofPair = (pools.data ?? []).filter((p) => p.pair === pair);
+  const stakes = useQueries({ queries: ofPair.map((p) => ({ queryKey: ['v2-lp', poolRef(p)], enabled, queryFn: () => api<Stake>(`/api/v2/pools/${encodeURIComponent(poolRef(p))}/lp`) })) });
+  const mine = ofPair.filter((_, i) => Number(stakes[i].data?.value ?? 0) > 0 || Number(stakes[i].data?.account?.reserved ?? 0) > 0);
+  const positions = useQueries({ queries: mine.map((p) => ({ queryKey: ['v2-pool-positions', poolRef(p)], enabled, queryFn: async () => (await api<{ positions: ProtectionPosition[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(p))}/positions`)).positions })) });
+  return { pools: mine, rows: mine.flatMap((pool, i) => (positions[i].data ?? []).map((pos) => ({ pool, pos }))), loading: pools.isLoading || stakes.some((q) => q.isLoading) };
+}
+
+export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair: string; role: 'hedger' | 'underwriter'; focus?: string }) {
+  const [range, setRange] = useState<Range>('1M');
+  const chart = useChart(pair, range);
+  const spot = useSpot(pair);
+  const hedges = useHedges();
+  const under = useUnderwrittenOn(pair, role === 'underwriter');
+  const [focus, setFocus] = useState<string | null>(initialFocus ?? null);
+  useEffect(() => { if (initialFocus) setFocus(initialFocus); }, [initialFocus]);
+  const ccy = quoteCcy(pair);
+  const points = chart.data ?? [];
+  const periodChange = points.length >= 2 ? (range.endsWith('H') && spot.data ? spot.data : points[points.length - 1].v) / points[0].v - 1 : null;
+
+  const mineHedges = (hedges.data ?? []).filter((h) => h.pair === pair);
+  const marks: ChartMark[] = role === 'hedger'
+    ? mineHedges.map((h) => hedgeMark(h.position, exposureLabel(pair, h.position.direction).title))
+    : under.rows.map(({ pool, pos }) => riskMark(pos, exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover));
+  const activeKeys = role === 'hedger'
+    ? mineHedges.filter((h) => h.settlement.status === 'pending').map((h) => markKey(h.position))
+    : under.rows.map((r) => markKey(r.pos));
+  useEffect(() => { if (!focus && activeKeys[0]) setFocus(activeKeys[0]); }, [activeKeys.join(',')]);
+
+  return (
+    <main className="bx-main">
+      <section className="bx-full">
+        <div className="bx-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <Flag pair={pair} large />
+            <div><div style={{ fontSize: 22, fontWeight: 600 }}>{ccyName(pair)}</div><div className="muted">{pair}</div></div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {role === 'hedger'
+                ? <button className="bx-btn" onClick={() => go('h-protect', { pair })}>Protect</button>
+                : <button className="bx-btn" onClick={() => go('u-pools')}>Provide liquidity</button>}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+            <span className="num" style={{ fontSize: 36, fontWeight: 600, letterSpacing: '-0.02em' }}>{spot.data ? fmtRate(spot.data) : '...'}</span>
+            <span className="muted">{ccy} per 1 USD</span>
+            <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
+          </div>
+          <RateChart points={points} loading={chart.isLoading} strike={null} cap={null} label={`${pair} · ${range}`} unit={ccy} marks={marks} focus={focus} />
+          <div className="bx-ranges" role="group" aria-label="Chart range">
+            {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
+          </div>
+          {marks.length > 0 && (
+            <div className="bx-legend">
+              <span><i style={{ background: '#e0a03a' }} />Strike</span>
+              <span><i style={{ background: role === 'hedger' ? '#12a05a' : '#e23b57', opacity: 0.35 }} />{role === 'hedger' ? 'Where you get paid' : 'Where your pool pays'}</span>
+              <span><i style={{ background: '#9aa2af' }} />{role === 'hedger' ? 'Bought' : 'Backed'}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bx-card">
+          <div className="bx-card-h"><div><h2>{role === 'hedger' ? 'Your protections on this pair' : 'Protection your pools back on this pair'}</h2><div className="sub">Select one to show it on the chart.</div></div></div>
+          {(role === 'hedger' ? hedges.isLoading : under.loading) ? <Loading /> : marks.length === 0 ? (
+            <div className="bx-empty">{role === 'hedger' ? 'You have no protection on this pair.' : 'Your pools have no running protection on this pair.'}</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
+              <div className="bx-list-h" style={POS_COLS}><span>{hint('Protection')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Expires')}</span></div>
+              {(role === 'hedger' ? mineHedges.map((h) => ({ pos: h.position, title: `${exposureLabel(pair, h.position.direction).title} · ${h.position.structure === 'open' ? 'Open' : 'Capped'}`, status: h.settlement.status }))
+                : under.rows.map(({ pool, pos }) => ({ pos, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
+              ).map(({ pos, title, status }) => {
+                const k = markKey(pos);
+                return (
+                  <div key={k} className={`bx-li click${focus === k ? ' sel' : ''}`} style={POS_COLS} role="button" tabIndex={0} aria-pressed={focus === k}
+                    onClick={() => setFocus(k)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFocus(k); } }}>
+                    <div className="bx-who"><span className="bx-ic" style={{ color: role === 'hedger' ? 'var(--green)' : 'var(--red)' }}><Shield aria-hidden="true" /></span>
+                      <div style={{ minWidth: 0 }}><div className="t">{title}</div><div className="d">{role === 'hedger' ? 'Bought' : 'Sold'} at {fmtRate(pos.spot)} · covered to {fmtRate(pos.cap)} {ccy}</div></div></div>
+                    <div className="r num" style={{ fontWeight: 600 }}>${fmt(pos.notional, 0)}</div>
+                    <div className="r num">{fmtRate(pos.strike)}</div>
+                    <div className="r"><div className="num">{dateOf(pos.expiry)}</div><div style={{ fontSize: 12 }}>{status === 'pending' ? <span className="up">Active</span> : <span className="muted">Ended</span>}</div></div>
+                  </div>
+                );
+              })}
+            </div></div>
+          )}
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -446,6 +607,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const { toast } = useToast();
   const qc = useQueryClient();
   const pools = usePools();
+  const hedgesAll = useHedges();
   const chains = useChains();
   const balances = useUsdcBalances();
 
@@ -625,7 +787,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             <span className="muted">{ccy} per 1 USD</span>
             <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
           </div>
-          <RateChart points={points} loading={chart.isLoading} strike={strike} cap={structure === 'capped' ? cap : null} label={`${pair} · ${range}`} unit={ccy} />
+          <RateChart points={points} loading={chart.isLoading} strike={strike} cap={structure === 'capped' ? cap : null} label={`${pair} · ${range}`} unit={ccy}
+            marks={(hedgesAll.data ?? []).filter((h) => h.pair === pair && h.settlement.status === 'pending').map((h) => hedgeMark(h.position, exposureLabel(pair, h.position.direction).title))} focus={null} />
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
@@ -809,14 +972,14 @@ export function MyProtections({ go }: { go: Go }) {
                   const active = s.status === 'pending';
                   const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
                   return (
-                    <div key={s.position} className="bx-li" style={cols}>
+                    <div key={s.position} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
                       <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Capped'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
                       <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
                       <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
                       <div className="r num" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>
                       <div className="r">
                         {active ? <Tag tone="green">Active</Tag> : s.status === 'settled_claimable'
-                          ? <button className="bx-btn small" disabled={busy === s.position} onClick={() => claim(s.position)}>{busy === s.position ? <Spin /> : 'Receive payout'}</button>
+                          ? <button className="bx-btn small" disabled={busy === s.position} onClick={(e) => { e.stopPropagation(); claim(s.position); }}>{busy === s.position ? <Spin /> : 'Receive payout'}</button>
                           : s.status === 'claimed' ? <Tag tone="grey">Paid</Tag> : <Tag tone="grey">Expired</Tag>}
                       </div>
                     </div>
@@ -920,12 +1083,12 @@ function FxRates({ go }: { go: Go }) {
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 620 }}>
           <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">{hint("Rate")}</span><span className="r">{hint("Change")}</span><span /></div>
           {rows.map((r) => (
-            <div key={r.pair} className="bx-li" style={cols}>
+            <div key={r.pair} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair: r.pair })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair: r.pair }); }}>
               <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{pairName(r.pair)}</div><div className="d">{r.pair} · 1 {r.pair.split('/')[0]} in {quoteCcy(r.pair)}</div></div></div>
               <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '-'}</div>
               <div className="r"><ChangeText change={r.change} /></div>
               <div className="r">{covered.has(r.pair)
-                ? <button className="bx-btn small" onClick={() => go('h-protect', { pair: r.pair })}>Protect</button>
+                ? <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); go('h-protect', { pair: r.pair }); }}>Protect</button>
                 : <span className="muted" style={{ fontSize: 12 }}>No cover yet</span>}</div>
             </div>
           ))}

@@ -12,7 +12,7 @@ import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
 import { Flag } from './ui';
-import { HedgerHome, MarketsPage, MyProtections, ProtectPage, RatesPage } from './hedger-pages';
+import { HedgerHome, MarketsPage, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
@@ -20,9 +20,9 @@ import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
 export type Page =
-  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account'
+  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account' | 'pair'
   | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw';
-export interface Target { wallet?: 'deposit' | 'withdraw'; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
+export interface Target { wallet?: 'deposit' | 'withdraw'; position?: string; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
 export type Go = (page: Page, target?: Target) => void;
 
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
@@ -96,6 +96,7 @@ export function Workspace() {
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
   const [ratesAt, setRatesAt] = useState<Target>({});
+  const [pairAt, setPairAt] = useState<Target>({});
   const [walletMode, setWalletMode] = useState<WalletMode>('none');
   const [, setLocation] = useLocation();
   const { session } = usePasskeySession();
@@ -106,6 +107,7 @@ export function Workspace() {
     if (target?.pool !== undefined) setPool(target.pool);
     if (p === 'h-protect') setBuy(target ?? {});
     if (p === 'h-rates') setRatesAt(target ?? {});
+    if (p === 'pair') setPairAt(target ?? {});
     if (p === 'wallet') setWalletMode(target?.wallet ?? 'none');
     setPage(p);
     window.scrollTo(0, 0);
@@ -176,6 +178,7 @@ export function Workspace() {
         {page === 'h-protections' && <MyProtections go={go} />}
         {page === 'h-rates' && <RatesPage go={go} target={ratesAt} />}
         {page === 'wallet' && <WalletPage mode={walletMode} />}
+        {page === 'pair' && pairAt.pair && <PairPage go={go} pair={pairAt.pair} role={role} focus={pairAt.position} />}
         {page === 'account' && <AccountPage />}
         {page === 'u-home' && <UnderwriterHome go={go} />}
         {page === 'u-pools' && <MyPools go={go} />}

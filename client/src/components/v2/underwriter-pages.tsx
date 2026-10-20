@@ -244,6 +244,7 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
             <Flag pair={pool.pair} large />
             <div><div style={{ fontSize: 22, fontWeight: 600 }}>{poolName(pool)} pool</div><div className="muted">Pays hedgers if {pool.pair} {pool.direction === 'down' ? 'falls below' : 'rises past'} their strike</div></div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+<button className="bx-btn ghost small" onClick={() => go('pair', { pair: pool.pair })}>Chart and positions</button>
               <Tag tone={pool.acceptingHedges ? 'green' : 'grey'}>{pool.acceptingHedges ? 'Accepting hedges' : 'Paused'}</Tag>
               {all.length > 1 && <PoolPicker pools={all} value={ref} onChange={setRef} />}
             </div>
