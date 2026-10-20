@@ -237,6 +237,9 @@ export async function emailAdminSalesRequest(req: {
   name: string;
   email: string;
   company?: string | null;
+  jobTitle?: string | null;
+  phone?: string | null;
+  enquiry?: string | null;
   country?: string | null;
   role?: string | null;
   exposure?: string | null;
@@ -245,9 +248,12 @@ export async function emailAdminSalesRequest(req: {
   source?: string | null;
 }) {
   const rows = [
+    ['Enquiry', req.enquiry],
     ['Name', req.name],
     ['Email', req.email],
     ['Company', req.company],
+    ['Job title', req.jobTitle],
+    ['Phone', req.phone],
     ['Country', req.country],
     ['Interested as', req.role],
     ['Exposure', req.exposure],

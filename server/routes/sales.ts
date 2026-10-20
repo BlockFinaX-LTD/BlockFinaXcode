@@ -1,16 +1,33 @@
 /**
- * Contact sales, from the demo. A visitor who wants live protection leaves their details;
- * the request is stored and the sales team is emailed (SALES_NOTIFY_EMAIL, else the admins).
+ * Contact sales (from the demo) and the website Contact page. The request is stored and the
+ * team is emailed (SALES_NOTIFY_EMAIL, else the admins).
  *
- *   POST /api/sales-requests   { name, email, company?, country?, role?, exposure?, monthlyVolume?, message?, source? }
+ *   POST /api/sales-requests   { name, email, company?, jobTitle?, phone?, enquiry?, country?, role?,
+ *                                exposure?, monthlyVolume?, message?, source? }
  */
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+
+/** Enquiry types on the Contact page. */
+export const ENQUIRIES = [
+  "General enquiries",
+  "Protection for my business",
+  "Underwriting and liquidity",
+  "Partnerships",
+  "API and integrations",
+  "Media and press",
+  "Security and vulnerability reporting",
+  "Compliance and legal",
+  "Complaints and feedback",
+] as const;
 
 const schema = z.object({
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(254),
   company: z.string().trim().max(160).optional(),
+  jobTitle: z.string().trim().max(120).optional(),
+  phone: z.string().trim().max(40).optional(),
+  enquiry: z.enum(ENQUIRIES).optional(),
   country: z.string().trim().max(80).optional(),
   role: z.enum(["business", "underwriter", "partner", "other"]).optional(),
   exposure: z.string().trim().max(200).optional(),
@@ -35,7 +52,12 @@ async function ensureTable() {
     message text,
     source text,
     created_at timestamptz NOT NULL DEFAULT now()
-  )`).then(() => undefined);
+  )`)
+    .then(() => pool.query(`ALTER TABLE sales_requests
+      ADD COLUMN IF NOT EXISTS job_title text,
+      ADD COLUMN IF NOT EXISTS phone text,
+      ADD COLUMN IF NOT EXISTS enquiry text`))
+    .then(() => undefined);
   await tableReady;
   return pool;
 }
@@ -60,9 +82,9 @@ export function registerSalesRoutes(app: Express) {
       const pool = await ensureTable();
       const r = parsed.data;
       const { rows } = await pool.query(
-        `INSERT INTO sales_requests (name, email, company, country, role, exposure, monthly_volume, message, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        [r.name, r.email.toLowerCase(), r.company ?? null, r.country ?? null, r.role ?? null, r.exposure ?? null, r.monthlyVolume ?? null, r.message ?? null, r.source ?? null],
+        `INSERT INTO sales_requests (name, email, company, country, role, exposure, monthly_volume, message, source, job_title, phone, enquiry)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+        [r.name, r.email.toLowerCase(), r.company ?? null, r.country ?? null, r.role ?? null, r.exposure ?? null, r.monthlyVolume ?? null, r.message ?? null, r.source ?? null, r.jobTitle ?? null, r.phone ?? null, r.enquiry ?? null],
       );
       const { emailAdminSalesRequest } = await import("../email");
       void emailAdminSalesRequest({ id: rows[0].id, ...r }).catch((err) => console.warn(`[sales] email failed: ${err?.message}`));
