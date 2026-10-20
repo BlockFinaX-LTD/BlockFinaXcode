@@ -355,55 +355,47 @@ export interface ChartMark {
   maxPayout?: number;
 }
 
-/** Chart overlays a user can switch on and off. */
-export type Layer = 'payout' | 'zone' | 'strike' | 'cap' | 'entry' | 'dates' | 'others' | 'fit';
-export const LAYERS: { key: Layer; label: string }[] = [
-  { key: 'payout', label: 'Payout curve' }, { key: 'zone', label: 'Pay zone' }, { key: 'strike', label: 'Strike' },
-  { key: 'cap', label: 'Max payout' }, { key: 'entry', label: 'Bought' }, { key: 'dates', label: 'Expiry' },
-  { key: 'others', label: 'Other positions' }, { key: 'fit', label: 'Full range' },
-];
-const ALL_LAYERS: Record<Layer, boolean> = { payout: true, zone: true, strike: true, cap: true, entry: true, dates: true, others: true, fit: true };
-
 const toSec = (t: string) => Date.parse(t.length === 10 ? `${t}T12:00:00Z` : t) / 1000;
-const shortDay = (sec: number) => new Date(sec * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+/** One protection drawn on a chart: where it starts paying, where it stops, and whose side it is. */
+export interface ChartProtection {
+  strike: number;
+  /** null for Open cover with no visible cap. */
+  cap: number | null;
+  /** `pay`: a hedger is paid in the band. `risk`: an underwriter pays in the band. */
+  tone: 'pay' | 'risk';
+}
 
 /**
- * Price chart in the classic wallet's style: scaled to the price itself so small moves show,
- * the axis on the right, a BlockFinaX watermark behind the line, and a readout on hover.
- *
- * Positions are drawn on top. The focused one shows its strike, cap, the band where it pays
- * (green for a hedger, red for an underwriter), the rate it was opened at, when it was opened
- * and when it expires; the rest show a faint strike line. Strikes and caps far from the price
- * never stretch the scale; they are pinned to the edge as tags so the history keeps its shape.
+ * Price chart scaled to the price itself, so the period's moves are visible. One protection
+ * overlay: the strike, the band where it pays, and the cap, labelled together. When the band
+ * sits beyond the visible prices, a strip on that edge says where it is instead of flattening
+ * the price line to fit it.
  */
-function RateChart({ points, loading, strike, cap, label, unit, marks = [], focus, fit: fitProp = false, layers = ALL_LAYERS }: {
-  points: { t: string; v: number }[]; loading: boolean; strike: number | null; cap: number | null; label?: string; unit?: string;
-  marks?: ChartMark[]; focus?: string | null;
-  /** Fit the focused position's strike and cap into the scale, even when far from the price. */
-  fit?: boolean;
-  /** Which overlays to draw; all by default. */
-  layers?: Record<Layer, boolean>;
+export function RateChart({ points, loading, label, unit, protection = null }: {
+  points: { t: string; v: number }[]; loading: boolean; label?: string; unit?: string;
+  protection?: ChartProtection | null;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   if (points.length < 2) {
     return <div className="bx-chart"><div className="bx-empty">{loading ? 'Loading chart...' : 'Not enough data for this range yet.'}</div></div>;
   }
-  const fit = fitProp || (layers.fit && marks.length > 0);
-  const L = layers;
-  const VW = 800, VH = 260, PL = 8, PR = 72, PT = 14, PB = 14;
-  const iw = VW - PL - PR, ih = VH - PT - PB;
+  const VW = 800, VH = 260, PL = 8, PR = 72;
   const values = points.map((p) => p.v);
   const dLo = Math.min(...values), dHi = Math.max(...values);
-  const span = dHi - dLo || Math.abs(dHi) * 0.01;
-  const focused = marks.find((m) => m.key === focus) ?? (focus === undefined && marks.length === 1 ? marks[0] : null);
-  // Levels count toward the scale only when they sit close to where the price has been.
-  const near = (v: number | null | undefined, k = 0.6) => v !== null && v !== undefined && Number.isFinite(v) && v >= dLo - span * k && v <= dHi + span * k;
-  const pull = fit && focused
-    ? ([focused.strike, focused.cap, focused.entry].filter((v) => v !== null && v !== undefined && Number.isFinite(v)) as number[])
-    : ([strike, focused?.strike, focused?.entry].filter((v) => near(v, focused ? 1.5 : 0.6)) as number[]);
+  const span = dHi - dLo || Math.abs(dHi) * 0.004 || 1;
+  // A level stretches the scale only when it is just beyond the prices (a quarter of their range).
+  const near = (v: number | null | undefined) => v !== null && v !== undefined && Number.isFinite(v) && v >= dLo - span * 0.25 && v <= dHi + span * 0.25;
+  const pull = protection ? [protection.strike, protection.cap].filter(near) as number[] : [];
   const lo0 = Math.min(dLo, ...pull), hi0 = Math.max(dHi, ...pull);
-  const pad = (hi0 - lo0) * 0.12 || Math.abs(hi0) * 0.002 || 1;
+  const pad = (hi0 - lo0) * 0.08 || Math.abs(hi0) * 0.002 || 1;
   const lo = lo0 - pad, hi = hi0 + pad;
+  // Protection beyond the visible prices gets its own strip of space for its label.
+  const bandEnds = protection ? [protection.strike, protection.cap ?? protection.strike] : [];
+  const offTop = bandEnds.length > 0 && Math.min(...bandEnds) > hi;
+  const offBottom = bandEnds.length > 0 && Math.max(...bandEnds) < lo;
+  const PT = offTop ? 34 : 14, PB = offBottom ? 34 : 14;
+  const iw = VW - PL - PR, ih = VH - PT - PB;
   const x = (i: number) => PL + (i / (values.length - 1)) * iw;
   const y = (v: number) => PT + (1 - (v - lo) / (hi - lo)) * ih;
   const clampY = (v: number) => Math.min(PT + ih, Math.max(PT, y(v)));
@@ -413,19 +405,7 @@ function RateChart({ points, loading, strike, cap, label, unit, marks = [], focu
   const dp = decimalsFor((hi - lo) / 4);
   const rising = values[values.length - 1] >= values[0];
   const stroke = '#1f5fe0';
-  const t0 = toSec(points[0].t), t1 = toSec(points[points.length - 1].t);
-  const xAt = (sec: number) => (sec < t0 || sec > t1 ? null : PL + ((sec - t0) / Math.max(1, t1 - t0)) * iw);
-
   const inside = (v: number | null | undefined) => v !== null && v !== undefined && Number.isFinite(v) && v >= lo && v <= hi;
-  const edgeTag = (v: number | null | undefined, name: string, slot = 0) => {
-    if (v === null || v === undefined || !Number.isFinite(v) || inside(v)) return null;
-    const above = v > hi;
-    return (
-      <span key={name} className="bx-strike-tag" style={above ? { top: 4 + slot * 24 } : { bottom: 4 + slot * 24 }}>
-        {name} {fmtAxis(v, dp)} {above ? '↑' : '↓'}
-      </span>
-    );
-  };
 
   const onMove = (clientX: number, el: SVGSVGElement) => {
     const box = el.getBoundingClientRect();
@@ -435,22 +415,21 @@ function RateChart({ points, loading, strike, cap, label, unit, marks = [], focu
     setHover(Math.max(0, Math.min(values.length - 1, i)));
   };
   const h = hover === null ? null : points[hover];
-  const zone = focused?.tone === 'risk' ? '#e23b57' : '#12a05a';
-  const fx = focused?.from !== undefined && L.dates ? xAt(focused.from) : null;
-  const tx = focused?.to !== undefined && L.dates ? xAt(focused.to) : null;
-  // The payout curve runs sideways along the right edge, sharing the price axis: at each rate,
-  // a bar as long as what the position pays if it ends there.
-  const payW = 150;
-  const payCurve = (() => {
-    if (!focused?.payout || !focused.maxPayout || !L.payout) return null;
-    const steps = 80;
-    const pts: string[] = [];
-    for (let i = 0; i <= steps; i++) {
-      const r = lo + ((hi - lo) * i) / steps;
-      pts.push(`${(VW - PR - (focused.payout(r) / focused.maxPayout) * payW).toFixed(1)} ${y(r).toFixed(1)}`);
-    }
-    const any = Array.from({ length: steps + 1 }, (_, i) => focused.payout!(lo + ((hi - lo) * i) / steps)).some((v) => v > 0);
-    return any ? `M${VW - PR} ${y(lo).toFixed(1)} L${pts.join(' L')} L${VW - PR} ${y(hi).toFixed(1)} Z` : null;
+
+  // The protection band: from the strike to the cap (or to the edge for Open cover).
+  const band = (() => {
+    if (!protection) return null;
+    const { strike: k, cap: c } = protection;
+    const up = c !== null ? c > k : k >= values[values.length - 1];
+    const far = c ?? (up ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+    const top = Math.max(k, far), bot = Math.min(k, far);
+    const color = protection.tone === 'risk' ? '#e23b57' : '#12a05a';
+    const visible = top >= lo && bot <= hi;
+    const offAbove = bot > hi, offBelow = top < lo;
+    const last = values[values.length - 1];
+    const pct = (((up ? k : k) - last) / last) * 100;
+    const text = `${protection.tone === 'risk' ? 'Pool pays' : 'Pays'} from ${fmtAxis(k, dp)}${c !== null ? ` to ${fmtAxis(c, dp)}` : ''}`;
+    return { k, c, top, bot, color, visible, offAbove, offBelow, pct, text };
   })();
 
   return (
@@ -462,7 +441,7 @@ function RateChart({ points, loading, strike, cap, label, unit, marks = [], focu
         </div>
       )}
       <svg
-        role="img" aria-label={`${label ?? 'Rate'} over the selected period, ${rising ? 'rising' : 'falling'}${focused ? `, with ${focused.label} marked` : ''}`}
+        role="img" aria-label={`${label ?? 'Rate'} over the selected period, ${rising ? 'rising' : 'falling'}${band ? `; ${band.text}` : ''}`}
         viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none" style={{ touchAction: 'pan-y' }}
         onMouseMove={(e) => onMove(e.clientX, e.currentTarget)} onMouseLeave={() => setHover(null)}
         onTouchStart={(e) => e.touches[0] && onMove(e.touches[0].clientX, e.currentTarget)}
@@ -478,27 +457,16 @@ function RateChart({ points, loading, strike, cap, label, unit, marks = [], focu
         {ticks.map((v, k) => (
           <line key={k} x1={PL} y1={y(v)} x2={VW - PR} y2={y(v)} stroke="var(--line)" vectorEffect="non-scaling-stroke" />
         ))}
-        {/* The focused position's band: where it pays (hedger) or where the pool pays (underwriter). */}
-        {focused && L.zone && (() => {
-          const top = clampY(Math.max(focused.strike, focused.cap ?? (focused.strike > (focused.entry ?? focused.strike) ? hi : lo)));
-          const bot = clampY(Math.min(focused.strike, focused.cap ?? (focused.strike > (focused.entry ?? focused.strike) ? hi : lo)));
-          const left = fx ?? PL;
-          return <rect x={left} y={top} width={Math.max(0, VW - PR - left)} height={Math.max(0, bot - top)} fill={zone} opacity="0.1" />;
-        })()}
+        {band?.visible && (
+          <rect x={PL} y={clampY(band.top)} width={iw} height={Math.max(0, clampY(band.bot) - clampY(band.top))} fill={band.color} opacity="0.1" />
+        )}
+        {band && (band.offAbove || band.offBelow) && (
+          <rect x={PL} y={band.offAbove ? 4 : VH - 10} width={iw} height={6} fill={band.color} opacity="0.55" />
+        )}
         <path d={area} fill="url(#bx-chart-fill)" />
         <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        {/* Other positions: a faint strike line each. */}
-        {payCurve && <path d={payCurve} fill={zone} opacity="0.18" stroke={zone} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
-        {L.others && marks.filter((m) => m !== focused && inside(m.strike)).map((m) => (
-          <line key={m.key} x1={PL} y1={y(m.strike)} x2={VW - PR} y2={y(m.strike)} stroke={m.tone === 'risk' ? '#e23b57' : '#12a05a'} strokeWidth="1" strokeDasharray="2 6" opacity="0.5" vectorEffect="non-scaling-stroke" />
-        ))}
-        {focused && L.cap && inside(focused.cap) && <line x1={PL} y1={y(focused.cap!)} x2={VW - PR} y2={y(focused.cap!)} stroke={zone} strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
-        {focused && L.entry && inside(focused.entry) && <line x1={PL} y1={y(focused.entry!)} x2={VW - PR} y2={y(focused.entry!)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />}
-        {focused && L.strike && inside(focused.strike) && <line x1={PL} y1={y(focused.strike)} x2={VW - PR} y2={y(focused.strike)} stroke="#e0a03a" strokeWidth="1.6" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
-        {fx !== null && <line x1={fx} y1={PT} x2={fx} y2={PT + ih} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
-        {tx !== null && <line x1={tx} y1={PT} x2={tx} y2={PT + ih} stroke={zone} strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
-        {inside(cap) && <line x1={PL} y1={y(cap!)} x2={VW - PR} y2={y(cap!)} stroke="#9aa2af" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
-        {inside(strike) && <line x1={PL} y1={y(strike!)} x2={VW - PR} y2={y(strike!)} stroke="#e0a03a" strokeWidth="1.5" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
+        {band && inside(band.c) && <line x1={PL} y1={y(band.c!)} x2={VW - PR} y2={y(band.c!)} stroke={band.color} strokeWidth="1.2" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />}
+        {band && inside(band.k) && <line x1={PL} y1={y(band.k)} x2={VW - PR} y2={y(band.k)} stroke="#e0a03a" strokeWidth="1.6" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />}
         {hover !== null && (
           <g pointerEvents="none">
             <line x1={x(hover)} y1={PT} x2={x(hover)} y2={PT + ih} stroke="#9aa2af" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
@@ -514,25 +482,17 @@ function RateChart({ points, loading, strike, cap, label, unit, marks = [], focu
         {ticks.map((v, k) => <span key={k} style={{ top: `${(y(v) / VH) * 100}%` }}>{fmtAxis(v, dp)}</span>)}
       </div>
       <span className="bx-chart-dot" style={{ left: `${(x(hover ?? values.length - 1) / VW) * 100}%`, top: `${(y(values[hover ?? values.length - 1]) / VH) * 100}%` }} />
-      {inside(strike) && <span className="bx-strike-tag" style={{ top: `calc(${(y(strike!) / VH) * 100}% - 22px)`, right: 76 }}>Strike {fmtAxis(strike!, dp)}</span>}
-      {edgeTag(strike, 'Strike')}
-      {focused && L.strike && inside(focused.strike) && <span className="bx-strike-tag" style={{ top: `calc(${(y(focused.strike) / VH) * 100}% - 22px)`, right: 76 }}>Strike {fmtAxis(focused.strike, dp)}</span>}
-      {focused && L.cap && inside(focused.cap) && <span className="bx-level-tag" style={{ top: `calc(${(y(focused.cap!) / VH) * 100}% - 22px)`, right: 76, color: zone }}>{focused.tone === 'risk' ? 'Max you pay' : 'Max payout'} {fmtAxis(focused.cap!, dp)}</span>}
-      {focused && L.entry && inside(focused.entry) && <span className="bx-level-tag" style={{ top: `calc(${(y(focused.entry!) / VH) * 100}% + 4px)`, left: 8 }}>{focused.tone === 'risk' ? 'Backed at' : 'Bought at'} {fmtAxis(focused.entry!, dp)}</span>}
-      {focused && (() => {
-        // Off-chart levels are stacked in value order, so the higher one is shown higher.
-        const levels = [...(L.strike ? [{ v: focused.strike, n: 'Strike' }] : []), ...(L.cap ? [{ v: focused.cap, n: focused.tone === 'risk' ? 'Max you pay' : 'Max payout' }] : [])]
-          .filter((l) => l.v !== null && Number.isFinite(l.v as number) && !inside(l.v));
-        const above = levels.filter((l) => (l.v as number) > hi).sort((a, b) => (b.v as number) - (a.v as number));
-        const below = levels.filter((l) => (l.v as number) < lo).sort((a, b) => (a.v as number) - (b.v as number));
-        return [...above.map((l, i) => edgeTag(l.v, l.n, i)), ...below.map((l, i) => edgeTag(l.v, l.n, i))];
+      {band && (() => {
+        // One label for the whole protection: on the band when it is visible, on the edge strip when it is not.
+        const where = band.offAbove ? { top: 0 } : band.offBelow ? { bottom: 0 } : { top: `calc(${(clampY(band.top) / VH) * 100}% + 6px)` };
+        const off = band.offAbove || band.offBelow;
+        return (
+          <span className="bx-protect-tag" style={{ ...where, right: 80, borderColor: band.color, color: band.color }}>
+            <i style={{ background: '#e0a03a' }} />{band.text}
+            {off && <b> {band.offAbove ? '↑' : '↓'} {Math.abs(band.pct).toFixed(1)}% {band.offAbove ? 'above' : 'below'} today</b>}
+          </span>
+        );
       })()}
-      {payCurve && focused?.maxPayout && <span className="bx-level-tag" style={{ top: 4, right: 76, color: zone }}>{focused.tone === 'risk' ? 'Pool pays' : 'Pays'} up to ${fmt(focused.maxPayout, 0)} →</span>}
-      {payCurve && h && focused?.payout && <span className="bx-level-tag" style={{ top: 26, right: 76, color: zone }}>At {fmtAxis(h.v, Math.max(dp, 2))}: ${fmt(focused.payout(h.v))}</span>}
-      {focused && fx !== null && <span className="bx-level-tag" style={{ bottom: 2, left: `calc(${(fx / VW) * 100}% + 4px)` }}>{focused.tone === 'risk' ? 'Backed' : 'Bought'} {shortDay(focused.from!)}</span>}
-      {focused?.to !== undefined && L.dates && (tx !== null
-        ? <span className="bx-level-tag" style={{ bottom: 2, left: `calc(${(tx / VW) * 100}% + 4px)`, color: zone }}>Expires {shortDay(focused.to)}</span>
-        : focused.to > t1 && <span className="bx-level-tag" style={{ bottom: 2, right: 76, color: zone }}>Expires {shortDay(focused.to)} →</span>)}
     </div>
   );
 }
@@ -574,14 +534,6 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
   const hedges = useHedges();
   const under = useUnderwrittenOn(pair, role === 'underwriter');
   const [focus, setFocus] = useState<string | null>(initialFocus ?? null);
-  const [layers, setLayers] = useState<Record<Layer, boolean>>(() => {
-    try { return { ...ALL_LAYERS, ...JSON.parse(localStorage.getItem('bfx:chart-layers') ?? '{}') }; } catch { return ALL_LAYERS; }
-  });
-  const toggleLayer = (k: Layer) => setLayers((l) => {
-    const next = { ...l, [k]: !l[k] };
-    try { localStorage.setItem('bfx:chart-layers', JSON.stringify(next)); } catch { /* per-viewer convenience */ }
-    return next;
-  });
   useEffect(() => { if (initialFocus) setFocus(initialFocus); }, [initialFocus]);
   const ccy = quoteCcy(pair);
   const points = chart.data ?? [];
@@ -616,20 +568,13 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
             <span className="muted">{ccy} per 1 USD</span>
             <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
           </div>
-          <RateChart points={points} loading={chart.isLoading} strike={null} cap={null} label={`${pair} · ${range}`} unit={ccy} marks={marks} focus={focus} layers={layers} />
+          {(() => {
+            const m = marks.find((x) => x.key === focus) ?? (marks.length === 1 ? marks[0] : null);
+            return <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy} protection={m ? { strike: m.strike, cap: m.cap, tone: m.tone } : null} />;
+          })()}
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
-          {marks.length > 0 && (
-            <div className="bx-chips" role="group" aria-label="Chart layers">
-              {LAYERS.map((l) => (
-                <button key={l.key} className={`bx-chip${layers[l.key] ? ' on' : ''}`} aria-pressed={layers[l.key]} onClick={() => toggleLayer(l.key)}>
-                  <i style={{ background: l.key === 'strike' ? '#e0a03a' : l.key === 'entry' ? '#9aa2af' : l.key === 'fit' ? 'var(--blue)' : role === 'hedger' ? '#12a05a' : '#e23b57' }} />
-                  {l.key === 'cap' && role === 'underwriter' ? 'Max you pay' : l.label}
-                </button>
-              ))}
-            </div>
-          )}
           {focusedPos && (() => {
             const m = marks.find((x) => x.key === focus);
             if (!m?.payout) return null;
@@ -863,8 +808,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             <span className="muted">{ccy} per 1 USD</span>
             <ChangeText change={periodChange} /><span className="muted" style={{ fontSize: 13 }}>{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
           </div>
-          <RateChart points={points} loading={chart.isLoading} strike={strike} cap={structure === 'capped' ? cap : null} label={`${pair} · ${range}`} unit={ccy}
-            marks={(hedgesAll.data ?? []).filter((h) => h.pair === pair && h.settlement.status === 'pending').map((h) => hedgeMark(h.position, exposureLabel(pair, h.position.direction).title))} focus={null} />
+          <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy}
+            protection={strike ? { strike, cap: structure === 'capped' ? cap : null, tone: 'pay' } : null} />
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
@@ -1251,7 +1196,7 @@ function BenchmarkPage({ id, back }: { id: string; back: () => void }) {
               </div>
               <BenchmarkState r={d} />
             </div>
-            <RateChart points={points} loading={history.isLoading} strike={null} cap={null} label={`${id} · ${range}`} unit="%" />
+            <RateChart points={points} loading={history.isLoading} label={`${id} · ${range}`} unit="%" />
             <div className="bx-ranges" role="group" aria-label="Chart range">
               {IR_RANGES.map((r) => <button key={r.k} className={range === r.k ? 'on' : ''} aria-pressed={range === r.k} onClick={() => setRange(r.k)}>{r.k}</button>)}
             </div>

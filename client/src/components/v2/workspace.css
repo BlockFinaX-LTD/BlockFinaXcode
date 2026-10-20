@@ -258,6 +258,10 @@
 .bx-level-tag { position: absolute; z-index: 2; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--panel); padding: 1px 5px; border-radius: 5px; pointer-events: none; white-space: nowrap; }
 .bx-chart-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #1f5fe0; box-shadow: 0 0 0 4px rgba(31, 95, 224, 0.18); pointer-events: none; z-index: 2; }
 .bx-chart-read { position: absolute; top: -6px; left: 0; z-index: 3; display: flex; gap: 10px; align-items: baseline; background: var(--panel); padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; box-shadow: 0 2px 8px rgba(15, 23, 41, 0.06); }
+.bx-protect-tag { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid; border-radius: 8px; padding: 3px 9px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11.5px; font-weight: 600; white-space: nowrap; pointer-events: none; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
+.bx-protect-tag i { width: 10px; height: 2px; border-radius: 1px; display: inline-block; }
+.bx-protect-tag b { font-weight: 600; opacity: 0.85; }
+@media (max-width: 640px) { .bx-protect-tag { right: 8px !important; font-size: 10.5px; white-space: normal; max-width: 70%; } }
 .bx-strike-tag { position: absolute; right: 76px; z-index: 2; background: var(--amber-soft); color: var(--amber-text); font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; font-family: 'Geist Mono', ui-monospace, monospace; }
 
 .bx-spin { animation: bx-spin 1s linear infinite; }
