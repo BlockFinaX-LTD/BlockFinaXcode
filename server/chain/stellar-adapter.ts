@@ -316,6 +316,51 @@ export class StellarAdapter implements ChainAdapter {
     }
   }
 
+  /** An unsigned call on another contract (Circle CCTP), with the platform as fee source. */
+  async prepareContractCall(contractId: string, label: string, method: string, args: Record<string, unknown>): Promise<PreparedTransaction[]> {
+    try {
+      const tx = await (await this.client(contractId))[method](args);
+      return [{ chain: this.chain.key, family: "stellar", label, payload: { kind: "stellar", networkPassphrase: this.chain.networkId, xdr: tx.toXDR() } }];
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  /** USDC allowance from a wallet to a spender, in 7-decimal units. */
+  async tokenAllowance(from: string, spender: string): Promise<bigint> {
+    const { sim } = await this.simulateToken(this.usdc.addressOrContract, "allowance", [
+      nativeToScVal(from, { type: "address" }), nativeToScVal(spender, { type: "address" }),
+    ]);
+    const ret = (sim as rpc.Api.SimulateTransactionSuccessResponse).result?.retval;
+    return ret ? BigInt(scValToNative(ret)) : BigInt(0);
+  }
+
+  /** An unsigned USDC approve from the user's wallet to a spender, valid for about 80 minutes. */
+  async prepareTokenApprove(owner: string, spender: string, units: bigint, label: string): Promise<PreparedTransaction[]> {
+    try {
+      const latest = await this.server.getLatestLedger();
+      const { tx, sim } = await this.simulateToken(this.usdc.addressOrContract, "approve", [
+        nativeToScVal(owner, { type: "address" }), nativeToScVal(spender, { type: "address" }),
+        nativeToScVal(units, { type: "i128" }), nativeToScVal(latest.sequence + 1_000, { type: "u32" }),
+      ]);
+      const assembled = rpc.assembleTransaction(tx, sim as rpc.Api.SimulateTransactionSuccessResponse).build();
+      return [{ chain: this.chain.key, family: "stellar", label, payload: { kind: "stellar", networkPassphrase: this.chain.networkId, xdr: assembled.toXDR() } }];
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  /** A permissionless call the platform signs and pays for itself (the CCTP mint). Returns the hash. */
+  async invokeAsPlatform(contractId: string, method: string, args: Record<string, unknown>): Promise<string> {
+    const secret = this.env.STELLAR_FEE_PAYER_SECRET;
+    if (!secret) throw new ApplicationError("CHAIN_NOT_ENABLED", "Stellar fee sponsor is not configured");
+    const c = await this.client(contractId, Keypair.fromSecret(secret));
+    const sent = await (await c[method](args)).signAndSend();
+    const hash = sent.sendTransactionResponse?.hash;
+    if (!hash) throw new ApplicationError("TRANSACTION_REJECTED", `${method} was not submitted`);
+    return hash;
+  }
+
   prepareCreatePool(owner: string, input: CreatePoolInput) {
     return this.prepare("Create pool", "create_pool", {
       creator: owner, pair: input.pair, direction: input.direction === "down" ? 2 : 1, allow_external_lp: input.allowExternalLp,
@@ -438,7 +483,10 @@ export class StellarAdapter implements ChainAdapter {
     const extra = ratePool ? [{ contract: ratePool, ...RATE_POOL_POLICY }] : [];
     // The user's own smart wallet may add a backup passkey as a signer (authorized by itself).
     extra.push({ contract: wallet, methods: new Set(["add_signer"]), walletArg: {}, permissionless: new Set<string>() });
-    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract), extra);
+    // Circle CCTP: the user's wallet burns its own USDC to move it to another network.
+    const cctp = this.chain.cctp?.tokenMessenger;
+    if (cctp) extra.push({ contract: cctp, methods: new Set(["deposit_for_burn_with_hook"]), walletArg: { deposit_for_burn_with_hook: 0 }, permissionless: new Set<string>() });
+    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract), extra, cctp ? [cctp] : []);
     const fail = (err: unknown) => (ratePool && call.target === ratePool ? mapRatePoolError(err instanceof Error ? err.message : String(err)) : this.mapError(err));
     // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.
     const relayerUrl = this.env.STELLAR_RELAYER_URL;

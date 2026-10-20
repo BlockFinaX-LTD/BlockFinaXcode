@@ -30,10 +30,7 @@ import { chainRegistry, registryLoadError } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
 import { QuoteService, enginePricer } from "../domain/quote-service";
 import { settlementResult } from "../domain/settlement";
-import { BalanceLedger } from "../domain/ledger";
-import { RoutingEngine } from "../routing/engine";
-import { DirectProvider } from "../routing/providers";
-import { InMemoryRouteStore } from "../routing/types";
+import { routeView, routingService, type RoutingService } from "../routing/service";
 import { getSession } from "../auth-routes";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
 
@@ -46,7 +43,7 @@ interface Services {
   adapters: AdapterRegistry;
   quotes: QuoteService;
   accounts: AccountService;
-  routing: RoutingEngine;
+  routing: RoutingService;
 }
 
 let services: Promise<Services> | null = null;
@@ -58,9 +55,8 @@ function getServices(): Promise<Services> {
       if (!chains) throw new ApplicationError("CHAIN_NOT_ENABLED", `Chain registry not configured: ${registryLoadError()}`);
       const adapters = new AdapterRegistry(chains);
       const accounts = new AccountService(chains, await drizzleAccountRepository(chains));
-      // Routing moves money; cross-chain providers are wired only once their ports and a
-      // persistent ledger are configured (docs/architecture/v2/routing-v2.0.md).
-      const routing = new RoutingEngine(chains, [new DirectProvider()], new InMemoryRouteStore(), new BalanceLedger(), async () => "completed");
+      // Routes and the ledger are stored in the database; Circle CCTP connects chains that have it.
+      const routing = await routingService(chains, adapters);
       return { adapters, quotes: new QuoteService(chains, adapters, await enginePricer()), accounts, routing };
     })();
     services.catch(() => { services = null; });
@@ -364,29 +360,75 @@ export function registerV2Routes(app: Express) {
     res.json({ balances: rows });
   }));
 
-  app.post("/api/v2/routing/quote", wrap(async (req, res) => {
-    const s = await getServices();
-    const uid = await userId(req);
+  /**
+   * A transfer between a funding or withdrawal network and the hub.
+   *   kind "fund":     network -> hub, to the user's own hub account
+   *   kind "withdraw": hub -> network, to `recipient` (default: the user's own account there)
+   */
+  async function routeRequest(s: Services, uid: number, body: any) {
     const chains = chainRegistry()!;
-    const { kind, network, amount, symbol = "USDC" } = req.body ?? {};
+    const { kind, network, amount, recipient, symbol = "USDC" } = body ?? {};
     if (kind !== "fund" && kind !== "withdraw") throw new ApplicationError("INVALID_REQUEST", "kind must be fund or withdraw");
-    const hub = s.routing.destinationFor(network);
+    if (typeof network !== "string" || !(Number(amount) > 0)) throw new ApplicationError("INVALID_REQUEST", "network and a positive amount are required");
+    const hub = s.routing.engine.destinationFor(network);
+    if (hub === network) throw new ApplicationError("INVALID_REQUEST", "That network is the hub; send or receive there directly");
     const [source, destination] = kind === "fund" ? [network, hub] : [hub, network];
     const book = await s.accounts.addressBook(uid);
-    const quotes = await s.routing.quote({
+    if (!book[source]) throw new ApplicationError("INVALID_REQUEST", `No ${source} account yet`);
+    const to = kind === "withdraw" && typeof recipient === "string" && recipient.trim() ? recipient.trim() : book[destination];
+    if (!to) throw new ApplicationError("INVALID_REQUEST", `No ${destination} account yet`);
+    return {
       userId: String(uid), kind, sourceChain: source, destinationChain: destination,
       asset: chains.asset(source, symbol), destinationAsset: chains.asset(destination, symbol), amount: String(amount),
-      sender: book[source] ?? "", recipient: book[destination] ?? "", action: { type: "credit" },
-    });
-    if (quotes.length === 0) throw new ApplicationError("NO_ROUTE", `No route from ${source} to ${destination} right now`);
-    res.json({ quotes });
+      sender: book[source], recipient: to, action: { type: "credit" as const },
+    };
+  }
+
+  app.post("/api/v2/routing/quote", wrap(async (req, res) => {
+    const s = await getServices();
+    const quotes = await s.routing.engine.quote(await routeRequest(s, await userId(req), req.body));
+    if (quotes.length === 0) throw new ApplicationError("NO_ROUTE", "No route between these networks right now");
+    res.json({ quotes: quotes.map((q) => q.quote) });
   }));
 
-  app.post("/api/v2/routing/execute", wrap(async () => {
-    // Cross-network execution moves user funds and needs the persistent route store and
-    // ledger. Until those are configured it is refused rather than run from memory.
-    if (process.env.ROUTING_ENABLED !== "true") throw new ApplicationError("CHAIN_NOT_ENABLED", "Cross-network routing is not enabled on this deployment");
-    throw new ApplicationError("CHAIN_NOT_ENABLED", "Persistent routing store not configured");
+  /** Start the best route; returns the source-chain transactions for the user to sign. */
+  app.post("/api/v2/routing/execute", wrap(async (req, res) => {
+    const s = await getServices();
+    if (!s.routing.cctpEnabled) throw new ApplicationError("CHAIN_NOT_ENABLED", "Cross-network transfers are not enabled on this deployment");
+    const request = await routeRequest(s, await userId(req), req.body);
+    const quotes = await s.routing.engine.quote(request);
+    const best = quotes.find((q) => q.quote.provider !== "direct") ?? quotes[0];
+    if (!best) throw new ApplicationError("NO_ROUTE", "No route between these networks right now");
+    const { route, sourceTransactions } = await s.routing.engine.start(request, best.quote);
+    res.json({ route: routeView(route), transactions: sourceTransactions });
+  }));
+
+  /** The next step of a transfer whose previous step said `continues`. */
+  app.post("/api/v2/routing/:id/continue", wrap(async (req, res) => {
+    const s = await getServices();
+    const { route, sourceTransactions } = await s.routing.engine.continueRoute(req.params.id, String(await userId(req)));
+    res.json({ route: routeView(route), transactions: sourceTransactions });
+  }));
+
+  /** The user reports the hash of the source transaction they signed and submitted. */
+  app.post("/api/v2/routing/:id/source", wrap(async (req, res) => {
+    const s = await getServices();
+    const hash = String(req.body?.txHash ?? "");
+    if (!/^(0x)?[0-9a-fA-F]{64}$/.test(hash)) throw new ApplicationError("INVALID_REQUEST", "txHash is required");
+    const route = await s.routing.engine.attachSource(req.params.id, String(await userId(req)), hash);
+    res.json({ route: routeView(route) });
+  }));
+
+  app.get("/api/v2/routing", wrap(async (req, res) => {
+    const s = await getServices();
+    res.json({ routes: (await s.routing.store.listByUser(String(await userId(req)))).map(routeView) });
+  }));
+
+  app.get("/api/v2/routing/:id", wrap(async (req, res) => {
+    const s = await getServices();
+    const route = await s.routing.store.get(req.params.id);
+    if (!route || route.request.userId !== String(await userId(req))) throw new ApplicationError("INVALID_REQUEST", "Transfer not found");
+    res.json({ route: routeView(route) });
   }));
 
   /** Stellar: the user's passkey authorized the call; the platform pays the fee. */

@@ -75,6 +75,86 @@ export interface ChainInfo {
   name: string;
   state: string;
   capabilities: Record<string, boolean>;
+  /** Circle CCTP connects this network to the others. */
+  cctp?: boolean;
+}
+
+// ── Cross-network transfers (Circle CCTP) ────────────────────────────────────
+
+export interface RouteView {
+  id: string;
+  kind: 'fund' | 'withdraw';
+  sourceChain: string;
+  destinationChain: string;
+  recipient: string;
+  amount: string;
+  amountOut: string;
+  maxFee: string;
+  state: string;
+  sourceTxHash: string | null;
+  destinationTxHash: string | null;
+  createdAt: number | null;
+  error: string | null;
+}
+
+export interface TransferQuote { amountIn: string; amountOut: string; totalFees: string; estimatedSeconds: number; provider: string }
+
+const OPEN_STATES = new Set(['REQUESTED', 'SOURCE_CONFIRMED', 'ROUTING', 'DESTINATION_CONFIRMED', 'ACTION_PENDING', 'RECOVERY_REQUIRED']);
+
+export function useTransfers() {
+  return useQuery({
+    queryKey: ['v2-routes'],
+    queryFn: () => api<{ routes: RouteView[] }>('/api/v2/routing').then((r) => r.routes),
+    refetchInterval: (q) => ((q.state.data as RouteView[] | undefined)?.some((r) => OPEN_STATES.has(r.state) && r.sourceTxHash) ? 5_000 : 60_000),
+  });
+}
+
+export function useTransferQuote(input: { kind: 'fund' | 'withdraw'; network: string | null; amount: string; recipient?: string }) {
+  const amount = useDebounced(input.amount, 400);
+  return useQuery({
+    queryKey: ['v2-route-quote', input.kind, input.network, amount],
+    queryFn: () => api<{ quotes: TransferQuote[] }>('/api/v2/routing/quote', { kind: input.kind, network: input.network, amount }).then((r) => r.quotes.find((q) => q.provider !== 'direct') ?? r.quotes[0]),
+    enabled: Boolean(input.network) && Number(amount) > 0,
+    retry: false,
+  });
+}
+
+/**
+ * Move USDC between a network and the hub: start the route, sign each source step with the
+ * passkey (a step marked `continues` must confirm before the next can be prepared), then
+ * report the final transaction so BlockFinaX can follow it to delivery.
+ */
+export async function runTransfer(input: { kind: 'fund' | 'withdraw'; network: string; amount: string; recipient?: string }, onStep: (m: string) => void): Promise<RouteView> {
+  onStep('Preparing transfer...');
+  let { route, transactions } = await api<{ route: RouteView; transactions: PreparedTransaction[] }>('/api/v2/routing/execute', input);
+  let hash = '';
+  for (let guard = 0; guard < 4; guard++) {
+    let more = false;
+    for (const tx of transactions) {
+      onStep(tx.label);
+      hash = (await passkeyWalletProvider.sendTransaction(toWalletRequest(tx), onStep)).transactionHash;
+      more = Boolean(tx.continues);
+    }
+    if (!more) break;
+    // The next step is prepared once the previous one is visible on chain.
+    onStep('Preparing the transfer...');
+    for (let wait = 0; wait < 10; wait++) {
+      ({ route, transactions } = await api<{ route: RouteView; transactions: PreparedTransaction[] }>(`/api/v2/routing/${route.id}/continue`, {}));
+      if (!transactions.every((t) => t.continues)) break;
+      await new Promise((r) => setTimeout(r, 3_000));
+    }
+  }
+  onStep('Sending to Circle...');
+  return (await api<{ route: RouteView }>(`/api/v2/routing/${route.id}/source`, { txHash: hash })).route;
+}
+
+/** How a transfer's state reads to a person. */
+export function transferStatus(r: RouteView): { label: string; tone: 'green' | 'amber' | 'grey' | 'blue' } {
+  if (r.state === 'ACTION_COMPLETED' || r.state === 'DESTINATION_CONFIRMED' || r.state === 'ACTION_PENDING') return { label: 'Arrived', tone: 'green' };
+  if (r.state === 'REFUNDED') return { label: 'Refunded', tone: 'grey' };
+  if (r.state === 'RECOVERY_REQUIRED') return { label: 'Retrying delivery', tone: 'amber' };
+  if (r.state === 'REQUESTED' && !r.sourceTxHash) return { label: 'Not approved', tone: 'grey' };
+  return { label: 'Moving', tone: 'blue' };
 }
 
 export function useChains() {

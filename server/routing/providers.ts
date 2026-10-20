@@ -115,9 +115,12 @@ export class PrefundedProvider implements RoutingProvider {
 /** Circle CCTP operations, behind a port: burn on the source, attest, mint on the destination. */
 export interface CctpPort {
   prepareBurn(req: RouteRequest, sourceDomain: number, destinationDomain: number): Promise<PreparedTransaction[]>;
-  status(trackingId: string): Promise<"burn_pending" | "attesting" | "minted" | "failed">;
+  /** May record delivery details (destination hash, nonce) on the route it is given. */
+  status(route: RouteRecord): Promise<"burn_pending" | "attesting" | "minted" | "failed">;
   /** Re-attempt the mint with the existing attestation. CCTP burns cannot be refunded. */
-  retryMint(trackingId: string): Promise<boolean>;
+  retryMint(route: RouteRecord): Promise<boolean>;
+  /** The most Circle may charge and the usual time, when the port can ask Circle. */
+  estimate?(req: RouteRequest): Promise<{ maxFee: string; seconds: number }>;
 }
 
 export class CctpProvider implements RoutingProvider {
@@ -129,19 +132,27 @@ export class CctpProvider implements RoutingProvider {
       && this.domains[req.sourceChain] !== undefined && this.domains[req.destinationChain] !== undefined;
   }
   async getQuote(req: RouteRequest) {
-    return quoteFor(this.id, req, this.cfg.feeBps, this.cfg.seconds, 0.02, {
-      sourceDomain: this.domains[req.sourceChain], destinationDomain: this.domains[req.destinationChain],
-    });
+    const route = { sourceDomain: this.domains[req.sourceChain], destinationDomain: this.domains[req.destinationChain] };
+    if (!this.port.estimate) return quoteFor(this.id, req, this.cfg.feeBps, this.cfg.seconds, 0.02, route);
+    const { maxFee, seconds } = await this.port.estimate(req);
+    const d = req.asset.decimals;
+    const amountIn = toUnits(req.amount, d);
+    const fee = toUnits(maxFee, d);
+    return {
+      provider: this.id, sourceChain: req.sourceChain, destinationChain: req.destinationChain, assetIn: req.asset, assetOut: req.destinationAsset,
+      amountIn: fromUnits(amountIn, d), amountOut: fromUnits(amountIn - fee, d), totalFees: fromUnits(fee, d),
+      estimatedSeconds: seconds, expiresAt: now() + QUOTE_TTL, riskScore: 0.02, route,
+    };
   }
   async execute(route: RouteRecord) {
     const txs = await this.port.prepareBurn(route.request, this.domains[route.request.sourceChain], this.domains[route.request.destinationChain]);
     return { trackingId: `cctp:${route.id}`, sourceTransactions: txs };
   }
   async getStatus(route: RouteRecord): Promise<{ status: ProviderStatus }> {
-    const s = await this.port.status(route.trackingId!);
+    const s = await this.port.status(route);
     return { status: s === "minted" ? "destination_confirmed" : s === "failed" ? "failed" : s === "attesting" ? "source_confirmed" : "pending" };
   }
   async recover(route: RouteRecord) {
-    return (await this.port.retryMint(route.trackingId!)) ? "retrying" as const : "manual" as const;
+    return (await this.port.retryMint(route)) ? "retrying" as const : "manual" as const;
   }
 }

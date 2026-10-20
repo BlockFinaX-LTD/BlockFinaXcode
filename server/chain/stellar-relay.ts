@@ -26,7 +26,7 @@ export interface ExtraContractPolicy {
   permissionless: Set<string>;
 }
 
-export function inspectPoolCall(envelope: string, networkPassphrase: string, wallet: string, poolContract: string, tokens: string[] = [], extra: ExtraContractPolicy[] = []) {
+export function inspectPoolCall(envelope: string, networkPassphrase: string, wallet: string, poolContract: string, tokens: string[] = [], extra: ExtraContractPolicy[] = [], spenders: string[] = []) {
   const tx = TransactionBuilder.fromXDR(envelope, networkPassphrase);
   if (!(tx instanceof Transaction) || tx.operations.length !== 1) throw new ApplicationError("UNAUTHORIZED", "Only one pool call is permitted");
   const op = tx.operations[0];
@@ -38,11 +38,17 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   const target = Address.fromScAddress(invoke.contractAddress()).toString();
   const args = invoke.args().map(scValToNative);
   const tokenTransfer = tokens.includes(target) && method === "transfer";
+  // An allowance for an approved spender (Circle CCTP's TokenMessengerMinter), from the user's wallet.
+  const tokenApprove = tokens.includes(target) && method === "approve";
   const policy = extra.find((e) => e.contract === target);
   if (policy) {
     if (!policy.methods.has(method)) throw new ApplicationError("UNAUTHORIZED", "Contract or method is not approved");
     const arg = policy.walletArg[method];
     if (arg !== undefined && args[arg] !== wallet) throw new ApplicationError("UNAUTHORIZED", "Call must use the connected wallet address");
+  } else if (tokenApprove) {
+    if (args.length !== 4 || args[0] !== wallet || !spenders.includes(String(args[1])) || typeof args[2] !== "bigint" || args[2] <= BigInt(0)) {
+      throw new ApplicationError("UNAUTHORIZED", "Only an allowance from your wallet to an approved transfer contract is permitted");
+    }
   } else if (tokenTransfer) {
     // A user sending a listed asset: from their own wallet, a positive amount, to someone else.
     if (args.length !== 3 || args[0] !== wallet || args[1] === wallet || typeof args[2] !== "bigint" || args[2] <= BigInt(0)) {
@@ -51,7 +57,7 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   } else if (target !== poolContract || !POOL_METHODS.has(method)) {
     throw new ApplicationError("UNAUTHORIZED", "Contract or method is not approved");
   }
-  if (!policy && WALLET_ARG[method] !== undefined && !tokenTransfer && args[WALLET_ARG[method]] !== wallet) {
+  if (!policy && WALLET_ARG[method] !== undefined && !tokenTransfer && !tokenApprove && args[WALLET_ARG[method]] !== wallet) {
     throw new ApplicationError("UNAUTHORIZED", "Call must use the connected wallet address");
   }
   const auth = op.auth ?? [];

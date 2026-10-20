@@ -386,6 +386,15 @@ app.use((req, res, next) => {
     // Expired currency-pool hedges on Stellar (current and legacy contracts) get prices and settle.
     void import("./domain/oracle-runner").then((m) => m.startPoolOracleRunner());
   }
+  // Cross-network transfers (Circle CCTP): follow attestations and deliver on the destination.
+  void import("./routing/service").then(async (m) => {
+    const { chainRegistry } = await import("./chain/config");
+    const { AdapterRegistry } = await import("./chain");
+    const chains = chainRegistry();
+    if (!chains) return;
+    const adapters = new AdapterRegistry(chains);
+    m.startRoutingWorker(async () => ({ chains, adapters }));
+  });
 
   // Auto-expire hedge events whose expiryDate has passed — runs at startup and every hour.
   // Keeps DB status consistent even when ChainSync hasn't run or the oracle hasn't settled yet.

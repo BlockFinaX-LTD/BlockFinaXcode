@@ -41,6 +41,14 @@ export interface RouteRecord {
   state: RoutingState;
   trackingId?: string;
   amountReceived?: string;
+  /** The user's signed source transaction, reported back after they submit it. */
+  sourceTxHash?: string;
+  /** The delivery transaction on the destination, when BlockFinaX submits it. */
+  destinationTxHash?: string;
+  /** CCTP message nonce, once Circle has indexed the burn. */
+  cctpNonce?: string;
+  lastError?: string;
+  createdAt?: number;
   history: { state: RoutingState; at: number; note?: string }[];
 }
 
@@ -63,6 +71,8 @@ export interface RouteStore {
   save(route: RouteRecord): Promise<void>;
   get(id: string): Promise<RouteRecord | undefined>;
   listByUser(userId: string): Promise<RouteRecord[]>;
+  /** Routes not yet finished (completed or refunded), for the background worker. */
+  listOpen?(): Promise<RouteRecord[]>;
 }
 
 export class InMemoryRouteStore implements RouteStore {

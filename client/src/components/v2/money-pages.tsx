@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
 import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
-import { fmt, useChains, useUsdcBalances, usdcOn } from './shared';
+import { fmt, runTransfer, transferStatus, useChains, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 
 function useAccounts() {
@@ -68,6 +68,70 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
         </div>
       )}
       <div style={{ marginTop: 20 }}><Note>Send only USDC on {acct?.name ?? 'this network'} to this address. Network fees are covered by BlockFinaX.</Note></div>
+      {acct && hub && acct.chain !== hub && chains.data?.chains.find((c) => c.key === acct.chain)?.cctp && <MoveToHub network={acct.chain} networkName={acct.name} />}
+    </div>
+  );
+}
+
+/** USDC that arrived on a funding network moves to the hub through Circle CCTP. */
+function MoveToHub({ network, networkName }: { network: string; networkName: string }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const balances = useUsdcBalances();
+  const chains = useChains();
+  const hubName = chains.data?.chains.find((c) => c.key === chains.data?.activeLiquidityHub)?.name ?? 'your main wallet';
+  const have = usdcOn(balances.data?.rows, network);
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const quote = useTransferQuote({ kind: 'fund', network, amount });
+  async function move() {
+    setBusy('Preparing...');
+    try {
+      await runTransfer({ kind: 'fund', network, amount }, (m) => setBusy(m));
+      toast({ title: 'Transfer started', description: `Your USDC is on its way to ${hubName}. It usually arrives within a minute.` });
+      setAmount('');
+      void qc.invalidateQueries({ queryKey: ['v2-routes'] });
+      void qc.invalidateQueries({ queryKey: ['v2-usdc-all'] });
+    } catch (e) {
+      toast({ title: 'Not moved', description: (e as Error).message, variant: 'destructive' });
+    } finally { setBusy(null); }
+  }
+  return (
+    <div style={{ marginTop: 22, paddingTop: 20, borderTop: '1px solid var(--line)' }}>
+      <h3 style={{ margin: '0 0 6px 0' }}>Move to {hubName}</h3>
+      <div className="sub" style={{ marginBottom: 14 }}>Protection and liquidity use USDC on {hubName}. USDC you send to {networkName} is moved there through Circle's Cross-Chain Transfer Protocol (CCTP).</div>
+      <div className="bx-big">
+        <label htmlFor="bx-move">Amount (USDC)</label>
+        <input id="bx-move" inputMode="decimal" value={`$${amount}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <div className="muted" style={{ fontSize: 12 }}>On {networkName}: ${fmt(have)} · <button className="bx-link" style={{ fontSize: 12 }} onClick={() => setAmount(String(have))}>Max</button></div>
+      </div>
+      <div className="bx-sums">
+        <Sum l="Circle transfer fee (at most)" v={quote.data ? <span className="num">${quote.data.totalFees}</span> : '...'} />
+        <Sum l="Network fees" v="Covered" good />
+        <Sum l={`You receive on ${hubName}`} v={<span className="num">{quote.data ? `$${fmt(quote.data.amountOut)}` : '...'}</span>} total />
+      </div>
+      {quote.isError && Number(amount) > 0 && <div className="bx-error">{(quote.error as Error).message}</div>}
+      <button className="bx-btn block" style={{ marginTop: 14 }} disabled={!!busy || !(Number(amount) > 0) || Number(amount) > have || !quote.data} onClick={move}>{busy ? <><Spin /> {busy}</> : `Move to ${hubName}`}</button>
+    </div>
+  );
+}
+
+/** Transfers between networks, newest first, with their live state. */
+function TransfersCard() {
+  const routes = useTransfers();
+  const chains = useChains();
+  const name = (k: string) => chains.data?.chains.find((c) => c.key === k)?.name ?? k;
+  const list = (routes.data ?? []).filter((r) => r.sourceTxHash).slice(0, 8);
+  if (!list.length) return null;
+  return (
+    <div className="bx-card tight">
+      <h2 style={{ marginBottom: 4 }}>Transfers between networks</h2>
+      <div className="bx-sums" style={{ borderTop: 0 }}>
+        {list.map((r) => {
+          const st = transferStatus(r);
+          return <Sum key={r.id} l={<span><span className="num">${fmt(r.amount)}</span> {name(r.sourceChain)} to {name(r.destinationChain)}</span>} v={<Tag tone={st.tone}>{st.label}</Tag>} />;
+        })}
+      </div>
     </div>
   );
 }
@@ -106,16 +170,28 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [hash, setHash] = useState<string | null>(null);
-  useEffect(() => { if (!chain && accounts[0]) setChain(accounts[0].chain); }, [accounts, chain]);
+  const chains = useChains();
+  const hub = chains.data?.activeLiquidityHub;
+  const hubName = chains.data?.chains.find((c) => c.key === hub)?.name ?? 'your main wallet';
+  useEffect(() => { if (!chain && accounts[0]) setChain(accounts.some((a) => a.chain === hub) ? hub! : accounts[0].chain); }, [accounts, chain, hub]);
   const acct = accounts.find((a) => a.chain === chain);
-  const have = usdcOn(balances.data?.rows, chain ?? undefined);
+  // Withdrawing to another network comes from the hub balance, through Circle CCTP.
+  const viaCctp = Boolean(acct && hub && acct.chain !== hub && chains.data?.chains.find((c) => c.key === acct.chain)?.cctp);
+  const have = usdcOn(balances.data?.rows, (viaCctp ? hub : chain) ?? undefined);
   const validTo = acct?.stellar ? /^[GC][A-Z2-7]{55}$/.test(to) : /^0x[a-fA-F0-9]{40}$/.test(to);
+  const quote = useTransferQuote({ kind: 'withdraw', network: viaCctp ? chain : null, amount });
 
   async function send() {
     if (!chain) return;
     setBusy('Preparing...');
     try {
-      setHash(await passkeySend({ chain: toScreenChain(chain), symbol: 'USDC', to, amount }, (m) => setBusy(m)));
+      if (viaCctp) {
+        const route = await runTransfer({ kind: 'withdraw', network: chain, amount, recipient: to }, (m) => setBusy(m));
+        setHash(route.sourceTxHash);
+        void qc.invalidateQueries({ queryKey: ['v2-routes'] });
+      } else {
+        setHash(await passkeySend({ chain: toScreenChain(chain), symbol: 'USDC', to, amount }, (m) => setBusy(m)));
+      }
       setAmount('');
       void qc.invalidateQueries({ queryKey: ['v2-usdc-all'] });
     } catch (e) {
@@ -129,7 +205,8 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
           <span className="bx-label">Network</span>
-          <div className="bx-seg">{accounts.map((a) => <button key={a.chain} className={chain === a.chain ? 'on' : ''} onClick={() => { setChain(a.chain); setTo(''); }}>{a.name}</button>)}</div>
+          <div className="bx-seg">{accounts.map((a) => <button key={a.chain} className={chain === a.chain ? 'on' : ''} onClick={() => { setChain(a.chain); setTo(a.chain !== hub ? a.address : ''); }}>{a.name}</button>)}</div>
+          {viaCctp && <div className="bx-hint" style={{ marginTop: 8 }}>Sent from your {hubName} balance through Circle CCTP. It usually arrives within two minutes.</div>}
         </div>
         <div className="bx-big">
           <label htmlFor="bx-send">Amount (USDC)</label>
@@ -141,8 +218,17 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
           <input className="bx-input num" placeholder={acct?.stellar ? 'G... or C...' : '0x...'} value={to} onChange={(e) => setTo(e.target.value.trim())} />
         </label>
         {to && !validTo && <div className="bx-error">Enter a valid {acct?.name} address.</div>}
-        <div className="bx-sums"><Sum l="Network fees" v="Covered" good /><Sum l="Recipient gets" v={<span className="num">${fmt(amount || 0)}</span>} total /></div>
-        <button className="bx-btn block" disabled={!!busy || !validTo || !(Number(amount) > 0) || Number(amount) > have} onClick={send}>{busy ? <><Spin /> {busy}</> : 'Send USDC'}</button>
+        {viaCctp ? (
+          <div className="bx-sums">
+            <Sum l="Circle transfer fee (at most)" v={quote.data ? <span className="num">${quote.data.totalFees}</span> : '...'} />
+            <Sum l="Network fees" v="Covered" good />
+            <Sum l="Recipient gets at least" v={<span className="num">{quote.data ? `$${fmt(quote.data.amountOut)}` : '...'}</span>} total />
+          </div>
+        ) : (
+          <div className="bx-sums"><Sum l="Network fees" v="Covered" good /><Sum l="Recipient gets" v={<span className="num">${fmt(amount || 0)}</span>} total /></div>
+        )}
+        {viaCctp && quote.isError && Number(amount) > 0 && <div className="bx-error">{(quote.error as Error).message}</div>}
+        <button className="bx-btn block" disabled={!!busy || !validTo || !(Number(amount) > 0) || Number(amount) > have || (viaCctp && !quote.data)} onClick={send}>{busy ? <><Spin /> {busy}</> : 'Send USDC'}</button>
         {hash && <div className="bx-hint">Sent · reference {hash.slice(0, 10)}...{hash.slice(-6)}</div>}
       </div>
     </div>
@@ -175,6 +261,7 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
       </section>
       <aside className="bx-aside">
         {mode !== 'none' && <Balances />}
+        <TransfersCard />
         <FaucetCard />
       </aside>
     </main>

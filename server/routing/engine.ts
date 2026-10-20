@@ -69,7 +69,7 @@ export class RoutingEngine {
 
   async start(req: RouteRequest, quote: RoutingQuote) {
     const provider = this.provider(quote.provider);
-    const route: RouteRecord = { id: randomUUID(), request: req, quote, state: "REQUESTED", history: [] };
+    const route: RouteRecord = { id: randomUUID(), request: req, quote, state: "REQUESTED", history: [], createdAt: this.clock() };
     this.move(route, "REQUESTED");
     const { trackingId, sourceTransactions } = await provider.execute(route);
     route.trackingId = trackingId;
@@ -135,6 +135,25 @@ export class RoutingEngine {
     if (route.state === "FAILED") this.move(route, "RECOVERY_REQUIRED", "routing failed");
     await this.store.save(route);
     return route;
+  }
+
+  /** The next source-chain step, for routes whose first step had to confirm before it. */
+  async continueRoute(id: string, userId: string) {
+    const route = await this.require(id);
+    if (route.request.userId !== userId) throw new ApplicationError("UNAUTHORIZED", "This transfer belongs to another account");
+    if (route.sourceTxHash || route.state !== "REQUESTED") throw new ApplicationError("INVALID_REQUEST", "This transfer has already started");
+    const { sourceTransactions } = await this.provider(route.quote.provider).execute(route);
+    return { route, sourceTransactions };
+  }
+
+  /** Record the user's submitted source transaction, then advance. Only the route's owner may. */
+  async attachSource(id: string, userId: string, txHash: string): Promise<RouteRecord> {
+    const route = await this.require(id);
+    if (route.request.userId !== userId) throw new ApplicationError("UNAUTHORIZED", "This transfer belongs to another account");
+    if (route.sourceTxHash && route.sourceTxHash !== txHash) throw new ApplicationError("INVALID_REQUEST", "This transfer already has a source transaction");
+    route.sourceTxHash = txHash;
+    await this.store.save(route);
+    return this.advance(id);
   }
 
   /** Recover a route whose routing failed. Action failures are retried with advance(). */

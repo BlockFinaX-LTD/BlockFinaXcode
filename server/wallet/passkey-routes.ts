@@ -78,7 +78,8 @@ function evmRelayer(evm: ChainConfig): EvmRelayer {
   if (relayer?.chain === evm.key) return relayer.instance;
   const provider = new ethers.JsonRpcProvider(evm.rpcUrls[0], Number(evm.networkId), { staticNetwork: ethers.Network.from(Number(evm.networkId)) });
   const secret = process.env.EVM_RELAYER_PRIVATE_KEY;
-  const contracts = [evm.contracts.currencyPool, evm.contracts.poolOracle].filter((a): a is string => Boolean(a));
+  // BlockFinaX contracts, and Circle CCTP's TokenMessenger for moving USDC to the hub.
+  const contracts = [evm.contracts.currencyPool, evm.contracts.poolOracle, evm.cctp?.tokenMessenger].filter((a): a is string => Boolean(a));
   const instance = new EvmRelayer(provider, Number(evm.networkId), secret ? new ethers.Wallet(secret, provider) : null, {
     tokens: Object.values(evm.assets).map((a) => a.addressOrContract),
     contracts,

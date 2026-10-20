@@ -48,12 +48,20 @@ export interface ChainConfig {
   allowSecondaryExecution?: boolean;
   /** Accounts are created on this chain at signup; others are created when first needed. */
   provisionAtSignup?: boolean;
+  /**
+   * Circle CCTP on this chain. EVM: TokenMessengerV2 and MessageTransmitterV2. Stellar:
+   * TokenMessengerMinter, MessageTransmitter and the CctpForwarder that delivers minted USDC
+   * to any Stellar address.
+   */
+  cctp?: { domain: number; tokenMessenger: string; messageTransmitter: string; forwarder?: string };
 }
 
 export interface ChainRegistryConfig {
   environment: string;
   activeLiquidityHub: ChainKey;
   chains: ChainConfig[];
+  /** Circle's attestation service (Iris): the sandbox on testnet, production on mainnet. */
+  cctpAttestationUrl?: string;
 }
 
 export interface ChainCapabilities {
@@ -148,6 +156,7 @@ export class ChainRegistry {
       chains: this.all().map((c) => ({
         key: c.key, family: c.family, name: c.name, explorer: c.explorer, state: c.state,
         capabilities: CAPABILITIES[c.state],
+        cctp: Boolean(c.cctp),
         assets: Object.entries(c.assets).map(([symbol, a]) => ({ symbol, decimals: a.decimals })),
       })),
     };

@@ -21,6 +21,8 @@ export interface EvmTransactionRequest {
   to: string;
   data?: string;
   value?: string;
+  /** Several calls approved together in one operation (for example approve, then burn). */
+  calls?: { to: string; data: string; value: string }[];
 }
 
 export interface SorobanTransactionRequest {
@@ -64,13 +66,15 @@ export interface PreparedTransaction {
   chain: string;
   family: "evm" | "stellar";
   label: string;
+  /** After this step, ask the API for the next one (it can only be prepared once this one is on chain). */
+  continues?: boolean;
   payload:
-    | { kind: "evm"; chainId: number; to: string; data: string; value: string }
+    | { kind: "evm"; chainId: number; to: string; data: string; value: string; calls?: { to: string; data: string; value: string }[] }
     | { kind: "stellar"; networkPassphrase: string; xdr: string };
 }
 
 export function toWalletRequest(tx: PreparedTransaction): WalletTransactionRequest {
   return tx.payload.kind === "evm"
-    ? { kind: "evm_transaction", chainId: tx.payload.chainId, to: tx.payload.to, data: tx.payload.data, value: tx.payload.value }
+    ? { kind: "evm_transaction", chainId: tx.payload.chainId, to: tx.payload.to, data: tx.payload.data, value: tx.payload.value, calls: tx.payload.calls }
     : { kind: "soroban_transaction", networkKey: tx.chain, transactionXdr: tx.payload.xdr };
 }

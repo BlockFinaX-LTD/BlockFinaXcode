@@ -26,8 +26,10 @@ export interface PreparedTransaction {
   family: "evm" | "stellar";
   /** What this step does, for the transaction UX ("Approve USDC", "Buy protection"). */
   label: string;
+  /** After this step, ask the API for the next one (it can only be prepared once this one is on chain). */
+  continues?: boolean;
   payload:
-    | { kind: "evm"; chainId: number; to: string; data: string; value: string }
+    | { kind: "evm"; chainId: number; to: string; data: string; value: string; calls?: { to: string; data: string; value: string }[] }
     | { kind: "stellar"; networkPassphrase: string; xdr: string };
 }
 

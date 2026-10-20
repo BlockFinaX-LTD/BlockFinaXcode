@@ -276,7 +276,7 @@ export class PasskeyWalletProvider implements WalletProvider {
     if (request.kind === "evm_transaction") {
       onStep?.("Preparing transaction...");
       const prepared = await api<{ id: string; options: any }>("/api/wallet/evm/prepare", {
-        calls: [{ to: request.to, data: request.data ?? "0x", value: request.value ?? "0" }],
+        calls: request.calls?.length ? request.calls : [{ to: request.to, data: request.data ?? "0x", value: request.value ?? "0" }],
       });
       onStep?.("Approve with your passkey...");
       const response = await startAuthentication({ optionsJSON: prepared.options });
