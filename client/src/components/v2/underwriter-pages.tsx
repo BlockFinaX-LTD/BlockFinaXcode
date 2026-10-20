@@ -17,7 +17,7 @@ import {
   ccyName, dateOf, exposureLabel, fmt, pct, poolRef, routeFunding, signAndSend, useChains, usePools, useUsdcBalances,
   usdcOn, type Direction,
 } from './shared';
-import { Flag, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
+import { Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
 import type { Go } from './workspace';
 
 const MARKUP_MIN = 9000;
@@ -89,7 +89,7 @@ function PoolRows({ pools, stakes, go }: { pools: CurrencyPool[]; stakes: Map<st
   return (
     <div style={{ overflowX: 'auto' }}>
       <div style={{ minWidth: 640 }}>
-        <div className="bx-list-h" style={POOL_COLS}><span>Pool</span><span className="r">Liquidity</span><span className="r">In use</span><span className="r">Your premiums</span><span className="r">Your capital</span></div>
+        <div className="bx-list-h" style={POOL_COLS}><span>{hint("Pool")}</span><span className="r">{hint("Liquidity")}</span><span className="r">{hint("In use")}</span><span className="r">{hint("Your premiums")}</span><span className="r">{hint("Your capital")}</span></div>
         {pools.map((p) => {
           const nav = Number(p.liquidity.nav);
           const used = nav > 0 ? Number(p.liquidity.reserved) / nav : 0;
@@ -164,7 +164,7 @@ export function UnderwriterHome({ go }: { go: Go }) {
             <div className="bx-strip" style={{ borderTop: 0, paddingTop: 0, marginTop: 16 }}>
               <div><div className="k"><span className="bx-dot" style={{ background: 'var(--blue)' }} />Reserved</div><div className="v num">${fmt(reserved, 0)}</div></div>
               <div><div className="k"><span className="bx-dot" style={{ background: '#bcd0ff' }} />Available</div><div className="v num">${fmt(available, 0)}</div></div>
-              <div><div className="k">Active hedges</div><div className="v num">{hedges}</div></div>
+              <div><div className="k">{hint("Active hedges")}</div><div className="v num">{hedges}</div></div>
             </div>
           </div>
         </div>
@@ -249,11 +249,11 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
             </div>
           </div>
           <div className="bx-strip">
-            <div><div className="k">Liquidity</div><div className="v num">${fmt(nav, 0)}</div></div>
-            <div><div className="k">Available</div><div className="v num">${fmt(pool.liquidity.capacity, 0)}</div></div>
-            <div><div className="k">In use</div><div className="v num">{pct(nav ? Number(pool.liquidity.reserved) / nav : 0, 0)}</div></div>
-            <div><div className="k">Return</div><div className={`v num ${growth >= 0 ? 'up' : 'down'}`}>{growth >= 0 ? '+' : ''}{pct(growth)}</div></div>
-            <div><div className="k">Active hedges</div><div className="v num">{pool.activePositions}</div></div>
+            <div><div className="k">{hint("Liquidity")}</div><div className="v num">${fmt(nav, 0)}</div></div>
+            <div><div className="k">{hint("Available")}</div><div className="v num">${fmt(pool.liquidity.capacity, 0)}</div></div>
+            <div><div className="k">{hint("In use")}</div><div className="v num">{pct(nav ? Number(pool.liquidity.reserved) / nav : 0, 0)}</div></div>
+            <div><div className="k">{hint("Return")}</div><div className={`v num ${growth >= 0 ? 'up' : 'down'}`}>{growth >= 0 ? '+' : ''}{pct(growth)}</div></div>
+            <div><div className="k">{hint("Active hedges")}</div><div className="v num">{pool.activePositions}</div></div>
           </div>
         </div>
         <TenorPricing pool={pool} editable={creator} />
@@ -301,7 +301,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ minWidth: 640 }}>
-          <div className="bx-list-h" style={cols}><span>Tenor</span><span className="r">Fair price</span><span className="r">Offer</span><span className="r">Difference</span><span className="r">Active cover</span><span className="r">On</span></div>
+          <div className="bx-list-h" style={cols}><span>{hint("Tenor")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Offer")}</span><span className="r">{hint("Difference")}</span><span className="r">{hint("Active cover")}</span><span className="r">On</span></div>
           {days.map((d) => {
             const t = pool.tenors.find((x) => x.tenorDays === d);
             const f = fairOf(d);
@@ -378,18 +378,18 @@ function ProtectionSettings({ pool, editable }: { pool: CurrencyPool; editable: 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 600 }}>Capped Protection</span><Toggle label="Capped Protection" on={capped} disabled={!editable} onChange={setCapped} /></div>
           <div className="sub" style={{ margin: '6px 0 12px' }}>Hedgers choose a cap within your boundaries.</div>
           {capped && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <label className="bx-field" style={{ margin: 0 }}><span>Smallest cap (%)</span><input className="bx-input num" disabled={!editable} value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
-            <label className="bx-field" style={{ margin: 0 }}><span>Largest cap (%)</span><input className="bx-input num" disabled={!editable} value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+            <label className="bx-field" style={{ margin: 0 }}><span>{hint("Smallest cap (%)")}</span><input className="bx-input num" disabled={!editable} value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+            <label className="bx-field" style={{ margin: 0 }}><span>{hint("Largest cap (%)")}</span><input className="bx-input num" disabled={!editable} value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
           </div>}
         </div>
         <div style={box}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 600 }}>Open Protection</span><Toggle label="Open Protection" on={open} disabled={!editable} onChange={setOpen} /></div>
           <div className="sub" style={{ margin: '6px 0 12px' }}>Pays the whole move, up to your maximum.</div>
-          {open && <label className="bx-field" style={{ margin: 0 }}><span>Maximum payout, % of amount</span><input className="bx-input num" disabled={!editable} value={openMax} onChange={(e) => setOpenMax(e.target.value.replace(/[^0-9.]/g, ''))} /></label>}
+          {open && <label className="bx-field" style={{ margin: 0 }}><span>{hint("Maximum payout, % of amount")}</span><input className="bx-input num" disabled={!editable} value={openMax} onChange={(e) => setOpenMax(e.target.value.replace(/[^0-9.]/g, ''))} /></label>}
         </div>
       </div>
       <label className="bx-field" style={{ marginTop: 16, marginBottom: 0, maxWidth: 360 }}>
-        <span>Closest strike allowed (% from today's rate)</span>
+        <span>{hint("Closest strike allowed (% from today's rate)")}</span>
         <input className="bx-input num" disabled={!editable} value={minStrike} onChange={(e) => setMinStrike(e.target.value.replace(/[^0-9.]/g, ''))} />
         <span className="muted" style={{ fontSize: 12 }}>0 lets buyers start cover at today's rate. A higher number only sells cover that starts further away, which is less likely to pay out.</span>
       </label>
@@ -449,7 +449,7 @@ function BackingPreferences({ pool, account, tenors }: { pool: CurrencyPool; acc
         <Toggle on={account.backing} disabled={busy} label="Back new protection" onChange={(v) => save(v, account.maxTenorDays)} />
       </div>
       <label className="bx-field" style={{ marginTop: 12, marginBottom: 0 }}>
-        <span>Longest protection I back</span>
+        <span>{hint("Longest protection I back")}</span>
         <select className="bx-select" disabled={busy || !account.backing} value={account.maxTenorDays} onChange={(e) => save(true, Number(e.target.value))}>
           <option value={0}>Any length the pool offers</option>
           {tenors.map((d) => <option key={d} value={d}>Up to {d} days</option>)}
@@ -622,13 +622,13 @@ export function CreatePool({ go }: { go: Go }) {
         <div className="bx-card">
           {step === 0 && (
             <>
-              <label className="bx-field"><span>Underwrite</span>
+              <label className="bx-field"><span>{hint("Underwrite")}</span>
                 <select className="bx-select" value={key} onChange={(e) => setKey(e.target.value)}>
                   {exposures.map((k) => { const [p, d] = k.split(':') as [string, Direction]; return <option key={k} value={k}>{exposureLabel(p, d).cover} ({p})</option>; })}
                 </select>
               </label>
               {pair && <div className="sub" style={{ marginTop: -8, marginBottom: 16 }}>You pay out if the {ccyName(pair)} {exposureLabel(pair, direction).verb} past what buyers chose, and earn their premiums otherwise.</div>}
-              <label className="bx-field"><span>Commit liquidity (USDC)</span><input className="bx-input num" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+              <label className="bx-field"><span>{hint("Commit liquidity (USDC)")}</span><input className="bx-input num" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
               <div className="bx-pills" style={{ marginBottom: 16, marginTop: -8 }}>{[100, 250, 500, 1000].map((c) => <button key={c} className={`bx-pill${Number(amount) === c ? ' on' : ''}`} onClick={() => setAmount(String(c))}>${c.toLocaleString()}</button>)}</div>
               <FundingSelect value={network} onChange={setNetwork} />
             </>
@@ -638,7 +638,7 @@ export function CreatePool({ go }: { go: Go }) {
               <h2>Set your price for each tenor</h2>
               <div className="sub" style={{ marginBottom: 8 }}>BlockFinaX calculates the fair price; you choose the offer. All tenors share this pool's liquidity.</div>
               <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 560 }}>
-                <div className="bx-list-h" style={tcols}><span>Tenor</span><span className="r">Fair price</span><span className="r">Your offer</span><span className="r">Difference</span><span className="r">On</span><span /></div>
+                <div className="bx-list-h" style={tcols}><span>{hint("Tenor")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Your offer")}</span><span className="r">{hint("Difference")}</span><span className="r">On</span><span /></div>
                 {tenors.map((t, i) => {
                   const f = fairOf(t.tenorDays);
                   const diff = f && Number(t.offerPct) > 0 ? Math.round((Number(t.offerPct) / 100 - f / 1e6) * 10000) : null;
@@ -666,14 +666,14 @@ export function CreatePool({ go }: { go: Go }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontWeight: 600 }}>Capped Protection</span><Toggle label="Capped Protection" on={cappedOn} onChange={setCappedOn} /></div>
                 <div className="sub" style={{ margin: '6px 0 12px' }}>Hedgers choose a cap within your boundaries.</div>
                 {cappedOn && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <label className="bx-field" style={{ margin: 0 }}><span>Smallest cap (%)</span><input className="bx-input num" value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
-                  <label className="bx-field" style={{ margin: 0 }}><span>Largest cap (%)</span><input className="bx-input num" value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+                  <label className="bx-field" style={{ margin: 0 }}><span>{hint("Smallest cap (%)")}</span><input className="bx-input num" value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+                  <label className="bx-field" style={{ margin: 0 }}><span>{hint("Largest cap (%)")}</span><input className="bx-input num" value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
                 </div>}
               </div>
               <div style={box}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontWeight: 600 }}>Open Protection</span><Toggle label="Open Protection" on={openOn} onChange={setOpenOn} /></div>
                 <div className="sub" style={{ margin: '6px 0 12px' }}>Pays the whole move, up to your maximum.</div>
-                {openOn && <label className="bx-field" style={{ margin: 0 }}><span>Maximum payout, % of amount</span><input className="bx-input num" value={openMax} onChange={(e) => setOpenMax(e.target.value.replace(/[^0-9.]/g, ''))} /></label>}
+                {openOn && <label className="bx-field" style={{ margin: 0 }}><span>{hint("Maximum payout, % of amount")}</span><input className="bx-input num" value={openMax} onChange={(e) => setOpenMax(e.target.value.replace(/[^0-9.]/g, ''))} /></label>}
               </div>
               <label className="bx-field" style={{ ...box, margin: 0 }}>
                 <span style={{ fontWeight: 600, color: 'var(--text)' }}>Closest strike allowed</span>
@@ -790,7 +790,7 @@ export function WithdrawCapital({ go, poolRef: initial }: { go: Go; poolRef: str
           <div className="bx-card-h"><h2>Your withdrawals</h2></div>
           {withdrawals.isLoading ? <Loading /> : !(withdrawals.data ?? []).length ? <div className="bx-empty">No withdrawals yet.</div> : (
             <>
-              <div className="bx-list-h" style={cols}><span>Pool</span><span className="r">Amount</span><span className="r">Status</span></div>
+              <div className="bx-list-h" style={cols}><span>{hint("Pool")}</span><span className="r">Amount</span><span className="r">{hint("Status")}</span></div>
               {(withdrawals.data ?? []).map((w) => {
                 const p = poolOf(w);
                 return (

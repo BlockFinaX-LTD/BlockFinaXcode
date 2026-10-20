@@ -1,5 +1,7 @@
 /** Building blocks for the BlockFinaX workspace. Styles live in workspace.css. */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { explain } from './glossary';
 import { Info, Loader2 } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
 import { quoteCcy } from './shared';
@@ -8,10 +10,56 @@ export function Flag({ pair, large }: { pair: string; large?: boolean }) {
   return <span className={`bx-flag${large ? ' lg' : ''}`}><FlagSvg code={quoteCcy(pair)} /></span>;
 }
 
+// ── Hover explanations ────────────────────────────────────────────────────────
+
+/**
+ * A term with a plain-language explanation on hover, keyboard focus or tap. The bubble is
+ * drawn in a portal inside the workspace root with fixed positioning, so scrolling tables
+ * cannot clip it, and it inherits the light or dark theme.
+ */
+export function Term({ children, tip }: { children: ReactNode; tip: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const below = r.top < 90; // no room above: open underneath
+    setPos({ x: Math.min(Math.max(r.left + r.width / 2, 140), window.innerWidth - 140), y: below ? r.bottom + 8 : r.top - 8, below });
+  };
+  const hide = () => setPos(null);
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [pos]);
+  const root = typeof document !== 'undefined' ? document.querySelector('.bx') : null;
+  return (
+    <span
+      ref={ref} className="bx-term" tabIndex={0} aria-label={`${typeof children === 'string' ? children : ''}: ${tip}`}
+      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
+      onClick={(e) => { e.stopPropagation(); if (pos) hide(); else show(); }}
+    >
+      {children}
+      {pos && root && createPortal(
+        <span role="tooltip" className={`bx-tip${pos.below ? ' below' : ''}`} style={{ left: pos.x, top: pos.y }}>{tip}</span>,
+        root,
+      )}
+    </span>
+  );
+}
+
+/** A label with its glossary explanation, when it has one. */
+export function hint(label: string): ReactNode {
+  const tip = explain(label);
+  return tip ? <Term tip={tip}>{label}</Term> : label;
+}
+
 export function Sum({ l, v, total, good }: { l: ReactNode; v: ReactNode; total?: boolean; good?: boolean }) {
   return (
     <div className={`bx-sum${total ? ' total' : ''}`}>
-      <span className="l">{l}</span>
+      <span className="l">{typeof l === 'string' ? hint(l) : l}</span>
       <span className={`v${good ? ' up' : ''}`}>{v}</span>
     </div>
   );

@@ -14,7 +14,7 @@ import {
   ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, type Direction,
 } from './shared';
-import { AssetClassTabs, Flag, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, useAssetClass } from './ui';
+import { AssetClassTabs, Flag, hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 
@@ -127,7 +127,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
       </div>
       {open && (
         <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
-          <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>Length</span><span className="r">Ends</span><span className="r">Price</span><span className="r">Cost per $1,000</span><span /></div>
+          <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span className="r">{hint("Cost per $1,000")}</span><span /></div>
           {offers.rows.map((r) => (
             <div key={r.tenorDays} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}>
               <span style={{ fontWeight: 600 }}>{r.tenorDays} days</span>
@@ -145,7 +145,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
 }
 
 function MarketHeader() {
-  return <div className="bx-list-h" style={MARKET_COLS}><span>Cover</span><span className="r">Liquidity</span><span className="r">Premium</span><span className="r">Lengths</span><span /></div>;
+  return <div className="bx-list-h" style={MARKET_COLS}><span>{hint("Cover")}</span><span className="r">{hint("Liquidity")}</span><span className="r">{hint("Premium")}</span><span className="r">{hint("Lengths")}</span><span /></div>;
 }
 
 function useOpenPools() {
@@ -216,9 +216,9 @@ export function HedgerHome({ go }: { go: Go }) {
           <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
           <div className="sub">USDC · network fees covered by BlockFinaX</div>
           <div className="bx-strip">
-            <div><div className="k">Protected exposure</div><div className="v num">${fmt(exposure, 0)}</div></div>
-            <div><div className="k">Active protections</div><div className="v num">{active.length + rateActive.length}</div></div>
-            <div><div className="k">Next expiry</div><div className="v num">{next ? `${daysLeft(next)} days` : '-'}</div>{next && <div className="s">{dateOf(next)}</div>}</div>
+            <div><div className="k">{hint("Protected exposure")}</div><div className="v num">${fmt(exposure, 0)}</div></div>
+            <div><div className="k">{hint("Active protections")}</div><div className="v num">{active.length + rateActive.length}</div></div>
+            <div><div className="k">{hint("Next expiry")}</div><div className="v num">{next ? `${daysLeft(next)} days` : '-'}</div>{next && <div className="s">{dateOf(next)}</div>}</div>
           </div>
         </div>
 
@@ -228,7 +228,7 @@ export function HedgerHome({ go }: { go: Go }) {
             <div className="bx-empty">Nothing protected yet. <button className="bx-link" onClick={() => go('h-protect')}>Protect an exposure</button></div>
           ) : (
             <>
-              <div className="bx-list-h" style={cols}><span>Exposure</span><span className="r">Protected</span><span className="r">Expires</span><span className="r">Payout today</span></div>
+              <div className="bx-list-h" style={cols}><span>{hint("Exposure")}</span><span className="r">{hint("Protected")}</span><span className="r">{hint("Expires")}</span><span className="r">{hint("Payout today")}</span></div>
               {active.map(({ position: p, pair, settlement: s }) => (
                 <div key={s.position} className="bx-li click" style={cols} onClick={() => go('h-protections')}>
                   <div className="bx-who">
@@ -666,20 +666,20 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 </div>
               </div>
               <div>
-                <span className="bx-label">How long</span>
+                <span className="bx-label">{hint("How long")}</span>
                 <div className="bx-pills wrap">
                   {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
                 </div>
                 {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Ends {dateIn(days)}</div>}
               </div>
               <div>
-                <span className="bx-label">Protection starts</span>
+                <span className="bx-label">{hint("Protection starts")}</span>
                 <div className="bx-seg">
                   {startChoices.map((m) => <button key={m} className={startPct === m ? 'on' : ''} onClick={() => setStartPct(m)}>{m === 0 ? "Today's rate" : `${m}% away`}</button>)}
                 </div>
               </div>
               <div>
-                <span className="bx-label">Cover type</span>
+                <span className="bx-label">{hint("Cover type")}</span>
                 <div className="bx-choice">
                   {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Capped</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
                   {tenor?.open !== false && <button className={structure === 'open' ? 'on' : ''} onClick={() => setStructure('open')}><div className="t">Open</div><div className="p num">{open.data ? `$${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'}</div></button>}
@@ -743,7 +743,7 @@ export function MyProtections({ go }: { go: Go }) {
           {hedges.isLoading ? <Loading /> : !all.length ? <div className="bx-empty">You have not bought protection yet.</div> : (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 720 }}>
-                <div className="bx-list-h" style={cols}><span>Exposure</span><span className="r">Protected</span><span className="r">Expiry</span><span className="r">Payout</span><span className="r">Status</span></div>
+                <div className="bx-list-h" style={cols}><span>{hint("Exposure")}</span><span className="r">{hint("Protected")}</span><span className="r">{hint("Expiry")}</span><span className="r">{hint("Payout")}</span><span className="r">{hint("Status")}</span></div>
                 {all.map(({ position: p, pair, settlement: s }) => {
                   const active = s.status === 'pending';
                   const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
@@ -857,7 +857,7 @@ function FxRates({ go }: { go: Go }) {
       </div>
       {watch.isLoading ? <Loading /> : !rows.length ? <div className="bx-empty">No currency matches.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 620 }}>
-          <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">Rate</span><span className="r">Change</span><span /></div>
+          <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">{hint("Rate")}</span><span className="r">{hint("Change")}</span><span /></div>
           {rows.map((r) => (
             <div key={r.pair} className="bx-li" style={cols}>
               <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{pairName(r.pair)}</div><div className="d">{r.pair} · 1 {r.pair.split('/')[0]} in {quoteCcy(r.pair)}</div></div></div>
@@ -886,7 +886,7 @@ function InterestRates({ open }: { open: (id: string) => void }) {
       </div>
       {q.isLoading ? <Loading /> : q.isError ? <div className="bx-empty">Interest rates are unavailable right now.</div> : !rows.length ? <div className="bx-empty">No benchmarks are in use here yet.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
-          <div className="bx-list-h" style={cols}><span>Benchmark</span><span className="r">Rate</span><span className="r">Change</span><span className="r">For business day</span><span className="r">Status</span></div>
+          <div className="bx-list-h" style={cols}><span>Benchmark</span><span className="r">{hint("Rate")}</span><span className="r">{hint("Change")}</span><span className="r">For business day</span><span className="r">{hint("Status")}</span></div>
           {rows.map((r) => (
             <div
               key={r.id} className="bx-li click" style={cols} role="button" tabIndex={0} aria-label={`Open ${r.id}`}

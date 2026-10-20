@@ -246,6 +246,17 @@
 .bx-spin { animation: bx-spin 1s linear infinite; }
 @keyframes bx-spin { to { transform: rotate(360deg); } }
 
+/* Hover explanations */
+.bx-term { border-bottom: 1px dotted var(--muted); cursor: help; outline: none; }
+.bx-term:focus-visible { border-bottom-style: solid; border-bottom-color: var(--blue); }
+.bx-tip {
+  position: fixed; z-index: 60; transform: translate(-50%, -100%); max-width: 260px; width: max-content;
+  background: var(--text); color: var(--panel); font-size: 12.5px; font-weight: 500; line-height: 1.45;
+  letter-spacing: 0; text-align: left; white-space: normal; padding: 8px 11px; border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(15, 23, 41, 0.18); pointer-events: none; font-family: Geist, system-ui, -apple-system, sans-serif;
+}
+.bx-tip.below { transform: translate(-50%, 0); }
+
 /* Agent chat */
 .bx-agent-fab { position: fixed; right: 24px; bottom: 24px; z-index: 35; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 12px 18px; background: var(--blue); color: #fff; font-weight: 600; font-size: 14px; box-shadow: 0 8px 24px rgba(31, 95, 224, 0.35); cursor: pointer; }
 .bx-agent-fab svg { width: 18px; height: 18px; }

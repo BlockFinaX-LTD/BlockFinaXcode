@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import { dateOf, fmt, signAndSend, useUsdcBalances, usdcOn } from './shared';
-import { Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag } from './ui';
+import { hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag } from './ui';
 import type { Go } from './workspace';
 
 export interface RatePool {
@@ -177,7 +177,7 @@ export function RateMarkets({ go, embedded, limit }: { go: Go; embedded?: boolea
   const list = pools.isLoading ? <Loading /> : pools.isError ? <div className="bx-empty">Interest rate cover is unavailable right now.</div>
     : !rows.length ? <div className="bx-empty">No interest rate cover is on sale right now.</div> : (
       <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
-        <div className="bx-list-h" style={cols}><span>Cover</span><span className="r">Liquidity</span><span className="r">Strike today</span><span className="r">Lengths</span><span /></div>
+        <div className="bx-list-h" style={cols}><span>{hint("Cover")}</span><span className="r">{hint("Liquidity")}</span><span className="r">{hint("Strike today")}</span><span className="r">{hint("Lengths")}</span><span /></div>
         {rows.map((p) => {
           const l = rateCoverLabel(p.direction, p.benchmark);
           return (
@@ -237,7 +237,7 @@ export function RateProtections({ go, embedded }: { go: Go; embedded?: boolean }
       <div className="bx-empty">No interest rate protection yet. <button className="bx-link" onClick={() => go('h-markets')}>See interest rate cover</button></div>
     ) : (
       <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
-        <div className="bx-list-h" style={cols}><span>Protection</span><span className="r">Protected</span><span className="r">Strike</span><span className="r">Expires</span><span className="r">Status</span></div>
+        <div className="bx-list-h" style={cols}><span>{hint("Protection")}</span><span className="r">{hint("Protected")}</span><span className="r">{hint("Strike")}</span><span className="r">{hint("Expires")}</span><span className="r">{hint("Status")}</span></div>
         {rows.map((p) => {
           const l = rateCoverLabel(p.direction, p.benchmark);
           return (
