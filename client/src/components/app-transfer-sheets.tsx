@@ -600,12 +600,12 @@ function ReceiveSheet({ open, onClose, passkey = false }: { open: boolean; onClo
                 setClaiming(true);
                 try {
                   await passkeyApi('/api/wallet/faucet/usdc', {});
-                  toast({ title: 'Test USDC sent', description: '10 test USDC is on its way to your Stellar wallet.' });
+                  toast({ title: 'Test USDC sent', description: '10,000 test USDC is on its way to your Stellar wallet.' });
                 } catch (e: any) {
                   toast({ title: 'Faucet unavailable', description: e?.message, variant: 'destructive' });
                 } finally { setClaiming(false); }
               }}>
-                {claiming ? <Loader2 className="spin" /> : null} Get 10 test USDC
+                {claiming ? <Loader2 className="spin" /> : null} Get 10,000 test USDC
               </button>
             )}
             <p className="send-note"><Info /> {passkey ? `Only send test USDC on ${selected?.label ?? 'this network'} to this address.` : isWalletSandbox ? 'Only send test tokens on Base Sepolia to this address.' : 'Only send tokens on supported networks (Base, BNB Chain) to this address.'}</p>

@@ -183,12 +183,12 @@ function FaucetCard() {
   return (
     <div className="bx-cta">
       <h3>Need test USDC?</h3>
-      <p>Get 10 test USDC on Stellar testnet, once a day.</p>
+      <p>Get 10,000 test USDC on Stellar testnet, once a day.</p>
       <button disabled={claiming} onClick={async () => {
         setClaiming(true);
         try {
           await api('/api/wallet/faucet/usdc', {});
-          toast({ title: 'Test USDC sent', description: '10 test USDC is on its way.' });
+          toast({ title: 'Test USDC sent', description: '10,000 test USDC is on its way.' });
           void qc.invalidateQueries({ queryKey: ['v2-usdc-all'] });
         } catch (e) {
           toast({ title: 'Faucet unavailable', description: (e as Error).message, variant: 'destructive' });

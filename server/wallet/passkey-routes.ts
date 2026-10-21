@@ -508,10 +508,11 @@ export function registerPasskeyWalletRoutes(app: Express) {
   }));
 
   /**
-   * Testnet only: send 10 test USDC from the BlockFinaX faucet account to the user's
+   * Testnet only: send FAUCET_USDC test USDC from the BlockFinaX faucet account to the user's
    * Stellar wallet, once per user per day. Circle's faucet cannot pay contract (C)
    * addresses, so testers are funded from this account instead.
    */
+  const FAUCET_USDC = "10000";
   const faucetClaims = new Map<string, number>();
   app.post("/api/wallet/faucet/usdc", wrap(async (req, res) => {
     const userId = await requireUser(req);
@@ -532,7 +533,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
         .addOperation(Operation.invokeContractFunction({
           contract: usdc.addressOrContract,
           function: "transfer",
-          args: [nativeToScVal(faucet.publicKey(), { type: "address" }), nativeToScVal(to, { type: "address" }), nativeToScVal(toUnits("10", usdc.decimals), { type: "i128" })],
+          args: [nativeToScVal(faucet.publicKey(), { type: "address" }), nativeToScVal(to, { type: "address" }), nativeToScVal(toUnits(FAUCET_USDC, usdc.decimals), { type: "i128" })],
         }))
         .setTimeout(60)
         .build();
@@ -544,7 +545,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       if (sent.status === "ERROR") throw new Error("Stellar rejected the faucet transfer");
       for (let i = 0; i < 30; i++) {
         const found = await server.getTransaction(sent.hash);
-        if (found.status === StellarApi.GetTransactionStatus.SUCCESS) return res.json({ chain: stellar.key, hash: sent.hash, amount: "10" });
+        if (found.status === StellarApi.GetTransactionStatus.SUCCESS) return res.json({ chain: stellar.key, hash: sent.hash, amount: FAUCET_USDC });
         if (found.status === StellarApi.GetTransactionStatus.FAILED) throw new Error("The faucet transfer failed");
         await new Promise((r) => setTimeout(r, 1000));
       }
