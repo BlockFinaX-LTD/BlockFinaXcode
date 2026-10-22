@@ -277,7 +277,6 @@ export type WalletMode = 'none' | 'deposit' | 'withdraw';
 
 /** One place for money: the balance first; deposit or withdraw opens only when asked for. */
 export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
-  const demo = useIsDemo();
   const balances = useUsdcBalances();
   const [mode, setMode] = useState<WalletMode>(initial);
   useEffect(() => setMode(initial), [initial]);
@@ -288,7 +287,6 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
         <div className="bx-card">
           <div className="bx-hero-k">Wallet balance</div>
           <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
-          <div className="sub">{demo ? 'Test USDC (demo)' : 'USDC'} · network fees covered by BlockFinaX</div>
           <div className="bx-wallet-actions">
             <button className={`bx-btn${mode === 'deposit' ? '' : mode === 'none' ? '' : ' ghost'}`} onClick={() => setMode('deposit')} aria-pressed={mode === 'deposit'}><ArrowDown /> Deposit</button>
             <button className={`bx-btn${mode === 'withdraw' ? '' : ' ghost'}`} onClick={() => setMode('withdraw')} aria-pressed={mode === 'withdraw'}><ArrowUp /> Withdraw</button>

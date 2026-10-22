@@ -214,7 +214,6 @@ export function HedgerHome({ go }: { go: Go }) {
         <div className="bx-card">
           <div className="bx-hero-k">Your balance</div>
           <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
-          <div className="sub">USDC · network fees covered by BlockFinaX</div>
           <div className="bx-strip">
             <div><div className="k">{hint("Protected exposure")}</div><div className="v num">${fmt(exposure, 0)}</div></div>
             <div><div className="k">{hint("Active protections")}</div><div className="v num">{active.length + rateActive.length}</div></div>
