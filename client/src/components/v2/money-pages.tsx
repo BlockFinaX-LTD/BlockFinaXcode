@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Check, Copy, KeyRound, LogOut, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Copy, CreditCard, KeyRound, LogOut, Plus, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
@@ -48,6 +48,41 @@ interface DepositAddresses {
   deposits: { chain: string; name: string; address: string; assets: string[]; minimum: string }[];
 }
 
+/** Buy USDC with a card or bank transfer through MoonPay. It lands on the user's Base
+ * deposit address and moves to their main wallet automatically, like any other deposit. */
+function BuyWithCard() {
+  const { toast } = useToast();
+  const onramp = useQuery({ queryKey: ['v2-onramp'], queryFn: () => api<{ moonpay: { enabled: boolean; sandbox?: boolean } }>('/api/v2/onramp'), staleTime: 300_000, retry: false });
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!onramp.data?.moonpay.enabled) return null;
+  const open = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ url: string }>('/api/v2/onramp/moonpay', { amountUsd: Number(amount) || undefined });
+      window.open(r.url, '_blank', 'noopener');
+    } catch (e: any) {
+      toast({ title: 'Card purchase unavailable', description: e?.message, variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ border: '1px solid var(--line)', borderRadius: 14, padding: 16, marginBottom: 22 }}>
+      <h3 style={{ margin: '0 0 4px 0' }}>Buy USDC with a card</h3>
+      <div className="sub" style={{ marginBottom: 12 }}>Pay by card or bank transfer through MoonPay. Your USDC arrives in your BlockFinaX account automatically.</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input className="bx-input num" style={{ maxWidth: 160 }} inputMode="decimal" placeholder="Amount in USD" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <button className="bx-btn" disabled={busy} onClick={open}>{busy ? <Spin /> : <CreditCard />} Buy with MoonPay</button>
+      </div>
+      <div className="bx-hint" style={{ marginTop: 10 }}>
+        MoonPay checks your ID and sets its own fees, shown before you pay. Minimum about $5.
+        {onramp.data.moonpay.sandbox ? ' Test mode: use MoonPay test cards; no real money moves and nothing arrives.' : ''}
+      </div>
+    </div>
+  );
+}
+
 function DepositCard({ onCancel }: { onCancel: () => void }) {
   const demo = useIsDemo();
   const accounts = useAccounts();
@@ -71,6 +106,7 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="bx-card">
       <CardHead title="Deposit USDC" sub="Send USDC to your BlockFinaX account from an exchange or another wallet." onCancel={onCancel} />
+      <BuyWithCard />
       <span className="bx-label">Where are you sending from?</span>
       <div className="bx-seg" style={{ marginBottom: 6 }}>
         {options.map((o) => <button key={o.chain} className={chain === o.chain ? 'on' : ''} onClick={() => { setChain(o.chain); setCopied(false); }}>{o.name}</button>)}

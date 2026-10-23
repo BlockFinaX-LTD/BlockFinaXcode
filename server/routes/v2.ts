@@ -433,6 +433,37 @@ export function registerV2Routes(app: Express) {
     res.json({ hub: { chain: hub.key, name: hub.name, address: wallet }, deposits: depositAddressesFor(chainRegistry()!, wallet) });
   }));
 
+  /** Card on-ramp: is it switched on here, and in which mode. */
+  app.get("/api/v2/onramp", wrap(async (_req, res) => {
+    const { moonpayConfig } = await import("../onramp/moonpay");
+    const config = moonpayConfig();
+    res.json({ moonpay: config ? { enabled: true, sandbox: config.sandbox, currency: config.currencyCode } : { enabled: false } });
+  }));
+
+  /** A signed MoonPay link that delivers USDC to the user's Base deposit address. */
+  app.post("/api/v2/onramp/moonpay", wrap(async (req, res) => {
+    const { moonpayConfig, buyUrl } = await import("../onramp/moonpay");
+    const config = moonpayConfig();
+    if (!config) throw new ApplicationError("INVALID_REQUEST", "Card purchases are not available yet");
+    const s = await getServices();
+    const id = await userId(req);
+    const hub = chainRegistry()!.hub;
+    const wallet = (await s.accounts.addressBook(id))[hub.key];
+    if (!wallet) throw new ApplicationError("INVALID_REQUEST", `No ${hub.name} account yet`);
+    const { depositAddressesFor } = await import("../routing/deposit-addresses");
+    const deposit = depositAddressesFor(chainRegistry()!, wallet)[0];
+    if (!deposit) throw new ApplicationError("INVALID_REQUEST", "No deposit address on this network");
+    const amount = Number(req.body?.amountUsd);
+    const appUrl = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const { url } = buyUrl(config, {
+      userId: String(id),
+      walletAddress: deposit.address,
+      amountUsd: Number.isFinite(amount) && amount >= 5 && amount <= 50_000 ? amount : undefined,
+      redirectUrl: appUrl ? `${appUrl}/wallet` : undefined,
+    });
+    res.json({ url, chain: deposit.chain, depositAddress: deposit.address, sandbox: config.sandbox });
+  }));
+
   app.get("/api/v2/routing", wrap(async (req, res) => {
     const s = await getServices();
     res.json({ routes: (await s.routing.store.listByUser(String(await userId(req)))).map(routeView) });
