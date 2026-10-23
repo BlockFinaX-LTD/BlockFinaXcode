@@ -455,13 +455,13 @@ export function registerV2Routes(app: Express) {
     if (!deposit) throw new ApplicationError("INVALID_REQUEST", "No deposit address on this network");
     const amount = Number(req.body?.amountUsd);
     const appUrl = (process.env.PUBLIC_APP_URL || "").replace(/\/$/, "");
-    const { url } = buyUrl(config, {
+    const { url, prefilled } = buyUrl(config, {
       userId: String(id),
       walletAddress: deposit.address,
       amountUsd: Number.isFinite(amount) && amount >= 5 && amount <= 50_000 ? amount : undefined,
       redirectUrl: appUrl ? `${appUrl}/wallet` : undefined,
     });
-    res.json({ url, chain: deposit.chain, depositAddress: deposit.address, sandbox: config.sandbox });
+    res.json({ url, prefilled, chain: deposit.chain, depositAddress: deposit.address, sandbox: config.sandbox });
   }));
 
   app.get("/api/v2/routing", wrap(async (req, res) => {

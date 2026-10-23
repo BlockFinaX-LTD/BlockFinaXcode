@@ -5,9 +5,9 @@ import { buyUrl, moonpayConfig } from "../moonpay";
 
 const WALLET = "0x71595cb952580a257F7B9af52676467198bd425A";
 
-test("off until both keys are set; test and live keys cannot be mixed", () => {
+test("on with a public key; test and live keys cannot be mixed", () => {
   assert.equal(moonpayConfig({}), null);
-  assert.equal(moonpayConfig({ MOONPAY_PUBLIC_KEY: "pk_test_x" }), null);
+  assert.equal(moonpayConfig({ MOONPAY_PUBLIC_KEY: "pk_test_x" })!.secretKey, null);
   assert.throws(() => moonpayConfig({ MOONPAY_PUBLIC_KEY: "pk_test_x", MOONPAY_SECRET_KEY: "sk_live_y" }));
   const sandbox = moonpayConfig({ MOONPAY_PUBLIC_KEY: "pk_test_x", MOONPAY_SECRET_KEY: "sk_test_y" })!;
   assert.equal(sandbox.sandbox, true);
@@ -39,4 +39,14 @@ test("only an EVM deposit address is accepted", () => {
   const config = moonpayConfig({ MOONPAY_PUBLIC_KEY: "pk_test_x", MOONPAY_SECRET_KEY: "sk_test_y" })!;
   assert.throws(() => buyUrl(config, { userId: "1", walletAddress: "CB4IWMDLPUPCFNMQH4KLEFWX6PEN5M2OGNY25E5YA7DUTPOYD4E2YWXU" }));
   assert.match(buyUrl(config, { userId: "1", walletAddress: WALLET }).url, /^https:\/\/buy-sandbox\.moonpay\.com\/\?/);
+});
+
+test("without a secret key the address is not prefilled, so MoonPay accepts the link unsigned", () => {
+  const config = moonpayConfig({ MOONPAY_PUBLIC_KEY: "pk_test_x" })!;
+  const r = buyUrl(config, { userId: "1", walletAddress: WALLET });
+  const u = new URL(r.url);
+  assert.equal(r.prefilled, false);
+  assert.equal(u.searchParams.get("walletAddress"), null);
+  assert.equal(u.searchParams.get("signature"), null);
+  assert.equal(u.searchParams.get("currencyCode"), "usdc");
 });
