@@ -8,6 +8,7 @@
  * The hedger never names a chain or a pool. This replaces the two copies of pool
  * selection that lived in server/pricing/pool-quote.ts and the Stellar wallet server.
  */
+import { durationsOffered, expiryAt, markupForDays } from "@shared/domain/durations";
 import type { ChainRegistry } from "@shared/chains/registry";
 import {
   checkTerms,
@@ -79,8 +80,12 @@ export class QuoteService {
     const pools = (await this.adapters.adapterFor(chain.key).listPools())
       .filter((p) => p.pair === pair && p.acceptingHedges && (!direction || p.direction === "both" || p.direction === direction));
     const rows = new Map<number, { open: boolean; capped: boolean; capacity: number }>();
+    // Pools that sell any day in a range: the widest range on sale.
+    let range: { minDays: number; maxDays: number } | null = null;
     for (const p of pools) {
-      for (const t of p.tenors.filter((x) => x.active)) {
+      const offered = durationsOffered(p);
+      if (offered.range) range = range ? { minDays: Math.min(range.minDays, offered.range.minDays), maxDays: Math.max(range.maxDays, offered.range.maxDays) } : offered.range;
+      for (const t of p.tenors.filter((x) => x.active && offered.days.includes(x.tenorDays))) {
         const r = rows.get(t.tenorDays) ?? { open: false, capped: false, capacity: 0 };
         r.open ||= p.structures.open;
         r.capped ||= p.structures.capped;
@@ -90,6 +95,7 @@ export class QuoteService {
     }
     return {
       pair,
+      anyDay: range,
       tenors: Array.from(rows.entries()).sort(([a], [b]) => a - b)
         .map(([tenorDays, r]) => ({ tenorDays, open: r.open, capped: r.capped, maxPayoutAvailable: String(r.capacity) })),
     };
@@ -109,27 +115,27 @@ export class QuoteService {
     const pools = await adapter.listPools();
 
     const candidates = pools
-      .map((pool) => ({ pool, tenor: pool.tenors.find((t) => t.tenorDays === req.tenorDays && t.active) }))
-      .filter(({ pool, tenor }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
+      .map((pool) => ({ pool, markupBps: markupForDays(pool, req.tenorDays) }))
+      .filter(({ pool, markupBps }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
         && (!req.pool || formatResourceId(pool.ref) === req.pool)
         && strikeDistanceBps(req, spotNow) >= (pool.structures.minStrikeDistanceBps ?? 0)
-        && tenor && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
-      .sort((a, b) => a.tenor!.markupBps - b.tenor!.markupBps);
+        && markupBps !== null && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
+      .sort((a, b) => a.markupBps! - b.markupBps!);
     if (candidates.length === 0) {
       // Say so plainly when the only reason is that the strike is too close to today's rate.
       const closest = pools
         .filter((p) => p.pair === req.pair && p.acceptingHedges && (p.direction === "both" || p.direction === req.direction)
-          && (!req.pool || formatResourceId(p.ref) === req.pool) && p.tenors.some((t) => t.tenorDays === req.tenorDays && t.active))
+          && (!req.pool || formatResourceId(p.ref) === req.pool) && markupForDays(p, req.tenorDays) !== null)
         .map((p) => p.structures.minStrikeDistanceBps ?? 0);
       if (closest.length) {
         throw new ApplicationError("STRIKE_TOO_CLOSE", `Protection must start at least ${Math.min(...closest) / 100}% from today's rate for this cover`);
       }
     }
-    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} ${req.direction === "up" ? "rising-rate" : "falling-rate"} protection on ${req.pair}`);
+    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} ${req.direction === "up" ? "rising-rate" : "falling-rate"} protection on ${req.pair}. Request a quote instead.`);
 
     let last: ApplicationError = new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
-    for (const { pool, tenor } of candidates) {
-      const economic = await this.economic(req, pool, tenor!.markupBps, chain.key);
+    for (const { pool, markupBps } of candidates) {
+      const economic = await this.economic(req, pool, markupBps!, chain.key);
       if (economic instanceof ApplicationError) { last = economic; continue; }
       return adapter.signQuote(economic, buyer, pool.poolId);
     }
@@ -187,7 +193,7 @@ export async function enginePricer(): Promise<FairPricer> {
     async fair(a) {
       const q = await quote({
         pair: a.pair, strike: Number(a.strike), payoutCap: Number(a.cap),
-        expiryUnixSeconds: Math.floor(Date.now() / 1000) + a.tenorDays * 86_400,
+        expiryUnixSeconds: expiryAt(Math.floor(Date.now() / 1000), a.tenorDays),
         notional: Number(a.notional), strikeAbove: a.direction === "up",
       });
       return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot) };

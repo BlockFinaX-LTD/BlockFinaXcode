@@ -331,6 +331,21 @@ export function registerV2Routes(app: Express) {
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareSetTenor(owner, id, req.body) });
   }));
 
+  app.post("/api/v2/pools/:ref/durations/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    const adapter = s.adapters.adapterForContract(chain, contract);
+    if (adapter !== s.adapters.adapterFor(chain) || !adapter.prepareSetDurationRule) {
+      throw new ApplicationError("INVALID_REQUEST", "This pool cannot change its durations.");
+    }
+    const { mode, minDays, maxDays } = req.body ?? {};
+    if (!["specific", "any", "up-to"].includes(mode) || !Number.isInteger(minDays) || minDays < 1 || (mode === "up-to" && (!Number.isInteger(maxDays) || maxDays < minDays))) {
+      throw new ApplicationError("INVALID_REQUEST", "Choose which durations to sell, with a minimum of at least 1 day and a maximum no lower than the minimum.");
+    }
+    const owner = await ownerOn(s, await userId(req), chain);
+    res.json({ transactions: await adapter.prepareSetDurationRule(owner, id, { mode, minDays, maxDays: Number(maxDays) || 0 }) });
+  }));
+
   app.post("/api/v2/pools/:ref/deposits/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");

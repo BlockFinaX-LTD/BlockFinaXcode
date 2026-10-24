@@ -8,10 +8,11 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ChevronDown, ChevronUp, Percent, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
+import { durationsOffered } from '@shared/domain/durations';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
-  ccyName, dateIn, dateOf, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
+  ccyName, dateIn, dateOf, endsAt, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, useIsDemo, openContactSales, type Direction,
 } from './shared';
 import { AssetClassTabs, Flag, hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
@@ -623,6 +624,41 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
   );
 }
 
+const QUICK_DAYS: [number, string][] = [[7, '1 week'], [14, '2 weeks'], [30, '1 month'], [90, '3 months']];
+const DAY_MS = 86_400_000;
+const utcDay = (ms: number) => Math.floor(ms / DAY_MS);
+const isoDay = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
+
+/** "Protect until" a date, for pools that sell any day in a range. */
+function ProtectUntil({ days, range, onChange }: { days: number | null; range: { minDays: number; maxDays: number }; onChange: (d: number) => void }) {
+  const today = utcDay(Date.now());
+  const picked = days ? today + days : null;
+  const weekday = picked !== null ? (picked + 3) % 7 : -1; // Monday is 0
+  return (
+    <div>
+      <input
+        className="bx-input num"
+        type="date"
+        style={{ maxWidth: 220 }}
+        min={isoDay(today + range.minDays)}
+        max={isoDay(today + range.maxDays)}
+        value={picked !== null ? isoDay(picked) : ''}
+        onChange={(ev) => {
+          const d = utcDay(Date.parse(ev.target.value)) - today;
+          if (Number.isFinite(d) && d >= range.minDays && d <= range.maxDays) onChange(d);
+        }}
+        aria-label="Protect until"
+      />
+      <div className="bx-pills wrap" style={{ marginTop: 8 }}>
+        {QUICK_DAYS.filter(([d]) => d >= range.minDays && d <= range.maxDays).map(([d, label]) => (
+          <button key={d} className={`bx-pill${d === days ? ' on' : ''}`} onClick={() => onChange(d)}>{label}</button>
+        ))}
+      </div>
+      {weekday >= 5 && <div className="bx-hint" style={{ marginTop: 6 }}>Markets are closed at weekends, so this cover ends on Monday.</div>}
+    </div>
+  );
+}
+
 export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: string | null; target?: Target }) {
   const demo = useIsDemo();
   const { toast } = useToast();
@@ -663,7 +699,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const options = useQuery({
     queryKey: ['v2-options', pair, direction],
     enabled: Boolean(pair),
-    queryFn: () => api<{ tenors: { tenorDays: number; open: boolean; capped: boolean }[] }>(`/api/v2/options?pair=${encodeURIComponent(pair!)}&direction=${direction}`),
+    queryFn: () => api<{ anyDay?: { minDays: number; maxDays: number } | null; tenors: { tenorDays: number; open: boolean; capped: boolean }[] }>(`/api/v2/options?pair=${encodeURIComponent(pair!)}&direction=${direction}`),
   });
   const [amount, setAmount] = useState('1000');
   const [days, setDays] = useState<number | null>(target?.days ?? null);
@@ -671,12 +707,21 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const chosenPool = matching.find((p) => poolRef(p) === poolChoice) ?? null;
   // A chosen pool offers its own lengths and cover types; otherwise all pools combined.
   const tenorList = chosenPool
-    ? chosenPool.tenors.filter((t) => t.active).map((t) => ({ tenorDays: t.tenorDays, open: chosenPool.structures.open, capped: chosenPool.structures.capped })).sort((a, b) => a.tenorDays - b.tenorDays)
+    ? durationsOffered(chosenPool).days.map((d) => ({ tenorDays: d, open: chosenPool.structures.open, capped: chosenPool.structures.capped }))
     : options.data?.tenors ?? [];
+  // Pools that sell any day in a range: the date picker replaces the duration buttons.
+  const dayRange = chosenPool ? durationsOffered(chosenPool).range : options.data?.anyDay ?? null;
+  const inRange = (d: number | null) => Boolean(dayRange && d && d >= dayRange.minDays && d <= dayRange.maxDays);
   useEffect(() => {
+    if (dayRange) {
+      if (!inRange(days)) setDays(Math.min(Math.max(30, dayRange.minDays), dayRange.maxDays));
+      return;
+    }
     if (tenorList.length && !tenorList.some((t) => t.tenorDays === days)) setDays((tenorList.find((t) => t.tenorDays >= 14) ?? tenorList[0]).tenorDays);
-  }, [tenorList.map((t) => t.tenorDays).join(','), days]);
-  const tenor = tenorList.find((t) => t.tenorDays === days);
+  }, [tenorList.map((t) => t.tenorDays).join(','), days, dayRange?.minDays, dayRange?.maxDays]);
+  const rangeStructures = chosenPool ? chosenPool.structures : { open: matching.some((p) => p.structures.open), capped: matching.some((p) => p.structures.capped) };
+  const tenor = tenorList.find((t) => t.tenorDays === days)
+    ?? (inRange(days) ? { tenorDays: days!, open: rangeStructures.open, capped: rangeStructures.capped } : undefined);
 
   const pool = chosenPool ?? matching[0];
   const capMin = (pool?.structures.minCapDistanceBps ?? 300) / 100;
@@ -859,7 +904,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 <Sum l="Protection type" v={e.structure === 'open' ? 'Open' : 'Capped'} />
                 {e.structure === 'capped' && <Sum l="Maximum protected rate" v={<span className="num">{fmtRate(e.cap)}</span>} />}
                 <Sum l="Duration" v={`${e.tenorDays} days`} />
-                <Sum l="Expiry" v={dateIn(e.tenorDays)} />
+                <Sum l="Expiry" v={endsAt(e.tenorDays)} />
                 <Sum l="Most you can receive" v={<span className="num">${fmt(e.maxPayout)}</span>} />
                 <Sum l="Premium" v={<span className="num">{pct(e.offerRateE6 / 1e6)} (${fmt(e.premium)})</span>} />
                 <Sum l="Execution cost" v={<span className="num">${fmt(e.hedgerFee)}</span>} />
@@ -904,10 +949,14 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               </div>
               <div>
                 <span className="bx-label">{hint("How long")}</span>
-                <div className="bx-pills wrap">
-                  {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
-                </div>
-                {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Ends {dateIn(days)}</div>}
+                {dayRange ? (
+                  <ProtectUntil days={days} range={dayRange} onChange={setDays} />
+                ) : (
+                  <div className="bx-pills wrap">
+                    {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
+                  </div>
+                )}
+                {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{days} {days === 1 ? 'day' : 'days'} · ends {endsAt(days)}</div>}
               </div>
               <div>
                 <span className="bx-label">{hint("Protection starts")}</span>

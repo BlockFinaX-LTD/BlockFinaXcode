@@ -566,6 +566,10 @@ export function CreatePool({ go }: { go: Go }) {
   const [network, setNetwork] = useState<string | null>(null);
   const [tenors, setTenors] = useState<TenorDraft[]>([3, 7, 14, 30].map((d) => ({ tenorDays: d, offerPct: '', active: true })));
   const [newDays, setNewDays] = useState('');
+  // Which durations businesses can buy: any day (the default), up to a maximum, or only the listed ones.
+  const [durMode, setDurMode] = useState<'any' | 'up-to' | 'specific'>('any');
+  const [durMin, setDurMin] = useState('1');
+  const [durMax, setDurMax] = useState('60');
   const [openOn, setOpenOn] = useState(true);
   const [cappedOn, setCappedOn] = useState(true);
   const [minCap, setMinCap] = useState('3');
@@ -602,6 +606,19 @@ export function CreatePool({ go }: { go: Go }) {
         tenors: tenors.map((t) => ({ tenorDays: t.tenorDays, active: t.active, markupBps: markupOf(t) })),
       });
       await signAndSend(transactions, (m) => setBusy(m));
+      // New pools sell any day up to the protocol maximum; anything else is a second approval.
+      if (durMode !== 'any' || Number(durMin) > 1) {
+        setBusy('Setting durations...');
+        const mine = (await api<{ pools: CurrencyPool[] }>('/api/v2/pools')).pools
+          .filter((p) => p.pair === pair && p.direction === direction && !p.legacy)
+          .sort((a, b) => b.createdAt - a.createdAt)[0];
+        if (mine) {
+          const rule = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(mine))}/durations/prepare`, {
+            mode: durMode, minDays: Math.max(1, Math.round(Number(durMin) || 1)), maxDays: Math.round(Number(durMax) || 0),
+          });
+          await signAndSend(rule.transactions, (m) => setBusy(m));
+        }
+      }
       toast({ title: 'Pool created', description: `Your ${exposureLabel(pair, direction).cover} pool is live.` });
       for (const k of ['v2-pools', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
       go('u-pools');
@@ -636,8 +653,25 @@ export function CreatePool({ go }: { go: Go }) {
           )}
           {step === 1 && (
             <>
-              <h2>Set your price for each tenor</h2>
-              <div className="sub" style={{ marginBottom: 8 }}>BlockFinaX calculates the fair price; you choose the offer. All tenors share this pool's liquidity.</div>
+              <h2>Durations and prices</h2>
+              <span className="bx-label" style={{ marginTop: 8 }}>Which durations can businesses buy?</span>
+              <div className="bx-seg" style={{ marginBottom: 8 }}>
+                <button className={durMode === 'any' ? 'on' : ''} onClick={() => setDurMode('any')}>Any day</button>
+                <button className={durMode === 'up-to' ? 'on' : ''} onClick={() => setDurMode('up-to')}>Up to a maximum</button>
+                <button className={durMode === 'specific' ? 'on' : ''} onClick={() => setDurMode('specific')}>Only these durations</button>
+              </div>
+              {durMode !== 'specific' && (
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+                  <label className="bx-mini-input">Shortest <input aria-label="Shortest duration in days" value={durMin} onChange={(e) => setDurMin(e.target.value.replace(/\D/g, ''))} /><span className="muted">days</span></label>
+                  {durMode === 'up-to' && <label className="bx-mini-input">Longest <input aria-label="Longest duration in days" value={durMax} onChange={(e) => setDurMax(e.target.value.replace(/\D/g, ''))} /><span className="muted">days</span></label>}
+                </div>
+              )}
+              <div className="sub" style={{ marginBottom: 8 }}>
+                {durMode === 'specific'
+                  ? 'Businesses can buy only the durations below. BlockFinaX calculates the fair price; you choose the offer.'
+                  : `Businesses pick any end date${durMode === 'up-to' ? ` up to ${durMax || '?'} days` : ' up to 90 days'}. The durations below are your price points; prices in between are filled in smoothly.`}
+                {' '}All durations share this pool's liquidity.
+              </div>
               <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 560 }}>
                 <div className="bx-list-h" style={tcols}><span>{hint("Tenor")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Your offer")}</span><span className="r">{hint("Difference")}</span><span className="r">On</span><span /></div>
                 {tenors.map((t, i) => {

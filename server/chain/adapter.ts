@@ -101,6 +101,8 @@ export interface ChainAdapter {
   // Unsigned transactions for the user's wallet, in the order they must be sent.
   prepareCreatePool(owner: string, input: CreatePoolInput): Promise<PreparedTransaction[]>;
   prepareSetTenor(owner: string, poolId: number, tenor: TenorInput): Promise<PreparedTransaction[]>;
+  /** Which durations a pool sells (chains with duration rules only). */
+  prepareSetDurationRule?(owner: string, poolId: number, rule: { mode: "specific" | "any" | "up-to"; minDays: number; maxDays: number }): Promise<PreparedTransaction[]>;
   prepareDeposit(owner: string, poolId: number, amount: string): Promise<PreparedTransaction[]>;
   prepareHedge(owner: string, quote: ProtectionQuote): Promise<PreparedTransaction[]>;
   prepareWithdrawalRequest(owner: string, poolId: number, shares: string): Promise<PreparedTransaction[]>;

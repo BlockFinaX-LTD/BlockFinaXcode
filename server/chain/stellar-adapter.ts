@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { BASE_FEE, Keypair, Operation, StrKey, TransactionBuilder, contract, nativeToScVal, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import type { ChainConfig } from "@shared/chains/registry";
+import type { DurationRule } from "@shared/domain/durations";
 import { fromRate, fromUnits, toRate, toUnits, STRUCTURE_CODE } from "@shared/domain/pool-economics";
 import {
   ApplicationError,
@@ -128,10 +129,28 @@ export class StellarAdapter implements ChainAdapter {
   async getPool(poolId: number): Promise<CurrencyPool> {
     try {
       const c = await this.client(this.poolId);
-      const [p, l] = await Promise.all([c.get_pool({ pool_id: poolId }), c.get_liquidity({ pool_id: poolId })]);
-      return this.toPool(unwrap(p.result), unwrap(l.result));
+      const [p, l, rule] = await Promise.all([c.get_pool({ pool_id: poolId }), c.get_liquidity({ pool_id: poolId }), this.durationRule(c, poolId)]);
+      return { ...this.toPool(unwrap(p.result), unwrap(l.result)), durations: rule };
     } catch (err) {
       throw this.mapError(err);
+    }
+  }
+
+  /** The protocol's longest duration; contracts from before duration rules sell what they list. */
+  private maxTenorDays: { value: number; at: number } | null = null;
+
+  private async durationRule(c: any, poolId: number): Promise<DurationRule | undefined> {
+    if (typeof c.get_duration_rule !== "function") return undefined;
+    try {
+      if (!this.maxTenorDays || Date.now() - this.maxTenorDays.at > 300_000) {
+        this.maxTenorDays = { value: Number((await c.get_max_tenor_days()).result), at: Date.now() };
+      }
+      const max = this.maxTenorDays.value;
+      const r = unwrap((await c.get_duration_rule({ pool_id: poolId })).result);
+      const mode = r.mode === 1 ? "any" : r.mode === 2 ? "up-to" : "specific";
+      return { mode, minDays: Number(r.min_days), maxDays: mode === "up-to" ? Math.min(Number(r.max_days), max) : max };
+    } catch {
+      return undefined;
     }
   }
 
@@ -373,6 +392,11 @@ export class StellarAdapter implements ChainAdapter {
       tenors: input.tenors.map((t) => ({ tenor_days: t.tenorDays, active: t.active, markup_bps: t.markupBps })),
       initial_liquidity: toUnits(input.initialLiquidity, this.usdc.decimals),
     });
+  }
+
+  prepareSetDurationRule(_owner: string, poolId: number, r: { mode: "specific" | "any" | "up-to"; minDays: number; maxDays: number }) {
+    const mode = r.mode === "any" ? 1 : r.mode === "up-to" ? 2 : 0;
+    return this.prepare("Set durations", "set_duration_rule", { pool_id: poolId, rule: { mode, min_days: r.minDays, max_days: r.mode === "up-to" ? r.maxDays : 0 } });
   }
 
   prepareSetTenor(_owner: string, poolId: number, t: TenorInput) {

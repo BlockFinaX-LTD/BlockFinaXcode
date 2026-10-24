@@ -5,6 +5,7 @@
  * chain details behind "Advanced details". Everything is USDC and network fees are
  * sponsored.
  */
+import { expiryAt } from '@shared/domain/durations';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CurrencyPool } from '@shared/domain/types';
@@ -31,7 +32,10 @@ export const fmt = (v: string | number | null | undefined, dp = 2) =>
 export const fmtRate = (v: string | number) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 export const pct = (fraction: number, dp = 2) => `${(fraction * 100).toFixed(dp)}%`;
 export const dateOf = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-export const dateIn = (days: number) => new Date(Date.now() + days * 86_400_000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+/** The date cover bought now for `days` ends: 14:00 UTC on that date, weekends moved to Monday. */
+export const dateIn = (days: number) => new Date(expiryAt(Math.floor(Date.now() / 1000), days) * 1000).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+/** The exact end of cover bought now for `days`, in the viewer's time. */
+export const endsAt = (days: number) => new Date(expiryAt(Math.floor(Date.now() / 1000), days) * 1000).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 export const poolRef = (p: CurrencyPool) => `${p.ref.chain}:${p.ref.contract}:${p.ref.id}`;
 
 /**

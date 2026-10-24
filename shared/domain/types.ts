@@ -149,6 +149,8 @@ export interface CurrencyPool {
   allowExternalLp: boolean;
   structures: PoolStructures;
   tenors: Tenor[];
+  /** Which durations the pool sells; absent means only its listed tenors. */
+  durations?: import("./durations").DurationRule;
   fees: FeeRates;
   liquidity: { cash: string; reserved: string; deferredPremium: string; nav: string; free: string; holdback: string; capacity: string };
   creatorEarnings: string;
