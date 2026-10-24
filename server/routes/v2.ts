@@ -32,6 +32,7 @@ import { QuoteService, enginePricer } from "../domain/quote-service";
 import { settlementResult } from "../domain/settlement";
 import { routeView, routingService, type RoutingService } from "../routing/service";
 import { getSession } from "../auth-routes";
+import { registerRfqRoutes } from "../rfq/routes";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
 
 const STATUS: Partial<Record<ApplicationErrorCode, number>> = {
@@ -88,6 +89,7 @@ async function ownerOn(s: Services, uid: number, chain: ChainKey) {
 }
 
 export function registerV2Routes(app: Express) {
+  registerRfqRoutes(app, { getServices, userId, ownerOn, wrap });
   app.get("/api/v2/chains", wrap(async (_req, res) => {
     const chains = chainRegistry();
     if (!chains) throw new ApplicationError("CHAIN_NOT_ENABLED", `Chain registry not configured: ${registryLoadError()}`);

@@ -394,6 +394,32 @@ export class StellarAdapter implements ChainAdapter {
     });
   }
 
+  /**
+   * A create_pool transaction whose authorization stays valid for `validSeconds`, for the
+   * creator to approve now and the platform to submit later (Request a quote offers).
+   */
+  async prepareCreatePoolForLater(owner: string, input: CreatePoolInput, validSeconds: number): Promise<PreparedTransaction> {
+    const [tx] = await this.prepareCreatePool(owner, input);
+    const payload = tx.payload as { kind: "stellar"; networkPassphrase: string; xdr: string };
+    const latest = (await this.server.getLatestLedger()).sequence;
+    const until = latest + Math.ceil(validSeconds / 5);
+    const envelope = xdr.TransactionEnvelope.fromXDR(payload.xdr, "base64");
+    const invoke = envelope.v1().tx().operations()[0].body().invokeHostFunctionOp();
+    for (const entry of invoke.auth()) {
+      const c = entry.credentials();
+      if (c.switch().name === "sorobanCredentialsAddress") c.address().signatureExpirationLedger(until);
+    }
+    return { ...tx, label: "Approve your offer", payload: { ...payload, xdr: envelope.toXDR("base64") } };
+  }
+
+  /** The newest pools, newest first (for finding a pool just created). */
+  async recentPools(limit: number): Promise<CurrencyPool[]> {
+    const count = Number((await (await this.client(this.poolId)).get_pool_count()).result);
+    const out: CurrencyPool[] = [];
+    for (let id = count; id >= 1 && out.length < limit; id--) out.push(await this.getPool(id));
+    return out;
+  }
+
   prepareSetDurationRule(_owner: string, poolId: number, r: { mode: "specific" | "any" | "up-to"; minDays: number; maxDays: number }) {
     const mode = r.mode === "any" ? 1 : r.mode === "up-to" ? 2 : 0;
     return this.prepare("Set durations", "set_duration_rule", { pool_id: poolId, rule: { mode, min_days: r.minDays, max_days: r.mode === "up-to" ? r.maxDays : 0 } });

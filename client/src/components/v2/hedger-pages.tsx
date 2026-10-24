@@ -15,9 +15,10 @@ import {
   ccyName, dateIn, dateOf, endsAt, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
   useUsdcBalances, usdcOn, useIsDemo, openContactSales, type Direction,
 } from './shared';
-import { AssetClassTabs, Flag, hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
+import { AssetClassTabs, Flag, hint, Loading, Note, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
+import { MyQuoteRequests, RequestQuoteModal } from './rfq';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
@@ -179,6 +180,9 @@ export function MarketsPage({ go }: { go: Go }) {
               {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
             </div></div>
           )}
+          <div className="bx-hint" style={{ marginTop: 12 }}>
+            Don't see what you need? <button className="bx-link" onClick={() => go('h-protect', { rfq: true })}>Request a quote</button>
+          </div>
         </div>}
       </section>
     </main>
@@ -670,6 +674,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 
   const available = useMemo(() => (pools.data ?? []).filter((p) => p.acceptingHedges && Number(p.liquidity.capacity) > 0), [pools.data]);
   const pairs = useMemo(() => Array.from(new Set(available.map((p) => p.pair))), [available]);
+  const setup = useQuery({ queryKey: ['v2-pool-setup'], queryFn: () => api<{ pairs: string[] }>('/api/v2/pools/setup'), staleTime: 300_000 });
+  const rfqPairs = setup.data?.pairs ?? pairs;
   const [pair, setPair] = useState<string | null>(initialPair);
   useEffect(() => { if (initialPair) setPair(initialPair); }, [initialPair]);
   useEffect(() => { if ((!pair || !pairs.includes(pair)) && pairs[0]) setPair(pairs[0]); }, [pairs, pair]);
@@ -681,6 +687,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   useEffect(() => { if (target?.direction) setDirection(target.direction); }, [target?.direction]);
   useEffect(() => { if (directions.length && !directions.includes(direction)) setDirection(directions[0]); }, [directions, direction]);
   // The pool to buy from: one chosen in Markets, or null for the best price.
+  const [rfqOpen, setRfqOpen] = useState(Boolean(target?.rfq));
+  useEffect(() => { if (target?.rfq) setRfqOpen(true); }, [target?.rfq]);
   const [poolChoice, setPoolChoice] = useState<string | null>(target?.pool ?? null);
   useEffect(() => { setPoolChoice(target?.pool ?? null); }, [target?.pool]);
   const matching = available.filter((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
@@ -1000,12 +1008,21 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 <Sum l="Total" v={<span className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</span>} total />
               </div>
               {chosen.error && <p className="bx-error">{(chosen.error as Error).message}</p>}
+              {chosen.error && <Note>No pool can price this cover. <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button> and approved underwriters can make you an offer.</Note>}
               <button className="bx-btn block" disabled={!e} onClick={() => setMode('review')}>Review protection</button>
+              {!chosen.error && <div className="bx-hint" style={{ textAlign: 'center' }}>Need other terms? <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button></div>}
               <div className="bx-hint">{e ? `Price held for ${left} seconds · ` : ''}approve with your passkey</div>
             </>
           )}
         </div>
       </aside>
+      {rfqOpen && pair && (
+        <RequestQuoteModal
+          pairs={rfqPairs}
+          draft={{ pair, direction, notional: amount, tenorDays: days ?? 30, strike, cap, reason: chosen.error ? (chosen.error as Error).message : undefined }}
+          onClose={() => setRfqOpen(false)}
+        />
+      )}
     </main>
   );
 }
@@ -1036,6 +1053,7 @@ export function MyProtections({ go }: { go: Go }) {
   return (
     <main className="bx-main">
       <section className="bx-full">
+        <MyQuoteRequests />
         <AssetClassTabs value={assetClass} onChange={setAssetClass} />
         {assetClass === 'ir' ? <RateProtections go={go} /> : <div className="bx-card">
           <div className="bx-card-h"><h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>

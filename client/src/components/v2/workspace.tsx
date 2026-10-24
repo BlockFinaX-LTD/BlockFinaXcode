@@ -8,7 +8,7 @@
 import { ContactSales, DemoBanner } from './demo';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowUp, CircleUser, GraduationCap, Home, Layers, LineChart, List, Menu, Moon, Search, Shield, Store, Sun, Wallet, X } from 'lucide-react';
+import { ArrowUp, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Moon, Search, Shield, Store, Sun, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -18,13 +18,14 @@ import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapit
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
 import { ProductTour } from './tour';
+import { UnderwriterRequests } from './rfq';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
 export type Page =
   | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account' | 'pair'
-  | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw';
-export interface Target { wallet?: 'deposit' | 'withdraw'; position?: string; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
+  | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw' | 'u-requests';
+export interface Target { rfq?: boolean; wallet?: 'deposit' | 'withdraw'; position?: string; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
 export type Go = (page: Page, target?: Target) => void;
 
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
@@ -39,6 +40,7 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   underwriter: [
     { page: 'u-home', label: 'Home', icon: <Home /> },
     { page: 'u-pools', label: 'My pools', icon: <Layers /> },
+    { page: 'u-requests', label: 'Quote requests', icon: <Inbox /> },
     { page: 'u-risk', label: 'Risk and exposure', icon: <LineChart /> },
     { page: 'u-withdraw', label: 'Withdraw capital', icon: <ArrowUp /> },
     { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
@@ -190,6 +192,7 @@ export function Workspace() {
         {page === 'u-pool' && <PoolPage go={go} poolRef={pool} />}
         {page === 'u-risk' && <RiskPage go={go} poolRef={pool} />}
         {page === 'u-withdraw' && <WithdrawCapital go={go} poolRef={pool} />}
+        {page === 'u-requests' && <UnderwriterRequests />}
       </div>
 
       <AgentChat />

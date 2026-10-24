@@ -228,7 +228,7 @@ export async function addBackupPasskey(label: string, onStep?: WalletStep): Prom
     const { Buffer } = await import("buffer");
     (globalThis as any).Buffer ??= Buffer;
     const { PasskeyKit, SignerStore } = await import("passkey-kit");
-    const kit = new PasskeyKit({ rpcUrl: cfg.stellar.rpcUrl, networkPassphrase: cfg.stellar.networkPassphrase, walletWasmHash: cfg.stellar.walletWasmHash });
+    const kit = new PasskeyKit({ rpcUrl: cfg.stellar.rpcUrl, networkPassphrase: cfg.stellar.networkPassphrase, walletWasmHash: cfg.stellar.walletWasmHash, rpId: cfg.rpId });
     await kit.connectWallet({ keyId: session.credentialId, getContractId: async () => stellar.address });
     const tx = await kit.addSecp256r1(passkey.credentialId, stellarPublicKey, undefined, SignerStore.Persistent);
     const signed = await signStellarAuth(tx.built!.toXDR(), session.credentialId, stellar.address);
@@ -304,6 +304,19 @@ export class PasskeyWalletProvider implements WalletProvider {
 }
 
 export const passkeyWalletProvider = new PasskeyWalletProvider();
+
+/**
+ * Approve a Stellar transaction with the passkey without sending it. The server keeps the
+ * signed transaction and submits it later (a Request a quote offer, sent only when the
+ * business accepts). Its signature stays valid until the expiry the server set on it.
+ */
+export async function signStellarForLater(networkKey: string, transactionXdr: string, onStep?: (m: string) => void): Promise<string> {
+  const session = await currentPasskeySession();
+  const account = session?.accounts.find((a) => a.chain === networkKey);
+  if (!session?.credentialId || !account) throw new Error("No Stellar account for this wallet");
+  onStep?.("Approve with your passkey...");
+  return signStellarAuth(transactionXdr, session.credentialId, account.address);
+}
 
 /** Network keys in the shape the wallet screens use ("stellar-testnet" -> "STELLAR_TESTNET"). */
 export const toScreenChain = (key: string) => key.toUpperCase().replace(/-/g, "_");
