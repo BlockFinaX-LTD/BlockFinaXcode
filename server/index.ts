@@ -380,7 +380,7 @@ app.use((req, res, next) => {
   startDailyRefresh();
   // Testnet has its own empty database: load the pricing history it needs, in the background.
   if (process.env.APP_ENV === "testnet") {
-    void import("./pricing/testnet-bootstrap").then((m) => m.bootstrapTestnetPricing());
+    void import("./pricing/testnet-bootstrap").then((m) => m.startTestnetPricing());
     // Interest-rate benchmarks (SOFR, KESONIA) from official sources; testnet only until licensing clears.
     void import("./rates/scheduler").then((m) => m.startRateOracleScheduler());
     // Expired currency-pool hedges on Stellar (current and legacy contracts) get prices and settle.
