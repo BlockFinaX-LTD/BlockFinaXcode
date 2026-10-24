@@ -43,6 +43,9 @@ import { EvmRelayer, paymasterUrls } from "./evm-relayer";
 import { Api as StellarApi, Server as StellarServer } from "@stellar/stellar-sdk/rpc";
 import { BASE_FEE, Keypair, Operation, TransactionBuilder, nativeToScVal } from "@stellar/stellar-sdk";
 
+/** A passkey sign-in lasts at most 12 hours; the browser also forgets it when the tab closes. */
+const PASSKEY_SESSION_HOURS = 12;
+
 /** The passkey wallet is the default; the legacy Rift wallet only with WALLET_PROVIDER=rift. */
 export const passkeyWalletEnabled = () => process.env.WALLET_PROVIDER !== "rift";
 
@@ -223,7 +226,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       throw httpError(400, (err as Error).message);
     }
     const user = await findOrCreateUser(email);
-    const sessionToken = await createSession(user.id);
+    const sessionToken = await createSession(user.id, undefined, PASSKEY_SESSION_HOURS);
     res.json({ sessionToken });
   }));
 
@@ -297,7 +300,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     });
     if (!result.verified) throw httpError(401, "Passkey verification failed");
     await db.update(walletPasskeys).set({ counter: result.authenticationInfo.newCounter }).where(eq(walletPasskeys.id, passkey.id));
-    const sessionToken = await createSession(passkey.userId);
+    const sessionToken = await createSession(passkey.userId, undefined, PASSKEY_SESSION_HOURS);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, passkey.userId));
     const provisioned = await provision(passkey.userId, (await findPasskey(passkey.userId)) ?? passkey);
     res.json({ sessionToken, user: { id: user.id, name: user.name }, credentialId: passkey.credentialId, ...provisioned });

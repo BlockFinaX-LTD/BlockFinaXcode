@@ -82,7 +82,8 @@ function generateToken(bytes = 32): string {
   return randomBytes(bytes).toString('hex');
 }
 
-function sessionExpiry(hours = 30 * 24): Date {
+/** Sign-ins last 12 hours at most; the app also forgets them when its tab closes. */
+function sessionExpiry(hours = 12): Date {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
 }
 
@@ -102,9 +103,9 @@ export async function getSession(req: any) {
   return session || null;
 }
 
-export async function createSession(userId: number, walletAddress?: string) {
+export async function createSession(userId: number, walletAddress?: string, hours?: number) {
   const sessionToken = generateToken(48);
-  const expiresAt = sessionExpiry();
+  const expiresAt = sessionExpiry(hours);
   await db.insert(authSessions).values({ sessionToken, userId, walletAddress: walletAddress || null, expiresAt });
   return sessionToken;
 }

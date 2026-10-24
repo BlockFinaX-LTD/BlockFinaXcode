@@ -59,14 +59,19 @@ interface WalletConfig {
   stellar?: { chain: string; rpcUrl: string; networkPassphrase: string; walletWasmHash: string } | null;
 }
 
+// The sign-in lives in sessionStorage, which the browser clears when the tab or window
+// closes: reopening BlockFinaX asks for the passkey again. A refresh keeps it.
+// Older builds kept it in localStorage; that copy is removed on load.
+try { localStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ }
+
 export function storedSessionToken(): string | null {
-  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
 
 function storeSessionToken(token: string | null) {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
   } catch { /* storage unavailable: session lasts for this page only */ }
 }
 

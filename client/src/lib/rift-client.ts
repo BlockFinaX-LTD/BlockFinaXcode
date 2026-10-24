@@ -182,7 +182,7 @@ export async function getMe(): Promise<User | null> {
 
 export function isLoggedIn(): boolean {
   if (import.meta.env.VITE_WALLET_PROVIDER !== 'rift') {
-    try { return !!localStorage.getItem('bfx:passkey-session'); } catch { return false; }
+    try { return !!sessionStorage.getItem('bfx:passkey-session'); } catch { return false; }
   }
   return rift.isAuthenticated();
 }
