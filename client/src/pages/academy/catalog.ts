@@ -48,7 +48,7 @@ export const CATALOG: Lesson[] = [
       { id: 'shape',       label: 'The shape of the protocol' },
       { id: 'roles',       label: 'The four roles' },
       { id: 'lifecycle',   label: 'Lifecycle of a pool' },
-      { id: 'solvency',    label: 'Why pools are always solvent' },
+      { id: 'solvency',    label: 'Collateral checks and remaining risks' },
       { id: 'not-position',label: 'Why the protocol takes no position' },
     ],
   },

@@ -160,11 +160,32 @@ export async function checkTransaction(args: {
     const [pool] = args.eventId
       ? await db.select().from(hedgeEvents).where(eq(hedgeEvents.id, args.eventId)).limit(1)
       : [];
+    if (!pool) {
+      return {
+        standing,
+        addsCashUsd: 0,
+        addsExposureUsd: 0,
+        allowed: false,
+        reason: "Could not verify this pool's risk settings. Please retry later.",
+      };
+    }
+    const premiumRate = Number(pool.premiumRate);
+    const payoutRate = Number(pool.payoutRate);
+    if (
+      !Number.isFinite(premiumRate) || premiumRate <= 0 || premiumRate > 1 ||
+      !Number.isFinite(payoutRate) || payoutRate <= 0 || payoutRate > 10
+    ) {
+      return {
+        standing,
+        addsCashUsd: 0,
+        addsExposureUsd: 0,
+        allowed: false,
+        reason: "This pool has invalid risk settings and cannot be checked safely.",
+      };
+    }
     const notional = args.notionalUsd ?? 0;
-    // Fall back to the platform's standard 10% payout rate if the pool cannot
-    // be read: erring toward a higher exposure keeps the control conservative.
-    addsCash = notional * (pool ? num(pool.premiumRate) : 0.01);
-    addsExposure = notional * (pool ? num(pool.payoutRate) : 0.1);
+    addsCash = notional * premiumRate;
+    addsExposure = notional * payoutRate;
   } else {
     addsCash = args.amountUsd ?? 0;
   }

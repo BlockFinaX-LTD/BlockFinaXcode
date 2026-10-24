@@ -9,11 +9,13 @@
 import { Link } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Presentation, Folder, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Presentation, Folder, ChevronRight, FileText } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 
 // The whitepaper is reached from the data room rather than listed separately.
 const DOCS = [
+  { href: '/docs/technical', icon: FileText, title: 'Technical documentation', sub: 'API reference, SDK guides, and protocol documentation.' },
+  { href: '/data-room/whitepaper', icon: FileText, title: 'Whitepaper', sub: 'Protocol design and strategy.' },
   {
     href: '/pitch',
     icon: Presentation,
@@ -45,10 +47,9 @@ export default function DocsIndex() {
 
       <main className="max-w-2xl mx-auto px-4 pt-8">
         <div className="mb-6">
-          <h1 className="bfx-display text-2xl font-semibold tracking-tight">You're in</h1>
+          <h1 className="bfx-display text-2xl font-semibold tracking-tight">Documentation</h1>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            Your access link expires on the date shown in your email. You'll stay signed in on this
-            browser until then.
+            Explore our documentation. No sign-in or access approval is required.
           </p>
         </div>
 
@@ -71,10 +72,7 @@ export default function DocsIndex() {
           ))}
         </div>
 
-        <p className="text-[11px] text-muted-foreground mt-8 text-center">
-          These docs are confidential. Please don't share the magic link — tokens are tracked and we
-          revoke ones that get circulated.
-        </p>
+
       </main>
     </div>
   );

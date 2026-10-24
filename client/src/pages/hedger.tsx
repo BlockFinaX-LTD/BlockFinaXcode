@@ -740,8 +740,9 @@ function LearnTab() {
           </Lesson>
           <Lesson n={4} title="Payout structure: bounded and predictable">
             <p className="text-sm text-gray-700">
-              Parametric means automatic. There's no claims process, no
-              adjuster, no negotiation. The cap bounds the maximum payout — a
+              Parametric cover uses predefined contract terms. There is no
+              claims adjuster or negotiation, but settlement still depends on
+              oracle data and an on-chain transaction. The cap bounds the maximum payout — a
               4.5% cap on $50,000 = $2,250 maximum, regardless of how far the
               rate moves.
             </p>
@@ -789,15 +790,15 @@ function UseCasesTab() {
     },
     {
       q: 'How fast can I get protection?',
-      a: 'Instant. No underwriting interview, no credit check. You pick your notional, your terms, you pay the premium, and the protection is live. One of the biggest differences from bank forwards.',
+      a: 'The app can submit a purchase once wallet, network, liquidity and contract checks pass. A confirmed on-chain transaction is required before protection is live; delays or reverts are possible.',
     },
     {
       q: 'What happens at expiry — do I need to do anything?',
-      a: 'No. Settlement is automatic. If the rate breaches the band by expiry, the payout is sent to your wallet. If the rate stays inside, the protection simply expires.',
+      a: 'Settlement requires the configured oracle path to submit a valid transaction after expiry. If the contract records a payout, the winning hedger must call the claim function to receive it. Oracle or network delays can postpone settlement.',
     },
     {
       q: 'Can I buy protection for any currency?',
-      a: 'BlockFinaX currently supports USD/GHS, USD/NGN, USD/KES, USD/ETB, USD/EGP, and USD/ZAR. Additional pairs roll out based on validated SME demand. If your corridor isn\'t listed, get in touch.',
+      a: 'Available currency markets depend on the selected network and current contract configuration. Check the markets shown in the app before connecting or transacting. If your corridor is not listed, contact us to ask about availability.',
     },
   ];
 
@@ -808,10 +809,10 @@ function UseCasesTab() {
           Who uses parametric FX protection?
         </h2>
         <p className="text-sm text-gray-700 leading-relaxed">
-          Anyone with a future foreign-currency exposure they can't fully pass
-          through to their customers. The most common users on BlockFinaX are
-          SME importers and exporters, foreign-school payers, and businesses
-          serving cross-border supply chains. Each one uses protection slightly
+          A business with a future foreign-currency exposure may evaluate this
+          product if a compatible market is available. Intended customer groups
+          include importers, exporters and businesses with cross-border supply
+          chains; current usage and product availability vary by deployment. Each one uses protection slightly
           differently.
         </p>
       </Section>

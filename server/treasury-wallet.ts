@@ -23,16 +23,16 @@ export function isMainnetTreasury(): boolean {
 
 const NETWORK_CONFIGS = {
   testnet: {
-    rpcUrl: "https://sepolia.base.org",
-    chainId: 4202,
-    usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
+    rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
+    chainId: 84532,
+    usdcAddress: process.env.BASE_SEPOLIA_USDC_ADDRESS || "",
     name: "Base Sepolia"
   },
   mainnet: {
-    rpcUrl: "https://sepolia.base.org",
-    chainId: 4202,
-    usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
-    name: "Base Sepolia"
+    rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+    chainId: 8453,
+    usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    name: "Base Mainnet"
   }
 };
 
@@ -62,9 +62,8 @@ export function getTreasuryWallet(): ethers.Wallet {
   }
 
   const provider = getTreasuryProvider();
-  treasuryWallet = new ethers.Wallet(privateKey, provider);
-  
   const config = getTreasuryNetworkConfig();
+  treasuryWallet = new ethers.Wallet(privateKey, provider);
   console.log(`Treasury wallet initialized on ${config.name} (chainId: ${config.chainId})`);
   
   return treasuryWallet;
@@ -75,5 +74,9 @@ export function getTreasuryAddress(): string {
 }
 
 export function getTreasuryUSDCAddress(): string {
-  return getTreasuryNetworkConfig().usdcAddress;
+  const config = getTreasuryNetworkConfig();
+  if (!config.usdcAddress) {
+    throw new Error("BASE_SEPOLIA_USDC_ADDRESS must be configured before testnet treasury operations");
+  }
+  return config.usdcAddress;
 }

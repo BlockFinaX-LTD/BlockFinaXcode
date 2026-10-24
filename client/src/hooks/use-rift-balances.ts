@@ -1,3 +1,4 @@
+import { isWalletSandbox } from "@/lib/wallet-environment";
 /**
  * useRiftBalances Hook — Wallet balances via the Rift SDK
  *
@@ -37,7 +38,7 @@ const NETWORK_ID_TO_RIFT_CHAIN: Record<number, ChainName> = {
   56: 'BNB',
 };
 
-const CACHE_KEY = 'bfx_rift_balances';
+const CACHE_KEY = isWalletSandbox ? 'bfx_sandbox_balances' : 'bfx_rift_balances';
 
 function loadCached(): Balance[] {
   try {

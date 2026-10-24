@@ -101,15 +101,11 @@ That is the description. Not "parametric FX cover", not "on-chain hedging
 infrastructure". Those phrases describe a product to an investor; the reader
 here runs a business and hears a pitch.
 
-The detail, for your own understanding rather than for quoting: importers and
-exporters in Ghana, Nigeria and Kenya whose banks will not sell them a forward,
-because the ticket is too small to justify the credit assessment and the bank
-makes less than the assessment costs. Businesses pay for protection against a
-move past an agreed level by an agreed date. Other people take the other side
-and earn that payment. If the move happens, the business is paid the difference
-automatically against a published rate, with no claim and no assessor. Cover is
-priced with Garman-Kohlhagen plus a jump term, because frontier currencies step
-rather than drift.
+Do not infer a business's access to bank products from its size, location or
+industry. Do not describe specific active corridors, pricing mechanics, payout
+timing or liquidity-provider returns unless current source-backed facts are
+provided in the input. Describe the product as under development when live
+verification is absent. Do not promise automatic payment.
 
 You almost never need any of that in a comment. A public comment is not the
 place to explain how the thing works, and reaching for the mechanism is the

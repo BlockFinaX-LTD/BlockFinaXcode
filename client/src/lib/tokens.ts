@@ -1,3 +1,4 @@
+import { isWalletSandbox, sandboxTokenAddress } from "./wallet-environment";
 /**
  * Tokens - Token registry and ERC-20 contract helpers
  *
@@ -29,10 +30,9 @@ export const ERC20_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)"
 ];
 
-export const NETWORK_TOKENS: NetworkTokens = {
-  // Lisk (network IDs 1 + 2) was removed when smart-contract support for
-  // Lisk was dropped. Supported networks: Base (3) and BSC (4).
-  //
+export const NETWORK_TOKENS: NetworkTokens = isWalletSandbox ? {
+  84532: sandboxTokenAddress ? [{ symbol: 'sUSD', name: 'Sandbox USD', address: sandboxTokenAddress, decimals: 6, icon: '💵', color: '#2775CA' }] : [],
+} : {
   // Base Mainnet (internal network ID 3)
   3: [
     {
@@ -152,15 +152,11 @@ export class TokenManager {
     try {
       let usdcContracts: string[] = [];
       
-      if (networkId === 1) {
-        usdcContracts = ['0xF242275d3a6527d877f2c927a82D9b057609cc71'];
-      } else if (networkId === 2) {
-        usdcContracts = ['0xf52Ad63619Bf9cFeF510341ac6b4038554399562'];
-      } else if (networkId === 3) {
+      if (networkId === 3) {
         usdcContracts = ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'];
       } else if (networkId === 4) {
         usdcContracts = ['0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d'];
-      }
+      } else return "0";
       
       for (const usdcAddress of usdcContracts) {
         try {

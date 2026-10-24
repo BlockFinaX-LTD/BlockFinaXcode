@@ -79,15 +79,12 @@ export function daysToDeadline(deadline: Date | null, now = Date.now()): number 
  * and it can be corrected in one place when the business moves.
  */
 export const PROFILE = `
-BlockFinaX builds FX risk infrastructure for emerging markets, focused on
-Africa. Importers and exporters buy cover against currency moves; underwriters
-provide the capital and earn premiums. It runs on Base (Ethereum L2), settles in
-USDC, and prices with a Merton jump-diffusion model calibrated to frontier
-currencies. Incorporated in Delaware with a Ghanaian operating subsidiary.
-Live on mainnet with real positions. Categories that fit: onchain/crypto
-infrastructure, fintech, emerging markets, financial inclusion, trade finance,
-climate and agriculture adaptation where FX risk is a barrier, Africa-focused
-accelerators and funds.
+BlockFinaX is developing tools for foreign-exchange risk management and
+cross-border payments. Deployment, product availability, settlement assets,
+corporate structure, operating traction, pricing and regulatory status must be
+verified from current source material before they are stated in a funding
+application. Do not infer a grant's fit or the company's eligibility without
+checking the current published criteria.
 `.trim();
 
 export const DEFAULT_QUERIES = [

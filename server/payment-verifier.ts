@@ -15,22 +15,28 @@ interface NetworkPaymentConfig {
 }
 
 const TESTNET_CONFIG: NetworkPaymentConfig = {
-  usdcAddress: "0xf52Ad63619Bf9cFeF510341ac6b4038554399562",
-  rpcUrl: "https://sepolia.base.org",
-  chainId: 4202,
+  usdcAddress: process.env.BASE_SEPOLIA_USDC_ADDRESS || "",
+  rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
+  chainId: 84532,
   name: "Base Sepolia"
 };
 
-const MAINNET_CONFIG: NetworkPaymentConfig = TESTNET_CONFIG;
+const MAINNET_CONFIG: NetworkPaymentConfig = {
+  usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+  chainId: 8453,
+  name: "Base Mainnet",
+};
 
 const MAINNET_RPC_FALLBACKS = [
-  "https://sepolia.base.org",
-  "https://base-sepolia.drpc.org"
+  process.env.BASE_RPC_URL || "https://mainnet.base.org",
+  "https://base-rpc.publicnode.com",
+  "https://base.drpc.org",
 ];
 
 const TESTNET_RPC_FALLBACKS = [
-  "https://sepolia.base.org",
-  "https://base-sepolia.drpc.org"
+  process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
+  "https://base-sepolia.drpc.org",
 ];
 
 export function getNetworkMode(): "testnet" | "mainnet" {
@@ -39,19 +45,25 @@ export function getNetworkMode(): "testnet" | "mainnet" {
 }
 
 export function getPaymentNetworkConfig(): NetworkPaymentConfig {
-  return getNetworkMode() === "mainnet" ? MAINNET_CONFIG : TESTNET_CONFIG;
+  const config = getNetworkMode() === "mainnet" ? MAINNET_CONFIG : TESTNET_CONFIG;
+  if (!config.usdcAddress) {
+    throw new Error("BASE_SEPOLIA_USDC_ADDRESS must be configured before testnet payment verification");
+  }
+  return config;
 }
 
 async function getWorkingProvider(): Promise<ethers.JsonRpcProvider> {
+  const config = getPaymentNetworkConfig();
   const fallbacks = getNetworkMode() === "mainnet" ? MAINNET_RPC_FALLBACKS : TESTNET_RPC_FALLBACKS;
   
   for (const rpcUrl of fallbacks) {
     try {
       const provider = new ethers.JsonRpcProvider(rpcUrl);
-      await Promise.race([
-        provider.getBlockNumber(),
+      const network = await Promise.race([
+        provider.getNetwork(),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
-      ]);
+      ]) as ethers.Network;
+      if (Number(network.chainId) !== config.chainId) continue;
       return provider;
     } catch {
       continue;
@@ -61,10 +73,7 @@ async function getWorkingProvider(): Promise<ethers.JsonRpcProvider> {
   throw new Error(`No working RPC provider found for ${getNetworkMode()} network`);
 }
 
-const USDC_ABI = [
-  "function transfer(address to, uint256 amount) returns (bool)",
-  "event Transfer(address indexed from, address indexed to, uint256 value)"
-];
+const USDC_ABI = ["event Transfer(address indexed from, address indexed to, uint256 value)"];
 
 interface PaymentVerification {
   valid: boolean;

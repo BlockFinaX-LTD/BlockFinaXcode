@@ -19,7 +19,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowRight } from 'lucide-react';
 import {

@@ -281,10 +281,6 @@ export default function ProfilePage() {
           <VerificationRow />
         </SettingsGroup>
 
-        <SettingsGroup title="Earn">
-          <SettingsRow icon={TrendingUp} label="Tasks and rewards" sub="Points, referrals and payouts in USDC" href="/tasks" />
-        </SettingsGroup>
-
         <SettingsGroup title="App">
           <SettingsRow icon={SettingsIcon} label="Security and preferences" sub="Auto-lock, display currency, terms and privacy" href="/settings" />
           <SettingsRow

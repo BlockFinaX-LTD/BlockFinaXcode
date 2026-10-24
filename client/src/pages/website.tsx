@@ -1226,7 +1226,7 @@ function Footer() {
               <Link href="/faq">FAQ</Link>
               <Link href="/learn">Academy</Link>
               <Link href="/blog">Blog</Link>
-              <a href="mailto:hello@blockfinax.com">Contact</a>
+              <Link href="/contact">Contact</Link>
             </div>
             <div className="foot-col">
               <h5>Social</h5>

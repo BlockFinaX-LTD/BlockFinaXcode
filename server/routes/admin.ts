@@ -19,7 +19,7 @@ const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
  * Server-side key. Prefers RIFT_SECRET_KEY, which must never carry a VITE_
  * prefix — that prefix is what puts a value into the public browser bundle.
  */
-const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || process.env.VITE_RIFT_API_KEY || "";
+const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || "";
 import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain, readCreationFeePerChain, diagnoseChainReads } from "../hedge-reader";
 
 export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
@@ -110,6 +110,11 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
   // Key-protected hedge-events clear — no wallet auth needed, uses SAFE_OWNER_KEY_1 as bearer
   app.post("/api/admin/clear-hedge-events", async (req, res) => {
+    // This destructive test/reset operation must never be available against a
+    // production database, even if the bearer secret is accidentally exposed.
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
     // Constant-time compare. This endpoint truncates three tables, and a plain
     // !== leaks how much of the key matched through response timing. The
     // difference is small over a network and the cost of closing it is nothing.
@@ -140,6 +145,9 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   });
 
   app.post("/api/admin/reset-testnet", async (_req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
       await db.execute(sql`
         TRUNCATE TABLE

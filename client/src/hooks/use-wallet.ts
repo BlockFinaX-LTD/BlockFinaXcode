@@ -1,3 +1,4 @@
+import { isWalletSandbox, walletDefaultChainId } from "@/lib/wallet-environment";
 /**
  * useWallet Hook — Wallet state sourced from the Rift widget
  *
@@ -7,7 +8,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import {
   getMe as riftGetMe,
   clearLocalRiftState,
@@ -32,7 +33,7 @@ export interface WalletSettings {
 }
 
 const DEFAULT_SETTINGS: WalletSettings = {
-  selectedNetworkId: 8453, // Base
+  selectedNetworkId: walletDefaultChainId,
   theme: 'dark',
   currency: 'USD',
   autoLock: true,
@@ -41,13 +42,14 @@ const DEFAULT_SETTINGS: WalletSettings = {
 
 function loadSettings(): WalletSettings {
   try {
-    const raw = localStorage.getItem('wallet_settings');
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    const raw = localStorage.getItem(isWalletSandbox ? 'sandbox_wallet_settings' : 'wallet_settings');
+    const settings = raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    return isWalletSandbox ? { ...settings, selectedNetworkId: walletDefaultChainId } : settings;
   } catch { return DEFAULT_SETTINGS; }
 }
 
 function saveSettings(s: WalletSettings) {
-  localStorage.setItem('wallet_settings', JSON.stringify(s));
+  localStorage.setItem(isWalletSandbox ? 'sandbox_wallet_settings' : 'wallet_settings', JSON.stringify(s));
 }
 
 // True on first paint if the Rift provider has a persisted session in storage.
@@ -137,7 +139,7 @@ export function useWallet() {
 
   // ── Settings ───────────────────────────────────────────────────────────
   const updateSettings = useCallback((newSettings: Partial<WalletSettings>) => {
-    const updated = { ...settings, ...newSettings };
+    const updated = { ...settings, ...newSettings, ...(isWalletSandbox ? { selectedNetworkId: walletDefaultChainId } : {}) };
     setSettings(updated);
     saveSettings(updated);
   }, [settings]);

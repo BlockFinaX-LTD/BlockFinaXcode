@@ -14,7 +14,7 @@ The browser builds a SEP-41 token transfer, simulates it and requests the user's
 
 SQLite holds application identities, HMAC-protected email codes, verified credential public keys/counters, wallet addresses and confirmed activity. Session cookies contain signed, expiring identities. Registration and unlock challenges are short-lived in-memory values; restarting the server cancels pending ceremonies. A single-process queue serializes sponsorship transactions. This release must run as one API process with persistent storage.
 
-The initial approved token is Stellar's native asset contract on testnet. Friendbot funds only the sponsor's classic account; the application faucet moves 100 test XLM to the user's contract account. A faucet call is not proof that the user can sign: the payment integration test provides that evidence.
+The approved testnet payment assets are Stellar native XLM and Circle's canonical testnet USDC Stellar Asset Contract (`CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`). Both use seven decimal places. The application faucet moves 100 test XLM to the user's contract account; it does not mint or distribute USDC. Friendbot funds only the sponsor's classic account. A faucet call is not proof that the user can sign: the payment integration test provides that evidence.
 
 ## Contract provenance
 
@@ -24,4 +24,4 @@ Wallet WASM: `fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0`.
 
 ## Following this release
 
-The next wallet work is additional/recovery signers, institutional approval and spending policies, account lifecycle and storage-TTL operations, durable queues and transaction reconciliation. The separate Stellar hedge/oracle build will consume these wallet signing capabilities. A passkey payment wallet does not by itself implement FX protection or an approved institutional custody service.
+The next wallet work is additional/recovery signers, institutional approval and spending policies, account lifecycle and storage-TTL operations, durable queues and transaction reconciliation. The Base hedge contracts, FX oracle consensus, event creation, liquidity/LP accounting and settlement logic are not yet implemented on Stellar. A passkey payment wallet does not by itself implement FX protection or an approved institutional custody service.

@@ -133,11 +133,11 @@ export default function StartHere() {
           with it, and they usually can&apos;t do much about it.
         </P>
         <P>
-          They come here to buy cover. They pay a small fee up front, and
-          if the dollar gets sharply more expensive by a date they choose,
-          they get an automatic payout that offsets the damage. If nothing
-          bad happens, the fee is what it cost. Like a mobile data bundle
-          for currency risk.
+          They may use the app to buy bounded cover. A confirmed purchase
+          transaction is required. At expiry, an oracle settlement
+          transaction determines whether the contract records a payout;
+          a winning hedger must then claim it. Oracle, network and contract
+          failures can delay or prevent payment.
         </P>
         <P>
           The second group are people with dollars sitting still, in a
@@ -148,12 +148,11 @@ export default function StartHere() {
           falls hard, they help pay the covered users back.
         </P>
         <P>
-          BlockFinaX matches these two groups up on-chain, keeps a small
-          slice of the fees for running the system, and settles everything
-          automatically when the cover expires. Nobody has to trust anyone
-          personally. The pool always holds enough dollars to pay every
-          buyer&apos;s worst case, and the rate that decides who gets paid is
-          published publicly.
+          The contracts connect liquidity providers and hedgers, record
+          fees and reserve payouts according to their code. This does not
+          remove smart contract, oracle, liquidity or governance risk.
+          The current settlement mode and governance controls should be
+          checked on chain before relying on a market or payout.
         </P>
         <P>
           The lessons that follow show, in order, how the pieces fit

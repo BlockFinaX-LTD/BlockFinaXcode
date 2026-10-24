@@ -31,8 +31,9 @@ export default function Cheatsheet() {
             at or after expiry.
           </KVRow>
           <KVRow term="Owner">
-            EOA (currently) or Safe (target) authorised for admin and
-            upgrade actions.
+            Current owner type and address vary by network. Check the
+            live Governance & Protocol Control panel before assuming an
+            EOA or Safe controls admin and upgrade actions.
           </KVRow>
         </KV>
       </Section>
@@ -62,10 +63,10 @@ export default function Cheatsheet() {
             Any single fee rate at most 10%. Creator loyalty at most
             50%.
           </KVRow>
-          <KVRow term="Default rates">
-            Platform fee on premium 2.5%, payout 1%, LP profit 1%,
-            creator loyalty 5%. Creation fee: flat $25 on every
-            supported chain.
+          <KVRow term="Fee rates">
+            Rates and fee bases are network-specific and governable.
+            Read the current contract configuration and transaction
+            preview; this cheatsheet does not provide a live quote.
           </KVRow>
           <KVRow term="Range width cap">
             <CodeInline>payoutCap − strike ≤ 10 × notional</CodeInline>.

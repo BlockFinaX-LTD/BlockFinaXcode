@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import { ethers } from 'ethers';
 import { walletManager, type WalletBalance } from '@/lib/wallet';
 import { fallbackProvider } from '@/lib/rpc-provider';
