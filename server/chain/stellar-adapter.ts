@@ -491,15 +491,18 @@ export class StellarAdapter implements ChainAdapter {
     // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.
     const relayerUrl = this.env.STELLAR_RELAYER_URL;
     const relayerKey = this.env.STELLAR_RELAYER_API_KEY;
+    const secret = this.env.STELLAR_FEE_PAYER_SECRET;
     if (relayerUrl && relayerKey) {
       const { RelayerClient } = await import("passkey-kit/server");
       const result = await new RelayerClient({ baseUrl: relayerUrl, apiKey: relayerKey })
         .send(call.func.toXDR("base64"), call.auth.map((a) => a.toXDR("base64")));
-      if (!result.success) throw fail(new Error(result.error.message));
-      return { chain: this.chain.key, state: "CONFIRMED", hash: result.hash };
+      if (result.success) return { chain: this.chain.key, state: "CONFIRMED", hash: result.hash };
+      // A relayer that cannot build the transaction (it once priced a hedge at ~745 XLM) is
+      // not the last word: the platform fee payer tries, under its own fee cap.
+      console.warn(`[stellar] relayer failed, trying the platform fee payer: ${result.error.message}`);
+      if (!secret) throw fail(new Error(result.error.message));
     }
     // Fallback: the platform fee payer submits and pays.
-    const secret = this.env.STELLAR_FEE_PAYER_SECRET;
     if (!secret) throw new ApplicationError("CHAIN_NOT_ENABLED", "Stellar fee sponsor is not configured");
     try {
       const hash = await relay(this.server, this.chain.networkId, secret, call.func, call.auth);
