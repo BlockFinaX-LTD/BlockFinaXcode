@@ -75,6 +75,9 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   return { func: op.func, auth, method, target };
 }
 
+/** The most the fee payer spends on one relayed call (50 XLM); normal calls cost a few XLM. */
+const MAX_RESOURCE_FEE_STROOPS = BigInt(500_000_000);
+
 /** Submit an inspected call with the platform fee payer as source. Returns the hash once confirmed. */
 export async function relay(
   server: rpc.Server,
@@ -91,6 +94,22 @@ export async function relay(
     .build();
   const sim = await server.simulateTransaction(tx);
   if (rpc.Api.isSimulationError(sim)) throw new Error(sim.error);
+  // A normal call costs a few XLM. Anything far above that means something in the request
+  // (for example a signature expiry far in the future) would make the sponsor pay rent for
+  // years: refuse it, and log enough to see why.
+  if (BigInt(sim.minResourceFee) > MAX_RESOURCE_FEE_STROOPS) {
+    const latest = (await server.getLatestLedger()).sequence;
+    const expiries = auth.map((a) => {
+      const c = a.credentials();
+      const name = c.switch().name;
+      return name === "sorobanCredentialsAddress" ? c.address().signatureExpirationLedger()
+        : name === "sorobanCredentialsAddressV2" ? (c as any).addressV2().signatureExpirationLedger() : null;
+    });
+    const r = sim.transactionData.build().resources();
+    console.warn(`[stellar-relay] refused: resource fee ${Number(sim.minResourceFee) / 1e7} XLM; latest ledger ${latest}; auth expiries ${JSON.stringify(expiries)}; ` +
+      `instructions ${r.instructions()}, write bytes ${r.writeBytes()}, read ${r.footprint().readOnly().length}, write ${r.footprint().readWrite().length} entries`);
+    throw new Error("This transaction would cost far more in network fees than normal, so it was not sent. Please try again.");
+  }
   tx = rpc.assembleTransaction(tx, sim).build();
   tx.sign(payer);
   const sent = await server.sendTransaction(tx);
