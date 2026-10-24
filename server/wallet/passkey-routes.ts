@@ -31,7 +31,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { userAccounts } from "@shared/auth-core-schema";
 import { walletPasskeys, type WalletPasskey } from "@shared/chain-wallet-schema";
-import { createSession, findOrCreateUser, getAppOrigin, getRpId, getSession } from "../auth-routes";
+import { createSession, findOrCreateUser, getPasskeyOrigins, getRpId, getSession } from "../auth-routes";
 import { EmailOtp, sendCode } from "./email-otp";
 import { chainRegistry } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
@@ -184,6 +184,12 @@ function toBytes(b64url: string) {
 }
 
 export function registerPasskeyWalletRoutes(app: Express) {
+  // WebAuthn related origins: the passkey domain lists the addresses allowed to use its
+  // passkeys, so a passkey made on an earlier address still works after a domain move.
+  app.get("/.well-known/webauthn", (req, res) => {
+    res.set("Cache-Control", "public, max-age=300").json({ origins: getPasskeyOrigins(req) });
+  });
+
   app.get("/api/wallet/passkey/config", (req, res) => {
     if (!passkeyWalletEnabled()) return res.json({ enabled: false });
     const { evm, stellar } = chains();
@@ -246,7 +252,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const verified = await verifyRegistrationResponse({
       response: req.body?.response,
       expectedChallenge: pending.challenge,
-      expectedOrigin: getAppOrigin(req),
+      expectedOrigin: getPasskeyOrigins(req),
       expectedRPID: getRpId(req),
       requireUserVerification: true,
     });
@@ -284,7 +290,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const result = await verifyAuthenticationResponse({
       response,
       expectedChallenge: pending.challenge,
-      expectedOrigin: getAppOrigin(req),
+      expectedOrigin: getPasskeyOrigins(req),
       expectedRPID: getRpId(req),
       requireUserVerification: true,
       credential: { id: passkey.credentialId, publicKey: new Uint8Array(Buffer.from(passkey.publicKey, "base64")), counter: passkey.counter, transports: JSON.parse(passkey.transports) },
@@ -339,7 +345,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const result = await verifyAuthenticationResponse({
       response,
       expectedChallenge: Buffer.from(ethers.getBytes(pending.hash)).toString("base64url"),
-      expectedOrigin: getAppOrigin(req),
+      expectedOrigin: getPasskeyOrigins(req),
       expectedRPID: getRpId(req),
       requireUserVerification: true,
       credential: { id: passkey.credentialId, publicKey: new Uint8Array(Buffer.from(passkey.publicKey, "base64")), counter: passkey.counter, transports: JSON.parse(passkey.transports) },
@@ -385,7 +391,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const verified = await verifyRegistrationResponse({
       response: req.body?.response,
       expectedChallenge: pending.challenge,
-      expectedOrigin: getAppOrigin(req),
+      expectedOrigin: getPasskeyOrigins(req),
       expectedRPID: getRpId(req),
       requireUserVerification: true,
     });

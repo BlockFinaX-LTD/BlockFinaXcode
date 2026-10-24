@@ -176,12 +176,25 @@ export function getAppOrigin(req: any): string {
   return `${proto}://${req.get('host')}`;
 }
 
+/**
+ * The passkey relying-party domain. Normally the app's own host. PASSKEY_RP_ID keeps
+ * passkeys created on an earlier address working after a domain move: the browser then
+ * reads /.well-known/webauthn on that domain to allow the new address (related origins).
+ */
 export function getRpId(req: any): string {
+  const configured = process.env.PASSKEY_RP_ID?.trim();
+  if (configured) return configured;
   try {
     return new URL(getAppOrigin(req)).hostname;
   } catch {
     return 'localhost';
   }
+}
+
+/** Origins allowed to use the passkey domain: the app, plus PASSKEY_RELATED_ORIGINS (comma-separated). */
+export function getPasskeyOrigins(req: any): string[] {
+  const extra = (process.env.PASSKEY_RELATED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean).map((o) => new URL(o).origin);
+  return Array.from(new Set([getAppOrigin(req), ...extra]));
 }
 
 async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<{ sent: boolean; error?: string }> {

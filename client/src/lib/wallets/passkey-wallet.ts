@@ -161,9 +161,11 @@ async function signStellarAuth(transactionXdr: string, credentialId: string, con
   const { Buffer } = await import("buffer");
   (globalThis as any).Buffer ??= Buffer;
   const [{ PasskeyKit }, { xdr, Address }] = await Promise.all([import("passkey-kit"), import("@stellar/stellar-sdk")]);
-  const cfg = (await walletConfig()).stellar;
+  const config = await walletConfig();
+  const cfg = config.stellar;
   if (!cfg) throw new Error("Stellar is not enabled for this wallet");
-  const kit = new PasskeyKit({ rpcUrl: cfg.rpcUrl, networkPassphrase: cfg.networkPassphrase, walletWasmHash: cfg.walletWasmHash });
+  // The server's passkey domain, which may be an earlier address (related origins).
+  const kit = new PasskeyKit({ rpcUrl: cfg.rpcUrl, networkPassphrase: cfg.networkPassphrase, walletWasmHash: cfg.walletWasmHash, rpId: config.rpId });
   await kit.connectWallet({ keyId: credentialId, getContractId: async () => contract });
   if (kit.contractId !== contract) throw new Error("This passkey does not control the expected Stellar account");
 
