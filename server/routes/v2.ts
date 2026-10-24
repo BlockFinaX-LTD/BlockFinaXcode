@@ -259,7 +259,16 @@ export function registerV2Routes(app: Express) {
     if (!body?.pair || !body.notional || !body.tenorDays || !body.structure || !body.direction || !body.strike) {
       throw new ApplicationError("INVALID_REQUEST", "pair, notional, tenorDays, structure, direction and strike are required");
     }
-    res.json(await s.quotes.quote(body, await s.accounts.addressBook(uid)));
+    try {
+      res.json(await s.quotes.quote(body, await s.accounts.addressBook(uid)));
+    } catch (err) {
+      // The pricing engine refusing a quote is an answer, not a server fault: say why, plainly.
+      const message = err instanceof Error ? err.message : String(err);
+      if (/max_payout\/premium/.test(message)) throw new ApplicationError("INVALID_REQUEST", "This protection is too cheap for what it could pay. Move the strike closer to today's rate or choose a lower maximum.", message);
+      if (/premium rounds to zero/.test(message)) throw new ApplicationError("INVALID_REQUEST", "This strike is too far from today's rate to price. Move it closer or choose a longer duration.", message);
+      if (/Stale history|Sparse history/.test(message)) throw new ApplicationError("INVALID_REQUEST", "Pricing for this currency is updating. Please try again in a few minutes.", message);
+      throw err;
+    }
   }));
 
   app.post("/api/v2/hedges/prepare", wrap(async (req, res) => {

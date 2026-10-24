@@ -7,7 +7,7 @@
  * the configured pool contract, uses the user's own account where the method takes one,
  * and carries an authorization from that account bound to this exact invocation.
  */
-import { Address, BASE_FEE, Keypair, Operation, Transaction, TransactionBuilder, scValToNative, rpc, type xdr } from "@stellar/stellar-sdk";
+import { Address, BASE_FEE, Keypair, Operation, Transaction, TransactionBuilder, scValToNative, rpc, xdr } from "@stellar/stellar-sdk";
 import { ApplicationError } from "@shared/domain/types";
 
 const POOL_METHODS = new Set([
@@ -106,8 +106,22 @@ export async function relay(
         : name === "sorobanCredentialsAddressV2" ? (c as any).addressV2().signatureExpirationLedger() : null;
     });
     const r = sim.transactionData.build().resources();
-    console.warn(`[stellar-relay] refused: resource fee ${Number(sim.minResourceFee) / 1e7} XLM; latest ledger ${latest}; auth expiries ${JSON.stringify(expiries)}; ` +
-      `instructions ${r.instructions()}, write bytes ${r.writeBytes()}, read ${r.footprint().readOnly().length}, write ${r.footprint().readWrite().length} entries`);
+    const signers = auth.map((a) => {
+      const c = a.credentials();
+      const name = c.switch().name;
+      const addr = name === "sorobanCredentialsAddress" ? c.address().address() : name === "sorobanCredentialsAddressV2" ? (c as any).addressV2().address() : null;
+      return addr ? Address.fromScAddress(addr).toString() : name;
+    });
+    const describe = (k: xdr.LedgerKey) => {
+      const t = k.switch().name;
+      if (t === "contractData") return `data:${Address.fromScAddress(k.contractData().contract()).toString().slice(0, 6)}:${k.contractData().key().switch().name}`;
+      if (t === "contractCode") return `code:${k.contractCode().hash().toString("hex").slice(0, 8)}`;
+      return t;
+    };
+    const fp = r.footprint();
+    console.warn(`[stellar-relay] refused: resource fee ${Number(sim.minResourceFee) / 1e7} XLM; latest ledger ${latest}; signers ${JSON.stringify(signers)}; auth expiries ${JSON.stringify(expiries)}; ` +
+      `instructions ${r.instructions()}, disk read bytes ${(r as any).diskReadBytes?.() ?? "?"}, write bytes ${r.writeBytes()}; restore needed ${"restorePreamble" in sim && Boolean((sim as any).restorePreamble)}; ` +
+      `read ${JSON.stringify(fp.readOnly().map(describe))}; write ${JSON.stringify(fp.readWrite().map(describe))}`);
     throw new Error("This transaction would cost far more in network fees than normal, so it was not sent. Please try again.");
   }
   tx = rpc.assembleTransaction(tx, sim).build();
