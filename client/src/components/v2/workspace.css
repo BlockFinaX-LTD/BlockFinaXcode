@@ -387,3 +387,18 @@
 .bx-modal { width: min(560px, 100%); max-height: 92vh; overflow: auto; background: var(--panel); color: var(--ink); border-radius: 18px; padding: 22px; box-shadow: 0 20px 60px rgba(15, 23, 41, 0.3); }
 @media (max-width: 640px) { .bx-modal div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; } }
 .bx-demo-done { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--blue-soft, #eef3ff); font-size: 13px; text-align: left; }
+
+/* Product tour: spotlight on one element, a card beside it. */
+.bx-tour { position: fixed; inset: 0; z-index: 80; }
+.bx-tour-dim { position: fixed; inset: 0; background: rgba(15, 23, 41, 0.55); }
+.bx-tour-spot { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(15, 23, 41, 0.55); outline: 2px solid var(--blue); transition: top .2s ease, left .2s ease, width .2s ease, height .2s ease; pointer-events: none; }
+.bx-tour-card { position: fixed; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 14px; box-shadow: 0 20px 50px rgba(15, 23, 41, 0.35); }
+.bx-tour-card h3 { margin: 4px 0 6px; font-size: 17px; }
+.bx-tour-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.bx-tour-step { font-size: 12px; color: var(--blue); font-weight: 600; letter-spacing: .02em; }
+.bx-tour-dots { display: flex; gap: 5px; margin: 14px 0 12px; }
+.bx-tour-dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--line); transition: width .2s ease; }
+.bx-tour-dots span.on { width: 18px; background: var(--blue); }
+.bx-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bx-tour-skip { background: none; border: 0; color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 0; }
+.bx-tour-skip:hover { color: var(--text); }

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Check, Copy, CreditCard, KeyRound, LogOut, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Compass, Copy, CreditCard, KeyRound, LogOut, Plus, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
@@ -12,6 +12,7 @@ import { usePasskeySession } from '@/lib/identity';
 import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
 import { fmt, runTransfer, transferStatus, useChains, useIsDemo, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
+import { startTour } from './tour';
 
 function useAccounts() {
   const { session } = usePasskeySession();
@@ -595,7 +596,10 @@ export function AccountPage() {
             <Sum l="Name" v={session?.user.name || '-'} />
             <Sum l="Email" v={session?.user.email || '-'} />
           </div>
-          <button className="bx-btn ghost" style={{ marginTop: 12 }} onClick={async () => { await signOutPasskey(); setSession(null); setLocation('/auth'); }}><LogOut /> Sign out</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <button className="bx-btn ghost" onClick={startTour}><Compass /> Take the product tour</button>
+            <button className="bx-btn ghost" onClick={async () => { await signOutPasskey(); setSession(null); setLocation('/auth'); }}><LogOut /> Sign out</button>
+          </div>
         </div>
         <VerificationCard />
         <PasskeysCard />

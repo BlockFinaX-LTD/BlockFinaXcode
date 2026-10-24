@@ -17,6 +17,7 @@ import { HedgerHome, MarketsPage, MyProtections, PairPage, ProtectPage, RatesPag
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
+import { ProductTour } from './tour';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
@@ -134,13 +135,13 @@ export function Workspace() {
     <div className="bx" data-theme={theme}>
       <nav className="bx-rail" aria-label="Main">
         <div className="bx-brand"><img src={logoPath} alt="" />BlockFinaX</div>
-        <div className="bx-roles">
+        <div className="bx-roles" data-tour="roles">
           <button className={role === 'hedger' ? 'on' : ''} onClick={() => switchRole('hedger')}>Hedger</button>
           <button className={role === 'underwriter' ? 'on' : ''} onClick={() => switchRole('underwriter')}>Underwriter</button>
         </div>
         <div className="bx-navs">
           {NAV[role].map((n) => (
-            <button key={n.page} className={`bx-nav${page === n.page || PARENT[page] === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
+            <button key={n.page} data-tour={n.page} className={`bx-nav${page === n.page || PARENT[page] === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
           ))}
         </div>
         <div className="bx-rail-foot">
@@ -157,19 +158,19 @@ export function Workspace() {
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
-            <button className="bx-balance-pill num bx-hide-sm" onClick={() => go('wallet')}>${fmt(balances.data?.total)} USDC</button>
+            <button className="bx-balance-pill num bx-hide-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total)} USDC</button>
             {role === 'hedger' ? (
               <>
                 <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>
-                <button className="bx-btn" onClick={() => go('h-protect')}>Protect an exposure</button>
+                <button className="bx-btn" data-tour="protect" onClick={() => go('h-protect')}>Protect an exposure</button>
               </>
             ) : (
               <>
                 <button className="bx-btn ghost bx-hide-sm" onClick={() => go('u-pools')}>Add liquidity</button>
-                <button className="bx-btn" onClick={() => go('u-create')}>Create pool</button>
+                <button className="bx-btn" data-tour="create-pool" onClick={() => go('u-create')}>Create pool</button>
               </>
             )}
-            <button className="bx-balance-pill num bx-show-sm" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
+            <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
             <button className="bx-icon-btn" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={flipTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</button>
             <button className="bx-avatar" aria-label="Account" onClick={() => go('account')}>{initials}</button>
           </div>
@@ -192,12 +193,13 @@ export function Workspace() {
       </div>
 
       <AgentChat />
+      <ProductTour role={role} userId={session?.user.id} />
 
       <nav className="bx-tabs" aria-label="Main">
         {TABS[role].map((p) => {
           const n = NAV[role].find((x) => x.page === p)!;
           return (
-            <button key={p} className={`${(page === p || PARENT[page] === p) && !more ? 'on' : ''}${p === 'h-protect' ? ' primary' : ''}`} onClick={() => goTab(p)}>
+            <button key={p} data-tour={p} className={`${(page === p || PARENT[page] === p) && !more ? 'on' : ''}${p === 'h-protect' ? ' primary' : ''}`} onClick={() => goTab(p)}>
               {n.icon}<span>{SHORT[p] ?? n.label}</span>
             </button>
           );
