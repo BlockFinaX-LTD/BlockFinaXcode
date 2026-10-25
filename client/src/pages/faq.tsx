@@ -246,8 +246,7 @@ export default function FaqPage() {
         <p className="mb-8 text-sm leading-relaxed text-muted-foreground">
           If your question is not here, email{" "}
           <a href="mailto:hello@blockfinax.com" className="text-primary underline">hello@blockfinax.com</a>{" "}
-          and we will answer it and add it. Longer explanations live in the{" "}
-          <Link href="/learn" className="text-primary underline">Academy</Link>.
+          and we will answer it and add it.
         </p>
 
         <div className="space-y-8">

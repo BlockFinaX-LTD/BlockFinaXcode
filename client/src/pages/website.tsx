@@ -573,7 +573,6 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             <a href="/#use">Products</a>
             <Link href="/hedger">Hedgers</Link>
             <Link href="/liquidity-provider">Underwriters</Link>
-            <Link href="/learn">Academy</Link>
             <div
               className="nav-dropdown"
               onMouseEnter={() => setResourcesOpen(true)}
@@ -640,9 +639,6 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </Link>
             <Link href="/liquidity-provider" className="nav-mobile-link" onClick={closeMobile}>
               Underwriters
-            </Link>
-            <Link href="/learn" className="nav-mobile-link" onClick={closeMobile}>
-              Academy
             </Link>
             <button
               type="button"
@@ -734,7 +730,7 @@ function UseSection({ theme }: { theme: Theme }) {
                 <Link href="/hedge" className="feat-btn primary">
                   Hedge <span className="arrow">→</span>
                 </Link>
-                <Link href="/learn/hedging-101" className="feat-btn ghost">Learn more</Link>
+                <Link href="/hedger" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>
@@ -748,7 +744,7 @@ function UseSection({ theme }: { theme: Theme }) {
                 <Link href="/hedge" className="feat-btn primary">
                   Underwrite <span className="arrow">→</span>
                 </Link>
-                <Link href="/learn/underwriting-101" className="feat-btn ghost">Learn more</Link>
+                <Link href="/liquidity-provider" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>
@@ -787,7 +783,7 @@ const PERSONAS: Persona[] = [
     body:
       'You ship goods abroad or bring them in, priced in dollars, while your books run in local currency. Cover the leg of the trade that hurts when the rate moves against you.',
     cta: 'How hedging protects margin',
-    href: '/learn/hedging-101',
+    href: '/hedger',
     Icon: TradeIcon,
   },
   {
@@ -796,7 +792,7 @@ const PERSONAS: Persona[] = [
     body:
       'You hold reserves in one currency and liabilities in another. Corporate treasuries, remittance corridors, neobanks with cross-border float. Hedge at the balance-sheet level, not per transaction.',
     cta: 'How settlement works',
-    href: '/learn/how-blockfinax-works',
+    href: '/hedger',
     Icon: VaultIcon,
   },
   {
@@ -805,7 +801,7 @@ const PERSONAS: Persona[] = [
     body:
       'You have idle USDC on a wallet, treasury, or DAO. Underwrite parametric cover for the people who need it. Collect premium, back hedgers, hold reserves that back real economic risk.',
     cta: 'Underwriting mechanics',
-    href: '/learn/underwriting-101',
+    href: '/liquidity-provider',
     Icon: LiquidityIcon,
   },
 ];
@@ -1268,14 +1264,14 @@ function LearnSection() {
         <div className="learn-grid">
           <CurrencyArt />
           <div className="learn-copy">
-            <h3>A place to learn the market</h3>
+            <h3>Notes on the markets we cover</h3>
             <p>
-              The BlockFinaX Academy brings together short lessons, worked examples and market notes on the naira, the cedi,
-              the shilling and the other currencies we cover. It is written for business owners and finance teams, so you can see
-              your exposure and decide how to manage it, with or without us.
+              Our blog brings together worked examples and market notes on the naira, the cedi, the shilling and the other
+              currencies we cover. It is written for business owners and finance teams, so you can see your exposure and decide
+              how to manage it, with or without us.
             </p>
             <div className="learn-ctas">
-              <Link href="/learn" className="btn btn-primary">Start learning <span className="arrow">→</span></Link>
+              <Link href="/blog" className="btn btn-primary">Read the blog <span className="arrow">→</span></Link>
               <a href="https://www.linkedin.com/company/blockfinax/" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Follow us on LinkedIn <span className="arrow">→</span></a>
             </div>
           </div>
@@ -1327,8 +1323,8 @@ function BookCallCushion() {
               >
                 Book a call <span className="arrow" aria-hidden="true">→</span>
               </a>
-              <Link href="/learn" className="cushion-btn ghost">
-                Read the academy <span className="arrow" aria-hidden="true">→</span>
+              <Link href="/contact" className="cushion-btn ghost">
+                Contact us <span className="arrow" aria-hidden="true">→</span>
               </Link>
             </div>
           </div>
@@ -1365,7 +1361,6 @@ function Footer() {
             <div className="foot-col">
               <h5>Resources</h5>
               <Link href="/faq">FAQ</Link>
-              <Link href="/learn">Academy</Link>
               <Link href="/blog">Blog</Link>
               <Link href="/contact">Contact</Link>
             </div>
@@ -1588,7 +1583,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
           <h2>{copy.close}</h2>
           <div className="hero-ctas">
             <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>
-            <Link href="/learn" className="btn btn-ghost">Read the academy</Link>
+            <Link href="/contact" className="btn btn-ghost">Talk to us</Link>
           </div>
         </div>
       </section>
