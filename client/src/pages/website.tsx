@@ -908,6 +908,47 @@ function PillarsSection() {
   );
 }
 
+const TRUST = [
+  {
+    title: 'Every payout is reserved when sold',
+    body: 'The most a protection can pay is set aside from underwriters the moment you buy it. Cover is never sold without the money to pay it.',
+    icon: <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3zM8.5 12l2.5 2.5 4.5-5" />,
+  },
+  {
+    title: 'Independent operators agree the rate',
+    body: 'At the end date, the rate that decides your payout must be reported and agreed by independent operators. No single party can choose it.',
+    icon: <path d="M4 18h16M6 14l3-4 3 2 4-6 2 3M7 21h10" />,
+  },
+  {
+    title: 'Only you can approve your money',
+    body: 'Buying, withdrawing and claiming all need your passkey, which stays on your device. Nobody else can move your funds.',
+    icon: <path d="M8 11V8a4 4 0 118 0v3M6 11h12v9H6zM12 15v2" />,
+  },
+];
+
+/** Why a business can rely on being paid. */
+function TrustSection() {
+  return (
+    <section className="trust" id="trust" aria-labelledby="trust-title">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2 id="trust-title">Why you can trust the payout.</h2>
+          <p>Protection is only worth buying if it pays. These rules are written into the contracts, and every contract is recorded on a public ledger.</p>
+        </div>
+        <div className="trust-grid">
+          {TRUST.map((t) => (
+            <div className="trust-card" key={t.title}>
+              <svg className="trust-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.icon}</svg>
+              <h3>{t.title}</h3>
+              <p>{t.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function WhoSection() {
   return (
     <section className="who" id="who">
@@ -1458,6 +1499,7 @@ export default function Website() {
       <PillarsSection />
       <WhoSection />
       <UseSection theme={theme} />
+      <TrustSection />
       <RequestSection />
       <CurrenciesSection />
       <SignalSection />
