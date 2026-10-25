@@ -1130,14 +1130,32 @@
 .bfx-landing .why-head { align-items: end; }
 .bfx-landing .why-copy p { font-size: 19px; }
 
-/* ── Why you can trust the payout ──────────────────────────────────────── */
+/* ── Why you can trust the payout: a timeline ──────────────────────────── */
 .bfx-landing .trust { padding: 88px 0 96px; border-top: 1px solid var(--bfx-border); }
-.bfx-landing .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.bfx-landing .trust-card { padding: 28px 26px; border-radius: 20px; border: 1px solid var(--bfx-border); background: var(--bfx-card); }
-.bfx-landing .trust-ic { width: 34px; height: 34px; color: var(--bfx-accent); margin-bottom: 18px; }
-.bfx-landing .trust-card h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; margin-bottom: 10px; color: var(--bfx-tx); }
-.bfx-landing .trust-card p { font-size: 15px; line-height: 1.55; color: var(--bfx-tx-2); }
+.bfx-landing .trust-line { position: relative; margin-top: 12px; }
+.bfx-landing .trust-track { position: absolute; left: 0; right: 0; top: 9px; height: 2px; background: var(--bfx-border-2); border-radius: 2px; }
+.bfx-landing .trust-track i {
+  display: block; height: 100%; background: var(--bfx-accent); border-radius: 2px;
+  width: calc((var(--lit, 0) / 3) * 100%); transition: width .5s var(--bfx-ease);
+}
+.bfx-landing .trust-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+.bfx-landing .trust-steps li { position: relative; padding-top: 40px; opacity: 0.45; transform: translateY(6px); transition: opacity .5s var(--bfx-ease), transform .5s var(--bfx-ease); }
+.bfx-landing .trust-steps li.on { opacity: 1; transform: none; }
+.bfx-landing .trust-dot {
+  position: absolute; top: 0; left: 0; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--bfx-bg); border: 2px solid var(--bfx-border-2); transition: border-color .4s, background .4s, box-shadow .4s;
+}
+.bfx-landing .trust-steps li.on .trust-dot { border-color: var(--bfx-accent); background: var(--bfx-accent); box-shadow: 0 0 0 6px color-mix(in oklab, var(--bfx-accent) 18%, transparent); }
+.bfx-landing .trust-when { display: block; font-family: var(--bfx-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bfx-accent); margin-bottom: 12px; }
+.bfx-landing .trust-steps h3 { font-size: clamp(22px, 2.2vw, 28px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 12px; color: var(--bfx-tx); }
+.bfx-landing .trust-steps p { font-size: 15.5px; line-height: 1.6; color: var(--bfx-tx-2); max-width: 36ch; }
 @media (max-width: 900px) {
-  .bfx-landing .trust-grid { grid-template-columns: 1fr; gap: 14px; }
   .bfx-landing .trust { padding: 64px 0 72px; }
+  .bfx-landing .trust-track { top: 0; bottom: 0; left: 9px; right: auto; width: 2px; height: auto; }
+  .bfx-landing .trust-track i { width: 100%; height: calc((var(--lit, 0) / 3) * 100%); transition: height .5s var(--bfx-ease); }
+  .bfx-landing .trust-steps { grid-template-columns: 1fr; gap: 34px; }
+  .bfx-landing .trust-steps li { padding-top: 0; padding-left: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bfx-landing .trust-steps li, .bfx-landing .trust-track i, .bfx-landing .trust-dot { transition: none; }
 }
