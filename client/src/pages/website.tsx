@@ -687,13 +687,14 @@ function Hero() {
       <div className="wrap hero-inner">
         <div className="hero-grid2">
           <div className="hero-copy">
+            <div className="hero-eyebrow">FX risk solutions for emerging markets</div>
             <h1>
               <HeroRotator />
               <br />
               currency risk.
             </h1>
             <p className="hero-sub">
-              The market to discover, trade and hedge FX risk in emerging markets.
+              Currency protection for businesses and investors, backed by private capital.
             </p>
             <div className="hero-ctas">
               <Link href="/hedge" className="btn btn-primary">
@@ -1357,8 +1358,8 @@ function Footer() {
               BlockFinaX
             </Link>
             <p>
-              Markets for FX risk. Underwrite it to earn premiums, or
-              hedge against it to protect your money.
+              FX risk solutions for emerging markets. Hedge currency risk, or
+              underwrite it to earn premiums.
             </p>
           </div>
           <div className="foot-cols">
