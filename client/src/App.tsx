@@ -25,7 +25,7 @@ import { MethodChooser } from "@/components/wallet/method-chooser";
 import { useToast } from "@/hooks/use-toast";
 
 // Public pages
-import Website from "@/pages/website";
+import Website, { HedgersPage, UnderwritersPage } from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import DataRoom from "@/pages/data-room";
@@ -57,8 +57,6 @@ import ApplyPage from "@/pages/apply";
 import ContactPage from "@/pages/contact";
 import TechnicalDocs from "@/pages/docs-technical";
 import DocsIndex from "@/pages/docs-index";
-import LiquidityProviderPage from "@/pages/liquidity-provider";
-import HedgerPage from "@/pages/hedger";
 import AcademyRoute from "@/pages/academy";
 
 // Counterparty signing portal. Public by design — authenticated by the
@@ -198,8 +196,8 @@ function Router() {
       <Route path="/apply" component={ApplyPage} />
       <Route path="/contact" component={ContactPage} />
       <Route path="/docs/request"><Redirect to="/docs" /></Route>
-      <Route path="/liquidity-provider" component={LiquidityProviderPage} />
-      <Route path="/hedger" component={HedgerPage} />
+      <Route path="/liquidity-provider" component={UnderwritersPage} />
+      <Route path="/hedger" component={HedgersPage} />
 
       {/* Agreement signing. Deliberately outside PROTECTED_ROUTES: the
           counterparty has no BlockFinaX account and must never be asked for

@@ -1050,3 +1050,64 @@
   .bfx-landing .pillars { padding: 64px 0 72px; }
   .bfx-landing .guilloche { width: 100%; opacity: 0.1; }
 }
+
+/* ── Understand currency risk ─────────────────────────────────────────── */
+.bfx-landing .accent { color: var(--bfx-accent); }
+.bfx-landing .learn { padding: 88px 0 96px; border-top: 1px solid var(--bfx-border); }
+.bfx-landing .learn-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 36px; }
+.bfx-landing .learn-head h2 { font-size: clamp(36px, 5vw, 64px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; max-width: 12ch; }
+.bfx-landing .learn-dots {
+  flex: 0 1 420px; height: 34px; margin-top: 18px;
+  background-image: radial-gradient(circle, var(--bfx-tx) 1.6px, transparent 1.8px); background-size: 20px 17px; opacity: 0.55;
+}
+.bfx-landing .learn-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; }
+.bfx-landing .learn-art { width: 100%; height: auto; color: var(--bfx-tx); overflow: visible; }
+.bfx-landing .learn-copy h3 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
+.bfx-landing .learn-copy p { color: var(--bfx-tx-2); font-size: 17px; line-height: 1.6; max-width: 46ch; }
+.bfx-landing .learn-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.bfx-landing .art-chart-bg { fill: color-mix(in oklab, var(--bfx-accent) 16%, var(--bfx-bg)); }
+.bfx-landing .art-dot { fill: color-mix(in oklab, var(--bfx-accent) 55%, transparent); }
+.bfx-landing .art-cap { stroke: var(--bfx-accent); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.7; }
+.bfx-landing .art-candle { fill: color-mix(in oklab, var(--bfx-accent) 70%, transparent); }
+.bfx-landing .art-rate { fill: none; stroke: var(--bfx-accent-2); stroke-width: 2; }
+.bfx-landing .art-note { color: var(--bfx-tx); }
+.bfx-landing .art-note-bg { fill: color-mix(in oklab, var(--bfx-tx) 7%, var(--bfx-bg)); }
+.bfx-landing .art-rose path { fill: none; stroke: currentColor; stroke-width: 0.5; opacity: 0.45; }
+.bfx-landing .art-ink { stroke: currentColor; fill: color-mix(in oklab, var(--bfx-tx) 22%, transparent); opacity: 0.75; }
+.bfx-landing .art-serial, .bfx-landing .art-specimen { font-family: var(--bfx-mono); font-size: 9.5px; letter-spacing: 0.12em; fill: currentColor; opacity: 0.7; }
+.bfx-landing .art-value { font-family: Georgia, 'Times New Roman', serif; font-size: 54px; fill: currentColor; opacity: 0.55; }
+.bfx-landing .art-rim { stroke: currentColor; stroke-width: 1; opacity: 0.25; }
+.bfx-landing .art-thread { fill: none; stroke: var(--bfx-accent); stroke-width: 1.2; opacity: 0.6; }
+.bfx-landing .art-thread-dot { fill: var(--bfx-accent); }
+.bfx-landing .art-badge { fill: var(--bfx-accent); }
+@media (max-width: 900px) {
+  .bfx-landing .learn-grid { grid-template-columns: 1fr; gap: 28px; }
+  .bfx-landing .learn-dots { display: none; }
+  .bfx-landing .learn { padding: 64px 0 72px; }
+}
+
+/* ── Audience pages (Hedgers, Underwriters) ──────────────────────────── */
+.bfx-landing .aud-hero { position: relative; overflow: hidden; padding: 150px 0 88px; }
+.bfx-landing .aud-hero .wrap { position: relative; z-index: 1; }
+.bfx-landing .aud-hero .guilloche { width: min(62%, 900px); }
+.bfx-landing .aud-eyebrow { font-family: var(--bfx-mono); font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--bfx-tx-3); margin-bottom: 18px; }
+.bfx-landing .aud-title { font-size: clamp(44px, 7vw, 92px); font-weight: 600; letter-spacing: -0.04em; line-height: 0.98; max-width: 11ch; }
+.bfx-landing .aud-lede { font-size: 19px; line-height: 1.55; color: var(--bfx-tx-2); max-width: 52ch; margin: 24px 0 30px; }
+.bfx-landing .aud-section { padding: 72px 0; border-top: 1px solid var(--bfx-border); }
+.bfx-landing .aud-h2 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 600; letter-spacing: -0.025em; margin-bottom: 30px; }
+.bfx-landing .aud-steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.bfx-landing .aud-steps h3, .bfx-landing .aud-point h3 { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; margin: 10px 0 8px; color: var(--bfx-accent); }
+.bfx-landing .aud-steps p, .bfx-landing .aud-point p { color: var(--bfx-tx-2); font-size: 15.5px; line-height: 1.55; }
+.bfx-landing .aud-n { font-family: var(--bfx-mono); font-size: 13px; color: var(--bfx-tx-3); }
+.bfx-landing .aud-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.bfx-landing .aud-point { padding: 24px; border-radius: 20px; background: color-mix(in oklab, var(--bfx-accent) 6%, var(--bfx-bg)); border: 1px solid color-mix(in oklab, var(--bfx-accent) 16%, var(--bfx-border)); }
+.bfx-landing .aud-note { margin-top: 22px; padding: 18px 20px; border-left: 3px solid var(--bfx-accent); color: var(--bfx-tx-2); font-size: 15px; line-height: 1.55; max-width: 80ch; }
+.bfx-landing .aud-faqs details { border-bottom: 1px solid var(--bfx-border); padding: 18px 0; max-width: 820px; }
+.bfx-landing .aud-faqs summary { cursor: pointer; font-size: 17px; font-weight: 600; list-style: none; }
+.bfx-landing .aud-faqs summary::after { content: "+"; float: right; color: var(--bfx-tx-3); }
+.bfx-landing .aud-faqs details[open] summary::after { content: "\2212"; }
+.bfx-landing .aud-faqs p { margin-top: 10px; color: var(--bfx-tx-2); line-height: 1.55; }
+@media (max-width: 900px) {
+  .bfx-landing .aud-steps, .bfx-landing .aud-points { grid-template-columns: 1fr; }
+  .bfx-landing .aud-hero { padding: 120px 0 64px; }
+}
