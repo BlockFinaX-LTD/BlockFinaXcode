@@ -1254,8 +1254,7 @@ function CurrencyArt() {
       <circle cx="250" cy="160" r="5" className="art-thread-dot" />
       <g transform="translate(300 335)">
         <circle r="56" className="art-badge" />
-        <circle r="30" fill="#ffffff" />
-        <image href={logoPath} x="-22" y="-22" width="44" height="44" />
+        <image href={logoPath} x="-34" y="-34" width="68" height="68" />
       </g>
     </svg>
   );
