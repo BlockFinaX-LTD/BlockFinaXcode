@@ -888,8 +888,8 @@ const PILLARS = [
   },
   {
     n: 3,
-    title: 'Increasing awareness',
-    body: 'Currency risk stays invisible until it hits the margin. Through plain-language quotes, worked examples on every purchase and the BlockFinaX Academy, we help businesses see their exposure and understand exactly what they are buying, and what they are not.',
+    title: 'Reaching underserved currencies',
+    body: 'Hedging is easiest to find in a handful of major currencies and for large clients. BlockFinaX pools cover the naira, the cedi, the shilling, the rand and the Egyptian pound, in amounts as small as a single supplier invoice, so businesses in these markets can protect what they pay and what they earn.',
   },
 ];
 

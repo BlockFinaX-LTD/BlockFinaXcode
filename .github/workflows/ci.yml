@@ -1,7 +1,8 @@
 name: CI
 
 # testnet is where every change lands first; main is production.
-# A change reaches main only through a pull request from testnet with this check passing.
+# A change reaches main only through a pull request from testnet (or, for website-only
+# changes, from website/*) with these checks passing.
 on:
   push:
     branches: [testnet, main]
@@ -34,13 +35,30 @@ jobs:
         run: npm run build
 
   promotion-source:
-    # Production only accepts changes that were tested on testnet first.
+    # Production only accepts changes that were tested on testnet first. The one exception:
+    # a branch named website/* may change the public website and its Contact form, and
+    # nothing else, so the marketing site can ship while the product waits on testnet.
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    env:
+      HEAD_REF: ${{ github.head_ref }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
-      - name: Pull request must come from testnet
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: From testnet, or a website-only change from website/*
         run: |
-          if [ "${{ github.head_ref }}" != "testnet" ]; then
-            echo "Pull requests into main must come from the testnet branch (got '${{ github.head_ref }}')."
+          if [ "$HEAD_REF" = "testnet" ]; then exit 0; fi
+          case "$HEAD_REF" in
+            website/*) ;;
+            *) echo "Pull requests into main must come from testnet, or from website/* for website-only changes (got '$HEAD_REF')."; exit 1 ;;
+          esac
+          changed=$(git diff --name-only "$BASE_SHA"...HEAD)
+          echo "Changed files:"; echo "$changed"
+          outside=$(echo "$changed" | grep -vE '^(client/src/pages/(website\.tsx|website\.css|contact\.tsx)|client/public/.+|client/src/App\.tsx|server/routes/sales\.ts|server/routes\.ts)$' || true)
+          if [ -n "$outside" ]; then
+            echo "A website/* pull request may only change website files. These are outside that list:"
+            echo "$outside"
             exit 1
           fi
