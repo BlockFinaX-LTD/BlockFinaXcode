@@ -1212,3 +1212,12 @@
   .bfx-landing .way-media, .bfx-landing .way-row.on .way-media { margin-right: 0; }
 }
 @media (hover: hover) and (min-width: 901px) { .bfx-landing .way-row.on .way-in { grid-template-columns: 300px minmax(0, 1fr) minmax(0, 1fr) 40px; } }
+
+/* Receipt in brand colours */
+.bfx-landing .receipt { padding: 0 0 18px; overflow: hidden; border-color: color-mix(in oklab, var(--bfx-accent) 22%, var(--bfx-border)); box-shadow: 0 30px 60px -30px color-mix(in oklab, var(--bfx-accent) 55%, transparent); }
+.bfx-landing .receipt-h { padding: 16px 24px; border-bottom: 0; color: rgba(255,255,255,0.82); background: linear-gradient(90deg, #0b1a33, #133a7a 60%, var(--bfx-accent)); }
+.bfx-landing .receipt-status, .bfx-landing .receipt-status.s2 { color: #0b1a33; background: #ffffff; }
+.bfx-landing .receipt dl { margin: 8px 24px 0; }
+.bfx-landing .receipt-row.now { background: color-mix(in oklab, var(--bfx-accent) 9%, transparent); }
+.bfx-landing .receipt-row .proof { color: var(--bfx-accent); }
+.bfx-landing .receipt-foot { margin: 12px 24px 0; }

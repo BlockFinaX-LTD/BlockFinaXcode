@@ -877,11 +877,11 @@ const TRUST = [
 ];
 
 const RECEIPT: { step: number; k: string; v: string; proof?: string }[] = [
-  { step: 0, k: 'Protection', v: 'Naira payables · $20,000' },
-  { step: 0, k: 'Strike and cap', v: '1,377 to 1,515' },
-  { step: 0, k: 'Reserve', v: '$2,044.44', proof: 'Locked at purchase' },
-  { step: 1, k: 'Rate at 14:00 UTC', v: '1,450.00', proof: 'Agreed by 2 operators' },
-  { step: 2, k: 'Payout', v: '$1,059.85', proof: 'Claimed with your passkey' },
+  { step: 0, k: 'Protection', v: 'Cedi payables · $500,000' },
+  { step: 0, k: 'Strike and cap', v: '11.83 to 13.01' },
+  { step: 0, k: 'Reserve', v: '$50,862.07', proof: 'Locked at purchase' },
+  { step: 1, k: 'USD/GHS at 14:00 UTC', v: '12.40', proof: 'Agreed by 2 operators' },
+  { step: 2, k: 'Payout', v: '$24,077.59', proof: 'Claimed with your passkey' },
 ];
 
 /** Why a business can rely on being paid: three steps beside a contract that fills in as they advance. */
