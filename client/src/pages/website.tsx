@@ -687,7 +687,6 @@ function Hero() {
       <div className="wrap hero-inner">
         <div className="hero-grid2">
           <div className="hero-copy">
-            <div className="hero-eyebrow">FX risk solutions for emerging markets</div>
             <h1>
               <HeroRotator />
               <br />
@@ -866,16 +865,14 @@ function PillarsSection() {
       <Guilloche />
       <div className="wrap">
         <div className="why-head">
-          <h2 id="pillars-title">Why BlockFinaX matters</h2>
+          <div>
+            <div className="why-label">Why BlockFinaX matters</div>
+            <h2 id="pillars-title">FX risk solutions for <span className="accent">emerging markets</span></h2>
+          </div>
           <div className="why-copy">
             <p>
-              Businesses and investors make commitments today whose costs and returns can change tomorrow. An exchange-rate
-              move can make a supplier payment more expensive, increase the burden of foreign-currency debt or reduce the value
-              of an investment.
-            </p>
-            <p>
-              Protection lets people make those commitments with confidence. Yet the tools to manage this risk remain out of
-              reach for many. <strong>BlockFinaX exists to make that protection accessible.</strong>
+              An exchange-rate move can make a supplier payment more expensive, a foreign-currency loan heavier or an
+              investment worth less. <strong>BlockFinaX makes protection against it accessible.</strong>
             </p>
           </div>
         </div>
