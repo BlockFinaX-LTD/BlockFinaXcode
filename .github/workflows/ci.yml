@@ -56,6 +56,11 @@ jobs:
           esac
           changed=$(git diff --name-only "$BASE_SHA"...HEAD)
           echo "Changed files:"; echo "$changed"
+          # This workflow may travel with a website change only exactly as it is on testnet.
+          if echo "$changed" | grep -qx '.github/workflows/ci.yml'; then
+            git diff --quiet origin/testnet HEAD -- .github/workflows/ci.yml || { echo "ci.yml differs from testnet's"; exit 1; }
+            changed=$(echo "$changed" | grep -vx '.github/workflows/ci.yml')
+          fi
           outside=$(echo "$changed" | grep -vE '^(client/src/pages/(website\.tsx|website\.css|contact\.tsx)|client/public/.+|client/src/App\.tsx|server/routes/sales\.ts|server/routes\.ts)$' || true)
           if [ -n "$outside" ]; then
             echo "A website/* pull request may only change website files. These are outside that list:"
