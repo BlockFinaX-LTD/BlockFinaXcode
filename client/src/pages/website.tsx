@@ -814,31 +814,65 @@ const PERSONAS: Persona[] = [
 
 const PILLARS = [
   {
-    n: 1,
+    n: '01',
     title: 'Making currency protection accessible',
+    lede: 'Help businesses protect their margins against exchange-rate movements.',
     body: 'Most businesses that pay or earn in another currency have no practical way to protect it: forwards need a credit line and a dealer. BlockFinaX turns protection into a simple purchase. Choose the amount, the end date and the move you fear, pay a known premium in USDC, and get paid if the rate passes your strike.',
   },
   {
-    n: 2,
-    title: 'Mobilizing private capital',
-    body: 'Every protection is backed by underwriters who put USDC into currency pools and earn the premiums. The most a contract can pay is set aside the moment it is sold, so capacity is real. That opens currency risk in markets banks rarely reach to new capital: funds, partners and individuals.',
+    n: '02',
+    title: 'Mobilising capital for risk protection',
+    lede: 'Connect private capital with businesses seeking currency protection.',
+    body: 'Every protection is backed by underwriters who put USDC into currency pools and earn the premiums. The most a contract can pay is set aside the moment it is sold, so the cover on offer is always funded.',
   },
   {
-    n: 3,
-    title: 'Reaching underserved currencies',
-    body: 'Hedging is easiest to find in a handful of major currencies and for large clients. BlockFinaX pools cover the naira, the cedi, the shilling, the rand and the Egyptian pound, in amounts as small as a single supplier invoice, so businesses in these markets can protect what they pay and what they earn.',
+    n: '03',
+    title: 'Expanding protection to underserved currencies',
+    lede: 'Bring hedging access to markets where suitable protection is limited.',
+    body: 'Hedging is easiest to find in a handful of major currencies and for large clients. BlockFinaX pools cover the naira, the cedi, the shilling, the rand and the Egyptian pound, in amounts as small as a single supplier invoice.',
   },
 ];
 
-/** Three pillars as flip cards: the title on the front, what it means on the back. */
+/**
+ * Fine engraved lines, like the guilloché on banknotes: rings that all pass through one
+ * point, so they fan out from it, plus a few wavy loops. Drawn once; decorative only.
+ */
+function Guilloche() {
+  const fx = 820, fy = 420;
+  const rings: { d: string; dashed: boolean }[] = [];
+  for (let i = 0; i < 46; i++) {
+    const a = (200 + i * 3.2) * (Math.PI / 180);
+    const r = 150 + (i % 9) * 34 + i * 2;
+    const cx = fx + r * Math.cos(a);
+    const cy = fy + r * Math.sin(a);
+    const pts: string[] = [];
+    const wobble = i % 3 === 0 ? 0.06 : 0;
+    for (let k = 0; k <= 180; k++) {
+      const t = (k / 180) * Math.PI * 2;
+      const rr = r * (1 + wobble * Math.sin(5 * t + i));
+      pts.push(`${(cx + rr * Math.cos(t)).toFixed(1)},${(cy + rr * 0.82 * Math.sin(t)).toFixed(1)}`);
+    }
+    rings.push({ d: `M${pts.join(' L')} Z`, dashed: i % 4 === 1 });
+  }
+  return (
+    <svg className="guilloche" viewBox="0 0 1000 800" preserveAspectRatio="xMaxYMid slice" aria-hidden="true" focusable="false">
+      {rings.map((r, i) => (
+        <path key={i} d={r.d} fill="none" stroke="currentColor" strokeWidth="0.6" strokeDasharray={r.dashed ? '2 5' : undefined} vectorEffect="non-scaling-stroke" />
+      ))}
+    </svg>
+  );
+}
+
+/** Three pillars. The front says it all; the back adds detail for anyone who wants it. */
 function PillarsSection() {
-  const [flipped, setFlipped] = useState<number | null>(null);
+  const [flipped, setFlipped] = useState<string | null>(null);
   return (
     <section className="pillars" id="pillars" aria-labelledby="pillars-title">
+      <Guilloche />
       <div className="wrap">
         <div className="assets-head">
           <h2 id="pillars-title">What we are building.</h2>
-          <p>Three pillars behind the protocol. Tap a card to read more.</p>
+          <p>Currency protection for more businesses, backed by private capital, across more markets.</p>
         </div>
         <div className="pillar-grid">
           {PILLARS.map((p) => (
@@ -847,15 +881,20 @@ function PillarsSection() {
               type="button"
               className={`pillar${flipped === p.n ? ' flipped' : ''}`}
               aria-pressed={flipped === p.n}
-              aria-label={`Pillar ${p.n}: ${p.title}. ${p.body}`}
+              aria-label={`${p.title}. ${p.lede} ${p.body}`}
               onClick={() => setFlipped((f) => (f === p.n ? null : p.n))}
             >
               <span className="pillar-inner" aria-hidden="true">
                 <span className="pillar-face pillar-front">
-                  <span className="pillar-num">Pillar {p.n}</span>
-                  <span className="pillar-title">{p.title}</span>
+                  <span className="pillar-num">{p.n}</span>
+                  <span className="pillar-text">
+                    <span className="pillar-title">{p.title}</span>
+                    <span className="pillar-lede">{p.lede}</span>
+                  </span>
+                  <span className="pillar-more">More</span>
                 </span>
                 <span className="pillar-face pillar-back">
+                  <span className="pillar-num on-dark">{p.n}</span>
                   <span className="pillar-body">{p.body}</span>
                 </span>
               </span>
