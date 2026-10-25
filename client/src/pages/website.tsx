@@ -1480,7 +1480,7 @@ interface AudienceCopy {
   steps: { t: string; d: string }[];
   points: { t: string; d: string }[];
   pointsTitle: string;
-  note: { t: string; d: string };
+  note?: { t: string; d: string };
   faqs: { q: string; a: string }[];
   close: string;
 }
@@ -1501,7 +1501,6 @@ const HEDGERS: AudienceCopy = {
     { t: 'Keep the upside', d: 'If the rate moves in your favour, you simply buy at the better rate.' },
     { t: 'Small amounts welcome', d: 'Protect a single supplier invoice, not only large contracts.' },
   ],
-  note: { t: 'What it does not cover', d: 'Moves below your strike, moves beyond your cap, and the gap between the reference rate and the rate your bank gives you. The quote shows all three before you buy.' },
   faqs: [
     { q: 'Who is it for?', a: 'Importers, exporters and treasury teams with costs or revenue in another currency.' },
     { q: 'How is the rate decided?', a: 'At expiry, the contract settles against an agreed reference rate from its oracle operators, by rules written in code.' },
@@ -1575,7 +1574,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
           <div className="aud-points">
             {copy.points.map((p) => <div key={p.t} className="aud-point"><h3>{p.t}</h3><p>{p.d}</p></div>)}
           </div>
-          <div className="aud-note"><b>{copy.note.t}.</b> {copy.note.d}</div>
+          {copy.note && <div className="aud-note"><b>{copy.note.t}.</b> {copy.note.d}</div>}
         </div>
       </section>
       <section className="aud-section">
