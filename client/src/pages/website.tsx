@@ -875,6 +875,61 @@ const PERSONAS: Persona[] = [
   },
 ];
 
+const PILLARS = [
+  {
+    n: 1,
+    title: 'Making currency protection accessible',
+    body: 'Most businesses that pay or earn in another currency have no practical way to protect it: forwards need a credit line and a dealer. BlockFinaX turns protection into a simple purchase. Choose the amount, the end date and the move you fear, pay a known premium in USDC, and get paid if the rate passes your strike.',
+  },
+  {
+    n: 2,
+    title: 'Mobilizing private capital',
+    body: 'Every protection is backed by underwriters who put USDC into currency pools and earn the premiums. The most a contract can pay is set aside the moment it is sold, so capacity is real. That opens currency risk in markets banks rarely reach to new capital: funds, partners and individuals.',
+  },
+  {
+    n: 3,
+    title: 'Increasing awareness',
+    body: 'Currency risk stays invisible until it hits the margin. Through plain-language quotes, worked examples on every purchase and the BlockFinaX Academy, we help businesses see their exposure and understand exactly what they are buying, and what they are not.',
+  },
+];
+
+/** Three pillars as flip cards: the title on the front, what it means on the back. */
+function PillarsSection() {
+  const [flipped, setFlipped] = useState<number | null>(null);
+  return (
+    <section className="pillars" id="pillars" aria-labelledby="pillars-title">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2 id="pillars-title">What we are building.</h2>
+          <p>Three pillars behind the protocol. Tap a card to read more.</p>
+        </div>
+        <div className="pillar-grid">
+          {PILLARS.map((p) => (
+            <button
+              key={p.n}
+              type="button"
+              className={`pillar${flipped === p.n ? ' flipped' : ''}`}
+              aria-pressed={flipped === p.n}
+              aria-label={`Pillar ${p.n}: ${p.title}. ${p.body}`}
+              onClick={() => setFlipped((f) => (f === p.n ? null : p.n))}
+            >
+              <span className="pillar-inner" aria-hidden="true">
+                <span className="pillar-face pillar-front">
+                  <span className="pillar-num">Pillar {p.n}</span>
+                  <span className="pillar-title">{p.title}</span>
+                </span>
+                <span className="pillar-face pillar-back">
+                  <span className="pillar-body">{p.body}</span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function WhoSection() {
   return (
     <section className="who" id="who">
@@ -1313,6 +1368,7 @@ export default function Website() {
       <Hero />
       <UseSection theme={theme} />
       <WhoSection />
+      <PillarsSection />
       <RequestSection />
       <CurrenciesSection />
       <SignalSection />
