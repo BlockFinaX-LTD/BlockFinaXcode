@@ -693,7 +693,7 @@ function Hero() {
               currency risk.
             </h1>
             <p className="hero-sub">
-              Currency protection for businesses and investors, backed by private capital.
+              Making currency risk protection more accessible to support trade and investment in emerging markets.
             </p>
             <div className="hero-ctas">
               <Link href="/hedge" className="btn btn-primary">
