@@ -1110,3 +1110,13 @@
   .bfx-landing .aud-steps, .bfx-landing .aud-points { grid-template-columns: 1fr; }
   .bfx-landing .aud-hero { padding: 120px 0 64px; }
 }
+
+/* ── Why BlockFinaX matters (heading and intro above the pillars) ─────── */
+.bfx-landing .why-head { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: start; margin-bottom: 44px; }
+.bfx-landing .why-head h2 { font-size: clamp(34px, 4.6vw, 58px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; }
+.bfx-landing .why-copy p { font-size: 17.5px; line-height: 1.6; color: var(--bfx-tx-2); margin: 0 0 14px; max-width: 58ch; }
+.bfx-landing .why-copy strong { color: var(--bfx-tx); font-weight: 600; }
+@media (max-width: 900px) { .bfx-landing .why-head { grid-template-columns: 1fr; gap: 18px; margin-bottom: 30px; } }
+.bfx-landing .pillar-front { justify-content: flex-start; gap: 0; }
+.bfx-landing .pillar-front .pillar-text { margin-top: 34px; }
+.bfx-landing .pillar-front .pillar-more { margin-top: auto; }

@@ -810,7 +810,7 @@ const PILLARS = [
   {
     n: '01',
     title: 'Making currency protection accessible',
-    lede: 'Help businesses protect their margins against exchange-rate movements.',
+    lede: 'Help businesses and investors protect their margins and returns against exchange-rate movements.',
     body: 'Most businesses that pay or earn in another currency have no practical way to protect it: forwards need a credit line and a dealer. BlockFinaX turns protection into a simple purchase. Choose the amount, the end date and the move you fear, pay a known premium in USDC, and get paid if the rate passes your strike.',
   },
   {
@@ -864,9 +864,19 @@ function PillarsSection() {
     <section className="pillars" id="pillars" aria-labelledby="pillars-title">
       <Guilloche />
       <div className="wrap">
-        <div className="assets-head">
-          <h2 id="pillars-title">What we are building.</h2>
-          <p>Currency protection for more businesses, backed by private capital, across more markets.</p>
+        <div className="why-head">
+          <h2 id="pillars-title">Why BlockFinaX matters</h2>
+          <div className="why-copy">
+            <p>
+              Businesses and investors make commitments today whose costs and returns can change tomorrow. An exchange-rate
+              move can make a supplier payment more expensive, increase the burden of foreign-currency debt or reduce the value
+              of an investment.
+            </p>
+            <p>
+              Protection lets people make those commitments with confidence. Yet the tools to manage this risk remain out of
+              reach for many. <strong>BlockFinaX exists to make that protection accessible.</strong>
+            </p>
+          </div>
         </div>
         <div className="pillar-grid">
           {PILLARS.map((p) => (
