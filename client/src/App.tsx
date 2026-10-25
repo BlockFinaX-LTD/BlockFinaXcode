@@ -52,6 +52,7 @@ import FinancialModel from "@/pages/financial-model";
 
 // Private beta gating
 import ApplyPage from "@/pages/apply";
+import ContactPage from "@/pages/contact";
 import TechnicalDocs from "@/pages/docs-technical";
 import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
@@ -208,6 +209,7 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPage} />
       <Route path="/predict" component={PredictPage} />
       <Route path="/apply" component={ApplyPage} />
+      <Route path="/contact" component={ContactPage} />
       <Route path="/docs/request" component={DocsRequestPage} />
       <Route path="/liquidity-provider" component={LiquidityProviderPage} />
       <Route path="/hedger" component={HedgerPage} />

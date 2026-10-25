@@ -19,6 +19,7 @@ import { generalApiLimiter, financialMutationLimiter, walletLimiter } from "./mi
 import { requireSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
 import { registerAuthRoutes } from "./auth-routes";
 import { registerInvestorRoutes } from "./routes/investor";
+import { registerSalesRoutes } from "./routes/sales";
 import { registerAdminRoutes } from "./routes/admin";
 import { registerKycRoutes } from "./routes/kyc";
 import { registerWalletRoutes } from "./routes/wallet";
@@ -65,6 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // browser calls are routed through this same-origin proxy. No-op in production.
   registerRiftProxy(app);
   registerInvestorRoutes(app);
+  registerSalesRoutes(app);
   registerKycRoutes(app);
   registerWalletRoutes(app);
   registerCommunityRoutes(app);
