@@ -821,3 +821,28 @@
   .ac-fig { padding: 18px 14px 12px; }
   .ac-callout, .ac-pull { padding: 12px 14px; }
 }
+
+/* ── Lesson atoms: in short, worked example, try it, sources ──────────── */
+.ac-inshort { margin: 22px 0 30px; padding: 18px 20px; border-radius: 14px; background: var(--ac-accent-soft); border: 1px solid color-mix(in oklab, var(--ac-accent) 30%, transparent); }
+.ac-inshort .k, .ac-sources .k { font-family: var(--ac-mono, ui-monospace, monospace); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ac-accent); margin-bottom: 8px; }
+.ac-inshort p { margin: 0; font-size: 17px; line-height: 1.55; color: var(--ac-tx); }
+.ac-example { margin: 22px 0; border: 1px solid var(--ac-hair-2); border-radius: 14px; overflow: hidden; }
+.ac-example-h { padding: 12px 18px; font-size: 13px; font-weight: 600; color: var(--ac-tx); background: var(--ac-panel); border-bottom: 1px solid var(--ac-hair-2); }
+.ac-example dl { margin: 0; padding: 6px 18px; }
+.ac-example dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--ac-hair); font-size: 14.5px; }
+.ac-example dl > div:last-child { border-bottom: 0; }
+.ac-example dt { color: var(--ac-tx-3); }
+.ac-example dd { margin: 0; color: var(--ac-tx); font-variant-numeric: tabular-nums; text-align: right; }
+.ac-example p { margin: 0; padding: 12px 18px 16px; color: var(--ac-tx-2); font-size: 14.5px; line-height: 1.55; border-top: 1px solid var(--ac-hair-2); }
+.ac-tryit { margin: 34px 0 10px; padding: 18px 20px; border-radius: 14px; border: 1px dashed var(--ac-hair-3); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.ac-tryit p { margin: 0; color: var(--ac-tx-2); flex: 1 1 260px; }
+.ac-sources { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--ac-hair-2); }
+.ac-sources ol { margin: 0; padding-left: 18px; color: var(--ac-tx-3); font-size: 13px; line-height: 1.6; }
+.ac-parts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 26px 0 8px; }
+.ac-part { display: block; padding: 22px; border-radius: 16px; border: 1px solid var(--ac-hair-2); background: var(--ac-panel); text-decoration: none; color: inherit; }
+.ac-part:hover { border-color: var(--ac-accent); }
+.ac-part .n { font-family: var(--ac-mono, ui-monospace, monospace); font-size: 12px; color: var(--ac-tx-3); letter-spacing: 0.1em; }
+.ac-part h3 { margin: 8px 0 6px; font-size: 21px; color: var(--ac-accent); }
+.ac-part p { margin: 0 0 12px; color: var(--ac-tx-2); font-size: 14.5px; line-height: 1.5; }
+.ac-part ol { margin: 0; padding-left: 18px; color: var(--ac-tx-2); font-size: 14px; line-height: 1.7; }
+@media (max-width: 760px) { .ac-parts { grid-template-columns: 1fr; } }

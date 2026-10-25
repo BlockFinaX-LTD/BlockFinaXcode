@@ -146,3 +146,48 @@ export function RangePayoffSVG({
     </svg>
   );
 }
+
+/** The two-line answer at the top of every lesson. */
+export function InShort({ children }: { children: ReactNode }) {
+  return (
+    <div className="ac-inshort">
+      <div className="k">In short</div>
+      <p>{children}</p>
+    </div>
+  );
+}
+
+/** A worked example with real numbers: a few labelled rows and a sentence on what it means. */
+export function Example({ title, rows, children }: { title: string; rows: Array<[string, ReactNode]>; children?: ReactNode }) {
+  return (
+    <div className="ac-example">
+      <div className="ac-example-h">Worked example · {title}</div>
+      <dl>
+        {rows.map(([k, v]) => (
+          <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+        ))}
+      </dl>
+      {children && <p>{children}</p>}
+    </div>
+  );
+}
+
+/** A link from the idea to the product. */
+export function TryIt({ label = 'Try it in the app', href = '/hedge', children }: { label?: string; href?: string; children: ReactNode }) {
+  return (
+    <div className="ac-tryit">
+      <p>{children}</p>
+      <a href={href} className="ac-btn primary">{label} <span aria-hidden="true">→</span></a>
+    </div>
+  );
+}
+
+/** Where the figures in a lesson come from. */
+export function Sources({ items }: { items: string[] }) {
+  return (
+    <div className="ac-sources">
+      <div className="k">Sources</div>
+      <ol>{items.map((s) => <li key={s}>{s}</li>)}</ol>
+    </div>
+  );
+}

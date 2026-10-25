@@ -1,101 +1,75 @@
-import { Callout, CodeInline, H1, Lead, LessonTag, P, RangePayoffSVG, Section, UL } from '../lesson-blocks';
+import { Callout, Example, Fig, H1, InShort, Lead, LessonTag, P, RangePayoffSVG, Section, TryIt, UL } from '../lesson-blocks';
 
 export default function RangeProduct() {
   return (
     <>
-      <LessonTag>Lesson 03 · How BlockFinaX works</LessonTag>
-      <H1>The range product</H1>
-      <Lead>
-        BlockFinaX&apos;s default payoff isn&apos;t a yes-or-no bet. It&apos;s a
-        payout that scales linearly through a bounded range. This lesson
-        explains why we chose that shape and what changes because of it.
-      </Lead>
+      <LessonTag>Lesson 03 · Learn BlockFinaX</LessonTag>
+      <H1>Strike, cap and payout</H1>
+      <Lead>Every protection is four choices. Together they decide what you pay and what you can receive.</Lead>
+      <InShort>
+        Below your starting point (the strike) you receive nothing. Between the strike and the cap, every move is paid to you.
+        Beyond the cap, the payout stops growing. The premium is the most protection can ever cost you.
+      </InShort>
 
-      <Section n="01" id="digital" title="Digital vs. range">
-        <P>
-          A digital option pays a fixed amount if the strike is touched,
-          and nothing otherwise. It&apos;s the simplest possible parametric
-          payoff.
-        </P>
-        <P>
-          A range option, the default here, pays nothing below the
-          strike, scales linearly through a bounded range, and caps out
-          at a second price. The picture is a ramp.
-        </P>
-        <RangePayoffSVG />
-        <P>
-          Given a <CodeInline>notional</CodeInline>, an
-          <CodeInline>initialRate</CodeInline>, a <CodeInline>strike</CodeInline>, and a
-          <CodeInline>payoutCap</CodeInline>, the payout is:
-        </P>
-        <P>
-          <CodeInline>payout = notional × clamp(spot − strike, 0, payoutCap − strike) / initialRate</CodeInline>
-        </P>
+      <Section n="01" id="choices" title="The four choices">
+        <UL>
+          <li><strong>The amount</strong>: the dollars you want to protect, such as one supplier invoice.</li>
+          <li><strong>The end date</strong>: when the rate is checked, usually when you pay or are paid.</li>
+          <li><strong>The strike</strong>: the rate where protection starts. Closer to today's rate costs more.</li>
+          <li><strong>The cap</strong>: the rate where the payout stops rising. A wider range costs more.</li>
+        </UL>
       </Section>
 
-      <Section n="02" id="geometry" title="Three regions of the payoff">
+      <Section n="02" id="outcomes" title="Three possible outcomes">
+        <Fig label="Figure 1" caption=" The payout grows between the strike and the cap, and stays flat beyond it.">
+          <RangePayoffSVG strikeLabel="Strike" capLabel="Cap" underlyingLabel="Exchange rate at the end date" payoutLabel="Payout" />
+        </Fig>
         <UL>
-          <li>
-            <strong>Below the strike.</strong> No payout. The hedger
-            keeps the premium as a sunk cost. The LP keeps it as earned
-            income.
-          </li>
-          <li>
-            <strong>Between strike and cap.</strong> Every unit of
-            adverse move translates linearly into payout. This is the
-            protection window. The range of outcomes the hedger is
-            actively insured against.
-          </li>
-          <li>
-            <strong>Above the cap.</strong> Payout stops rising. The
-            hedger is uninsured on any move beyond the cap. In return,
-            the pool&apos;s liability is bounded. No single event can drain
-            more than <em>(cap − strike) × notional / initialRate</em>.
-          </li>
+          <li><strong>The rate stays below the strike.</strong> No payout. You buy your dollars at a rate no worse than you planned for.</li>
+          <li><strong>It ends between the strike and the cap.</strong> You receive the difference from the strike, on your amount.</li>
+          <li><strong>It ends beyond the cap.</strong> You receive the full payout. Moves past the cap are not covered.</li>
         </UL>
-        <Callout label="Why the cap exists">
-          The cap isn&apos;t stinginess. It&apos;s what lets the pool underwrite
-          the trade at all.
+      </Section>
+
+      <Section n="03" id="example" title="A worked example">
+        <Example
+          title="Naira payables protection"
+          rows={[
+            ['Supplier invoice', '$20,000 due in 30 days'],
+            ["Today's rate", '1,350 naira per dollar'],
+            ['Strike (2% above today)', '1,377'],
+            ['Cap (about 10% above the strike)', '1,515'],
+            ['Premium, paid once', 'about $240 plus a $12 fee'],
+            ['Rate at the end date 1,350', 'No payout'],
+            ['Rate at the end date 1,450', '$1,081'],
+            ['Rate at the end date 1,600', '$2,044, the most this cover pays'],
+          ]}
+        >
+          At 1,450 the invoice costs 2,000,000 naira more than at today's rate. The payout covers the part above your strike, so
+          the first 2% is yours to carry: that is what keeps the premium low.
+        </Example>
+        <Callout label="What it does not cover">
+          Moves below the strike, moves beyond the cap, and any gap between the reference rate and the rate your bank gives you.
+          The quote shows all three before you buy.
         </Callout>
       </Section>
 
-      <Section n="03" id="width" title="Why range width is capped at 10×">
+      <Section n="04" id="capped-open" title="Capped or open">
         <P>
-          The on-chain contract enforces
-          <CodeInline>payoutCap − strike ≤ 10 × notional</CodeInline>. It&apos;s
-          protection against a single hedger, or a single creator,
-          configuring a range wide enough to eat the whole pool if the
-          tail hits.
-        </P>
-        <P>
-          The 10× ceiling is wide enough that most real-world hedging
-          cases fit inside. Even a shock devaluation rarely moves an
-          emerging-market cross by more than a factor of a few. It&apos;s
-          narrow enough that a single event can&apos;t take out the pool&apos;s
-          other underwriters.
-        </P>
-        <P>
-          In practice, every pool has a natural liability ceiling.
-          Total-reserved never exceeds
-          <em> 10 × (sum of active notionals)</em>, and by construction
-          never exceeds the pool&apos;s on-chain balance.
+          <strong>Capped</strong> cover stops at the cap you choose. <strong>Open</strong> cover has no cap you set; instead the
+          pool sets the most it pays per dollar protected, for example 30%. Capped cover is usually cheaper; open cover suits
+          bigger, rarer moves.
         </P>
       </Section>
 
-      <Section n="04" id="legacy" title="Legacy single-strike mode">
+      <Section n="05" id="durations" title="Durations and end times">
         <P>
-          Events created with <CodeInline>payoutCap = 0</CodeInline> fall
-          back to the old digital behaviour. Full fixed payout if the
-          strike is touched at expiry, nothing otherwise. It&apos;s still
-          supported for backwards compatibility with the earliest pools,
-          but the new default is always the range product.
-        </P>
-        <P>
-          If you&apos;re browsing an older pool and its cap reads zero,
-          you&apos;re looking at a digital. The rest of the mechanics
-          (solvency, settlement, fees) are identical.
+          Most pools let you choose any end date up to 90 days ahead; some offer only fixed durations. Cover ends at 14:00 UTC on
+          its date, the same moment for everyone, and if that day is a Saturday or Sunday it ends on the Monday.
         </P>
       </Section>
+
+      <TryIt>Move the strike and cap in the app and watch the premium change.</TryIt>
     </>
   );
 }

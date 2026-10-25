@@ -1,121 +1,51 @@
-import { Callout, CodeInline, H1, KV, KVRow, Lead, LessonTag, OL, P, Section, UL } from '../lesson-blocks';
+import { Callout, H1, InShort, Lead, LessonTag, P, Section, Step, Steps, TryIt } from '../lesson-blocks';
 
 export default function OracleSettlement() {
   return (
     <>
-      <LessonTag>Lesson 04 · How BlockFinaX works</LessonTag>
-      <H1>Oracle and settlement</H1>
-      <Lead>
-        Settlement is the moment a pool answers the question: did the
-        tail hit? On BlockFinaX that answer is one number, posted
-        on-chain at or after expiry, by a party the protocol has
-        explicitly agreed to trust. This lesson is how that number gets
-        there.
-      </Lead>
+      <LessonTag>Lesson 04 · Learn BlockFinaX</LessonTag>
+      <H1>How the rate is set and you get paid</H1>
+      <Lead>Who reports the exchange rate when protection ends, how the payout is fixed, and how you collect it.</Lead>
+      <InShort>
+        At 14:00 UTC on the end date, independent rate operators report the exchange rate. When they agree, the payout is
+        fixed by rules in code, and you claim it in USDC whenever you like.
+      </InShort>
 
-      <Section n="01" id="question" title="What settlement has to answer">
+      <Section n="01" id="when" title="When protection ends">
         <P>
-          For every pool, at expiry, the protocol needs a single fact.
-          The settlement rate for the underlying currency pair. From
-          that fact the on-chain contract can compute the payoff for
-          every hedger and the loss share for every LP mechanically.
-        </P>
-        <P>
-          The design question is not &quot;how do we settle,&quot; but &quot;how do we
-          get that rate on-chain in a way both sides trust.&quot;
+          Only the rate at the end date counts. A move past your strike during the contract that reverses before the end does
+          not pay, and a move that happens after it does not either. If the end date falls on a weekend, the rate is taken on
+          the Monday, when markets are open.
         </P>
       </Section>
 
-      <Section n="02" id="european" title="Why settlement is European">
-        <P>
-          BlockFinaX only settles at or after an event&apos;s expiry. Both
-          settlement paths, <CodeInline>HedgeFacet.settleEvent</CodeInline> and
-          <CodeInline>OracleFacet.submitRate</CodeInline>, check the expiry
-          timestamp before applying any payout. A strike that was
-          breached mid-life but retraced does not fire.
-        </P>
-        <P>Two consequences worth keeping in your head.</P>
-        <UL>
-          <li>
-            LPs know that mid-life volatility, however dramatic, doesn&apos;t
-            move any capital until the event ends. Their reserves can be
-            treated as static for the duration of the pool.
-          </li>
-          <li>
-            Hedgers cannot game the oracle by racing to submit at an
-            intra-day spike. The protocol simply ignores any submission
-            whose timestamp is before the event&apos;s expiry.
-          </li>
-        </UL>
-      </Section>
-
-      <Section n="03" id="consensus" title="Multi-signer consensus">
-        <P>
-          The oracle facet supports up to ten registered signers, each
-          of whom can call <CodeInline>submitRate(eventId, price)</CodeInline>.
-          Settlement runs when three conditions align in the same
-          transaction.
-        </P>
-        <OL>
-          <li>
-            The number of matching submissions meets the configured
-            quorum (<CodeInline>requiredSigners</CodeInline>, at least 2).
-          </li>
-          <li>
-            All submitted rates fall within a tolerance band
-            (<CodeInline>toleranceBps</CodeInline>, up to 10%) of each other.
-            No wild outlier counts.
-          </li>
-          <li>
-            No submission is stale relative to the current block. An
-            oracle that stopped talking a week ago doesn&apos;t count.
-          </li>
-        </OL>
-        <P>
-          When the quorum is met in tolerance, <CodeInline>submitRate</CodeInline>
-          settles the event in the same transaction. There&apos;s no
-          separate &quot;finalise&quot; step to be griefed.
-        </P>
-      </Section>
-
-      <Section n="04" id="single-key" title="The single-key path (and its retirement)">
-        <P>
-          The Hedge facet contains a
-          <CodeInline>settleEvent</CodeInline> path and the Oracle facet
-          contains a consensus path. Which path is accepted depends on
-          the on-chain <CodeInline>oracleV2Active</CodeInline> setting;
-          this lesson does not assume which mode is currently active.
-        </P>
-        <P>
-          The contract includes a one-way owner function,
-          <CodeInline>activateOracleV2()</CodeInline>, that permanently
-          disables the single-key path. Once called, only the consensus
-          route settles. Its current value should be checked through the
-          live governance read in the Data Room.
-        </P>
-        <Callout kind="warn" label="Where we are today">
-          Current settlement mode is not inferred from source code or
-          registered oracle addresses. Check the live governance read in
-          the Data Room.
+      <Section n="02" id="rate" title="How the rate is agreed">
+        <Steps>
+          <Step title="Several operators report">Each rate operator submits the rate it observes, signed with its own key.</Step>
+          <Step title="They must agree">Two operators are needed, and their rates must be within 1% of each other. Rates more than 15 minutes old are not accepted.</Step>
+          <Step title="The average is recorded">The agreed rate is stored with the contract and cannot be changed afterwards.</Step>
+        </Steps>
+        <Callout label="Why not one source">
+          Requiring independent operators to agree means no single party can choose the rate your payout depends on.
         </Callout>
       </Section>
 
-      <Section n="05" id="stale" title="Stale submissions and tolerance">
-        <P>The oracle facet keeps house on its own submissions. Two admin controls matter.</P>
-        <KV>
-          <KVRow term="setToleranceBps(x)">
-            The band inside which rate submissions are considered
-            &quot;agreeing.&quot; Capped at 10%. Wider tolerance is more
-            permissive but risks smuggling a bad price through consensus.
-            Tighter is safer but harder to actually reach quorum on.
-          </KVRow>
-          <KVRow term="clearStaleSubmissions(id)">
-            Removes any submission for an event that has aged out of the
-            freshness window. A defensive cleanup. Makes it impossible
-            for a long-lived signature to be replayed later.
-          </KVRow>
-        </KV>
+      <Section n="03" id="settle" title="Fixing the payout">
+        <P>
+          Once the rate is recorded, anyone can ask the contract to settle. It reads the rate itself, applies the terms you bought
+          and fixes the payout. Nobody can pass in a different number, and the payout can never exceed what was set aside when
+          you bought.
+        </P>
       </Section>
+
+      <Section n="04" id="claim" title="Claiming">
+        <P>
+          The payout waits for you until you claim it, and only you can. It arrives in your wallet in USDC, less a 2% fee on the
+          payout. If there is no payout, the reserve returns to the underwriters who backed your cover.
+        </P>
+      </Section>
+
+      <TryIt label="See your protections">Open My protections in the app to follow each contract to its end date.</TryIt>
     </>
   );
 }

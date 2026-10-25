@@ -1,141 +1,54 @@
-import { Callout, Fig, H1, KV, KVRow, Lead, LessonTag, OL, P, Section, UL } from '../lesson-blocks';
+import { Callout, H1, InShort, Lead, LessonTag, P, Section, Sources, TryIt, UL } from '../lesson-blocks';
 
 export default function Underwriting101() {
   return (
     <>
-      <LessonTag>Lesson 08 · Fundamentals</LessonTag>
+      <LessonTag>Lesson 06 · Learn BlockFinaX</LessonTag>
       <H1>Underwriting: the other side of the trade</H1>
-      <Lead>
-        For every hedger buying cover there is someone on the other side
-        of the contract, agreeing to pay if the tail hits. That someone
-        is you, if you provide liquidity. This lesson is the
-        underwriter&apos;s mental model.
-      </Lead>
+      <Lead>How your USDC backs protection, where your returns come from, and the controls you keep.</Lead>
+      <InShort>
+        You add USDC to a pool that covers one currency and one direction. When protection is sold from your money, you are paid
+        its premium at once. If that cover pays out, your reserve pays it, never more than was set aside.
+      </InShort>
 
-      <Section n="01" id="who" title="Who writes the cover">
+      <Section n="01" id="what" title="What underwriting means">
         <P>
-          In a traditional market it would be an insurance company or a
-          derivatives desk. An entity with a large balance sheet, a
-          licence, and a risk team pricing tail events for a living.
-        </P>
-        <P>
-          BlockFinaX replaces that single balance sheet with a pool of
-          liquidity providers. When you deposit into a pool, your
-          capital sits alongside every other LP&apos;s. Premiums accrue to
-          the pool as new hedgers buy in. Payouts, if any, are debited
-          from the pool at expiry. Your share of everything is
-          proportional to how much you deposited and how long it
-          stayed.
+          A business buying Naira payables protection is worried the naira will weaken. Someone has to agree to pay if it does.
+          As an underwriter of <em>Naira depreciation cover</em>, that is you, and the premium is what you are paid for it.
         </P>
       </Section>
 
-      <Section n="02" id="analogy" title="The insurance analogy and its limits">
-        <P>
-          &quot;LPs are the insurance company&quot; is a useful first pass. It
-          gets you three important things right.
-        </P>
+      <Section n="02" id="pools" title="How a pool works">
         <UL>
-          <li>The premium is compensation for absorbing a loss you didn&apos;t cause.</li>
-          <li>Diversification across many small policies is safer than concentration in one.</li>
-          <li>The pool is only as solvent as the sum of its reserves.</li>
-        </UL>
-        <P>Where the analogy breaks:</P>
-        <UL>
-          <li>
-            There is no claims department, and there is no way to deny
-            a valid claim. The oracle publishes a rate. If the event is
-            in the money, the payout is owed and can be pulled at any
-            time by the hedger.
-          </li>
-          <li>
-            You can exit, but only once the pool has settled. Until
-            then, your capital is reserved against the worst-case
-            payout of every active hedger.
-          </li>
-          <li>
-            The exposure isn&apos;t independent across pools. FX regimes
-            move together. A cedi shock and a naira shock are not two
-            uncorrelated tails. They&apos;re one story told twice.
-          </li>
+          <li><strong>One currency, one direction.</strong> A pool covers, for example, the naira weakening against the dollar, never both ways, so you know exactly what you back.</li>
+          <li><strong>Backed sale by sale.</strong> Each protection is funded by the underwriters in the pool when it is sold, in proportion to their free money.</li>
+          <li><strong>Fully reserved.</strong> The most each protection can pay is set aside from those underwriters at the moment of sale. A pool cannot sell cover it cannot pay.</li>
+          <li><strong>Free money stays free.</strong> Money not set aside for running cover can be withdrawn whenever you like.</li>
         </UL>
       </Section>
 
-      <Section n="03" id="capital" title="Reserved capital vs. earned premium">
+      <Section n="03" id="returns" title="Where returns come from">
         <P>
-          When a hedger buys cover, the pool reserves their worst-case
-          payout from the deposited liquidity. That reservation is what
-          keeps the pool solvent. The money to pay them exists,
-          on-chain, at the moment they buy in.
+          Only from premiums businesses pay for protection, never from new deposits. In quiet months most cover ends without a
+          payout and you keep the premiums. When a currency moves sharply, some of your reserve pays out.
         </P>
-        <P>
-          Reserved capital is not the same as capital &quot;at risk.&quot; You
-          only lose reserved capital if the event settles in the money
-          at expiry. If it doesn&apos;t, the reservation is released and the
-          premium the hedger paid stays in the pool as your earnings.
-        </P>
-        <Fig label="Fig. 08·1" caption="A schematic pool. Unencumbered capital is withdrawable after settlement. Reserved capital is backing outstanding cover.">
-          <svg viewBox="0 0 600 180" preserveAspectRatio="xMidYMid meet">
-            <text x="20" y="24" className="lbl-major">Pool composition (LP view)</text>
-
-            <text x="20" y="52">Unencumbered</text>
-            <text x="580" y="52" textAnchor="end" style={{ fill: 'var(--ac-accent)' }}>Reserved</text>
-
-            <rect x="20" y="66" width="340" height="44" fill="var(--ac-hair)" stroke="var(--ac-hair-3)" />
-            <rect x="360" y="66" width="220" height="44" className="accent-fill" />
-            <rect x="360" y="66" width="220" height="44" fill="none" stroke="var(--ac-accent)" />
-
-            <text x="20" y="138" style={{ fill: 'var(--ac-tx-3)' }}>Withdrawable after settlement</text>
-            <text x="580" y="138" textAnchor="end" style={{ fill: 'var(--ac-tx-3)' }}>Backing outstanding cover</text>
-          </svg>
-        </Fig>
-      </Section>
-
-      <Section n="04" id="edge" title="Where an LP&apos;s edge comes from">
-        <P>
-          Underwriting an option is not a bet on which way the rate
-          goes. It&apos;s a wager on whether the rate crosses the strike by
-          more than the premium implies. Your edge, if you have one, is
-          in seeing the tail more clearly than the buyer does.
-        </P>
-        <P>Practically, an LP&apos;s edge tends to come from three places.</P>
-        <OL>
-          <li>
-            <strong>Local knowledge.</strong> You have a view on what
-            actually drives the cedi that the offshore desk pricing the
-            hedge does not.
-          </li>
-          <li>
-            <strong>Diversification.</strong> You can underwrite across
-            currencies and expiries in a way a single hedger can&apos;t.
-          </li>
-          <li>
-            <strong>Cheap capital.</strong> You have USDC sitting
-            on-chain that would otherwise earn a lending rate. Premium
-            is your excess return over that idle rate.
-          </li>
-        </OL>
-      </Section>
-
-      <Section n="05" id="ruin" title="The one number you must not ignore">
-        <P>
-          Every underwriter, on-chain or off, eventually has the same
-          conversation with themselves. What&apos;s the largest loss I can
-          take on this pool without being ruined by it?
-        </P>
-        <P>
-          On BlockFinaX, that number has a mechanical upper bound. Your
-          proportional share of the pool&apos;s reserved payouts, if every
-          active hedger&apos;s cover settles in the money at the cap. Read
-          the pool&apos;s utilisation and cap width before you commit
-          capital. If the answer to &quot;what&apos;s the worst case?&quot; is &quot;more
-          than I can lose and still function next quarter,&quot; you are
-          oversized.
-        </P>
-        <Callout kind="risk" label="A hard rule">
-          Never let any single pool&apos;s worst-case loss exceed a
-          fraction of your capital you are comfortable losing.
+        <Callout label="A useful benchmark">
+          TCX, the largest dedicated emerging-market currency-risk fund, reported an average annualised return of 1.6% across
+          about 5,000 hedges from 2007 to 2023. Currency underwriting is a steady, modest business, not a windfall.
         </Callout>
       </Section>
+
+      <Section n="04" id="controls" title="What you control">
+        <UL>
+          <li><strong>Which risk</strong>: the currency and the direction of the pools you join or create.</li>
+          <li><strong>How long</strong>: the longest cover your money backs.</li>
+          <li><strong>Whether to keep backing</strong>: stop backing new sales at any time, without withdrawing.</li>
+          <li><strong>Your own pool</strong>: as a creator you set the durations, how close to today's rate cover may start, and its price.</li>
+        </UL>
+      </Section>
+
+      <TryIt label="Open the underwriter view">Switch to Underwriter in the app to see open pools and what each has earned.</TryIt>
+      <Sources items={['TCX, Scaling Up Currency Risk Hedging for Low and Lower Middle-Income Countries, September 2023, Appendix 3.']} />
     </>
   );
 }
