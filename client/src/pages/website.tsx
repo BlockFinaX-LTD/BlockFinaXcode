@@ -573,6 +573,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             <a href="/#use">Products</a>
             <Link href="/hedger">Hedgers</Link>
             <Link href="/liquidity-provider">Underwriters</Link>
+            <Link href="/about">About</Link>
             <div
               className="nav-dropdown"
               onMouseEnter={() => setResourcesOpen(true)}
@@ -639,6 +640,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </Link>
             <Link href="/liquidity-provider" className="nav-mobile-link" onClick={closeMobile}>
               Underwriters
+            </Link>
+            <Link href="/about" className="nav-mobile-link" onClick={closeMobile}>
+              About
             </Link>
             <button
               type="button"
@@ -1432,6 +1436,7 @@ function Footer() {
             </div>
             <div className="foot-col">
               <h5>Resources</h5>
+              <Link href="/about">About</Link>
               <Link href="/faq">FAQ</Link>
               <Link href="/blog">Blog</Link>
               <Link href="/contact">Contact</Link>
@@ -1666,3 +1671,80 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
 
 export function HedgersPage() { return <AudiencePage copy={HEDGERS} />; }
 export function UnderwritersPage() { return <AudiencePage copy={UNDERWRITERS} />; }
+
+
+// ── About ───────────────────────────────────────────────────────────────
+
+const APPROACH = [
+  { t: 'A protocol, not a counterparty', d: 'BlockFinaX connects businesses that need protection with underwriters who provide it. We build the pricing, the records and the settlement; underwriters carry the risk and earn the premiums.' },
+  { t: 'Every promise funded', d: 'The most a protection can pay is set aside from underwriters the moment it is sold. Cover is never offered without the money to pay it.' },
+  { t: 'Rates no one party chooses', d: 'The exchange rate that decides a payout is reported and agreed by independent operators, at a fixed time, and recorded on a public ledger.' },
+  { t: 'Simple to use', d: 'Sign in with email, approve with a passkey and pay in USDC. No credit line, no dealer and no network fees to manage.' },
+];
+
+export function AboutPage() {
+  useGeistFont();
+  const [theme, setTheme] = useState<Theme>('light');
+  useEffect(() => { setTheme(readStoredTheme()); window.scrollTo(0, 0); }, []);
+  const toggleTheme = () => setTheme((t) => {
+    const next: Theme = t === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
+  return (
+    <div className="bfx-landing" data-theme={theme}>
+      <TopNav theme={theme} onToggleTheme={toggleTheme} />
+      <section className="aud-hero">
+        <Guilloche />
+        <div className="wrap">
+          <div className="aud-eyebrow">About BlockFinaX</div>
+          <h1 className="aud-title">FX risk solutions for <span className="accent">emerging markets</span></h1>
+          <div className="about-why">
+            <p>
+              Businesses and investors make commitments today whose costs and returns can change tomorrow. An exchange-rate
+              move can make a supplier payment more expensive, increase the burden of foreign-currency debt or reduce the value
+              of an investment.
+            </p>
+            <p>
+              Protection lets people make those commitments with confidence. Yet the tools to manage this risk remain out of
+              reach for many. <strong>BlockFinaX exists to make that protection accessible.</strong>
+            </p>
+          </div>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap">
+          <h2 className="aud-h2">What we are building</h2>
+          <div className="about-pillars">
+            {PILLARS.map((p) => (
+              <div key={p.n} className="about-pillar">
+                <span className="pillar-num">{p.n}</span>
+                <h3>{p.title}</h3>
+                <p>{p.lede}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap">
+          <h2 className="aud-h2">How we work</h2>
+          <div className="about-approach">
+            {APPROACH.map((a) => <div key={a.t}><h3>{a.t}</h3><p>{a.d}</p></div>)}
+          </div>
+        </div>
+      </section>
+      <section className="tail">
+        <div className="wrap">
+          <h2>Work with us.</h2>
+          <p>Businesses, underwriters, partners and development institutions: we would like to hear from you.</p>
+          <div className="hero-ctas">
+            <Link href="/contact" className="btn btn-primary">Contact us <span className="arrow">→</span></Link>
+            <Link href="/hedge" className="btn btn-ghost">Launch App</Link>
+          </div>
+        </div>
+      </section>
+      <Footer />
+    </div>
+  );
+}

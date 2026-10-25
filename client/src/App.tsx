@@ -25,7 +25,7 @@ import { MethodChooser } from "@/components/wallet/method-chooser";
 import { useToast } from "@/hooks/use-toast";
 
 // Public pages
-import Website, { HedgersPage, UnderwritersPage } from "@/pages/website";
+import Website, { AboutPage, HedgersPage, UnderwritersPage } from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import DataRoom from "@/pages/data-room";
@@ -195,6 +195,7 @@ function Router() {
       <Route path="/predict" component={PredictPage} />
       <Route path="/apply" component={ApplyPage} />
       <Route path="/contact" component={ContactPage} />
+      <Route path="/about" component={AboutPage} />
       <Route path="/docs/request"><Redirect to="/docs" /></Route>
       <Route path="/liquidity-provider" component={UnderwritersPage} />
       <Route path="/hedger" component={HedgersPage} />

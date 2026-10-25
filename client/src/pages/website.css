@@ -1221,3 +1221,15 @@
 .bfx-landing .receipt-row.now { background: color-mix(in oklab, var(--bfx-accent) 9%, transparent); }
 .bfx-landing .receipt-row .proof { color: var(--bfx-accent); }
 .bfx-landing .receipt-foot { margin: 12px 24px 0; }
+
+/* ── About ─────────────────────────────────────────────────────────────── */
+.bfx-landing .about-why { margin-top: 28px; max-width: 64ch; }
+.bfx-landing .about-why p { font-size: 19px; line-height: 1.6; color: var(--bfx-tx-2); margin: 0 0 16px; }
+.bfx-landing .about-why strong { color: var(--bfx-tx); }
+.bfx-landing .about-pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; }
+.bfx-landing .about-pillar { border-top: 2px solid var(--bfx-accent); padding-top: 18px; }
+.bfx-landing .about-pillar h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: var(--bfx-accent); margin: 12px 0 10px; }
+.bfx-landing .about-pillar p, .bfx-landing .about-approach p { color: var(--bfx-tx-2); font-size: 15.5px; line-height: 1.6; }
+.bfx-landing .about-approach { display: grid; grid-template-columns: repeat(2, 1fr); gap: 34px 48px; }
+.bfx-landing .about-approach h3 { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; margin-bottom: 8px; color: var(--bfx-tx); }
+@media (max-width: 900px) { .bfx-landing .about-pillars, .bfx-landing .about-approach { grid-template-columns: 1fr; gap: 24px; } }
