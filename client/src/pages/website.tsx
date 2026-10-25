@@ -138,7 +138,7 @@ function useHeroSurface(ref: React.RefObject<HTMLCanvasElement>) {
 
 // ── Hero rotator ────────────────────────────────────────────────────────
 
-const ROTATOR_WORDS = ['Hedging', 'Trading', 'Insuring', 'Underwriting'];
+const ROTATOR_WORDS = ['Hedging', 'Managing', 'Pricing', 'Underwriting'];
 
 function HeroRotator() {
   const ref = useRef<HTMLSpanElement>(null);
@@ -871,43 +871,28 @@ function PillarsSection() {
 }
 
 const TRUST = [
-  {
-    when: 'When you buy',
-    title: 'Your payout is reserved',
-    body: 'The most your protection can pay is set aside from underwriters at the moment you buy. Cover is never sold without the money to pay it.',
-  },
-  {
-    when: 'At the end date',
-    title: 'The rate is agreed independently',
-    body: 'The rate that decides your payout must be reported and agreed by independent operators. No single party can choose it.',
-  },
-  {
-    when: 'When you claim',
-    title: 'Only you can collect it',
-    body: 'Your payout waits until you claim it with your passkey, which stays on your device. Nobody else can move your funds.',
-  },
+  { when: 'When you buy', title: 'Your payout is reserved', line: 'The most it can pay is set aside the moment you buy.' },
+  { when: 'At the end date', title: 'The rate is agreed independently', line: 'Independent operators must agree the rate. No one party chooses it.' },
+  { when: 'When you claim', title: 'Only you can collect it', line: 'Your payout waits for your passkey. Nobody else can move it.' },
 ];
 
-/** Why a business can rely on being paid: one promise at each step of a protection's life. */
+const RECEIPT: { step: number; k: string; v: string; proof?: string }[] = [
+  { step: 0, k: 'Protection', v: 'Naira payables · $20,000' },
+  { step: 0, k: 'Strike and cap', v: '1,377 to 1,515' },
+  { step: 0, k: 'Reserve', v: '$2,044.44', proof: 'Locked at purchase' },
+  { step: 1, k: 'Rate at 14:00 UTC', v: '1,450.00', proof: 'Agreed by 2 operators' },
+  { step: 2, k: 'Payout', v: '$1,059.85', proof: 'Claimed with your passkey' },
+];
+
+/** Why a business can rely on being paid: three steps beside a contract that fills in as they advance. */
 function TrustSection() {
-  const ref = useRef<HTMLDivElement>(null);
-  // Lit by default; the step-by-step reveal only runs once the section is about to scroll in,
-  // so the text can never be left faded.
-  const [lit, setLit] = useState(3);
+  const [step, setStep] = useState(0);
+  const [paused, setPaused] = useState(false);
   useEffect(() => {
-    const el = ref.current;
-    if (!el || prefersReducedMotion() || typeof IntersectionObserver === 'undefined') return;
-    if (el.getBoundingClientRect().top < window.innerHeight) return;
-    setLit(0);
-    const timers: number[] = [];
-    const io = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return;
-      io.disconnect();
-      [1, 2, 3].forEach((n, k) => timers.push(window.setTimeout(() => setLit(n), 250 + k * 450)));
-    }, { threshold: 0.35 });
-    io.observe(el);
-    return () => { io.disconnect(); timers.forEach(clearTimeout); };
-  }, []);
+    if (paused || prefersReducedMotion()) return;
+    const id = window.setInterval(() => setStep((s) => (s + 1) % 3), 3200);
+    return () => clearInterval(id);
+  }, [paused]);
   return (
     <section className="trust" id="trust" aria-labelledby="trust-title">
       <div className="wrap">
@@ -915,18 +900,38 @@ function TrustSection() {
           <h2 id="trust-title">Why you can trust the payout.</h2>
           <p>Protection is only worth buying if it pays. At every step, the rules are written into the contracts and recorded on a public ledger.</p>
         </div>
-        <div className="trust-line" ref={ref} style={{ ['--lit' as string]: lit }}>
-          <div className="trust-track" aria-hidden="true"><i /></div>
+        <div className="trust-split" onMouseLeave={() => setPaused(false)}>
           <ol className="trust-steps">
             {TRUST.map((t, k) => (
-              <li key={t.title} className={lit > k ? 'on' : ''}>
-                <span className="trust-dot" aria-hidden="true" />
-                <span className="trust-when">{String(k + 1).padStart(2, '0')} · {t.when}</span>
-                <h3>{t.title}</h3>
-                <p>{t.body}</p>
+              <li key={t.title}>
+                <button type="button" className={step === k ? 'on' : ''} aria-pressed={step === k}
+                  onMouseEnter={() => { setPaused(true); setStep(k); }} onFocus={() => { setPaused(true); setStep(k); }} onClick={() => { setPaused(true); setStep(k); }}>
+                  <span className="trust-when">{String(k + 1).padStart(2, '0')} · {t.when}</span>
+                  <span className="trust-title">{t.title}</span>
+                  <span className="trust-text">{t.line}</span>
+                  <span className="trust-bar" aria-hidden="true"><i key={paused ? 'p' : step} className={!paused && step === k ? 'run' : ''} /></span>
+                </button>
               </li>
             ))}
           </ol>
+          <div className="receipt" aria-label="An example protection contract">
+            <div className="receipt-h">
+              <span>Protection #1042</span>
+              <span className={`receipt-status s${step}`}>{step === 0 ? 'Active' : step === 1 ? 'Settled' : 'Paid'}</span>
+            </div>
+            <dl>
+              {RECEIPT.map((r) => (
+                <div key={r.k} className={`receipt-row${r.step <= step ? ' shown' : ''}${r.step === step ? ' now' : ''}`}>
+                  <dt>{r.k}</dt>
+                  <dd>
+                    <span className="v">{r.v}</span>
+                    {r.proof && <span className="proof"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>{r.proof}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div className="receipt-foot">Recorded on a public ledger · example contract</div>
+          </div>
         </div>
       </div>
     </section>

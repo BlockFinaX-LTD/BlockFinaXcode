@@ -1130,34 +1130,48 @@
 .bfx-landing .why-head { align-items: end; }
 .bfx-landing .why-copy p { font-size: 19px; }
 
-/* ── Why you can trust the payout: a timeline ──────────────────────────── */
+/* ── Why you can trust the payout: steps beside a contract ─────────────── */
 .bfx-landing .trust { padding: 88px 0 96px; border-top: 1px solid var(--bfx-border); }
-.bfx-landing .trust-line { position: relative; margin-top: 12px; }
-.bfx-landing .trust-track { position: absolute; left: 0; right: 0; top: 9px; height: 2px; background: var(--bfx-border-2); border-radius: 2px; }
-.bfx-landing .trust-track i {
-  display: block; height: 100%; background: var(--bfx-accent); border-radius: 2px;
-  width: calc((var(--lit, 0) / 3) * 100%); transition: width .5s var(--bfx-ease);
+.bfx-landing .trust-split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+.bfx-landing .trust-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.bfx-landing .trust-steps button {
+  appearance: none; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--bfx-border);
+  padding: 22px 0 20px; cursor: pointer; color: inherit; font: inherit; display: block; position: relative;
 }
-.bfx-landing .trust-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
-.bfx-landing .trust-steps li { position: relative; padding-top: 40px; opacity: 0.45; transform: translateY(6px); transition: opacity .5s var(--bfx-ease), transform .5s var(--bfx-ease); }
-.bfx-landing .trust-steps li.on { opacity: 1; transform: none; }
-.bfx-landing .trust-dot {
-  position: absolute; top: 0; left: 0; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--bfx-bg); border: 2px solid var(--bfx-border-2); transition: border-color .4s, background .4s, box-shadow .4s;
+.bfx-landing .trust-steps li:last-child button { border-bottom: 1px solid var(--bfx-border); }
+.bfx-landing .trust-when { display: block; font-family: var(--bfx-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bfx-tx-3); margin-bottom: 8px; transition: color .3s; }
+.bfx-landing .trust-title { display: block; font-size: clamp(22px, 2.2vw, 28px); font-weight: 600; letter-spacing: -0.02em; color: var(--bfx-tx-3); transition: color .3s; }
+.bfx-landing .trust-text { display: block; font-size: 15.5px; line-height: 1.5; color: var(--bfx-tx-2); max-height: 0; overflow: hidden; opacity: 0; transition: max-height .4s var(--bfx-ease), opacity .3s, margin .3s; }
+.bfx-landing .trust-steps button.on .trust-when { color: var(--bfx-accent); }
+.bfx-landing .trust-steps button.on .trust-title { color: var(--bfx-tx); }
+.bfx-landing .trust-steps button.on .trust-text { max-height: 80px; opacity: 1; margin-top: 8px; }
+.bfx-landing .trust-bar { position: absolute; left: 0; right: 0; top: -1px; height: 2px; }
+.bfx-landing .trust-bar i { display: block; height: 100%; width: 0; background: var(--bfx-accent); }
+.bfx-landing .trust-steps button.on .trust-bar i { width: 100%; }
+.bfx-landing .trust-steps button.on .trust-bar i.run { animation: bfx-trust-run 3.2s linear forwards; }
+@keyframes bfx-trust-run { from { width: 0; } to { width: 100%; } }
+.bfx-landing .receipt {
+  border-radius: 20px; background: var(--bfx-card); border: 1px solid var(--bfx-border);
+  box-shadow: 0 30px 60px -30px rgba(15, 30, 70, 0.35); padding: 22px 24px 18px; font-variant-numeric: tabular-nums;
 }
-.bfx-landing .trust-steps li.on .trust-dot { border-color: var(--bfx-accent); background: var(--bfx-accent); box-shadow: 0 0 0 6px color-mix(in oklab, var(--bfx-accent) 18%, transparent); }
-.bfx-landing .trust-when { display: block; font-family: var(--bfx-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bfx-accent); margin-bottom: 12px; }
-.bfx-landing .trust-steps h3 { font-size: clamp(22px, 2.2vw, 28px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 12px; color: var(--bfx-tx); }
-.bfx-landing .trust-steps p { font-size: 15.5px; line-height: 1.6; color: var(--bfx-tx-2); max-width: 36ch; }
+.bfx-landing .receipt-h { display: flex; justify-content: space-between; align-items: center; font-family: var(--bfx-mono); font-size: 12.5px; letter-spacing: 0.06em; color: var(--bfx-tx-3); padding-bottom: 14px; border-bottom: 1px dashed var(--bfx-border-2); }
+.bfx-landing .receipt-status { padding: 4px 10px; border-radius: 999px; font-size: 11px; color: var(--bfx-accent); background: color-mix(in oklab, var(--bfx-accent) 12%, transparent); }
+.bfx-landing .receipt-status.s2 { color: #12a05a; background: color-mix(in oklab, #12a05a 14%, transparent); }
+.bfx-landing .receipt dl { margin: 6px 0 0; }
+.bfx-landing .receipt-row { display: flex; justify-content: space-between; gap: 16px; padding: 13px 10px; margin: 0 -10px; border-radius: 10px; opacity: 0.28; transition: opacity .4s, background .4s; }
+.bfx-landing .receipt-row.shown { opacity: 1; }
+.bfx-landing .receipt-row.now { background: color-mix(in oklab, var(--bfx-accent) 7%, transparent); }
+.bfx-landing .receipt-row dt { color: var(--bfx-tx-3); font-size: 14.5px; }
+.bfx-landing .receipt-row dd { margin: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.bfx-landing .receipt-row .v { color: var(--bfx-tx); font-size: 15.5px; font-weight: 600; }
+.bfx-landing .receipt-row .proof { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #12a05a; }
+.bfx-landing .receipt-foot { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--bfx-border-2); font-family: var(--bfx-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--bfx-tx-4); }
 @media (max-width: 900px) {
   .bfx-landing .trust { padding: 64px 0 72px; }
-  .bfx-landing .trust-track { top: 0; bottom: 0; left: 9px; right: auto; width: 2px; height: auto; }
-  .bfx-landing .trust-track i { width: 100%; height: calc((var(--lit, 0) / 3) * 100%); transition: height .5s var(--bfx-ease); }
-  .bfx-landing .trust-steps { grid-template-columns: 1fr; gap: 34px; }
-  .bfx-landing .trust-steps li { padding-top: 0; padding-left: 44px; }
+  .bfx-landing .trust-split { grid-template-columns: 1fr; gap: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bfx-landing .trust-steps li, .bfx-landing .trust-track i, .bfx-landing .trust-dot { transition: none; }
+  .bfx-landing .trust-text, .bfx-landing .receipt-row { transition: none; }
 }
 
 /* ── Who it is for: hover rows (the row turns blue, its note slides in) ─── */
