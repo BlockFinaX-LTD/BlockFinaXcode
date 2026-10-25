@@ -1159,3 +1159,42 @@
 @media (prefers-reduced-motion: reduce) {
   .bfx-landing .trust-steps li, .bfx-landing .trust-track i, .bfx-landing .trust-dot { transition: none; }
 }
+
+/* ── Who it is for: hover rows (the row turns blue, its note slides in) ─── */
+.bfx-landing .ways { position: relative; overflow: hidden; padding-bottom: 0; }
+.bfx-landing .ways .wrap, .bfx-landing .ways .way-list { position: relative; z-index: 1; }
+.bfx-landing .way-list { border-top: 1px solid var(--bfx-border); margin-top: 28px; }
+.bfx-landing .way-row { display: block; color: var(--bfx-tx); text-decoration: none; border-bottom: 1px solid var(--bfx-border); transition: background .35s var(--bfx-ease), color .35s var(--bfx-ease); }
+.bfx-landing .way-in { display: grid; grid-template-columns: 0px minmax(0, 1fr) minmax(0, 1fr) 40px; align-items: start; gap: 0 32px; min-height: 200px; padding-top: 34px; padding-bottom: 34px; transition: grid-template-columns .45s var(--bfx-ease); }
+.bfx-landing .way-media { overflow: hidden; width: 100%; height: 150px; opacity: 0; transform: translateX(-16px); transition: opacity .35s var(--bfx-ease), transform .45s var(--bfx-ease); }
+.bfx-landing .way-note { width: 260px; height: auto; display: block; border-radius: 10px 48px 10px 48px; }
+.bfx-landing .way-title { font-size: clamp(26px, 3vw, 38px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; }
+.bfx-landing .way-line { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.45; color: var(--bfx-tx-2); max-width: 30ch; transition: color .35s; }
+.bfx-landing .way-arrow { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--bfx-border-2); display: inline-flex; align-items: center; justify-content: center; color: var(--bfx-tx-2); transition: background .35s, color .35s, border-color .35s; }
+@media (hover: hover) and (min-width: 901px) {
+  .bfx-landing .way-row.on { background: linear-gradient(90deg, #0b1a33, #133a7a 60%, var(--bfx-accent)); color: #fff; }
+  .bfx-landing .way-row.on .way-in { grid-template-columns: 270px minmax(0, 1fr) minmax(0, 1fr) 40px; }
+  .bfx-landing .way-row.on .way-media { opacity: 1; transform: none; }
+  .bfx-landing .way-row.on .way-line { color: rgba(255,255,255,0.88); }
+  .bfx-landing .way-row.on .way-arrow { background: #fff; color: #0b1a33; border-color: #fff; }
+}
+.bfx-landing .way-row:focus-visible { outline: 2px solid var(--bfx-accent); outline-offset: -2px; }
+@media (max-width: 900px) {
+  .bfx-landing .way-in { grid-template-columns: minmax(0, 1fr) 34px; gap: 10px 16px; min-height: 0; padding-top: 24px; padding-bottom: 24px; }
+  .bfx-landing .way-media { display: none; }
+  .bfx-landing .way-title { grid-column: 1; }
+  .bfx-landing .way-arrow { grid-column: 2; grid-row: 1; }
+  .bfx-landing .way-line { grid-column: 1 / -1; font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bfx-landing .way-in, .bfx-landing .way-media, .bfx-landing .way-row { transition: none; }
+}
+.bfx-landing .way-media { margin-right: -32px; transition: opacity .35s var(--bfx-ease), transform .45s var(--bfx-ease), margin .45s var(--bfx-ease); }
+@media (hover: hover) and (min-width: 901px) { .bfx-landing .way-row.on .way-media { margin-right: 0; } }
+@media (max-width: 900px) { .bfx-landing .way-media { margin-right: 0; } }
+@media (min-width: 901px) {
+  .bfx-landing .way-in { column-gap: 0; }
+  .bfx-landing .way-title, .bfx-landing .way-line { padding-right: 32px; }
+  .bfx-landing .way-media, .bfx-landing .way-row.on .way-media { margin-right: 0; }
+}
+@media (hover: hover) and (min-width: 901px) { .bfx-landing .way-row.on .way-in { grid-template-columns: 300px minmax(0, 1fr) minmax(0, 1fr) 40px; } }
