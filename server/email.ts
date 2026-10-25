@@ -231,55 +231,6 @@ export async function emailAdminNewAccessRequest(req: {
   });
 }
 
-/** A demo visitor asked to talk to sales about live protection. */
-export async function emailAdminSalesRequest(req: {
-  id: number;
-  name: string;
-  email: string;
-  company?: string | null;
-  jobTitle?: string | null;
-  phone?: string | null;
-  enquiry?: string | null;
-  country?: string | null;
-  role?: string | null;
-  exposure?: string | null;
-  monthlyVolume?: string | null;
-  message?: string | null;
-  source?: string | null;
-}) {
-  const rows = [
-    ['Enquiry', req.enquiry],
-    ['Name', req.name],
-    ['Email', req.email],
-    ['Company', req.company],
-    ['Job title', req.jobTitle],
-    ['Phone', req.phone],
-    ['Country', req.country],
-    ['Interested as', req.role],
-    ['Exposure', req.exposure],
-    ['Monthly volume', req.monthlyVolume],
-    ['Message', req.message],
-    ['Asked from', req.source],
-  ]
-    .filter(([, v]) => v)
-    .map(
-      ([k, v]) =>
-        `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;font-size:13px;width:140px;vertical-align:top;">${k}</td><td style="padding:6px 0;color:#0f1a2f;font-size:13px;">${escapeHtml(String(v))}</td></tr>`,
-    )
-    .join('');
-  const body = `
-    <h2 style="font-size:18px;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em;">Sales request #${req.id}</h2>
-    <p style="font-size:13px;color:#5b6577;margin:0 0 16px;">Someone using the demo wants to talk about live protection.</p>
-    <table style="width:100%;border-collapse:collapse;">${rows}</table>
-  `;
-  const to = (process.env.SALES_NOTIFY_EMAIL || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return sendEmail({
-    to: to.length ? to : ADMIN_EMAILS,
-    subject: `[BlockFinaX] Sales request from ${req.name}${req.company ? ` (${req.company})` : ''}`,
-    html: shell('Sales request', body),
-    replyTo: req.email,
-  });
-}
 
 export async function emailUserAccessReceived(to: string, name: string) {
   const body = `

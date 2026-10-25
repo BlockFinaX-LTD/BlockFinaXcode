@@ -7,6 +7,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+import { ADMIN_EMAILS, escapeHtml, sendEmail, shell } from "../email";
 
 /** Enquiry types on the Contact page. */
 export const ENQUIRIES = [
@@ -86,12 +87,61 @@ export function registerSalesRoutes(app: Express) {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
         [r.name, r.email.toLowerCase(), r.company ?? null, r.country ?? null, r.role ?? null, r.exposure ?? null, r.monthlyVolume ?? null, r.message ?? null, r.source ?? null, r.jobTitle ?? null, r.phone ?? null, r.enquiry ?? null],
       );
-      const { emailAdminSalesRequest } = await import("../email");
       void emailAdminSalesRequest({ id: rows[0].id, ...r }).catch((err) => console.warn(`[sales] email failed: ${err?.message}`));
       res.json({ ok: true });
     } catch (err: any) {
       console.error("[sales] request failed:", err?.message);
       res.status(500).json({ message: "Something went wrong. Please try again." });
     }
+  });
+}
+
+/** Email the sales team (SALES_NOTIFY_EMAIL, else the admins) about a new request. */
+async function emailAdminSalesRequest(req: {
+  id: number;
+  name: string;
+  email: string;
+  company?: string | null;
+  jobTitle?: string | null;
+  phone?: string | null;
+  enquiry?: string | null;
+  country?: string | null;
+  role?: string | null;
+  exposure?: string | null;
+  monthlyVolume?: string | null;
+  message?: string | null;
+  source?: string | null;
+}) {
+  const rows = [
+    ['Enquiry', req.enquiry],
+    ['Name', req.name],
+    ['Email', req.email],
+    ['Company', req.company],
+    ['Job title', req.jobTitle],
+    ['Phone', req.phone],
+    ['Country', req.country],
+    ['Interested as', req.role],
+    ['Exposure', req.exposure],
+    ['Monthly volume', req.monthlyVolume],
+    ['Message', req.message],
+    ['Asked from', req.source],
+  ]
+    .filter(([, v]) => v)
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;font-size:13px;width:140px;vertical-align:top;">${k}</td><td style="padding:6px 0;color:#0f1a2f;font-size:13px;">${escapeHtml(String(v))}</td></tr>`,
+    )
+    .join('');
+  const body = `
+    <h2 style="font-size:18px;margin:0 0 12px;font-weight:600;letter-spacing:-0.01em;">Sales request #${req.id}</h2>
+    <p style="font-size:13px;color:#5b6577;margin:0 0 16px;">Someone using the demo wants to talk about live protection.</p>
+    <table style="width:100%;border-collapse:collapse;">${rows}</table>
+  `;
+  const to = (process.env.SALES_NOTIFY_EMAIL || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return sendEmail({
+    to: to.length ? to : ADMIN_EMAILS,
+    subject: `[BlockFinaX] Sales request from ${req.name}${req.company ? ` (${req.company})` : ''}`,
+    html: shell('Sales request', body),
+    replyTo: req.email,
   });
 }
