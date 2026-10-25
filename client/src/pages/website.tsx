@@ -360,99 +360,36 @@ function YieldViz() {
 
 // ── Trade viz: long/short toggle + scrolling tape ───────────────────────
 
-function TradeViz() {
-  const tapeRef = useRef<HTMLCanvasElement>(null);
-  const ivRef = useRef<HTMLSpanElement>(null);
-  const [side, setSide] = useState<'long' | 'short'>('long');
+/** A benchmark rate around a protection level; the part above the level is covered. */
+const RATE_PATH = [4.31, 4.33, 4.36, 4.34, 4.38, 4.41, 4.39, 4.44, 4.47, 4.45, 4.5, 4.53, 4.51, 4.57, 4.62, 4.66, 4.63, 4.69, 4.72, 4.68, 4.64, 4.61, 4.58, 4.55, 4.57, 4.6, 4.65, 4.7, 4.74, 4.71];
+const RATE_CAP = 4.6;
 
-  useEffect(() => {
-    const cv = tapeRef.current;
-    if (!cv) return;
-    const REDUCED = prefersReducedMotion();
-    const tint = '111,140,255';
-    const N = 60;
-    const data: number[] = [];
-    let v = 0;
-    for (let i = 0; i < N; i++) { v += (Math.random() - 0.5) * 6; data.push(v); }
-    let d = fitCanvas(cv);
-    const onResize = () => { d = fitCanvas(cv); };
-    window.addEventListener('resize', onResize, { passive: true });
-
-    function draw() {
-      const { ctx, w: W, h: H } = d;
-      ctx.clearRect(0, 0, W, H);
-      const min = Math.min(...data), max = Math.max(...data);
-      const rng = max - min || 1;
-      const X = (i: number) => (i / (N - 1)) * W;
-      const Y = (val: number) => 6 + (1 - (val - min) / rng) * (H - 12);
-
-      ctx.beginPath();
-      ctx.moveTo(0, H);
-      for (let i = 0; i < N; i++) ctx.lineTo(X(i), Y(data[i]));
-      ctx.lineTo(W, H);
-      ctx.closePath();
-      const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, `rgba(${tint},0.22)`);
-      g.addColorStop(1, `rgba(${tint},0)`);
-      ctx.fillStyle = g;
-      ctx.fill();
-
-      ctx.beginPath();
-      for (let j = 0; j < N; j++) {
-        if (j === 0) ctx.moveTo(X(j), Y(data[j]));
-        else ctx.lineTo(X(j), Y(data[j]));
-      }
-      ctx.strokeStyle = `rgba(${tint},0.95)`;
-      ctx.lineWidth = 1.6;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(X(N - 1), Y(data[N - 1]), 3, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${tint},1)`;
-      ctx.fill();
-    }
-
-    draw();
-    if (REDUCED) {
-      return () => { window.removeEventListener('resize', onResize); };
-    }
-    const id = window.setInterval(() => {
-      const step = (Math.random() - 0.5) * 8;
-      data.push(data[data.length - 1] + step);
-      data.shift();
-      draw();
-      if (ivRef.current) {
-        const iv = 18 + Math.abs(step) * 1.4 + Math.random() * 4;
-        ivRef.current.textContent = `${iv.toFixed(1)}%`;
-      }
-    }, 900);
-    return () => { clearInterval(id); window.removeEventListener('resize', onResize); };
-  }, []);
-
+function RateViz() {
+  const W = 340, H = 74, min = 4.2, max = 4.85;
+  const X = (i: number) => (i / (RATE_PATH.length - 1)) * W;
+  const Y = (v: number) => 6 + (1 - (v - min) / (max - min)) * (H - 12);
+  const line = RATE_PATH.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const area = `M0,${Y(RATE_CAP)} ${RATE_PATH.map((v, i) => `L${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')} L${W},${Y(RATE_CAP)} Z`;
+  const last = RATE_PATH[RATE_PATH.length - 1];
   return (
     <div className="feat-viz">
       <div className="trd">
-        <div className="trd-toggle">
-          <button
-            type="button"
-            className={`trd-side${side === 'long' ? ' is-active' : ''}`}
-            onClick={() => setSide('long')}
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            className={`trd-side${side === 'short' ? ' is-active' : ''}`}
-            onClick={() => setSide('short')}
-          >
-            No
-          </button>
+        <div className="trd-foot" style={{ marginBottom: 8 }}>
+          <span>Benchmark rate</span>
+          <span>--- Protected above {RATE_CAP.toFixed(2)}%</span>
         </div>
-        <canvas ref={tapeRef} className="trd-tape" aria-hidden="true" />
+        <svg className="trd-tape" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <clipPath id="rate-above"><rect x="0" y="0" width={W} height={Y(RATE_CAP)} /></clipPath>
+          </defs>
+          <path d={area} fill="var(--bfx-tint)" fillOpacity="0.2" clipPath="url(#rate-above)" />
+          <line x1="0" x2={W} y1={Y(RATE_CAP)} y2={Y(RATE_CAP)} stroke="var(--bfx-tint)" strokeOpacity="0.55" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+          <path d={line} fill="none" stroke="var(--bfx-tint)" strokeWidth="1.6" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <circle cx={X(RATE_PATH.length - 1)} cy={Y(last)} r="3" fill="var(--bfx-tint)" />
+        </svg>
         <div className="trd-foot">
-          <span>Probability</span>
-          <span ref={ivRef} className="trd-iv">24.8%</span>
+          <span>Covered above the level</span>
+          <span className="trd-iv">{last.toFixed(2)}%</span>
         </div>
       </div>
     </div>
@@ -787,7 +724,7 @@ function UseSection({ theme }: { theme: Theme }) {
       <div className="wrap">
         <div className="assets-head">
           <h2>Three ways to use it.</h2>
-          <p>Hedge FX risk, earn premium on stablecoins, or predict where it's headed.</p>
+          <p>Hedge FX risk, underwrite it for premium, or protect against interest-rate moves.</p>
         </div>
         <div className="feats">
           <article className="feat t-blue">
@@ -807,11 +744,11 @@ function UseSection({ theme }: { theme: Theme }) {
           <article className="feat t-azure">
             <YieldViz />
             <div className="feat-body">
-              <div className="feat-name">Yield <span className="feat-pill">EARN</span></div>
-              <p>Earn premiums on idle stablecoins.</p>
+              <div className="feat-name">Underwrite <span className="feat-pill">EARN</span></div>
+              <p>Underwrite FX risk and earn premiums on idle stablecoins.</p>
               <div className="feat-actions">
                 <Link href="/hedge" className="feat-btn primary">
-                  Yield <span className="arrow">→</span>
+                  Underwrite <span className="arrow">→</span>
                 </Link>
                 <Link href="/learn/underwriting-101" className="feat-btn ghost">Learn more</Link>
               </div>
@@ -819,12 +756,12 @@ function UseSection({ theme }: { theme: Theme }) {
           </article>
 
           <article className="feat t-indigo">
-            <TradeViz />
+            <RateViz />
             <div className="feat-body">
-              <div className="feat-name">Predict <span className="feat-pill">SOON</span></div>
-              <p>Buy Yes or No shares.</p>
+              <div className="feat-name">Interest rates <span className="feat-pill">SOON</span></div>
+              <p>Protect loans and deposits against interest-rate moves.</p>
               <div className="feat-actions">
-                <Link href="/predict" className="feat-btn ghost">Learn more</Link>
+                <Link href="/contact" className="feat-btn ghost">Ask about early access</Link>
               </div>
             </div>
           </article>
@@ -1366,9 +1303,9 @@ export default function Website() {
     <div className="bfx-landing" data-theme={theme}>
       <TopNav theme={theme} onToggleTheme={toggleTheme} />
       <Hero />
-      <UseSection theme={theme} />
-      <WhoSection />
       <PillarsSection />
+      <WhoSection />
+      <UseSection theme={theme} />
       <RequestSection />
       <CurrenciesSection />
       <SignalSection />
