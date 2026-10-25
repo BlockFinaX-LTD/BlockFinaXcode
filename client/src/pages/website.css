@@ -1079,7 +1079,6 @@
 .bfx-landing .art-rim { stroke: currentColor; stroke-width: 1; opacity: 0.25; }
 .bfx-landing .art-thread { fill: none; stroke: var(--bfx-accent); stroke-width: 1.2; opacity: 0.6; }
 .bfx-landing .art-thread-dot { fill: var(--bfx-accent); }
-.bfx-landing .art-badge { fill: var(--bfx-accent); }
 @media (max-width: 900px) {
   .bfx-landing .learn-grid { grid-template-columns: 1fr; gap: 28px; }
   .bfx-landing .learn-dots { display: none; }
