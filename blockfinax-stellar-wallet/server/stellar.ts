@@ -13,6 +13,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { Server, assembleTransaction, Api } from "@stellar/stellar-sdk/rpc";
 import { Client } from "passkey-kit-sdk";
+import { checkSponsorshipFee } from "./sponsorship.js";
 export const NETWORK = Networks.TESTNET;
 export const RPC =
   process.env.STELLAR_RPC_URL || "https://soroban-testnet.stellar.org";
@@ -20,6 +21,19 @@ export const WASM =
   process.env.WALLET_WASM_HASH ||
   "fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0";
 export const TOKEN = Asset.native().contractId(NETWORK);
+// Circle's canonical Stellar testnet USDC SEP-41 / Stellar Asset Contract.
+// This address is testnet-only and must never be reused for mainnet.
+export const USDC_TOKEN =
+  "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+export const TOKENS = {
+  XLM: { symbol: "XLM", name: "Test XLM", contract: TOKEN, decimals: 7 },
+  USDC: {
+    symbol: "USDC",
+    name: "Test USDC",
+    contract: USDC_TOKEN,
+    decimals: 7,
+  },
+} as const;
 export const rpc = new Server(RPC);
 function payer() {
   if (!process.env.STELLAR_FEE_PAYER_SECRET)
@@ -68,9 +82,7 @@ export async function invoke(
     const sim = await rpc.simulateTransaction(tx);
     if (Api.isSimulationError(sim)) throw Error(sim.error);
     tx = assembleTransaction(tx, sim).build();
-    const fee = Number(tx.fee);
-    if (!Number.isSafeInteger(fee) || fee > 10_0000000)
-      throw Error("Transaction exceeds sponsorship fee limit");
+    checkSponsorshipFee(tx.fee, "payment");
     tx.sign(key);
     return confirm(tx);
   });
@@ -101,8 +113,7 @@ export async function deploy(credential: string, publicKey: Uint8Array) {
       },
     );
     if (!tx.built) throw Error("Deployment was not assembled");
-    if (Number(tx.built.fee) > 10_0000000)
-      throw Error("Deployment exceeds fee limit");
+    checkSponsorshipFee(tx.built.fee, "deployment");
     tx.built.sign(key);
     const txHash = await confirm(tx.built);
     return { contract: tx.result.options.contractId, hash: txHash };
@@ -124,7 +135,7 @@ export async function fund(contract: string) {
     ),
   );
 }
-export async function balance(contract: string) {
+export async function balance(contract: string, token = TOKEN) {
   const account = await rpc.getAccount(payer().publicKey());
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
@@ -132,7 +143,7 @@ export async function balance(contract: string) {
   })
     .addOperation(
       Operation.invokeContractFunction({
-        contract: TOKEN,
+        contract: token,
         function: "balance",
         args: [new Address(contract).toScVal()],
       }),

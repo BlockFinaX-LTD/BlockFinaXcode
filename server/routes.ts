@@ -12,6 +12,7 @@
  *   community — /api/tasks, /api/referrals, /api/terms, /api/articles
  */
 
+import { registerSalesRoutes } from "./routes/sales";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -30,6 +31,9 @@ import { registerCommunityRoutes } from "./routes/community";
 import { registerRiftProxy } from "./routes/rift-proxy";
 import { registerMercuryoRoutes } from "./routes/mercuryo";
 import { registerPricingRoutes } from "./routes/pricing";
+import { registerV2Routes } from "./routes/v2";
+import { registerRateOracleRoutes } from "./routes/rate-oracle";
+import { registerPasskeyWalletRoutes } from "./wallet/passkey-routes";
 import { registerPredictRoutes } from "./routes/predict";
 import { registerFundingRoutes } from "./routes/funding";
 import { registerContentRoutes } from "./routes/content";
@@ -70,6 +74,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCommunityRoutes(app);
   registerMercuryoRoutes(app);
   registerPricingRoutes(app);
+  registerV2Routes(app);
+  registerRateOracleRoutes(app);
+  registerPasskeyWalletRoutes(app);
   registerPredictRoutes(app);
   registerFundingRoutes(app);
   registerContentRoutes(app);
@@ -79,6 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAgentChatRoutes(app);
   registerComplianceRoutes(app);
   registerLeadRoutes(app);
+  registerSalesRoutes(app);
   registerSignatureRoutes(app);
   registerNotificationRoutes(app);
   await registerProtocolRoutes(app);

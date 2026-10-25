@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
+import { TAM, SAM } from "@/lib/market-figures";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { ethers } from "ethers";
 
 /* ─── EDIT AUTH CONTEXT ─── */
 type EditAuthCtx = {
@@ -197,23 +199,23 @@ const CATEGORIES = [
     documents: [
       { id: "whitepaper", title: "Whitepaper", description: "Technical deep-dive: Diamond Standard, HedgeFacet, USDC flows, settlement logic", href: "/data-room/whitepaper", type: "navigate" as const, badge: "Technical", badgeColor: "bg-purple-100 text-purple-700", icon: BookOpen },
       { id: "oracle-strategy", title: "Oracle Strategy", description: "Current oracle architecture, known limitations, and 4-phase decentralization roadmap", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Globe },
-      { id: "security-audit", title: "Security Audit", description: "April 2026 Diamond audit — 19 findings across all facets, 2 critical open, 9 fixed, and the remediation checklist", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
+      { id: "security-audit", title: "Security Audit", description: "Historical April 2026 review and its stated scope; it does not verify current deployments", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
     ],
   },
   {
     id: "demo", label: "Demo & Product", icon: PlayCircle,
     color: "border-amber-200 bg-amber-50", iconColor: "text-amber-600",
     documents: [
-      { id: "demo-video", title: "Product Demo Video", description: "Walkthrough of the Wallet and Hedge products on testnet — add your video link", href: null, type: "modal" as const, badge: "Video", badgeColor: "bg-amber-100 text-amber-700", icon: Video },
-      { id: "live-app", title: "Live Mainnet App", description: "Fully functional deployment on Base Mainnet — create a wallet and explore hedge markets with real USDC", href: "/home", type: "navigate" as const, badge: "Live", badgeColor: "bg-emerald-100 text-emerald-700", icon: Beaker },
+      { id: "demo-video", title: "Product Demo Video", description: "A demo can be added after the recording and demonstrated flows are verified", href: null, type: "modal" as const, badge: "Video", badgeColor: "bg-slate-100 text-slate-600", icon: Video },
+      { id: "live-app", title: "BlockFinaX App", description: "Open the application. Availability and supported actions depend on the selected network and current deployment state", href: "/home", type: "navigate" as const, badge: "App", badgeColor: "bg-slate-100 text-slate-600", icon: Beaker },
     ],
   },
   {
     id: "market", label: "Market Research", icon: Globe,
     color: "border-rose-200 bg-rose-50", iconColor: "text-rose-600",
     documents: [
-      { id: "market-opportunity", title: "Market Opportunity", description: "TAM/SAM/SOM: $210B African cross-border trade, $35B annual SME FX losses", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Globe },
-      { id: "competitive-landscape", title: "Competitive Landscape", description: "Side-by-side comparison vs banks, OTC brokers, DeFi protocols, and prediction markets", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: BarChart2 },
+      { id: "market-opportunity", title: "Market Opportunity", description: "Published context and illustrative scenarios; not validated company market sizing", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Globe },
+      { id: "competitive-landscape", title: "Competitive Landscape", description: "Market research status and diligence gaps; no unsupported competitor ratings", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: BarChart2 },
       { id: "gtm-strategy", title: "Go-to-Market Strategy", description: "4-phase GTM: community beta → SME direct → channel partners → flywheel growth", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ChevronRight },
     ],
   },
@@ -222,7 +224,7 @@ const CATEGORIES = [
     color: "border-slate-200 bg-slate-50", iconColor: "text-slate-600",
     documents: [
       { id: "compliance-proposals", title: "Compliance Proposals", description: "Proposals and recommendations from legal and compliance consultants — admin editable", href: null, type: "modal" as const, badge: "Internal", badgeColor: "bg-purple-100 text-purple-700", icon: BookOpen },
-      { id: "bog-sandbox", title: "Bank of Ghana Sandbox", description: "Regulatory sandbox application status, compliance framework, and market entry roadmap", href: null, type: "modal" as const, badge: "In Progress", badgeColor: "bg-orange-100 text-orange-700", icon: ShieldCheck },
+      { id: "bog-sandbox", title: "Bank of Ghana Sandbox", description: "Management-reported application history and evidence gaps; no current regulatory status is asserted", href: null, type: "modal" as const, badge: "Unverified", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
       { id: "nda-request", title: "Request NDA / Term Sheet", description: "Contact us to request a non-disclosure agreement or investment term sheet", href: "mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20NDA%20Request", type: "external" as const, badge: "Email", badgeColor: "bg-slate-100 text-slate-600", icon: ExternalLink },
     ],
   },
@@ -233,7 +235,7 @@ const CATEGORIES = [
       { id: "governance", title: "Governance & Protocol Control", description: "Who can change the protocol today, read from the chain rather than from a deployment record, and what changes before third-party capital", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: ShieldCheck },
       { id: "cap-table", title: "Cap Table", description: "Founder equity, option pool, investor allocations, and post-money ownership structure", href: null, type: "modal" as const, badge: "Confidential", badgeColor: "bg-indigo-100 text-indigo-700", icon: PieChart },
       { id: "team-info", title: "Team", description: "Founding team, advisors, and key hires — backgrounds, roles, and LinkedIn profiles", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: Users },
-      { id: "incorporation", title: "Incorporation & Ownership", description: "Ghana incorporation (active) · Delaware C-Corp in progress — dual-entity structure for US investors", href: null, type: "modal" as const, badge: "Active", badgeColor: "bg-emerald-100 text-emerald-700", icon: Building2 },
+      { id: "incorporation", title: "Incorporation & Ownership", description: "Company-structure information requiring current registry documents", href: null, type: "modal" as const, badge: "Evidence needed", badgeColor: "bg-slate-100 text-slate-600", icon: Building2 },
       { id: "agreements", title: "IP & Agreements", description: "NDA templates, IP assignment agreements, service contracts, consulting agreements, and investor term sheet status", href: null, type: "modal" as const, badge: "Document", badgeColor: "bg-slate-100 text-slate-600", icon: FileText },
     ],
   },
@@ -242,84 +244,48 @@ const CATEGORIES = [
 /* ─── CONTENT COMPONENTS ─── */
 
 const EXEC_D = {
-  intro: "BlockFinaX is a blockchain-native P2P parametric protection platform designed for African SMEs, traders, and cross-border businesses. Built on the EIP-2535 Diamond Standard on Base L2, it offers fully collateralised downside protection, stop-loss rebates, and volatility buffers across 63 asset pairs — covering 40+ African FX pairs, commodities, and major crypto assets.",
-  problem: "African SMEs conducting cross-border trade are structurally exposed to FX volatility, with swings of 8–25% common on pairs like GHS/USD, NGN/USD, and KES/USD. No accessible, transparent hedging product exists for sub-$1M trade flows. Banks ignore them. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs.",
-  solution_hedge: "BlockFinaX Hedge: P2P parametric contracts. Hedgers buy downside protection against a specific FX strike level. LPs provide liquidity and earn premiums. No counterparty risk: payouts are reserved on-chain the moment a hedge is purchased. Settlement is automatic, at expiry, on the rate recorded then.",
-  solution_wallet: "BlockFinaX Wallet — Non-custodial USDC wallet with AES-256 encrypted key storage, gasless transactions, and real-time cross-border transfers at 0.3% (min $0.50).",
-  traction: "Live on Base Mainnet. Smart contracts verified on Blockscout. FX oracle running — polling ExchangeRate-API, Yahoo Finance, and CoinGecko every 5 minutes, automatically settling expired hedge events. Multi-round audit patch (v5 + v6) applied pre-launch. Bank of Ghana regulatory sandbox application filed Q1 2026.",
-  technology: "Diamond Standard (EIP-2535) for upgradeable contract architecture. HedgeFacet encapsulates all P2P hedge logic. USDC as the sole settlement token. Base L2 for near-zero gas fees, enabling micro-hedges starting from $10.",
-  mainnet: "Live — Deployed on Base Mainnet and BNB Smart Chain (Q1 2026). EIP-2535 Diamond proxy on each chain. All contracts verified (Basescan on Base, BscScan on BSC). Upgrade authority currently sits with a single founder-controlled key; migration to a 2-of-3 Gnosis Safe with a 48-hour timelock is the next governance step. See Governance & Protocol Control for the current position in full.",
+  intro: "BlockFinaX is developing blockchain-based tools for foreign-exchange risk management and cross-border payments. The protocol uses an EIP-2535 Diamond architecture on Base and BNB Smart Chain. Available pairs, features, collateral requirements and settlement behavior depend on the active network configuration; verify them in the application and on-chain before relying on them.",
+  problem: "Businesses with cross-border exposure can be affected by exchange-rate movements. The size of the affected market and the alternatives available vary by corridor, business and provider; this document does not assert a universal minimum or claim that competitors do not serve a segment.",
+  solution_hedge: "The protocol includes on-chain hedge and oracle-settlement functions. A position's eligibility, collateral reservation, settlement inputs, timing and payout depend on the active contract implementation and configuration. A transaction or oracle update may be required; do not assume settlement is automatic or guaranteed.",
+  solution_wallet: "The application includes wallet and payment integrations. Custody model, signing method, fees, supported assets and transaction availability depend on the selected provider and network; review the current transaction details before use.",
+  traction: "Company-reported product and deployment information is not a live chain verification. See Live Protocol Monitor for indexed on-chain activity, and Governance & Protocol Control for owner, Safe, settlement authority and oracle settings read from Base and BNB Smart Chain when the page loads. Historical audit scope and finding status are described separately and do not establish that current deployments match audited bytecode.",
+  technology: "The protocol uses an EIP-2535 Diamond architecture. Supported settlement assets and live contract settings vary by chain and deployment; verify current values in the app and on the relevant block explorer before relying on them.",
+  mainnet: "Deployment and contract addresses are listed as references. Current owner, Safe relationship, settlement authority, oracle configuration and active diamondCut selector implementation are queried from Base and BNB Smart Chain in Governance & Protocol Control. Explorer verification and an active facet address do not, by themselves, prove an audit match or an enforced timelock.",
   ask: [
-    { round: "Pre-Seed", amount: "$500K", timing: "Now (H1 2026)", use: "Engineering, audit, regulatory sandbox", color: "blue" },
+    { round: "Pre-Seed", amount: "$500K", timing: "Proposed", use: "Proposed use: engineering, independent security review and regulatory work", color: "blue" },
     { round: "Seed",     amount: "$1.5M", timing: "Jan 2027",       use: "6 months live traction, bridge to Series A, early market validation", color: "blue" },
     { round: "Series A", amount: "$8M",   timing: "Jan 2028",       use: "Multi-country expansion, BD, institutional LP onboarding, near break-even", color: "green" },
     { round: "Series B", amount: "$20M",  timing: "Jul 2029",       use: "Deep market scale, Kenya/Nigeria enterprise integrations, liquidity depth", color: "amber" },
   ],
 };
 
-function ExecSummary({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("exec-summary", token, EXEC_D);
-  const setAsk = (i: number, k: string, v: string) => setField("ask", draft.ask.map((r, j) => j === i ? { ...r, [k]: v } : r));
-
-  if (editing) return (
-    <div>
-      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
-      {(["intro","problem","solution_hedge","solution_wallet","traction","technology","mainnet"] as const).map(k => (
-        <TxtF key={k} label={k} value={draft[k]} onChange={v => setField(k, v)} />
-      ))}
-      <h2 style={S.h2}>The Ask</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead>
-        <tbody>{draft.ask.map((r, i) => (
-          <tr key={i}>{(["round","amount","timing","use"] as const).map(f => (
-            <td key={f} style={S.td}><input value={r[f]} onChange={e => setAsk(i, f, e.target.value)} style={EI} /></td>
-          ))}</tr>
-        ))}</tbody>
-      </table>
-    </div>
-  );
-
+function ExecSummary({ token: _token }: { token: string }) {
+  const data = EXEC_D;
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
+      <p style={{ ...S.p, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: 12 }}>Planning material only. Market estimates are source-attributed; financial results are model scenarios, not actual results or an offer. Product statements are subject to live deployment and network configuration.</p>
       <p style={S.p}>{data.intro}</p>
-      <h2 style={S.h2}>The Problem</h2>
-      <p style={S.p}>{data.problem}</p>
+      <h2 style={S.h2}>The Problem</h2><p style={S.p}>{data.problem}</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", margin: "16px 0" }}>
-        <div style={S.stat}><div style={S.statVal}>$210B</div><div style={S.statLbl}>TAM — African cross-border trade (2024)</div></div>
-        <div style={S.stat}><div style={S.statVal}>$35B</div><div style={S.statLbl}>SAM — Annual FX losses for SMEs</div></div>
-        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>{fmtUSD(DEFAULT_ANNUALS[1].notionalHedged)}</div><div style={S.statLbl}>SOM Year 1 — {((DEFAULT_ANNUALS[1].notionalHedged / 35_000_000_000) * 100).toFixed(1)}% of SAM (2027)</div></div>
-        <div style={S.stat}><div style={S.statVal}>63</div><div style={S.statLbl}>Asset pairs at launch</div></div>
+        <div style={S.stat}><div style={S.statVal}>{TAM.display}</div><div style={S.statLbl}>TAM — African merchandise trade ({TAM.year})</div></div>
+        <div style={S.stat}><div style={S.statVal}>{SAM.display}</div><div style={S.statLbl}>Unmet trade finance estimate ({SAM.year})</div></div>
+        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>{fmtUSD(DEFAULT_ANNUALS[1].notionalHedged)}</div><div style={S.statLbl}>Modelled notional scenario for 2027 — not actual volume</div></div>
+        <div style={S.stat}><div style={S.statVal}>Network-specific</div><div style={S.statLbl}>Available assets and markets; verify live</div></div>
       </div>
-      <h2 style={S.h2}>The Solution</h2>
-      <p style={S.p}>{data.solution_hedge}</p>
-      <p style={S.p}>{data.solution_wallet}</p>
-      <h2 style={S.h2}>Traction</h2>
-      <p style={S.p}>{data.traction}</p>
-      <h2 style={S.h2}>Technology</h2>
-      <p style={S.p}>{data.technology}</p>
+      <p style={{ ...S.p, fontSize: 12 }}>Market estimates: {TAM.source} ({TAM.year}); {SAM.source} ({SAM.year}). These figures measure different things and are not BlockFinaX revenue or a validated serviceable market.</p>
+      <h2 style={S.h2}>The Solution</h2><p style={S.p}>{data.solution_hedge}</p><p style={S.p}>{data.solution_wallet}</p>
+      <h2 style={S.h2}>Traction and verification</h2><p style={S.p}>{data.traction}</p>
+      <h2 style={S.h2}>Technology</h2><p style={S.p}>{data.technology}</p>
       <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Diamond (Base): 0xbCC51E62C4948FD35ab505bd71804C849601e4Ef · Diamond (BSC): 0xaC939C0897981Abc0711ec4e37527F13106180fc</p>
-      <h2 style={S.h2}>The Ask</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead>
-        <tbody>{data.ask.map(r => (
-          <tr key={r.round}>
-            <td style={S.td}><span style={S.tag(r.color)}>{r.round}</span></td>
-            <td style={S.td}>{r.amount}</td><td style={S.td}>{r.timing}</td><td style={S.td}>{r.use}</td>
-          </tr>
-        ))}</tbody>
-      </table>
+      <h2 style={S.h2}>Indicative fundraising plan</h2><p style={S.p}>Discussion material only. Amounts, timing and use of proceeds are not a current public offer or committed schedule.</p>
+      <table style={S.table}><thead><tr><th style={S.th}>Round</th><th style={S.th}>Amount</th><th style={S.th}>Timing</th><th style={S.th}>Use of Funds</th></tr></thead><tbody>{data.ask.map(r => (
+        <tr key={r.round}><td style={S.td}><span style={S.tag(r.color)}>{r.round}</span></td><td style={S.td}>{r.amount}</td><td style={S.td}>{r.timing}</td><td style={S.td}>{r.use}</td></tr>
+      ))}</tbody></table>
       <div style={{ margin: "16px 0", padding: "16px", background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)", borderRadius: "10px", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" as const }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "15px", color: "#1e3a8a", marginBottom: "4px" }}>Ready to explore the opportunity?</div>
-          <div style={{ fontSize: "13px", color: "#3b82f6" }}>Schedule a 30-minute discovery call with the founder — no commitment required.</div>
-        </div>
-        <a href="https://calendly.com/anthonykumako8/30min" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#2563eb", color: "#fff", fontWeight: 600, fontSize: "14px", padding: "10px 20px", borderRadius: "8px", textDecoration: "none", whiteSpace: "nowrap" as const, flexShrink: 0 }}>
-          <Calendar style={{ width: "16px", height: "16px" }} /> Book a Call
-        </a>
+        <div><div style={{ fontWeight: 700, fontSize: "15px", color: "#1e3a8a", marginBottom: "4px" }}>Discuss the opportunity</div><div style={{ fontSize: "13px", color: "#3b82f6" }}>Contact the founder to request current materials.</div></div>
+        <a href="mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20Investor%20Enquiry" style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#2563eb", color: "#fff", fontWeight: 600, fontSize: "14px", padding: "10px 20px", borderRadius: "8px", textDecoration: "none", whiteSpace: "nowrap" as const, flexShrink: 0 }}>Contact BlockFinaX</a>
       </div>
-      <h2 style={S.h2}>Mainnet Timeline</h2>
-      <p style={S.p}>{data.mainnet}</p>
+      <h2 style={S.h2}>Deployment status</h2><p style={S.p}>{data.mainnet}</p>
     </div>
   );
 }
@@ -348,16 +314,16 @@ function RevenueBreakdown() {
 
   return (
     <div>
-      <p style={S.p}>BlockFinaX generates revenue from two products: <strong>Hedge</strong> (P2P parametric contracts) and <strong>Wallet</strong> (USDC cross-border transfers). Both use a low-friction fee model designed for high volume.</p>
+      <p style={S.p}>The following rates are historical planning assumptions in the financial model. They are not verified live contract settings, customer terms, or evidence of collected revenue. Confirm the active network, contract code, and terms before relying on them.</p>
 
-      <h2 style={S.h2}>Fee Structure</h2>
+      <h2 style={S.h2}>Illustrative Model Fee Assumptions</h2>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Fee Type</th><th style={S.th}>Rate</th><th style={S.th}>Paid By</th><th style={S.th}>Trigger</th></tr></thead>
         <tbody>
-          <tr><td style={S.td}>Hedger premium fee</td><td style={S.td}><strong>5%</strong></td><td style={S.td}>Hedger</td><td style={S.td}>At purchase, on the premium paid</td></tr>
-          <tr><td style={S.td}>Payout / LP fee</td><td style={S.td}><strong>1.0%</strong></td><td style={S.td}>Winning party</td><td style={S.td}>At claim, on payout amount</td></tr>
-          <tr><td style={S.td}>Creator loyalty fee</td><td style={S.td}><strong>5%</strong></td><td style={S.td}>Platform fee pool</td><td style={S.td}>At settlement, to event creator</td></tr>
-          <tr><td style={S.td}>Wallet transfer fee</td><td style={S.td}><strong>0.3%</strong> (min $0.50)</td><td style={S.td}>Sender</td><td style={S.td}>Per USDC transfer</td></tr>
+          <tr><td style={S.td}>Hedger premium fee</td><td style={S.td}><strong>5% (model input)</strong></td><td style={S.td}>Unverified</td><td style={S.td}>Confirm from active contract and terms</td></tr>
+          <tr><td style={S.td}>Payout / LP fee</td><td style={S.td}><strong>1.0% (model input)</strong></td><td style={S.td}>Unverified</td><td style={S.td}>Confirm from active contract and terms</td></tr>
+          <tr><td style={S.td}>Creator loyalty fee</td><td style={S.td}><strong>5% (model input)</strong></td><td style={S.td}>Unverified</td><td style={S.td}>Confirm from active contract and terms</td></tr>
+          <tr><td style={S.td}>Wallet transfer fee</td><td style={S.td}><strong>0.3% (model input)</strong></td><td style={S.td}>Unverified</td><td style={S.td}>Confirm current wallet implementation and terms</td></tr>
         </tbody>
       </table>
 
@@ -399,85 +365,33 @@ function RevenueBreakdown() {
       <p style={S.p}>In 2027, hedge fees (including event creation) account for approximately <strong>{hedgePct27}%</strong> of total revenue, with wallet transfers contributing <strong>{walletPct27}%</strong>. By 2030, the wallet share grows as cross-border payment volume scales independently of hedge activity.</p>
 
       <h2 style={S.h2}>Margin Profile</h2>
-      <p style={S.p}>The platform is asset-light — BlockFinaX does not take principal risk. Hedges are fully collateralised by LPs. Revenue is purely fee-based. Gross margins reach <strong>{grossMargin30}%</strong> by 2030, as infrastructure costs (Base L2 gas, oracle, hosting) scale sub-linearly with volume.</p>
+      <p style={S.p}>This is a forward-looking model, not operating results or a guarantee. It assumes the listed transaction volumes, fees, costs and product availability. Smart-contract collateral controls and the actual ability to pay depend on deployed code, token behavior and on-chain liquidity; review those independently before relying on the projection. Gross margin by 2030 in this scenario is <strong>{grossMargin30}%</strong>.</p>
     </div>
   );
 }
 
-const ORACLE_D = {
-  intro: "BlockFinaX operates as a P2P parametric protection platform covering 63 asset pairs across African FX, commodities, and crypto. At the core of every hedge settlement is a price oracle — the mechanism that determines whether a strike price has been touched and triggers payouts.",
-  current_impl: "BlockFinaX uses a custodial push oracle model. The platform backend fetches prices from multiple external APIs on a 5-minute polling cycle and submits settlement prices directly to the Diamond smart contract when a strike condition is met.",
-  phase1: "Dual-source averaging for FX (two ExchangeRate-API endpoints). Anomaly detection planned — reject rates deviating more than 5% from the median of all sources before submission.",
-  phase2: "Replace single admin key with a 3-of-5 multisig oracle relay. Multiple independent signers must agree on a price before any settlement is submitted. Gnosis Safe as the signing infrastructure.",
-  phase3: "Integrate Chainlink Data Feeds for crypto prices (already available). Advocate for Chainlink or Pyth coverage of major African FX pairs (GHS/USD, KES/USD, NGN/USD). Hybrid model: on-chain oracle for available pairs; signed off-chain feed for African FX.",
-  phase4: "Open oracle participation to permissioned third-party data providers. Stake-weighted median aggregation. Dispute window before settlement is final. Moves BlockFinaX from \"trusted operator\" to \"verifiable protocol\".",
-  limitations: [
-    { risk: "Centralisation",           desc: "Single private key controls all settlements",           status: "Pre-mainnet fix", color: "amber" },
-    { risk: "Single point of failure",  desc: "Backend outage halts all settlements",                  status: "Phase 2",         color: "amber" },
-    { risk: "No on-chain provenance",   desc: "Price source is not verifiable on-chain",               status: "Phase 3",         color: "amber" },
-    { risk: "5-minute latency",         desc: "Fast-moving markets may miss intraday touches",         status: "Accepted for now",color: "blue"  },
-    { risk: "No decentralised alt",     desc: "Chainlink/Pyth don't support 40+ African FX pairs",     status: "Phase 4",         color: "blue"  },
-  ],
-};
-
-function OracleStrategyDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("oracle-strategy", token, ORACLE_D);
-  const setLim = (i: number, k: string, v: string) => setField("limitations", draft.limitations.map((r, j) => j === i ? { ...r, [k]: v } : r));
-
-  if (editing) return (
-    <div>
-      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
-      {(["intro","current_impl","phase1","phase2","phase3","phase4"] as const).map(k => (
-        <TxtF key={k} label={k} value={draft[k]} onChange={v => setField(k, v)} />
-      ))}
-      <h2 style={S.h2}>Known Limitations</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Risk</th><th style={S.th}>Description</th><th style={S.th}>Status</th></tr></thead>
-        <tbody>{draft.limitations.map((r, i) => (
-          <tr key={i}>
-            <td style={S.td}><input value={r.risk} onChange={e => setLim(i, "risk", e.target.value)} style={EI} /></td>
-            <td style={S.td}><input value={r.desc} onChange={e => setLim(i, "desc", e.target.value)} style={EI} /></td>
-            <td style={S.td}><input value={r.status} onChange={e => setLim(i, "status", e.target.value)} style={EI} /></td>
-          </tr>
-        ))}</tbody>
-      </table>
-    </div>
-  );
-
+function OracleStrategyDoc({ token: _token }: { token: string }) {
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
-      <p style={S.p}>{data.intro}</p>
-      <h2 style={S.h2}>Current Implementation</h2>
-      <p style={S.p}>{data.current_impl}</p>
-      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px 18px", margin: "12px 0" }}>
-        <p style={{ ...S.p, marginBottom: "6px" }}><strong>Data Sources:</strong></p>
-        <ul style={{ fontSize: "13px", color: "#475569", paddingLeft: "18px", lineHeight: 1.8 }}>
-          <li><strong>FX Rates:</strong> ExchangeRate-API (two endpoints, equal-weight averaged)</li>
-          <li><strong>Commodities:</strong> Yahoo Finance (metals, energy, agriculture)</li>
-          <li><strong>Crypto:</strong> CoinGecko (BTC, ETH, BNB, SOL, XRP, ADA)</li>
-        </ul>
-      </div>
-      <p style={{ ...S.p, fontFamily: "monospace", fontSize: "12px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px" }}>Oracle admin: 0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d</p>
-      <h2 style={S.h2}>Known Limitations</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Risk</th><th style={S.th}>Description</th><th style={S.th}>Status</th></tr></thead>
-        <tbody>{data.limitations.map(r => (
-          <tr key={r.risk}><td style={S.td}>{r.risk}</td><td style={S.td}>{r.desc}</td><td style={S.td}><span style={S.tag(r.color)}>{r.status}</span></td></tr>
-        ))}</tbody>
-      </table>
-      <h2 style={S.h2}>Decentralisation Roadmap</h2>
-      <h3 style={S.h3}>Phase 1 — Multi-Source Aggregation (Live)</h3><p style={S.p}>{data.phase1}</p>
-      <h3 style={S.h3}>Phase 2 — Multi-Signer Oracle Relay (Pre-Mainnet)</h3><p style={S.p}>{data.phase2}</p>
-      <h3 style={S.h3}>Phase 3 — Chainlink / Pyth Integration (Series A, 2027)</h3><p style={S.p}>{data.phase3}</p>
-      <h3 style={S.h3}>Phase 4 — On-Chain Oracle DAO (Series B, 2028)</h3><p style={S.p}>{data.phase4}</p>
+      <p style={S.p}>This section describes the contract mechanism. It does not claim that a particular oracle service is running, that a feed is fresh, or that an off-chain poller completed a settlement.</p>
+      <h2 style={S.h2}>On-chain settlement mechanism</h2>
+      <p style={S.p}>The contracts include an oracle consensus route. Its live activation state, single-key settler, registered signers, quorum and tolerance are queried in Governance & Protocol Control. If the getter cannot be read, the state is shown as unverified.</p>
+      <h2 style={S.h2}>Operational dependencies</h2>
+      <p style={S.p}>Price source selection, data freshness, polling schedule, relay availability and settlement transaction completion are off-chain operational facts. This page does not infer them from contract source or deployment records. Verify service health and transaction receipts separately before relying on a market rate or settlement.</p>
+      <h2 style={S.h2}>Limitations</h2>
+      <ul style={{ fontSize: "13px", color: "#475569", paddingLeft: "18px", lineHeight: 1.8 }}>
+        <li>An oracle consensus rule does not prove that input rates are accurate or independent.</li>
+        <li>Registered signer count alone does not prove the multi-signer mode is active.</li>
+        <li>RPC, data-provider or signer outages can delay settlement.</li>
+        <li>Current provider identities and service status require separate operational evidence.</li>
+      </ul>
     </div>
   );
 }
 
 const AUDIT_D = {
   intro:
-    "Full security review of the EIP-2535 Diamond system and all facets, April 2026. Nineteen findings: 2 critical, 3 high, 5 medium, 5 low, 4 informational. The auditor's conclusion was that there is no single catastrophic flaw and that CEI ordering, nonReentrant, SafeERC20 and fee snapshots are applied correctly throughout — but that several issues compound, and should be closed before liquidity is scaled. Nine findings are fixed, four accepted, six remain open, including both critical items. Scope note: the report was performed against the Lisk deployment (0x3eDfA00a1E3C158A591097de2FA1756aCD66860D). Lisk has since been retired and production now runs on Base and BNB Smart Chain, so equivalence of the deployed bytecode to the audited source is being confirmed with the auditor.",
+    "Historical security review summary, dated April 2026. The report covered a Lisk deployment (0x3eDfA00a1E3C158A591097de2FA1756aCD66860D), not the current Base or BNB Smart Chain deployments. Its reported findings were 2 critical, 3 high, 5 medium, 5 low and 4 informational; the fixed/accepted/open labels below reflect the report summary and have not been independently revalidated against current deployed bytecode in this page. The report is not evidence that current Base/BSC bytecode matches the reviewed source. Obtain the original report and a separate deployment-equivalence review before representing the current deployments as audited.",
   findings: [
     { sev: "Critical", sevColor: "red",   issue: "C-01 · DiamondCutFacet is never replaced by TimelockCutFacet — both expose diamondCut, so routing is undefined if the original is not removed atomically",  status: "Open",         statusColor: "red"   },
     { sev: "Critical", sevColor: "red",   issue: "C-02 · facetAddress() may return a corrupted address if LibDiamond stores a struct rather than an address",                                                   status: "Open",         statusColor: "red"   },
@@ -499,117 +413,28 @@ const AUDIT_D = {
     { sev: "Info",     sevColor: "blue",  issue: "I-03 · recoverExpiredPayouts may consume significant gas over many positions",                                                                                status: "Accepted",     statusColor: "blue"  },
     { sev: "Info",     sevColor: "blue",  issue: "I-04 · _checkConsensus makes two passes over submitters",                                                                                                     status: "Open",         statusColor: "blue"  },
   ],
-  checklist: [
-    { item: "Close C-01 — enforce the DiamondCut/Timelock transition as an atomic deployment invariant", timing: "Before scaling", status: "pending" },
-    { item: "Close C-02 — verify the LibDiamond selector mapping and fix facetAddress() if it stores a struct", timing: "Before scaling", status: "pending" },
-    { item: "Confirm audited source matches the deployed Base and BSC bytecode",  timing: "In progress",  status: "pending" },
-    { item: "Verify the live HedgeFacet implementation on BaseScan",              timing: "Before scaling", status: "pending" },
-    { item: "Formal third-party audit (Certik / Trail of Bits)",                  timing: "Pre-scale",    status: "pending" },
-    { item: "Gnosis Safe multisig ownership transfer",                            timing: "Post-launch",  status: "pending" },
-    { item: "Timelock on Diamond upgrades (48h delay)",                           timing: "Post-launch",  status: "pending" },
-    { item: "Emergency pause mechanism on HedgeFacet",                            timing: "Mainnet",      status: "done"    },
-    { item: "Multi-signer oracle relay (3-of-5)",                                 timing: "Mainnet",      status: "done"    },
-    { item: "ReentrancyGuard on all state-changing functions",                    timing: "Done",         status: "done"    },
-    { item: "SafeERC20 for all USDC transfers",                                   timing: "Done",         status: "done"    },
-  ],
 };
 
-function SecurityAuditDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("security-audit", token, AUDIT_D);
-  const setFinding = (i: number, k: string, v: string) => setField("findings", draft.findings.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const setCheck  = (i: number, k: string, v: string) => setField("checklist", draft.checklist.map((r, j) => j === i ? { ...r, [k]: v } : r));
-
-  if (editing) return (
-    <div>
-      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
-      <TxtF label="intro" value={draft.intro} onChange={v => setField("intro", v)} />
-      <h2 style={S.h2}>Findings</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Severity</th><th style={S.th}>Issue</th><th style={S.th}>Status</th></tr></thead>
-        <tbody>{draft.findings.map((r, i) => (
-          <tr key={i}>
-            <td style={S.td}><input value={r.sev} onChange={e => setFinding(i, "sev", e.target.value)} style={{ ...EI, width: "70px" }} /></td>
-            <td style={S.td}><input value={r.issue} onChange={e => setFinding(i, "issue", e.target.value)} style={EI} /></td>
-            <td style={S.td}><input value={r.status} onChange={e => setFinding(i, "status", e.target.value)} style={EI} /></td>
-          </tr>
-        ))}</tbody>
-      </table>
-      <h2 style={S.h2}>Checklist</h2>
-      {draft.checklist.map((r, i) => (
-        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
-          <input value={r.item} onChange={e => setCheck(i, "item", e.target.value)} style={{ ...EI, flex: 1 }} />
-          <input value={r.timing} onChange={e => setCheck(i, "timing", e.target.value)} style={{ ...EI, width: "100px" }} />
-          <select value={r.status} onChange={e => setCheck(i, "status", e.target.value)} style={{ ...EI, width: "90px" }}>
-            <option value="done">done</option><option value="pending">pending</option>
-          </select>
-        </div>
-      ))}
-    </div>
-  );
-
+function SecurityAuditDoc({ token: _token }: { token: string }) {
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "20px" }}>
-        <div style={S.stat}><div style={S.statVal}>19</div><div style={S.statLbl}>Findings, April 2026</div></div>
-        <div style={{ ...S.stat, borderColor: "#fecaca" }}><div style={{ ...S.statVal, color: "#dc2626" }}>2</div><div style={S.statLbl}>Critical — both open</div></div>
-        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>9</div><div style={S.statLbl}>Fixed</div></div>
-        <div style={S.stat}><div style={{ ...S.statVal, color: "#d97706" }}>4</div><div style={S.statLbl}>Accepted risks</div></div>
+        <div style={S.stat}><div style={S.statVal}>19</div><div style={S.statLbl}>Findings reported, April 2026</div></div>
+        <div style={{ ...S.stat, borderColor: "#fecaca" }}><div style={{ ...S.statVal, color: "#dc2626" }}>2</div><div style={S.statLbl}>Critical in historical report</div></div>
+        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>9</div><div style={S.statLbl}>Reported fixed at that time</div></div>
+        <div style={S.stat}><div style={{ ...S.statVal, color: "#d97706" }}>4</div><div style={S.statLbl}>Reported accepted at that time</div></div>
       </div>
-      <p style={S.p}>{data.intro}</p>
-      <h2 style={S.h2}>Findings Summary</h2>
+      <p style={S.p}>{AUDIT_D.intro}</p>
+      <h2 style={S.h2}>Findings as listed in the historical report</h2>
       <table style={S.table}>
-        <thead><tr><th style={S.th}>Severity</th><th style={S.th}>Issue</th><th style={S.th}>Status</th></tr></thead>
-        <tbody>{data.findings.map((r, i) => (
+        <thead><tr><th style={S.th}>Severity</th><th style={S.th}>Issue as described in report</th><th style={S.th}>Status in report</th></tr></thead>
+        <tbody>{AUDIT_D.findings.map((r, i) => (
           <tr key={i}><td style={S.td}><span style={S.tag(r.sevColor)}>{r.sev}</span></td><td style={S.td}>{r.issue}</td><td style={S.td}><span style={S.tag(r.statusColor)}>{r.status}</span></td></tr>
         ))}</tbody>
       </table>
-      <h2 style={S.h2}>Pre-Mainnet Security Checklist</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0" }}>
-        {data.checklist.map(r => (
-          <div key={r.item} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: r.status === "done" ? "#f0fdf4" : "#f8fafc", borderRadius: "6px", border: `1px solid ${r.status === "done" ? "#bbf7d0" : "#e2e8f0"}` }}>
-            <span style={{ fontSize: "16px" }}>{r.status === "done" ? "✅" : "⬜"}</span>
-            <span style={{ fontSize: "13px", color: "#334155", flex: 1 }}>{r.item}</span>
-            <span style={{ fontSize: "11px", color: "#64748b" }}>{r.timing}</span>
-          </div>
-        ))}
-      </div>
-      <h2 style={S.h2}>Contract Addresses — Multi-Chain Deployment</h2>
-      {[
-        {
-          chain: "Base Mainnet", chainId: 8453, explorer: "https://basescan.org",
-          diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef",
-          safe:    "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb",
-          paySymbol: "USDC", payToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-          cut:     "0x31098B8fF039cfb400bee2c272004dcf03C2AF06",
-          hedge:   "0x66aF6cA48f80A6d9e838aAF152c71eD26ed82F66",
-          oracle:  "0x1bba706e69F3a49c971E7e639b039fcBd4447E86",
-        },
-        {
-          chain: "BNB Smart Chain", chainId: 56, explorer: "https://bscscan.com",
-          diamond: "0xaC939C0897981Abc0711ec4e37527F13106180fc",
-          safe:    "0x2a0ab363E01b518B189218e39f79Bfc3AE310807",
-          paySymbol: "USDT", payToken: "0x55d398326f99059fF775485246999027B3197955",
-          cut:     "0xAEcE90e767E257dE7cd9C6E1e93cEb880575C394",
-          hedge:   "0x94e1436180C4c577D98e769D1830F39f62F0b122",
-          oracle:  "0x090a3cC9A71e2272f6a681C2bA940C71D36c239f",
-        },
-      ].map(c => (
-        <div key={c.chainId} style={{ marginBottom: "16px" }}>
-          <div style={{ fontWeight: 600, fontSize: "13px", color: "#1e293b", marginBottom: "6px" }}>
-            {c.chain} (chainId {c.chainId}){" "}
-            <a href={`${c.explorer}/address/${c.diamond}`} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "#4070F4", textDecoration: "none" }}>↗ Explorer</a>
-          </div>
-          <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#475569", background: "#f8fafc", padding: "10px 14px", borderRadius: "6px", lineHeight: 2 }}>
-            <div>Diamond:     <strong>{c.diamond}</strong></div>
-            <div>Gnosis Safe: <strong>{c.safe}</strong></div>
-            <div>HedgeFacet:  <strong>{c.hedge}</strong></div>
-            <div>OracleFacet: <strong>{c.oracle}</strong></div>
-            <div>CutFacet:    <strong>{c.cut}</strong></div>
-            <div>{c.paySymbol}:        <strong>{c.payToken}</strong></div>
-          </div>
-        </div>
-      ))}
+      <h2 style={S.h2}>Current deployed facet registry</h2>
+      <p style={S.p}>The list below is queried from each Diamond at page load and includes only addresses returned by its live EIP-2535 loupe. It does not assert that the current bytecode matches the historical audit.</p>
+      <LiveFacetRegistry />
     </div>
   );
 }
@@ -697,38 +522,31 @@ function DemoVideoDoc({ token }: { token: string }) {
         </div>
       )}
 
-      <h2 style={S.h2}>What the Demo Covers</h2>
-      <ul style={{ fontSize: "13px", color: "#475569", paddingLeft: "18px", lineHeight: 2 }}>
-        <li>Creating a non-custodial USDC wallet on Base Mainnet</li>
-        <li>Browsing open hedge events across FX, commodities, and crypto pairs</li>
-        <li>Buying a downside hedge — setting strike, notional, and expiry</li>
-        <li>Providing liquidity as an LP and earning premiums</li>
-        <li>Automatic oracle settlement when the strike is touched</li>
-        <li>Claiming payouts and viewing position history</li>
-      </ul>
+      <h2 style={S.h2}>Demo status</h2>
+      <p style={S.p}>No verified demo recording is attached here. Product flows, custody and settlement claims should be added only after they are demonstrated against the current deployment.</p>
     </div>
   );
 }
 
 const MARKET_D = {
-  tam_text: "African cross-border trade flows exceed $210B annually, growing at approximately 12% CAGR, driven by mobile money adoption, infrastructure improvements, and regional trade agreements (AfCFTA). The majority of this trade is conducted by SMEs — importers, exporters, manufacturers, and remittance-dependent businesses — that lack access to professional FX hedging tools.",
-  sam_text: "An estimated $35B per year is lost by African SMEs to unhedged FX volatility. Key corridors include GHS/USD (Ghana), NGN/USD (Nigeria), KES/USD (Kenya), and ZAR/USD (South Africa). Volatility ranges from 8–25% annually on these pairs — unacceptable for businesses operating on thin margins.",
-  sam_text2: "BlockFinaX's SAM is the subset of these losses that can be addressed by parametric hedging products: businesses with predictable, scheduled FX exposure (e.g., import payment in 30 days) who would pay a small premium to cap their downside.",
-  regional: "Pilot: Ghana (GHS pairs, Bank of Ghana sandbox approval) → 2027: Nigeria, Kenya → 2028: South Africa, Francophone West Africa (CEMAC/BCEAO currencies)",
+  tam_text: "Afreximbank's 2025 report is cited for African merchandise trade estimates. This is a measure of trade value, not the value of FX hedging demand, BlockFinaX revenue, or customers the product can serve. Its methodology and corridor-specific relevance should be reviewed before use in an investment case.",
+  sam_text: "The African Development Bank's 2025 report is cited for an estimate of unmet trade-finance demand. Trade-finance demand is not the same as demand for FX protection and is not a validated serviceable market for BlockFinaX.",
+  sam_text2: "A BlockFinaX serviceable market has not been established in this document. It requires customer research by corridor, product eligibility, regulatory permissions, competitor analysis and willingness-to-pay evidence.",
+  regional: "This is a planning hypothesis only. Do not infer product availability, a regulatory application or approval, or a launch commitment from this roadmap. Verify current status with supporting documents.",
   drivers: [
-    { text: "594M mobile money accounts in Sub-Saharan Africa",              label: "Infrastructure" },
-    { text: "Base L2 near-zero gas fees enable micro-hedges from $10",       label: "Technology"     },
-    { text: "USDC as settlement — no FX execution risk at point of hedge",   label: "Product"        },
-    { text: "No incumbent serving sub-$1M cross-border trade hedging",       label: "Market gap"     },
-    { text: "AfCFTA driving 60% more intra-African trade by 2030",           label: "Macro"          },
-    { text: "Bank of Ghana regulatory sandbox — first-mover advantage",      label: "Regulatory"     },
+    { text: "Validate corridor-level customer demand and willingness to pay", label: "Research needed" },
+    { text: "Verify current network costs and minimum viable transaction size", label: "Research needed" },
+    { text: "Confirm supported assets and settlement path per deployment", label: "Product verification" },
+    { text: "Map existing bank, broker and fintech alternatives by corridor", label: "Research needed" },
+    { text: "Validate trade and FX exposure assumptions against source data", label: "Research needed" },
+    { text: "Confirm regulatory correspondence and permissions", label: "Evidence needed" },
   ],
 };
 
 function MarketOpportunityDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("market-opportunity", token, MARKET_D);
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("market-opportunity-evidence-v2", token, MARKET_D);
   const setDriver = (i: number, k: string, v: string) => setField("drivers", draft.drivers.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const SAM = 35_000_000_000;
+  const samValue = SAM.value;
   const som27 = DEFAULT_ANNUALS[1].notionalHedged;
   const som28 = DEFAULT_ANNUALS[2].notionalHedged;
   const som29 = DEFAULT_ANNUALS[3].notionalHedged;
@@ -753,22 +571,23 @@ function MarketOpportunityDoc({ token }: { token: string }) {
     <div>
       <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "20px" }}>
-        <div style={S.stat}><div style={S.statVal}>$210B</div><div style={S.statLbl}>TAM — African cross-border trade (2024)</div></div>
-        <div style={S.stat}><div style={S.statVal}>$35B</div><div style={S.statLbl}>SAM — Annual FX losses for SMEs</div></div>
-        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>{fmtUSD(som27)}</div><div style={S.statLbl}>SOM Year 1 — {((som27 / SAM) * 100).toFixed(1)}% of SAM (2027)</div></div>
+        <div style={S.stat}><div style={S.statVal}>{TAM.display}</div><div style={S.statLbl}>TAM — African merchandise trade (2024)</div></div>
+        <div style={S.stat}><div style={S.statVal}>{SAM.display}</div><div style={S.statLbl}>SAM — Unmet trade finance demand (2024)</div></div>
+        <div style={{ ...S.stat, borderColor: "#86efac" }}><div style={{ ...S.statVal, color: "#16a34a" }}>{fmtUSD(som27)}</div><div style={S.statLbl}>Illustrative model output for 2027, not a market share</div></div>
       </div>
+      <p style={S.p}>The trade and trade-finance figures below are context from cited reports. They are different measures and neither has been validated as BlockFinaX&apos;s serviceable market. The operating figures are editable model scenarios, not observed traction.</p>
       <h2 style={S.h2}>Total Addressable Market (TAM)</h2>
       <p style={S.p}>{data.tam_text}</p>
       <h2 style={S.h2}>Serviceable Available Market (SAM)</h2>
       <p style={S.p}>{data.sam_text}</p>
       <p style={S.p}>{data.sam_text2}</p>
-      <h2 style={S.h2}>Serviceable Obtainable Market (SOM) — Projections</h2>
+      <h2 style={S.h2}>Illustrative operating scenarios — not a validated SOM</h2>
       <table style={S.table}>
-        <thead><tr><th style={S.th}>Year</th><th style={S.th}>Notional Hedged</th><th style={S.th}>SAM Share</th><th style={S.th}>Active Wallets</th><th style={S.th}>Revenue</th></tr></thead>
+        <thead><tr><th style={S.th}>Scenario year</th><th style={S.th}>Modelled notional</th><th style={S.th}>Share of cited trade-finance figure</th><th style={S.th}>Modelled new wallets</th><th style={S.th}>Modelled revenue</th></tr></thead>
         <tbody>
-          <tr><td style={S.td}><strong>2027</strong></td><td style={S.td}>{fmtUSD(som27)}</td><td style={S.td}>{((som27/SAM)*100).toFixed(1)}%</td><td style={S.td}>~{(DEFAULT_ANNUALS[1].totalNewWallets/1000).toFixed(0)}K</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[1].totalRevenue)}</strong></td></tr>
-          <tr><td style={S.td}><strong>2028</strong></td><td style={S.td}>{fmtUSD(som28)}</td><td style={S.td}>{((som28/SAM)*100).toFixed(1)}%</td><td style={S.td}>~{(DEFAULT_ANNUALS[2].totalNewWallets/1000).toFixed(0)}K</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[2].totalRevenue)}</strong></td></tr>
-          <tr><td style={S.td}><strong>2029</strong></td><td style={S.td}>{fmtUSD(som29)}</td><td style={S.td}>{((som29/SAM)*100).toFixed(1)}%</td><td style={S.td}>~{(DEFAULT_ANNUALS[3].totalNewWallets/1000).toFixed(0)}K</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[3].totalRevenue)}</strong></td></tr>
+          <tr><td style={S.td}><strong>2027</strong></td><td style={S.td}>{fmtUSD(som27)}</td><td style={S.td}>Not a comparable measure</td><td style={S.td}>{DEFAULT_ANNUALS[1].totalNewWallets.toLocaleString()}</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[1].totalRevenue)}</strong></td></tr>
+          <tr><td style={S.td}><strong>2028</strong></td><td style={S.td}>{fmtUSD(som28)}</td><td style={S.td}>Not a comparable measure</td><td style={S.td}>{DEFAULT_ANNUALS[2].totalNewWallets.toLocaleString()}</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[2].totalRevenue)}</strong></td></tr>
+          <tr><td style={S.td}><strong>2029</strong></td><td style={S.td}>{fmtUSD(som29)}</td><td style={S.td}>Not a comparable measure</td><td style={S.td}>{DEFAULT_ANNUALS[3].totalNewWallets.toLocaleString()}</td><td style={S.td}><strong>{fmtUSD(DEFAULT_ANNUALS[3].totalRevenue)}</strong></td></tr>
         </tbody>
       </table>
       <h2 style={S.h2}>Key Growth Drivers</h2>
@@ -787,41 +606,19 @@ function MarketOpportunityDoc({ token }: { token: string }) {
 }
 
 const COMP_D = {
-  intro: "Banks ignore sub-$1M trade flows. OTC brokers are opaque and expensive. DeFi protocols don't cover African pairs. Prediction markets are booming — but built for speculation, not real-world business hedging. BlockFinaX is the only accessible, transparent protection product built for African SMEs.",
+  intro: "This comparison has not been independently researched or validated and is not a complete assessment of providers. Availability, minimum size, pricing and product terms vary by institution and corridor; compare current provider documentation before using this table for a decision.",
   rows: [
-    { feature: "Min trade size",        bfx: "$10 USDC",    banks: "~$250K+",    otc: "~$100K+",   defi: "❌ None",      pred: "~$1+"          },
-    { feature: "African pair coverage", bfx: "40+ pairs",   banks: "❌ None",    otc: "❌ None",   defi: "❌ None",      pred: "❌ None"        },
-    { feature: "Real-world hedging",    bfx: "✅ Yes",       banks: "✅ Yes",     otc: "✅ Yes",    defi: "⚡ Limited",   pred: "❌ Speculative" },
-    { feature: "Transparent pricing",   bfx: "✅ On-chain",  banks: "❌ Opaque",  otc: "❌ Opaque", defi: "⚡ Varies",    pred: "✅ On-chain"    },
-    { feature: "Instant settlement",    bfx: "✅ Auto",      banks: "3–5 days",   otc: "1–3 days",  defi: "✅ On-chain",  pred: "✅ On-chain"    },
-    { feature: "SME accessible",        bfx: "✅",           banks: "❌ Ignored", otc: "❌ Opaque", defi: "❌ Complex",   pred: "⚡ Partial"     },
+    { feature: "Minimum trade size", bfx: "Check the selected market", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed", pred: "Not assessed" },
+    { feature: "Supported corridors", bfx: "Check the selected network and market", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed", pred: "Not assessed" },
+    { feature: "Settlement terms", bfx: "Check contract and oracle state", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed", pred: "Not assessed" },
+    { feature: "Pricing and eligibility", bfx: "Check current terms before transacting", banks: "Not assessed", otc: "Not assessed", defi: "Not assessed", pred: "Not assessed" },
   ],
 };
 
-function CompetitiveLandscapeDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("competitive-landscape", token, COMP_D);
-  const setRow = (i: number, k: string, v: string) => setField("rows", draft.rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
-
-  if (editing) return (
-    <div>
-      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
-      <TxtF label="intro" value={draft.intro} onChange={v => setField("intro", v)} />
-      <h2 style={S.h2}>Comparison Table</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Feature</th><th style={S.th}>BlockFinaX</th><th style={S.th}>Banks</th><th style={S.th}>OTC</th><th style={S.th}>DeFi</th><th style={S.th}>Prediction</th></tr></thead>
-        <tbody>{draft.rows.map((r, i) => (
-          <tr key={i}>{(["feature","bfx","banks","otc","defi","pred"] as const).map(f => (
-            <td key={f} style={S.td}><input value={r[f]} onChange={e => setRow(i, f, e.target.value)} style={EI} /></td>
-          ))}</tr>
-        ))}</tbody>
-      </table>
-    </div>
-  );
-
+function CompetitiveLandscapeDoc({ token: _token }: { token: string }) {
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
-      <p style={S.p}>{data.intro}</p>
+      <p style={S.p}>{COMP_D.intro}</p>
       <div style={{ overflowX: "auto", margin: "20px 0" }}>
         <table style={{ ...S.table, minWidth: "680px" }}>
           <thead>
@@ -831,7 +628,7 @@ function CompetitiveLandscapeDoc({ token }: { token: string }) {
               <th style={S.th}>Banks</th><th style={S.th}>OTC Brokers</th><th style={S.th}>DeFi</th><th style={S.th}>Prediction Markets</th>
             </tr>
           </thead>
-          <tbody>{data.rows.map(r => (
+          <tbody>{COMP_D.rows.map(r => (
             <tr key={r.feature}>
               <td style={{ ...S.td, fontWeight: 500, color: "#334155" }}>{r.feature}</td>
               <td style={{ ...S.td, background: "#f0f9ff", fontWeight: 600, color: "#1e40af" }}>{r.bfx}</td>
@@ -1004,9 +801,9 @@ function GTMStrategyDoc({ token }: { token: string }) {
 }
 
 const BOG_D = {
-  status_label: "Application In Progress",
-  status_date: "Filed Q1 2026 · Decision expected Q3 2026",
-  intro: "BlockFinaX has applied for admission to the Bank of Ghana's Regulatory Sandbox — a controlled environment for testing innovative fintech products under regulatory supervision. Admission would grant a time-limited licence to operate in Ghana while formal regulation is developed around on-chain parametric protection products.",
+  status_label: "Current status not verified",
+  status_date: "Check the latest written Bank of Ghana correspondence",
+  intro: "Company records have described a Bank of Ghana Regulatory Sandbox application. This page does not include an application receipt or a current decision letter, so the filing status, admission, permissions and any regulatory protection are unverified. A sandbox application is not a licence or approval.",
   applied_for: [
     "A sandbox licence to offer parametric FX protection contracts to Ghanaian SMEs",
     "Permission to settle contracts in USDC on a public blockchain (Base Mainnet)",
@@ -1014,23 +811,22 @@ const BOG_D = {
     "Access to the Bank of Ghana's FinTech and Innovation Office for dialogue on licensing frameworks",
   ],
   compliance: [
-    { title: "USDC-only settlement",          desc: "No native token — no securities classification risk",                                  status: "done"    },
-    { title: "Fully pre-funded pools",         desc: "Hedger payouts reserved on-chain before purchase — no undercollateralisation",         status: "done"    },
-    { title: "Immutable on-chain audit trail", desc: "Every settlement recorded permanently on Base L2",                                      status: "done"    },
-    { title: "No leverage",                    desc: "Hedgers can only lose their premium — no amplified loss risk",                          status: "done"    },
-    { title: "No algorithmic trading",         desc: "All contracts are user-initiated — no automated position-taking",                      status: "done"    },
-    { title: "Tiered KYC with enforced limits", desc: "Unverified accounts cannot transact. Limits on value moved and payout exposure are checked before every transaction", status: "done"    },
-    { title: "Sanctions screening",            desc: "Automated against OFAC SDN and the UN Consolidated List, including aliases and designated wallet addresses. EU and Ghana FIC checked manually at review", status: "done"    },
-    { title: "Transaction monitoring",         desc: "Alerts on single transactions above $5,000, cumulative above $10,000 in 30 days, and repeated activity below the reporting threshold", status: "done"    },
-    { title: "AML/CFT policy",                 desc: "Version 1.1, aligned to Act 1044 and Bank of Ghana directives — thresholds enforced in the platform match the filed document", status: "done"    },
-    { title: "Automated identity verification", desc: "Document verification is manual during the sandbox period; an automated provider is planned for commercial launch", status: "pending" },
-    { title: "Designated compliance officer",  desc: "To be appointed ahead of commercial launch; responsibilities held by the CEO during the sandbox period", status: "pending" },
+    { title: "Supported settlement assets", desc: "Verify against live network configuration and current terms.", status: "pending" },
+    { title: "Collateral and payout controls", desc: "Require independent source-to-deployment review and financial testing.", status: "pending" },
+    { title: "Transaction audit trail", desc: "Document event coverage, indexing, retention and reconciliation evidence.", status: "pending" },
+    { title: "Customer loss limits", desc: "Verify contract behavior, disclosures and edge cases before making a claim.", status: "pending" },
+    { title: "KYC and transaction limits", desc: "Provide current policy, enforcement evidence and exception handling.", status: "pending" },
+    { title: "Sanctions screening", desc: "Provide vendor, screening scope, refresh cadence and case records.", status: "pending" },
+    { title: "Transaction monitoring", desc: "Provide documented rules, alert handling and reporting procedures.", status: "pending" },
+    { title: "AML/CFT policy", desc: "Provide the approved policy and evidence of implementation.", status: "pending" },
+    { title: "Identity verification", desc: "Provide vendor or manual review process and evidence of coverage.", status: "pending" },
+    { title: "Compliance officer", desc: "Provide appointment and documented responsibilities.", status: "pending" },
   ],
   timeline: [
-    { milestone: "Application filed",            date: "Q1 2026",            status: "Complete", color: "green" },
-    { milestone: "Bank of Ghana decision",        date: "Q3 2026",            status: "Pending",  color: "amber" },
-    { milestone: "Sandbox period (if approved)",  date: "Q4 2026 – Q2 2027", status: "Planned",  color: "blue"  },
-    { milestone: "Commercial launch in Ghana",    date: "Q1 2027",            status: "Planned",  color: "blue"  },
+    { milestone: "Application receipt",            date: "Evidence required", status: "Unverified", color: "amber" },
+    { milestone: "Bank of Ghana decision",         date: "Evidence required", status: "Unverified", color: "amber" },
+    { milestone: "Sandbox period, if admitted",    date: "Not scheduled here", status: "Unverified", color: "amber" },
+    { milestone: "Commercial launch in Ghana",     date: "Not scheduled here", status: "Unverified", color: "amber" },
   ],
   markets: [
     { market: "Kenya",                 regulator: "Capital Markets Authority",  target: "Sandbox application 2027" },
@@ -1040,7 +836,7 @@ const BOG_D = {
 };
 
 function BoGSandboxDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("bog-sandbox", token, BOG_D);
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("bog-sandbox-evidence-v2", token, BOG_D);
   const setComp = (i: number, k: string, v: string) => setField("compliance", draft.compliance.map((r, j) => j === i ? { ...r, [k]: v } : r));
   const setTime = (i: number, k: string, v: string) => setField("timeline", draft.timeline.map((r, j) => j === i ? { ...r, [k]: v } : r));
   const setMkt  = (i: number, k: string, v: string) => setField("markets", draft.markets.map((r, j) => j === i ? { ...r, [k]: v } : r));
@@ -1360,36 +1156,33 @@ function CostBreakdownDoc() {
 }
 
 const INCORP_D = {
-  intro: "BlockFinaX operates under a dual-entity structure: BlockFinaX Inc., a Delaware C-Corporation, is the parent company and the entity customers contract with; BlockFinaX Ltd, registered in Ghana, is its wholly-owned operating subsidiary. Both are incorporated and active. The Delaware parent accommodates US institutional investors and standard venture capital term sheets.",
-  investor_note: "Series A investment will be structured through the Delaware C-Corp, enabling standard US venture term sheets, stock option pools, and SAFE/priced round mechanics. The Ghana entity operates as the local subsidiary.",
+  intro: "Entity names, registration, ownership links, operating status, and customer contracting entity have not been independently verified for this data room. Treat all status as unverified until current registry extracts and signed corporate records are attached.",
+  investor_note: "No investment entity, parent-subsidiary relationship, or financing structure is asserted here. Confirm these from current corporate records and counsel before relying on them.",
   ghana_rows: [
-    { k: "Entity type",      v: "Company Limited by Shares (Private)"                          },
-    { k: "Governing law",    v: "Companies Act, 2019 (Act 992) — Republic of Ghana"             },
-    { k: "Registered with",  v: "Registrar General's Department (RGD), Accra"                   },
-    { k: "Country",          v: "Ghana, West Africa"                                             },
-    { k: "Primary market",   v: "Ghana (Bank of Ghana sandbox), with East & West Africa expansion" },
-    { k: "Tax jurisdiction", v: "Ghana Revenue Authority (GRA)"                                  },
+    { k: "Entity name",      v: "Not verified — provide current registry extract" },
+    { k: "Entity type",      v: "Not verified — provide current registry extract" },
+    { k: "Registration",     v: "Not verified — provide current registry extract" },
+    { k: "Ownership",        v: "Not verified — provide signed corporate records" },
+    { k: "Operating status", v: "Not verified — provide current official record" },
   ],
   delaware_rows: [
-    { k: "Entity type",   v: "Delaware C-Corporation"                                                    },
-    { k: "Purpose",       v: "US investor vehicle, Series A/B term sheet compatibility, stock option pool" },
-    { k: "Status",        v: "Incorporated — 1007 N Orange St, 4th Floor #5543, Wilmington, DE 19801"     },
-    { k: "Structure",     v: "Delaware parent holding 100% of Ghana operating subsidiary"                  },
-    { k: "Legal counsel", v: "US counsel to be engaged on Series A raise"                                  },
+    { k: "Entity name",    v: "Not verified — provide current registry extract" },
+    { k: "Entity type",    v: "Not verified — provide current registry extract" },
+    { k: "Registration",   v: "Not verified — provide current registry extract" },
+    { k: "Ownership link", v: "Not verified — provide signed corporate records" },
+    { k: "Legal counsel",  v: "Not verified — provide current engagement evidence" },
   ],
   timeline_rows: [
-    { milestone: "Ghana private limited company incorporated", jur: "Ghana",          target: "Q1 2026",    status: "Complete", color: "green" },
-    { milestone: "Ghana operating bank account opened",        jur: "Ghana",          target: "Q1 2026",    status: "Complete", color: "green" },
-    { milestone: "BoG sandbox application filed",              jur: "Ghana",          target: "Q1 2026",    status: "Complete", color: "green" },
-    { milestone: "Delaware C-Corp formation",                  jur: "United States",  target: "Q1–Q2 2027", status: "Planned",  color: "amber" },
-    { milestone: "IP assignment Ghana → Delaware",             jur: "International",  target: "Q2 2027",    status: "Planned",  color: "amber" },
-    { milestone: "Kenya subsidiary registration",              jur: "Kenya",          target: "2027",        status: "Roadmap",  color: "blue"  },
-    { milestone: "Nigeria subsidiary registration",            jur: "Nigeria",        target: "2028",        status: "Roadmap",  color: "blue"  },
+    { milestone: "Ghana entity registration and status", jur: "Ghana", target: "Current registry extract required", status: "Unverified", color: "amber" },
+    { milestone: "Operating bank account", jur: "Ghana", target: "Current bank evidence required", status: "Unverified", color: "amber" },
+    { milestone: "Regulatory application status", jur: "Ghana", target: "Official correspondence required", status: "Unverified", color: "amber" },
+    { milestone: "US entity formation, if any", jur: "United States", target: "Current registry extract required", status: "Unverified", color: "amber" },
+    { milestone: "Intercompany ownership and IP assignment", jur: "As applicable", target: "Signed records required", status: "Unverified", color: "amber" },
   ],
 };
 
 function IncorporationDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("incorporation", token, INCORP_D);
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("incorporation-evidence-v2", token, INCORP_D);
   const setGhana  = (i: number, k: string, v: string) => setField("ghana_rows",    draft.ghana_rows.map((r, j)    => j === i ? { ...r, [k]: v } : r));
   const setDel    = (i: number, k: string, v: string) => setField("delaware_rows", draft.delaware_rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
   const setTl     = (i: number, k: string, v: string) => setField("timeline_rows", draft.timeline_rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
@@ -1434,8 +1227,8 @@ function IncorporationDoc({ token }: { token: string }) {
       <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <span style={{ fontSize: "22px" }}>🇬🇭</span>
-          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#14532d" }}>BlockFinaX Ltd</div><div style={{ fontSize: "13px", color: "#16a34a" }}>Incorporated · Active</div></div>
-          <span style={{ marginLeft: "auto", ...S.tag("green") }}>Active</span>
+          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Registry evidence required</div><div style={{ fontSize: "13px", color: "#92400e" }}>Entity name and status unverified</div></div>
+          <span style={{ marginLeft: "auto", ...S.tag("amber") }}>Unverified</span>
         </div>
         <table style={S.table}><tbody>{data.ghana_rows.map(r => (
           <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" as const }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
@@ -1445,8 +1238,8 @@ function IncorporationDoc({ token }: { token: string }) {
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "18px", margin: "12px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <span style={{ fontSize: "22px" }}>🇺🇸</span>
-          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>BlockFinaX Inc.</div><div style={{ fontSize: "13px", color: "#64748b" }}>Delaware C-Corporation — Incorporated · Active</div></div>
-          <span style={{ marginLeft: "auto", ...S.tag("green") }}>Active</span>
+          <div><div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Registry evidence required</div><div style={{ fontSize: "13px", color: "#92400e" }}>Entity name and status unverified</div></div>
+          <span style={{ marginLeft: "auto", ...S.tag("amber") }}>Unverified</span>
         </div>
         <table style={S.table}><tbody>{data.delaware_rows.map(r => (
           <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "40%", whiteSpace: "nowrap" as const }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
@@ -1467,154 +1260,254 @@ function IncorporationDoc({ token }: { token: string }) {
   );
 }
 
-/**
- * Governance, stated as it is rather than as intended.
- *
- * The executive summary previously read "Gnosis Safe 2-of-3 multisig governs
- * upgrades on all chains". Read from Base storage on 5 September 2026, the
- * Diamond's contractOwner is 0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d, an
- * address with no bytecode, and pendingOwner is the zero address, so no
- * transfer is even in flight. The claim was not true.
- *
- * That matters more here than in most documents. A counterparty performing
- * diligence on a protocol reads its storage, and a governance claim that does
- * not survive that reading costs more than the weakness it was covering. The
- * honest version is a defensible position: single-key control is normal for a
- * pilot, and what a counterparty needs is the plan and the date, not a
- * reassurance that contradicts the chain.
- *
- * Every value below was read from the chain, not from a deployment record.
- */
-const GOV_D = {
-  intro: "This section states who can change the protocol today, and what changes before third-party capital is placed on it. Every on-chain value below was read directly from contract storage on Base rather than taken from a deployment record, and can be independently verified by anyone with an RPC endpoint.",
-  as_at: "On-chain values read 5 September 2026, Base mainnet (chain 8453).",
-  control_rows: [
-    { k: "Protocol contract",          v: "EIP-2535 Diamond at 0xbCC51E62C4948FD35ab505bd71804C849601e4Ef (Base, chain 8453)" },
-    { k: "Upgrade authority today",    v: "0xef5Bed7c221c85A2c88e3c0223ee45482d6F037d — a single externally owned account holding no contract code" },
-    { k: "Multisig status",            v: "A 2-of-3 Gnosis Safe exists at 0x7909a2f1… but does NOT yet control the Diamond" },
-    { k: "Transfer in progress",       v: "None. pendingOwner is the zero address" },
-    { k: "Ownership transfer model",   v: "Two-step: transferOwnership then acceptOwnership, so a mistyped address cannot orphan the protocol" },
-    { k: "Upgrade delay",              v: "None in force. A 48-hour timelock facet is written and covered by tests but is not installed" },
-    { k: "Public verifiability",       v: "No facet currently exposes owner(), so control must be read from storage rather than called" },
-    { k: "Facets registered",          v: "23 addresses registered, of which 8 are current. EIP-2535 registries only ever grow, so superseded entries remain listed and hold no live selectors" },
-  ],
-  operational_rows: [
-    { k: "Settlement rate",     v: "Multi-signer oracle. A minimum number of independent nodes must agree, default 2 of 3" },
-    { k: "Disagreement",        v: "If submissions differ by more than the tolerance, default 1%, all are discarded and settlement waits rather than proceeding on a contested rate" },
-    { k: "Underwriting limits", v: "Leverage floor 1.5, ceiling 100, and an implied-volatility band of 0.4x to 2.5x of market, all enforced in the contract rather than by policy" },
-    { k: "Concentration",       v: "500 policies and 200 capacity providers per pool, enforced at the contract level" },
-    { k: "Customer onboarding", v: "Tiered verification with sanctions screening and an audit record for every check" },
-    { k: "Administrative access", v: "Named-address allowlist for the internal console. Reviewed as part of the work below" },
-  ],
-  roadmap_rows: [
-    { item: "Transfer Diamond ownership to the 2-of-3 Safe",        status: "Not started", priority: "Highest", color: "red",   note: "Removes the single point of failure. One transaction, then acceptance from the Safe" },
-    { item: "Install the 48-hour timelock facet",                   status: "Built, tested, not installed", priority: "High", color: "amber", note: "Gives counterparties a window to observe and object before any upgrade takes effect" },
-    { item: "Expose owner() through a facet",                       status: "Not started", priority: "High", color: "amber", note: "Makes control publicly checkable with one call instead of a storage read" },
-    { item: "Rotate the client-side API key for the wallet partner", status: "Not started", priority: "High", color: "amber", note: "Pending rotation with the partner. Until it completes we treat this credential as public and assume no secrecy from it" },
-    { item: "Independent review of the money-path test suite",       status: "In progress", priority: "Medium", color: "blue", note: "Ledger-level tests covering exit ordering and solvency were added September 2026" },
-  ],
-  note: "We would rather a counterparty read this and ask hard questions than find it themselves. Single-key control is ordinary for a pilot written on the founders' own capital, and it is not acceptable for a book carrying third-party risk. The first two items above are the conditions we would expect an underwriting partner to set before any capacity is committed, and we would treat them as conditions precedent rather than as commitments to be met later.",
+type GovernanceSnapshot = {
+  chain: string;
+  chainId: number;
+  blockNumber: number;
+  diamond: string;
+  safe: string;
+  owner: string;
+  pendingOwner: string;
+  ownerKind: "contract" | "externally owned account";
+  safeControlsDiamond: boolean;
+  oracleV2Active: boolean | null;
+  singleKeySettler: string | null;
+  oracleSigners: string[];
+  requiredSigners: string | null;
+  toleranceBps: string | null;
+  maxOracles: string | null;
+  safeThreshold: string | null;
+  safeOwners: string[];
+  safeStatus: string;
+  activeCutFacet: string;
 };
 
-function GovernanceDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("governance", token, GOV_D);
-  const setCtl = (i: number, k: string, v: string) => setField("control_rows",     draft.control_rows.map((r, j)     => j === i ? { ...r, [k]: v } : r));
-  const setOps = (i: number, k: string, v: string) => setField("operational_rows", draft.operational_rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const setRm  = (i: number, k: string, v: string) => setField("roadmap_rows",     draft.roadmap_rows.map((r, j)     => j === i ? { ...r, [k]: v } : r));
+const GOVERNANCE_CHAINS = [
+  { name: "Base", chainId: 8453, rpc: "https://mainnet.base.org", diamond: "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef", safe: "0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb", explorer: "https://basescan.org" },
+  { name: "BNB Smart Chain", chainId: 56, rpc: "https://bsc-dataseed.binance.org", diamond: "0xaC939C0897981Abc0711ec4e37527F13106180fc", safe: "0x2a0ab363E01b518B189218e39f79Bfc3AE310807", explorer: "https://bscscan.com" },
+] as const;
 
-  const KV = ({ rows, setter }: { rows: { k: string; v: string }[]; setter: (i: number, k: string, v: string) => void }) => (
-    <table style={S.table}>
-      <tbody>{rows.map((r, i) => (
-        <tr key={i}>
-          <td style={{ ...S.td, width: "34%" }}><input value={r.k} onChange={e => setter(i, "k", e.target.value)} style={EI} /></td>
-          <td style={S.td}><input value={r.v} onChange={e => setter(i, "v", e.target.value)} style={EI} /></td>
-        </tr>
-      ))}</tbody>
-    </table>
-  );
+const DIAMOND_GOVERNANCE_ABI = [
+  "function owner() view returns (address)",
+  "function pendingOwnerAddress() view returns (address)",
+  "function facetAddress(bytes4) view returns (address)",
+  "function getOracles() view returns (address[])",
+  "function getOracleConfig() view returns (uint256,uint256,uint256,uint256)",
+  "function getSettlementAuthority() view returns (bool,address,address[],uint256,uint256)",
+];
+const SAFE_GOVERNANCE_ABI = [
+  "function getOwners() view returns (address[])",
+  "function getThreshold() view returns (uint256)",
+];
+const DIAMOND_CUT_SELECTOR = "0x1f931c1c";
 
-  if (editing) return (
-    <div>
-      <DocEditBar editUnlocked saving={saving} editing onEdit={() => {}} onSave={save} onCancel={cancelEdit} />
-      <TxtF label="intro" value={draft.intro} onChange={v => setField("intro", v)} />
-      <TxtF label="as_at" value={draft.as_at} onChange={v => setField("as_at", v)} rows={2} />
-      <h2 style={S.h2}>Who Can Change the Protocol</h2>
-      <KV rows={draft.control_rows} setter={setCtl} />
-      <h2 style={S.h2}>Operational Controls</h2>
-      <KV rows={draft.operational_rows} setter={setOps} />
-      <h2 style={S.h2}>Before Third-Party Capital</h2>
-      {draft.roadmap_rows.map((r, i) => (
-        <div key={i} style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
-          <input value={r.item}     onChange={e => setRm(i, "item", e.target.value)}     style={{ ...EI, flex: 1 }} />
-          <input value={r.status}   onChange={e => setRm(i, "status", e.target.value)}   style={{ ...EI, width: "150px" }} />
-          <input value={r.priority} onChange={e => setRm(i, "priority", e.target.value)} style={{ ...EI, width: "90px" }} />
-        </div>
-      ))}
-      <TxtF label="note" value={draft.note} onChange={v => setField("note", v)} rows={5} />
-    </div>
-  );
+async function readGovernanceSnapshot(chain: typeof GOVERNANCE_CHAINS[number]): Promise<GovernanceSnapshot> {
+  const provider = new ethers.JsonRpcProvider(chain.rpc, chain.chainId, { staticNetwork: true });
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== chain.chainId) {
+    throw new Error("RPC returned chain " + network.chainId + ", expected " + chain.chainId);
+  }
+  const diamond = new ethers.Contract(chain.diamond, DIAMOND_GOVERNANCE_ABI, provider);
+  const safe = new ethers.Contract(chain.safe, SAFE_GOVERNANCE_ABI, provider);
+  const [blockNumber, ownerWord, pendingOwnerWord, safeResult, activeCutFacet, safeCode, oracleReadResults] = await Promise.all([
+    provider.getBlockNumber(),
+    provider.getStorage(chain.diamond, ethers.toBeHex(BigInt(ethers.id("diamond.standard.diamond.storage")) + 4n, 32)),
+    provider.getStorage(chain.diamond, ethers.toBeHex(BigInt(ethers.id("diamond.standard.diamond.storage")) + 5n, 32)),
+    Promise.allSettled([safe.getOwners(), safe.getThreshold()]),
+    diamond.facetAddress(DIAMOND_CUT_SELECTOR),
+    provider.getCode(chain.safe),
+    Promise.allSettled([diamond.getOracles(), diamond.getOracleConfig()]),
+  ]);
+  const owner = ethers.getAddress("0x" + ownerWord.slice(-40));
+  const pendingOwner = ethers.getAddress("0x" + pendingOwnerWord.slice(-40));
+  const [ownerFunction, pendingOwnerFunction, settlementAuthority] = await Promise.allSettled([
+    diamond.owner(),
+    diamond.pendingOwnerAddress(),
+    diamond.getSettlementAuthority(),
+  ]);
+  if (ownerFunction.status === "fulfilled" && ethers.getAddress(ownerFunction.value) !== owner) {
+    throw new Error("owner() result does not match the documented Diamond storage layout");
+  }
+  if (pendingOwnerFunction.status === "fulfilled" && ethers.getAddress(pendingOwnerFunction.value) !== pendingOwner) {
+    throw new Error("pendingOwnerAddress() result does not match the documented Diamond storage layout");
+  }
+  const authority = settlementAuthority.status === "fulfilled" ? settlementAuthority.value : null;
+  const ownerCode = await provider.getCode(owner);
+  const safeOwnersResult = safeResult[0];
+  const safeThresholdResult = safeResult[1];
+  const oracleSignersCall = oracleReadResults[0];
+  const oracleConfigCall = oracleReadResults[1];
+  const safeOk = safeCode !== "0x" && safeOwnersResult.status === "fulfilled" && safeThresholdResult.status === "fulfilled";
+  const liveSafeOwners = safeOwnersResult.status === "fulfilled" ? safeOwnersResult.value as string[] : [];
+  const liveSafeThreshold = safeThresholdResult.status === "fulfilled" ? (safeThresholdResult.value as bigint).toString() : null;
+  const liveOracleSigners = oracleSignersCall.status === "fulfilled" ? oracleSignersCall.value as string[] : [];
+  const liveOracleConfig = oracleConfigCall.status === "fulfilled" ? oracleConfigCall.value as readonly [bigint, bigint, bigint, bigint] : null;
+  return {
+    chain: chain.name,
+    chainId: chain.chainId,
+    blockNumber,
+    diamond: chain.diamond,
+    safe: chain.safe,
+    owner: ethers.getAddress(owner),
+    pendingOwner: ethers.getAddress(pendingOwner),
+    ownerKind: ownerCode === "0x" ? "externally owned account" : "contract",
+    safeControlsDiamond: owner.toLowerCase() === chain.safe.toLowerCase(),
+    oracleV2Active: authority ? authority[0] : null,
+    singleKeySettler: authority ? ethers.getAddress(authority[1]) : null,
+    oracleSigners: liveOracleSigners.map((address: string) => ethers.getAddress(address)),
+    requiredSigners: liveOracleConfig ? liveOracleConfig[0].toString() : null,
+    toleranceBps: liveOracleConfig ? liveOracleConfig[1].toString() : null,
+    maxOracles: liveOracleConfig ? liveOracleConfig[3].toString() : null,
+    safeThreshold: liveSafeThreshold,
+    safeOwners: liveSafeOwners.map((address: string) => ethers.getAddress(address)),
+    safeStatus: safeOk ? "Safe owners and threshold read successfully" : safeCode === "0x" ? "Configured Safe address has no contract code on this network" : "Safe owner/threshold reads unavailable",
+    activeCutFacet: ethers.getAddress(activeCutFacet),
+  };
+}
+
+type FacetRegistrySnapshot = {
+  chainId: number;
+  chain: string;
+  blockNumber: number;
+  diamond: string;
+  facets: { address: string; selectorCount: number }[];
+};
+
+const DIAMOND_LOUPE_ABI = [
+  "function facets() view returns ((address facetAddress, bytes4[] functionSelectors)[])",
+];
+
+async function readFacetRegistry(chain: typeof GOVERNANCE_CHAINS[number]): Promise<FacetRegistrySnapshot> {
+  const provider = new ethers.JsonRpcProvider(chain.rpc, chain.chainId, { staticNetwork: true });
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== chain.chainId) throw new Error("RPC chain ID mismatch");
+  const diamond = new ethers.Contract(chain.diamond, DIAMOND_LOUPE_ABI, provider);
+  const [blockNumber, facets] = await Promise.all([provider.getBlockNumber(), diamond.facets()]);
+  return {
+    chainId: chain.chainId,
+    chain: chain.name,
+    blockNumber,
+    diamond: chain.diamond,
+    facets: facets
+      .map((facet: any) => ({ address: ethers.getAddress(facet.facetAddress), selectorCount: facet.functionSelectors.length }))
+      .filter((facet: { selectorCount: number }) => facet.selectorCount > 0)
+      .sort((a: { address: string }, b: { address: string }) => a.address.localeCompare(b.address)),
+  };
+}
+
+function LiveFacetRegistry() {
+  const [snapshots, setSnapshots] = useState<FacetRegistrySnapshot[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all(GOVERNANCE_CHAINS.map(async chain => {
+      try { return { snapshot: await readFacetRegistry(chain) }; }
+      catch (error) { return { error: chain.name + ": " + (error instanceof Error ? error.message : "loupe read failed") }; }
+    })).then(results => {
+      if (!active) return;
+      setSnapshots(results.flatMap(result => "snapshot" in result && result.snapshot ? [result.snapshot] : []));
+      setErrors(results.flatMap(result => "error" in result && result.error ? [result.error] : []));
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  return <div>
+    {loading && <p style={S.p}>Reading live facet registries…</p>}
+    {errors.map(error => <p key={error} style={{ ...S.p, color: "#b91c1c" }}>Live registry unavailable: {error}</p>)}
+    {snapshots.map(snapshot => {
+      const chain = GOVERNANCE_CHAINS.find(item => item.chainId === snapshot.chainId)!;
+      return <section key={snapshot.chainId} style={{ marginBottom: 20 }}>
+        <h3 style={S.h3}>{snapshot.chain} — block {snapshot.blockNumber}</h3>
+        <p style={S.p}><a href={chain.explorer + "/address/" + snapshot.diamond} target="_blank" rel="noreferrer">Diamond {snapshot.diamond}</a></p>
+        <table style={S.table}><thead><tr><th style={S.th}>Live facet address</th><th style={S.th}>Active selectors</th></tr></thead>
+          <tbody>{snapshot.facets.map(facet => <tr key={facet.address}>
+            <td style={S.td}><a href={chain.explorer + "/address/" + facet.address} target="_blank" rel="noreferrer">{facet.address}</a></td>
+            <td style={S.td}>{facet.selectorCount}</td>
+          </tr>)}</tbody>
+        </table>
+      </section>;
+    })}
+  </div>;
+}
+
+function GovernanceDoc({ token: _token }: { token: string }) {
+  const [snapshots, setSnapshots] = useState<GovernanceSnapshot[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all(GOVERNANCE_CHAINS.map(async chain => {
+      try { return { snapshot: await readGovernanceSnapshot(chain) }; }
+      catch (error) {
+        return { error: chain.name + ": " + (error instanceof Error ? error.message : "live read failed") };
+      }
+    })).then(results => {
+      if (!active) return;
+      setSnapshots(results.flatMap(result => "snapshot" in result && result.snapshot ? [result.snapshot] : []));
+      setErrors(results.flatMap(result => "error" in result && result.error ? [result.error] : []));
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   return (
     <div>
-      <DocEditBar editUnlocked={editUnlocked} editing={false} saving={false} onEdit={() => requestEdit(startEdit)} onSave={save} onCancel={cancelEdit} />
-      <p style={S.p}>{data.intro}</p>
-      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "12px 16px", margin: "12px 0" }}>
-        <div style={{ fontSize: "12.5px", color: "#92400e" }}>{data.as_at}</div>
-      </div>
-      <h2 style={S.h2}>Who Can Change the Protocol</h2>
-      <table style={S.table}><tbody>{data.control_rows.map(r => (
-        <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "34%" }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
-      ))}</tbody></table>
-      <h2 style={S.h2}>Operational Controls</h2>
-      <table style={S.table}><tbody>{data.operational_rows.map(r => (
-        <tr key={r.k}><td style={{ ...S.td, fontWeight: 600, color: "#334155", width: "34%" }}>{r.k}</td><td style={S.td}>{r.v}</td></tr>
-      ))}</tbody></table>
-      <h2 style={S.h2}>Before Third-Party Capital Is Placed</h2>
-      <table style={S.table}>
-        <thead><tr><th style={S.th}>Action</th><th style={S.th}>Status</th><th style={S.th}>Priority</th><th style={S.th}>Why it matters</th></tr></thead>
-        <tbody>{data.roadmap_rows.map(r => (
-          <tr key={r.item}>
-            <td style={S.td}>{r.item}</td>
-            <td style={S.td}>{r.status}</td>
-            <td style={S.td}><span style={S.tag(r.color)}>{r.priority}</span></td>
-            <td style={{ ...S.td, color: "#64748b" }}>{r.note}</td>
-          </tr>
-        ))}</tbody>
-      </table>
-      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px 18px", marginTop: "20px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>Our position</div>
-        <div style={{ fontSize: "13px", color: "#334155", marginTop: "4px", lineHeight: 1.6 }}>{data.note}</div>
-      </div>
+      <p style={S.p}>Governance is read from each chain when this page loads. If a chain read fails, its state is shown as unverified; this page does not substitute a saved or dated ownership claim.</p>
+      {loading && <p style={S.p}>Reading Base and BNB Smart Chain…</p>}
+      {errors.map(error => <p key={error} style={{ ...S.p, color: "#b91c1c" }}>Live verification unavailable: {error}</p>)}
+      {snapshots.map(snapshot => {
+        const chain = GOVERNANCE_CHAINS.find(item => item.chainId === snapshot.chainId)!;
+        return (
+          <section key={snapshot.chainId} style={{ marginBottom: 24 }}>
+            <h2 style={S.h2}>{snapshot.chain} governance — live block {snapshot.blockNumber}</h2>
+            <table style={S.table}><tbody>
+              <tr><td style={{ ...S.td, width: "34%", fontWeight: 600 }}>Diamond</td><td style={S.td}><a href={chain.explorer + "/address/" + snapshot.diamond} target="_blank" rel="noreferrer">{snapshot.diamond}</a></td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Current owner</td><td style={S.td}><a href={chain.explorer + "/address/" + snapshot.owner} target="_blank" rel="noreferrer">{snapshot.owner}</a> ({snapshot.ownerKind})</td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Configured Safe controls Diamond</td><td style={S.td}>{snapshot.safeControlsDiamond ? "Yes — live owner address matches this Safe" : "No — live owner address does not match this Safe"}</td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Pending owner</td><td style={S.td}>{snapshot.pendingOwner}</td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Configured Safe owners and threshold</td><td style={S.td}>{snapshot.safeStatus}{snapshot.safeThreshold !== null ? ` — ${snapshot.safeThreshold} of ${snapshot.safeOwners.length}; ${snapshot.safeOwners.join(", ")}` : ""}</td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Settlement authorization</td><td style={S.td}>{snapshot.oracleV2Active === null ? "Unverified — current implementation does not expose this getter" : snapshot.oracleV2Active ? "Multi-signer consensus required" : "Single-key settlement path active"}{snapshot.singleKeySettler ? "; single-key address: " + snapshot.singleKeySettler : ""}</td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Oracle consensus configuration</td><td style={S.td}>{snapshot.requiredSigners === null ? "Unverified — current implementation does not expose this getter" : `${snapshot.requiredSigners} of ${snapshot.oracleSigners.length} registered signers; tolerance ${snapshot.toleranceBps} bps; maximum ${snapshot.maxOracles}; signers: ${snapshot.oracleSigners.join(", ") || "none registered"}`}</td></tr>
+              <tr><td style={{ ...S.td, fontWeight: 600 }}>Active diamondCut selector implementation</td><td style={S.td}><a href={chain.explorer + "/address/" + snapshot.activeCutFacet} target="_blank" rel="noreferrer">{snapshot.activeCutFacet}</a>. This address alone does not establish whether an upgrade delay is enforced.</td></tr>
+            </tbody></table>
+          </section>
+        );
+      })}
+      <p style={{ ...S.p, color: "#64748b" }}>The Safe address is a configured reference. The page reads its live owners and threshold and separately checks whether it currently owns the Diamond. It does not infer timelock behavior from a facet name or deployment file.</p>
     </div>
   );
 }
 
 const AGREE_D = {
-  intro: "This section tracks the status of all formal agreements — investor NDAs, service agreements with contractors and advisors, consulting contracts, and template legal documents. Signed agreements are held by BlockFinaX's legal counsel and available to verified investors on request.",
-  request_note: "To request a signed NDA, term sheet, or specific agreement, email anthonykumako8@gmail.com with the subject \"BlockFinaX Agreement Request\".",
+  intro: "Management-provided agreement and ownership checklist. Entries are not independently verified and supporting records are not attached here. Confirm signed documents, active counterparties and current legal entities before relying on any status.",
+  request_note: "Contact BlockFinaX to request the current supporting documents. Availability and execution status should be confirmed in writing.",
   investor_rows: [
-    { doc: "Non-Disclosure Agreement (NDA)",    party: "Pre-seed investors", status: "Template Ready", color: "amber", note: "Available on request — email to initiate"         },
-    { doc: "SAFE Note / Investment Agreement",   party: "Pre-seed round",     status: "In Drafting",   color: "amber", note: "Being prepared ahead of pre-seed close"           },
-    { doc: "Investor Term Sheet",               party: "Series A",           status: "Not Yet",       color: "slate", note: "Will be issued Q4 2027 ahead of Series A"          },
+    { doc: "Non-Disclosure Agreement (NDA)", party: "Not verified", status: "Evidence needed", color: "amber", note: "Attach current template or confirm availability" },
+    { doc: "Investment agreement", party: "Not verified", status: "Evidence needed", color: "amber", note: "Attach current draft or confirm none exists" },
+    { doc: "Investor term sheet", party: "Not verified", status: "Evidence needed", color: "amber", note: "Attach current draft or confirm none exists" },
   ],
   service_rows: [
-    { doc: "Smart Contract Audit Agreement", party: "Third-party auditor (TBD)",  status: "Pending Auditor Selection", color: "amber", note: "Planned pre-mainnet — budget allocated"              },
-    { doc: "Legal Advisory Retainer",        party: "Ghana corporate counsel",    status: "Active",                    color: "green", note: "Ongoing advisory on BoG sandbox application"          },
-    { doc: "Compliance Consulting",          party: "AML/KYC consultant",         status: "In Negotiation",            color: "amber", note: "See Compliance Proposals for details"                 },
-    { doc: "Cloud Services Agreement",       party: "AWS / GCP",                  status: "Active",                    color: "green", note: "Standard cloud services — no special terms"           },
-    { doc: "Delaware Formation Counsel",     party: "US law firm (TBD)",          status: "Not Started",               color: "slate", note: "To be engaged Q4 2026 ahead of formation"            },
+    { doc: "Smart Contract Audit Agreement", party: "Not verified", status: "Evidence needed", color: "amber", note: "Attach signed agreement or confirm no engagement" },
+    { doc: "Legal Advisory Retainer",        party: "Not verified",               status: "Evidence needed",            color: "amber", note: "Provide signed agreement or confirm no engagement" },
+    { doc: "Compliance Consulting",          party: "Not verified",               status: "Evidence needed",            color: "amber", note: "Provide signed agreement or confirm no engagement" },
+    { doc: "Cloud Services Agreement",       party: "Not verified",               status: "Evidence needed",            color: "amber", note: "Provide current vendor and terms" },
+    { doc: "Delaware Formation Counsel",     party: "Not verified",               status: "Evidence needed",            color: "amber", note: "Provide current formation status and counsel details" },
   ],
   ip_items: [
-    { title: "All source code owned by BlockFinaX Inc.",          desc: "No third-party IP encumbrances on the core protocol",      status: "done"    },
-    { title: "Smart contracts deployed from founder-controlled wallet", desc: "Full on-chain ownership of Diamond proxy",               status: "done"    },
-    { title: "No open-source licence conflicts",                      desc: "Dependencies are MIT / Apache 2.0 compatible",            status: "done"    },
-    { title: "IP assignment to Delaware holding company",             desc: "Planned on Delaware formation (Q2 2027)",                  status: "pending" },
-    { title: "Trademark registration — BlockFinaX",                   desc: "Ghana and international filing planned",                   status: "pending" },
+    { title: "Source-code ownership", desc: "Assignment and entity records required; deployment ownership is not IP ownership.", status: "pending" },
+    { title: "Deployment authority", desc: "See live on-chain owner; this does not establish corporate ownership.", status: "pending" },
+    { title: "Open-source licence review", desc: "Provide a current dependency inventory and licence review.", status: "pending" },
+    { title: "IP assignment and ownership records", desc: "Provide executed assignment records and identify the relevant entity.", status: "pending" },
+    { title: "Trademark registration", desc: "Provide current registry evidence or confirm no registration.", status: "pending" },
   ],
 };
 
 function AgreementsDoc({ token }: { token: string }) {
-  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("agreements", token, AGREE_D);
+  const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("agreements-evidence-v2", token, AGREE_D);
   const setInv  = (i: number, k: string, v: string) => setField("investor_rows", draft.investor_rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
   const setSvc  = (i: number, k: string, v: string) => setField("service_rows",  draft.service_rows.map((r, j)  => j === i ? { ...r, [k]: v } : r));
   const setIP   = (i: number, k: string, v: string) => setField("ip_items",      draft.ip_items.map((r, j)      => j === i ? { ...r, [k]: v } : r));
@@ -2975,11 +2868,11 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
     "oracle-strategy": { title: "Oracle Strategy", subtitle: "Architecture, limitations, and decentralisation roadmap" },
     "security-audit": { title: "Security Audit", subtitle: "April 2026 Diamond audit — findings, status and remediation" },
     "demo-video": { title: "Product Demo Video", subtitle: "Video walkthrough of the Wallet and Hedge products" },
-    "market-opportunity": { title: "Market Opportunity", subtitle: "TAM / SAM / SOM and growth drivers" },
+    "market-opportunity": { title: "Market Opportunity", subtitle: "Published context and illustrative scenarios; not validated company market sizing" },
     "competitive-landscape": { title: "Competitive Landscape", subtitle: "Side-by-side comparison across key dimensions" },
     "gtm-strategy": { title: "Go-to-Market Strategy", subtitle: "4-phase GTM, partnerships, and flywheel" },
     "governance":            { title: "Governance & Protocol Control", subtitle: "Upgrade authority, operational controls, and what changes before third-party capital" },
-    "incorporation":         { title: "Incorporation",         subtitle: "Ghana entity (active) · Delaware C-Corp in progress" },
+    "incorporation":         { title: "Incorporation",         subtitle: "Entity records and ownership require current evidence" },
     "agreements":            { title: "Agreements",            subtitle: "NDAs, service contracts, IP ownership, and investor docs" },
     "compliance-proposals":  { title: "Compliance Proposals",  subtitle: "Consultant proposals — admin editable" },
     "bog-sandbox": { title: "Bank of Ghana Sandbox", subtitle: "Application status, compliance framework, and timeline" },
@@ -3106,7 +2999,6 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
   }, [token, onLogout]);
 
   const handleOpen = (doc: typeof CATEGORIES[0]["documents"][0]) => {
-    if (doc.type === "coming-soon") { toast({ title: "Coming soon", description: "This document will be available shortly." }); return; }
     if (doc.type === "external" || (doc.href && doc.href.startsWith("mailto:"))) { window.open(doc.href!, "_blank"); return; }
     if (doc.type === "navigate" && doc.href) { navigate(doc.href); return; }
     if (doc.type === "modal") { setOpenDoc(doc.id); }
@@ -3145,10 +3037,10 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
                 </motion.span>
               )}
             </AnimatePresence>
-            <Button variant="outline" size="sm" onClick={handleLogout} style={{ color: "#64748b", fontSize: "13px" }}>
+            {token && <Button variant="outline" size="sm" onClick={handleLogout} style={{ color: "#64748b", fontSize: "13px" }}>
               <LogOut style={{ width: "13px", height: "13px", marginRight: isMobile ? "0" : "5px" }} />
               {!isMobile && "Sign out"}
-            </Button>
+            </Button>}
           </div>
         </div>
       </div>
@@ -3229,8 +3121,8 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
                 {active.documents.map((doc, idx) => (
                   <motion.div key={doc.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
                     onClick={() => handleOpen(doc)}
-                    style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px", display: "flex", alignItems: "flex-start", gap: "14px", cursor: doc.type === "coming-soon" ? "not-allowed" : "pointer", opacity: doc.type === "coming-soon" ? 0.5 : 1, transition: "box-shadow 0.15s" }}
-                    whileHover={doc.type !== "coming-soon" ? { scale: 1.003, boxShadow: "0 4px 14px rgba(0,0,0,0.06)" } : {}}>
+                    style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px", display: "flex", alignItems: "flex-start", gap: "14px", cursor: "pointer", transition: "box-shadow 0.15s" }}
+                    whileHover={{ scale: 1.003, boxShadow: "0 4px 14px rgba(0,0,0,0.06)" }}>
                     <div style={{ width: "38px", height: "38px", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <doc.icon style={{ width: "17px", height: "17px", color: "#64748b" }} />
                     </div>
@@ -3242,9 +3134,7 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
                       <p style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>{doc.description}</p>
                     </div>
                     <div style={{ flexShrink: 0, marginTop: "2px" }}>
-                      {doc.type === "external" ? <ExternalLink style={{ width: "15px", height: "15px", color: "#cbd5e1" }} />
-                        : doc.type === "coming-soon" ? <span style={{ fontSize: "11px", color: "#94a3b8" }}>Soon</span>
-                        : doc.type === "navigate" ? <ExternalLink style={{ width: "15px", height: "15px", color: "#cbd5e1" }} />
+                      {doc.type === "external" || doc.type === "navigate" ? <ExternalLink style={{ width: "15px", height: "15px", color: "#cbd5e1" }} />
                         : <Eye style={{ width: "15px", height: "15px", color: "#cbd5e1" }} />}
                     </div>
                   </motion.div>
@@ -3268,35 +3158,22 @@ function DataRoomContent({ token, onLogout, initialEditEnabled = false }: { toke
 
 /* ─── ROOT EXPORT ─── */
 export default function DataRoom() {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState("");
   const [initialEditEnabled, setInitialEditEnabled] = useState(false);
-  const [checking, setChecking] = useState(true);
-
   useEffect(() => {
+    let cancelled = false;
     const stored = localStorage.getItem(SESSION_KEY);
-    if (!stored) { setChecking(false); return; }
+    if (!stored) return;
     fetch("/api/investor/verify", { headers: { "x-investor-token": stored } })
       .then(r => r.json())
       .then(d => {
+        if (cancelled) return;
         if (d.valid) { setToken(stored); setInitialEditEnabled(!!d.editEnabled); }
         else localStorage.removeItem(SESSION_KEY);
       })
-      .catch(() => localStorage.removeItem(SESSION_KEY))
-      .finally(() => setChecking(false));
+      .catch(() => {}) ;
+    return () => { cancelled = true; };
   }, []);
-
-  if (checking) return (
-    <div style={{ minHeight: "100vh", background: "#0a1628", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "30px", height: "30px", border: "2px solid #3d8ef5", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-    </div>
-  );
-
-  if (token) return (
-    <DataRoomContent
-      token={token}
-      initialEditEnabled={initialEditEnabled}
-      onLogout={() => { setToken(null); setInitialEditEnabled(false); }}
-    />
-  );
-  return <PasswordGate onSuccess={(tok, editEnabled) => { setToken(tok); setInitialEditEnabled(editEnabled); }} />;
+  return <DataRoomContent token={token} initialEditEnabled={initialEditEnabled}
+    onLogout={() => { setToken(""); setInitialEditEnabled(false); }} />;
 }

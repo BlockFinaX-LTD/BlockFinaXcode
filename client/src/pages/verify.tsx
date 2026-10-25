@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useRift } from "@rift-finance/react";
+import { useIdentity as useRift } from '@/lib/identity';
 import { getRiftAccessToken } from "@/lib/rift-token-bridge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

@@ -3,7 +3,7 @@
 | Threat                           | Implemented control                                                                   | Remaining work                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Email-code theft/replay          | HMAC storage, five-minute expiry, single use, five guesses, 60-second resend cooldown | Email delivery security, identity abuse detection            |
-| OAuth account substitution       | State cookie, provider ID-token/audience validation, verified email                   | Operator Google configuration and live-provider test         |
+| OAuth account substitution       | State cookie plus expiring single-use server challenge, provider ID-token/audience validation, verified email                   | Operator Google configuration and live-provider test         |
 | CSRF                             | Exact configured origin check on mutations, SameSite/HttpOnly cookies                 | Validate ingress proxy configuration                         |
 | False passkey registration       | Server challenge, expected origin/RP, P-256, required user verification               | Independent review                                           |
 | Unauthorized payment             | Session-bound sender, approved token/function, on-chain passkey signature             | Institutional approval policies                              |

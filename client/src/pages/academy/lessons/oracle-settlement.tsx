@@ -80,23 +80,23 @@ export default function OracleSettlement() {
 
       <Section n="04" id="single-key" title="The single-key path (and its retirement)">
         <P>
-          The Hedge facet still exposes a
-          <CodeInline>settleEvent</CodeInline> entrypoint the admin can
-          call directly. Same expiry check, same rate parameter, single
-          signature. It exists because the multi-signer oracle wasn&apos;t
-          live at day one.
+          The Hedge facet contains a
+          <CodeInline>settleEvent</CodeInline> path and the Oracle facet
+          contains a consensus path. Which path is accepted depends on
+          the on-chain <CodeInline>oracleV2Active</CodeInline> setting;
+          this lesson does not assume which mode is currently active.
         </P>
         <P>
-          There&apos;s a one-way owner function,
+          The contract includes a one-way owner function,
           <CodeInline>activateOracleV2()</CodeInline>, that permanently
           disables the single-key path. Once called, only the consensus
-          route settles. The intention is to call it as soon as the
-          oracle roster is stable in production.
+          route settles. Its current value should be checked through the
+          live governance read in the Data Room.
         </P>
         <Callout kind="warn" label="Where we are today">
-          The single-key path is currently active. That&apos;s a starting
-          posture, not the target end state. Lesson 11 has the full
-          governance story.
+          Current settlement mode is not inferred from source code or
+          registered oracle addresses. Check the live governance read in
+          the Data Room.
         </Callout>
       </Section>
 

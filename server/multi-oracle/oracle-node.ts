@@ -63,6 +63,18 @@ const ORACLE_FACET_ABI = [
   "function isAuthorizedOracle(address oracle) external view returns (bool)",
 ];
 
+/** Matches RESUBMIT_COOLDOWN in BlockFinaXPoolTradeFacet. */
+const POOL_RESUBMIT_COOLDOWN_S = 5 * 60;
+
+/** Currency-pool hedges settle one by one, each at its own expiry. */
+const POOL_ABI = [
+  "function submitPositionRate(uint256 positionId, uint256 price) external",
+  "function getCurrencyPoolCount() external view returns (uint256)",
+  "function getCurrencyPool(uint256) external view returns (tuple(uint256 id, address creator, string underlying, address paymentToken, bool acceptingHedges, bool allowExternalLp, bool openEnabled, bool cappedEnabled, uint32 minCapDistanceBps, uint32 maxCapDistanceBps, uint32 openMaxPayoutBps, uint256 hedgerFeeRate, uint256 payoutFeeRate, uint256 lpProfitFeeRate, uint256 creatorLoyaltyRate, uint256 cash, uint256 reserved, uint256 deferredPremium, uint256 totalShares, uint256 pendingWithdrawShares, uint256 creatorEarnings, uint256 latestExpiry, uint256 activePositions, uint256 settledThroughDay, uint256 createdAt))",
+  "function getPoolPositionCount(uint256 poolId) external view returns (uint256)",
+  "function getPoolPositions(uint256 poolId, uint256 offset, uint256 limit) external view returns (tuple(uint256 id, uint256 poolId, address hedger, uint8 structure, bool strikeAbove, uint8 status, uint32 tenorDays, uint64 createdAt, uint64 expiry, uint256 notional, uint256 spot, uint256 strike, uint256 cap, uint256 fairRate, uint256 premiumRate, uint256 premium, uint256 platformFee, uint256 maxPayout, uint256 settlementPrice, uint256 payout)[])",
+];
+
 const HEDGE_FACET_ABI = [
   "function getTotalHedgeEvents() external view returns (uint256)",
   "function getHedgeEventCore(uint256) external view returns (uint256 id, address creator, string name, string underlying, uint256 strike, uint256 premiumRate, uint256 expiryDate, uint8 status, bool poolOpen, bool allowExternalLp, uint256 initialRate, bool strikeAbove)",
@@ -80,6 +92,10 @@ export class OracleNode {
   private readContract: ethers.Contract;
   private lastKnownRates: Map<string, number> = new Map();
   private intervalId: ReturnType<typeof setInterval> | null = null;
+  /** Per pool, index of the first hedge that may still be Active. Earlier ones are settled. */
+  private poolScanFrom: Map<number, number> = new Map();
+  /** When this node last submitted for each pool hedge, to honour the 5 minute cooldown. */
+  private poolSubmittedAt: Map<string, number> = new Map();
 
   constructor(config: OracleNodeConfig) {
     this.config = {
@@ -105,12 +121,12 @@ export class OracleNode {
     this.signer = new ethers.Wallet(this.config.privateKey, this.provider as any);
     this.writeContract = new ethers.Contract(
       this.config.diamondAddress,
-      ORACLE_FACET_ABI,
+      [...ORACLE_FACET_ABI, ...POOL_ABI],
       this.signer
     );
     this.readContract = new ethers.Contract(
       this.config.diamondAddress,
-      [...ORACLE_FACET_ABI, ...HEDGE_FACET_ABI],
+      [...ORACLE_FACET_ABI, ...HEDGE_FACET_ABI, ...POOL_ABI],
       this.provider
     );
   }
@@ -269,6 +285,64 @@ export class OracleNode {
     this.log(
       `Poll cycle complete — submitted: ${submitted}, skipped: ${skipped}`
     );
+
+    await this.settlePoolPositions(prices, now);
+  }
+
+  /**
+   * Submit the current rate for every currency-pool hedge that has reached its expiry.
+   * Run every poll, so the rate submitted is the one observed within one poll interval
+   * of expiry. Skipped quietly on a Diamond without the pool facets.
+   */
+  private async settlePoolPositions(prices: PriceMap, now: number) {
+    let poolCount: number;
+    try {
+      poolCount = Number(await this.readContract.getCurrencyPoolCount());
+    } catch {
+      return;
+    }
+    let submitted = 0;
+    for (let poolId = 1; poolId <= poolCount; poolId++) {
+      try {
+        const pool = await this.readContract.getCurrencyPool(poolId);
+        if (Number(pool.activePositions) === 0) continue;
+        const price = prices[pool.underlying as string];
+        if (!price || price <= 0) continue;
+        if (!this.checkDeviation(pool.underlying, price).ok) continue;
+
+        const total = Number(await this.readContract.getPoolPositionCount(poolId));
+        let from = this.poolScanFrom.get(poolId) ?? 0;
+        let contiguousDone = true;
+        for (let offset = from; offset < total; offset += 100) {
+          const page = await this.readContract.getPoolPositions(poolId, offset, 100);
+          for (let k = 0; k < page.length; k++) {
+            const pos = page[k];
+            if (Number(pos.status) !== 0) {
+              if (contiguousDone) from = offset + k + 1;
+              continue;
+            }
+            contiguousDone = false;
+            if (Number(pos.expiry) > now) continue;
+            // The contract rejects a resubmission inside its 5 minute cooldown; skipping
+            // here saves a failed transaction every poll.
+            const last = this.poolSubmittedAt.get(String(pos.id));
+            if (last !== undefined && now - last < POOL_RESUBMIT_COOLDOWN_S) continue;
+            try {
+              const tx = await this.writeContract.submitPositionRate(pos.id, ethers.parseUnits(price.toFixed(6), 6));
+              await tx.wait();
+              this.poolSubmittedAt.set(String(pos.id), now);
+              submitted++;
+            } catch (err) {
+              this.log(`  Pool hedge #${pos.id}: submission error: ${err instanceof Error ? err.message : err}`);
+            }
+          }
+        }
+        this.poolScanFrom.set(poolId, from);
+      } catch (err) {
+        this.log(`  Pool #${poolId}: read error: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+    if (submitted > 0) this.log(`Pool hedges submitted: ${submitted}`);
   }
 
   private checkDeviation(

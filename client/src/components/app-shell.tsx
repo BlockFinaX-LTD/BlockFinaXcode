@@ -1,7 +1,8 @@
+import { isWalletSandbox } from "@/lib/wallet-environment";
 /**
  * AppShell — chrome around every signed-in page, rebuilt to the new design.
  *
- *   - Sidebar (desktop ≥761px): brand + Home / Cover / Earn
+ *   - Sidebar (desktop ≥761px): brand + Home / Cover
  *   - Appbar (sticky): greeting, account pill, live market search (⌘K),
  *     theme toggle, notifications
  *   - Mobile tab bar: same three routes
@@ -15,7 +16,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift } from '@/lib/identity';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Shield, TrendingUp, Search, Bell, Moon, Sun, User } from 'lucide-react';
 // Same brand mark as the landing-page nav (served from /public).
@@ -189,13 +190,16 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
           <nav className="sb-nav">
             {navItem('home', '/home', 'Home', LayoutDashboard)}
             {navItem('cover', '/hedge', 'Cover', Shield)}
-            {navItem('earn', '/tasks', 'Earn', TrendingUp)}
             {navItem('profile', '/profile', 'Profile', User)}
           </nav>
         </aside>
 
         {/* ===== MAIN ===== */}
         <main className="main">
+          {isWalletSandbox && <div role="status" style={{ padding: '12px 20px', background: '#382d13', color: '#ffe19a', fontSize: 13, lineHeight: 1.5 }}>
+            <strong>TESTNET · Base Sepolia</strong> · Test tokens have no monetary value.
+            <div>Current BlockFinaX sign-in project. Market rates are synthetic fixtures. Test contracts and signing are pending.</div>
+          </div>}
           <header className="appbar">
             <div className="greeting">
               <div className="g1">{title}</div>
@@ -272,10 +276,7 @@ export function AppShell({ active, greeting, children }: AppShellProps) {
       </div>
 
       {/* ===== BOTTOM TAB BAR (mobile) =====
-           Three destinations, not four. Earn moved under Profile: it is a
-           place you visit occasionally, and it was taking a quarter of the
-           bar from Home, Cover and Profile, which are the daily ones. Its
-           route is unchanged, so any link to /tasks still lands. */}
+           Three destinations: Home, Cover and Profile. Earn was retired. */}
       <nav className="tabbar">
         <Link href="/home" className={`tab${active === 'home' ? ' on' : ''}`}>
           <LayoutDashboard /><span className="tl">Home</span>

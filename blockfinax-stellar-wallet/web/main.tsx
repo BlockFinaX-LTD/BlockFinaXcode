@@ -37,7 +37,7 @@ type Config = {
   networkPassphrase: string;
   rpcUrl: string;
   walletWasmHash: string;
-  tokenContract: string;
+  tokens: { symbol: "XLM" | "USDC"; name: string; contract: string; decimals: number }[];
   rpId: string;
   googleEnabled: boolean;
   sponsorshipConfigured: boolean;
@@ -65,7 +65,7 @@ function amount(value: string) {
   const [whole, fraction = ""] = value.split(".");
   const result = BigInt(whole) * 10000000n + BigInt(fraction.padEnd(7, "0"));
   if (result <= 0n || result > 1000_0000000n)
-    throw Error("Send between 0 and 1,000 test XLM");
+    throw Error("Send a positive amount up to 1,000 test tokens");
   return result;
 }
 function App() {
@@ -77,9 +77,15 @@ function App() {
   const [emailRequest, setEmailRequest] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => {
+    const reason = new URLSearchParams(location.search).get("auth_error");
+    if (reason === "google_cancelled") return "Google sign-in was cancelled. Try again or use an email code.";
+    if (reason === "google_failed") return "Google sign-in could not be completed. Try again or use an email code.";
+    return "";
+  });
   const [busy, setBusy] = useState("");
-  const [balance, setBalance] = useState("0");
+  const [assetBalances, setAssetBalances] = useState({ XLM: "0", USDC: "0" });
+  const [selectedAsset, setSelectedAsset] = useState<"XLM" | "USDC">("USDC");
   const [recipient, setRecipient] = useState("");
   const [quantity, setQuantity] = useState("");
   const [tab, setTab] = useState("Home");
@@ -96,12 +102,13 @@ function App() {
     const me = await api<Profile>("/me");
     setProfile(me);
     if (me.wallet) {
-      const result = await api<{ stroops: string }>("/wallet/balance");
-      setBalance(
-        (Number(result.stroops) / 1e7).toLocaleString("en-US", {
-          maximumFractionDigits: 7,
+      const entries = await Promise.all(
+        (["XLM", "USDC"] as const).map(async (asset) => {
+          const result = await api<{ stroops: string }>(`/wallet/balance?asset=${asset}`);
+          return [asset, (Number(result.stroops) / 1e7).toLocaleString("en-US", { maximumFractionDigits: 7 })] as const;
         }),
       );
+      setAssetBalances(Object.fromEntries(entries) as typeof assetBalances);
     }
   }
   async function run(label: string, work: () => Promise<void>) {
@@ -166,7 +173,9 @@ function App() {
   async function send() {
     if (!unlocked || !profile?.wallet || !config || !kit)
       throw Error("Unlock your wallet first");
-    const token = new SACClient(config).getSACClient(config.tokenContract);
+    const tokenConfig = config.tokens.find((item) => item.symbol === selectedAsset);
+    if (!tokenConfig) throw Error("Selected testnet asset is not configured");
+    const token = new SACClient(config).getSACClient(tokenConfig.contract);
     const tx = await token.transfer({
       from: profile.wallet.contract,
       to: recipient.trim(),
@@ -176,6 +185,7 @@ function App() {
     if (!tx.built) throw Error("Payment was not built");
     const result = await api<{ hash: string }>("/wallet/payments", {
       xdr: tx.built.toXDR(),
+      asset: selectedAsset,
     });
     setQuantity("");
     setMessage(`Payment confirmed on testnet. Transaction: ${result.hash}`);
@@ -215,6 +225,8 @@ function App() {
   const shortAddress = fullAddress
     ? `${fullAddress.slice(0, 6)}…${fullAddress.slice(-4)}`
     : "Create your wallet";
+  const balance = assetBalances.XLM;
+  const usdcBalance = assetBalances.USDC;
   const balanceParts = balance.split(".");
   const copy = () =>
     void run("Copying", async () => {
@@ -277,7 +289,7 @@ function App() {
     <div className="topgrid reveal in">
       <div className={`balance${hidden ? " hidden" : ""}`}>
         <div className="bal-top">
-          <span className="bal-k">Total balance</span>
+          <span className="bal-k">Test XLM balance</span>
           <button
             className="eye"
             aria-label={hidden ? "Show balance" : "Hide balance"}
@@ -328,12 +340,12 @@ function App() {
           <div className="sv tnum">
             {hidden ? "•••••" : balance} <small>XLM</small>
           </div>
-          <div className="ss">1 test asset</div>
+          <div className="ss">Testnet gas and fees</div>
         </div>
         <div className="split-card pool">
-          <div className="sk">Pools</div>
-          <div className="sv tnum">—</div>
-          <div className="ss">Stellar pools coming soon</div>
+          <div className="sk">Test USDC</div>
+          <div className="sv tnum">{hidden ? "•••••" : usdcBalance} <small>USDC</small></div>
+          <div className="ss">Circle Stellar testnet asset</div>
         </div>
       </div>
     </div>
@@ -578,13 +590,24 @@ function App() {
                             <div className="row">
                               <span className="asset-glyph">✦</span>
                               <div className="r-main">
-                                <div className="r1">Stellar</div>
+            <div className="r1">Stellar</div>
                                 <div className="r2">Test XLM</div>
                               </div>
                               <div className="r-side">
                                 <div className="v1 tnum">
                                   {hidden ? "••••" : balance} XLM
                                 </div>
+                                <div className="v2">Test asset</div>
+                              </div>
+                            </div>
+                            <div className="row">
+                              <span className="asset-glyph">$</span>
+                              <div className="r-main">
+                                <div className="r1">USD Coin</div>
+                                <div className="r2">Circle USDC · Testnet</div>
+                              </div>
+                              <div className="r-side">
+                                <div className="v1 tnum">{hidden ? "••••" : usdcBalance} USDC</div>
                                 <div className="v2">Test asset</div>
                               </div>
                             </div>
@@ -689,7 +712,12 @@ function App() {
                         {busy || "Unlock with passkey"}
                       </button>
                       <p className="hint">
-                        Recovery and additional signers are planned.
+                        To reconnect on another device, use the same sign-in
+                        email and your existing synced passkey. If the passkey
+                        is missing, check your password manager or original
+                        device. Google or email sign-in cannot replace a lost
+                        passkey. Recovery with a new signing key and additional
+                        signers are not available yet.
                       </p>
                     </div>
                   </div>
@@ -895,7 +923,19 @@ function App() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="quantity">Amount · test XLM</label>
+                <label htmlFor="asset">Asset</label>
+                <select
+                  id="asset"
+                  className="input"
+                  value={selectedAsset}
+                  onChange={(e) => setSelectedAsset(e.target.value as "XLM" | "USDC")}
+                >
+                  <option value="USDC">USDC · testnet</option>
+                  <option value="XLM">XLM · testnet</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="quantity">Amount · test {selectedAsset}</label>
                 <input
                   id="quantity"
                   className="input"
@@ -907,7 +947,7 @@ function App() {
                 />
               </div>
               <p className="hint">
-                Available: {balance} test XLM · Stellar testnet
+                Available: {assetBalances[selectedAsset]} test {selectedAsset} · Stellar testnet
               </p>
               {!unlocked && (
                 <button
@@ -966,6 +1006,7 @@ function App() {
                 {busy || "Receive test funds"}
               </button>
               <p className="hint">100 test XLM, once every 24 hours.</p>
+              <p className="hint">This faucet provides XLM only. It does not mint or dispense USDC.</p>
               {message && (
                 <div role="status" className="feedback success">
                   {message}

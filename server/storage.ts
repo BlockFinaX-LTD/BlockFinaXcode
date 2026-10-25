@@ -192,7 +192,7 @@ export class MemStorage implements IStorage {
     const defaultNetworks: InsertNetwork[] = [
       {
         name: "Base Sepolia",
-        chainId: 4202,
+        chainId: 84532,
         rpcUrl: "https://sepolia.base.org",
         symbol: "ETH",
         blockExplorerUrl: "https://sepolia.basescan.org",

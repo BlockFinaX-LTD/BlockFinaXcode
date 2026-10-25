@@ -8,8 +8,10 @@
 import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, unique, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { userAccounts } from "./auth-core-schema";
 
 // Import profile and referral schemas
+export * from "./auth-core-schema";
 export * from "./profile-schema";
 export * from "./referral-schema";
 // Smart Letter of Intent — agreement drafting, signing and audit trail
@@ -20,17 +22,10 @@ export * from "./agent-schema";
 export * from "./compliance-schema";
 export * from "./lead-schema";
 export * from "./notification-schema";
+export * from "./chain-wallet-schema";
+export * from "./rate-oracle-schema";
 
 // ── Auth: user accounts ───────────────────────────────────────────────────────
-export const userAccounts = pgTable("user_accounts", {
-  id: serial("id").primaryKey(),
-  email: text("email").unique(),
-  googleId: text("google_id").unique(),
-  name: text("name"),
-  avatarUrl: text("avatar_url"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 // ── Auth: email magic links ───────────────────────────────────────────────────
 export const magicLinks = pgTable("magic_links", {
   id: serial("id").primaryKey(),

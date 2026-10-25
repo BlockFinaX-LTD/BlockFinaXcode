@@ -1,0 +1,34 @@
+{
+  "about": "Backend parity: the raw pool and hedge below, built in each chain's contract types and units, must normalize to exactly `expect_pool` and `expect_position` (chain name aside). Used by BlockFinaXcode server/pricing/__tests__/normalize.test.ts and blockfinax-stellar apps/wallet/tests/normalize.test.ts. Identical file in both repos.",
+  "pool": {
+    "id": 1, "creator": "CREATOR", "pair": "USD/GHS", "accepting_hedges": true, "allow_external_lp": true,
+    "open_enabled": true, "capped_enabled": true, "min_cap_distance_bps": 300, "max_cap_distance_bps": 2000, "open_max_payout_bps": 3000,
+    "tenors": [[14, true, 11613], [30, false, 14194]],
+    "hedger_fee_rate": 5000, "payout_fee_rate": 10000, "lp_profit_fee_rate": 10000, "creator_share": 50000,
+    "cash": "519800", "reserved": "220178.571425", "deferred_premium": "19800", "nav": "500000",
+    "free": "279821.428575", "holdback": "0", "capacity": "279821.428575",
+    "creator_earnings": "5.04995", "active_positions": 11, "latest_expiry": 1801209600
+  },
+  "position": {
+    "id": 3, "pool_id": 1, "hedger": "HEDGER", "structure": 1, "strike_above": true, "status": "settled",
+    "tenor_days": 14, "created_at": 1800000000, "expiry": 1801209600,
+    "notional": "100000", "spot": "11.2", "strike": "11.6", "cap": "12.5",
+    "fair_rate": 15500, "premium_rate": 18000, "premium": "1800", "fee": "9", "max_payout": "8035.714285",
+    "settlement_price": "12", "payout": "3571.428571"
+  },
+  "expect_pool": {
+    "poolId": 1, "creator": "CREATOR", "pair": "USD/GHS", "acceptingHedges": true, "allowExternalLp": true,
+    "structures": { "open": true, "capped": true, "minCapDistanceBps": 300, "maxCapDistanceBps": 2000, "openMaxPayoutBps": 3000 },
+    "tenors": [{ "tenorDays": 14, "active": true, "markupBps": 11613 }, { "tenorDays": 30, "active": false, "markupBps": 14194 }],
+    "fees": { "hedgerFeeRateE6": 5000, "payoutFeeRateE6": 10000, "lpProfitFeeRateE6": 10000, "creatorShareE6": 50000 },
+    "liquidity": { "cash": "519800", "reserved": "220178.571425", "deferredPremium": "19800", "nav": "500000", "free": "279821.428575", "holdback": "0", "capacity": "279821.428575" },
+    "creatorEarnings": "5.04995", "activePositions": 11, "latestExpiry": 1801209600
+  },
+  "expect_position": {
+    "positionId": 3, "poolId": 1, "hedger": "HEDGER", "structure": "capped", "direction": "up", "status": "settled",
+    "tenorDays": 14, "createdAt": 1800000000, "expiry": 1801209600,
+    "notional": "100000", "spot": "11.2", "strike": "11.6", "cap": "12.5",
+    "fairRateE6": 15500, "premiumRateE6": 18000, "premium": "1800", "fee": "9", "maxPayout": "8035.714285",
+    "settlementPrice": "12", "payout": "3571.428571"
+  }
+}

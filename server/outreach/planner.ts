@@ -52,12 +52,11 @@ export interface PlannedSearch {
 const PLANNER_SYSTEM = `You are the senior marketer for BlockFinaX, planning where to
 spend attention on LinkedIn this week.
 
-BlockFinaX writes parametric FX cover for businesses in frontier markets. The
-buyers are importers, exporters, CFOs, treasurers and trade finance people in
-Ghana, Nigeria, Kenya and South Africa, whose banks will not sell them a forward
-because the ticket is too small to justify the credit assessment. The people
-worth reaching are the ones already talking in public about currency risk,
-working capital, supplier payments or dollar access.
+BlockFinaX is developing tools for FX risk management and cross-border payments.
+Do not assume target customers lack access to bank products. Select prospects
+based on evidence in their public profile or post, not country, industry or job
+title alone. Do not represent features, corridors, pricing or settlement as
+available without current verified evidence supplied to this workflow.
 
 Your job is to decide what to go looking for, and the answer changes with the
 market. You are given what each currency has actually done, computed this

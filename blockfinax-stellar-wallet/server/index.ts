@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { EmailOtp, sendCode } from "./otp.js";
 import { OAuth2Client } from "google-auth-library";
+import { registerGoogleAuth } from "./google-auth.js";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -17,7 +18,6 @@ import { decodeCredentialPublicKey } from "@simplewebauthn/server/helpers";
 import { Store } from "./store.js";
 import {
   Challenges,
-  randomToken,
   issueSession,
   readSession,
 } from "./security.js";
@@ -26,7 +26,7 @@ import {
   NETWORK,
   RPC,
   WASM,
-  TOKEN,
+  TOKENS,
   deploy,
   fund,
   balance,
@@ -122,7 +122,7 @@ app.get("/api/config", (_req, res) =>
     networkPassphrase: NETWORK,
     rpcUrl: RPC,
     walletWasmHash: WASM,
-    tokenContract: TOKEN,
+    tokens: Object.values(TOKENS),
     rpId: rpID,
     googleEnabled: !!(
       process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -182,39 +182,13 @@ function google() {
     `${origin}/api/auth/google/callback`,
   );
 }
-app.get("/api/auth/google", authLimit, (_req, res) => {
-  const state = randomToken();
-  res.cookie("bfx_oauth", state, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure,
-    maxAge: 600_000,
-    path: "/api/auth/google",
-  });
-  res.redirect(
-    google().generateAuthUrl({
-      scope: ["openid", "email", "profile"],
-      state,
-      access_type: "online",
-    }),
-  );
-});
-app.get("/api/auth/google/callback", authLimit, async (req, res) => {
-  const state = z.string().parse(req.query.state);
-  if (state !== cookie(req, "bfx_oauth"))
-    throw Error("Google sign-in state mismatch");
-  res.clearCookie("bfx_oauth", { path: "/api/auth/google" });
-  const client = google();
-  const { tokens } = await client.getToken(z.string().parse(req.query.code));
-  const ticket = await client.verifyIdToken({
-    idToken: tokens.id_token!,
-    audience: process.env.GOOGLE_CLIENT_ID,
-  });
-  const payload = ticket.getPayload();
-  if (!payload?.email || !payload.email_verified)
-    throw Error("Google email must be verified");
-  await login(res, findUser(payload.email.toLowerCase()));
-  res.redirect("/");
+registerGoogleAuth(app, {
+  origin,
+  clientId: process.env.GOOGLE_CLIENT_ID,
+  client: google,
+  limit: authLimit,
+  findUser,
+  login,
 });
 app.post("/api/auth/logout", (_req, res) => {
   res.clearCookie("bfx_session", { path: "/" });
@@ -334,7 +308,12 @@ app.get("/api/wallet/balance", async (req, res) => {
   const value = await user(req);
   const wallet = db.wallet(value.id);
   if (!wallet) throw Error("Create a wallet first");
-  res.json({ stroops: await balance(wallet.contract) });
+  const symbol = z.enum(["XLM", "USDC"]).parse(req.query.asset ?? "XLM");
+  const token = TOKENS[symbol];
+  res.json({
+    asset: symbol,
+    stroops: await balance(wallet.contract, token.contract),
+  });
 });
 const faucetInFlight = new Set<string>();
 app.post("/api/wallet/faucet", sponsorLimit, async (req, res) => {
@@ -364,10 +343,28 @@ app.post("/api/wallet/payments", sponsorLimit, async (req, res) => {
   const value = await user(req);
   const wallet = db.wallet(value.id);
   if (!wallet) throw Error("Create a wallet first");
-  const xdr = z.string().min(10).max(100_000).parse(req.body.xdr);
-  const payment = inspectPayment(xdr, NETWORK, wallet.contract, TOKEN);
+  const input = z
+    .object({
+      xdr: z.string().min(10).max(100_000),
+      asset: z.enum(["XLM", "USDC"]),
+    })
+    .parse(req.body);
+  const payment = inspectPayment(
+    input.xdr,
+    NETWORK,
+    wallet.contract,
+    Object.values(TOKENS).map((token) => token.contract),
+  );
+  const token = TOKENS[input.asset];
+  if (payment.token !== token.contract)
+    throw Error("Payment token does not match the selected asset");
   const txHash = await invoke(payment.func, payment.auth);
-  db.event(value.id, `Sent ${Number(payment.amount) / 1e7} test XLM`, txHash);
+  const fraction = (payment.amount % 10_000_000n)
+    .toString()
+    .padStart(7, "0")
+    .replace(/0+$/, "");
+  const displayAmount = `${payment.amount / 10_000_000n}.${fraction || "0"}`;
+  db.event(value.id, `Sent ${displayAmount} test ${input.asset}`, txHash);
   res.json({ hash: txHash });
 });
 app.use(express.static(resolve("dist")));

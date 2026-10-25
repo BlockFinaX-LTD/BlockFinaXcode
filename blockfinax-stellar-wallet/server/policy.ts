@@ -10,7 +10,7 @@ export function inspectPayment(
   envelope: string,
   network: string,
   from: string,
-  token: string,
+  approvedTokens: readonly string[],
 ) {
   const tx = TransactionBuilder.fromXDR(envelope, network);
   if (!(tx instanceof Transaction) || tx.operations.length !== 1)
@@ -23,7 +23,9 @@ export function inspectPayment(
     throw Error("Only token transfers are permitted");
   const invoke = op.func.invokeContract();
   if (
-    Address.fromScAddress(invoke.contractAddress()).toString() !== token ||
+    !approvedTokens.includes(
+      Address.fromScAddress(invoke.contractAddress()).toString(),
+    ) ||
     invoke.functionName().toString() !== "transfer" ||
     invoke.args().length !== 3
   )
@@ -42,7 +44,7 @@ export function inspectPayment(
     amount > 1000_0000000n
   )
     throw Error(
-      "Invalid payment. Send between 0 and 1,000 test XLM to another Stellar account.",
+      "Invalid payment. Send a positive amount up to 1,000 approved test tokens to another Stellar account.",
     );
   const auth = op.auth ?? [];
   if (
@@ -61,7 +63,13 @@ export function inspectPayment(
     root.subInvocations().length !== 0
   )
     throw Error("Unexpected payment authorization");
-  return { func: op.func, auth, recipient, amount };
+  return {
+    func: op.func,
+    auth,
+    recipient,
+    amount,
+    token: Address.fromScAddress(invoke.contractAddress()).toString(),
+  };
 }
 export function validateRecipient(value: string) {
   if (!StrKey.isValidEd25519PublicKey(value) && !StrKey.isValidContract(value))

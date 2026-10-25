@@ -306,7 +306,7 @@ top of a spine that's already proven.
 
 ## 14. Open questions
 
-- **Who approves?** Amschel is in `ADMIN_EMAILS`. Any admin, or only you?
+- **Who approves?** Any admin in `ADMIN_EMAILS`, or only you?
 - **How are you told?** Email digest, in-app badge, both.
 - **Follow-up threshold?** Seven days of silence is a guess; should be a setting.
 - **Does the agent see counterparty names?** It needs them to draft anything

@@ -571,9 +571,6 @@ export function registerInvestorRoutes(app: Express) {
   });
 
   app.get("/api/investor/content/:docId", async (req, res) => {
-    const token = req.headers["x-investor-token"] as string;
-    const expiry = investorSessions.get(token);
-    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
     const data = await storage.getDataRoomContent(req.params.docId);
     res.json(data);
   });
@@ -608,9 +605,6 @@ export function registerInvestorRoutes(app: Express) {
   });
 
   app.get("/api/investor/files/:filename", (req, res) => {
-    const token = req.headers["x-investor-token"] as string;
-    const expiry = investorSessions.get(token);
-    if (!expiry || Date.now() > expiry) { investorSessions.delete(token); return res.status(401).json({ error: "Unauthorized" }); }
 
     const raw = path.basename(decodeURIComponent(req.params.filename));
     if (!/^[\w.\-]+$/.test(raw)) return res.status(400).json({ error: "Invalid filename" });

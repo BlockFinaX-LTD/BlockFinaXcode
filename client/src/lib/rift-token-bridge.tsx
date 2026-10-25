@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useRift } from '@rift-finance/react';
+import { useIdentity as useRift, usesPasskeyWallet } from '@/lib/identity';
 import type { RiftUser } from '@rift-finance/react';
 import { rift } from './rift-client';
 import {
@@ -120,7 +120,7 @@ export function RiftTokenBridge() {
 
   // Cache the latest user object + sync the SDK's bearer token whenever it changes
   useEffect(() => {
-    _cachedUser = user;
+    _cachedUser = user as RiftUser | null;
     if (user?.accessToken) {
       rift.setBearerToken(user.accessToken);
     } else if (!isAuthenticated) {
@@ -131,7 +131,8 @@ export function RiftTokenBridge() {
 
   // Silent auto-migrate — fires exactly once per authenticated session.
   useEffect(() => {
-    if (!isAuthenticated || !user?.accessToken) return;
+    // Rift-only: the testnet passkey wallet has no Rift account to migrate.
+    if (usesPasskeyWallet || !isAuthenticated || !user?.accessToken) return;
     const key = (user as any)?.id || (user as any)?.email || 'anonymous';
     if (migrateAttemptedFor.current === key) return;
     migrateAttemptedFor.current = key;

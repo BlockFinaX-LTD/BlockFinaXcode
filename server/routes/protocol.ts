@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { db } from "../db";
+import { monitorTransaction } from "../compliance/limits";
 import { storage } from "../storage";
 import { eq, sql } from "drizzle-orm";
 import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposits, hedgeActivity, historicalFxCloses } from "../../shared/schema";
@@ -129,6 +130,33 @@ async function fetchBnbPrice(): Promise<number | null> {
 const gasSponsorCooldown = new Map<string, number>();
 
 export async function registerProtocolRoutes(app: Express) {
+  // The old server-side hedge ledger can create deposits and positions without
+  // proving that funds moved on-chain. Never expose those write paths as
+  // financial truth. Hedge creation, LP deposits, position purchases, claims,
+  // and settlement must go through the Diamond and its verified chain indexer.
+  // Keep the read endpoints and chain activity indexer available during the UI
+  // migration, but fail closed on legacy database-backed mutations.
+  app.use("/api/hedge", (req, res, next) => {
+    const legacyFinancialWrite =
+      (req.method === "POST" && (
+        req.path === "/events" ||
+        req.path === "/positions" ||
+        req.path === "/deposits" ||
+        /^\/deposits\/\d+\/(?:withdraw|claim-premiums)$/.test(req.path) ||
+        /^\/events\/\d+\/(?:settle)$/.test(req.path) ||
+        /^\/positions\/\d+\/claim$/.test(req.path)
+      )) ||
+      (req.method === "PATCH" && /^\/events\/\d+\/pool$/.test(req.path));
+
+    if (legacyFinancialWrite) {
+      return res.status(410).json({
+        error: "Legacy database-backed hedge mutations are disabled",
+        message: "Use the on-chain Diamond flow. This endpoint cannot create or pay financial positions.",
+      });
+    }
+    next();
+  });
+
   const { fetchAllRates, getRate, getSupportedPairs, getSupportedPairsWithClass, checkAndSettleEvents, startOraclePoller } = await import("../fx-oracle");
   startOraclePoller(5 * 60 * 1000);
 
@@ -212,7 +240,7 @@ export async function registerProtocolRoutes(app: Express) {
         txHash, feeTxHash: feeTxHash || null, fromWallet, toWallet,
         transferAmount: amt.toFixed(6), feeAmount: computedFee.toFixed(6),
         feePercent: FEE_CONFIG.walletTransferPercent.toString(),
-        token: token || "USDC", chainId: chainId || 4202,
+        token: token || "USDC", chainId: chainId || 8453,
         status: feeTxHash ? "collected" : "pending",
       });
       res.json({ success: true, feeAmount: computedFee });
@@ -929,85 +957,8 @@ export async function registerProtocolRoutes(app: Express) {
     }
   });
 
-  app.post("/api/hedge/deposits/:id/withdraw", async (req, res) => {
-    try {
-      const deposit = await storage.getHedgeLpDeposit(parseInt(req.params.id));
-      if (!deposit) return res.status(404).json({ message: "Deposit not found" });
-      if (deposit.withdrawn) return res.status(400).json({ message: "Already withdrawn" });
-
-      const event = await storage.getHedgeEvent(deposit.eventId);
-      if (!event) return res.status(404).json({ message: "Event not found" });
-      if (event.status === "open") return res.status(400).json({ message: "Cannot withdraw liquidity while the contract is still active. Withdrawals are available after the event expires or settles." });
-
-      const updated = await storage.updateHedgeLpDeposit(deposit.id, { withdrawn: true, withdrawnAt: new Date() });
-      res.json({ ...updated, message: "Liquidity withdrawn successfully" });
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to withdraw" });
-    }
-  });
-
-  app.post("/api/hedge/deposits/:id/claim-premiums", async (req, res) => {
-    try {
-      const { callerAddress } = req.body;
-      if (!callerAddress) return res.status(400).json({ message: "Missing callerAddress" });
-
-      const deposit = await storage.getHedgeLpDeposit(parseInt(req.params.id));
-      if (!deposit) return res.status(404).json({ message: "Deposit not found" });
-      if (deposit.lpWallet.toLowerCase() !== callerAddress.toLowerCase()) return res.status(403).json({ message: "Unauthorized: You can only claim premiums for your own deposits" });
-
-      const earned = parseFloat(deposit.premiumsEarned || "0");
-      const alreadyWithdrawn = parseFloat(deposit.premiumsWithdrawn || "0");
-      const claimable = earned - alreadyWithdrawn;
-      if (claimable <= 0) return res.status(400).json({ message: "No premiums available to claim" });
-
-      const LP_PROFIT_FEE_RATE = 0.01;
-      const lpProfitFee = claimable * LP_PROFIT_FEE_RATE;
-      const netPayout = claimable - lpProfitFee;
-
-      const CREATOR_LOYALTY_RATE = 0.05;
-      const creatorReward = lpProfitFee * CREATOR_LOYALTY_RATE;
-      const event = await storage.getHedgeEvent(deposit.eventId);
-      if (event) {
-        const currentCreatorEarnings = parseFloat(event.creatorEarnings || "0");
-        await storage.updateHedgeEvent(event.id, { creatorEarnings: (currentCreatorEarnings + creatorReward).toString() });
-      }
-
-      const treasuryPrivateKey = process.env.TREASURY_POOL_PRIVATE_KEY;
-      if (!treasuryPrivateKey) return res.status(500).json({ message: "Treasury wallet not configured" });
-
-      const ethers = await import("ethers");
-      const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
-      const treasuryWallet = new ethers.Wallet(treasuryPrivateKey, provider);
-      const usdcAddress = "0xf52Ad63619Bf9cFeF510341ac6b4038554399562";
-      const usdcContract = new ethers.Contract(usdcAddress, [
-        "function balanceOf(address) view returns (uint256)",
-        "function decimals() view returns (uint8)",
-        "function transfer(address to, uint256 amount) returns (bool)"
-      ], treasuryWallet);
-
-      const decimals = await usdcContract.decimals();
-      const treasuryBalance = await usdcContract.balanceOf(treasuryWallet.address);
-      const treasuryBalanceFormatted = parseFloat(ethers.formatUnits(treasuryBalance, decimals));
-      if (netPayout > treasuryBalanceFormatted) return res.status(400).json({ message: `Insufficient treasury balance. Available: ${treasuryBalanceFormatted.toFixed(2)} USDC, Claimable: ${netPayout.toFixed(2)} USDC` });
-
-      const transferAmount = ethers.parseUnits(netPayout.toFixed(6), decimals);
-      const tx = await usdcContract.transfer(deposit.lpWallet, transferAmount);
-      const receipt = await tx.wait();
-
-      const updated = await storage.updateHedgeLpDeposit(deposit.id, { premiumsWithdrawn: (alreadyWithdrawn + claimable).toString() });
-
-      console.log(`[LP Fee] Claimed: $${claimable.toFixed(4)} | Platform fee (1%): $${lpProfitFee.toFixed(4)} | Net to LP: $${netPayout.toFixed(4)} | LP: ${deposit.lpWallet}`);
-
-      res.json({
-        success: true, txHash: receipt.hash,
-        grossAmount: claimable.toFixed(2), platformFee: lpProfitFee.toFixed(4), netAmount: netPayout.toFixed(2),
-        from: treasuryWallet.address, to: deposit.lpWallet,
-        message: `Claimed $${netPayout.toFixed(2)} USDC (1% platform fee: $${lpProfitFee.toFixed(4)} retained)`
-      });
-    } catch (error) {
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to claim premiums" });
-    }
-  });
+  // Legacy database-backed withdrawal and premium payout handlers were removed.
+  // The fail-closed 410 middleware above handles these paths during migration.
 
   // ── Settle event (admin) ─────────────────────────────────────────────────────
   app.post("/api/hedge/events/:id/settle", requireAdmin, async (req, res) => {
@@ -1161,6 +1112,22 @@ export async function registerProtocolRoutes(app: Express) {
         metadata: metadata != null ? (typeof metadata === "string" ? metadata : JSON.stringify(metadata)) : null,
         status,
       });
+
+      // Post-trade transaction monitoring. The thresholds live in
+      // compliance/limits.ts: single-transaction review, rolling cumulative
+      // value, and clustering just below the reporting line. This runs after
+      // the fact by design, raising a case for a reviewer rather than
+      // rejecting a transaction that has already settled on chain, so it is
+      // fire-and-forget and can never fail the request.
+      const monitoredUsd = amount != null ? Number(amount) : 0;
+      if (Number.isFinite(monitoredUsd) && monitoredUsd > 0) {
+        monitorTransaction({
+          walletAddress,
+          amountUsd: monitoredUsd,
+          kind: actionType,
+          txHash,
+        }).catch((e) => console.warn("[Compliance] monitorTransaction failed:", e?.message));
+      }
 
       // First verified qualifying action settles a pending referral (awards both
       // the referrer and the referee). Fire-and-forget — never blocks the response.

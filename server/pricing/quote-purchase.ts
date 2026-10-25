@@ -79,7 +79,7 @@ import { pricePurchase, MIN_TENOR_HOURS } from "./purchase-math";
 export type { PurchaseQuote, PurchaseQuoteError } from "./purchase-math";
 import type { PurchaseQuote, PurchaseQuoteError } from "./purchase-math";
 
-async function provider(chainId: number): Promise<{ p: ethers.JsonRpcProvider; diamond: string }> {
+export async function provider(chainId: number): Promise<{ p: ethers.JsonRpcProvider; diamond: string }> {
   const cfg = CHAINS[chainId];
   if (!cfg) throw new Error(`Unsupported chain ${chainId}`);
   for (const url of cfg.rpcs) {

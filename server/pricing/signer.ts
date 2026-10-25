@@ -229,3 +229,65 @@ export async function signPurchaseQuote(q: SignablePurchase): Promise<SignedQuot
   const signature = await wallet.signMessage(ethers.getBytes(messageHash));
   return { signature, quoteTimestamp, quoteNonce, signerAddress: wallet.address };
 }
+
+/* ── Currency-pool purchase quotes ───────────────────────────────────────── */
+
+/** Tag in the signed payload. Must equal POOL_BUY_TAG in BlockFinaXPoolTradeFacet. */
+export const POOL_BUY_TAG = ethers.keccak256(ethers.toUtf8Bytes("BLOCKFINAX_POOL_BUY_V1"));
+
+export interface SignablePoolBuy {
+  chainId: number | bigint;
+  diamondAddress: string;
+  /** The wallet that will call buyPoolProtection. The quote is bound to it. */
+  buyer: string;
+  poolId: number | bigint;
+  notional: bigint;
+  tenorDays: number;
+  /** 0 = Open, 1 = Capped, matching LibPoolStorage.Structure. */
+  structure: 0 | 1;
+  strikeAbove: boolean;
+  /** 6-decimal fixed FX rates. */
+  spot: bigint;
+  strike: bigint;
+  cap: bigint;
+  /** Engine fair rate, PRECISION-denominated, BEFORE the underwriter's markup. */
+  fairRate: bigint;
+}
+
+/**
+ * The hash BlockFinaXPoolTradeFacet._verifyQuote recovers against. Exported so the
+ * golden-vector test can pin it; field order is part of the contract.
+ *
+ * Only the fair rate is signed. The contract applies the tenor's markup itself, from
+ * storage, at the moment of purchase, so the underwriter's price cannot be undercut by
+ * the server and a markup change takes effect without re-signing anything.
+ */
+export function buildPoolBuyHash(q: SignablePoolBuy, quoteTimestamp: bigint, quoteNonce: string): string {
+  return ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      [
+        "bytes32", "uint256", "address", "address",
+        "uint256", "uint256", "uint32", "uint8", "bool",
+        "uint256", "uint256", "uint256", "uint256",
+        "uint256", "bytes32",
+      ],
+      [
+        POOL_BUY_TAG,
+        asBigint(q.chainId), ethers.getAddress(q.diamondAddress), ethers.getAddress(q.buyer),
+        asBigint(q.poolId), q.notional, q.tenorDays, q.structure, q.strikeAbove,
+        q.spot, q.strike, q.cap, q.fairRate,
+        quoteTimestamp, quoteNonce,
+      ],
+    ),
+  );
+}
+
+/** Returns null when PRICING_ENGINE_PRIVATE_KEY is unset: the pool cannot be bought. */
+export async function signPoolBuyQuote(q: SignablePoolBuy): Promise<SignedQuote | null> {
+  const wallet = getSigner();
+  if (!wallet) return null;
+  const quoteTimestamp = BigInt(Math.floor(Date.now() / 1000));
+  const quoteNonce = "0x" + randomBytes(32).toString("hex");
+  const signature = await wallet.signMessage(ethers.getBytes(buildPoolBuyHash(q, quoteTimestamp, quoteNonce)));
+  return { signature, quoteTimestamp, quoteNonce, signerAddress: wallet.address };
+}

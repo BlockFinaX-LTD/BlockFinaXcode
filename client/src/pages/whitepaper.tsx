@@ -401,17 +401,20 @@ export default function Whitepaper() {
               <span>Version {VERSION}</span>
               <span>{DATE}</span>
               <span>Base 8453</span>
-              <span>Live on mainnet</span>
+              <span>Deployed; verify current chain state</span>
             </div>
+            <p className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm leading-relaxed text-muted-foreground">
+              This document describes a protocol design and historical implementation decisions. It is not a statement that every described feature is active on every network, that current bytecode matches this document, or that settlement or payout is guaranteed. Check the live chain reads and transaction details before relying on a feature.
+            </p>
           </div>
 
           {/* ── abstract ── */}
           <SectionTitle id="abstract" n="Abstract" title="What this protocol does" />
           <P>
-            A Ghanaian importer with a $50,000 supplier payment due in thirty days carries currency
-            risk they did not choose and cannot price. Their bank will not write them a forward: the
-            ticket is too small, the credit assessment too expensive, the currency too thin. So they
-            absorb it, and a 6% move against them erases a quarter's margin.
+            Illustratively, a business with a foreign-currency supplier payment due in thirty days
+            may face uncertainty between agreeing a price and paying the supplier. Its exposure,
+            existing hedges, bank access and margin impact depend on the business and corridor; this
+            is not a customer case or a market-wide statistic.
           </P>
           <P>
             BlockFinaX lets anyone with stablecoins underwrite that risk, and anyone exposed to it buy
@@ -772,19 +775,19 @@ export default function Whitepaper() {
           </P>
           <H3>7.1 Audit</H3>
           <P>
-            A full review of the Diamond and all facets in April 2026 returned nineteen findings —
-            two critical, three high, five medium, five low and four informational. Nine are fixed,
-            four accepted, six remain open <Em>including both critical items</Em>, which concern
-            upgrade safety rather than the pricing or settlement paths. The auditor's conclusion was
-            that no single catastrophic flaw exists and that CEI ordering, reentrancy guards and safe
-            token transfers are applied correctly throughout.
+            The April 2026 review summary available to the company reports nineteen findings —
+            two critical, three high, five medium, five low and four informational. It covered the
+            retired Lisk deployment. The finding statuses shown in that report are historical; they
+            have not been revalidated here against current Base or BNB Smart Chain bytecode. This
+            review must not be represented as an audit of those current deployments. See the Data
+            Room for the report scope and live governance reads.
           </P>
           <H3>7.2 Risks that remain</H3>
           <Table
             headers={["Risk", "Status"]}
             rows={[
-              [<Em key="a">Oracle centralisation</Em>, "A single key submits settlement rates. The largest remaining centralisation point; a multi-signer relay is the mitigation and is not yet the default."],
-              [<Em key="b">Upgrade authority</Em>, "One externally owned account can perform a diamondCut. A timelock facet exists but the transition to it is one of the open critical findings."],
+              [<Em key="a">Oracle authorisation</Em>, "Settlement authority depends on the active on-chain mode, configured signer roster and quorum. Check the live Data Room governance read; this document does not assert a current mode."],
+              [<Em key="b">Upgrade authority</Em>, "The current Diamond owner and active diamondCut selector implementation are read live in the Data Room. A Safe's existence does not establish that it controls the Diamond, and a facet address alone does not prove a delay is enforced."],
               [<Em key="c">Pricing dependency</Em>, "Quoted purchases require the engine to be reachable. It fails closed, so the failure mode is an inability to buy rather than a mispriced sale."],
               [<Em key="d">Rate source</Em>, "Settlement depends on third-party FX data. Sources are separated by asset class, but a coordinated failure would delay settlement."],
             ]}
