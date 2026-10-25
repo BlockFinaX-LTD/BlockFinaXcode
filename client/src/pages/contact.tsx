@@ -5,7 +5,7 @@
  */
 import { useState, type FormEvent } from 'react';
 import { Link } from 'wouter';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Mail } from 'lucide-react';
 
 const ENQUIRIES = [
   'General enquiries',
@@ -96,10 +96,6 @@ export default function ContactPage() {
             <a href="mailto:hello@blockfinax.com" className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3 no-underline text-[#0a0e1a] hover:border-gray-200 hover:bg-gray-50 transition">
               <Mail className="h-5 w-5 text-[#1a4480]" />
               <span><span className="block text-sm font-semibold">Email us</span><span className="block text-sm text-gray-500">hello@blockfinax.com</span></span>
-            </a>
-            <a href="https://docs.blockfinax.com/stellar/intro" className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3 no-underline text-[#0a0e1a] hover:border-gray-200 hover:bg-gray-50 transition">
-              <BookOpen className="h-5 w-5 text-[#1a4480]" />
-              <span><span className="block text-sm font-semibold">Read the docs</span><span className="block text-sm text-gray-500">For businesses, partners and developers</span></span>
             </a>
           </div>
         </section>
