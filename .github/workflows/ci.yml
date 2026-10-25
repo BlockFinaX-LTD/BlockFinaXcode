@@ -30,7 +30,8 @@ jobs:
           cache: npm
       - run: npm ci --legacy-peer-deps
       - name: Tests
-        run: npm test
+        # Production's package.json has no test script until testnet is promoted.
+        run: npm run test --if-present
       - name: Build
         run: npm run build
 
