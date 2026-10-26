@@ -191,3 +191,15 @@ export function Sources({ items }: { items: string[] }) {
     </div>
   );
 }
+
+/** A simple comparison table. */
+export function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
+  return (
+    <div className="ac-table-wrap">
+      <table className="ac-table">
+        <thead><tr>{head.map((h) => <th key={h}>{h}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
+}

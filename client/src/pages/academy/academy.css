@@ -846,3 +846,9 @@
 .ac-part p { margin: 0 0 12px; color: var(--ac-tx-2); font-size: 14.5px; line-height: 1.5; }
 .ac-part ol { margin: 0; padding-left: 18px; color: var(--ac-tx-2); font-size: 14px; line-height: 1.7; }
 @media (max-width: 760px) { .ac-parts { grid-template-columns: 1fr; } }
+.ac-table-wrap { overflow-x: auto; margin: 18px 0 22px; border: 1px solid var(--ac-hair-2); border-radius: 12px; }
+.ac-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.ac-table th { text-align: left; font-weight: 600; color: var(--ac-tx); background: var(--ac-panel); padding: 10px 14px; border-bottom: 1px solid var(--ac-hair-2); }
+.ac-table td { padding: 10px 14px; border-bottom: 1px solid var(--ac-hair); color: var(--ac-tx-2); vertical-align: top; font-variant-numeric: tabular-nums; }
+.ac-table tr:last-child td { border-bottom: 0; }
+.ac-link { color: var(--ac-accent); text-decoration: underline; text-underline-offset: 2px; }

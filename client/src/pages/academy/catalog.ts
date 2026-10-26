@@ -5,8 +5,8 @@
  * route dispatcher all read from this single array. Adding a lesson means
  * inserting one entry here and one lesson file, nothing else.
  *
- * Order matters: Part 1 teaches BlockFinaX itself, Part 2 teaches currency
- * risk in general. Slugs are kept from the first Academy so old links work.
+ * The documentation in five parts: about BlockFinaX, buying protection, providing
+ * underwriting capital, funds data and risk, and help and reference.
  */
 
 export interface Lesson {
@@ -20,66 +20,78 @@ export interface Lesson {
 }
 
 export const CATALOG: Lesson[] = [
-  {
-    slug: '', title: 'Start here', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 4,
-    blurb: 'What BlockFinaX is, who it is for, and how the Academy is organised.',
-    toc: [{ id: 'what', label: 'What BlockFinaX is' }, { id: 'who', label: 'Who it is for' }, { id: 'parts', label: 'The two parts' }, { id: 'how', label: 'How to use the Academy' }],
-  },
-  {
-    slug: 'how-blockfinax-works', title: 'How BlockFinaX works', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 7,
-    blurb: 'The people involved, the money in USDC, and the life of one protection from quote to payout.',
-    toc: [{ id: 'roles', label: 'Who is involved' }, { id: 'money', label: 'Your account and your money' }, { id: 'life', label: 'The life of one protection' }, { id: 'rfq', label: 'When no pool fits' }],
-  },
-  {
-    slug: 'range-product', title: 'Strike, cap and payout', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 7,
-    blurb: 'The four choices behind every protection and what you are paid in each outcome.',
-    toc: [{ id: 'choices', label: 'The four choices' }, { id: 'outcomes', label: 'Three possible outcomes' }, { id: 'example', label: 'A worked example' }, { id: 'capped-open', label: 'Capped or open' }, { id: 'durations', label: 'Durations and end times' }],
-  },
-  {
-    slug: 'oracle-settlement', title: 'How the rate is set and you get paid', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 5,
-    blurb: 'Who reports the rate at expiry, how the payout is fixed, and how you claim it.',
-    toc: [{ id: 'when', label: 'When protection ends' }, { id: 'rate', label: 'How the rate is agreed' }, { id: 'settle', label: 'Fixing the payout' }, { id: 'claim', label: 'Claiming' }],
-  },
-  {
-    slug: 'fees', title: 'Fees and earnings', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 5,
-    blurb: 'What a business pays, what underwriters and pool creators earn, with one example.',
-    toc: [{ id: 'business', label: 'What a business pays' }, { id: 'underwriters', label: 'What underwriters earn' }, { id: 'creators', label: 'What pool creators earn' }, { id: 'example', label: 'One purchase, every fee' }],
-  },
-  {
-    slug: 'underwriting-101', title: 'Underwriting: the other side of the trade', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 6,
-    blurb: 'How your USDC backs protection, where returns come from, and the controls you keep.',
-    toc: [{ id: 'what', label: 'What underwriting means' }, { id: 'pools', label: 'How a pool works' }, { id: 'returns', label: 'Where returns come from' }, { id: 'controls', label: 'What you control' }],
-  },
-  {
-    slug: 'lp-risk', title: 'Underwriter risk and sizing', group: 'Part 1: Learn BlockFinaX', level: 'intermediate', readMin: 7,
-    blurb: 'What you can lose, three worked scenarios, and how to size and spread your capital.',
-    toc: [{ id: 'risk', label: 'The risk you take' }, { id: 'scenarios', label: 'Three scenarios' }, { id: 'sizing', label: 'Sizing a position' }, { id: 'spread', label: 'Spreading risk' }],
-  },
-  {
-    slug: 'governance', title: 'Trust and security', group: 'Part 1: Learn BlockFinaX', level: 'beginner', readMin: 5,
-    blurb: 'What the rules in code guarantee, what you approve yourself, and how changes are handled.',
-    toc: [{ id: 'code', label: 'What the code guarantees' }, { id: 'you', label: 'What only you can approve' }, { id: 'changes', label: 'How changes are handled' }, { id: 'trust', label: 'What you are trusting' }],
-  },
-  {
-    slug: 'hedging-101', title: 'Currency risk, from first principles', group: 'Part 2: Understanding FX risk', level: 'beginner', readMin: 7,
-    blurb: 'What currency risk is, how it reaches a business, and the ways to manage it.',
-    toc: [{ id: 'what', label: 'What currency risk is' }, { id: 'exposure', label: 'Payables and receivables' }, { id: 'example', label: 'An import invoice' }, { id: 'manage', label: 'Ways to manage it' }],
-  },
-  {
-    slug: 'options-basics', title: 'Forwards, swaps and options', group: 'Part 2: Understanding FX risk', level: 'beginner', readMin: 7,
-    blurb: 'The main hedging instruments, how each works, and what each asks of you.',
-    toc: [{ id: 'forwards', label: 'Forwards and NDFs' }, { id: 'swaps', label: 'Swaps' }, { id: 'futures', label: 'Futures' }, { id: 'options', label: 'Options' }, { id: 'compare', label: 'Side by side' }],
-  },
-  {
-    slug: 'emerging-markets', title: 'Why hedging is hard to find in emerging markets', group: 'Part 2: Understanding FX risk', level: 'intermediate', readMin: 6,
-    blurb: 'How large the gap is, why small businesses are left out, and what is changing.',
-    toc: [{ id: 'size', label: 'The size of the exposure' }, { id: 'moves', label: 'How far currencies move' }, { id: 'gap', label: 'Why supply is thin' }, { id: 'africa', label: 'In our markets' }],
-  },
-  {
-    slug: 'cheatsheet', title: 'Glossary', group: 'Part 2: Understanding FX risk', level: 'beginner', readMin: 4,
-    blurb: 'Every term in the Academy, in one line each.',
-    toc: [{ id: 'blockfinax', label: 'BlockFinaX terms' }, { id: 'fx', label: 'FX terms' }],
-  },
+  { slug: '', title: 'Introduction', group: 'About BlockFinaX', level: 'beginner', readMin: 4,
+    blurb: 'What BlockFinaX does, who uses it and what is available today.',
+    toc: [{ id: 'what', label: 'What BlockFinaX does' }, { id: 'who', label: 'Who uses it' }, { id: 'today', label: 'What is available today' }, { id: 'guide', label: 'How this guide is organised' }] },
+  { slug: 'how-protection-works', title: 'How protection works', group: 'About BlockFinaX', level: 'beginner', readMin: 5,
+    blurb: 'The buyer, the underwriters, the premium, the payout conditions and settlement.',
+    toc: [{ id: 'parties', label: 'The parties' }, { id: 'life', label: 'From purchase to payout' }, { id: 'example', label: 'A worked example' }] },
+  { slug: 'contract-terms', title: 'Markets and contract terms', group: 'About BlockFinaX', level: 'beginner', readMin: 6,
+    blurb: 'The currencies on offer and the terms that define every contract.',
+    toc: [{ id: 'markets', label: 'Markets' }, { id: 'terms', label: 'Contract terms' }, { id: 'formula', label: 'The payout formula' }, { id: 'durations', label: 'Durations and end times' }] },
+  { slug: 'pricing-and-charges', title: 'Pricing and charges', group: 'About BlockFinaX', level: 'beginner', readMin: 5,
+    blurb: 'What the premium pays for, how a quote is set and when each fee applies.',
+    toc: [{ id: 'premium', label: 'The premium' }, { id: 'quote', label: 'How a quote is set' }, { id: 'fees', label: 'Fees and when they apply' }, { id: 'example', label: 'All charges on one contract' }] },
+  { slug: 'getting-started', title: 'Before your first purchase', group: 'Buying protection', level: 'beginner', readMin: 5,
+    blurb: 'Your account, wallet, funding and verification.',
+    toc: [{ id: 'account', label: 'Account and wallet' }, { id: 'funding', label: 'Adding USDC' }, { id: 'verification', label: 'Verification' }] },
+  { slug: 'choosing-protection', title: 'Choosing your protection', group: 'Buying protection', level: 'beginner', readMin: 5,
+    blurb: 'Selecting the currency, direction, amount, end date, strike and cap.',
+    toc: [{ id: 'steps', label: 'Making your choices' }, { id: 'pools', label: 'Which pool you buy from' }, { id: 'rfq', label: 'When no pool fits' }] },
+  { slug: 'your-quote', title: 'Understanding your quote', group: 'Buying protection', level: 'beginner', readMin: 5,
+    blurb: 'What each line of a quote means and what remains your risk.',
+    toc: [{ id: 'lines', label: 'What the quote shows' }, { id: 'exposure', label: 'What remains your risk' }, { id: 'validity', label: 'How long a quote lasts' }] },
+  { slug: 'confirming', title: 'Confirming a purchase', group: 'Buying protection', level: 'beginner', readMin: 3,
+    blurb: 'What happens between accepting a quote and holding an active contract.',
+    toc: [{ id: 'steps', label: 'Steps' }, { id: 'funds', label: 'When funds move' }] },
+  { slug: 'active-contracts', title: 'Following an active contract', group: 'Buying protection', level: 'beginner', readMin: 3,
+    blurb: 'What you can see and do while protection is running.',
+    toc: [{ id: 'view', label: 'What you can see' }, { id: 'changes', label: 'Changes and cancellation' }] },
+  { slug: 'expiry-and-settlement', title: 'Expiry and settlement', group: 'Buying protection', level: 'beginner', readMin: 6,
+    blurb: 'How the outcome is determined and how a payout reaches you.',
+    toc: [{ id: 'when', label: 'When the outcome is set' }, { id: 'rate', label: 'The settlement rate' }, { id: 'payout', label: 'Calculating the payout' }, { id: 'claim', label: 'Claiming' }, { id: 'examples', label: 'Outcomes compared' }] },
+  { slug: 'underwriting', title: 'How underwriting works', group: 'Providing underwriting capital', level: 'beginner', readMin: 5,
+    blurb: 'What you commit to, how premiums are earned and how payouts reduce capital.',
+    toc: [{ id: 'commit', label: 'What you commit to' }, { id: 'earn', label: 'How premiums are earned' }, { id: 'payouts', label: 'How payouts reduce capital' }, { id: 'example', label: 'A worked example' }] },
+  { slug: 'adding-capital', title: 'Adding capital', group: 'Providing underwriting capital', level: 'beginner', readMin: 4,
+    blurb: 'Joining a pool or creating one.',
+    toc: [{ id: 'join', label: 'Adding to an existing pool' }, { id: 'create', label: 'Creating a pool' }, { id: 'requirements', label: 'Requirements' }] },
+  { slug: 'underwriting-terms', title: 'Setting underwriting terms', group: 'Providing underwriting capital', level: 'beginner', readMin: 5,
+    blurb: 'The settings underwriters and pool creators can change.',
+    toc: [{ id: 'everyone', label: 'Settings for every underwriter' }, { id: 'creators', label: 'Settings for pool creators' }, { id: 'fixed', label: 'Settings that cannot be changed' }] },
+  { slug: 'capital-and-positions', title: 'Capital and positions', group: 'Providing underwriting capital', level: 'beginner', readMin: 5,
+    blurb: 'Free and reserved capital, capacity, and what the interface shows.',
+    toc: [{ id: 'states', label: 'Free, reserved and pending' }, { id: 'shared', label: 'How contracts share capital' }, { id: 'monitor', label: 'Monitoring positions' }] },
+  { slug: 'withdrawals', title: 'Withdrawals and proceeds', group: 'Providing underwriting capital', level: 'beginner', readMin: 3,
+    blurb: 'When capital and earnings can be withdrawn, and how.',
+    toc: [{ id: 'when', label: 'When money is available' }, { id: 'how', label: 'Withdrawing' }, { id: 'creator', label: 'Pool creator earnings' }] },
+  { slug: 'funds', title: 'Where funds are held', group: 'Funds, data and risk', level: 'beginner', readMin: 5,
+    blurb: 'Where money sits at each stage and who can move it.',
+    toc: [{ id: 'stages', label: 'At each stage' }, { id: 'permissions', label: 'Who can move what' }, { id: 'admin', label: 'Administrative powers' }] },
+  { slug: 'rate-data', title: 'Exchange-rate data', group: 'Funds, data and risk', level: 'beginner', readMin: 4,
+    blurb: 'Where rates come from and how the settlement rate is set.',
+    toc: [{ id: 'pricing', label: 'Data used for pricing' }, { id: 'settlement', label: 'Data used for settlement' }, { id: 'bank', label: 'Reference rate and your bank rate' }] },
+  { slug: 'protection-limits', title: 'Protection limits', group: 'Funds, data and risk', level: 'beginner', readMin: 4,
+    blurb: 'Why a payout may not offset your full loss.',
+    toc: [{ id: 'limits', label: 'Where a payout falls short' }] },
+  { slug: 'underwriting-risks', title: 'Underwriting risks', group: 'Funds, data and risk', level: 'beginner', readMin: 4,
+    blurb: 'How underwriters can lose money.',
+    toc: [{ id: 'loss', label: 'Loss on a contract' }, { id: 'correlated', label: 'Losses that arrive together' }, { id: 'other', label: 'Other risks' }] },
+  { slug: 'technical-risks', title: 'Technical and operational risks', group: 'Funds, data and risk', level: 'beginner', readMin: 4,
+    blurb: 'The systems BlockFinaX depends on and the safeguards in place.',
+    toc: [{ id: 'dependencies', label: 'Dependencies' }, { id: 'safeguards', label: 'Safeguards' }] },
+  { slug: 'faq', title: 'Common questions', group: 'Help and reference', level: 'beginner', readMin: 4,
+    blurb: 'Answers to questions the other pages leave open.',
+    toc: [{ id: 'questions', label: 'Questions' }] },
+  { slug: 'glossary', title: 'Glossary', group: 'Help and reference', level: 'beginner', readMin: 4,
+    blurb: 'Terms used in BlockFinaX, in plain language.',
+    toc: [{ id: 'terms', label: 'Terms' }] },
+  { slug: 'troubleshooting', title: 'Troubleshooting', group: 'Help and reference', level: 'beginner', readMin: 4,
+    blurb: 'Common problems and what to do next.',
+    toc: [{ id: 'quotes', label: 'Quotes' }, { id: 'transactions', label: 'Transactions' }, { id: 'sign-in', label: 'Signing in' }, { id: 'settlement', label: 'Settlement' }] },
+  { slug: 'support', title: 'Contact and support', group: 'Help and reference', level: 'beginner', readMin: 2,
+    blurb: 'How to reach BlockFinaX and what to include.',
+    toc: [{ id: 'channels', label: 'Channels' }, { id: 'include', label: 'What to include' }] },
 ];
 
 export function findLesson(slug: string): Lesson | undefined {

@@ -1,49 +1,56 @@
 /**
- * academy/index.tsx — dispatcher for /learn and /learn/:slug.
- *
- * Reads the URL, resolves it against the catalog, and mounts the matching
- * lesson component inside the shared shell. Kept in one place so App.tsx
- * only has to know one route to register.
+ * academy/index.tsx: dispatcher for /learn and /learn/:slug.
  */
 import { useRoute } from 'wouter';
 import { AcademyShell } from './academy-shell';
 import { findLesson } from './catalog';
-
-import StartHere from './lessons/start-here';
-import Hedging101 from './lessons/hedging-101';
-import OptionsBasics from './lessons/options-basics';
-import Underwriting101 from './lessons/underwriting-101';
-import HowBlockFinaXWorks from './lessons/how-blockfinax-works';
-import RangeProduct from './lessons/range-product';
-import OracleSettlement from './lessons/oracle-settlement';
-import Fees from './lessons/fees';
-import LpRisk from './lessons/lp-risk';
-import EmergingMarkets from './lessons/emerging-markets';
-import Governance from './lessons/governance';
-import Cheatsheet from './lessons/cheatsheet';
 import NotFound from './lessons/not-found';
+import { ContractTerms, HowProtectionWorks, Introduction, PricingAndCharges } from './docs/part1';
+import { ActiveContracts, ChoosingProtection, Confirming, ExpiryAndSettlement, GettingStarted, YourQuote } from './docs/part2';
+import { AddingCapital, CapitalAndPositions, Underwriting, UnderwritingTerms, Withdrawals } from './docs/part3';
+import { Funds, ProtectionLimits, RateData, TechnicalRisks, UnderwritingRisks } from './docs/part4';
+import { Faq, Glossary, Support, Troubleshooting } from './docs/part5';
 
 const REGISTRY: Record<string, React.ComponentType> = {
-  '': StartHere,
-  'hedging-101': Hedging101,
-  'options-basics': OptionsBasics,
-  'underwriting-101': Underwriting101,
-  'how-blockfinax-works': HowBlockFinaXWorks,
-  'range-product': RangeProduct,
-  'oracle-settlement': OracleSettlement,
-  'fees': Fees,
-  'lp-risk': LpRisk,
-  'emerging-markets': EmergingMarkets,
-  'governance': Governance,
-  'cheatsheet': Cheatsheet,
+  '': Introduction,
+  'how-protection-works': HowProtectionWorks,
+  'contract-terms': ContractTerms,
+  'pricing-and-charges': PricingAndCharges,
+  'getting-started': GettingStarted,
+  'choosing-protection': ChoosingProtection,
+  'your-quote': YourQuote,
+  'confirming': Confirming,
+  'active-contracts': ActiveContracts,
+  'expiry-and-settlement': ExpiryAndSettlement,
+  'underwriting': Underwriting,
+  'adding-capital': AddingCapital,
+  'underwriting-terms': UnderwritingTerms,
+  'capital-and-positions': CapitalAndPositions,
+  'withdrawals': Withdrawals,
+  'funds': Funds,
+  'rate-data': RateData,
+  'protection-limits': ProtectionLimits,
+  'underwriting-risks': UnderwritingRisks,
+  'technical-risks': TechnicalRisks,
+  'faq': Faq,
+  'glossary': Glossary,
+  'troubleshooting': Troubleshooting,
+  'support': Support,
+};
+
+/** Addresses from the previous Academy, sent to their closest page. */
+const MOVED: Record<string, string> = {
+  'how-blockfinax-works': 'how-protection-works', 'range-product': 'contract-terms', 'oracle-settlement': 'expiry-and-settlement',
+  'fees': 'pricing-and-charges', 'underwriting-101': 'underwriting', 'lp-risk': 'underwriting-risks', 'governance': 'funds',
+  'hedging-101': 'how-protection-works', 'options-basics': 'contract-terms', 'emerging-markets': '', 'cheatsheet': 'glossary',
 };
 
 export default function AcademyRoute() {
   const [, params] = useRoute<{ slug?: string }>('/learn/:slug');
-  const slug = params?.slug ?? '';
+  const raw = params?.slug ?? '';
+  const slug = raw in MOVED ? MOVED[raw] : raw;
   const known = findLesson(slug);
   const LessonComponent = REGISTRY[slug] ?? NotFound;
-
   return (
     <AcademyShell slug={known ? slug : ''}>
       <LessonComponent />
