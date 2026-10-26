@@ -216,6 +216,32 @@ export function normalise(s: string): string {
 }
 
 /**
+ * Legal-form words say what kind of company a name is, not which one. Left in, a
+ * list entry such as "I.C.I.C. LTD." reduces to "ltd" and matches every limited company.
+ */
+const LEGAL_FORMS = new Set([
+  "ltd", "limited", "plc", "llc", "llp", "lp", "inc", "incorporated", "corp", "corporation", "co", "company",
+  "gmbh", "ag", "sa", "sas", "sarl", "srl", "spa", "bv", "nv", "kft", "ooo", "oao", "zao", "pao", "jsc", "pjsc", "ojsc",
+  "fze", "fzco", "fzc", "pte", "pty", "sdn", "bhd", "tbk", "ab", "as", "oy", "kg", "group", "holding", "holdings",
+]);
+
+/**
+ * The words that identify a name. Runs of single letters are joined first, so
+ * "I.C.I.C." becomes "icic" and still meets "ICIC"; legal forms are then dropped.
+ */
+export function nameTokens(s: string): Set<string> {
+  const words: string[] = [];
+  let initials = "";
+  for (const w of normalise(s).split(" ").filter(Boolean)) {
+    if (w.length === 1) { initials += w; continue; }
+    if (initials) { words.push(initials); initials = ""; }
+    words.push(w);
+  }
+  if (initials) words.push(initials);
+  return new Set(words.filter((w) => w.length > 1 && !LEGAL_FORMS.has(w)));
+}
+
+/**
  * Token-set similarity, 0–1.
  *
  * Deliberately order-insensitive: "Putin Vladimir" and "Vladimir Putin" are the
@@ -224,8 +250,8 @@ export function normalise(s: string): string {
  * "Vladimir Vladimirovich Putin" — a middle name should not hide a designation.
  */
 export function similarity(a: string, b: string): number {
-  const A = new Set(normalise(a).split(" ").filter((w) => w.length > 1));
-  const B = new Set(normalise(b).split(" ").filter((w) => w.length > 1));
+  const A = nameTokens(a);
+  const B = nameTokens(b);
   if (!A.size || !B.size) return 0;
 
   let shared = 0;

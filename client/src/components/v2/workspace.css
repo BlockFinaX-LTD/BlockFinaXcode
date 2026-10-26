@@ -402,3 +402,30 @@
 .bx-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .bx-tour-skip { background: none; border: 0; color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 0; }
 .bx-tour-skip:hover { color: var(--text); }
+
+/* ── Onboarding: individual or organisation, then the basics ─────────────── */
+.bx-onboard { flex: 1; min-width: 0; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 56px 16px; background: var(--soft); color: var(--text); }
+.bx-onboard > .bx-spin { margin-top: 30vh; }
+.bx-onboard-card { width: min(640px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 32px; }
+.bx-onboard-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; margin-bottom: 28px; }
+.bx-onboard-brand img { width: 26px; height: 26px; object-fit: contain; }
+.bx-onboard h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+.bx-onboard .sub { color: var(--muted); font-size: 14px; margin: 6px 0 22px; line-height: 1.5; }
+.bx-onboard-types { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bx-onboard-types button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); border-radius: 16px; padding: 20px; cursor: pointer; transition: border-color .15s, background .15s; }
+.bx-onboard-types button:hover, .bx-onboard-types button:focus-visible { border-color: var(--blue); background: var(--blue-soft); outline: none; }
+.bx-onboard-types svg { width: 26px; height: 26px; color: var(--blue); margin-bottom: 6px; }
+.bx-onboard-types .t, .bx-onboard-intents .t { font-weight: 600; font-size: 15px; }
+.bx-onboard-types .p, .bx-onboard-intents .p { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.bx-onboard-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+.bx-onboard-back svg { width: 15px; height: 15px; }
+.bx-onboard-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+.bx-onboard-grid .bx-field.wide { grid-column: 1 / -1; }
+.bx-onboard-intents { display: grid; gap: 8px; }
+.bx-onboard-intents button { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+.bx-onboard-intents button.on { border: 2px solid var(--blue); background: var(--blue-soft); padding: 11px 13px; }
+@media (max-width: 640px) {
+  .bx-onboard { padding: 24px 16px; }
+  .bx-onboard-card { padding: 22px 18px; }
+  .bx-onboard-types, .bx-onboard-grid { grid-template-columns: 1fr; }
+}

@@ -8,17 +8,21 @@
 import { ContactSales, DemoBanner } from './demo';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Moon, Search, Shield, Store, Sun, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
-import { Flag } from './ui';
+import { Flag, Spin } from './ui';
 import { HedgerHome, MarketsPage, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
 import { ProductTour } from './tour';
 import { UnderwriterRequests } from './rfq';
+import { Onboarding, type OnboardingView } from './onboarding';
+import { startingRole } from '@shared/onboarding';
+import { api } from '@/lib/wallets/passkey-wallet';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
@@ -132,6 +136,29 @@ export function Workspace() {
   useListLabels(content);
   const goTab = (p: Page) => { setMore(false); go(p); };
   const initials = (session?.user.name || session?.user.email || 'BX').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
+  // New accounts answer "individual or organisation" and a few basics before the workspace opens.
+  // If the check itself fails, the workspace opens anyway: onboarding must never lock a user out.
+  const qc = useQueryClient();
+  const onboarding = useQuery({ queryKey: ['v2-onboarding'], queryFn: () => api<OnboardingView>('/api/v2/onboarding'), staleTime: Infinity, retry: 1 });
+
+  if (onboarding.isPending) {
+    return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
+  }
+  if (onboarding.data && !onboarding.data.completed) {
+    return (
+      <div className="bx" data-theme={theme}>
+        <Onboarding
+          email={session?.user.email}
+          defaultName={session?.user.name}
+          onDone={(v) => {
+            if (v.intents?.length) switchRole(startingRole(v.intents));
+            qc.setQueryData(['v2-onboarding'], v);
+            window.scrollTo(0, 0);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="bx" data-theme={theme}>
