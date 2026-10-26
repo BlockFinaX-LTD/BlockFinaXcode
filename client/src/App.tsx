@@ -13,7 +13,7 @@ import { queryClient } from "./lib/api-client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { IdentityProvider, useIdentity } from "@/lib/identity";
+import { IdentityProvider, rememberReturnPath, useIdentity } from "@/lib/identity";
 import { storedSessionToken } from "@/lib/wallets/passkey-wallet";
 
 // Public pages
@@ -89,6 +89,7 @@ function AuthGuard() {
     if (pendingHydration) return;
     const requiresAuth = PROTECTED_ROUTES.some(p => location === p || location.startsWith(p + '/'));
     if (requiresAuth && !isAuthenticated) {
+      rememberReturnPath(location);
       setLocation('/auth');
     }
   }, [location, isAuthenticated, pendingHydration, setLocation]);

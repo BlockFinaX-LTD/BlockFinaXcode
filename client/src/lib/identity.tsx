@@ -87,11 +87,28 @@ function PasskeyIdentityProvider({ children }: { children: ReactNode }) {
       if (!token) throw new Error("Not signed in");
       return token;
     },
-    open: () => { if (window.location.pathname !== "/auth") window.location.assign("/auth"); },
+    open: () => { if (window.location.pathname !== "/auth") { rememberReturnPath(); window.location.assign("/auth"); } },
     signOut,
   }), [session, stellarChain, ready, error, signOut]);
 
   return <PasskeyContext.Provider value={value}>{children}</PasskeyContext.Provider>;
+}
+
+const RETURN_KEY = "bfx:after-signin";
+
+/** Remember the page that sent the user to sign in, so sign-in can return there. */
+export function rememberReturnPath(path = window.location.pathname + window.location.search) {
+  try { if (path !== "/auth" && !path.startsWith("/auth/")) sessionStorage.setItem(RETURN_KEY, path); } catch { /* storage unavailable */ }
+}
+
+/** Where to go after signing in: the remembered page (same site only), else the app. */
+export function takeReturnPath(fallback = "/hedge"): string {
+  try {
+    const p = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    if (p && p.startsWith("/") && !p.startsWith("//")) return p;
+  } catch { /* storage unavailable */ }
+  return fallback;
 }
 
 /** Wraps the app with the signed-in identity. */

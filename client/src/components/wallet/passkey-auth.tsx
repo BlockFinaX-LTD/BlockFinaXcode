@@ -12,7 +12,7 @@ import { KeyRound, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
-import { usePasskeySession } from "@/lib/identity";
+import { takeReturnPath, usePasskeySession } from "@/lib/identity";
 import {
   acceptGoogleRedirect, createWalletPasskey, currentPasskeySession, finishEmailSignIn, signInWithPasskey,
   signOutPasskey, startEmailSignIn, startGoogleSignIn,
@@ -41,7 +41,7 @@ export function PasskeyAuth() {
   }, [setSession]);
 
   useEffect(() => {
-    if (isAuthenticated && !busy && !warning) setLocation("/home");
+    if (isAuthenticated && !busy && !warning) setLocation(takeReturnPath());
   }, [isAuthenticated, busy, warning, setLocation]);
 
   async function run(label: string, action: () => Promise<void>) {
@@ -97,7 +97,7 @@ export function PasskeyAuth() {
           {warning && (
             <div className="text-xs text-amber-500 mt-2 space-y-2">
               <p>{warning}</p>
-              <Button size="sm" variant="outline" onClick={() => { setWarning(null); setLocation("/home"); }}>Continue</Button>
+              <Button size="sm" variant="outline" onClick={() => { setWarning(null); setLocation(takeReturnPath()); }}>Continue</Button>
             </div>
           )}
           {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
