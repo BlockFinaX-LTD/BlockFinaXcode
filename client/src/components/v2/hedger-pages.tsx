@@ -116,12 +116,14 @@ const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 110px' };
 
-function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false }: {
+function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false, chart }: {
   pool: CurrencyPool; go: Go; expandable?: boolean; action?: string;
   /** Clicking the row chooses the pool (Markets) rather than only opening its prices. */
   selectOnClick?: boolean;
   /** The pool chosen on Markets: shown open, without its Select button. */
   focused?: boolean;
+  /** On the chosen pool: the rate chart switch, shown in place of Select. */
+  chart?: { on: boolean; toggle: () => void };
 }) {
   const [open, setOpen] = useState(focused);
   // Opens when chosen, closes again when the full list returns.
@@ -140,6 +142,10 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
         <div className="r" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
           {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{action}</button>}
+          {focused && chart && (
+            <button className={`bx-icon-btn bx-chart-toggle${chart.on ? ' on' : ''}`} aria-pressed={chart.on} aria-label={chart.on ? 'Hide rate chart' : 'Show rate chart'} title={chart.on ? 'Hide rate chart' : 'Show rate chart'}
+              onClick={(e) => { e.stopPropagation(); chart.toggle(); }}><ChartIcon /></button>
+          )}
           {expandable && (open ? <ChevronUp size={16} className="muted" /> : <ChevronDown size={16} className="muted" />)}
         </div>
       </div>
@@ -176,7 +182,7 @@ function useOpenPools() {
  * The pools on sale, at the top of Markets. Choosing one shows only that pool, open, and
  * loads it into the buying panel beside it; All markets brings the list back.
  */
-function MarketList({ go, selected }: { go: Go; selected: string | null }) {
+function MarketList({ go, selected, chart }: { go: Go; selected: string | null; chart?: { on: boolean; toggle: () => void } }) {
   const { pools, open } = useOpenPools();
   const pairs = Array.from(new Set(open.map((p) => p.pair)));
   const [filter, setFilter] = useState<string>('all');
@@ -198,7 +204,7 @@ function MarketList({ go, selected }: { go: Go; selected: string | null }) {
       {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
           <MarketHeader />
-          {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" selectOnClick focused={p === chosen} />)}
+          {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" selectOnClick focused={p === chosen} chart={p === chosen ? chart : undefined} />)}
         </div></div>
       )}
       {!chosen && (
@@ -938,7 +944,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           </div>
         </div>}
 
-        <MarketList go={go} selected={poolChoice} />
+        <MarketList go={go} selected={poolChoice} chart={{ on: showChart, toggle: toggleChart }} />
         <div className="bx-card">
           <h2 style={{ marginBottom: 14 }}>How protection works</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
@@ -1005,12 +1011,9 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             </>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
-                </div>
-                <button className={`bx-icon-btn bx-chart-toggle${showChart ? ' on' : ''}`} aria-pressed={showChart} aria-label={showChart ? 'Hide rate chart' : 'Show rate chart'} title={showChart ? 'Hide rate chart' : 'Show rate chart'} onClick={toggleChart}><ChartIcon /></button>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
               </div>
               <div className="bx-field" style={{ margin: 0 }}>
                 <label htmlFor="bx-amount" className="bx-label" style={{ margin: 0 }}>How much?</label>
