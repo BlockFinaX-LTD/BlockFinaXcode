@@ -7,7 +7,6 @@ import { X } from 'lucide-react';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { usePasskeySession } from '@/lib/identity';
 import { openContactSales, useIsDemo } from './shared';
-import { MAINNET_APP_HREF } from '@/lib/app-links';
 import { Spin } from './ui';
 
 export function DemoBanner() {
@@ -22,14 +21,14 @@ export function DemoBanner() {
 }
 
 /**
- * Testnet or Mainnet. This app is testnet, where everyone starts; Mainnet leads to the
- * BlockFinaX app on Base (lib/app-links.ts), which uses real USDC.
+ * Testnet or Mainnet. Everyone starts on testnet; mainnet is not open for self-service yet,
+ * so choosing it opens the sales form instead of switching.
  */
 export function NetworkSwitch() {
   return (
     <div className="bx-network" role="group" aria-label="Network">
-      <span className="on" aria-current="true">Testnet</span>
-      <a href={MAINNET_APP_HREF} title="BlockFinaX on Base, with real USDC">Mainnet</a>
+      <button className="on" aria-pressed="true">Testnet</button>
+      <button aria-pressed="false" onClick={() => openContactSales('mainnet')}>Mainnet</button>
     </div>
   );
 }
@@ -82,7 +81,9 @@ export function ContactSales() {
     <div className="bx-modal-bg" onClick={() => setOpen(false)}>
       <div className="bx-modal" role="dialog" aria-label="Contact sales" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-          <div><h2 style={{ margin: 0 }}>Talk to sales</h2><div className="sub">Live protection with real USDC is available through our team.</div></div>
+          {source === 'mainnet'
+            ? <div><h2 style={{ margin: 0 }}>Mainnet access</h2><div className="sub">Mainnet, with real USDC, is open to businesses through our team for now. Tell us what you need and we will set you up. You can keep using testnet meanwhile.</div></div>
+            : <div><h2 style={{ margin: 0 }}>Talk to sales</h2><div className="sub">Live protection with real USDC is available through our team.</div></div>}
           <button className="bx-icon-btn" aria-label="Close" onClick={() => setOpen(false)}><X /></button>
         </div>
         {sent ? (
