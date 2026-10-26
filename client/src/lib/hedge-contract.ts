@@ -343,12 +343,12 @@ class HedgeContractManager {
    * (where user sends USDC).
    */
   async getEffectiveAddress(fallback: string): Promise<string> {
-    // With Rift, the smart wallet address is the same across all chains.
+    // The smart wallet address is the same across all chains.
     return fallback;
   }
 
   async ensureGas(_walletAddress: string): Promise<void> {
-    // Rift handles gas (gasless transactions paid in USDC). No-op.
+    // Gas is sponsored. No-op.
   }
 
   /**
@@ -364,8 +364,7 @@ class HedgeContractManager {
     _gasBumpPct = 0,
     onStep?: (step: string) => void
   ): Promise<string> {
-    // Rift's signing path (device signing, else a one-time credential) lives in the
-    // Rift wallet provider, the canonical WalletProvider for EVM (Architecture v2.0).
+    // Signing lives in the active WalletProvider for EVM (Architecture v2.0).
     const { activeEvmWalletProvider } = await import('./identity');
     const result = await (await activeEvmWalletProvider()).sendTransaction(
       { kind: 'evm_transaction', chainId: this._chainId, to, data: calldata, value: value.toString() },

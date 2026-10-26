@@ -7,7 +7,7 @@
  * and transactions — and has no tool capable of naming anyone else.
  *
  * Which one it is comes from `scope`, and the server enforces it regardless:
- * the customer endpoint requires a Rift-verified session and derives identity
+ * the customer endpoint requires a verified sign-in session and derives identity
  * from that, never from anything this component sends.
  */
 
@@ -18,7 +18,7 @@ import { FinaxFollowUp } from "./finax-follow-up";
 import { AgentMarkdown } from "@/components/agent-markdown";
 // Resolves a *fresh* JWT — the bridge handles silent refresh, so reading
 // storage directly would eventually send an expired token.
-import { getRiftAccessToken } from "@/lib/rift-token-bridge";
+import { storedSessionToken } from "@/lib/wallets/passkey-wallet";
 
 type Scope = "public" | "customer";
 
@@ -131,7 +131,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
     const h: Record<string, string> = { "Content-Type": "application/json" };
     if (scope === "customer") {
       try {
-        h.Authorization = `Bearer ${await getRiftAccessToken()}`;
+        h.Authorization = `Bearer ${storedSessionToken() ?? ""}`;
       } catch {
         // Signed out, or the bridge isn't mounted. The request will 401 and
         // the widget shows that, which is more honest than pretending.

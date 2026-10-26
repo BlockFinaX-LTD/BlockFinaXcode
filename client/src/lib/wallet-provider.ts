@@ -45,7 +45,7 @@ export type WalletStep = (message: string) => void;
 /**
  * The canonical wallet interface (Architecture v2.0, docs/architecture/v2/wallet-v2.0.md).
  *
- * Rift is one implementation, the Stellar passkey wallet another; MetaMask, WalletConnect
+ * The passkey wallet is the implementation in use; MetaMask, WalletConnect
  * or a BlockFinaX smart wallet would be more. Providers handle account access and signing
  * only. They do not own the user's BlockFinaX account, business data or product rules,
  * and the backend prepares every transaction they sign.

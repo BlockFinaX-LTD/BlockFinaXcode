@@ -1,7 +1,7 @@
 /**
  * access.ts — Client-side access gate helpers
  *
- * After a user signs in via the Rift widget, we check their email against
+ * After a user signs in, we check their email against
  * the backend allowlist. The result is cached in sessionStorage so we
  * don't re-check on every navigation.
  */

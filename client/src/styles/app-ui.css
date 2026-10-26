@@ -278,10 +278,10 @@
       80 / 81   app sheet scrim / panel   (.sheet-scrim, .sheet)
         200     modal dialogs             (dialog, alert-dialog, drawer,
                                            ui/sheet)
-        210     the signing dialog        (v3-sign-dialog)
+        210     (unused: was the Rift signing dialog)
         220     opened from signing       (method-chooser,
                                            add-method-wizard)
-        240     Google's fallback button  (rift-v3.ts)
+        240     (unused: was the Rift Google button)
         250     contextual overlays       (popover, dropdown-menu,
                                            select, tooltip)
         300     toasts

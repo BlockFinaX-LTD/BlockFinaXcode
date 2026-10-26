@@ -1,24 +1,17 @@
 /**
- * Who is signed in, independent of the wallet provider.
+ * Who is signed in: the BlockFinaX passkey wallet (email or Google, then a passkey).
  *
- * The BlockFinaX passkey wallet is the default everywhere: the same
- * shape is filled from the passkey session, with `address` set to the user's smart
- * account on the EVM network and `accessToken` set to the BlockFinaX session token
- * (the server accepts it wherever it accepts a Rift token on that deployment).
- * The legacy Rift wallet runs only when VITE_WALLET_PROVIDER=rift is set explicitly.
- *
- * The provider choice is fixed at build time, so the hook order never changes.
+ * `address` is the user's smart account on the EVM network and `accessToken` is the
+ * BlockFinaX session token, which the server accepts on every signed-in route.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { RiftProvider, useRift } from "@rift-finance/react";
 import {
   currentPasskeySession, passkeyWalletProvider, signOutPasskey, storedSessionToken, walletConfig, type PasskeySession,
 } from "./wallets/passkey-wallet";
 import type { WalletProvider } from "./wallet-provider";
 
-export const walletProviderKind: "rift" | "passkey" =
-  import.meta.env.VITE_WALLET_PROVIDER === "rift" ? "rift" : "passkey";
-export const usesPasskeyWallet = walletProviderKind === "passkey";
+/** Kept for older call sites: the passkey wallet is the only wallet. */
+export const usesPasskeyWallet = true;
 
 export interface IdentityUser {
   user: string;
@@ -101,10 +94,9 @@ function PasskeyIdentityProvider({ children }: { children: ReactNode }) {
   return <PasskeyContext.Provider value={value}>{children}</PasskeyContext.Provider>;
 }
 
-/** Wraps the app with the identity provider for this build. */
-export function IdentityProvider({ apiKey, widgetUrl, children }: { apiKey: string; widgetUrl?: string; children: ReactNode }) {
-  if (usesPasskeyWallet) return <PasskeyIdentityProvider>{children}</PasskeyIdentityProvider>;
-  return <RiftProvider apiKey={apiKey} widgetUrl={widgetUrl} persist>{children}</RiftProvider>;
+/** Wraps the app with the signed-in identity. */
+export function IdentityProvider({ children }: { children: ReactNode }) {
+  return <PasskeyIdentityProvider>{children}</PasskeyIdentityProvider>;
 }
 
 function usePasskeyIdentity(): Identity {
@@ -113,21 +105,17 @@ function usePasskeyIdentity(): Identity {
   return ctx;
 }
 
-/** Same shape as useRift(); callers that used useRift switch by changing the import. */
-export const useIdentity: () => Identity & Record<string, any> = usesPasskeyWallet
-  ? usePasskeyIdentity
-  : (useRift as unknown as () => Identity & Record<string, any>);
+/** The signed-in user and sign-in controls. */
+export const useIdentity: () => Identity & Record<string, any> = usePasskeyIdentity as () => Identity & Record<string, any>;
 
-/** Passkey session controls for the testnet sign-in page. */
+/** Passkey session controls for the sign-in page. */
 export function usePasskeySession() {
   const ctx = useContext(PasskeyContext);
   if (!ctx) throw new Error("usePasskeySession needs the passkey wallet build");
   return ctx;
 }
 
-/** The wallet provider that signs EVM transactions in this build. */
+/** The wallet provider that signs EVM transactions. */
 export async function activeEvmWalletProvider(): Promise<WalletProvider> {
-  if (usesPasskeyWallet) return passkeyWalletProvider;
-  const { riftWalletProvider } = await import("./wallets/rift-provider");
-  return riftWalletProvider;
+  return passkeyWalletProvider;
 }

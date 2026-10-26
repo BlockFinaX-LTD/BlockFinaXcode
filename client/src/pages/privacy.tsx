@@ -112,7 +112,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="9. Security">
-            <p><strong>Wallet keys.</strong> Wallets on this platform are created and held by our wallet infrastructure provider, Rift. The private key that controls your wallet is held by Rift under its own security arrangements. BlockFinaX never receives, transmits, or stores your private key, and cannot move funds from your wallet — a transaction happens only when you authorise it through Rift's authentication. If you imported an existing wallet, that key is encrypted and held in your browser's local storage and is never sent to our servers.</p>
+            <p><strong>Wallet keys.</strong> Your wallet is a smart account controlled by a passkey that is created and stored on your own device and unlocked with its fingerprint, face or PIN. BlockFinaX never receives, transmits, or stores your passkey's private key, and cannot move funds from your wallet: a transaction happens only when you approve it with your passkey. Signing in with your email or Google account identifies you but cannot move funds.</p>
             <p className="mt-2">We implement industry-standard security measures including rate limiting, HTTPS encryption, and session-based access controls. No method of transmission or storage is completely secure; you use the protocol at your own risk.</p>
           </Section>
 
