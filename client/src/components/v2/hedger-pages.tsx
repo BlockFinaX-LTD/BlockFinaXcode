@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronDown, ChevronUp, Percent, Shield } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, LineChart as ChartIcon, Percent, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
 import { durationsOffered } from '@shared/domain/durations';
@@ -774,6 +774,16 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // "Adjust protection" stays open for buyers who opened it before (a per-viewer convenience).
   const [adjustOpen, setAdjustOpen] = useState(() => { try { return localStorage.getItem('bfx:buy-adjust') === '1'; } catch { return false; } });
   const rememberAdjust = (v: boolean) => { setAdjustOpen(v); try { localStorage.setItem('bfx:buy-adjust', v ? '1' : '0'); } catch { /* storage unavailable */ } };
+  // The rate chart shows beside the buying form only when asked for (remembered per viewer).
+  const [showChart, setShowChart] = useState(() => { try { return localStorage.getItem('bfx:buy-chart') === '1'; } catch { return false; } });
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const toggleChart = () => {
+    const next = !showChart;
+    setShowChart(next);
+    try { localStorage.setItem('bfx:buy-chart', next ? '1' : '0'); } catch { /* storage unavailable */ }
+    // On phones the chart sits above the form: bring it into view.
+    if (next && window.innerWidth < 860) setTimeout(() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
   const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
@@ -906,8 +916,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   return (
     <main className="bx-main">
       <section className="bx-col">
-        <MarketList go={go} selected={poolChoice} />
-        <div className="bx-card">
+        {showChart && <div className="bx-card" ref={chartRef}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <Flag pair={pair} large />
             <div><div style={{ fontSize: 22, fontWeight: 600 }}>{name}</div><div className="muted">{pair}</div></div>
@@ -927,8 +936,9 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
-        </div>
+        </div>}
 
+        <MarketList go={go} selected={poolChoice} />
         <div className="bx-card">
           <h2 style={{ marginBottom: 14 }}>How protection works</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
@@ -995,9 +1005,12 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             </>
           ) : (
             <>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
-                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
+                </div>
+                <button className={`bx-icon-btn bx-chart-toggle${showChart ? ' on' : ''}`} aria-pressed={showChart} aria-label={showChart ? 'Hide rate chart' : 'Show rate chart'} title={showChart ? 'Hide rate chart' : 'Show rate chart'} onClick={toggleChart}><ChartIcon /></button>
               </div>
               <div className="bx-field" style={{ margin: 0 }}>
                 <label htmlFor="bx-amount" className="bx-label" style={{ margin: 0 }}>How much?</label>

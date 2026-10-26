@@ -464,3 +464,5 @@
 .bx-buy .bx-hint, .bx-buy .muted { font-size: 11.5px; }
 .bx-buy .bx-sums { font-size: 13px; }
 .bx-adjust > summary:focus:not(:focus-visible) { outline: none; }
+.bx-chart-toggle { flex: none; }
+.bx-chart-toggle.on { background: var(--blue-soft); color: var(--blue); border-color: var(--blue-line); }
