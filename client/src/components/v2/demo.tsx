@@ -20,6 +20,19 @@ export function DemoBanner() {
   );
 }
 
+/**
+ * Testnet or Mainnet. Everyone starts on testnet; mainnet is not open for self-service yet,
+ * so choosing it opens the sales form instead of switching.
+ */
+export function NetworkSwitch() {
+  return (
+    <div className="bx-network" role="group" aria-label="Network">
+      <button className="on" aria-pressed="true">Testnet</button>
+      <button aria-pressed="false" onClick={() => openContactSales('mainnet')}>Mainnet</button>
+    </div>
+  );
+}
+
 type Role = 'business' | 'underwriter' | 'partner' | 'other';
 
 export function ContactSales() {
@@ -68,14 +81,16 @@ export function ContactSales() {
     <div className="bx-modal-bg" onClick={() => setOpen(false)}>
       <div className="bx-modal" role="dialog" aria-label="Contact sales" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-          <div><h2 style={{ margin: 0 }}>Talk to sales</h2><div className="sub">Live protection with real USDC is available through our team.</div></div>
+          {source === 'mainnet'
+            ? <div><h2 style={{ margin: 0 }}>Mainnet access</h2><div className="sub">Mainnet, with real USDC, is open to businesses through our team for now. Tell us what you need and we will set you up. You can keep using testnet meanwhile.</div></div>
+            : <div><h2 style={{ margin: 0 }}>Talk to sales</h2><div className="sub">Live protection with real USDC is available through our team.</div></div>}
           <button className="bx-icon-btn" aria-label="Close" onClick={() => setOpen(false)}><X /></button>
         </div>
         {sent ? (
           <div style={{ padding: '24px 0 8px' }}>
             <h3 style={{ margin: '0 0 6px' }}>Thank you</h3>
             <p className="muted" style={{ margin: 0 }}>We have your request and will reply to {f.email}, usually within one working day.</p>
-            <button className="bx-btn block" style={{ marginTop: 18 }} onClick={() => setOpen(false)}>Back to the demo</button>
+            <button className="bx-btn block" style={{ marginTop: 18 }} onClick={() => setOpen(false)}>Back to testnet</button>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>

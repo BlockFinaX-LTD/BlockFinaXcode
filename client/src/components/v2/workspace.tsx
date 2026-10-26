@@ -5,7 +5,7 @@
  *   Hedger: "What do you want to protect?"
  *   Underwriter: "How do you want your capital exposed?"
  */
-import { ContactSales, DemoBanner } from './demo';
+import { ContactSales, DemoBanner, NetworkSwitch } from './demo';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -177,7 +177,7 @@ export function Workspace() {
           ))}
         </div>
         <div className="bx-rail-foot">
-          <div className="bx-testnet">Demo · test USDC only</div>
+          <NetworkSwitch />
           <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><CircleUser />Account</button>
           <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
         </div>
@@ -253,7 +253,7 @@ export function Workspace() {
             ))}
             <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Account</button>
             <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
-            <div className="bx-testnet" style={{ marginTop: 8 }}>Testnet · test USDC only</div>
+            <div style={{ marginTop: 8 }}><NetworkSwitch /></div>
           </div>
         </div>
       )}
