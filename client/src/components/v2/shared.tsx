@@ -40,7 +40,8 @@ export const poolRef = (p: CurrencyPool) => `${p.ref.chain}:${p.ref.contract}:${
 
 /**
  * How a direction is named, by audience.
- *   Hedgers think in business flows: payables (USD to pay) and receivables (USD to receive).
+ *   Hedgers see the trading pair (only depreciation protection is on sale); receivables
+ *   protection, from before launch, keeps its own name so older contracts stay distinct.
  *   Underwriters see the risk their capital backs: depreciation or appreciation cover.
  * `verb` is for plain explanations ("if the naira weakens past your strike").
  */
@@ -48,7 +49,7 @@ export function exposureLabel(pair: string, d: Direction | 'both') {
   const name = ccyName(pair);
   return d === 'down'
     ? { title: `${name} receivables protection`, kind: 'Receivables protection', flow: 'receivables', who: 'For USD you will receive', cover: `${name} appreciation cover`, verb: 'strengthens' }
-    : { title: `${name} payables protection`, kind: 'Payables protection', flow: 'payables', who: 'For USD you have to pay', cover: `${name} depreciation cover`, verb: 'weakens' };
+    : { title: pair, kind: 'Protection', flow: 'payments', who: 'For USD you have to pay', cover: `${name} depreciation cover`, verb: 'weakens' };
 }
 
 

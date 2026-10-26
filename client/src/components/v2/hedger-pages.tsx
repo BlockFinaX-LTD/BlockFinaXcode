@@ -119,7 +119,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
   return (
     <>
       <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
-        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{pool.pair} · {types} · {startsLabel(offers.distance)}</div></div></div>
+        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{ccyName(pool.pair)} · {types} · {startsLabel(offers.distance)}</div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
         <div className="r" style={{ fontSize: 13 }}>{pool.tenors.filter((t) => t.active).map((t) => t.tenorDays).sort((a, b) => a - b).join(', ')} days</div>

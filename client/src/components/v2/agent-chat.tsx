@@ -13,7 +13,7 @@ import { Spin } from './ui';
 interface Msg { id?: number; role: 'user' | 'assistant'; content: string }
 
 const SUGGESTIONS = [
-  'How does payables protection work?',
+  'How does currency protection work?',
   'What would protecting $10,000 of naira for 30 days cost?',
   'How do I raise my verification limit?',
 ];
