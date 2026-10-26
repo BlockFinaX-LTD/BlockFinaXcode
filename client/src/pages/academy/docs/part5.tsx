@@ -27,23 +27,21 @@ export function Faq() {
 
 const TERMS: [string, string][] = [
   ['Amount (notional)', 'The dollar amount a contract protects.'],
-  ['Appreciation cover', 'The underwriter side of receivables protection: it pays out if the local currency strengthens past the strike.'],
-  ['Cap', 'In capped cover, the rate beyond which the payout stops growing.'],
-  ['Capped cover', 'Protection whose payout stops at a cap the buyer chooses.'],
-  ['Depreciation cover', 'The underwriter side of payables protection: it pays out if the local currency weakens past the strike.'],
+  ['Cap', 'A contract that pays if the rate rises above the strike, meaning the local currency weakens. Suits dollars you have to pay. Named after its pair, such as USD/GHS Cap.'],
   ['End date', 'The date a contract ends, at 14:00 UTC, moved to Monday if it falls on a weekend.'],
   ['Execution cost', 'The 5% platform fee on the premium for direct purchases.'],
+  ['Floor', 'A contract that pays if the rate falls below the strike, meaning the local currency strengthens. Suits dollars you will receive.'],
   ['Fair rate', 'The price per dollar protected calculated by BlockFinaX\'s pricing engine, before the pool\'s markup.'],
   ['Free capital', 'Underwriting capital not reserved for running contracts, available to back new sales or withdraw.'],
+  ['Limit', 'In limited cover, the rate beyond which the payout stops growing.'],
+  ['Limited cover', 'Protection whose payout stops at a limit the buyer chooses.'],
   ['Markup', 'The multiple of the fair rate a pool charges, set by the pool creator.'],
   ['Open cover', 'Protection whose maximum payout is a percentage of the amount set by the pool.'],
   ['Passkey', 'A credential on your device, approved with your fingerprint, face or PIN, used to approve every transaction.'],
-  ['Payables protection', 'Protection for dollars you have to pay; pays if the local currency weakens past your strike.'],
-  ['Pool', 'Underwriters\' USDC that backs protection for one currency in one direction.'],
+  ['Pool', 'Underwriters\' USDC that backs one contract, a Cap or a Floor, on one currency.'],
   ['Pool creator', 'The underwriter who opened a pool and sets its terms.'],
   ['Premium', 'The price of a contract, paid once at purchase.'],
   ['Rate operator', 'A party that reports the reference rate after a contract ends.'],
-  ['Receivables protection', 'Protection for dollars you will receive; pays if the local currency strengthens past your strike.'],
   ['Reference rate', 'The published USD exchange rate a contract settles on.'],
   ['Request a quote', 'Asking underwriters to price cover that no open pool offers.'],
   ['Reserve', 'The maximum payout of a contract, set aside from underwriters when it is sold.'],
@@ -73,10 +71,10 @@ export function Troubleshooting() {
         <Table
           head={['Message', 'Meaning and next step']}
           rows={[
-            ['No pool is offering 30-day capped rising-rate protection on USD/GHS. Request a quote instead. (with your own terms)', 'No open pool sells these terms. Change the end date, structure or direction, or request a quote.'],
-            ['Not enough free liquidity for that amount', 'The pool\'s free capital is smaller than the maximum payout. Lower the amount, narrow the cap or request a quote.'],
+            ['No pool is offering a 30-day limited USD/GHS Cap. Request a quote instead. (with your own terms)', 'No open pool sells these terms. Change the end date or structure, or request a quote.'],
+            ['Not enough free liquidity for that amount', 'The pool\'s free capital is smaller than the maximum payout. Lower the amount, narrow the limit or request a quote.'],
             ['Protection must start at least X% from today\'s rate for this cover', 'The pool sets a minimum distance for the strike. Move the strike further from today\'s rate.'],
-            ['This protection is too cheap for what it could pay', 'The maximum payout is more than 100 times the premium. Move the strike closer to today\'s rate or lower the cap.'],
+            ['This protection is too cheap for what it could pay', 'The maximum payout is more than 100 times the premium. Move the strike closer to today\'s rate or bring the limit closer.'],
             ['This strike is too far from today\'s rate to price', 'The premium would be zero. Move the strike closer or choose a longer duration.'],
             ['Pricing for this currency is updating', 'The rate history is being refreshed. Try again in a few minutes.'],
           ]}

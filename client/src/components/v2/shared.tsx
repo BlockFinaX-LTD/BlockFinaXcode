@@ -39,17 +39,15 @@ export const endsAt = (days: number) => new Date(expiryAt(Math.floor(Date.now() 
 export const poolRef = (p: CurrencyPool) => `${p.ref.chain}:${p.ref.contract}:${p.ref.id}`;
 
 /**
- * How a direction is named, by audience.
- *   Hedgers see the trading pair (only depreciation protection is on sale); receivables
- *   protection, from before launch, keeps its own name so older contracts stay distinct.
- *   Underwriters see the risk their capital backs: depreciation or appreciation cover.
+ * How a direction is named. Both sides of the trade see the same product name:
+ *   Cap:   pays if the rate rises above the strike (the local currency weakens).
+ *   Floor: pays if the rate falls below the strike (the local currency strengthens).
  * `verb` is for plain explanations ("if the naira weakens past your strike").
  */
 export function exposureLabel(pair: string, d: Direction | 'both') {
-  const name = ccyName(pair);
   return d === 'down'
-    ? { title: `${name} receivables protection`, kind: 'Receivables protection', flow: 'receivables', who: 'For USD you will receive', cover: `${name} appreciation cover`, verb: 'strengthens' }
-    : { title: pair, kind: 'Protection', flow: 'payments', who: 'For USD you have to pay', cover: `${name} depreciation cover`, verb: 'weakens' };
+    ? { title: `${pair} Floor`, kind: 'Floor', flow: 'receipts', who: 'For USD you will receive', cover: `${pair} Floor`, verb: 'strengthens' }
+    : { title: `${pair} Cap`, kind: 'Cap', flow: 'payments', who: 'For USD you have to pay', cover: `${pair} Cap`, verb: 'weakens' };
 }
 
 

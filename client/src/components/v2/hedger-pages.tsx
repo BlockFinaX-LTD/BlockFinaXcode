@@ -115,7 +115,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
   const buy = (days?: number) => go('h-protect', { pair: pool.pair, direction, pool: poolRef(pool), days });
-  const types = [pool.structures.capped && 'Capped', pool.structures.open && 'Open'].filter(Boolean).join(' + ');
+  const types = [pool.structures.capped && 'Limited', pool.structures.open && 'Open'].filter(Boolean).join(' + ');
   return (
     <>
       <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
@@ -239,7 +239,7 @@ export function HedgerHome({ go }: { go: Go }) {
                   <div className="bx-who">
                     <Flag pair={pair} />
                     <div style={{ minWidth: 0 }}>
-                      <div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Capped'}</div>
+                      <div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Limited'}</div>
                       <div className="d">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div>
                     </div>
                   </div>
@@ -373,7 +373,7 @@ export interface ChartProtection {
 
 /**
  * Price chart scaled to the price itself, so the period's moves are visible. One protection
- * overlay: the strike, the band where it pays, and the cap, labelled together. When the band
+ * overlay: the strike, the band where it pays, and the limit, labelled together. When the band
  * sits beyond the visible prices, a strip on that edge says where it is instead of flattening
  * the price line to fit it.
  */
@@ -421,7 +421,7 @@ export function RateChart({ points, loading, label, unit, protection = null }: {
   };
   const h = hover === null ? null : points[hover];
 
-  // The protection band: from the strike to the cap (or to the edge for Open cover).
+  // The protection band: from the strike to the limit (or to the edge for Open cover).
   const band = (() => {
     if (!protection) return null;
     const { strike: k, cap: c } = protection;
@@ -606,7 +606,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           ) : (
             <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
               <div className="bx-list-h" style={POS_COLS}><span>{hint('Protection')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Expires')}</span></div>
-              {(role === 'hedger' ? mineHedges.map((h) => ({ pos: h.position, title: `${exposureLabel(pair, h.position.direction).title} · ${h.position.structure === 'open' ? 'Open' : 'Capped'}`, status: h.settlement.status }))
+              {(role === 'hedger' ? mineHedges.map((h) => ({ pos: h.position, title: `${exposureLabel(pair, h.position.direction).title} · ${h.position.structure === 'open' ? 'Open' : 'Limited'}`, status: h.settlement.status }))
                 : under.rows.map(({ pool, pos }) => ({ pos, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
               ).map(({ pos, title, status }) => {
                 const k = markKey(pos);
@@ -910,8 +910,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <div className="bx-sums" style={{ borderTop: 0, paddingTop: 0 }}>
                 <Sum l="Current rate" v={<span className="num">{fmtRate(e.spot)}</span>} />
                 <Sum l="Protection starts" v={<span className="num">{fmtRate(e.strike)}</span>} />
-                <Sum l="Protection type" v={e.structure === 'open' ? 'Open' : 'Capped'} />
-                {e.structure === 'capped' && <Sum l="Maximum protected rate" v={<span className="num">{fmtRate(e.cap)}</span>} />}
+                <Sum l="Protection type" v={e.structure === 'open' ? 'Open' : 'Limited'} />
+                {e.structure === 'capped' && <Sum l="Protection limit" v={<span className="num">{fmtRate(e.cap)}</span>} />}
                 <Sum l="Duration" v={`${e.tenorDays} days`} />
                 <Sum l="Expiry" v={endsAt(e.tenorDays)} />
                 <Sum l="Most you can receive" v={<span className="num">${fmt(e.maxPayout)}</span>} />
@@ -989,15 +989,15 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <div>
                 <span className="bx-label">{hint("Cover type")}</span>
                 <div className="bx-choice">
-                  {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Capped</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
+                  {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Limited</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
                   {tenor?.open !== false && <button className={structure === 'open' ? 'on' : ''} onClick={() => setStructure('open')}><div className="t">Open</div><div className="p num">{open.data ? `$${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'}</div></button>}
                 </div>
               </div>
               {structure === 'capped' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><label htmlFor="bx-cap" className="muted">Maximum protected rate</label><span className="num" style={{ fontWeight: 600 }}>{cap ? fmtRate(cap) : '-'}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><label htmlFor="bx-cap" className="muted">Protection limit</label><span className="num" style={{ fontWeight: 600 }}>{cap ? fmtRate(cap) : '-'}</span></div>
                   <input id="bx-cap" className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(ev) => setCapPct(Number(ev.target.value))} />
-                  <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>Lower cap: cheaper</span><span>Higher cap: more protection</span></div>
+                  <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>Closer limit: cheaper</span><span>Wider limit: more protection</span></div>
                 </div>
               )}
               <div className="bx-sums">
@@ -1067,7 +1067,7 @@ export function MyProtections({ go }: { go: Go }) {
                   const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
                   return (
                     <div key={s.position} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
-                      <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Capped'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
+                      <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Limited'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
                       <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
                       <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
                       <div className="r num" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>

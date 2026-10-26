@@ -32,7 +32,7 @@ type Withdrawal = { chain: string; contract?: string; requestId: number; poolId:
 const withdrawalUsd = (w: Withdrawal, p: CurrencyPool | undefined) => Number(w.shares) * (p?.legacy ? sharePrice(p) : 1);
 
 const sharePrice = (p: CurrencyPool) => (Number(p.totalShares) > 0 ? Number(p.liquidity.nav) / Number(p.totalShares) : 1);
-const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${ccyName(p.pair)}, both directions` : exposureLabel(p.pair, p.direction).cover) + (p.legacy ? ' (earlier contract)' : '');
+const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${p.pair} Cap and Floor` : exposureLabel(p.pair, p.direction).cover) + (p.legacy ? ' (earlier contract)' : '');
 const shortDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const inDays = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000));
 
@@ -97,7 +97,7 @@ function PoolRows({ pools, stakes, go }: { pools: CurrencyPool[]; stakes: Map<st
           const growth = sharePrice(p) - 1;
           return (
             <div key={poolRef(p)} className="bx-li click" style={POOL_COLS} onClick={() => go('u-pool', { pool: poolRef(p) })}>
-              <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t">{poolName(p)}</div><div className="d">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Capped', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</div></div></div>
+              <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t">{poolName(p)}</div><div className="d">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Limited', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</div></div></div>
               <div className="r num" style={{ fontWeight: 600 }}>${fmt(nav, 0)}</div>
               <div className="r"><div className="num" style={{ fontWeight: 600 }}>{pct(used, 0)}</div><div className="bx-bar thin" style={{ width: 64, marginLeft: 'auto', marginTop: 6 }}><i style={{ width: `${used * 100}%`, background: 'var(--blue)' }} /></div></div>
               {stakes.get(poolRef(p))?.account
@@ -377,11 +377,11 @@ function ProtectionSettings({ pool, editable }: { pool: CurrencyPool; editable: 
       <div className="bx-card-h"><h2>Protection settings</h2>{editable && dirty && <button className="bx-btn small" disabled={busy || (!open && !capped)} onClick={save}>{busy ? <Spin /> : 'Save settings'}</button>}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 8 }}>
         <div style={box}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 600 }}>Capped Protection</span><Toggle label="Capped Protection" on={capped} disabled={!editable} onChange={setCapped} /></div>
-          <div className="sub" style={{ margin: '6px 0 12px' }}>Hedgers choose a cap within your boundaries.</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 600 }}>Limited Protection</span><Toggle label="Limited Protection" on={capped} disabled={!editable} onChange={setCapped} /></div>
+          <div className="sub" style={{ margin: '6px 0 12px' }}>Hedgers choose a limit within your boundaries.</div>
           {capped && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <label className="bx-field" style={{ margin: 0 }}><span>{hint("Smallest cap (%)")}</span><input className="bx-input num" disabled={!editable} value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
-            <label className="bx-field" style={{ margin: 0 }}><span>{hint("Largest cap (%)")}</span><input className="bx-input num" disabled={!editable} value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+            <label className="bx-field" style={{ margin: 0 }}><span>{hint("Smallest limit (%)")}</span><input className="bx-input num" disabled={!editable} value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+            <label className="bx-field" style={{ margin: 0 }}><span>{hint("Largest limit (%)")}</span><input className="bx-input num" disabled={!editable} value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
           </div>}
         </div>
         <div style={box}>
@@ -593,7 +593,7 @@ export function CreatePool({ go }: { go: Go }) {
   const problems = [
     !(Number(amount) >= 10) ? 'Commit at least $10' : total > have ? `You need $${fmt(total)} USDC on this network` : null,
     !tenors.some((t) => t.active) ? 'Turn on at least one tenor' : tenors.some((t) => markupOf(t) < MARKUP_MIN || markupOf(t) > MARKUP_MAX) ? 'Each offer must be 90% to 500% of the fair price' : null,
-    !openOn && !cappedOn ? 'Offer at least one protection type' : Number(maxCap) > 0 && Number(minCap) > Number(maxCap) ? 'The smallest cap must be below the largest' : !(Number(minStrike) >= 0 && Number(minStrike) <= 50) ? 'Closest strike must be 0% to 50%' : null,
+    !openOn && !cappedOn ? 'Offer at least one protection type' : Number(maxCap) > 0 && Number(minCap) > Number(maxCap) ? 'The smallest limit must be below the largest' : !(Number(minStrike) >= 0 && Number(minStrike) <= 50) ? 'Closest strike must be 0% to 50%' : null,
     null,
   ];
 
@@ -699,11 +699,11 @@ export function CreatePool({ go }: { go: Go }) {
           {step === 2 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
               <div style={box}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontWeight: 600 }}>Capped Protection</span><Toggle label="Capped Protection" on={cappedOn} onChange={setCappedOn} /></div>
-                <div className="sub" style={{ margin: '6px 0 12px' }}>Hedgers choose a cap within your boundaries.</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontWeight: 600 }}>Limited Protection</span><Toggle label="Limited Protection" on={cappedOn} onChange={setCappedOn} /></div>
+                <div className="sub" style={{ margin: '6px 0 12px' }}>Hedgers choose a limit within your boundaries.</div>
                 {cappedOn && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <label className="bx-field" style={{ margin: 0 }}><span>{hint("Smallest cap (%)")}</span><input className="bx-input num" value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
-                  <label className="bx-field" style={{ margin: 0 }}><span>{hint("Largest cap (%)")}</span><input className="bx-input num" value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+                  <label className="bx-field" style={{ margin: 0 }}><span>{hint("Smallest limit (%)")}</span><input className="bx-input num" value={minCap} onChange={(e) => setMinCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+                  <label className="bx-field" style={{ margin: 0 }}><span>{hint("Largest limit (%)")}</span><input className="bx-input num" value={maxCap} onChange={(e) => setMaxCap(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
                 </div>}
               </div>
               <div style={box}>
@@ -723,7 +723,7 @@ export function CreatePool({ go }: { go: Go }) {
               <Sum l="Underwrite" v={exposureLabel(pair, direction).cover} />
               <Sum l="Committed liquidity" v={<span className="num">${fmt(amount)}</span>} />
               {tenors.filter((t) => t.active).map((t) => <Sum key={t.tenorDays} l={`${t.tenorDays}-day offer`} v={<span className="num">{t.offerPct}%</span>} />)}
-              {cappedOn && <Sum l="Capped Protection" v={`caps ${minCap}% to ${maxCap}%`} />}
+              {cappedOn && <Sum l="Limited Protection" v={`limits ${minCap}% to ${maxCap}%`} />}
               {openOn && <Sum l="Open Protection" v={`max payout ${openMax}%`} />}
               <Sum l="Closest strike allowed" v={Number(minStrike) === 0 ? "Today's rate" : `${minStrike}% from today`} />
             </div>
@@ -746,7 +746,7 @@ export function CreatePool({ go }: { go: Go }) {
             <Sum l="Funding network" v={chains.data?.chains.find((c) => c.key === (network ?? hub))?.name ?? '-'} />
             <Sum l="Active liquidity hub" v={hubName ?? '-'} />
             <Sum l="Tenors" v={tenors.filter((t) => t.active).map((t) => `${t.tenorDays}d`).join(', ') || '-'} />
-            <Sum l="Protection" v={[cappedOn && 'Capped', openOn && 'Open'].filter(Boolean).join(' and ') || '-'} />
+            <Sum l="Protection" v={[cappedOn && 'Limited', openOn && 'Open'].filter(Boolean).join(' and ') || '-'} />
             <Sum l="Creation fee" v={<span className="num">${fmt(fee)}</span>} />
             <Sum l="Network fees" v="Covered" good />
             <Sum l="Total" v={<span className="num">${fmt(total)}</span>} total />
@@ -792,7 +792,7 @@ export function RiskPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
           <div style={{ marginTop: 16 }}><Bar parts={[{ label: 'Reserved', v: reserved, c: '#1f5fe0' }, { label: 'Available', v: available, c: '#bcd0ff' }, { label: 'Held back', v: held, c: '#dfe3ea' }]} /></div>
         </div>
         <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Active exposure by tenor</h2>{byTenor.size ? <Bar parts={Array.from(byTenor.entries()).sort(([a], [b]) => a - b).map(([d, v], i) => ({ label: `${d} days`, v, c: colors[i % colors.length] }))} /> : <div className="bx-empty">No active cover.</div>}</div>
-        <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Active exposure by protection type</h2>{positions.length ? <Bar parts={[{ label: 'Capped', v: byType.capped, c: '#1f5fe0' }, { label: 'Open', v: byType.open, c: '#0f1729' }]} /> : <div className="bx-empty">No active cover.</div>}</div>
+        <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Active exposure by protection type</h2>{positions.length ? <Bar parts={[{ label: 'Limited', v: byType.capped, c: '#1f5fe0' }, { label: 'Open', v: byType.open, c: '#0f1729' }]} /> : <div className="bx-empty">No active cover.</div>}</div>
       </section>
       <aside className="bx-aside">
         <div className="bx-card tight">

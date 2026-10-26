@@ -36,7 +36,7 @@ export const CATALOG: Lesson[] = [
     blurb: 'Your account, wallet, funding and verification.',
     toc: [{ id: 'account', label: 'Account and wallet' }, { id: 'funding', label: 'Adding USDC' }, { id: 'verification', label: 'Verification' }] },
   { slug: 'choosing-protection', title: 'Choosing your protection', group: 'Buying protection', level: 'beginner', readMin: 5,
-    blurb: 'Selecting the currency, direction, amount, end date, strike and cap.',
+    blurb: 'Selecting the currency, Cap or Floor, amount, end date, strike and limit.',
     toc: [{ id: 'steps', label: 'Making your choices' }, { id: 'pools', label: 'Which pool you buy from' }, { id: 'rfq', label: 'When no pool fits' }] },
   { slug: 'your-quote', title: 'Understanding your quote', group: 'Buying protection', level: 'beginner', readMin: 5,
     blurb: 'What each line of a quote means and what remains your risk.',

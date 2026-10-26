@@ -93,7 +93,7 @@ export function ProtectionLimits() {
   return (
     <>
       <Head part={PART} title="Protection limits">
-        A payout covers the move in the reference rate between your strike and your cap, on the amount you protected. Several
+        A payout covers the move in the reference rate between your strike and your limit, on the amount you protected. Several
         differences mean it may not equal your actual loss.
       </Head>
 
@@ -102,7 +102,7 @@ export function ProtectionLimits() {
           head={['Difference', 'Effect']}
           rows={[
             ['Strike', 'The move from the rate when bought to the strike is not covered.'],
-            ['Cap or maximum', 'Any move beyond the cap, or beyond the open-cover maximum, is not covered.'],
+            ['Limit or maximum', 'Any move beyond the limit, or beyond the open-cover maximum, is not covered.'],
             ['Timing', 'The payout uses the rate at 14:00 UTC on the end date, or the following Monday. Your payment may happen at another time.'],
             ['Reference rate', 'Your bank or provider rate can differ from the reference rate. See Exchange-rate data.'],
             ['Amount', 'Only the amount protected is covered. Payments larger than it are exposed on the difference.'],
@@ -110,7 +110,7 @@ export function ProtectionLimits() {
             ['Currency of payout', 'Payouts are in USDC. Converting them to local currency happens outside BlockFinaX at your provider\'s rate.'],
           ]}
         />
-        <P>The quote shows the strike, cap, end time and costs before you buy. <A to="your-quote">Understanding your quote</A> walks through them.</P>
+        <P>The quote shows the strike, limit, end time and costs before you buy. <A to="your-quote">Understanding your quote</A> walks through them.</P>
       </Section>
     </>
   );
@@ -133,9 +133,9 @@ export function UnderwritingRisks() {
 
       <Section n="02" id="correlated" title="Losses that arrive together">
         <P>
-          A pool covers one currency in one direction, so a sharp devaluation affects every running contract in a depreciation
+          A pool sells one contract on one currency, so a sharp devaluation affects every running contract in a Cap
           pool at the same time. Several contracts drawing on the same capital can together consume most of it, even though each
-          is limited to its own reserve. Spreading capital across currencies, directions and end dates reduces this concentration.
+          is limited to its own reserve. Spreading capital across currencies, Caps and Floors, and end dates reduces this concentration.
         </P>
       </Section>
 

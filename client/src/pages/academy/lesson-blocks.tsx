@@ -110,7 +110,7 @@ export function CodeInline({ children }: { children: ReactNode }) {
  */
 export function RangePayoffSVG({
   strikeLabel = 'Strike',
-  capLabel = 'Cap',
+  capLabel = 'Limit',
   underlyingLabel = 'Spot rate at expiry',
   payoutLabel = 'Payout',
 }: {
@@ -140,7 +140,7 @@ export function RangePayoffSVG({
       <text x="410" y="230" textAnchor="middle">{capLabel}</text>
 
       <text x="155" y="206" textAnchor="middle" style={{ fill: 'var(--ac-tx-3)' }}>No payout</text>
-      <text x="495" y="62" textAnchor="middle" style={{ fill: 'var(--ac-tx-3)' }}>Capped</text>
+      <text x="495" y="62" textAnchor="middle" style={{ fill: 'var(--ac-tx-3)' }}>Payout stops growing</text>
 
       <text x="320" y="254" className="lbl-major" textAnchor="middle">{underlyingLabel}</text>
     </svg>

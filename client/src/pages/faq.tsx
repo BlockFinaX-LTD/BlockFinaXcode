@@ -149,9 +149,9 @@ export default function FaqPage() {
     {
       q: "What do I get paid if the rate moves?",
       a: <>
-        <p>Payout starts at the strike, grows as the rate moves further, and stops at the cap. Past
-          the cap the payout holds steady however far the rate goes.</p>
-        <p>The cap is not there to short you. It is what lets the people backing the pool know
+        <p>Payout starts at the strike, grows as the rate moves further, and stops at the limit. Past
+          the limit the payout holds steady however far the rate goes.</p>
+        <p>The limit is not there to short you. It is what lets the people backing the pool know
           their worst case in advance, and without a known worst case nobody would take the other
           side.</p>
         <p>A claim pays out net of {pct(fees?.hedgerPayoutFeeRate)}.</p>
@@ -191,8 +191,8 @@ export default function FaqPage() {
     {
       q: "What is the most I can lose?",
       a: <>
-        <p>Known in advance and capped by the contract. Your worst case is your share of the pool's
-          maximum payout, which is fixed by the strike and the cap when the pool is created and
+        <p>Known in advance and limited by the contract. Your worst case is your share of the pool's
+          maximum payout, which is fixed by the strike and the limit when the pool is created and
           cannot grow however far the rate moves past it.</p>
         <p>Opening a pool costs {usd(fees?.creationFee)}. The protocol takes
           {" "}{pct(fees?.lpProfitFeeRate)} of underwriting profit.</p>

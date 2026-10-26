@@ -93,12 +93,12 @@ export function HowProtectionWorks() {
       <Section n="03" id="example" title="A worked example">
         <P>{EX.convention} All figures are hypothetical.</P>
         <Example
-          title="capped cedi payables protection"
+          title="limited USD/GHS Cap"
           rows={[
             ['Rate when bought', '11.60'],
             ['Amount protected', '$500,000'],
             ['Strike', '11.83'],
-            ['Cap', '13.01'],
+            ['Limit', '13.01'],
             ['Premium plus fee', '$6,037.50'],
             ['Rate at the end date: 12.40', 'payout $24,077.59 after the 2% fee'],
             ['Rate at the end date: 11.70', 'no payout'],
@@ -118,22 +118,23 @@ export function ContractTerms() {
     <>
       <Head part={PART} title="Markets and contract terms">
         Each contract covers one US dollar exchange rate, in one direction, for one amount, until one end date. Its strike sets
-        where the payout starts and its cap or maximum sets where the payout stops growing.
+        where the payout starts and its limit or maximum sets where the payout stops growing.
       </Head>
 
       <Section n="01" id="markets" title="Markets">
         <P>
           A currency is available when an underwriter has opened a pool for it. The protocol currently allows pools for USD/NGN
-          (naira), USD/GHS (cedi), USD/KES (shilling), USD/ZAR (rand) and USD/EGP (Egyptian pound). Each pool covers one direction:
+          (naira), USD/GHS (cedi), USD/KES (shilling), USD/ZAR (rand) and USD/EGP (Egyptian pound). Each pool sells one of two
+          contracts, named after the pair, such as USD/GHS Cap:
         </P>
         <Table
-          head={['You buy', 'For', 'It pays if', 'Underwriters call it']}
+          head={['Contract', 'It pays if', 'Suits']}
           rows={[
-            ['Payables protection', 'dollars you have to pay', 'the local currency weakens past your strike (the rate rises)', 'depreciation cover'],
-            ['Receivables protection', 'dollars you will receive', 'the local currency strengthens past your strike (the rate falls)', 'appreciation cover'],
+            ['Cap', 'the rate rises above your strike: the local currency weakens', 'dollars you have to pay'],
+            ['Floor', 'the rate falls below your strike: the local currency strengthens', 'dollars you will receive'],
           ]}
         />
-        <P>The Markets page in the app lists which currencies and directions have open pools and how much capacity each has.</P>
+        <P>Buyers and underwriters use the same names. The Markets page in the app lists the open pools and how much capacity each has.</P>
       </Section>
 
       <Section n="02" id="terms" title="Contract terms">
@@ -143,26 +144,26 @@ export function ContractTerms() {
             ['Reference rate', 'The USD exchange rate the contract settles on, recorded by the rate operators. See Exchange-rate data.'],
             ['Amount (notional)', 'The dollar amount protected. The contract minimum is 10 USDC.'],
             ['Protection period', 'From purchase until 14:00 UTC on the end date.'],
-            ['Strike', 'The rate where the payout starts. For payables protection it is at or above the rate when bought.'],
-            ['Cap', 'For capped cover, the rate where the payout stops growing. Set within the pool\'s allowed distance from the strike.'],
+            ['Strike', 'The rate where the payout starts. For a Cap it is at or above the rate when bought.'],
+            ['Limit', 'For limited cover, the rate where the payout stops growing. Set within the pool\'s allowed distance from the strike.'],
             ['Maximum payout', 'For open cover, a percentage of the amount set by the pool, for example 30%.'],
           ]}
         />
       </Section>
 
       <Section n="03" id="formula" title="The payout formula">
-        <P>For payables protection, with S the rate when bought, K the strike, C the cap and R the settlement rate:</P>
-        <Callout label="Payables protection">Payout = amount × (lower of R and C, minus K) ÷ S, and zero if R is at or below K.</Callout>
-        <Callout label="Receivables protection">Payout = amount × (K minus higher of R and C) ÷ S, and zero if R is at or above K.</Callout>
+        <P>With S the rate when bought, K the strike, L the limit and R the settlement rate:</P>
+        <Callout label="Cap">Payout = amount × (lower of R and L, minus K) ÷ S, and zero if R is at or below K.</Callout>
+        <Callout label="Floor">Payout = amount × (K minus higher of R and L) ÷ S, and zero if R is at or above K.</Callout>
         <P>
           The result never exceeds the maximum payout reserved at purchase. A 2% fee is deducted when the payout is claimed.
           Dividing by S, the rate when bought, converts the rate difference into dollars on the amount you protected.
         </P>
-        <Fig label="Figure 1" caption=" Payout against the settlement rate for capped payables protection.">
-          <RangePayoffSVG strikeLabel="Strike (K)" capLabel="Cap (C)" underlyingLabel="Settlement rate (R)" payoutLabel="Payout" />
+        <Fig label="Figure 1" caption=" Payout against the settlement rate for a limited Cap.">
+          <RangePayoffSVG strikeLabel="Strike (K)" capLabel="Limit (L)" underlyingLabel="Settlement rate (R)" payoutLabel="Payout" />
         </Fig>
         <P>
-          Open cover uses the same formula. Its cap is calculated for you as the strike plus the pool's maximum percentage of the
+          Open cover uses the same formula. Its limit is calculated for you as the strike plus the pool's maximum percentage of the
           rate when bought, so the maximum payout equals that percentage of the amount.
         </P>
       </Section>
@@ -190,7 +191,7 @@ export function PricingAndCharges() {
       <Section n="01" id="premium" title="The premium">
         <P>
           The premium pays underwriters for setting aside capital that may be paid out. It rises with how volatile the currency
-          is, how long the contract runs, how close the strike is to today's rate and how wide the range between strike and cap.
+          is, how long the contract runs, how close the strike is to today's rate and how wide the range between strike and limit.
         </P>
       </Section>
 
@@ -230,7 +231,7 @@ export function PricingAndCharges() {
       <Section n="04" id="example" title="All charges on one contract">
         <P>{EX.convention} Hypothetical figures, assuming a fair rate of 1.00% and a markup of 1.15.</P>
         <Example
-          title="$500,000 capped cedi payables protection, rate 12.40 at the end date"
+          title="$500,000 limited USD/GHS Cap, rate 12.40 at the end date"
           rows={[
             ['Premium: 500,000 × 1.00% × 1.15', '$5,750.00'],
             ['Platform fee: 5% of 5,750', '$287.50'],

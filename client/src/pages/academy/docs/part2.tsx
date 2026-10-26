@@ -59,21 +59,21 @@ export function ChoosingProtection() {
   return (
     <>
       <Head part={PART} title="Choosing your protection">
-        On the Protect page you choose the currency, the direction of the move you are protecting against, the amount, the end
+        On the Protect page you choose the currency, a Cap or a Floor depending on the move you are protecting against, the amount, the end
         date, where protection starts and how far it reaches. The price updates as you change each one.
       </Head>
 
       <Section n="01" id="steps" title="Making your choices">
         <Steps>
           <Step title="Currency">Choose from the currencies with open pools, for example the cedi.</Step>
-          <Step title="Direction">Payables protection for dollars you will pay; receivables protection for dollars you will receive.</Step>
+          <Step title="Cap or Floor">A Cap for dollars you will pay, which pays if the local currency weakens; a Floor for dollars you will receive, which pays if it strengthens.</Step>
           <Step title="Amount">The dollar amount to protect, usually the size of the invoice or payment.</Step>
           <Step title="End date">Pick a date or a duration, usually the day the payment is due. Pools offering any day show a date picker; others show their fixed durations.</Step>
           <Step title="Where protection starts">The strike, set as a percentage from today's rate or as a rate. Some pools require a minimum distance from today's rate.</Step>
-          <Step title="Capped or open">For capped cover, choose the cap as a percentage beyond the strike. For open cover, the pool's maximum applies.</Step>
+          <Step title="Limited or open">For limited cover, choose the limit as a percentage beyond the strike. For open cover, the pool's maximum applies.</Step>
         </Steps>
         <P>
-          A strike closer to today's rate pays sooner and costs more. A wider range between strike and cap pays more in a large
+          A strike closer to today's rate pays sooner and costs more. A wider range between strike and limit pays more in a large
           move and costs more.
         </P>
       </Section>
@@ -89,7 +89,7 @@ export function ChoosingProtection() {
         <P>
           If no pool can price your terms, for example because the amount exceeds every pool's free capital or the currency has
           no pool, use Request a quote. Requests start at $5,000 protected, run up to 90 days and stay open for 3 days.
-          Underwriters reply with a strike, cap and premium, valid for 1 hour on contracts under 30 days and 24 hours otherwise.
+          Underwriters reply with a strike, limit and premium, valid for 1 hour on contracts under 30 days and 24 hours otherwise.
           Offers appear under My protections, cheapest first, and you accept one with your passkey.
         </P>
       </Section>
@@ -102,7 +102,7 @@ export function YourQuote() {
     <>
       <Head part={PART} title="Understanding your quote">
         The quote lists what you pay now, the most you can receive, and the terms that decide the payout. Review the covered
-        amount, end date, strike, cap and total before confirming.
+        amount, end date, strike, limit and total before confirming.
       </Head>
 
       <Section n="01" id="lines" title="What the quote shows">
@@ -122,12 +122,12 @@ export function YourQuote() {
 
       <Section n="02" id="exposure" title="What remains your risk">
         <P>
-          {EX.convention} Hypothetical figures: $500,000 cedi payables protection bought at 11.60 with the strike at 11.83. The
-          capped version has a cap at 13.01. The open version is from a pool whose maximum payout is 30% of the amount, which
-          places its effective cap at 11.83 + (11.60 × 30%) = 15.31.
+          {EX.convention} Hypothetical figures: a $500,000 USD/GHS Cap bought at 11.60 with the strike at 11.83. The
+          limited version has a limit at 13.01. The open version is from a pool whose maximum payout is 30% of the amount, which
+          places its effective limit at 11.83 + (11.60 × 30%) = 15.31.
         </P>
         <Table
-          head={['', 'Capped cover', 'Open cover (30% maximum)']}
+          head={['', 'Limited cover', 'Open cover (30% maximum)']}
           rows={[
             ['Move from 11.60 to 11.83', 'Not covered: the first 2% is yours', 'Not covered: the first 2% is yours'],
             ['Covered range', '11.83 to 13.01', '11.83 to 15.31'],
@@ -191,7 +191,7 @@ export function ActiveContracts() {
 
       <Section n="01" id="view" title="What you can see">
         <UL>
-          <li>The currency, direction, amount, strike, cap and end date.</li>
+          <li>The pair, whether it is a Cap or a Floor, the amount, strike, limit and end date.</li>
           <li>What the contract would pay if it ended at today's rate. This is an estimate; only the rate at the end date counts.</li>
           <li>The status: active, settled with the payout amount, or claimed.</li>
         </UL>
@@ -249,22 +249,22 @@ export function ExpiryAndSettlement() {
 
       <Section n="05" id="examples" title="Outcomes compared">
         <P>
-          {EX.convention} Hypothetical: $500,000 payables protection bought at 11.60 with the strike at 11.83. Capped cover has a
-          cap at 13.01 and costs $6,037.50 in total. Open cover comes from a pool with a 30% maximum, so its effective cap is 15.31
+          {EX.convention} Hypothetical: a $500,000 USD/GHS Cap bought at 11.60 with the strike at 11.83. Limited cover has a
+          limit at 13.01 and costs $6,037.50 in total. Open cover comes from a pool with a 30% maximum, so its effective limit is 15.31
           and its maximum payout $150,000; its premium would be higher.
         </P>
         <Table
-          head={['Rate at end', 'Capped cover payout', 'Open cover payout', 'Why']}
+          head={['Rate at end', 'Limited cover payout', 'Open cover payout', 'Why']}
           rows={[
             ['11.70', '$0', '$0', 'Below the strike'],
             ['12.40', '$24,568.97 ($24,077.59 after fee)', '$24,568.97 ($24,077.59 after fee)', '500,000 × (12.40 − 11.83) ÷ 11.60; inside both ranges'],
-            ['13.50', '$50,862.07 ($49,844.83 after fee)', '$71,982.76 ($70,543.10 after fee)', 'Capped stops at 13.01; open continues: 500,000 × (13.50 − 11.83) ÷ 11.60'],
+            ['13.50', '$50,862.07 ($49,844.83 after fee)', '$71,982.76 ($70,543.10 after fee)', 'Limited stops at 13.01; open continues: 500,000 × (13.50 − 11.83) ÷ 11.60'],
             ['16.00', '$50,862.07 ($49,844.83 after fee)', '$150,000.00 ($147,000.00 after fee)', 'Both at their maximum'],
           ]}
         />
         <P>
           At 11.70 the cedi weakened but not past the strike, so neither pays and the premium was the cost of being protected. At
-          12.40 both pay the same, because the rate is inside both ranges. Above 13.01 they differ: capped cover has stopped
+          12.40 both pay the same, because the rate is inside both ranges. Above 13.01 they differ: limited cover has stopped
           growing, while open cover keeps paying until it reaches 30% of the amount.
         </P>
       </Section>

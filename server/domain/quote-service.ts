@@ -109,7 +109,7 @@ export class QuoteService {
    */
   async quote(req: ProtectionRequest, accounts: Record<ChainKey, string>): Promise<ProtectionQuote> {
     if (!isOffered(req.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
-    if (req.structure === "capped" && !req.cap) throw new ApplicationError("INVALID_CAP", "Choose a cap level for Capped protection");
+    if (req.structure === "capped" && !req.cap) throw new ApplicationError("INVALID_CAP", "Choose a limit for Limited protection");
     const chain = this.chains.require(this.chains.executionNetworkFor().key, "newHedges");
     const buyer = accounts[chain.key];
     if (!buyer) throw new ApplicationError("INVALID_REQUEST", `No ${chain.name} account yet; create one before buying protection`);
@@ -134,7 +134,7 @@ export class QuoteService {
         throw new ApplicationError("STRIKE_TOO_CLOSE", `Protection must start at least ${Math.min(...closest) / 100}% from today's rate for this cover`);
       }
     }
-    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering ${req.tenorDays}-day ${req.structure} ${req.direction === "up" ? "rising-rate" : "falling-rate"} protection on ${req.pair}. Request a quote instead.`);
+    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering a ${req.tenorDays}-day ${req.structure === "open" ? "open" : "limited"} ${req.pair} ${req.direction === "up" ? "Cap" : "Floor"}. Request a quote instead.`);
 
     let last: ApplicationError = new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
     for (const { pool, markupBps } of candidates) {

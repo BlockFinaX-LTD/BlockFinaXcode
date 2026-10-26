@@ -171,7 +171,7 @@ type Refusal = { ok: false; reason: string };
  */
 export async function quotePoolBuy(req: PoolBuyRequest) {
   if (req.structure === "capped" && req.cap === undefined) {
-    return { ok: false as const, reason: "Choose a cap level for Capped protection" };
+    return { ok: false as const, reason: "Choose a limit for Limited protection" };
   }
   let candidates: (ChainPool & { poolId: number })[];
   if (req.poolId) {

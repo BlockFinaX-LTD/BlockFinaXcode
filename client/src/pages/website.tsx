@@ -883,8 +883,8 @@ const TRUST = [
 ];
 
 const RECEIPT: { step: number; k: string; v: string; proof?: string }[] = [
-  { step: 0, k: 'Protection', v: 'Cedi payables · $500,000' },
-  { step: 0, k: 'Strike and cap', v: '11.83 to 13.01' },
+  { step: 0, k: 'Contract', v: 'USD/GHS Cap · $500,000' },
+  { step: 0, k: 'Strike and limit', v: '11.83 to 13.01' },
   { step: 0, k: 'Reserve', v: '$50,862.07', proof: 'Locked at purchase' },
   { step: 1, k: 'USD/GHS at 14:00 UTC', v: '12.40', proof: 'Agreed by 2 operators' },
   { step: 2, k: 'Payout', v: '$24,077.59', proof: 'Claimed with your passkey' },
@@ -1451,7 +1451,7 @@ const HEDGERS: AudienceCopy = {
   steps: [
     { t: 'Choose your cover', d: 'The currency, the amount, the end date and the move that worries you.' },
     { t: 'Pay once', d: 'One premium in USDC, shown in full before you approve. No credit line, no further calls.' },
-    { t: 'Get paid if it moves', d: 'If the rate passes your strike at expiry, you receive the difference, up to your cap.' },
+    { t: 'Get paid if it moves', d: 'If the rate passes your strike at expiry, you receive the difference, up to your limit.' },
   ],
   pointsTitle: 'Why businesses use it',
   points: [
@@ -1487,7 +1487,7 @@ const UNDERWRITERS: AudienceCopy = {
   faqs: [
     { q: 'Who is it for?', a: 'Funds, treasuries and individuals with USDC who want returns tied to real economic risk.' },
     { q: 'Where do returns come from?', a: 'Only from premiums businesses pay for protection, never from new deposits.' },
-    { q: 'Can I lose money?', a: 'Yes, when covered rates move past strikes. Your loss on any contract is capped at what was reserved for it.' },
+    { q: 'Can I lose money?', a: 'Yes, when covered rates move past strikes. Your loss on any contract is limited to what was reserved for it.' },
   ],
   close: 'Ready to put your USDC to work?',
 };

@@ -192,7 +192,7 @@ export function registerRfqRoutes(app: Express, d: Deps) {
     if (!r || r.status !== "open" || r.expires_at.getTime() < Date.now()) throw new ApplicationError("INVALID_REQUEST", "This request is closed");
     if (r.user_id === uid) throw new ApplicationError("INVALID_REQUEST", "You cannot answer your own request");
     const strike = num(req.body?.strike), cap = num(req.body?.cap), premium = num(req.body?.premium);
-    if (!(strike > 0 && cap > 0 && premium > 0)) throw new ApplicationError("INVALID_REQUEST", "Enter the strike, the cap and your premium");
+    if (!(strike > 0 && cap > 0 && premium > 0)) throw new ApplicationError("INVALID_REQUEST", "Enter the strike, the limit and your premium");
     if (r.direction === "up" ? !(cap > strike) : !(cap < strike)) {
       throw new ApplicationError("INVALID_CAP", r.direction === "up" ? "The cap must be above the strike" : "The cap must be below the strike");
     }

@@ -94,7 +94,7 @@ export function RequestQuoteModal({ draft, pairs, onClose }: { draft: RequestDra
           <label className="bx-field">Protection starts at (optional)
             <input className="bx-input num" inputMode="decimal" placeholder="Rate" value={strike} onChange={(e) => setStrike(e.target.value.replace(/[^0-9.]/g, ''))} />
           </label>
-          <label className="bx-field">Maximum rate covered (optional)
+          <label className="bx-field">Protection limit (optional)
             <input className="bx-input num" inputMode="decimal" placeholder="Rate" value={cap} onChange={(e) => setCap(e.target.value.replace(/[^0-9.]/g, ''))} />
           </label>
           <label className="bx-field" style={{ gridColumn: '1 / -1' }}>Most you would pay (optional, USDC)
@@ -163,7 +163,7 @@ export function MyQuoteRequests() {
             <div key={o.id} className="bx-sums" style={{ marginTop: 8 }}>
               <Sum l={o.label} v={o.status === 'accepted' ? <Tag tone="green">Accepted</Tag> : o.live ? <span className="muted">Valid until {until(o.validUntil)}</span> : <Tag tone="grey">{o.status === 'failed' ? 'No longer available' : 'Expired'}</Tag>} />
               <Sum l="Protection starts at" v={<span className="num">{fmtRate(Number(o.strike))}</span>} />
-              <Sum l="Maximum rate covered" v={<span className="num">{fmtRate(Number(o.cap))}</span>} />
+              <Sum l="Protection limit" v={<span className="num">{fmtRate(Number(o.cap))}</span>} />
               <Sum l="Most you can receive" v={<span className="num">${fmt(o.maxPayout)}</span>} />
               <Sum l="Premium" v={<span className="num">${fmt(o.premium)}</span>} />
               {(o.live || o.status === 'accepted') && (
@@ -267,7 +267,7 @@ function OfferModal({ request: r, onClose, onSent }: { request: OpenRequest; onC
           <label className="bx-field">Protection starts at
             <input className="bx-input num" inputMode="decimal" value={strike} onChange={(e) => setStrike(e.target.value.replace(/[^0-9.]/g, ''))} />
           </label>
-          <label className="bx-field">Maximum rate covered
+          <label className="bx-field">Protection limit
             <input className="bx-input num" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value.replace(/[^0-9.]/g, ''))} />
           </label>
           <label className="bx-field" style={{ gridColumn: '1 / -1' }}>Your premium (USDC)

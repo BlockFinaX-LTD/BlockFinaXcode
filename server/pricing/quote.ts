@@ -420,7 +420,7 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
       `Quote rejected: max_payout/premium = ${leverage.toFixed(0)}× exceeds ` +
       `safety cap of ${MAX_LEVERAGE_RATIO}×. This usually means σ for ${req.pair} ` +
       `is at the engine floor and the option is mispriced. Move the strike closer ` +
-      `to spot, narrow the cap, or wait for the volatility floor for this tier ` +
+      `to spot, narrow the limit, or wait for the volatility floor for this tier ` +
       `to be recalibrated.`,
     );
   }
@@ -442,7 +442,7 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
       `Quote rejected: max_payout/premium = ${leverage.toFixed(2)}× is below the ` +
       `floor of ${MIN_LEVERAGE_RATIO}×. Spot has moved so far through the strike that ` +
       `the premium approaches the maximum payout — after fees the buyer cannot profit ` +
-      `even at the cap. This pool is no longer worth buying into.`,
+      `even at the limit. This pool is no longer worth buying into.`,
     );
   }
 

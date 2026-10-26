@@ -7,7 +7,7 @@ export function Underwriting() {
   return (
     <>
       <Head part={PART} title="How underwriting works">
-        Underwriters deposit USDC into a pool that covers one currency and one direction. When protection is sold from the pool,
+        Underwriters deposit USDC into a pool that sells one contract, a Cap or a Floor, on one currency. When protection is sold from the pool,
         part of their capital is reserved to pay it and they receive its premium at once. If the contract pays out, the payout
         comes from that reserve.
       </Head>
@@ -37,7 +37,7 @@ export function Underwriting() {
       </Section>
 
       <Section n="04" id="example" title="A worked example">
-        <P>{EX.convention} Hypothetical: you are the only underwriter backing a $500,000 capped cedi payables contract, bought at 11.60 with strike 11.83, cap 13.01 and a premium of $5,750.</P>
+        <P>{EX.convention} Hypothetical: you are the only underwriter backing a $500,000 limited USD/GHS Cap, bought at 11.60 with strike 11.83, limit 13.01 and a premium of $5,750.</P>
         <Table
           head={['', 'No payout (11.70)', 'Payout (12.40)', 'Full payout (13.50)']}
           rows={[
@@ -67,7 +67,7 @@ export function AddingCapital() {
       <Section n="01" id="join" title="Adding to an existing pool">
         <Steps>
           <Step title="Switch to Underwriter">Use the role switch at the top of the menu.</Step>
-          <Step title="Choose a pool">Open My pools or a pool from the Markets page and review its currency, direction, durations and fees.</Step>
+          <Step title="Choose a pool">Open My pools or a pool from the Markets page and review its pair, whether it sells a Cap or a Floor, its durations and fees.</Step>
           <Step title="Add liquidity">Enter an amount and approve with your passkey. The USDC moves from your wallet to the pool contract and becomes free capital.</Step>
         </Steps>
       </Section>
@@ -75,9 +75,9 @@ export function AddingCapital() {
       <Section n="02" id="create" title="Creating a pool">
         <Steps>
           <Step title="Create pool">From the Underwriter menu, select Create pool.</Step>
-          <Step title="Currency and direction">Choose, for example, cedi depreciation cover.</Step>
+          <Step title="Currency and contract">Choose, for example, USD/GHS Cap.</Step>
           <Step title="Durations and prices">Choose any day, up to a maximum, or only listed durations, and set your price for each listed duration as a multiple of BlockFinaX's fair price.</Step>
-          <Step title="Structures">Allow capped cover, open cover or both, with the closest strike and the cap range you accept.</Step>
+          <Step title="Structures">Allow limited cover, open cover or both, with the closest strike and the limit range you accept.</Step>
           <Step title="Fund and approve">Enter your starting capital and approve. The 25 USDC creation fee is charged with it.</Step>
         </Steps>
       </Section>
@@ -118,14 +118,14 @@ export function UnderwritingTerms() {
           rows={[
             ['Prices per duration', 'The markup on the fair price for each listed duration; between listed durations it is interpolated. Between 0.9 and 5 times fair.'],
             ['Durations', 'Any day from a minimum, up to a maximum, or only listed durations (up to 16), within the 90-day protocol maximum.'],
-            ['Structures', 'Whether capped and open cover are sold, the allowed cap range, the open-cover maximum and the closest strike to today\'s rate.'],
+            ['Structures', 'Whether limited and open cover are sold, the allowed limit range, the open-cover maximum and the closest strike to today\'s rate.'],
           ]}
         />
       </Section>
 
       <Section n="03" id="fixed" title="Settings that cannot be changed">
         <P>
-          A pool's currency and direction, and its fee rates, are fixed when it is created. Contracts already sold keep the terms
+          A pool's pair, whether it sells a Cap or a Floor, and its fee rates are fixed when it is created. Contracts already sold keep the terms
           they were sold with.
         </P>
       </Section>
