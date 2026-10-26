@@ -116,8 +116,16 @@ const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 110px' };
 
-function MarketRow({ pool, go, expandable = true, action = 'Buy cover' }: { pool: CurrencyPool; go: Go; expandable?: boolean; action?: string }) {
-  const [open, setOpen] = useState(false);
+function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false }: {
+  pool: CurrencyPool; go: Go; expandable?: boolean; action?: string;
+  /** Clicking the row chooses the pool (Markets) rather than only opening its prices. */
+  selectOnClick?: boolean;
+  /** The pool chosen on Markets: shown open, without its Select button. */
+  focused?: boolean;
+}) {
+  const [open, setOpen] = useState(focused);
+  // Opens when chosen, closes again when the full list returns.
+  useEffect(() => { if (selectOnClick) setOpen(focused); }, [focused, selectOnClick]);
   const offers = usePoolOffers(pool);
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
@@ -125,13 +133,13 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover' }: { pool
   const spot = useSpot(pool.pair);
   return (
     <>
-      <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
+      <div className={`bx-li${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
         <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
-        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
         <div className="r" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{action}</button>
+          {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{action}</button>}
           {expandable && (open ? <ChevronUp size={16} className="muted" /> : <ChevronDown size={16} className="muted" />)}
         </div>
       </div>
@@ -140,14 +148,14 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover' }: { pool
           <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span className="r">{hint("Cost per $1,000")}</span><span /></div>
           {offers.rows.map((r) => (
             <div key={r.tenorDays} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}>
-              <span style={{ fontWeight: 600 }}>{r.tenorDays} days</span>
+              <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
               <span className="r">{dateIn(r.tenorDays)}</span>
               <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
               <span className="r num">{r.per1000 === null ? '-' : `$${fmt(r.per1000)}`}</span>
               <span className="r"><button className="bx-btn ghost small" onClick={() => buy(r.tenorDays)}>Buy</button></span>
             </div>
           ))}
-          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for this pool's closest cover: starting {offers.distance === 0 ? "at today's rate" : `${offers.distance / 100}% from today`}{offers.strike ? ` (${fmtRate(offers.strike)} ${quoteCcy(pool.pair)})` : ''}, capped 10% beyond, including the BlockFinaX fee. Cover starting further away costs less. Your exact price is shown before you buy.</div>
+          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for this pool's closest cover: starting {offers.distance === 0 ? "at today's rate" : `${offers.distance / 100}% from today`}{offers.strike ? ` (${fmtRate(offers.strike)} ${quoteCcy(pool.pair)})` : ''}, with a limit 10% beyond, including the BlockFinaX fee. Cover starting further away costs less. Your exact price is shown before you buy.</div>
         </div>
       )}
     </>
@@ -164,17 +172,23 @@ function useOpenPools() {
   return { pools, open };
 }
 
-/** The pools on sale, at the top of Markets. Choosing one loads it into the buying panel beside it. */
-function MarketList({ go }: { go: Go }) {
+/**
+ * The pools on sale, at the top of Markets. Choosing one shows only that pool, open, and
+ * loads it into the buying panel beside it; All markets brings the list back.
+ */
+function MarketList({ go, selected }: { go: Go; selected: string | null }) {
   const { pools, open } = useOpenPools();
   const pairs = Array.from(new Set(open.map((p) => p.pair)));
   const [filter, setFilter] = useState<string>('all');
-  const shown = open.filter((p) => filter === 'all' || p.pair === filter);
+  const chosen = selected ? open.find((p) => poolRef(p) === selected) ?? null : null;
+  const shown = chosen ? [chosen] : open.filter((p) => filter === 'all' || p.pair === filter);
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-        <div><h2>Markets</h2><div className="sub">Choose a pool to price your protection. Open a row to see its price for each duration.</div></div>
-        {pairs.length > 1 && (
+        <div><h2>Markets</h2><div className="sub">{chosen ? 'Set your terms beside it. Your exact price is shown before you buy.' : 'Choose a market to price your protection.'}</div></div>
+        {chosen ? (
+          <button className="bx-link" onClick={() => go('h-protect', { pair: chosen.pair })}>All markets</button>
+        ) : pairs.length > 1 && (
           <div className="bx-seg" style={{ width: 'auto' }}>
             <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
             {pairs.map((p) => <button key={p} className={filter === p ? 'on' : ''} onClick={() => setFilter(p)}>{ccyName(p)}</button>)}
@@ -184,12 +198,14 @@ function MarketList({ go }: { go: Go }) {
       {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
           <MarketHeader />
-          {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" />)}
+          {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" selectOnClick focused={p === chosen} />)}
         </div></div>
       )}
-      <div className="bx-hint" style={{ marginTop: 12 }}>
-        Don't see what you need? <button className="bx-link" onClick={() => go('h-protect', { rfq: true })}>Request a quote</button>
-      </div>
+      {!chosen && (
+        <div className="bx-hint" style={{ marginTop: 12 }}>
+          Don't see what you need? <button className="bx-link" onClick={() => go('h-protect', { rfq: true })}>Request a quote</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -861,7 +877,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   return (
     <main className="bx-main">
       <section className="bx-col">
-        <MarketList go={go} />
+        <MarketList go={go} selected={poolChoice} />
         <div className="bx-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <Flag pair={pair} large />
