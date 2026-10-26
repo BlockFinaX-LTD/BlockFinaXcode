@@ -1,4 +1,4 @@
-import { Example, P, Section, Step, Steps, Table, UL } from '../lesson-blocks';
+import { P, Section, Step, Steps, Table, UL } from '../lesson-blocks';
 import { A, EX, Head } from './common';
 
 const PART = 'Buying protection';
@@ -121,19 +121,25 @@ export function YourQuote() {
       </Section>
 
       <Section n="02" id="exposure" title="What remains your risk">
-        <P>{EX.convention} Hypothetical figures.</P>
-        <Example
-          title="$500,000 cedi payables protection bought at 11.60, strike 11.83, cap 13.01"
+        <P>
+          {EX.convention} Hypothetical figures: $500,000 cedi payables protection bought at 11.60 with the strike at 11.83. The
+          capped version has a cap at 13.01. The open version is from a pool whose maximum payout is 30% of the amount, which
+          places its effective cap at 11.83 + (11.60 × 30%) = 15.31.
+        </P>
+        <Table
+          head={['', 'Capped cover', 'Open cover (30% maximum)']}
           rows={[
-            ['Move from 11.60 to 11.83', 'Not covered: the first 2% is yours'],
-            ['Move from 11.83 to 13.01', 'Covered by the payout'],
-            ['Move beyond 13.01', 'Not covered'],
-            ['Premium and fees', 'Paid whatever the outcome'],
+            ['Move from 11.60 to 11.83', 'Not covered: the first 2% is yours', 'Not covered: the first 2% is yours'],
+            ['Covered range', '11.83 to 13.01', '11.83 to 15.31'],
+            ['Move beyond the covered range', 'Not covered', 'Not covered'],
+            ['Most you can receive, before the 2% fee', '$50,862.07', '$150,000.00'],
+            ['Premium and fees', 'Paid whatever the outcome', 'Paid whatever the outcome, and higher for the wider range'],
           ]}
-        >
-          A payout also may not match your actual loss exactly, because it uses the reference rate at 14:00 UTC on the end date
-          rather than the rate and time at which you pay. <A to="protection-limits">Protection limits</A> explains each case.
-        </Example>
+        />
+        <P>
+          With either structure, a payout may not match your actual loss exactly, because it uses the reference rate on the end
+          date rather than the rate and time at which you pay. <A to="protection-limits">Protection limits</A> explains each case.
+        </P>
       </Section>
 
       <Section n="03" id="validity" title="How long a quote lasts">
@@ -242,19 +248,24 @@ export function ExpiryAndSettlement() {
       </Section>
 
       <Section n="05" id="examples" title="Outcomes compared">
-        <P>{EX.convention} Hypothetical: $500,000 payables protection bought at 11.60, strike 11.83, cap 13.01, total paid $6,037.50.</P>
+        <P>
+          {EX.convention} Hypothetical: $500,000 payables protection bought at 11.60 with the strike at 11.83. Capped cover has a
+          cap at 13.01 and costs $6,037.50 in total. Open cover comes from a pool with a 30% maximum, so its effective cap is 15.31
+          and its maximum payout $150,000; its premium would be higher.
+        </P>
         <Table
-          head={['Rate at end', 'Calculation', 'Payout', 'After 2% fee']}
+          head={['Rate at end', 'Capped cover payout', 'Open cover payout', 'Why']}
           rows={[
-            ['11.70', 'Below the strike', '$0', '$0'],
-            ['12.40', '500,000 × (12.40 − 11.83) ÷ 11.60', '$24,568.97', '$24,077.59'],
-            ['13.50', '500,000 × (13.01 − 11.83) ÷ 11.60, capped', '$50,862.07', '$49,844.83'],
+            ['11.70', '$0', '$0', 'Below the strike'],
+            ['12.40', '$24,568.97 ($24,077.59 after fee)', '$24,568.97 ($24,077.59 after fee)', '500,000 × (12.40 − 11.83) ÷ 11.60; inside both ranges'],
+            ['13.50', '$50,862.07 ($49,844.83 after fee)', '$71,982.76 ($70,543.10 after fee)', 'Capped stops at 13.01; open continues: 500,000 × (13.50 − 11.83) ÷ 11.60'],
+            ['16.00', '$50,862.07 ($49,844.83 after fee)', '$150,000.00 ($147,000.00 after fee)', 'Both at their maximum'],
           ]}
         />
         <P>
-          At 11.70 the cedi weakened, but not past the strike, so there is no payout and the $6,037.50 was the cost of being
-          protected. At 12.40 the payout covers the move from 11.83 to 12.40 on $500,000. At 13.50 the payout stops at the cap,
-          and the move from 13.01 to 13.50 is not covered.
+          At 11.70 the cedi weakened but not past the strike, so neither pays and the premium was the cost of being protected. At
+          12.40 both pay the same, because the rate is inside both ranges. Above 13.01 they differ: capped cover has stopped
+          growing, while open cover keeps paying until it reaches 30% of the amount.
         </P>
       </Section>
     </>

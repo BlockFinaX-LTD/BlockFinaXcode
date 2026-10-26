@@ -93,7 +93,7 @@ export function HowProtectionWorks() {
       <Section n="03" id="example" title="A worked example">
         <P>{EX.convention} All figures are hypothetical.</P>
         <Example
-          title="cedi payables protection"
+          title="capped cedi payables protection"
           rows={[
             ['Rate when bought', '11.60'],
             ['Amount protected', '$500,000'],
@@ -230,7 +230,7 @@ export function PricingAndCharges() {
       <Section n="04" id="example" title="All charges on one contract">
         <P>{EX.convention} Hypothetical figures, assuming a fair rate of 1.00% and a markup of 1.15.</P>
         <Example
-          title="$500,000 cedi payables protection, rate 12.40 at the end date"
+          title="$500,000 capped cedi payables protection, rate 12.40 at the end date"
           rows={[
             ['Premium: 500,000 × 1.00% × 1.15', '$5,750.00'],
             ['Platform fee: 5% of 5,750', '$287.50'],

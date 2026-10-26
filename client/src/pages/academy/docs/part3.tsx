@@ -37,7 +37,7 @@ export function Underwriting() {
       </Section>
 
       <Section n="04" id="example" title="A worked example">
-        <P>{EX.convention} Hypothetical: you are the only underwriter backing a $500,000 cedi payables contract, bought at 11.60 with strike 11.83, cap 13.01 and a premium of $5,750.</P>
+        <P>{EX.convention} Hypothetical: you are the only underwriter backing a $500,000 capped cedi payables contract, bought at 11.60 with strike 11.83, cap 13.01 and a premium of $5,750.</P>
         <Table
           head={['', 'No payout (11.70)', 'Payout (12.40)', 'Full payout (13.50)']}
           rows={[
