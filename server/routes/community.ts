@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { dailyTasks, userTaskCompletions, termsAcceptances, authSessions, hedgeActivity } from "../../shared/schema";
 import { userPoints, pointTransactions, referrals, referralCodes } from "../../shared/referral-schema";
-import { requireRiftUser } from "../middleware/rift-auth";
+import { requireUser } from "../middleware/session-auth";
 import { v2 as cloudinary } from "cloudinary";
 
 // Configure Cloudinary from env. The `CLOUDINARY_URL` env var auto-configures
@@ -75,9 +75,9 @@ export function registerCommunityRoutes(app: Express) {
    * Frontend uses these fields to POST to
    *   https://api.cloudinary.com/v1_1/{cloud_name}/image/upload
    *
-   * Auth: Rift Bearer required — we never want anonymous uploads.
+   * Auth: a signed-in session is required — we never want anonymous uploads.
    */
-  app.post("/api/tasks/upload-signature", requireRiftUser, async (req, res) => {
+  app.post("/api/tasks/upload-signature", requireUser, async (req, res) => {
     try {
       if (!cloudinaryConfigured) {
         return res.status(503).json({
@@ -85,7 +85,7 @@ export function registerCommunityRoutes(app: Express) {
         });
       }
       const cfg = cloudinary.config() as any;
-      const wallet = req.riftUser!.address;
+      const wallet = req.sessionUser!.address;
       const timestamp = Math.floor(Date.now() / 1000);
       // Tag with the user's wallet for traceability; one folder per user
       const folder = `evidence/${wallet}`;
@@ -111,14 +111,14 @@ export function registerCommunityRoutes(app: Express) {
     }
   });
 
-  // Auth model: Authorization: Bearer <rift access token>. requireRiftUser
-  // verifies against Rift /user/me and attaches req.riftUser with the canonical
+  // Auth model: Authorization: Bearer <session token>. requireUser
+  // verifies the session and attaches req.sessionUser with the canonical
   // wallet address — we never trust an address from the body.
-  app.post("/api/tasks/complete", requireRiftUser, async (req, res) => {
+  app.post("/api/tasks/complete", requireUser, async (req, res) => {
     try {
       const { taskId, evidenceUrl, evidenceImage, evidenceText } = req.body ?? {};
       if (!taskId) return res.status(400).json({ error: "taskId required" });
-      const addr = req.riftUser!.address; // already lowercased
+      const addr = req.sessionUser!.address; // already lowercased
 
       const [task] = await db.select().from(dailyTasks).where(and(eq(dailyTasks.id, taskId), eq(dailyTasks.isActive, true)));
       if (!task) return res.status(404).json({ error: "Task not found or inactive" });
@@ -243,7 +243,7 @@ export function registerCommunityRoutes(app: Express) {
   app.get("/api/referrals/codes/:walletAddress", async (req, res) => {
     try {
       // Wallet addresses are stored lowercase server-side. The dashboard
-      // sends Rift's mixed-case checksum address, so we must normalise here
+      // sends a mixed-case checksum address, so we must normalise here
       // or look-ups + new-code inserts use mismatched casings.
       const walletAddress = req.params.walletAddress.toLowerCase();
       let codes = await storage.getReferralCodesByWallet(walletAddress);

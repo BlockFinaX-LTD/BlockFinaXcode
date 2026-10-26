@@ -1,5 +1,5 @@
 /**
- * The BlockFinaX passkey wallet on the main backend (testnet, WALLET_PROVIDER=passkey).
+ * The BlockFinaX passkey wallet on the main backend.
  *
  * Sign in with an email code or Google; then one passkey owns the user's smart accounts
  * and approves every transaction. Returning users may also sign in with the passkey.
@@ -46,8 +46,6 @@ import { BASE_FEE, Keypair, Operation, TransactionBuilder, nativeToScVal } from 
 /** A passkey sign-in lasts at most 12 hours; the browser also forgets it when the tab closes. */
 const PASSKEY_SESSION_HOURS = 12;
 
-/** The passkey wallet is the default; the legacy Rift wallet only with WALLET_PROVIDER=rift. */
-export const passkeyWalletEnabled = () => process.env.WALLET_PROVIDER !== "rift";
 
 const challenges = new Map<string, { challenge: string; expiresAt: number; name?: string; userHandle?: string }>();
 function putChallenge(value: { challenge: string; name?: string; userHandle?: string }) {
@@ -194,7 +192,6 @@ export function registerPasskeyWalletRoutes(app: Express) {
   });
 
   app.get("/api/wallet/passkey/config", (req, res) => {
-    if (!passkeyWalletEnabled()) return res.json({ enabled: false });
     const { evm, stellar } = chains();
     res.json({
       enabled: true,
@@ -203,7 +200,6 @@ export function registerPasskeyWalletRoutes(app: Express) {
       stellar: stellar ? { chain: stellar.key, rpcUrl: stellar.rpcUrls[0], networkPassphrase: stellar.networkId, walletWasmHash: PASSKEY_WALLET_WASM } : null,
     });
   });
-  if (!passkeyWalletEnabled()) return;
 
   app.post("/api/wallet/auth/email/start", wrap(async (req, res) => {
     const email = String(req.body?.email ?? "").trim().toLowerCase();

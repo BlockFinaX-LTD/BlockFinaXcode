@@ -247,8 +247,7 @@ export async function emailUserAccessReceived(to: string, name: string) {
 
 export async function emailUserAccessApproved(to: string, name: string, signinToken: string) {
   // Magic link carries the signin token so the recipient can land on /auth
-  // and actually see the sign-in surface — the AuthGate hides the Rift
-  // widget from any visitor without a valid token. Token is good for 30 days,
+  // and see the sign-in page. Token is good for 30 days,
   // long enough to sign in across devices before it expires.
   const signinLink = `${APP_URL}/auth?t=${encodeURIComponent(signinToken)}`;
   const body = `

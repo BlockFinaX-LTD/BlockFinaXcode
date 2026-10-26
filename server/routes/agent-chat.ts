@@ -7,7 +7,7 @@
  *   POST /api/chat/customer  signed-in user, their own account only
  *
  * The security property that matters is that a customer's identity is taken
- * from a Rift-verified session and threaded into the tool executor. The model
+ * from a verified sign-in session and threaded into the tool executor. The model
  * never sees a wallet address it could substitute, and the customer tool
  * schemas have no field to put one in. So "tell me about someone else's
  * account" has no mechanism to succeed, regardless of how it is phrased.
@@ -21,7 +21,7 @@ import crypto from "crypto";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { leads } from "@shared/lead-schema";
-import { requireRiftUser } from "../middleware/rift-auth";
+import { requireUser } from "../middleware/session-auth";
 import { agentMessages, agentRuns, chatSchema } from "@shared/agent-schema";
 import { runAgent, agentConfigured, fence } from "../agent/runtime";
 
@@ -201,7 +201,7 @@ export function registerAgentChatRoutes(app: Express) {
 
   // ═══ CUSTOMER ══════════════════════════════════════════════════════════
 
-  app.post("/api/chat/customer", requireRiftUser, async (req: Request, res: Response) => {
+  app.post("/api/chat/customer", requireUser, async (req: Request, res: Response) => {
     if (!agentConfigured()) {
       return res.status(503).json({ message: "Chat isn't available right now." });
     }
@@ -209,9 +209,9 @@ export function registerAgentChatRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
     const { threadId, message } = parsed.data;
 
-    // Rift verified this. It is the only source of the caller's identity —
+    // The session check verified this. It is the only source of the caller's identity —
     // nothing in the request body influences whose data gets read.
-    const wallet = req.riftUser!.address;
+    const wallet = req.sessionUser!.address;
 
     try {
       // Namespaced by wallet, so a guessed thread id cannot surface another
@@ -257,8 +257,8 @@ export function registerAgentChatRoutes(app: Express) {
     }
   });
 
-  app.get("/api/chat/customer/:threadId", requireRiftUser, async (req: Request, res: Response) => {
-    const wallet = req.riftUser!.address.toLowerCase();
+  app.get("/api/chat/customer/:threadId", requireUser, async (req: Request, res: Response) => {
+    const wallet = req.sessionUser!.address.toLowerCase();
     const scopedThread = `cus_${wallet}_${req.params.threadId}`.slice(0, 120);
     const rows = await db
       .select()

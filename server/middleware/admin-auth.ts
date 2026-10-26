@@ -35,9 +35,9 @@ export function getOwnerAddresses(): string[] {
 }
 
 /**
- * Admin email allowlist. The /api/admin/login endpoint accepts a Rift
- * access token, calls Rift to resolve the signed-in user's email, and
- * grants admin access if that email appears here. Comma-separated.
+ * Admin email allowlist. The /api/admin/login endpoint accepts the session
+ * token of a signed-in BlockFinaX user and grants admin access if that
+ * account's email appears here. Comma-separated.
  */
 export function getOwnerEmails(): string[] {
   const raw = process.env.ADMIN_EMAILS || "";

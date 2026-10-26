@@ -87,7 +87,7 @@ async function liveContext(): Promise<string> {
  * Auth for the browser extension.
  *
  * Admin sessions are in-memory with an eight-hour TTL, issued by logging in
- * through Rift. That is right for a console someone sits in front of, and wrong
+ * with a BlockFinaX account. That is right for a console someone sits in front of, and wrong
  * for an extension: Anthony would be re-pasting a token twice a day, and again
  * after every redeploy, since a restart empties the map.
  *

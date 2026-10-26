@@ -5,7 +5,7 @@
  *   /api/admin/compliance/*  admin: review queue, alerts, screening
  *
  * The customer half is identity-bound the same way Finax is: the wallet comes
- * from a Rift-verified session, never from the request body. A customer can
+ * from a verified sign-in session, never from the request body. A customer can
  * read their own standing and submit their own documents, and has no route to
  * anyone else's.
  */
@@ -13,7 +13,7 @@
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { requireRiftUser } from "../middleware/rift-auth";
+import { requireUser } from "../middleware/session-auth";
 import { requireAdmin, requireApprover } from "../middleware/admin-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
 import { userProfiles } from "@shared/schema";
@@ -32,9 +32,9 @@ export function registerComplianceRoutes(app: Express) {
   // ═══ CUSTOMER ══════════════════════════════════════════════════════════
 
   /** Your tier, what you've moved, and what's left. */
-  app.get("/api/compliance/me", requireRiftUser, async (req: Request, res: Response) => {
+  app.get("/api/compliance/me", requireUser, async (req: Request, res: Response) => {
     try {
-      const wallet = req.riftUser!.address;
+      const wallet = req.sessionUser!.address;
       const standing = await walletStanding(wallet);
       const [submission] = await db
         .select()
@@ -104,9 +104,9 @@ export function registerComplianceRoutes(app: Express) {
   });
 
   /** Would this transaction be allowed? Called by the app before it lets you act. */
-  app.post("/api/compliance/check", requireRiftUser, async (req: Request, res: Response) => {
+  app.post("/api/compliance/check", requireUser, async (req: Request, res: Response) => {
     try {
-      const wallet = req.riftUser!.address;
+      const wallet = req.sessionUser!.address;
       const kind = ["buy_protection", "deposit", "withdraw"].includes(req.body?.kind)
         ? req.body.kind
         : "buy_protection";
@@ -139,9 +139,9 @@ export function registerComplianceRoutes(app: Express) {
    * rather than rejecting it — a name collision is not grounds to refuse
    * someone service, but it is grounds for a person to look.
    */
-  app.post("/api/compliance/submit", requireRiftUser, strictLimiter, async (req: Request, res: Response) => {
+  app.post("/api/compliance/submit", requireUser, strictLimiter, async (req: Request, res: Response) => {
     try {
-      const wallet = req.riftUser!.address;
+      const wallet = req.sessionUser!.address;
       const parsed = kycSubmissionSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({

@@ -83,9 +83,7 @@ export function serveStatic(app: Express) {
   }
 
   // Public static assets (logos, fonts, images, JS, CSS) must be embeddable
-  // from third-party origins — most importantly the Rift sign-in widget at
-  // widget.blockfinax.com (the white-labeled host, formerly widget.riftfi.xyz)
-  // which renders our logo in its branded header. The
+  // from third-party origins (embeds that render our logo). The
   // global helmet config sets Cross-Origin-Resource-Policy: same-site for
   // every response, which causes browsers to silently block <img src="…">
   // from cross-site contexts (emails work because Gmail proxies the fetch

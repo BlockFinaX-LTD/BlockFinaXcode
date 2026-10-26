@@ -28,7 +28,6 @@ import { registerOutreachRoutes } from "./routes/outreach";
 import { registerProspectRoutes } from "./routes/prospects";
 import { registerResearchRoutes } from "./routes/research";
 import { registerCommunityRoutes } from "./routes/community";
-import { registerRiftProxy } from "./routes/rift-proxy";
 import { registerMercuryoRoutes } from "./routes/mercuryo";
 import { registerPricingRoutes } from "./routes/pricing";
 import { registerV2Routes } from "./routes/v2";
@@ -65,9 +64,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Sub-module registration ────────────────────────────────────────────────
-  // Dev-only: Rift's API sends no CORS headers for localhost, so in development
-  // browser calls are routed through this same-origin proxy. No-op in production.
-  registerRiftProxy(app);
   registerInvestorRoutes(app);
   registerKycRoutes(app);
   registerWalletRoutes(app);

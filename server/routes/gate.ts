@@ -21,17 +21,11 @@ import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { db } from '../db';
-import { storage } from '../storage';
-import { accessRequests, accessGrants, docsTokens, docsRequests, signinTokens, wallets } from '@shared/schema';
+import { accessRequests, accessGrants, docsTokens, docsRequests, signinTokens } from '@shared/schema';
 import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
+import { verifySessionToken } from '../middleware/session-auth';
 import { mintInvestorSession, revokeDocsInvestorSessions } from './investor';
 
-const RIFT_API_BASE = process.env.RIFT_API_BASE || 'https://payment.riftfi.xyz';
-/**
- * Server-side key. Prefers RIFT_SECRET_KEY, which must never carry a VITE_
- * prefix — that prefix is what puts a value into the public browser bundle.
- */
-const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || '';
 import {
   emailAdminNewAccessRequest,
   emailUserAccessReceived,
@@ -165,7 +159,7 @@ export function registerGateRoutes(app: Express) {
 
   // ── Public: verify a signin token from the approval email ───────────
   // The /auth route's AuthGate calls this with ?t=<raw>. We never return
-  // which email the token belongs to — Rift learns that from the user
+  // which email the token belongs to — the app learns that from the user
   // signing in. We just confirm the token is real, unexpired, unrevoked.
   app.get('/api/access/signin-verify', async (req, res) => {
     const raw = String(req.query.t || '').trim();
@@ -318,9 +312,9 @@ export function registerGateRoutes(app: Express) {
 
   // ── Public: admin bypass — mint a docs token for ADMIN_EMAILS members ──
   // Lets a signed-in admin skip the magic-link flow entirely. The client
-  // passes their Rift access token; we resolve the email via Rift and check
-  // it against ADMIN_EMAILS. On success, mint a docs token bound to that
-  // email and return it raw — the gate stores it and proceeds.
+  // passes their session token; the account email is checked against
+  // ADMIN_EMAILS. On success, mint a docs token bound to that email and
+  // return it raw — the gate stores it and proceeds.
   app.post('/api/docs/admin-bypass', async (req, res) => {
     const accessToken = String(req.body?.accessToken || '').trim();
     if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
@@ -329,35 +323,10 @@ export function registerGateRoutes(app: Express) {
     if (allowed.length === 0) {
       return res.status(500).json({ error: 'ADMIN_EMAILS not configured' });
     }
-    if (!RIFT_API_KEY) {
-      return res.status(500).json({ error: 'Server is missing the Rift API key' });
-    }
-
-    let riftRes: Response;
-    try {
-      riftRes = await fetch(`${RIFT_API_BASE}/user/me`, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': RIFT_API_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-        },
-      });
-    } catch (err: any) {
-      console.error('[docs/admin-bypass] Rift unreachable:', err?.message);
-      return res.status(502).json({ error: 'Could not reach Rift to verify the session' });
-    }
-    if (riftRes.status === 401 || riftRes.status === 403) {
-      return res.status(401).json({ error: 'Rift session expired' });
-    }
-    if (!riftRes.ok) {
-      return res.status(502).json({ error: 'Rift returned an error verifying the session' });
-    }
-
-    const body = (await riftRes.json()) as any;
-    const user = body?.user ?? body?.data?.user ?? body?.data ?? body;
-    const email: string | undefined = user?.email;
-    if (!email) return res.status(403).json({ error: 'No email on the Rift account' });
+    const user = await verifySessionToken(accessToken);
+    if (!user) return res.status(401).json({ error: 'Session expired' });
+    const email = user.email ?? undefined;
+    if (!email) return res.status(403).json({ error: 'No email on the account' });
     if (!allowed.includes(email.toLowerCase())) {
       return res.status(403).json({ error: 'Not on the admin allowlist' });
     }
@@ -376,84 +345,6 @@ export function registerGateRoutes(app: Express) {
     });
     const investor = mintInvestorSession({ editEnabled: true });
     return res.json({ token: raw, expiresAt: expiresAt.toISOString(), investorToken: investor.token });
-  });
-
-  // ── Public: register a Rift-authenticated user in our wallets table ─
-  //
-  // The dashboard counts users from the legacy `wallets` Postgres table,
-  // but that table is only populated by the legacy POST /api/wallets
-  // endpoint (which requires a session token from auth_sessions). After
-  // the Rift migration nobody hits that, so the count is permanently 0
-  // even when real users sign up.
-  //
-  // This endpoint is called by the client on every successful Rift
-  // sign-in (from RiftPostSigninSync). It verifies the access token via
-  // Rift's /user/me, then upserts a wallet row keyed by address. Once
-  // present, repeat sign-ins are no-ops thanks to ON CONFLICT DO NOTHING.
-  app.post('/api/rift/register', async (req, res) => {
-    const accessToken = String(req.body?.accessToken || '').trim();
-    if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
-    if (!RIFT_API_KEY) return res.status(500).json({ error: 'Server is missing the Rift API key' });
-
-    let riftRes: Response;
-    try {
-      riftRes = await fetch(`${RIFT_API_BASE}/user/me`, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': RIFT_API_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-        },
-      });
-    } catch (err: any) {
-      console.error('[rift/register] Rift unreachable:', err?.message);
-      return res.status(502).json({ error: 'Could not reach Rift to verify the session' });
-    }
-    if (riftRes.status === 401 || riftRes.status === 403) {
-      return res.status(401).json({ error: 'Rift session expired' });
-    }
-    if (!riftRes.ok) {
-      return res.status(502).json({ error: 'Rift returned an error verifying the session' });
-    }
-
-    const body = (await riftRes.json()) as any;
-    const user = body?.user ?? body?.data?.user ?? body?.data ?? body;
-    const address = (user?.address || '').toString().trim();
-    const email = (user?.email || '').toString().trim().toLowerCase() || null;
-    if (!address) return res.status(400).json({ error: 'No address on the Rift account' });
-
-    // Upsert. encryptedPrivateKey is required-nonnull on the legacy table
-    // but Rift custodies the key, so we store a sentinel marker instead.
-    try {
-      const [row] = await db
-        .insert(wallets)
-        .values({
-          address,
-          name: 'Rift wallet',
-          encryptedPrivateKey: 'rift-managed',
-          email,
-          isImported: true,
-        })
-        .onConflictDoNothing({ target: wallets.address })
-        .returning({ id: wallets.id });
-
-      // Referral attribution: only for a genuinely NEW wallet, and only via a
-      // code carried from /auth?ref=CODE. storage enforces no-self-referral,
-      // code caps, and one-referrer-per-referee. Pending until the referee
-      // qualifies on-chain. Fire-and-forget — never blocks registration.
-      if (row) {
-        const referralCode = String(req.body?.referralCode || '').trim();
-        if (referralCode) {
-          storage.recordReferralSignup(address.toLowerCase(), referralCode)
-            .then((ok) => { if (ok) console.log(`[referral] pending: ${address} via ${referralCode}`); })
-            .catch((e) => console.warn('[referral] signup record failed:', e?.message));
-        }
-      }
-      return res.json({ status: row ? 'created' : 'already_registered', address });
-    } catch (err: any) {
-      console.error('[rift/register] wallet upsert failed:', err?.message);
-      return res.status(500).json({ error: 'Failed to register user' });
-    }
   });
 
   // ── Admin: list access requests ──────────────────────────────────────
@@ -500,8 +391,8 @@ export function registerGateRoutes(app: Express) {
       // Mint a signin token so the approval email can carry a real magic link
       // that unlocks /auth (and only /auth — separate from docs tokens). 30-day
       // expiry so the applicant can sign in from multiple devices before it
-      // burns. The token isn't single-use — once they've signed in via Rift
-      // the widget owns the session and they don't need the link again.
+      // burns. The token isn't single-use — once they've signed in, their
+      // session carries them and they don't need the link again.
       const rawSignin = crypto.randomBytes(32).toString('base64url');
       const signinHash = hashToken(rawSignin);
       const signinExpiresAt = new Date(Date.now() + SIGNIN_TOKEN_TTL_MS);

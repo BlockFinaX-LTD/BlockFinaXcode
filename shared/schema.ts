@@ -340,8 +340,8 @@ export const userTaskCompletions = pgTable("user_task_completions", {
   reviewedAt: timestamp("reviewed_at"),
   reviewNotes: text("review_notes"),        // admin's reason / note
   // ── Payout tracking ────────────────────────────────────────────────────
-  // Set when an admin uses the Payouts queue to settle the points as a
-  // Rift transfer. Until then the row is "unpaid" and shows up in the queue.
+  // Set when an admin records an on-chain payout for the points. Until then
+  // the row is "unpaid" and shows up in the queue.
   paidTxHash: text("paid_tx_hash"),
   paidAmount: decimal("paid_amount", { precision: 18, scale: 6 }),
   paidToken: text("paid_token"),            // 'USDC' | 'USDT'
@@ -354,7 +354,7 @@ export const userTaskCompletions = pgTable("user_task_completions", {
  * Generic key/value config table — used today for `point_value_usd`
  * (how many USD a point is worth). Read by the Earn page hero (to show
  * "≈ $X.XX worth") and by the admin Payouts section (to compute payout
- * amounts in USD before triggering a Rift send).
+ * amounts in USD).
  */
 export const platformSettings = pgTable("platform_settings", {
   key: text("key").primaryKey(),
@@ -571,8 +571,7 @@ export const docsTokens = pgTable("docs_tokens", {
 export type DocsToken = typeof docsTokens.$inferSelect;
 
 // Issued when an admin approves an access_request. Lets an approved
-// applicant land on /auth to actually sign in via Rift — without one of
-// these tokens (in URL or localStorage), the Rift widget never renders.
+// applicant land on /auth to sign in. Kept from the invite-only period.
 // Separate from docs_tokens so that docs access doesn't accidentally grant
 // app access and vice-versa.
 export const signinTokens = pgTable("signin_tokens", {

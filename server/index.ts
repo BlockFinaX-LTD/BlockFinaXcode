@@ -57,7 +57,7 @@ const isProd = process.env.NODE_ENV === 'production';
  *
  * Both blockfinax.com and www.blockfinax.com are attached to this service in
  * Railway, so both serve the app directly. Browsers treat them as two separate
- * origins, and the Rift session lives in localStorage, which is per origin. A
+ * origins, and a browser session lives in per-origin storage. A
  * user signed in on one therefore appears signed out on the other, with an
  * empty wallet balance and no error to explain it.
  *
@@ -110,11 +110,7 @@ app.use(helmet({
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc:     ["'self'"],
-      // Google Identity Services (`accounts.google.com/gsi/client`) is
-      // dynamically injected as <script src=…> by the Rift v3 wallet
-      // helpers when the user links or signs with a Google account. Without
-      // this entry the script is CSP-blocked and enrolment / signing fails
-      // with "Failed to load Google Identity script".
+      // Google sign-in scripts.
       scriptSrc:      ["'self'", "https://accounts.google.com", "https://apis.google.com"],
       // style-src needs Google Fonts because index.html loads Inter + Geist
       // Mono from fonts.googleapis.com. Without it the page renders with
@@ -165,30 +161,14 @@ app.use(helmet({
         // Google OAuth
         "https://accounts.google.com",
         "https://oauth2.googleapis.com",
-        // Rift Finance — wallet SDK calls these directly from the browser
-        "https://payment.riftfi.xyz",
-        "https://*.riftfi.xyz",
-        "https://*.rift.fi",
-        "https://*.rift-finance.com",
-        // White-labeled Rift widget served from our own subdomain
-        "https://widget.blockfinax.com",
         // Cloudinary — direct-to-cloud upload for task evidence
         "https://api.cloudinary.com",
         "https://res.cloudinary.com",
       ],
-      // frame-src must include the Rift sign-in widget; otherwise the
-      // iframe is blocked and users can't sign in. We point production at
-      // our white-labeled widget.blockfinax.com but keep the partner hosts
-      // allow-listed so flipping VITE_RIFT_WIDGET_URL back doesn't require
-      // a server redeploy.
       frameSrc: [
         "https://accounts.google.com",
         // WalletConnect's verification prompt is embedded by the Reown modal.
         "https://verify.walletconnect.org",
-        "https://widget.blockfinax.com",
-        "https://widget.riftfi.xyz",
-        "https://*.riftfi.xyz",
-        "https://*.rift.fi",
       ],
       objectSrc:      ["'none'"],
       baseUri:        ["'self'"],
@@ -199,22 +179,21 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   // Helmet's default Cross-Origin-Opener-Policy is `same-origin`, which
   // severs the link between the page and any popup it opens (window.opener
-  // becomes null cross-origin). Google Sign-In opens a popup from the Rift
-  // widget iframe and needs to postMessage back to it — without
+  // becomes null cross-origin). Google Sign-In popups need to postMessage
+  // back to the page that opened them — without
   // `same-origin-allow-popups`, GSI logs:
   //   [GSI_LOGGER]: Failed to open popup window … Maybe blocked by the browser?
   // and Google sign-in silently fails. Other auth methods (email OTP, Apple)
   // are unaffected.
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-  // CORP=same-origin (helmet default) is too strict for the Rift widget's
-  // postMessage handshake. `same-site` allows cross-origin embeds while
+  // CORP=same-origin (helmet default) is too strict for cross-origin
+  // embeds. `same-site` allows them while
   // still preventing arbitrary other origins from reading our responses.
   //
   // NOTE: this same-site value is the DEFAULT for API responses. Public
   // static assets (logos, fonts, images) are served with CORP=cross-origin
   // overridden in serveStatic() — see server/vite.ts. Without that
-  // override, third-party embeds like the Rift widget's branded header
-  // can't render our logo.
+  // override, third-party embeds can't render our logo.
   crossOriginResourcePolicy: { policy: "same-site" },
 }));
 

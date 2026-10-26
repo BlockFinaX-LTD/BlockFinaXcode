@@ -12,24 +12,17 @@ import {
   adminSessions, requireAdmin, generateAdminToken,
   getOwnerEmails, ADMIN_SESSION_TTL_MS,
 } from "../middleware/admin-auth";
+import { verifySessionToken } from "../middleware/session-auth";
 
-// Rift API base — same host the wallet SDK uses internally.
-const RIFT_API_BASE = process.env.RIFT_API_BASE || "https://payment.riftfi.xyz";
-/**
- * Server-side key. Prefers RIFT_SECRET_KEY, which must never carry a VITE_
- * prefix — that prefix is what puts a value into the public browser bundle.
- */
-const RIFT_API_KEY = process.env.RIFT_SECRET_KEY || process.env.RIFT_API_KEY || "";
 import { readChainEvents, readChainPositionsByEvent, readChainDepositsByEvent, readPlatformFees, readPlatformFeesPerChain, readCreationFeePerChain, diagnoseChainReads } from "../hedge-reader";
 
 export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
   /**
-   * Admin login — Rift-based email allowlist.
+   * Admin login: email allowlist.
    *
-   * The client passes the Rift access token of the currently signed-in user.
-   * We hit Rift's `/user/me` to resolve the email, then check it against
-   * ADMIN_EMAILS. On success, issue an 8-hour `x-admin-token` (unchanged
-   * from the legacy flow — every other admin endpoint keeps working).
+   * The client passes the session token of the signed-in BlockFinaX user. The
+   * session's account email is checked against ADMIN_EMAILS. On success, issue an
+   * 8-hour `x-admin-token` (every other admin endpoint keeps working unchanged).
    */
   app.post("/api/admin/login", strictLimiter, async (req, res) => {
     try {
@@ -45,44 +38,11 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
         });
       }
 
-      if (!RIFT_API_KEY) {
-        return res.status(500).json({ message: "Server is missing the Rift API key." });
-      }
-
-      // Verify the access token by asking Rift for the user record. Anyone
-      // could send a JWT — Rift is the source of truth on whether it's valid
-      // and which email it belongs to.
-      let riftRes: Response;
-      try {
-        riftRes = await fetch(`${RIFT_API_BASE}/user/me`, {
-          method: "GET",
-          headers: {
-            "X-API-Key": RIFT_API_KEY,
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "application/json",
-          },
-        });
-      } catch (err: any) {
-        console.error("[Admin login] Rift /user/me unreachable:", err?.message);
-        return res.status(502).json({ message: "Could not reach Rift to verify your account." });
-      }
-
-      if (riftRes.status === 401 || riftRes.status === 403) {
-        return res.status(401).json({ message: "Your Rift session is expired — sign in again." });
-      }
-      if (!riftRes.ok) {
-        console.error("[Admin login] Rift /user/me returned", riftRes.status);
-        return res.status(502).json({ message: "Rift returned an error verifying your account." });
-      }
-
-      const body = await riftRes.json() as any;
-      // The wallet SDK wraps payloads as { data: { user } } or { user } — be liberal.
-      const user = body?.user ?? body?.data?.user ?? body?.data ?? body;
-      const email: string | undefined = user?.email;
+      const user = await verifySessionToken(accessToken);
+      if (!user) return res.status(401).json({ message: "Your session has expired. Sign in again." });
+      const email = user.email ?? undefined;
       if (!email) {
-        return res.status(403).json({
-          message: "Your Rift account has no email on file — admin access requires an email account.",
-        });
+        return res.status(403).json({ message: "Your account has no email on file. Admin access requires an email account." });
       }
       if (!allowedEmails.includes(email.toLowerCase())) {
         return res.status(403).json({ message: "This account is not authorised for admin access." });
@@ -93,7 +53,7 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       res.json({
         token,
         email,
-        address: user?.address ?? null,
+        address: user.address,
         expiresAt: Date.now() + ADMIN_SESSION_TTL_MS,
       });
     } catch (err: any) {
@@ -636,9 +596,8 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
     }
   });
 
-  // Record that an admin paid out the points for a specific completion via a
-  // Rift transfer. The frontend has already submitted the on-chain tx through
-  // the Rift SDK and gotten back a tx hash — this endpoint just files it.
+  // Record that an admin paid out the points for a specific completion with an
+  // on-chain transfer made elsewhere: this endpoint files its tx hash.
   // Idempotent: the storage layer refuses to overwrite an already-paid row.
   app.post("/api/admin/task-completions/:id/payout", requireAdmin, async (req, res) => {
     try {

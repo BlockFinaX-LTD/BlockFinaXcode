@@ -7,7 +7,7 @@ import { authSessions, platformFees, hedgeEvents, hedgePositions, hedgeLpDeposit
 import { describeMove } from "../agent/fx-direction";
 import { dropSpikes } from "../lib/fx-series";
 import { requireAdmin } from "../middleware/admin-auth";
-import { requireRiftUser } from "../middleware/rift-auth";
+import { requireUser } from "../middleware/session-auth";
 import { strictLimiter } from "../middleware/rate-limiter";
 import { syncChainEvents } from "../chain-sync";
 import { verifyHedgeTx, VERIFIABLE_ACTIONS } from "../lib/chain-verify";
@@ -161,12 +161,12 @@ export async function registerProtocolRoutes(app: Express) {
   startOraclePoller(5 * 60 * 1000);
 
   // ── Gas sponsorship ──────────────────────────────────────────────────────────
-  // Auth: Authorization: Bearer <rift access token>. The authenticated wallet
+  // Auth: Authorization: Bearer <session token>. The authenticated wallet
   // is the one we sponsor — we never trust a wallet address from the body.
-  app.post("/api/gas/sponsor", strictLimiter, requireRiftUser, async (req, res) => {
+  app.post("/api/gas/sponsor", strictLimiter, requireUser, async (req, res) => {
     try {
       const { chainId } = req.body ?? {};
-      const addr = req.riftUser!.address;           // already lowercased + verified by Rift
+      const addr = req.sessionUser!.address;           // already lowercased, from the verified session
       const walletAddress = addr;
       const now = Date.now();
       const cooldownKey = `${addr}:${chainId || 8453}`;
@@ -219,14 +219,14 @@ export async function registerProtocolRoutes(app: Express) {
     }
   });
 
-  // Auth: Authorization: Bearer <rift access token>. The recorder must be the
+  // Auth: Authorization: Bearer <session token>. The recorder must be the
   // sender of the transfer — we cross-check `fromWallet` against the verified
-  // Rift identity so the books can't be polluted by random callers.
-  app.post("/api/fees/record", requireRiftUser, async (req, res) => {
+  // session identity so the books can't be polluted by random callers.
+  app.post("/api/fees/record", requireUser, async (req, res) => {
     try {
       const { txHash, feeTxHash, fromWallet, toWallet, transferAmount, token, chainId } = req.body;
       if (!txHash || !fromWallet || !toWallet || !transferAmount) return res.status(400).json({ message: "Missing required fields" });
-      if (String(fromWallet).toLowerCase() !== req.riftUser!.address) {
+      if (String(fromWallet).toLowerCase() !== req.sessionUser!.address) {
         return res.status(403).json({ message: 'You can only record fees for transfers from your own wallet' });
       }
 
@@ -1064,7 +1064,7 @@ export async function registerProtocolRoutes(app: Express) {
     "reward_payout",
   ]);
 
-  app.post("/api/hedge/activity", requireRiftUser, async (req, res) => {
+  app.post("/api/hedge/activity", requireUser, async (req, res) => {
     try {
       const {
         chainId, txHash, actionType,
@@ -1072,9 +1072,9 @@ export async function registerProtocolRoutes(app: Express) {
         amount, token, metadata,
       } = req.body ?? {};
 
-      // Wallet comes from the verified Rift token — NEVER the body — so a caller
+      // Wallet comes from the verified session — NEVER the body — so a caller
       // can't log activity for someone else's address.
-      const walletAddress = req.riftUser!.address;
+      const walletAddress = req.sessionUser!.address;
 
       if (!Number.isFinite(chainId)) {
         return res.status(400).json({ message: "chainId is required" });
