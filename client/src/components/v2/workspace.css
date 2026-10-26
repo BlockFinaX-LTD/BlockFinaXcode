@@ -430,3 +430,14 @@
   .bx-onboard-types, .bx-onboard-grid { grid-template-columns: 1fr; }
 }
 .bx-onboard-soon { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--soft); border-radius: 999px; padding: 2px 8px; vertical-align: 2px; }
+
+/* ── Buying panel: price box and Adjust protection ───────────────────────── */
+.bx-quote { background: var(--soft); border-radius: 14px; padding: 14px 16px; display: grid; gap: 6px; }
+.bx-quote-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; }
+.bx-quote-row b { font-size: 20px; font-weight: 600; }
+.bx-quote-note { color: var(--muted); font-size: 12.5px; line-height: 1.45; margin-top: 2px; }
+.bx-adjust { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 12px 0; }
+.bx-adjust > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--blue); list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.bx-adjust > summary::-webkit-details-marker { display: none; }
+.bx-adjust > summary::after { content: '▾'; color: var(--muted); transition: transform .15s; }
+.bx-adjust[open] > summary::after { transform: rotate(180deg); }

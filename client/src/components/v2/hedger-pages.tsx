@@ -770,7 +770,12 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const startChoices = Array.from(new Set([minStartPct, minStartPct + 2, minStartPct + 5].map((v) => Math.round(v * 100) / 100)));
   // The strike, typed either as a % from today's rate or as a rate. Whichever the user typed
   // last stays fixed when the live rate moves; the other follows.
-  const [pctText, setPctText] = useState('2');
+  const [pctText, setPctText] = useState('0');
+  // "Adjust protection" stays open for buyers who opened it before (a per-viewer convenience).
+  const [adjustOpen, setAdjustOpen] = useState(() => { try { return localStorage.getItem('bfx:buy-adjust') === '1'; } catch { return false; } });
+  const rememberAdjust = (v: boolean) => { setAdjustOpen(v); try { localStorage.setItem('bfx:buy-adjust', v ? '1' : '0'); } catch { /* storage unavailable */ } };
+  // Until the buyer changes it, protection starts at the closest rate the pool allows.
+  const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
   const [anchor, setAnchor] = useState<'pct' | 'rate'>('pct');
   const rateDp = (v: number) => (v >= 100 ? 2 : 4);
@@ -787,8 +792,9 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     }
   }, [spot.data, direction]);
   // A pool's closest strike may be further than the current entry: move up to it.
-  useEffect(() => { if (Number(pctText) < minStartPct) choosePct(minStartPct); }, [minStartPct]);
-  function choosePct(v: number) {
+  useEffect(() => { if (!strikeTouched || Number(pctText) < minStartPct) choosePct(minStartPct, false); }, [minStartPct]);
+  function choosePct(v: number, byBuyer = true) {
+    if (byBuyer) setStrikeTouched(true);
     setAnchor('pct');
     setPctText(String(v));
     const r = rateFromPct(v);
@@ -796,6 +802,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   }
   function typePct(text: string) {
     const clean = text.replace(/[^0-9.]/g, '');
+    setStrikeTouched(true);
     setAnchor('pct');
     setPctText(clean);
     const r = rateFromPct(Number(clean));
@@ -803,6 +810,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   }
   function typeRate(text: string) {
     const clean = text.replace(/[^0-9.]/g, '');
+    setStrikeTouched(true);
     setAnchor('rate');
     setRateText(clean);
     const v = pctFromRate(Number(clean));
@@ -987,84 +995,102 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             </>
           ) : (
             <>
-              {directions.length > 1 && (
-                <div className="bx-seg">
-                  {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{exposureLabel(pair, d).kind}</button>)}
-                </div>
-              )}
-              {matching.length > 0 && (
-                <div>
-                  <label htmlFor="bx-pool" className="bx-label">Buying from</label>
-                  <select id="bx-pool" className="bx-select" value={poolChoice ?? ''} onChange={(ev) => setPoolChoice(ev.target.value || null)}>
-                    <option value="">Best price across pools</option>
-                    {matching.map((p) => <option key={poolRef(p)} value={poolRef(p)}>Pool {p.poolId} · ${fmt(p.liquidity.capacity, 0)} available · {startsLabel(p.structures.minStrikeDistanceBps ?? 0)}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="bx-big">
-                <label htmlFor="bx-amount">Amount to protect (USD)</label>
-                <input id="bx-amount" inputMode="decimal" value={`$${amount}`} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} />
-                <div className="bx-pills" style={{ marginTop: 8 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
+                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
+              </div>
+              <div className="bx-field" style={{ margin: 0 }}>
+                <label htmlFor="bx-amount" className="bx-label" style={{ margin: 0 }}>How much?</label>
+                <span className="bx-input-unit"><span style={{ paddingLeft: 12 }}>$</span><input id="bx-amount" className="bx-input num" inputMode="decimal" aria-label="Amount to protect in USD" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} /></span>
+                <div className="bx-pills">
                   {AMOUNTS.map((a) => <button key={a} className={`bx-pill${Number(amount) === a ? ' on' : ''}`} onClick={() => setAmount(String(a))}>{a >= 1000 ? `$${a / 1000}K` : `$${a}`}</button>)}
                 </div>
               </div>
               <div>
-                <span className="bx-label">{hint("How long")}</span>
+                <span className="bx-label">Until when?</span>
                 {dayRange ? (
                   <ProtectUntil days={days} range={dayRange} onChange={setDays} />
                 ) : (
                   <div className="bx-pills wrap">
-                    {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
+                    {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} {t.tenorDays === 1 ? 'day' : 'days'}</button>)}
                   </div>
                 )}
                 {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{days} {days === 1 ? 'day' : 'days'} · ends {endsAt(days)}</div>}
               </div>
-              <div>
-                <span className="bx-label">{hint("Protection starts")}</span>
-                <div className="bx-strike-in">
-                  <label className="bx-field" style={{ margin: 0 }}>
-                    <span>% from today's rate</span>
-                    <span className="bx-input-unit"><input className="bx-input num" inputMode="decimal" aria-label="Strike, percent from today's rate" value={pctText} onChange={(ev) => typePct(ev.target.value)} /><span>%</span></span>
-                  </label>
-                  <label className="bx-field" style={{ margin: 0 }}>
-                    <span>Strike rate</span>
-                    <span className="bx-input-unit"><input className="bx-input num" inputMode="decimal" aria-label={`Strike rate, ${ccy} per USD`} value={rateText} onChange={(ev) => typeRate(ev.target.value)} /><span>{ccy}</span></span>
-                  </label>
-                </div>
-                <div className="bx-pills" style={{ marginTop: 8 }}>
-                  {startChoices.map((m) => <button key={m} className={`bx-pill${startPct === m ? ' on' : ''}`} onClick={() => choosePct(m)}>{m === 0 ? "Today's rate" : `${m}%`}</button>)}
-                </div>
-                {!spot.data ? null : strikeError
-                  ? <div className="bx-error" style={{ marginTop: 6 }}>{strikeError}</div>
-                  : <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Pays if the rate {direction === 'up' ? 'rises above' : 'falls below'} {fmtRate(strike ?? 0)} {ccy}. Further away costs less.</div>}
+
+              <div className="bx-quote" aria-live="polite">
+                <div className="bx-quote-row"><span>You pay</span><b className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</b></div>
+                <div className="bx-quote-row"><span>Pays up to</span><b className="num">{e ? `$${fmt(e.maxPayout)}` : chosen.isFetching ? '...' : '-'}</b></div>
+                {strike && (
+                  <div className="bx-quote-note">
+                    If {pair} {direction === 'up' ? 'rises above' : 'falls below'} <span className="num">{fmtRate(strike)}</span> at the end date
+                    {structure === 'capped' && cap ? <>; the payout stops growing at <span className="num">{fmtRate(cap)}</span>.</> : ", up to the pool's maximum payout."}
+                  </div>
+                )}
               </div>
-              <div>
-                <span className="bx-label">{hint("Cover type")}</span>
-                <div className="bx-choice">
-                  {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Limited</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
-                  {tenor?.open !== false && <button className={structure === 'open' ? 'on' : ''} onClick={() => setStructure('open')}><div className="t">Open</div><div className="p num">{open.data ? `$${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'}</div></button>}
+
+              <details className="bx-adjust" open={adjustOpen} onToggle={(ev) => rememberAdjust((ev.target as HTMLDetailsElement).open)}>
+                <summary>Adjust protection</summary>
+                <div style={{ display: 'grid', gap: 16, marginTop: 14 }}>
+                  {directions.length > 1 && (
+                    <div className="bx-seg">
+                      {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{exposureLabel(pair, d).kind}</button>)}
+                    </div>
+                  )}
+                  <div>
+                    <span className="bx-label">{hint("Protection starts")}</span>
+                    <div className="bx-strike-in">
+                      <label className="bx-field" style={{ margin: 0 }}>
+                        <span>% from today's rate</span>
+                        <span className="bx-input-unit"><input className="bx-input num" inputMode="decimal" aria-label="Strike, percent from today's rate" value={pctText} onChange={(ev) => typePct(ev.target.value)} /><span>%</span></span>
+                      </label>
+                      <label className="bx-field" style={{ margin: 0 }}>
+                        <span>Strike rate</span>
+                        <span className="bx-input-unit"><input className="bx-input num" inputMode="decimal" aria-label={`Strike rate, ${ccy} per USD`} value={rateText} onChange={(ev) => typeRate(ev.target.value)} /><span>{ccy}</span></span>
+                      </label>
+                    </div>
+                    <div className="bx-pills" style={{ marginTop: 8 }}>
+                      {startChoices.map((m) => <button key={m} className={`bx-pill${startPct === m ? ' on' : ''}`} onClick={() => choosePct(m)}>{m === 0 ? "Today's rate" : `${m}%`}</button>)}
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Further from today's rate costs less.</div>
+                  </div>
+                  <div>
+                    <span className="bx-label">{hint("Cover type")}</span>
+                    <div className="bx-choice">
+                      {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Limited</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
+                      {tenor?.open !== false && <button className={structure === 'open' ? 'on' : ''} onClick={() => setStructure('open')}><div className="t">Open</div><div className="p num">{open.data ? `$${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'}</div></button>}
+                    </div>
+                  </div>
+                  {structure === 'capped' && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><label htmlFor="bx-cap" className="muted">Protection limit</label><span className="num" style={{ fontWeight: 600 }}>{cap ? fmtRate(cap) : '-'}</span></div>
+                      <input id="bx-cap" className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(ev) => setCapPct(Number(ev.target.value))} />
+                      <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>Closer limit: cheaper</span><span>Wider limit: more protection</span></div>
+                    </div>
+                  )}
+                  {matching.length > 0 && (
+                    <div>
+                      <label htmlFor="bx-pool" className="bx-label">Buying from</label>
+                      <select id="bx-pool" className="bx-select" value={poolChoice ?? ''} onChange={(ev) => setPoolChoice(ev.target.value || null)}>
+                        <option value="">Best price across pools</option>
+                        {matching.map((p) => <option key={poolRef(p)} value={poolRef(p)}>Pool {p.poolId} · ${fmt(p.liquidity.capacity, 0)} available · {startsLabel(p.structures.minStrikeDistanceBps ?? 0)}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
-              </div>
-              {structure === 'capped' && (
+              </details>
+
+              {(strikeError || chosen.error) && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><label htmlFor="bx-cap" className="muted">Protection limit</label><span className="num" style={{ fontWeight: 600 }}>{cap ? fmtRate(cap) : '-'}</span></div>
-                  <input id="bx-cap" className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(ev) => setCapPct(Number(ev.target.value))} />
-                  <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>Closer limit: cheaper</span><span>Wider limit: more protection</span></div>
+                  <p className="bx-error" style={{ margin: 0 }}>{strikeError ?? (chosen.error as Error).message}</p>
+                  {chosen.error && !strikeError && <div className="bx-hint" style={{ textAlign: 'left', marginTop: 6 }}>No pool can price this. <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button> and approved underwriters can make you an offer.</div>}
                 </div>
               )}
-              <div className="bx-sums">
-                <Sum l={`Protection starts ${direction === 'up' ? 'above' : 'below'}`} v={<span className="num">{strike ? fmtRate(strike) : '-'}</span>} />
-                <Sum l="Most you can receive" v={<span className="num">{e ? `$${fmt(e.maxPayout)}` : '-'}</span>} />
-                <Sum l="Premium" v={<span className="num">{e ? `$${fmt(e.premium)}` : '-'}</span>} />
-                <Sum l="Execution cost" v={<span className="num">{e ? `$${fmt(e.hedgerFee)}` : '-'}</span>} />
-                <Sum l="Network fees" v="Covered" good />
-                <Sum l="Total" v={<span className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</span>} total />
-              </div>
-              {chosen.error && <p className="bx-error">{(chosen.error as Error).message}</p>}
-              {chosen.error && <Note>No pool can price this cover. <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button> and approved underwriters can make you an offer.</Note>}
               <button className="bx-btn block" disabled={!e} onClick={() => setMode('review')}>Review protection</button>
-              {!chosen.error && <div className="bx-hint" style={{ textAlign: 'center' }}>Need other terms? <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button></div>}
-              <div className="bx-hint">{e ? `Price held for ${left} seconds · ` : ''}approve with your passkey</div>
+              <div className="bx-hint">
+                {e ? `Price held for ${left} seconds · ` : ''}approve with your passkey
+                {!chosen.error && <> · <button className="bx-link" style={{ fontSize: 'inherit' }} onClick={() => setRfqOpen(true)}>Request a quote</button></>}
+              </div>
             </>
           )}
         </div>
