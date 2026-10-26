@@ -351,7 +351,6 @@ function useChart(pair: string | null, range: Range) {
     refetchInterval: range.endsWith('H') ? 120_000 : false,
   });
 }
-const AMOUNTS = [500, 1000, 5000, 10000];
 
 /** Decimal places that keep neighbouring axis labels distinct for a given step. */
 function decimalsFor(step: number) {
@@ -745,7 +744,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     enabled: Boolean(pair),
     queryFn: () => api<{ anyDay?: { minDays: number; maxDays: number } | null; tenors: { tenorDays: number; open: boolean; capped: boolean }[] }>(`/api/v2/options?pair=${encodeURIComponent(pair!)}&direction=${direction}`),
   });
-  const [amount, setAmount] = useState('1000');
+  // No default: buyers enter their own amount, usually an invoice.
+  const [amount, setAmount] = useState('');
   const [days, setDays] = useState<number | null>(target?.days ?? null);
   useEffect(() => { if (target?.days) setDays(target.days); }, [target?.days]);
   const chosenPool = matching.find((p) => poolRef(p) === poolChoice) ?? null;
@@ -1017,10 +1017,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               </div>
               <div className="bx-field" style={{ margin: 0 }}>
                 <label htmlFor="bx-amount" className="bx-label" style={{ margin: 0 }}>How much?</label>
-                <span className="bx-input-unit"><span style={{ paddingLeft: 12 }}>$</span><input id="bx-amount" className="bx-input num" inputMode="decimal" aria-label="Amount to protect in USD" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} /></span>
-                <div className="bx-pills">
-                  {AMOUNTS.map((a) => <button key={a} className={`bx-pill${Number(amount) === a ? ' on' : ''}`} onClick={() => setAmount(String(a))}>{a >= 1000 ? `$${a / 1000}K` : `$${a}`}</button>)}
-                </div>
+                <span className="bx-input-unit"><span style={{ paddingLeft: 12 }}>$</span><input id="bx-amount" className="bx-input num" inputMode="decimal" aria-label="Amount to protect in USD" placeholder="Amount in USD, e.g. 25,000" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} /></span>
               </div>
               <div>
                 <span className="bx-label">Until when?</span>
@@ -1085,7 +1082,9 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 </div>
               </details>
 
-              <div className="bx-quote" aria-live="polite">
+              {!(Number(amount) > 0) ? (
+                <div className="bx-quote"><div className="bx-quote-note" style={{ margin: 0 }}>Enter an amount to see your price.</div></div>
+              ) : <div className="bx-quote" aria-live="polite">
                 <div className="bx-quote-row"><span>You pay</span><b className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</b></div>
                 <div className="bx-quote-row"><span>Pays up to</span><b className="num">{e ? `$${fmt(e.maxPayout)}` : chosen.isFetching ? '...' : '-'}</b></div>
                 {strike && (
@@ -1094,7 +1093,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                     {structure === 'capped' && cap ? <>; the payout stops growing at <span className="num">{fmtRate(cap)}</span>.</> : ", up to the pool's maximum payout."}
                   </div>
                 )}
-              </div>
+              </div>}
 
               {(strikeError || chosen.error) && (
                 <div>
