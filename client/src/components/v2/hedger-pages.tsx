@@ -19,6 +19,7 @@ import { AssetClassTabs, Flag, hint, Loading, Note, SHOW_INTEREST_RATES, Spin, S
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 import { MyQuoteRequests, RequestQuoteModal } from './rfq';
+import { isOffered, poolForSale } from '@shared/domain/offered-directions';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
@@ -152,7 +153,7 @@ function MarketHeader() {
 
 function useOpenPools() {
   const pools = usePools();
-  const open = (pools.data ?? []).filter((p) => p.acceptingHedges && Number(p.liquidity.capacity) > 0 && p.tenors.some((t) => t.active));
+  const open = (pools.data ?? []).filter((p) => p.acceptingHedges && poolForSale(p.direction) && Number(p.liquidity.capacity) > 0 && p.tenors.some((t) => t.active));
   return { pools, open };
 }
 
@@ -256,7 +257,7 @@ export function HedgerHome({ go }: { go: Go }) {
       <aside className="bx-aside">
         <div className="bx-cta">
           <h3>Protect an exposure</h3>
-          <p>Lock in today's rate for a payment or receivable. Pay a premium in USDC, and get paid if the rate moves against you.</p>
+          <p>Protect a dollar payment against the local currency weakening. Pay a premium in USDC, and get paid if the rate moves against you.</p>
           <button onClick={() => go('h-protect')}>Get started</button>
         </div>
         <div className="bx-card tight">
@@ -672,7 +673,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const chains = useChains();
   const balances = useUsdcBalances();
 
-  const available = useMemo(() => (pools.data ?? []).filter((p) => p.acceptingHedges && Number(p.liquidity.capacity) > 0), [pools.data]);
+  const available = useMemo(() => (pools.data ?? []).filter((p) => p.acceptingHedges && poolForSale(p.direction) && Number(p.liquidity.capacity) > 0), [pools.data]);
   const pairs = useMemo(() => Array.from(new Set(available.map((p) => p.pair))), [available]);
   const setup = useQuery({ queryKey: ['v2-pool-setup'], queryFn: () => api<{ pairs: string[] }>('/api/v2/pools/setup'), staleTime: 300_000 });
   const rfqPairs = setup.data?.pairs ?? pairs;
@@ -681,7 +682,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   useEffect(() => { if ((!pair || !pairs.includes(pair)) && pairs[0]) setPair(pairs[0]); }, [pairs, pair]);
   const directions = useMemo(() => {
     const ds = new Set(available.filter((p) => p.pair === pair).map((p) => p.direction));
-    return (['up', 'down'] as Direction[]).filter((d) => ds.has(d) || ds.has('both'));
+    return (['up', 'down'] as Direction[]).filter((d) => isOffered(d) && (ds.has(d) || ds.has('both')));
   }, [available, pair]);
   const [direction, setDirection] = useState<Direction>(target?.direction ?? 'up');
   useEffect(() => { if (target?.direction) setDirection(target.direction); }, [target?.direction]);
@@ -1158,7 +1159,7 @@ function BenchmarkState({ r }: { r: BenchmarkRow }) {
 
 function FxRates({ go }: { go: Go }) {
   const pools = usePools();
-  const covered = useMemo(() => new Set((pools.data ?? []).filter((p) => p.acceptingHedges).map((p) => p.pair)), [pools.data]);
+  const covered = useMemo(() => new Set((pools.data ?? []).filter((p) => p.acceptingHedges && poolForSale(p.direction)).map((p) => p.pair)), [pools.data]);
   const watch = useWatchlist();
   const [q, setQ] = useState('');
   const term = q.trim().toLowerCase();

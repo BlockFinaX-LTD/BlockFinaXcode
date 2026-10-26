@@ -429,3 +429,4 @@
   .bx-onboard-card { padding: 22px 18px; }
   .bx-onboard-types, .bx-onboard-grid { grid-template-columns: 1fr; }
 }
+.bx-onboard-soon { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--soft); border-radius: 999px; padding: 2px 8px; vertical-align: 2px; }

@@ -34,6 +34,7 @@ import { routeView, routingService, type RoutingService } from "../routing/servi
 import { getSession } from "../auth-routes";
 import { registerRfqRoutes } from "../rfq/routes";
 import { registerOnboardingRoutes } from "../onboarding/routes";
+import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
 
 const STATUS: Partial<Record<ApplicationErrorCode, number>> = {
@@ -280,6 +281,7 @@ export function registerV2Routes(app: Express) {
     const uid = await userId(req);
     const quote = req.body?.quote as ProtectionQuote;
     if (!quote?.economic) throw new ApplicationError("INVALID_REQUEST", "quote is required");
+    if (!isOffered(quote.economic.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     const chain = quote.economic.executionChain;
     if ((await ownerOn(s, uid, chain)) !== quote.buyer) throw new ApplicationError("UNAUTHORIZED", "Quote was issued to a different account");
     chainRegistry()!.require(chain, "newHedges");
@@ -321,6 +323,7 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/pools/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const chain = chainRegistry()!.require(chainRegistry()!.hub.key, "newPools");
+    if (!isOffered(req.body?.direction === "down" ? "down" : "up")) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     const owner = await ownerOn(s, await userId(req), chain.key);
     res.json({ chain: chain.key, transactions: await s.adapters.adapterFor(chain.key).prepareCreatePool(owner, req.body) });
   }));

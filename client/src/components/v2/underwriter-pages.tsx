@@ -19,6 +19,7 @@ import {
 } from './shared';
 import { Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
 import type { Go } from './workspace';
+import { isOffered } from '@shared/domain/offered-directions';
 
 const MARKUP_MIN = 9000;
 const MARKUP_MAX = 50000;
@@ -558,7 +559,7 @@ export function CreatePool({ go }: { go: Go }) {
   const balances = useUsdcBalances();
   const setup = useQuery({ queryKey: ['v2-pool-setup'], queryFn: () => api<{ chain: string; pairs: string[]; creationFee: string }>('/api/v2/pools/setup') });
   const [step, setStep] = useState(0);
-  const exposures = useMemo(() => (setup.data?.pairs ?? []).flatMap((pair) => (['up', 'down'] as Direction[]).map((d) => `${pair}:${d}`)), [setup.data]);
+  const exposures = useMemo(() => (setup.data?.pairs ?? []).flatMap((pair) => (['up', 'down'] as Direction[]).filter(isOffered).map((d) => `${pair}:${d}`)), [setup.data]);
   const [key, setKey] = useState('');
   useEffect(() => { if (!key && exposures[0]) setKey(exposures[0]); }, [exposures, key]);
   const [pair, direction] = (key || ':up').split(':') as [string, Direction];

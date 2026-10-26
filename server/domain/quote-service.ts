@@ -9,6 +9,7 @@
  * selection that lived in server/pricing/pool-quote.ts and the Stellar wallet server.
  */
 import { durationsOffered, expiryAt, markupForDays } from "@shared/domain/durations";
+import { isOffered, NOT_OFFERED_MESSAGE, poolForSale } from "@shared/domain/offered-directions";
 import type { ChainRegistry } from "@shared/chains/registry";
 import {
   checkTerms,
@@ -78,7 +79,8 @@ export class QuoteService {
   async options(pair: string, direction?: "up" | "down") {
     const chain = this.chains.executionNetworkFor();
     const pools = (await this.adapters.adapterFor(chain.key).listPools())
-      .filter((p) => p.pair === pair && p.acceptingHedges && (!direction || p.direction === "both" || p.direction === direction));
+      .filter((p) => p.pair === pair && p.acceptingHedges && poolForSale(p.direction)
+        && (!direction || (isOffered(direction) && (p.direction === "both" || p.direction === direction))));
     const rows = new Map<number, { open: boolean; capped: boolean; capacity: number }>();
     // Pools that sell any day in a range: the widest range on sale.
     let range: { minDays: number; maxDays: number } | null = null;
@@ -106,6 +108,7 @@ export class QuoteService {
    * bound to the account on whichever chain executes it.
    */
   async quote(req: ProtectionRequest, accounts: Record<ChainKey, string>): Promise<ProtectionQuote> {
+    if (!isOffered(req.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     if (req.structure === "capped" && !req.cap) throw new ApplicationError("INVALID_CAP", "Choose a cap level for Capped protection");
     const chain = this.chains.require(this.chains.executionNetworkFor().key, "newHedges");
     const buyer = accounts[chain.key];

@@ -12,6 +12,7 @@ import { api, signStellarForLater } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import { ccyName, endsAt, exposureLabel, fmt, fmtRate, signAndSend, type Direction } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
+import { isOffered } from '@shared/domain/offered-directions';
 
 const MIN_REQUEST = 5_000;
 
@@ -37,7 +38,7 @@ export function RequestQuoteModal({ draft, pairs, onClose }: { draft: RequestDra
   const { toast } = useToast();
   const qc = useQueryClient();
   const [pair, setPair] = useState(draft.pair);
-  const [direction, setDirection] = useState<Direction>(draft.direction);
+  const [direction, setDirection] = useState<Direction>(isOffered(draft.direction) ? draft.direction : 'up');
   const [notional, setNotional] = useState(String(Math.max(Number(draft.notional ?? 0), MIN_REQUEST)));
   const [days, setDays] = useState(String(draft.tenorDays ?? 30));
   const [strike, setStrike] = useState(draft.strike ? draft.strike.toFixed(4) : '');
@@ -81,8 +82,7 @@ export function RequestQuoteModal({ draft, pairs, onClose }: { draft: RequestDra
           </label>
           <label className="bx-field">Which move worries you
             <select className="bx-input" value={direction} onChange={(e) => setDirection(e.target.value as Direction)}>
-              <option value="up">{exposureLabel(pair, 'up').cover}</option>
-              <option value="down">{exposureLabel(pair, 'down').cover}</option>
+              {(['up', 'down'] as Direction[]).filter(isOffered).map((d) => <option key={d} value={d}>{exposureLabel(pair, d).cover}</option>)}
             </select>
           </label>
           <label className="bx-field">Amount to protect (USD)

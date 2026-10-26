@@ -16,6 +16,7 @@ import type { Express, Request, Response } from "express";
 import { ApplicationError, type EconomicQuote } from "@shared/domain/types";
 import { costBreakdown, fromRate, fromUnits, maxPayout, toRate, toUnits } from "@shared/domain/pool-economics";
 import { chainRegistry } from "../chain/config";
+import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
 import {
   expireOld, isApprovedUnderwriter, MIN_REQUEST_USD, newId, offerValiditySeconds, REQUEST_OPEN_HOURS, rfqDb,
   type OfferRow, type QuoteRequestRow,
@@ -59,6 +60,7 @@ export function registerRfqRoutes(app: Express, d: Deps) {
     const tenorDays = num(b.tenorDays);
     if (!PAIRS().includes(b.pair)) throw new ApplicationError("INVALID_REQUEST", "Choose a currency BlockFinaX covers");
     if (b.direction !== "up" && b.direction !== "down") throw new ApplicationError("INVALID_REQUEST", "Choose which move worries you");
+    if (!isOffered(b.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     if (!(notional >= MIN_REQUEST_USD)) throw new ApplicationError("INVALID_REQUEST", `Requests start at $${MIN_REQUEST_USD.toLocaleString("en-US")} protected`);
     if (!Number.isInteger(tenorDays) || tenorDays < 1 || tenorDays > 90) throw new ApplicationError("INVALID_REQUEST", "Choose an end date within 90 days");
     const opt = (v: unknown) => (v === undefined || v === null || v === "" ? null : Number.isFinite(num(v)) && num(v) > 0 ? String(num(v)) : (() => { throw new ApplicationError("INVALID_REQUEST", "Rates and amounts must be positive numbers"); })());

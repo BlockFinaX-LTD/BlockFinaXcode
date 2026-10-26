@@ -10,6 +10,7 @@ import {
   COUNTRIES, INDUSTRIES, INTENTS, INTENT_LABELS, MONTHLY_VOLUMES, PRIORITY_COUNTRIES, validateOnboarding,
   type AccountType, type Intent,
 } from '@shared/onboarding';
+import { isOffered } from '@shared/domain/offered-directions';
 import { api } from '@/lib/wallets/passkey-wallet';
 import logoPath from '@/assets/logo.png';
 import { Spin } from './ui';
@@ -152,7 +153,7 @@ export function Onboarding({ email, defaultName, onDone }: { email?: string | nu
             <div className="bx-onboard-intents">
               {INTENTS.map((i) => (
                 <button key={i} className={intents.includes(i) ? 'on' : ''} aria-pressed={intents.includes(i)} onClick={() => toggle(i)}>
-                  <span className="t">{INTENT_LABELS[type][i].title}</span>
+                  <span className="t">{INTENT_LABELS[type][i].title}{i === 'receivables' && !isOffered('down') && <span className="bx-onboard-soon">Coming soon</span>}</span>
                   <span className="p">{INTENT_LABELS[type][i].line}</span>
                 </button>
               ))}
