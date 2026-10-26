@@ -281,7 +281,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
   const sold = new Map<number, number>();
   for (const p of usePoolPositions([pool]).get(poolRef(pool)) ?? []) sold.set(p.tenorDays, (sold.get(p.tenorDays) ?? 0) + Number(p.maxPayout));
   useEffect(() => { setOffers({}); setExtra([]); }, [pool.ref.id]);
-  const cols = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 72px' };
+  const cols = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 150px' };
   const range = durationsOffered(pool).range;
 
   async function save(tenorDays: number, active: boolean, markupBps: number) {
@@ -314,16 +314,23 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
             const newMarkup = f && Number(offer) > 0 ? Math.round(((Number(offer) / 100) / (f / 1e6)) * 10000) : markup;
             const diff = f && Number(offer) > 0 ? Math.round((Number(offer) / 100 - f / 1e6) * 10000) : null;
             const valid = newMarkup >= MARKUP_MIN && newMarkup <= MARKUP_MAX;
-            const changed = !t || newMarkup !== t.markupBps;
+            // Only an offer the creator typed counts as a change: the shown offer is rounded, so
+            // working back from it would differ slightly from the stored markup on every row.
+            const edited = offers[d] !== undefined;
+            const changed = !t || (edited && newMarkup !== t.markupBps);
             return (
               <div key={d} className="bx-li" style={cols}>
-                <span style={{ fontWeight: 600 }}>{d} days</span>
+                <span style={{ fontWeight: 600 }}>{d} {d === 1 ? 'day' : 'days'}</span>
                 <span className="r num" style={{ color: 'var(--text-2)' }}>{f ? pct(f / 1e6) : fair.isLoading ? '...' : '-'}</span>
                 <span className="r">{editable ? <label className="bx-mini-input"><input aria-label={`Offer for ${d} days`} value={offer} onChange={(e) => setOffers((o) => ({ ...o, [d]: e.target.value.replace(/[^0-9.]/g, '') }))} /><span className="muted">%</span></label> : <span className="num" style={{ fontWeight: 600 }}>{offer}%</span>}</span>
                 <span className={`r num ${diff !== null && diff >= 0 ? 'up' : 'down'}`} style={{ fontWeight: 600 }}>{diff === null ? '-' : `${diff >= 0 ? '+' : ''}${diff} bps`}</span>
                 <span className="r num">${fmt(sold.get(d) ?? 0, 0)}</span>
-                <span className="r">{busy === d ? <Spin /> : editable && changed ? <button className="bx-btn small" disabled={!valid} onClick={() => save(d, t ? t.active : true, newMarkup)}>{t ? 'Save' : 'Add'}</button>
-                  : t ? <Toggle label={`${d}-day tenor`} on={t.active} disabled={!editable} onChange={(v) => save(d, v, t.markupBps)} /> : null}</span>
+                <span className="r" style={{ display: 'inline-flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                  {busy === d ? <Spin /> : <>
+                    {editable && changed && <button className="bx-btn small" disabled={!valid} onClick={() => save(d, t ? t.active : true, newMarkup)}>{t ? 'Save' : 'Add'}</button>}
+                    {t && <Toggle label={`${d}-day tenor`} on={t.active} disabled={!editable} onChange={(v) => save(d, v, t.markupBps)} />}
+                  </>}
+                </span>
               </div>
             );
           })}
