@@ -948,7 +948,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
       </section>
 
       <aside className="bx-aside" aria-label="Protect" ref={panelRef}>
-        <div className="bx-panel">
+        <div className="bx-panel bx-buy">
           {mode === 'done' ? (
             <div style={{ textAlign: 'center', padding: '12px 0' }}>
               <CheckCircle2 style={{ width: 48, height: 48, color: 'var(--green)' }} />
@@ -996,8 +996,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           ) : (
             <>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
               </div>
               <div className="bx-field" style={{ margin: 0 }}>
                 <label htmlFor="bx-amount" className="bx-label" style={{ margin: 0 }}>How much?</label>

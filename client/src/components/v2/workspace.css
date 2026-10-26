@@ -441,3 +441,26 @@
 .bx-adjust > summary::-webkit-details-marker { display: none; }
 .bx-adjust > summary::after { content: '▾'; color: var(--muted); transition: transform .15s; }
 .bx-adjust[open] > summary::after { transform: rotate(180deg); }
+
+/* Buying panel: smaller type and tighter spacing, so the form reads as one short card. */
+.bx-buy { padding: 18px; gap: 14px; }
+.bx-buy .bx-label { font-size: 12px; margin-bottom: 6px; }
+.bx-buy .bx-input, .bx-buy .bx-select { padding: 8px 10px; font-size: 13px; border-radius: 10px; }
+.bx-buy .bx-input-unit { border-radius: 10px; }
+.bx-buy .bx-pills { gap: 5px; margin-top: 6px; }
+.bx-buy .bx-pills.wrap { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.bx-buy .bx-pill { min-height: 30px; padding: 4px 2px; font-size: 12px; }
+.bx-buy .bx-choice button { padding: 9px 10px; }
+.bx-buy .bx-choice button.on { padding: 8px 9px; }
+.bx-buy .bx-choice .t { font-size: 13px; }
+.bx-buy .bx-choice .p { font-size: 12px; }
+.bx-buy .bx-quote { padding: 12px 14px; gap: 4px; border-radius: 12px; }
+.bx-buy .bx-quote-row { font-size: 13px; }
+.bx-buy .bx-quote-row b { font-size: 16px; }
+.bx-buy .bx-quote-note { font-size: 11.5px; }
+.bx-buy .bx-adjust { padding: 10px 0; }
+.bx-buy .bx-adjust > summary { font-size: 13px; }
+.bx-buy .bx-btn.block { padding: 11px; font-size: 14px; min-height: 42px; }
+.bx-buy .bx-hint, .bx-buy .muted { font-size: 11.5px; }
+.bx-buy .bx-sums { font-size: 13px; }
+.bx-adjust > summary:focus:not(:focus-visible) { outline: none; }
