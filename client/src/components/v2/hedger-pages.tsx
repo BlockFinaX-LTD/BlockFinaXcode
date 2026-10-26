@@ -790,6 +790,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     // On phones the chart sits above the form: bring it into view.
     if (next && window.innerWidth < 860) setTimeout(() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
+  const [checking, setChecking] = useState(false);
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
   const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
@@ -901,6 +902,19 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   if (!pair) return <main className="bx-main"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No protection is on sale right now. Please check back soon.</div></div></section></main>;
   const ccy = quoteCcy(pair);
   const name = ccyName(pair);
+
+  // Before reviewing: does the user's verification cover this? On mainnet, if not, the
+  // verification form opens (from the API helper) before any balance or signing step.
+  async function review() {
+    if (!e) return;
+    setChecking(true);
+    try {
+      await api('/api/v2/verification/check', { cashUsd: Number(e.totalCost), exposureUsd: Number(e.maxPayout) });
+      setMode('review');
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'VERIFICATION_REQUIRED') toast({ title: 'Could not review', description: (err as Error).message, variant: 'destructive' });
+    } finally { setChecking(false); }
+  }
 
   const rfqModal = rfqOpen && pair ? (
     <RequestQuoteModal
@@ -1101,7 +1115,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                   {chosen.error && !strikeError && <div className="bx-hint" style={{ textAlign: 'left', marginTop: 6 }}>No pool can price this. <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button> and approved underwriters can make you an offer.</div>}
                 </div>
               )}
-              <button className="bx-btn block" disabled={!e} onClick={() => setMode('review')}>Review protection</button>
+              <button className="bx-btn block" disabled={!e || checking} onClick={review}>{checking ? <Spin /> : null} Review protection</button>
               <div className="bx-hint">
                 {e ? `Price held for ${left} seconds · ` : ''}approve with your passkey
                 {!chosen.error && <> · <button className="bx-link" style={{ fontSize: 'inherit' }} onClick={() => setRfqOpen(true)}>Request a quote</button></>}

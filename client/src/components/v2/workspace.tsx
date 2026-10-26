@@ -6,6 +6,7 @@
  *   Underwriter: "How do you want your capital exposed?"
  */
 import { ContactSales, DemoBanner, NetworkSwitch } from './demo';
+import { VerifyModal } from './verify';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -186,6 +187,7 @@ export function Workspace() {
       <div className="bx-content" ref={content}>
         <DemoBanner />
         <ContactSales />
+        <VerifyModal />
         <header className="bx-top">
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
           <SearchBox role={role} go={go} />

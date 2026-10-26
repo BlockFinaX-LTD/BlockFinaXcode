@@ -1,33 +1,8 @@
 {
   "environment": "mainnet",
-  "activeLiquidityHub": "base",
+  "activeLiquidityHub": "stellar",
+  "cctpAttestationUrl": "https://iris-api.circle.com",
   "chains": [
-    {
-      "key": "base",
-      "family": "evm",
-      "name": "Base",
-      "networkId": "8453",
-      "rpcUrls": ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
-      "explorer": "https://basescan.org",
-      "state": "ACTIVE",
-      "provisionAtSignup": true,
-      "contracts": { "currencyPool": "0xbCC51E62C4948FD35ab505bd71804C849601e4Ef" },
-      "assets": { "USDC": { "decimals": 6, "addressOrContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" } }
-    },
-    {
-      "key": "bsc",
-      "family": "evm",
-      "name": "BNB Smart Chain",
-      "networkId": "56",
-      "rpcUrls": ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com", "https://bsc.drpc.org"],
-      "explorer": "https://bscscan.com",
-      "state": "ACCESS_ONLY",
-      "contracts": { "currencyPool": "0xaC939C0897981Abc0711ec4e37527F13106180fc" },
-      "assets": {
-        "USDC": { "decimals": 18, "addressOrContract": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" },
-        "USDT": { "decimals": 18, "addressOrContract": "0x55d398326f99059fF775485246999027B3197955" }
-      }
-    },
     {
       "key": "stellar",
       "family": "stellar",
@@ -35,9 +10,37 @@
       "networkId": "Public Global Stellar Network ; September 2015",
       "rpcUrls": [],
       "explorer": "https://stellar.expert/explorer/public",
-      "state": "DISABLED",
+      "state": "ACTIVE",
+      "provisionAtSignup": true,
       "contracts": {},
-      "assets": {}
+      "assets": {
+        "USDC": { "decimals": 7, "addressOrContract": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75" }
+      },
+      "cctp": {
+        "domain": 27,
+        "tokenMessenger": "CAE2G5Z77UP7GYPYGFOWFGW7C7J6I4YP2AFGSADRKQY62SYUFLPNFTXL",
+        "messageTransmitter": "CACMENFFJPJMSDAJQLX4R7K3SFZIW2LJSE3R2UMLGSWHFHS353FVXAZV",
+        "forwarder": "CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T"
+      }
+    },
+    {
+      "key": "base",
+      "family": "evm",
+      "name": "Base",
+      "networkId": "8453",
+      "rpcUrls": ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://base.drpc.org"],
+      "explorer": "https://basescan.org",
+      "state": "ACCESS_ONLY",
+      "provisionAtSignup": true,
+      "contracts": {},
+      "assets": {
+        "USDC": { "decimals": 6, "addressOrContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }
+      },
+      "cctp": {
+        "domain": 6,
+        "tokenMessenger": "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+        "messageTransmitter": "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64"
+      }
     }
   ]
 }

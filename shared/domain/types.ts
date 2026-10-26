@@ -86,6 +86,8 @@ export const APPLICATION_ERROR_CODES = [
   "DESTINATION_FUNDS_MISSING",
   "INSUFFICIENT_BALANCE",
   "UNAUTHORIZED",
+  /** Mainnet: the user must be verified, or verified to a higher tier, first. */
+  "VERIFICATION_REQUIRED",
   "TRANSACTION_REJECTED",
   "PAUSED",
   "INVALID_REQUEST",

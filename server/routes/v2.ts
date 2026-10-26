@@ -35,10 +35,11 @@ import { getSession } from "../auth-routes";
 import { registerRfqRoutes } from "../rfq/routes";
 import { registerOnboardingRoutes } from "../onboarding/routes";
 import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
+import { checkProtectionLimits, verificationRequired, verifiedTier } from "../compliance/protection-limits";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
 
 const STATUS: Partial<Record<ApplicationErrorCode, number>> = {
-  UNAUTHORIZED: 401, POOL_NOT_FOUND: 404, CHAIN_NOT_ENABLED: 503, CHAIN_DRAINING: 409,
+  UNAUTHORIZED: 401, VERIFICATION_REQUIRED: 403, POOL_NOT_FOUND: 404, CHAIN_NOT_ENABLED: 503, CHAIN_DRAINING: 409,
   INSUFFICIENT_LIQUIDITY: 409, QUOTE_EXPIRED: 409, QUOTE_USED: 409, UNKNOWN: 500,
 };
 
@@ -81,6 +82,26 @@ function idOf(ref: string, kind: "pool" | "position") {
   const [k, n] = r.id.split("/");
   if (k !== kind || !Number.isInteger(Number(n))) throw new ApplicationError("INVALID_REQUEST", `Not a ${kind} id: ${ref}`);
   return { chain: r.chain, id: Number(n), contract: r.contract };
+}
+
+/**
+ * Mainnet: refuse a purchase or deposit the user's verification tier does not cover.
+ * Tiers are recorded against the user's EVM smart account; activity is read from their
+ * contracts on every settling network.
+ */
+async function enforceVerification(s: Services, uid: number, adds: { cashUsd: number; exposureUsd: number }) {
+  const registry = chainRegistry()!;
+  if (!verificationRequired(process.env, registry.config.environment)) return;
+  const book = await s.accounts.addressBook(uid);
+  const evm = registry.all().find((c) => c.family === "evm" && book[c.key]);
+  const tier = evm ? await verifiedTier(book[evm.key]) : 0;
+  const positions = [];
+  for (const chain of registry.settlementNetworks()) {
+    if (!book[chain.key]) continue;
+    for (const adapter of s.adapters.adaptersFor(chain.key)) positions.push(...(await adapter.listPositions(book[chain.key])));
+  }
+  const d = checkProtectionLimits({ tier, positions, addsCashUsd: adds.cashUsd, addsExposureUsd: adds.exposureUsd });
+  if (!d.allowed) throw new ApplicationError("VERIFICATION_REQUIRED", d.reason, `requiredTier=${d.requiredTier} tier=${d.tier}`);
 }
 
 /** The user's own address on a chain, or a clear error asking them to add one. */
@@ -305,6 +326,19 @@ export function registerV2Routes(app: Express) {
     }
   }));
 
+  /**
+   * Would this purchase or deposit be allowed by the user's verification tier? Called before
+   * reviewing, so the verification form appears before any money is moved. Mainnet only;
+   * answers ok wherever verification is not enforced.
+   */
+  app.post("/api/v2/verification/check", wrap(async (req, res) => {
+    const s = await getServices();
+    const cashUsd = Math.max(0, Number(req.body?.cashUsd) || 0);
+    const exposureUsd = Math.max(0, Number(req.body?.exposureUsd) || 0);
+    await enforceVerification(s, await userId(req), { cashUsd, exposureUsd });
+    res.json({ ok: true });
+  }));
+
   app.post("/api/v2/hedges/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const uid = await userId(req);
@@ -314,6 +348,7 @@ export function registerV2Routes(app: Express) {
     const chain = quote.economic.executionChain;
     if ((await ownerOn(s, uid, chain)) !== quote.buyer) throw new ApplicationError("UNAUTHORIZED", "Quote was issued to a different account");
     chainRegistry()!.require(chain, "newHedges");
+    await enforceVerification(s, uid, { cashUsd: Number(quote.economic.totalCost), exposureUsd: Number(quote.economic.maxPayout) });
     res.json({ transactions: await s.adapters.adapterFor(chain).prepareHedge(quote.buyer, quote) });
   }));
 
@@ -353,7 +388,9 @@ export function registerV2Routes(app: Express) {
     const s = await getServices();
     const chain = chainRegistry()!.require(chainRegistry()!.hub.key, "newPools");
     if (!isOffered(req.body?.direction === "down" ? "down" : "up")) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
-    const owner = await ownerOn(s, await userId(req), chain.key);
+    const uid = await userId(req);
+    await enforceVerification(s, uid, { cashUsd: Number(req.body?.initialLiquidity ?? 0) || 0, exposureUsd: 0 });
+    const owner = await ownerOn(s, uid, chain.key);
     res.json({ chain: chain.key, transactions: await s.adapters.adapterFor(chain.key).prepareCreatePool(owner, req.body) });
   }));
 
@@ -389,7 +426,9 @@ export function registerV2Routes(app: Express) {
     if (s.adapters.adapterForContract(chain, contract) !== s.adapters.adapterFor(chain)) {
       throw new ApplicationError("INVALID_REQUEST", "This pool is on an earlier contract and is closed to new money. Withdraw from it, then use a current pool.");
     }
-    const owner = await ownerOn(s, await userId(req), chain);
+    const uid = await userId(req);
+    await enforceVerification(s, uid, { cashUsd: Number(req.body?.amount ?? 0) || 0, exposureUsd: 0 });
+    const owner = await ownerOn(s, uid, chain);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareDeposit(owner, id, String(req.body?.amount)) });
   }));
 
@@ -606,6 +645,8 @@ export function registerV2Routes(app: Express) {
   app.use("/api/v2", (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const e = err instanceof ApplicationError ? err : new ApplicationError("UNKNOWN", "Request failed", String((err as Error)?.message ?? err));
     if (e.detail) console.warn(`[api/v2] ${e.code}: ${e.detail}`);
-    res.status(STATUS[e.code] ?? 400).json({ error: { code: e.code, message: e.message } });
+    // Raw details stay server-side, except the tier a verification needs (no chain data in it).
+    const detail = e.code === "VERIFICATION_REQUIRED" ? { detail: e.detail } : {};
+    res.status(STATUS[e.code] ?? 400).json({ error: { code: e.code, message: e.message, ...detail } });
   });
 }

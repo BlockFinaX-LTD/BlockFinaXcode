@@ -86,7 +86,16 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error?.message ?? json?.error ?? json?.message ?? "Request failed");
+  if (!res.ok) {
+    const err = new Error(json?.error?.message ?? json?.error ?? json?.message ?? "Request failed") as Error & { code?: string };
+    err.code = json?.error?.code;
+    // Mainnet: a purchase or deposit beyond the user's verification tier opens the verification form.
+    if (err.code === "VERIFICATION_REQUIRED" && typeof window !== "undefined") {
+      const required = /requiredTier=(\d)/.exec(String(json?.error?.detail ?? ""))?.[1];
+      window.dispatchEvent(new CustomEvent("bfx:verify", { detail: { reason: err.message, requiredTier: required ? Number(required) : 1 } }));
+    }
+    throw err;
+  }
   return json as T;
 }
 
