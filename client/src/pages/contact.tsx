@@ -6,6 +6,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'wouter';
 import { ArrowLeft, ArrowRight, Check, Mail } from 'lucide-react';
+import { LAUNCH_APP_HREF } from '@/lib/app-links';
 
 const ENQUIRIES = [
   'General enquiries',
@@ -77,9 +78,9 @@ export default function ContactPage() {
             <Link href="/" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 no-underline px-3 py-2 rounded-full">
               <ArrowLeft className="h-4 w-4" /> Home
             </Link>
-            <Link href="/hedge" className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#1a4480] hover:bg-[#153a6e] no-underline px-5 py-2.5 rounded-full transition-colors">
+            <a href={LAUNCH_APP_HREF} className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#1a4480] hover:bg-[#153a6e] no-underline px-5 py-2.5 rounded-full transition-colors">
               Launch App <ArrowRight className="h-4 w-4" />
-            </Link>
+            </a>
           </div>
         </div>
       </header>

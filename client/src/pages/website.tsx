@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
 import './website.css';
+import { LAUNCH_APP_HREF } from '@/lib/app-links';
 
 const logoPath = '/favicon.png';
 
@@ -600,9 +601,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             >
               {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <Link href="/hedge" className="btn btn-primary btn-sm">
+            <a href={LAUNCH_APP_HREF} className="btn btn-primary btn-sm">
               Launch App <span className="arrow">→</span>
-            </Link>
+            </a>
           </div>
           <button
             type="button"
@@ -673,9 +674,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-ctas">
-            <Link href="/hedge" className="btn btn-primary" onClick={closeMobile}>
+            <a href={LAUNCH_APP_HREF} className="btn btn-primary" onClick={closeMobile}>
               Launch App <span className="arrow">→</span>
-            </Link>
+            </a>
           </div>
         </div>
       )}
@@ -702,9 +703,9 @@ function Hero() {
               Making currency risk protection more accessible to support trade and investment in emerging markets.
             </p>
             <div className="hero-ctas">
-              <Link href="/hedge" className="btn btn-primary">
+              <a href={LAUNCH_APP_HREF} className="btn btn-primary">
                 Launch App <span className="arrow">→</span>
-              </Link>
+              </a>
             </div>
           </div>
           <div className="hero-visual">
@@ -1447,7 +1448,7 @@ const HEDGERS: AudienceCopy = {
   eyebrow: 'For businesses',
   title: ['Protect your', 'margin'],
   lede: 'When you pay or earn in another currency, a move in the rate can erase your profit. BlockFinaX lets you set the worst case in advance, for a known cost.',
-  primary: { label: 'Launch App', href: '/hedge' },
+  primary: { label: 'Launch App', href: LAUNCH_APP_HREF },
   steps: [
     { t: 'Choose your cover', d: 'The currency, the amount, the end date and the move that worries you.' },
     { t: 'Pay once', d: 'One premium in USDC, shown in full before you approve. No credit line, no further calls.' },
@@ -1471,7 +1472,7 @@ const UNDERWRITERS: AudienceCopy = {
   eyebrow: 'For capital partners',
   title: ['Earn from', 'currency risk'],
   lede: 'Businesses pay premiums to protect their payments. As an underwriter, your USDC backs that protection and earns those premiums.',
-  primary: { label: 'Launch App', href: '/hedge' },
+  primary: { label: 'Launch App', href: LAUNCH_APP_HREF },
   steps: [
     { t: 'Add USDC to a pool', d: 'Each pool covers one currency and one direction, so you know exactly what you back.' },
     { t: 'Earn at every sale', d: 'When protection is sold from your money, you receive your share of the premium straight away.' },
@@ -1511,7 +1512,9 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
           <h1 className="aud-title">{copy.title[0]} <span className="accent">{copy.title[1]}</span></h1>
           <p className="aud-lede">{copy.lede}</p>
           <div className="hero-ctas">
-            <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>
+            {copy.primary.href.startsWith('http')
+              ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
+              : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
             <Link href="/contact" className="btn btn-ghost">Talk to us</Link>
           </div>
         </div>
@@ -1547,7 +1550,9 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
         <div className="wrap">
           <h2>{copy.close}</h2>
           <div className="hero-ctas">
-            <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>
+            {copy.primary.href.startsWith('http')
+              ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
+              : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
             <Link href="/contact" className="btn btn-ghost">Talk to us</Link>
           </div>
         </div>
@@ -1612,7 +1617,7 @@ export function AboutPage() {
           <p>Businesses, underwriters, partners and development institutions: we would like to hear from you.</p>
           <div className="hero-ctas">
             <Link href="/contact" className="btn btn-primary">Contact us <span className="arrow">→</span></Link>
-            <Link href="/hedge" className="btn btn-ghost">Launch App</Link>
+            <a href={LAUNCH_APP_HREF} className="btn btn-ghost">Launch App</a>
           </div>
         </div>
       </section>

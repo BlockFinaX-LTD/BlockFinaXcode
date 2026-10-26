@@ -19,6 +19,7 @@ import { MermaidBlock } from "@/components/mermaid-block";
 import { BlogScene } from "@/components/blog-scene";
 import { loadArticles, findArticle, type Article } from "@/lib/blog-loader";
 import logoPath from "@/assets/logo.png";
+import { LAUNCH_APP_HREF } from '@/lib/app-links';
 
 function SiteNav({ blogActive }: { blogActive?: boolean }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -51,11 +52,11 @@ function SiteNav({ blogActive }: { blogActive?: boolean }) {
               )}
             </div>
             <Link href="/blog" className={`text-sm transition-colors no-underline ${blogActive ? 'text-[#1a4480] font-semibold' : 'text-gray-500 hover:text-gray-900'}`}>Blog</Link>
-            <Link href="/home" className="no-underline">
+            <a href={LAUNCH_APP_HREF} className="no-underline">
               <Button size="sm" className="bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full px-5 text-sm font-medium">
                 Launch App
               </Button>
-            </Link>
+            </a>
           </div>
 
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 hover:bg-gray-50 rounded-lg transition-colors">
@@ -79,9 +80,9 @@ function SiteNav({ blogActive }: { blogActive?: boolean }) {
               </div>
               <Link href="/blog" onClick={() => setMobileMenuOpen(false)} className={`block w-full text-left px-3 py-2 text-sm rounded-lg transition-colors no-underline ${blogActive ? 'text-[#1a4480] font-semibold bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>Blog</Link>
               <div className="px-3 pt-2">
-                <Link href="/home" className="no-underline">
+                <a href={LAUNCH_APP_HREF} className="no-underline">
                   <Button className="w-full bg-[#1a4480] text-white hover:bg-[#153a6e] rounded-full font-medium" size="sm">Launch App</Button>
-                </Link>
+                </a>
               </div>
             </div>
           </div>
