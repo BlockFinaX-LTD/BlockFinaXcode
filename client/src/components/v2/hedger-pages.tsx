@@ -1034,17 +1034,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{days} {days === 1 ? 'day' : 'days'} · ends {endsAt(days)}</div>}
               </div>
 
-              <div className="bx-quote" aria-live="polite">
-                <div className="bx-quote-row"><span>You pay</span><b className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</b></div>
-                <div className="bx-quote-row"><span>Pays up to</span><b className="num">{e ? `$${fmt(e.maxPayout)}` : chosen.isFetching ? '...' : '-'}</b></div>
-                {strike && (
-                  <div className="bx-quote-note">
-                    If {pair} {direction === 'up' ? 'rises above' : 'falls below'} <span className="num">{fmtRate(strike)}</span> at the end date
-                    {structure === 'capped' && cap ? <>; the payout stops growing at <span className="num">{fmtRate(cap)}</span>.</> : ", up to the pool's maximum payout."}
-                  </div>
-                )}
-              </div>
-
               <details className="bx-adjust" open={adjustOpen} onToggle={(ev) => rememberAdjust((ev.target as HTMLDetailsElement).open)}>
                 <summary>Adjust protection</summary>
                 <div style={{ display: 'grid', gap: 16, marginTop: 14 }}>
@@ -1095,6 +1084,17 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                   )}
                 </div>
               </details>
+
+              <div className="bx-quote" aria-live="polite">
+                <div className="bx-quote-row"><span>You pay</span><b className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</b></div>
+                <div className="bx-quote-row"><span>Pays up to</span><b className="num">{e ? `$${fmt(e.maxPayout)}` : chosen.isFetching ? '...' : '-'}</b></div>
+                {strike && (
+                  <div className="bx-quote-note">
+                    If {pair} {direction === 'up' ? 'rises above' : 'falls below'} <span className="num">{fmtRate(strike)}</span> at the end date
+                    {structure === 'capped' && cap ? <>; the payout stops growing at <span className="num">{fmtRate(cap)}</span>.</> : ", up to the pool's maximum payout."}
+                  </div>
+                )}
+              </div>
 
               {(strikeError || chosen.error) && (
                 <div>
