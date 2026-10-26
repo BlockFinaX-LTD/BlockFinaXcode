@@ -1174,14 +1174,14 @@
   .bfx-landing .trust-text, .bfx-landing .receipt-row { transition: none; }
 }
 
-/* ── Who it is for: hover rows (the row turns blue, its note slides in) ─── */
+/* ── Who it is for: hover rows (the row turns blue, its photo slides in) ─── */
 .bfx-landing .ways { position: relative; overflow: hidden; padding-bottom: 0; }
 .bfx-landing .ways .wrap, .bfx-landing .ways .way-list { position: relative; z-index: 1; }
 .bfx-landing .way-list { border-top: 1px solid var(--bfx-border); margin-top: 28px; }
 .bfx-landing .way-row { display: block; color: var(--bfx-tx); text-decoration: none; border-bottom: 1px solid var(--bfx-border); transition: background .35s var(--bfx-ease), color .35s var(--bfx-ease); }
 .bfx-landing .way-in { display: grid; grid-template-columns: 0px minmax(0, 1fr) minmax(0, 1fr) 40px; align-items: start; gap: 0 32px; min-height: 200px; padding-top: 34px; padding-bottom: 34px; transition: grid-template-columns .45s var(--bfx-ease); }
 .bfx-landing .way-media { overflow: hidden; width: 100%; height: 150px; opacity: 0; transform: translateX(-16px); transition: opacity .35s var(--bfx-ease), transform .45s var(--bfx-ease); }
-.bfx-landing .way-note { width: 260px; height: auto; display: block; border-radius: 10px 48px 10px 48px; }
+.bfx-landing .way-img { width: 280px; height: 150px; object-fit: cover; display: block; border-radius: 10px 48px 10px 48px; }
 .bfx-landing .way-title { font-size: clamp(26px, 3vw, 38px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; }
 .bfx-landing .way-line { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.45; color: var(--bfx-tx-2); max-width: 30ch; transition: color .35s; }
 .bfx-landing .way-arrow { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--bfx-border-2); display: inline-flex; align-items: center; justify-content: center; color: var(--bfx-tx-2); transition: background .35s, color .35s, border-color .35s; }

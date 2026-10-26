@@ -944,68 +944,21 @@ function TrustSection() {
   );
 }
 
-interface WayRow { title: string; line: string; href: string; note: { value: string; ccy: string; serial: string; motif: 'baobab' | 'rays' | 'waves' | 'hex'; ink: string } }
+interface WayRow { title: string; line: string; href: string; img: string; alt: string }
 
+/* Photos from Unsplash (free licence). */
 const WAYS: WayRow[] = [
   { title: 'Exporters and importers', line: 'Protect the dollar side of every trade, from a single supplier invoice upwards.', href: '/hedger',
-    note: { value: '100', ccy: '₵', serial: 'BFX 0100 GH', motif: 'baobab', ink: '#b5532f' } },
+    img: '/ways/exporters.jpg', alt: 'A crane loading shipping containers onto a cargo ship' },
   { title: 'Treasuries', line: 'Manage the currency exposure across your balance sheet, not one payment at a time.', href: '/hedger',
-    note: { value: '500', ccy: '₦', serial: 'BFX 0500 NG', motif: 'rays', ink: '#2f6a8f' } },
+    img: '/ways/treasuries.jpg', alt: 'A finance team meeting around a boardroom table' },
   { title: 'Underwriters', line: 'Earn premiums by backing protection that real businesses need.', href: '/liquidity-provider',
-    note: { value: '1000', ccy: 'KSh', serial: 'BFX 1000 KE', motif: 'waves', ink: '#3f7a4a' } },
+    img: '/ways/underwriters.jpg', alt: 'Currency quotes on a phone in front of a trading screen' },
   { title: 'Partners', line: 'Offer currency protection inside your own product, with your own fees.', href: '/contact',
-    note: { value: '200', ccy: 'R', serial: 'BFX 0200 ZA', motif: 'hex', ink: '#6a4a9a' } },
+    img: '/ways/partners.jpg', alt: 'A person working on a laptop with a phone in hand' },
 ];
 
-/** A fictional banknote: guilloche rosette, a motif, the value and SPECIMEN. Not any real note. */
-function FakeNote({ value, ccy, serial, motif, ink }: WayRow['note']) {
-  const rose: string[] = [];
-  for (let k = 0; k < 12; k++) {
-    const pts: string[] = [];
-    for (let t = 0; t <= 360; t += 5) {
-      const a = (t * Math.PI) / 180;
-      const r = 30 + 8 * Math.sin(7 * a + k * 0.5);
-      pts.push(`${(r * Math.cos(a + k * 0.1)).toFixed(1)},${(r * Math.sin(a + k * 0.1)).toFixed(1)}`);
-    }
-    rose.push(`M${pts.join(' L')} Z`);
-  }
-  const border: string[] = [];
-  for (let x = 6; x <= 314; x += 6) border.push(`M${x} 8 q 3 -4 6 0`, `M${x} 172 q 3 4 6 0`);
-  return (
-    <svg className="way-note" viewBox="0 0 320 180" aria-hidden="true" style={{ color: ink }}>
-      <rect x="0" y="0" width="320" height="180" rx="10" fill="#fbf6ef" />
-      <g fill="none" stroke="currentColor" strokeWidth="0.7" opacity="0.7">{border.map((d, i) => <path key={i} d={d} />)}</g>
-      <rect x="10" y="14" width="300" height="152" rx="6" fill="none" stroke="currentColor" strokeWidth="0.8" opacity="0.5" />
-      <g transform="translate(232 82)" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.55">{rose.map((d, i) => <path key={i} d={d} />)}</g>
-      <g fill="none" stroke="currentColor" strokeWidth="1.1" opacity="0.8" transform="translate(40 40)">
-        {motif === 'baobab' && (<>
-          <path d="M40 100 C 42 72, 36 52, 44 40 C 48 34, 54 34, 58 40 C 66 52, 60 72, 62 100" />
-          <path d="M44 42 C 32 32, 20 30, 10 34 M48 38 C 42 22, 32 14, 22 12 M54 38 C 60 22, 72 16, 84 16 M58 42 C 70 32, 84 30, 94 36" />
-          {[[10, 30], [22, 10], [86, 14], [96, 34], [52, 6]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r={8 + (i % 2) * 3} />)}
-          <path d="M0 100 H 110" />
-        </>)}
-        {motif === 'rays' && (<>
-          <circle cx="55" cy="55" r="22" />
-          {Array.from({ length: 24 }).map((_, i) => { const a = (i / 24) * Math.PI * 2; return <path key={i} d={`M${55 + 26 * Math.cos(a)} ${55 + 26 * Math.sin(a)} L${55 + 44 * Math.cos(a)} ${55 + 44 * Math.sin(a)}`} />; })}
-          <path d="M0 100 H 110" />
-        </>)}
-        {motif === 'waves' && Array.from({ length: 8 }).map((_, i) => (
-          <path key={i} d={`M0 ${30 + i * 9} q 14 -10 28 0 t 28 0 t 28 0 t 28 0`} />
-        ))}
-        {motif === 'hex' && (<>
-          {[[30, 30], [62, 30], [46, 58], [78, 58], [14, 58], [30, 86], [62, 86]].map(([x, y], i) => (
-            <path key={i} d={`M${x - 14} ${y} l7 -12 h14 l7 12 l-7 12 h-14 z`} />
-          ))}
-        </>)}
-      </g>
-      <text x="22" y="34" fontFamily="ui-monospace, monospace" fontSize="9" letterSpacing="1.5" fill="currentColor">{serial}</text>
-      <text x="22" y="160" fontFamily="ui-monospace, monospace" fontSize="7.5" letterSpacing="1.4" fill="currentColor" opacity="0.8">SPECIMEN · NOT LEGAL TENDER</text>
-      <text x="300" y="158" textAnchor="end" fontFamily="Georgia, 'Times New Roman', serif" fontSize="40" fill="currentColor">{ccy}{value}</text>
-    </svg>
-  );
-}
-
-/** Who BlockFinaX is for, as hover rows: the hovered row turns blue and its note slides in. */
+/** Who BlockFinaX is for, as hover rows: the hovered row turns blue and its photo slides in. */
 function WhoSection() {
   const [active, setActive] = useState<number | null>(null);
   return (
@@ -1028,7 +981,7 @@ function WhoSection() {
             onBlur={() => setActive(null)}
           >
             <span className="wrap way-in">
-              <span className="way-media"><FakeNote {...w.note} /></span>
+              <span className="way-media"><img className="way-img" src={w.img} alt={w.alt} /></span>
               <span className="way-title">{w.title}</span>
               <span className="way-line">{w.line}</span>
               <span className="way-arrow" aria-hidden="true">
