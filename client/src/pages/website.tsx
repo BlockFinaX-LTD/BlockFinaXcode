@@ -584,6 +584,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
               </button>
               {resourcesOpen && (
                 <div className="nav-dropdown-menu">
+                  <Link href="/learn">Academy</Link>
                   <Link href="/blog">Blog</Link>
                   <Link href="/faq">FAQ</Link>
                 </div>
@@ -655,6 +656,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
             {mobileResourcesOpen && (
               <div className="nav-mobile-resources">
+                <Link href="/learn" onClick={closeMobile}>Academy</Link>
                 <Link href="/blog" onClick={closeMobile}>Blog</Link>
                 <Link href="/faq" onClick={closeMobile}>FAQ</Link>
               </div>
@@ -1371,6 +1373,7 @@ function Footer() {
             <div className="foot-col">
               <h5>Resources</h5>
               <Link href="/about">About</Link>
+              <Link href="/learn">Academy</Link>
               <Link href="/faq">FAQ</Link>
               <Link href="/blog">Blog</Link>
               <Link href="/contact">Contact</Link>
