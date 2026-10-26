@@ -195,6 +195,21 @@ test("the underwriter's minimum strike distance is enforced before pricing", asy
   assert.equal(ok.economic.strike, "11.8");
 });
 
+test("a strike chosen as a percentage is measured from the rate the quote is priced at", async () => {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const strict = { ...fakeAdapter("stellar", 7), listPools: async () => [{ ...pool("stellar", 7, 11613), structures: { ...pool("stellar", 7, 11613).structures, minStrikeDistanceBps: 500 } }] };
+  // The buyer chose 5% when the rate was 11.20 (strike 11.76); by the time of quoting it is 11.25.
+  const moved: FairPricer = { spot: async () => "11.25", fair: async () => ({ fairRateE6: 15500, spot: "11.25" }) };
+  const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: strict }), moved);
+  const stale = { ...request, strike: "11.76", cap: "12.82" };
+  // Sent as a rate, the strike is now only 4.5% away and is refused.
+  await assert.rejects(qs.quote(stale, { stellar: STELLAR_USER }), (e: ApplicationError) => e.code === "STRIKE_TOO_CLOSE");
+  // Sent as 5% (and the limit as 9% beyond it), it is measured from 11.25 and accepted.
+  const ok = await qs.quote({ ...stale, strikeDistanceBps: 500, capDistanceBps: 900 }, { stellar: STELLAR_USER });
+  assert.equal(ok.economic.strike, "11.8125");
+  assert.equal(ok.economic.cap, "12.875625");
+});
+
 // ── Routing: multi-chain funding, withdrawal, failure ─────────────────────────
 
 function treasury(opts: { sourceFails?: boolean; payoutFails?: boolean } = {}): TreasuryPort {

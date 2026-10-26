@@ -796,8 +796,13 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const strike = spot.data && !strikeError ? (anchor === 'rate' ? Number(rateText) : spot.data * (1 + (sign * startPct) / 100)) : null;
   const cap = strike ? strike * (1 + (sign * capPct) / 100) : null;
 
-  const base = pair && days && strike && Number(amount) > 0 ? { pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6), ...(poolChoice ? { pool: poolChoice } : {}) } : null;
-  const cappedReq = useDebounced(base && cap && tenor?.capped ? JSON.stringify({ ...base, structure: 'capped', cap: cap.toFixed(6) }) : null, 350);
+  // A strike set as a percentage is sent as one, so the server measures it from the rate it prices at.
+  const base = pair && days && strike && Number(amount) > 0 ? {
+    pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6),
+    ...(anchor === 'rate' ? {} : { strikeDistanceBps: Math.round(startPct * 100) }),
+    ...(poolChoice ? { pool: poolChoice } : {}),
+  } : null;
+  const cappedReq = useDebounced(base && cap && tenor?.capped ? JSON.stringify({ ...base, structure: 'capped', cap: cap.toFixed(6), capDistanceBps: Math.round(capPct * 100) }) : null, 350);
   const openReq = useDebounced(base && tenor?.open ? JSON.stringify({ ...base, structure: 'open' }) : null, 350);
   const [refresh, setRefresh] = useState(0);
   const q = (req: string | null) => ({ queryKey: ['v2-quote', req, refresh], enabled: Boolean(req), retry: false, queryFn: () => api<ProtectionQuote>('/api/v2/quotes', JSON.parse(req!)) });

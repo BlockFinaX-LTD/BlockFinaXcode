@@ -198,6 +198,14 @@ export interface ProtectionRequest {
   direction: Direction;
   strike: string;
   cap?: string;
+  /**
+   * The strike as a distance from today's rate, in bps (200 = 2%). When given, the strike is
+   * worked out from the exact rate the quote is priced at, so it never falls short of a
+   * pool's closest strike because the rate moved after the buyer chose it.
+   */
+  strikeDistanceBps?: number;
+  /** Limited cover: the limit as a distance beyond the strike, in bps of the strike. */
+  capDistanceBps?: number;
   /** Buy from this pool only ("chain:contract:pool/N"). Omitted: BlockFinaX picks the cheapest. */
   pool?: string;
 }

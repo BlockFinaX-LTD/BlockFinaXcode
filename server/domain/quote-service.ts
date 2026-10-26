@@ -109,28 +109,37 @@ export class QuoteService {
    */
   async quote(req: ProtectionRequest, accounts: Record<ChainKey, string>): Promise<ProtectionQuote> {
     if (!isOffered(req.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
-    if (req.structure === "capped" && !req.cap) throw new ApplicationError("INVALID_CAP", "Choose a limit for Limited protection");
+    if (req.strikeDistanceBps !== undefined && !(Number.isInteger(req.strikeDistanceBps) && req.strikeDistanceBps >= 0 && req.strikeDistanceBps <= 5_000)) {
+      throw new ApplicationError("INVALID_STRIKE", "The strike must be between 0% and 50% from today's rate");
+    }
+    if (req.capDistanceBps !== undefined && !(Number.isInteger(req.capDistanceBps) && req.capDistanceBps > 0 && req.capDistanceBps <= 10_000)) {
+      throw new ApplicationError("INVALID_CAP", "The limit must be between 0% and 100% beyond the strike");
+    }
+    if (req.structure === "capped" && !req.cap && req.capDistanceBps === undefined) throw new ApplicationError("INVALID_CAP", "Choose a limit for Limited protection");
     const chain = this.chains.require(this.chains.executionNetworkFor().key, "newHedges");
     const buyer = accounts[chain.key];
     if (!buyer) throw new ApplicationError("INVALID_REQUEST", `No ${chain.name} account yet; create one before buying protection`);
     const adapter = this.adapters.adapterFor(chain.key);
     const spotNow = Number(await this.pricer.spot(req.pair));
     const pools = await adapter.listPools();
+    const requestedDistanceBps = req.strikeDistanceBps ?? strikeDistanceBps(req, spotNow);
 
     const candidates = pools
       .map((pool) => ({ pool, markupBps: markupForDays(pool, req.tenorDays) }))
       .filter(({ pool, markupBps }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
         && (!req.pool || formatResourceId(pool.ref) === req.pool)
-        && strikeDistanceBps(req, spotNow) >= (pool.structures.minStrikeDistanceBps ?? 0)
+        && requestedDistanceBps >= (pool.structures.minStrikeDistanceBps ?? 0)
         && markupBps !== null && (req.structure === "open" ? pool.structures.open : pool.structures.capped))
       .sort((a, b) => a.markupBps! - b.markupBps!);
     if (candidates.length === 0) {
       // Say so plainly when the only reason is that the strike is too close to today's rate.
+      // Only when every pool that otherwise fits is ruled out by its closest strike.
       const closest = pools
         .filter((p) => p.pair === req.pair && p.acceptingHedges && (p.direction === "both" || p.direction === req.direction)
-          && (!req.pool || formatResourceId(p.ref) === req.pool) && markupForDays(p, req.tenorDays) !== null)
+          && (!req.pool || formatResourceId(p.ref) === req.pool) && markupForDays(p, req.tenorDays) !== null
+          && (req.structure === "open" ? p.structures.open : p.structures.capped))
         .map((p) => p.structures.minStrikeDistanceBps ?? 0);
-      if (closest.length) {
+      if (closest.length && closest.every((min) => requestedDistanceBps < min)) {
         throw new ApplicationError("STRIKE_TOO_CLOSE", `Protection must start at least ${Math.min(...closest) / 100}% from today's rate for this cover`);
       }
     }
@@ -149,22 +158,33 @@ export class QuoteService {
   async economic(req: ProtectionRequest, pool: CurrencyPool, markupBps: number, chain: ChainKey): Promise<EconomicQuote | ApplicationError> {
     const d = pool.asset.decimals;
     const up = req.direction === "up";
-    const strike = toRate(req.strike);
-    const capFor = (spot: bigint) => req.structure === "open"
+    // A strike or limit given as a distance is measured from the rate actually priced at.
+    const strikeFor = (spot: bigint) => req.strikeDistanceBps === undefined ? toRate(req.strike) : awayFrom(spot, req.strikeDistanceBps, up);
+    const capFor = (spot: bigint, strike: bigint) => req.structure === "open"
       ? openCap(BigInt(pool.structures.openMaxPayoutBps), up, spot, strike)
-      : toRate(req.cap!);
+      : req.capDistanceBps === undefined ? toRate(req.cap!) : awayFrom(strike, req.capDistanceBps, up);
 
-    // Open cover's cap depends on spot: re-price until the cap matches the spot priced at.
-    let cap = capFor(toRate(await this.pricer.spot(req.pair)));
+    // Re-price until the strike and cap match the spot priced at (Open cover's cap, and any
+    // strike or limit given as a distance, depend on it).
+    const first = toRate(await this.pricer.spot(req.pair));
+    let strike = strikeFor(first);
+    let cap = capFor(first, strike);
     let priced: { fairRateE6: number; spot: string } | null = null;
     for (let i = 0; i < 3 && !priced; i++) {
-      const r = await this.pricer.fair({ pair: req.pair, strike: req.strike, cap: fromRate(cap), tenorDays: req.tenorDays, notional: req.notional, direction: req.direction });
-      const exact = capFor(toRate(r.spot));
-      if (exact === cap) priced = r; else cap = exact;
+      const r = await this.pricer.fair({ pair: req.pair, strike: fromRate(strike), cap: fromRate(cap), tenorDays: req.tenorDays, notional: req.notional, direction: req.direction });
+      const s = toRate(r.spot);
+      const exactStrike = strikeFor(s);
+      const exactCap = capFor(s, exactStrike);
+      if (exactStrike === strike && exactCap === cap) priced = r; else { strike = exactStrike; cap = exactCap; }
     }
     if (!priced) return new ApplicationError("QUOTE_EXPIRED", "Spot moved while pricing; request the quote again");
 
     const spot = toRate(priced.spot);
+    // The contract's own rule, against the spot it will see.
+    const minBps = BigInt(pool.structures.minStrikeDistanceBps ?? 0);
+    if ((up ? strike - spot : spot - strike) * BigInt(10_000) < minBps * spot) {
+      return new ApplicationError("STRIKE_TOO_CLOSE", `Protection must start at least ${Number(minBps) / 100}% from today's rate for this cover`);
+    }
     const problem = checkTerms({ structures: pool.structures, structure: req.structure, strikeAbove: up, spot, strike, cap });
     if (problem) return new ApplicationError(problem.code, problem.message);
 
@@ -202,6 +222,12 @@ export async function enginePricer(): Promise<FairPricer> {
       return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot) };
     },
   };
+}
+
+/** A rate `bps` beyond `base` in the protected direction, rounded away from it so the distance is never short. */
+function awayFrom(base: bigint, bps: number, up: boolean): bigint {
+  const move = (base * BigInt(bps) + BigInt(9_999)) / BigInt(10_000);
+  return up ? base + move : base - move;
 }
 
 /** How far the requested strike is from today's rate, in bps of spot. */
