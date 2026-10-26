@@ -115,11 +115,11 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
   const buy = (days?: number) => go('h-protect', { pair: pool.pair, direction, pool: poolRef(pool), days });
-  const types = [pool.structures.capped && 'Limited', pool.structures.open && 'Open'].filter(Boolean).join(' + ');
+  const spot = useSpot(pool.pair);
   return (
     <>
       <div className={`bx-li${expandable ? ' click' : ''}`} style={MARKET_COLS} onClick={() => expandable && setOpen((o) => !o)}>
-        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">{ccyName(pool.pair)} · {types} · {startsLabel(offers.distance)}</div></div></div>
+        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
         <div className="r" style={{ fontSize: 13 }}>{pool.tenors.filter((t) => t.active).map((t) => t.tenorDays).sort((a, b) => a - b).join(', ')} days</div>
