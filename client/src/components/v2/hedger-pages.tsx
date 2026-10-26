@@ -728,8 +728,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const spot = useSpot(pair);
   const chart = useChart(pair, range);
   const points = chart.data ?? [];
-  // Intraday ranges share the live rate's source, so measure from the live rate; daily
-  // ranges measure close to close so two providers are never compared.
+  // Every range now ends on the live rate (the server puts it as today's point on daily
+  // charts), so the change runs from the first point to the rate quotes are priced at.
   const periodChange = points.length >= 2
     ? (range.endsWith('H') && spot.data ? spot.data : points[points.length - 1].v) / points[0].v - 1
     : null;

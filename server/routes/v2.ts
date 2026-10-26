@@ -267,6 +267,14 @@ export function registerV2Routes(app: Express) {
       const from = new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
       points = rows.filter((r: any) => range === "MAX" || String(r.date) >= from)
         .map((r: any) => ({ t: String(r.date).slice(0, 10), v: Number(r.close) }));
+      // Today has no close yet, and the history provider's partial figure can differ from the
+      // live rate quotes and strikes use. End the line on that live rate instead.
+      const today = now.toISOString().slice(0, 10);
+      const spot = Number(await (await getServices()).quotes.spot(pair).catch(() => NaN));
+      if (Number.isFinite(spot) && spot > 0) {
+        points = points.filter((p) => p.t < today);
+        points.push({ t: today, v: spot });
+      }
     }
     const step = Math.ceil(points.length / 300);
     if (step > 1) points = points.filter((_, i) => i % step === 0 || i === points.length - 1);
