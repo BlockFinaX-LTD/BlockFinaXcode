@@ -838,7 +838,7 @@ function PillarsSection() {
           <div className="why-copy">
             <p>
               An exchange-rate move can make a supplier payment more expensive, a foreign-currency loan heavier or an
-              investment worth less. <strong>BlockFinaX makes protection against it accessible.</strong>
+              investment worth less. <strong>BlockFinaX lets you set your worst case in advance.</strong>
             </p>
           </div>
         </div>
@@ -1049,57 +1049,6 @@ function WhoSection() {
 // with white type. Both target buyers/writers who can't find a fit in the
 // open marketplace and want to work with us directly.
 
-function RequestSection() {
-  return (
-    <section className="reqs" id="request">
-      <div className="wrap">
-        <div className="reqs-grid">
-          <a
-            href="mailto:hello@blockfinax.com?subject=Request%20a%20quote"
-            className="reqcard light"
-          >
-            <div className="reqcard-body">
-              <h2>Request a quote</h2>
-              <p>
-                For businesses, funds, and treasuries whose exposure doesn&apos;t
-                fit the open marketplace. Tell us the notional, the pair, the
-                expiry, and the strike range you want cover on. We&apos;ll
-                structure a bespoke pool and quote you back.
-              </p>
-              <span className="reqcard-cta">
-                Request a quote
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </div>
-          </a>
-          <a
-            href="mailto:hello@blockfinax.com?subject=Apply%20to%20underwrite"
-            className="reqcard dark"
-          >
-            <div className="reqcard-body">
-              <h2>Become an underwriter</h2>
-              <p>
-                Put idle USDC to work as pool liquidity. Every time a hedger
-                buys cover from a pool you back, you earn a share of the
-                premium. If the event settles out of the money, the reserved
-                capital comes back to you. If it settles in the money, your
-                share of the payout is capped and known upfront.
-              </p>
-              <span className="reqcard-cta">
-                Apply to underwrite
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </div>
-          </a>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ── Currencies we cover / flag row ───────────────────────────────────────
 // Six emerging-market currencies with their circular flags, laid out as a
@@ -1357,21 +1306,6 @@ function LearnSection() {
   );
 }
 
-function TailCTA() {
-  return (
-    <section className="tail">
-      <div className="wrap">
-        <h2>Hedge FX risk, or underwrite it.</h2>
-        <p>Buy protection against currency moves, or earn premiums by backing it.</p>
-        <div className="hero-ctas">
-          <Link href="/hedge" className="btn btn-primary">
-            Launch App <span className="arrow">→</span>
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ── Book-a-call cushion ─────────────────────────────────────────────────
 // Big brand-accent panel sitting between the tail CTA and the footer, in
@@ -1528,11 +1462,9 @@ export default function Website() {
       <WhoSection />
       <UseSection theme={theme} />
       <TrustSection />
-      <RequestSection />
       <CurrenciesSection />
       <SignalSection />
       <LearnSection />
-      <TailCTA />
       <BookCallCushion />
       <Footer />
     </div>
@@ -1677,8 +1609,6 @@ export function UnderwritersPage() { return <AudiencePage copy={UNDERWRITERS} />
 
 const APPROACH = [
   { t: 'A protocol, not a counterparty', d: 'BlockFinaX connects businesses that need protection with underwriters who provide it. We build the pricing, the records and the settlement; underwriters carry the risk and earn the premiums.' },
-  { t: 'Every promise funded', d: 'The most a protection can pay is set aside from underwriters the moment it is sold. Cover is never offered without the money to pay it.' },
-  { t: 'Rates no one party chooses', d: 'The exchange rate that decides a payout is reported and agreed by independent operators, at a fixed time, and recorded on a public ledger.' },
   { t: 'Simple to use', d: 'Sign in with email, approve with a passkey and pay in USDC. No credit line, no dealer and no network fees to manage.' },
 ];
 
@@ -1709,20 +1639,6 @@ export function AboutPage() {
               Protection lets people make those commitments with confidence. Yet the tools to manage this risk remain out of
               reach for many. <strong>BlockFinaX exists to make that protection accessible.</strong>
             </p>
-          </div>
-        </div>
-      </section>
-      <section className="aud-section">
-        <div className="wrap">
-          <h2 className="aud-h2">What we are building</h2>
-          <div className="about-pillars">
-            {PILLARS.map((p) => (
-              <div key={p.n} className="about-pillar">
-                <span className="pillar-num">{p.n}</span>
-                <h3>{p.title}</h3>
-                <p>{p.lede}</p>
-              </div>
-            ))}
           </div>
         </div>
       </section>
