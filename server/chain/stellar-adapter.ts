@@ -226,6 +226,8 @@ export class StellarAdapter implements ChainAdapter {
         out.account = {
           free: amt(a.free), reserved: amt(a.reserved), earned: amt(a.earned), paid: amt(a.paid),
           pendingWithdraw: amt(a.pending_withdraw), backing: Boolean(a.backing), maxTenorDays: Number(a.max_tenor_days),
+          minTenorDays: typeof c.get_lp_min_tenor_days === "function"
+            ? Number((await c.get_lp_min_tenor_days({ pool_id: poolId, lp: owner })).result ?? 0) : 0,
           withdrawable: amt(BigInt(a.free) - BigInt(a.pending_withdraw)),
         };
       }
@@ -233,11 +235,44 @@ export class StellarAdapter implements ChainAdapter {
     return out;
   }
 
-  /** Whether this underwriter's free money backs new sales, and the longest tenor it backs. */
-  prepareLpPreferences(owner: string, poolId: number, backing: boolean, maxTenorDays: number) {
-    return this.prepare(backing ? "Update backing preferences" : "Stop backing new protection", "set_lp_preferences", {
-      pool_id: poolId, lp: owner, backing, max_tenor_days: Math.max(0, Math.min(365, Math.floor(maxTenorDays))),
-    });
+  /** Whether this underwriter's free money backs new sales, and the range of tenors it backs. */
+  async prepareLpPreferences(owner: string, poolId: number, backing: boolean, maxTenorDays: number, minTenorDays = 0) {
+    const days = (d: number) => Math.max(0, Math.min(365, Math.floor(d)));
+    const label = backing ? "Update backing preferences" : "Stop backing new protection";
+    const c = await this.client(this.poolId);
+    if (typeof c.set_lp_backing_range === "function") {
+      return this.prepare(label, "set_lp_backing_range", {
+        pool_id: poolId, lp: owner, backing, min_tenor_days: days(minTenorDays), max_tenor_days: days(maxTenorDays),
+      });
+    }
+    if (minTenorDays > 0) throw new ApplicationError("INVALID_REQUEST", "Setting a shortest duration needs the upgraded pool contract");
+    return this.prepare(label, "set_lp_preferences", { pool_id: poolId, lp: owner, backing, max_tenor_days: days(maxTenorDays) });
+  }
+
+  /** Money able to back a new hedge of this many days, given each underwriter's range; null on older contracts. */
+  async capacityFor(poolId: number, tenorDays: number): Promise<string | null> {
+    const c = await this.client(this.poolId);
+    if (typeof c.get_capacity_for !== "function") return null;
+    const v = unwrap((await c.get_capacity_for({ pool_id: poolId, tenor_days: tenorDays })).result);
+    return fromUnits(BigInt(v ?? 0), this.usdc.decimals);
+  }
+
+  /** Whether `owner` may take over the pool: its creator has no money left in it and `owner` has the most. */
+  async takeOverStatus(poolId: number, owner: string): Promise<{ supported: boolean; eligible: boolean; reason: string | null }> {
+    const c = await this.client(this.poolId);
+    if (typeof c.take_over_pool !== "function") return { supported: false, eligible: false, reason: null };
+    const pool = unwrap((await c.get_pool({ pool_id: poolId })).result);
+    if (pool.creator === owner) return { supported: true, eligible: false, reason: "You already manage this pool" };
+    const lps: [string, any][] = unwrap((await c.list_pool_lps({ pool_id: poolId })).result) ?? [];
+    const stake = (who: string) => { const e = lps.find(([a]) => a === who); return e ? BigInt(e[1].free) + BigInt(e[1].reserved) : BigInt(0); };
+    if (stake(pool.creator) > BigInt(0)) return { supported: true, eligible: false, reason: "The creator still has money in this pool" };
+    const mine = stake(owner);
+    if (mine <= BigInt(0) || lps.some(([a]) => stake(a) > mine)) return { supported: true, eligible: false, reason: "Only the underwriter with the most money in the pool can take it over" };
+    return { supported: true, eligible: true, reason: null };
+  }
+
+  prepareTakeOver(owner: string, poolId: number) {
+    return this.prepare("Take over pool", "take_over_pool", { pool_id: poolId, claimant: owner });
   }
 
   async listWithdrawals(owner: string): Promise<WithdrawalRequestView[]> {

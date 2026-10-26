@@ -105,6 +105,13 @@ function usePoolOffers(pool: CurrencyPool) {
   return { rows, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: fair.isLoading, distance, strike: fair.data?.reference.strike ?? null };
 }
 
+/** The durations a pool sells: a range for pools that sell any day, otherwise the list. */
+function durationsLabel(pool: CurrencyPool) {
+  const { range, days } = durationsOffered(pool);
+  if (range) return range.minDays === range.maxDays ? `${range.minDays} days` : `Any day, ${range.minDays} to ${range.maxDays}`;
+  return days.length ? `${days.join(', ')} days` : '-';
+}
+
 const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${bps / 100}% away`);
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) 128px' };
@@ -122,7 +129,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
         <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
-        <div className="r" style={{ fontSize: 13 }}>{pool.tenors.filter((t) => t.active).map((t) => t.tenorDays).sort((a, b) => a - b).join(', ')} days</div>
+        <div className="r" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
           <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>Buy cover</button>
           {expandable && (open ? <ChevronUp size={16} className="muted" /> : <ChevronDown size={16} className="muted" />)}
@@ -148,7 +155,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
 }
 
 function MarketHeader() {
-  return <div className="bx-list-h" style={MARKET_COLS}><span>{hint("Cover")}</span><span className="r">{hint("Liquidity")}</span><span className="r">{hint("Premium")}</span><span className="r">{hint("Lengths")}</span><span /></div>;
+  return <div className="bx-list-h" style={MARKET_COLS}><span>{hint("Cover")}</span><span className="r">{hint("Liquidity")}</span><span className="r">{hint("Premium")}</span><span className="r">{hint("Durations")}</span><span /></div>;
 }
 
 function useOpenPools() {

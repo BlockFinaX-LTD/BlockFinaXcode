@@ -153,9 +153,30 @@ export function registerV2Routes(app: Express) {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
     const owner = await ownerOn(s, await userId(req), chain);
-    const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { prepareLpPreferences?: (o: string, p: number, b: boolean, t: number) => Promise<unknown> };
+    const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { prepareLpPreferences?: (o: string, p: number, b: boolean, max: number, min?: number) => Promise<unknown> };
     if (!adapter.prepareLpPreferences) throw new ApplicationError("INVALID_REQUEST", "This pool does not support underwriter preferences");
-    res.json({ transactions: await adapter.prepareLpPreferences(owner, id, req.body?.backing !== false, Number(req.body?.maxTenorDays ?? 0) || 0) });
+    const max = Number(req.body?.maxTenorDays ?? 0) || 0;
+    const min = Number(req.body?.minTenorDays ?? 0) || 0;
+    if (max > 0 && min > max) throw new ApplicationError("INVALID_REQUEST", "The shortest duration must not be longer than the longest");
+    res.json({ transactions: await adapter.prepareLpPreferences(owner, id, req.body?.backing !== false, max, min) });
+  }));
+
+  /** Whether the signed-in underwriter may take over a pool whose creator has left it. */
+  app.get("/api/v2/pools/:ref/takeover", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    const owner = await ownerOn(s, await userId(req), chain);
+    const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { takeOverStatus?: (p: number, o: string) => Promise<unknown> };
+    res.json(adapter.takeOverStatus ? await adapter.takeOverStatus(id, owner) : { supported: false, eligible: false, reason: null });
+  }));
+
+  app.post("/api/v2/pools/:ref/takeover/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    const owner = await ownerOn(s, await userId(req), chain);
+    const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { prepareTakeOver?: (o: string, p: number) => Promise<unknown> };
+    if (!adapter.prepareTakeOver) throw new ApplicationError("INVALID_REQUEST", "This pool cannot be taken over");
+    res.json({ transactions: await adapter.prepareTakeOver(owner, id) });
   }));
 
   /** The user's withdrawal requests on every settling chain. */

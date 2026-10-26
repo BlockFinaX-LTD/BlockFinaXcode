@@ -91,7 +91,7 @@ export class QuoteService {
         const r = rows.get(t.tenorDays) ?? { open: false, capped: false, capacity: 0 };
         r.open ||= p.structures.open;
         r.capped ||= p.structures.capped;
-        r.capacity = Math.max(r.capacity, Number(p.liquidity.capacity));
+        r.capacity = Math.max(r.capacity, Number((await this.capacityFor(p, t.tenorDays)) ?? p.liquidity.capacity));
         rows.set(t.tenorDays, r);
       }
     }
@@ -154,6 +154,17 @@ export class QuoteService {
     throw last;
   }
 
+  /** Money able to back `days`-day cover in this pool, from the contract when it reports it. */
+  private async capacityFor(pool: CurrencyPool, days: number): Promise<string | null> {
+    let a: { capacityFor?: (id: number, d: number) => Promise<string | null> };
+    try {
+      a = this.adapters.adapterForContract(pool.ref.chain, pool.ref.contract) as unknown as typeof a;
+    } catch {
+      return null; // a contract this server does not manage: use the pool's total
+    }
+    return a.capacityFor ? a.capacityFor(pool.poolId, days).catch(() => null) : null;
+  }
+
   /** The economic quote for one pool, or the reason it cannot take the hedge. */
   async economic(req: ProtectionRequest, pool: CurrencyPool, markupBps: number, chain: ChainKey): Promise<EconomicQuote | ApplicationError> {
     const d = pool.asset.decimals;
@@ -190,7 +201,9 @@ export class QuoteService {
 
     const notional = toUnits(req.notional, d);
     const reserve = maxPayout(notional, strike, cap, spot);
-    if (reserve > toUnits(pool.liquidity.capacity, d)) return new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
+    // Underwriters may back only some durations, so what is free for this one can be less than the pool's total.
+    const capacity = (await this.capacityFor(pool, req.tenorDays)) ?? pool.liquidity.capacity;
+    if (reserve > toUnits(capacity, d)) return new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount and duration");
 
     const fair = BigInt(priced.fairRateE6);
     const cost = costBreakdown({ notional, fairRate: fair, markupBps: BigInt(markupBps), hedgerFeeRate: BigInt(pool.fees.hedgerFeeRateE6) });

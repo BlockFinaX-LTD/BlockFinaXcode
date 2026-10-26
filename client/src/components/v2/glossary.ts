@@ -18,6 +18,7 @@ export const GLOSSARY: Record<string, string> = {
   'Duration': 'How long the protection lasts.',
   'Length': 'How long the protection lasts.',
   'Lengths': 'The protection lengths this pool sells.',
+  'Durations': 'How long protection bought from this pool can run. "Any day" pools sell any number of days in the range.',
   'Tenor': 'How long the protection lasts, in days.',
   'Tenors': 'The protection lengths this pool sells.',
   'Expiry': 'The date your protection ends. The rate on that date decides any payout.',
@@ -77,6 +78,7 @@ export const GLOSSARY: Record<string, string> = {
   'Largest limit (%)': 'The widest gap a buyer may choose between strike and limit. A wider gap means a bigger possible payout.',
   'Maximum payout, % of amount': 'For open protection: the most the pool will pay, as a percentage of the amount protected.',
   'Longest protection I back': 'Your money only funds protection up to this length, so it is never locked longer than you choose.',
+  'Shortest protection I back': 'Your money only funds protection at least this long. Use it to leave very short contracts to other underwriters.',
 
   // Verification and wallet
   'Moved (30 days)': 'How much you have deposited, withdrawn and spent in the last 30 days, against your verification limit.',

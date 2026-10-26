@@ -20,11 +20,12 @@ import {
 import { Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
 import type { Go } from './workspace';
 import { isOffered } from '@shared/domain/offered-directions';
+import { durationsOffered } from '@shared/domain/durations';
 
 const MARKUP_MIN = 9000;
 const MARKUP_MAX = 50000;
 /** Per-hedge underwriting (current Stellar pools): each underwriter's own balances in USDC. */
-type LpAccount = { free: string; reserved: string; earned: string; paid: string; pendingWithdraw: string; withdrawable: string; backing: boolean; maxTenorDays: number };
+type LpAccount = { free: string; reserved: string; earned: string; paid: string; pendingWithdraw: string; withdrawable: string; backing: boolean; maxTenorDays: number; minTenorDays?: number };
 type Stake = { shares: string; value: string; account?: LpAccount };
 type Withdrawal = { chain: string; contract?: string; requestId: number; poolId: number; shares: string; unlockAt: number; status: string };
 
@@ -261,7 +262,7 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
         <TenorPricing pool={pool} editable={creator} />
         <ProtectionSettings pool={pool} editable={creator} />
       </section>
-      <aside className="bx-aside" aria-label="Liquidity"><LiquidityPanel pool={pool} /></aside>
+      <aside className="bx-aside" aria-label="Liquidity"><LiquidityPanel pool={pool} /><TakeOverCard pool={pool} /></aside>
     </main>
   );
 }
@@ -281,6 +282,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
   for (const p of usePoolPositions([pool]).get(poolRef(pool)) ?? []) sold.set(p.tenorDays, (sold.get(p.tenorDays) ?? 0) + Number(p.maxPayout));
   useEffect(() => { setOffers({}); setExtra([]); }, [pool.ref.id]);
   const cols = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 72px' };
+  const range = durationsOffered(pool).range;
 
   async function save(tenorDays: number, active: boolean, markupBps: number) {
     setBusy(tenorDays);
@@ -299,7 +301,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ alignItems: 'flex-end' }}>
-        <div><h2>Tenor pricing</h2><div className="sub">BlockFinaX calculates the fair price. {editable ? 'You set your offer.' : "The pool's creator sets the offer."} All tenors share this pool's liquidity.</div></div>
+        <div><h2>Tenor pricing</h2><div className="sub">BlockFinaX calculates the fair price. {editable ? 'You set your offer.' : "The pool's creator sets the offer."} All tenors share this pool's liquidity.{range ? ` This pool sells any day from ${range.minDays} to ${range.maxDays}; the durations below are price points, and prices between them are blended.` : ''}</div></div>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ minWidth: 640 }}>
@@ -428,15 +430,24 @@ function LpBreakdown({ account }: { account: LpAccount }) {
   );
 }
 
-/** Whether this underwriter's free money backs new sales, and the longest protection it backs. */
-function BackingPreferences({ pool, account, tenors }: { pool: CurrencyPool; account: LpAccount; tenors: number[] }) {
+/** Whether this underwriter's free money backs new sales, and the durations it backs. */
+function BackingPreferences({ pool, account }: { pool: CurrencyPool; account: LpAccount }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  async function save(backing: boolean, maxTenorDays: number) {
+  const { range, days } = durationsOffered(pool);
+  // Pools selling any day get round-number choices inside their range; others their listed durations.
+  const choices = range ? [1, 3, 7, 14, 21, 30, 45, 60, 90].filter((d) => d >= range.minDays && d <= range.maxDays) : days;
+  const min = account.minTenorDays ?? 0;
+  const max = account.maxTenorDays;
+  async function save(backing: boolean, maxTenorDays: number, minTenorDays = min) {
+    if (maxTenorDays > 0 && minTenorDays > maxTenorDays) {
+      toast({ title: 'Not saved', description: 'The shortest duration must not be longer than the longest.', variant: 'destructive' });
+      return;
+    }
     setBusy(true);
     try {
-      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/preferences/prepare`, { backing, maxTenorDays });
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/preferences/prepare`, { backing, maxTenorDays, minTenorDays });
       await signAndSend(transactions, () => {});
       toast({ title: 'Preferences saved' });
       void qc.invalidateQueries({ queryKey: ['v2-lp'] });
@@ -448,15 +459,59 @@ function BackingPreferences({ pool, account, tenors }: { pool: CurrencyPool; acc
     <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <div><div style={{ fontWeight: 600, fontSize: 14 }}>Back new protection</div><div className="muted" style={{ fontSize: 12 }}>Off: your free money backs no new sales. Protection you already back keeps its reserve.</div></div>
-        <Toggle on={account.backing} disabled={busy} label="Back new protection" onChange={(v) => save(v, account.maxTenorDays)} />
+        <Toggle on={account.backing} disabled={busy} label="Back new protection" onChange={(v) => save(v, max)} />
       </div>
-      <label className="bx-field" style={{ marginTop: 12, marginBottom: 0 }}>
-        <span>{hint("Longest protection I back")}</span>
-        <select className="bx-select" disabled={busy || !account.backing} value={account.maxTenorDays} onChange={(e) => save(true, Number(e.target.value))}>
-          <option value={0}>Any length the pool offers</option>
-          {tenors.map((d) => <option key={d} value={d}>Up to {d} days</option>)}
-        </select>
-      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+        <label className="bx-field" style={{ margin: 0 }}>
+          <span>{hint("Shortest protection I back")}</span>
+          <select className="bx-select" disabled={busy || !account.backing} value={min} onChange={(e) => save(true, max, Number(e.target.value))}>
+            <option value={0}>No minimum</option>
+            {choices.map((d) => <option key={d} value={d}>From {d} days</option>)}
+          </select>
+        </label>
+        <label className="bx-field" style={{ margin: 0 }}>
+          <span>{hint("Longest protection I back")}</span>
+          <select className="bx-select" disabled={busy || !account.backing} value={max} onChange={(e) => save(true, Number(e.target.value))}>
+            <option value={0}>No maximum</option>
+            {choices.map((d) => <option key={d} value={d}>Up to {d} days</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Change these any time. Money already backing protection stays until that protection ends.</div>
+    </div>
+  );
+}
+
+/**
+ * Shown only when this underwriter may take over the pool: its creator has no money left
+ * in it and this underwriter has the most. The pool's settings then become theirs.
+ */
+function TakeOverCard({ pool }: { pool: CurrencyPool }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const status = useQuery({
+    queryKey: ['v2-takeover', poolRef(pool)],
+    queryFn: () => api<{ supported: boolean; eligible: boolean; reason: string | null }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/takeover`),
+    staleTime: 60_000,
+  });
+  if (!status.data?.eligible) return null;
+  async function takeOver() {
+    setBusy(true);
+    try {
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/takeover/prepare`, {});
+      await signAndSend(transactions, () => {});
+      toast({ title: 'You now manage this pool', description: 'You can set its durations, prices and protection settings.' });
+      for (const k of ['v2-pools', 'v2-takeover']) void qc.invalidateQueries({ queryKey: [k] });
+    } catch (e) {
+      toast({ title: 'Not taken over', description: (e as Error).message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="bx-card tight" style={{ marginTop: 16 }}>
+      <h2>Manage this pool</h2>
+      <div className="sub">The pool's creator has left it, and you have the most money in it. You can take over its durations, prices and protection settings. Anything the creator earned before is paid to them, not to you.</div>
+      <button className="bx-btn block" style={{ marginTop: 14 }} disabled={busy} onClick={takeOver}>{busy ? <Spin /> : null} Take over this pool</button>
     </div>
   );
 }
@@ -535,7 +590,7 @@ function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; ini
         {busy && !busy.startsWith('w') ? <><Spin /> {busy}</> : mode === 'add' ? 'Add liquidity' : 'Request withdrawal'}
       </button>
       {mode === 'add' && !pool.allowExternalLp && <div className="bx-hint">{pool.legacy ? 'This pool is on an earlier contract and takes no new money.' : 'This pool is closed to new underwriters.'}</div>}
-      {acct && <BackingPreferences pool={pool} account={acct} tenors={pool.tenors.filter((t) => t.active).map((t) => t.tenorDays)} />}
+      {acct && <BackingPreferences pool={pool} account={acct} />}
       {pending.length > 0 && (
         <div className="bx-sums">
           {pending.map((w) => {

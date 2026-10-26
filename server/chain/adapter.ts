@@ -80,6 +80,8 @@ export interface LpAccountView {
   withdrawable: string;
   backing: boolean;
   maxTenorDays: number;
+  /** Shortest tenor this underwriter backs; 0 when there is no minimum or the contract predates it. */
+  minTenorDays: number;
 }
 
 export interface ChainAdapter {
