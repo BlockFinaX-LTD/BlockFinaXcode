@@ -19,6 +19,8 @@ exec railway run -e testnet -s blockfinax-testnet -- env \
   DATABASE_URL="$LOCAL_DB" \
   PUBLIC_APP_URL=http://localhost:5173 \
   APP_URL=http://localhost:5173 \
+  PASSKEY_RP_ID=localhost \
+  PASSKEY_RELATED_ORIGINS= \
   PORT=5173 \
   NODE_OPTIONS='--dns-result-order=ipv4first --no-network-family-autoselection' \
   npm run dev
