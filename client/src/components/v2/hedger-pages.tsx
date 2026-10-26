@@ -636,7 +636,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
   );
 }
 
-const QUICK_DAYS: [number, string][] = [[7, '1 week'], [14, '2 weeks'], [30, '1 month'], [90, '3 months']];
+const QUICK_DAYS: [number, string][] = [7, 14, 30, 60, 90].map((d) => [d, `${d} days`]);
 const DAY_MS = 86_400_000;
 const utcDay = (ms: number) => Math.floor(ms / DAY_MS);
 const isoDay = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
