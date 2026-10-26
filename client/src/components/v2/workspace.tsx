@@ -9,12 +9,12 @@ import { ContactSales, DemoBanner } from './demo';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Moon, Search, Shield, Store, Sun, Wallet, X } from 'lucide-react';
+import { ArrowUp, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Moon, Search, Store, Sun, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
 import { Flag, Spin } from './ui';
-import { HedgerHome, MarketsPage, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
+import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
@@ -35,8 +35,7 @@ export type Go = (page: Page, target?: Target) => void;
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   hedger: [
     { page: 'h-home', label: 'Home', icon: <Home /> },
-    { page: 'h-markets', label: 'Markets', icon: <Store /> },
-    { page: 'h-protect', label: 'Protect', icon: <Shield /> },
+    { page: 'h-protect', label: 'Markets', icon: <Store /> },
     { page: 'h-protections', label: 'My protections', icon: <List /> },
     { page: 'h-rates', label: 'Rates', icon: <LineChart /> },
     { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
@@ -53,7 +52,7 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
 
 /** Pages on the phone tab bar; everything else sits under More. */
 const TABS: Record<Role, Page[]> = {
-  hedger: ['h-home', 'h-markets', 'h-protect', 'h-protections'],
+  hedger: ['h-home', 'h-protect', 'h-protections', 'wallet'],
   underwriter: ['u-home', 'u-pools', 'u-risk', 'wallet'],
 };
 const SHORT: Partial<Record<Page, string>> = { 'h-protections': 'Protections', 'u-risk': 'Risk' };
@@ -111,6 +110,7 @@ export function Workspace() {
   const balances = useUsdcBalances();
 
   const go: Go = (p, target) => {
+    if (p === 'h-markets') p = 'h-protect'; // Markets and buying are one page
     if (target?.pair !== undefined) setPair(target.pair);
     if (target?.pool !== undefined) setPool(target.pool);
     if (p === 'h-protect') setBuy(target ?? {});
@@ -206,7 +206,6 @@ export function Workspace() {
         </header>
 
         {page === 'h-home' && <HedgerHome go={go} />}
-        {page === 'h-markets' && <MarketsPage go={go} />}
         {page === 'h-protect' && <ProtectPage go={go} pair={buy.pair ?? pair} target={buy} />}
         {page === 'h-protections' && <MyProtections go={go} />}
         {page === 'h-rates' && <RatesPage go={go} target={ratesAt} />}

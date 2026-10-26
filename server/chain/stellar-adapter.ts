@@ -154,10 +154,50 @@ export class StellarAdapter implements ChainAdapter {
     }
   }
 
-  async listPools(): Promise<CurrencyPool[]> {
+  /**
+   * Every pool. Reading them from the network takes seconds, and Markets, quotes and the
+   * options list all need them, so the last result is kept: fresh for 20 seconds, then
+   * served while a new read runs in the background. A relayed transaction starts a new
+   * read at once, and callers wait for it, so its effect shows straight away.
+   */
+  private pools: { value: CurrencyPool[]; at: number } | null = null;
+  private poolsRead: Promise<CurrencyPool[]> | null = null;
+  private poolsGeneration = 0;
+
+  listPools(): Promise<CurrencyPool[]> {
+    if (this.pools && Date.now() - this.pools.at < 20_000) return Promise.resolve(this.pools.value);
+    const read = this.refreshPools();
+    if (this.pools) {
+      read.catch(() => undefined); // keep serving the last result if the background read fails
+      return Promise.resolve(this.pools.value);
+    }
+    return read;
+  }
+
+  private refreshPools(): Promise<CurrencyPool[]> {
+    if (this.poolsRead) return this.poolsRead;
+    // A read started before a transaction must not overwrite one started after it.
+    const generation = this.poolsGeneration;
+    const read: Promise<CurrencyPool[]> = this.readAllPools()
+      .then((value) => { if (generation === this.poolsGeneration) this.pools = { value, at: Date.now() }; return value; })
+      .finally(() => { if (this.poolsRead === read) this.poolsRead = null; });
+    this.poolsRead = read;
+    return read;
+  }
+
+  /** After a transaction that may have changed pools: read them again, and make callers wait for it. */
+  forgetPools() {
+    this.poolsGeneration += 1;
+    this.pools = null;
+    this.poolsRead = null;
+    this.refreshPools().catch(() => undefined);
+  }
+
+  private async readAllPools(): Promise<CurrencyPool[]> {
     const count = Number((await (await this.client(this.poolId)).get_pool_count()).result);
+    const ids = Array.from({ length: count }, (_, i) => i + 1);
     const out: CurrencyPool[] = [];
-    for (let id = 1; id <= count; id++) out.push(await this.getPool(id));
+    for (let i = 0; i < ids.length; i += 8) out.push(...(await Promise.all(ids.slice(i, i + 8).map((id) => this.getPool(id)))));
     return out;
   }
 

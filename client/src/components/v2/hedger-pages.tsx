@@ -3,7 +3,7 @@
  * protections and Rates. BlockFinaX picks the pool and network; the chain stays out
  * of sight except under Advanced details.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ChevronDown, ChevronUp, Percent, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -114,9 +114,9 @@ function durationsLabel(pool: CurrencyPool) {
 
 const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${bps / 100}% away`);
 
-const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) 128px' };
+const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 110px' };
 
-function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go; expandable?: boolean }) {
+function MarketRow({ pool, go, expandable = true, action = 'Buy cover' }: { pool: CurrencyPool; go: Go; expandable?: boolean; action?: string }) {
   const [open, setOpen] = useState(false);
   const offers = usePoolOffers(pool);
   const direction = pool.direction === 'down' ? 'down' : 'up';
@@ -131,7 +131,7 @@ function MarketRow({ pool, go, expandable = true }: { pool: CurrencyPool; go: Go
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} days` : 'price'}</div></div>
         <div className="r" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>Buy cover</button>
+          <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{action}</button>
           {expandable && (open ? <ChevronUp size={16} className="muted" /> : <ChevronDown size={16} className="muted" />)}
         </div>
       </div>
@@ -164,36 +164,33 @@ function useOpenPools() {
   return { pools, open };
 }
 
-export function MarketsPage({ go }: { go: Go }) {
+/** The pools on sale, at the top of Markets. Choosing one loads it into the buying panel beside it. */
+function MarketList({ go }: { go: Go }) {
   const { pools, open } = useOpenPools();
   const pairs = Array.from(new Set(open.map((p) => p.pair)));
   const [filter, setFilter] = useState<string>('all');
   const shown = open.filter((p) => filter === 'all' || p.pair === filter);
-  const [assetClass, setAssetClass] = useAssetClass();
   return (
-    <main className="bx-main">
-      <section className="bx-full">
-        <AssetClassTabs value={assetClass} onChange={setAssetClass} />
-        {assetClass === 'ir' ? <RateMarkets go={go} /> : <div className="bx-card">
-          <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-            <div><h2>{SHOW_INTEREST_RATES ? 'FX cover' : 'Markets'}</h2><div className="sub">Open pools you can buy currency cover from. Choose a pool to see its price for each length.</div></div>
-            <div className="bx-seg" style={{ width: 'auto' }}>
-              <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
-              {pairs.map((p) => <button key={p} className={filter === p ? 'on' : ''} onClick={() => setFilter(p)}>{ccyName(p)}</button>)}
-            </div>
+    <div className="bx-card">
+      <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
+        <div><h2>Markets</h2><div className="sub">Choose a pool to price your protection. Open a row to see its price for each duration.</div></div>
+        {pairs.length > 1 && (
+          <div className="bx-seg" style={{ width: 'auto' }}>
+            <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
+            {pairs.map((p) => <button key={p} className={filter === p ? 'on' : ''} onClick={() => setFilter(p)}>{ccyName(p)}</button>)}
           </div>
-          {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
-            <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 760 }}>
-              <MarketHeader />
-              {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
-            </div></div>
-          )}
-          <div className="bx-hint" style={{ marginTop: 12 }}>
-            Don't see what you need? <button className="bx-link" onClick={() => go('h-protect', { rfq: true })}>Request a quote</button>
-          </div>
-        </div>}
-      </section>
-    </main>
+        )}
+      </div>
+      {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
+        <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
+          <MarketHeader />
+          {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" />)}
+        </div></div>
+      )}
+      <div className="bx-hint" style={{ marginTop: 12 }}>
+        Don't see what you need? <button className="bx-link" onClick={() => go('h-protect', { rfq: true })}>Request a quote</button>
+      </div>
+    </div>
   );
 }
 
@@ -699,6 +696,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   useEffect(() => { if (target?.rfq) setRfqOpen(true); }, [target?.rfq]);
   const [poolChoice, setPoolChoice] = useState<string | null>(target?.pool ?? null);
   useEffect(() => { setPoolChoice(target?.pool ?? null); }, [target?.pool]);
+  // Choosing a pool from the list: on phones the buying panel sits below it, so bring it into view.
+  const panelRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (target?.pool && window.innerWidth < 860) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [target]);
   const matching = available.filter((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
   useEffect(() => { if (poolChoice && !matching.some((p) => poolRef(p) === poolChoice)) setPoolChoice(null); }, [poolChoice, matching]);
 
@@ -859,6 +861,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   return (
     <main className="bx-main">
       <section className="bx-col">
+        <MarketList go={go} />
         <div className="bx-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <Flag pair={pair} large />
@@ -899,7 +902,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
         </div>
       </section>
 
-      <aside className="bx-aside" aria-label="Protect">
+      <aside className="bx-aside" aria-label="Protect" ref={panelRef}>
         <div className="bx-panel">
           {mode === 'done' ? (
             <div style={{ textAlign: 'center', padding: '12px 0' }}>

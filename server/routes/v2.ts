@@ -510,10 +510,14 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/transactions/relay", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, xdr } = req.body ?? {};
-    const adapter = s.adapters.adapterFor(String(chain)) as unknown as { relayUserTransaction?: (x: string, w: string) => Promise<unknown> };
+    const adapter = s.adapters.adapterFor(String(chain)) as unknown as { relayUserTransaction?: (x: string, w: string) => Promise<unknown>; forgetPools?: () => void };
     if (!adapter.relayUserTransaction) throw new ApplicationError("INVALID_REQUEST", `${chain} transactions are sent by the wallet directly`);
     if (typeof xdr !== "string" || xdr.length < 10 || xdr.length > 100_000) throw new ApplicationError("INVALID_REQUEST", "xdr is required");
-    res.json(await adapter.relayUserTransaction(xdr, await ownerOn(s, await userId(req), String(chain))));
+    try {
+      res.json(await adapter.relayUserTransaction(xdr, await ownerOn(s, await userId(req), String(chain))));
+    } finally {
+      adapter.forgetPools?.(); // pools read while it was landing may be out of date
+    }
   }));
 
   app.get("/api/v2/transactions/:chain/:hash", wrap(async (req, res) => {
