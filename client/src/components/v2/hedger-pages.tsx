@@ -250,7 +250,7 @@ export function HedgerHome({ go }: { go: Go }) {
         <div className="bx-card">
           <div className="bx-card-h" style={{ flexWrap: 'wrap' }}><h2>Your protections</h2><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><AssetClassTabs small value={protClass} onChange={setProtClass} /><button className="bx-link" onClick={() => go('h-protections')}>View all</button></div></div>
           {protClass === 'ir' ? <RateProtections go={go} embedded /> : hedges.isLoading ? <Loading /> : !active.length ? (
-            <div className="bx-empty">Nothing protected yet. <button className="bx-link" onClick={() => go('h-protect')}>Protect an exposure</button></div>
+            <div className="bx-empty">Nothing protected yet. <button className="bx-link" onClick={() => go('h-protect', { buy: true })}>Protect an exposure</button></div>
           ) : (
             <>
               <div className="bx-list-h" style={cols}><span>{hint("Exposure")}</span><span className="r">{hint("Protected")}</span><span className="r">{hint("Expires")}</span><span className="r">{hint("Payout today")}</span></div>
@@ -278,7 +278,7 @@ export function HedgerHome({ go }: { go: Go }) {
         <div className="bx-cta">
           <h3>Protect an exposure</h3>
           <p>Protect a dollar payment against the local currency weakening. Pay a premium in USDC, and get paid if the rate moves against you.</p>
-          <button onClick={() => go('h-protect')}>Get started</button>
+          <button onClick={() => go('h-protect', { buy: true })}>Get started</button>
         </div>
         <div className="bx-card tight">
           <div className="bx-card-h"><h2>Rates</h2><button className="bx-link" onClick={() => go('h-rates', { rates: ratesClass })}>All rates</button></div>
@@ -584,7 +584,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
             <div><div style={{ fontSize: 22, fontWeight: 600 }}>{ccyName(pair)}</div><div className="muted">{pair}</div></div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               {role === 'hedger'
-                ? <button className="bx-btn" onClick={() => go('h-protect', { pair })}>Protect</button>
+                ? <button className="bx-btn" onClick={() => go('h-protect', { pair, buy: true })}>Protect</button>
                 : <button className="bx-btn" onClick={() => go('u-pools')}>Provide liquidity</button>}
             </div>
           </div>
@@ -712,6 +712,10 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   useEffect(() => { if (target?.rfq) setRfqOpen(true); }, [target?.rfq]);
   const [poolChoice, setPoolChoice] = useState<string | null>(target?.pool ?? null);
   useEffect(() => { setPoolChoice(target?.pool ?? null); }, [target?.pool]);
+  // Markets shows only its list until someone means to buy: a market chosen, a duration's Buy,
+  // or a Protect button. Choosing "Best price" in the panel afterwards keeps the panel open.
+  const [buying, setBuying] = useState(Boolean(target?.pool || target?.buy));
+  useEffect(() => { setBuying(Boolean(target?.pool || target?.buy)); }, [target]);
   // Choosing a pool from the list: on phones the buying panel sits below it, so bring it into view.
   const panelRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -873,6 +877,23 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   if (!pair) return <main className="bx-main"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No protection is on sale right now. Please check back soon.</div></div></section></main>;
   const ccy = quoteCcy(pair);
   const name = ccyName(pair);
+
+  const rfqModal = rfqOpen && pair ? (
+    <RequestQuoteModal
+      pairs={rfqPairs}
+      draft={{ pair, direction, notional: amount, tenorDays: days ?? 30, strike, cap, reason: chosen.error ? (chosen.error as Error).message : undefined }}
+      onClose={() => setRfqOpen(false)}
+    />
+  ) : null;
+
+  if (!buying) {
+    return (
+      <main className="bx-main">
+        <section className="bx-full"><MarketList go={go} selected={null} /></section>
+        {rfqModal}
+      </main>
+    );
+  }
 
   return (
     <main className="bx-main">
@@ -1048,13 +1069,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           )}
         </div>
       </aside>
-      {rfqOpen && pair && (
-        <RequestQuoteModal
-          pairs={rfqPairs}
-          draft={{ pair, direction, notional: amount, tenorDays: days ?? 30, strike, cap, reason: chosen.error ? (chosen.error as Error).message : undefined }}
-          onClose={() => setRfqOpen(false)}
-        />
-      )}
+      {rfqModal}
     </main>
   );
 }
@@ -1088,7 +1103,7 @@ export function MyProtections({ go }: { go: Go }) {
         <MyQuoteRequests />
         <AssetClassTabs value={assetClass} onChange={setAssetClass} />
         {assetClass === 'ir' ? <RateProtections go={go} /> : <div className="bx-card">
-          <div className="bx-card-h"><h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2><button className="bx-btn small" onClick={() => go('h-protect')}>Protect an exposure</button></div>
+          <div className="bx-card-h"><h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2><button className="bx-btn small" onClick={() => go('h-protect', { buy: true })}>Protect an exposure</button></div>
           {hedges.isLoading ? <Loading /> : !all.length ? <div className="bx-empty">You have not bought protection yet.</div> : (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 720 }}>
@@ -1213,7 +1228,7 @@ function FxRates({ go }: { go: Go }) {
               <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '-'}</div>
               <div className="r"><ChangeText change={r.change} /></div>
               <div className="r">{covered.has(r.pair)
-                ? <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); go('h-protect', { pair: r.pair }); }}>Protect</button>
+                ? <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); go('h-protect', { pair: r.pair, buy: true }); }}>Protect</button>
                 : <span className="muted" style={{ fontSize: 12 }}>No cover yet</span>}</div>
             </div>
           ))}

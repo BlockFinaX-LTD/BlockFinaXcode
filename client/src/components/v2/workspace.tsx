@@ -29,7 +29,10 @@ export type Role = 'hedger' | 'underwriter';
 export type Page =
   | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account' | 'pair'
   | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw' | 'u-requests';
-export interface Target { rfq?: boolean; wallet?: 'deposit' | 'withdraw'; position?: string; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
+export interface Target {
+  /** Show the chart and buying panel on Markets (someone means to buy), not only the list. */
+  buy?: boolean;
+  rfq?: boolean; wallet?: 'deposit' | 'withdraw'; position?: string; pair?: string; pool?: string; direction?: 'up' | 'down'; days?: number; rates?: 'fx' | 'ir'; benchmark?: string }
 export type Go = (page: Page, target?: Target) => void;
 
 const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
@@ -191,7 +194,7 @@ export function Workspace() {
             {role === 'hedger' ? (
               <>
                 <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>
-                <button className="bx-btn" data-tour="protect" onClick={() => go('h-protect')}>Protect an exposure</button>
+                <button className="bx-btn" data-tour="protect" onClick={() => go('h-protect', { buy: true })}>Protect an exposure</button>
               </>
             ) : (
               <>
@@ -271,7 +274,7 @@ function SearchBox({ role, go }: { role: Role; go: Go }) {
       const pairs = Array.from(new Set(all.map((p) => p.pair)));
       return pairs
         .filter((p) => `${p} ${ccyName(p)} ${quoteCcy(p)}`.toLowerCase().includes(term))
-        .map((p) => ({ key: p, pair: p, title: ccyName(p), sub: p, act: () => go('h-protect', { pair: p }) }));
+        .map((p) => ({ key: p, pair: p, title: ccyName(p), sub: p, act: () => go('h-protect', { pair: p, buy: true }) }));
     }
     return all
       .filter((p) => `${p.pair} ${ccyName(p.pair)} ${exposureLabel(p.pair, p.direction === 'both' ? 'up' : p.direction).cover}`.toLowerCase().includes(term))
