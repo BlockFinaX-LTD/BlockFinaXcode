@@ -80,3 +80,23 @@ export async function verifiedTier(evmAddress: string): Promise<number> {
     .where(sql`lower(${userProfiles.walletAddress}) = ${evmAddress.toLowerCase()}`).limit(1);
   return profile?.kycTier ?? 0;
 }
+
+/**
+ * What a signed currency-pool call moves and could pay out, in USD, read from its own
+ * arguments rather than from anything the client describes. Null for calls that move no
+ * money in. `decimals` is the pool asset's; rates use the contract's 1e6 scale.
+ *   buy_protection(hedger, params, signature)   cash = max_cost, exposure = reserve
+ *   deposit(pool_id, lp, amount)                cash = amount
+ *   create_pool(creator, ..., initial_liquidity) cash = initial liquidity (last argument)
+ */
+export function signedCallAmounts(method: string, args: unknown[], decimals: number): { cashUsd: number; exposureUsd: number } | null {
+  const usd = (units: unknown) => Number(BigInt(units as bigint)) / 10 ** decimals;
+  if (method === "buy_protection") {
+    const p = args[1] as { notional: bigint; spot: bigint; strike: bigint; cap: bigint; max_cost: bigint };
+    const width = BigInt(p.cap) > BigInt(p.strike) ? BigInt(p.cap) - BigInt(p.strike) : BigInt(p.strike) - BigInt(p.cap);
+    return { cashUsd: usd(p.max_cost), exposureUsd: usd((BigInt(p.notional) * width) / BigInt(p.spot)) };
+  }
+  if (method === "deposit") return { cashUsd: usd(args[2]), exposureUsd: 0 };
+  if (method === "create_pool") return { cashUsd: usd(args[args.length - 1]), exposureUsd: 0 };
+  return null;
+}

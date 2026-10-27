@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkProtectionLimits, verificationRequired } from "../protection-limits";
+import { checkProtectionLimits, signedCallAmounts, verificationRequired } from "../protection-limits";
 
 const NOW = 1_800_000_000;
 const pos = (daysAgo: number, premium: number, maxPayout: number, status: "active" | "settled" = "active") =>
@@ -32,4 +32,13 @@ test("money moved counts the last 30 days only; payout exposure counts active co
   assert.equal(d.cashMovedUsd, 0);
   assert.equal(d.payoutExposureUsd, 500);
   assert.equal(d.allowed, true);
+});
+
+test("audit: limits are measured from the signed call, not the client's description", () => {
+  const params = { notional: BigInt(100_000) * BigInt(1e7), spot: BigInt(11_200_000), strike: BigInt(11_600_000), cap: BigInt(12_500_000), max_cost: BigInt(2_000) * BigInt(1e7) };
+  const buy = signedCallAmounts("buy_protection", ["G...", params, "sig"], 7)!;
+  assert.equal(buy.cashUsd, 2_000);
+  assert.ok(Math.abs(buy.exposureUsd - 8_035.71) < 0.01);
+  assert.deepEqual(signedCallAmounts("deposit", [1, "G...", BigInt(5_000) * BigInt(1e7)], 7), { cashUsd: 5_000, exposureUsd: 0 });
+  assert.equal(signedCallAmounts("claim_payout", [1], 7), null);
 });

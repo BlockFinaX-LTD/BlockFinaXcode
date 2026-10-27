@@ -23,15 +23,8 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export function requireSignature(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const networkMode = process.env.NETWORK_MODE || "testnet";
-  if (networkMode !== "mainnet") {
-    const walletAddress = req.headers["x-wallet-address"] as string;
-    if (walletAddress) {
-      req.walletAddress = walletAddress.toLowerCase();
-    }
-    return next();
-  }
-
+  // Checked on every network. Testnet once trusted the X-Wallet-Address header alone, which
+  // let anyone act as any wallet on the routes behind this guard (security audit, 27 Oct 2026).
   try {
     const walletAddress = req.headers["x-wallet-address"] as string;
     const signature = req.headers["x-signature"] as string;

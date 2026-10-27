@@ -139,6 +139,9 @@ export function registerRfqRoutes(app: Express, d: Deps) {
         throw new ApplicationError("INSUFFICIENT_LIQUIDITY", "This offer is no longer available: the underwriter's funds could not be committed. Other offers stay open.", message);
       }
     }
+    // The offer's price holds only while the offer is valid. Without this, a buyer could come
+    // back after the market moved past the strike and buy at the old spot.
+    if (o.valid_until.getTime() < Date.now()) throw new ApplicationError("QUOTE_EXPIRED", "This offer has expired");
     const pool = await adapter.getPool(poolId);
     const d6 = pool.asset.decimals;
     const notional = toUnits(r.notional, d6);

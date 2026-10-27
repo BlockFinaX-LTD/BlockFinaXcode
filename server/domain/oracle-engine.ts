@@ -10,7 +10,9 @@
  *   stale     900 s  a submission older than this no longer counts
  *   cooldown  300 s  an oracle waits this long before replacing its own price
  *   poll      300 s  so a hedge gets a price within about 5 minutes of expiry
- *   deviation 7%     refuse a rate that moved more than this since the last one for the pair
+ *   deviation 7%     a rate that moved more than this since the last one for the pair is held
+ *                    back until a later poll (at least one cooldown apart) sees it again
+ *                    within 1%; a real move then settles, a single bad reading does not
  */
 import type { ChainRegistry } from "@shared/chains/registry";
 import type { ChainKey, ProtectionPosition } from "@shared/domain/types";
@@ -24,9 +26,23 @@ export interface OracleEngineState {
   submittedAt: Map<string, number>;
   /** pair -> last rate this operator used. */
   lastPrice: Map<string, number>;
+  /** pair -> a large move seen once and waiting for a second reading to confirm it. */
+  pendingJump: Map<string, { price: number; seenAt: number }>;
 }
 
-export const newOracleState = (): OracleEngineState => ({ submittedAt: new Map(), lastPrice: new Map() });
+export const newOracleState = (): OracleEngineState => ({ submittedAt: new Map(), lastPrice: new Map(), pendingJump: new Map() });
+
+/** Confirm a move beyond the deviation guard only when a later poll sees it again. */
+function jumpConfirmed(state: OracleEngineState, pair: string, price: number, now: number): boolean {
+  state.pendingJump ??= new Map();
+  const seen = state.pendingJump.get(pair);
+  if (seen && now - seen.seenAt >= ORACLE_POLICY.cooldownSeconds && Math.abs(price - seen.price) / seen.price <= 0.01) {
+    state.pendingJump.delete(pair);
+    return true;
+  }
+  if (!seen || Math.abs(price - seen.price) / seen.price > 0.01) state.pendingJump.set(pair, { price, seenAt: now });
+  return false;
+}
 
 export interface OracleCycleReport {
   submitted: string[];
@@ -100,8 +116,11 @@ export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngin
       if (!price || !Number.isFinite(price) || price <= 0) { report.skipped.push({ position: key, reason: `no price for ${pair}` }); continue; }
       const previous = state.lastPrice.get(pair);
       if (previous && Math.abs(price - previous) / previous > ORACLE_POLICY.maxDeviation) {
-        report.skipped.push({ position: key, reason: "deviation guard" });
-        continue;
+        if (!jumpConfirmed(state, pair, price, now)) {
+          report.skipped.push({ position: key, reason: "deviation guard" });
+          continue;
+        }
+        state.lastPrice.set(pair, price);
       }
       const sent = await adapter.submitOraclePrice(position.positionId, price.toFixed(6), signer);
       if (sent.state !== "CONFIRMED") { report.failed.push({ position: key, error: sent.error ?? "UNKNOWN" }); continue; }

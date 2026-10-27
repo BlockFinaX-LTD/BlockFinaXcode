@@ -24,6 +24,7 @@
  *   GET  /api/v2/transactions/:chain/:hash     POST /api/v2/transactions/relay (Stellar sponsored calls)
  */
 import type { Express, NextFunction, Request, Response } from "express";
+import { Address, Transaction, TransactionBuilder, scValToNative } from "@stellar/stellar-sdk";
 import { ApplicationError, parseResourceId, type ApplicationErrorCode, type ChainKey, type ProtectionQuote, type ProtectionRequest } from "@shared/domain/types";
 import { AdapterRegistry } from "../chain";
 import { chainRegistry, registryLoadError } from "../chain/config";
@@ -35,7 +36,7 @@ import { getSession } from "../auth-routes";
 import { registerRfqRoutes } from "../rfq/routes";
 import { registerOnboardingRoutes } from "../onboarding/routes";
 import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
-import { checkProtectionLimits, verificationRequired, verifiedTier } from "../compliance/protection-limits";
+import { checkProtectionLimits, signedCallAmounts, verificationRequired, verifiedTier } from "../compliance/protection-limits";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
 
 const STATUS: Partial<Record<ApplicationErrorCode, number>> = {
@@ -102,6 +103,24 @@ async function enforceVerification(s: Services, uid: number, adds: { cashUsd: nu
   }
   const d = checkProtectionLimits({ tier, positions, addsCashUsd: adds.cashUsd, addsExposureUsd: adds.exposureUsd });
   if (!d.allowed) throw new ApplicationError("VERIFICATION_REQUIRED", d.reason, `requiredTier=${d.requiredTier} tier=${d.tier}`);
+}
+
+/** What a relayed currency-pool call moves, read from the signed envelope; null otherwise. */
+function signedPoolCallAmounts(chainKey: string, envelope: string): { cashUsd: number; exposureUsd: number } | null {
+  const registry = chainRegistry()!;
+  if (!verificationRequired(process.env, registry.config.environment)) return null;
+  const chain = registry.get(chainKey);
+  if (chain.family !== "stellar" || !chain.contracts.currencyPool) return null;
+  try {
+    const tx = TransactionBuilder.fromXDR(envelope, chain.networkId) as Transaction;
+    const op = tx.operations?.[0] as any;
+    if (op?.type !== "invokeHostFunction" || op.func.switch().name !== "hostFunctionTypeInvokeContract") return null;
+    const invoke = op.func.invokeContract();
+    if (Address.fromScAddress(invoke.contractAddress()).toString() !== chain.contracts.currencyPool) return null;
+    return signedCallAmounts(invoke.functionName().toString(), invoke.args().map(scValToNative), chain.assets.USDC?.decimals ?? 7);
+  } catch {
+    return null; // a malformed envelope is refused by the relay's own inspection
+  }
 }
 
 /** The user's own address on a chain, or a clear error asking them to add one. */
@@ -348,7 +367,14 @@ export function registerV2Routes(app: Express) {
     const chain = quote.economic.executionChain;
     if ((await ownerOn(s, uid, chain)) !== quote.buyer) throw new ApplicationError("UNAUTHORIZED", "Quote was issued to a different account");
     chainRegistry()!.require(chain, "newHedges");
-    await enforceVerification(s, uid, { cashUsd: Number(quote.economic.totalCost), exposureUsd: Number(quote.economic.maxPayout) });
+    // Measured from the signed terms, which are what the contract executes, not from the
+    // descriptive `economic` block the client sends back.
+    const e = (quote.executable ?? {}) as Record<string, string>;
+    const decimals = chainRegistry()!.get(chain).assets.USDC?.decimals ?? 7;
+    const signed = e.max_cost !== undefined
+      ? signedCallAmounts("buy_protection", [quote.buyer, { notional: BigInt(e.notional), spot: BigInt(e.spot), strike: BigInt(e.strike), cap: BigInt(e.cap), max_cost: BigInt(e.max_cost) }], decimals)!
+      : { cashUsd: Number(quote.economic.totalCost), exposureUsd: Number(quote.economic.maxPayout) };
+    await enforceVerification(s, uid, signed);
     res.json({ transactions: await s.adapters.adapterFor(chain).prepareHedge(quote.buyer, quote) });
   }));
 
@@ -560,8 +586,13 @@ export function registerV2Routes(app: Express) {
     const adapter = s.adapters.adapterFor(String(chain)) as unknown as { relayUserTransaction?: (x: string, w: string) => Promise<unknown>; forgetPools?: () => void };
     if (!adapter.relayUserTransaction) throw new ApplicationError("INVALID_REQUEST", `${chain} transactions are sent by the wallet directly`);
     if (typeof xdr !== "string" || xdr.length < 10 || xdr.length > 100_000) throw new ApplicationError("INVALID_REQUEST", "xdr is required");
+    const uid = await userId(req);
+    // The relay is the path every sponsored purchase and deposit takes, so verification is
+    // checked here too; checking only at prepare left it open to anyone relaying directly.
+    const moves = signedPoolCallAmounts(String(chain), xdr);
+    if (moves) await enforceVerification(s, uid, moves);
     try {
-      res.json(await adapter.relayUserTransaction(xdr, await ownerOn(s, await userId(req), String(chain))));
+      res.json(await adapter.relayUserTransaction(xdr, await ownerOn(s, uid, String(chain))));
     } finally {
       adapter.forgetPools?.(); // pools read while it was landing may be out of date
     }
