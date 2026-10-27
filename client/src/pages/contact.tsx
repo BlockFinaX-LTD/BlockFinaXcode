@@ -16,6 +16,7 @@ const ENQUIRIES = [
   'API and integrations',
   'Media and press',
   'Security and vulnerability reporting',
+  'Audit report request',
   'Compliance and legal',
   'Complaints and feedback',
 ] as const;
