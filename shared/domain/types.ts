@@ -164,7 +164,8 @@ export interface CurrencyPool {
   latestExpiry: number;
 }
 
-export type PositionStatus = "active" | "settled" | "claimed";
+/** "voided": cancelled by the contract owner before settlement; the net premium was refunded. */
+export type PositionStatus = "active" | "settled" | "claimed" | "voided";
 
 export interface ProtectionPosition {
   ref: ResourceId;
@@ -249,7 +250,7 @@ export interface SettlementResult {
   grossPayout: string;
   fee: string;
   netPayout: string;
-  status: "pending" | "settled_no_payout" | "settled_claimable" | "claimed";
+  status: "pending" | "settled_no_payout" | "settled_claimable" | "claimed" | "voided";
 }
 
 // ── Routing ───────────────────────────────────────────────────────────────────

@@ -370,7 +370,14 @@ export class StellarAdapter implements ChainAdapter {
     const pos = await this.getPosition(positionId);
     if (pos.status !== "active") return { resolved: true, consensusPrice: pos.settlementPrice };
     if (!this.chain.contracts.poolOracle) return { resolved: false, consensusPrice: null };
-    const consensus = (await (await this.client(this.chain.contracts.poolOracle)).get_consensus({ event_id: positionId })).result;
+    const oracle = await this.client(this.chain.contracts.poolOracle);
+    // Current oracles keep one round per (hedge, expiry); contracts deployed before the
+    // 27 Oct 2026 audit keep one round per hedge and return (price, expiry).
+    if (typeof oracle.get_consensus_at === "function") {
+      const price = (await oracle.get_consensus_at({ event_id: positionId, event_expiry: BigInt(pos.expiry) })).result;
+      return { resolved: price !== undefined && price !== null, consensusPrice: price != null ? fromRate(BigInt(price)) : null };
+    }
+    const consensus = (await oracle.get_consensus({ event_id: positionId })).result;
     return { resolved: Boolean(consensus), consensusPrice: consensus ? fromRate(BigInt(consensus[0])) : null };
   }
 

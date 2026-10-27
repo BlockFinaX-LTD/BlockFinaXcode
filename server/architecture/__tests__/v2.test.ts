@@ -376,3 +376,21 @@ test("settlement results read the same on every chain", () => {
     position: `stellar:${STELLAR_POOL}:position/3`, settlementPrice: "12", grossPayout: "3571.4285714", fee: "35.7142857", netPayout: "3535.7142857", status: "settled_claimable",
   });
 });
+
+test("audit: the oracle state reads current (per-expiry) and older oracles", async () => {
+  const r = new ChainRegistry(config());
+  const adapter = new StellarAdapter(r.get("stellar"), {}) as any;
+  adapter.chain = { ...adapter.chain, contracts: { ...adapter.chain.contracts, poolOracle: "ORACLE" } };
+  adapter.getPosition = async () => ({ status: "active", expiry: 1_801_209_600, settlementPrice: null });
+  const asked: unknown[] = [];
+
+  adapter.client = async () => ({ get_consensus_at: async (args: unknown) => { asked.push(args); return { result: 12_050_000n }; } });
+  assert.deepEqual(await adapter.getOracleState(7), { resolved: true, consensusPrice: "12.05" });
+  assert.deepEqual(asked, [{ event_id: 7, event_expiry: 1_801_209_600n }]);
+
+  adapter.client = async () => ({ get_consensus_at: async () => ({ result: undefined }) });
+  assert.deepEqual(await adapter.getOracleState(7), { resolved: false, consensusPrice: null });
+
+  adapter.client = async () => ({ get_consensus: async () => ({ result: [12_000_000n, 1_801_209_600n] }) });
+  assert.deepEqual(await adapter.getOracleState(7), { resolved: true, consensusPrice: "12" });
+});

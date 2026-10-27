@@ -11,6 +11,7 @@ export function settlementResult(position: ProtectionPosition, payoutFeeRateE6: 
   const status: SettlementResult["status"] =
     position.status === "active" ? "pending"
       : position.status === "claimed" ? "claimed"
+        : position.status === "voided" ? "voided"
         : gross === BigInt(0) ? "settled_no_payout" : "settled_claimable";
   return {
     position: formatResourceId(position.ref),

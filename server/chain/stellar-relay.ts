@@ -13,7 +13,7 @@ import { ApplicationError } from "@shared/domain/types";
 const POOL_METHODS = new Set([
   "create_pool", "set_tenor", "set_duration_rule", "set_structures", "set_pool_settings", "deposit", "request_withdrawal",
   "cancel_withdrawal", "execute_withdrawal", "withdraw_creator_earnings", "buy_protection", "settle_position",
-  "claim_payout", "advance_settlement_cursor", "maintain_storage",
+  "claim_payout", "advance_settlement_cursor", "maintain_storage", "set_pool_limits",
 ]);
 const WALLET_ARG: Record<string, number> = { create_pool: 0, deposit: 1, request_withdrawal: 1, buy_protection: 0 };
 const PERMISSIONLESS = new Set(["settle_position", "advance_settlement_cursor", "maintain_storage"]);
