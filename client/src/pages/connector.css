@@ -70,10 +70,6 @@
 /* Landing */
 .bx-cp-hero { display: grid; gap: 14px; }
 .bx-cp-hero h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 700; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
-.bx-cp-figs { display: flex; flex-wrap: wrap; gap: 10px 28px; border-top: 1px solid var(--line); padding-top: 14px; }
-.bx-cp-figs div { display: grid; }
-.bx-cp-figs b { font-size: 24px; color: var(--blue); }
-.bx-cp-figs span { color: var(--muted); font-size: 13px; }
 .bx-cp-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .bx-cp-steps li { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
 .bx-cp-steps .n { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue); font-weight: 700; }

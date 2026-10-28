@@ -213,11 +213,6 @@ function Landing({ onStart }: { onStart: () => void }) {
         <section className="bx-cp-hero">
           <h1>Connector Programme</h1>
           <p className="bx-cp-lede">Introduce businesses, underwriters, partners and institutions to BlockFinaX, earn a reward for every result, and grow into an advisor with shares in the company. Independent contractors take on paid engagements here too.</p>
-          <div className="bx-cp-figs">
-            <div><b>25%</b><span>of revenue for 12 months</span></div>
-            <div><b>5%</b><span>of funds raised, by separate agreement</span></div>
-            <div><b>0.25 to 1%</b><span>advisory shares by tier</span></div>
-          </div>
         </section>
         <ol className="bx-cp-steps">
           <li><span className="n">1</span><div><b>Apply</b><span>Sign in with your BlockFinaX account and tell us how you can help.</span></div></li>
