@@ -34,6 +34,7 @@ import { routeView, routingService, type RoutingService } from "../routing/servi
 import { getSession } from "../auth-routes";
 import { registerRfqRoutes } from "../rfq/routes";
 import { registerOnboardingRoutes } from "../onboarding/routes";
+import { registerConnectorRoutes } from "../connectors/routes";
 import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
 import { checkProtectionLimits, verificationRequired, verifiedTier } from "../compliance/protection-limits";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
@@ -114,6 +115,7 @@ async function ownerOn(s: Services, uid: number, chain: ChainKey) {
 export function registerV2Routes(app: Express) {
   registerRfqRoutes(app, { getServices, userId, ownerOn, wrap });
   registerOnboardingRoutes(app, { userId, wrap });
+  registerConnectorRoutes(app, { getServices, userId, wrap });
   app.get("/api/v2/chains", wrap(async (_req, res) => {
     const chains = chainRegistry();
     if (!chains) throw new ApplicationError("CHAIN_NOT_ENABLED", `Chain registry not configured: ${registryLoadError()}`);
