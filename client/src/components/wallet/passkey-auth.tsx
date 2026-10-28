@@ -65,7 +65,7 @@ export function PasskeyAuth() {
       <div className="space-y-1">
         <h1 className="bfx-display text-[20px] font-semibold tracking-tight">BlockFinaX</h1>
         <p className="text-[12.5px] text-muted-foreground">Cross-border payments &amp; cover</p>
-        <p className="text-xs text-amber-500">TESTNET · Stellar and Base Sepolia · Test tokens only</p>
+        <p className="text-xs text-amber-500">TESTNET</p>
       </div>
     </>
   );
