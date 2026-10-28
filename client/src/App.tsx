@@ -51,6 +51,10 @@ import AcademyRoute from "@/pages/academy";
 // bearer token in the emailed link, not by a BlockFinaX account.
 import LoiSignPage from "@/pages/loi-sign";
 
+// Connector portal. The whole site on connector.blockfinax.com; /connector on the app.
+import ConnectorPortal, { isConnectorHost } from "@/pages/connector";
+import { api } from "@/lib/wallets/passkey-wallet";
+
 // Finax — the chat assistant. Public scope on the marketing site, customer
 // scope inside the app where it can see the signed-in user's own account.
 import { FinaxChat } from "@/components/finax-chat";
@@ -104,7 +108,47 @@ function AuthGuard() {
 
 // Document routes are public; no sign-in or access approval is required.
 
+/** The connector subdomain serves the portal and sign-in only. */
+function ConnectorRouter() {
+  return (
+    <Switch>
+      <Route path="/auth" component={Auth} />
+      <Route path="/auth/google/done" component={Auth} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route component={ConnectorPortal} />
+    </Switch>
+  );
+}
+
+const REF_KEY = "bfx:ref";
+
+/**
+ * Referral links (…/auth?ref=BFX…): remembers the code, then credits the account to the
+ * connector once the visitor is signed in. The server only credits new accounts.
+ */
+function ReferralCapture() {
+  const { isAuthenticated } = useIdentity();
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("ref");
+    if (code && /^BFX[A-Z0-9]{6}$/i.test(code)) {
+      try { localStorage.setItem(REF_KEY, code.toUpperCase()); } catch { /* storage blocked: no credit */ }
+    }
+  }, []);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let code: string | null = null;
+    try { code = localStorage.getItem(REF_KEY); } catch { return; }
+    if (!code) return;
+    void api("/api/v2/connectors/attribute", { code })
+      .then(() => { try { localStorage.removeItem(REF_KEY); } catch { /* ignore */ } })
+      .catch(() => { /* retried on the next visit */ });
+  }, [isAuthenticated]);
+  return null;
+}
+
 function Router() {
+  if (isConnectorHost) return <ConnectorRouter />;
   return (
     <Switch>
       {/* Public */}
@@ -126,6 +170,10 @@ function Router() {
           counterparty has no BlockFinaX account and must never be asked for
           one. The link's token is the credential. */}
       <Route path="/sign/:publicId" component={LoiSignPage} />
+
+      {/* Connector portal; connector.blockfinax.com serves the same page at its root. */}
+      <Route path="/connector" component={ConnectorPortal} />
+      <Route path="/connector/:tab" component={ConnectorPortal} />
 
       {/* Academy — public course pages under /learn. One dispatcher handles
           the root (Start here) and every /learn/:slug lesson from the catalog. */}
@@ -177,8 +225,8 @@ function FinaxMount() {
   const { isAuthenticated } = useIdentity();
   const [location] = useLocation();
 
-  const hidden = ["/admin", "/auth", "/sign/"].some((p) => location.startsWith(p));
-  if (hidden || isWalletSandbox) return null;
+  const hidden = ["/admin", "/auth", "/sign/", "/connector"].some((p) => location.startsWith(p));
+  if (hidden || isWalletSandbox || isConnectorHost) return null;
 
   const inApp = PROTECTED_ROUTES.some((p) => location === p || location.startsWith(p + "/"));
   return <FinaxChat scope={inApp && isAuthenticated ? "customer" : "public"} />;
@@ -191,6 +239,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <AuthGuard />
+          <ReferralCapture />
           <Router />
           <FinaxMount />
         </TooltipProvider>

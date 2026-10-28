@@ -34,6 +34,14 @@ The audit can only start on frozen contract code. Decide:
 | Legal check per country | **Blocker** | To do | Whether selling protection in Ghana and Nigeria needs a licence or a licensed partner (see the regulatory analysis). |
 | Privacy policy and terms | Review | Started | Privacy §9 now describes the passkey wallet; legal review needed. Terms to check against mainnet. |
 | Launch limits | Setup | To do | Per-contract and per-user caps for the limited phase; invited users only. |
+| Payout at the fixing rate | Build | To do | Agreed: the payout converts at the fixing rate (divide by R), the market standard; pricing already assumes it. Contract, server and app. |
+| Official fixing sources at 12:00 UTC | Build | To do | Agreed: expiry and settlement at 12:00 UTC against the official fixing (GHS: Refinitiv WMR; NGN: FMDQ NAFEX). |
+| Business-day rule | Build | To do | Agreed: use the latest official fixing on or before expiry, at most 3 business days old. |
+| 14-day disruption fallback | Build | To do | Agreed: `FALLBACK_DELAY` from 7 to 14 days, matching EMTA valuation postponement. |
+| Connector portal | Build | **Done** | `connector.blockfinax.com`: applications, typed-name signatures, training, prospect registration, referral links, rewards ledger, contractor engagements. Admin: Connectors section. |
+| Connector and contractor agreements | **Blocker** | To do | Counsel to review CA 1.0 and ICA 1.0 (`shared/connector-programme.ts`). Then set `CONNECTOR_AGREEMENT_APPROVED=true` on mainnet; until then mainnet signing stays closed. Any text change needs a new version number. |
+| Connector portal domain | Setup | To do | Add `connector.blockfinax.com` as a custom domain on the app service (DNS CNAME to Railway); set `CONNECTOR_PORTAL_URL` and add the origin to `PASSKEY_RELATED_ORIGINS`. |
+| Passkey domain `blockfinax.com` | Setup | To do | Set `PASSKEY_RP_ID=blockfinax.com` so one passkey works on the app and the connector portal. Changing it later invalidates existing passkeys, so set it before launch. |
 
 ## At deployment
 
