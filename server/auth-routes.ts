@@ -151,10 +151,12 @@ const googleClient = GOOGLE_CLIENT_ID
 
 // Short-lived OAuth state store (CSRF protection) — state → expiresAt
 const oauthStateStore = new Map<string, number>();
+/** Which of our sites each Google sign-in started on, so it returns there (keyed like oauthStateStore). */
+const oauthReturnOrigin = new Map<string, string>();
 // Clean up expired states every 10 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [k, exp] of oauthStateStore) if (exp < now) oauthStateStore.delete(k);
+  for (const [k, exp] of oauthStateStore) if (exp < now) { oauthStateStore.delete(k); oauthReturnOrigin.delete(k); }
 }, 10 * 60 * 1000);
 
 export function getAppOrigin(req: any): string {
@@ -196,6 +198,24 @@ export function getRpId(req: any): string {
 export function getPasskeyOrigins(req: any): string[] {
   const extra = (process.env.PASSKEY_RELATED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean).map((o) => new URL(o).origin);
   return Array.from(new Set([getAppOrigin(req), ...extra]));
+}
+
+/**
+ * The site this request came from (for example connector.blockfinax.com), when it is one
+ * of ours: the app or a PASSKEY_RELATED_ORIGINS entry. Anything else falls back to the
+ * app, so a forged Host header can never send a signed-in user to another site.
+ */
+export function requestSiteOrigin(req: any): string {
+  const app = getAppOrigin(req);
+  const host = String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]!.trim();
+  const proto = String(req.headers?.['x-forwarded-proto'] || req.protocol || 'https').split(',')[0]!.trim();
+  if (!host) return app;
+  try {
+    const origin = new URL(`${proto}://${host}`).origin;
+    return getPasskeyOrigins(req).includes(origin) ? origin : app;
+  } catch {
+    return app;
+  }
 }
 
 async function sendMagicLinkEmail(email: string, magicUrl: string): Promise<{ sent: boolean; error?: string }> {
@@ -438,6 +458,9 @@ export function registerAuthRoutes(app: Express) {
     const stateToken = generateToken(24);
     const state = isPopup ? `${stateToken}|popup` : stateToken;
     oauthStateStore.set(state, Date.now() + 10 * 60 * 1000); // 10-min expiry
+    // Google returns to the one registered callback on the app; the user is then sent
+    // back to the site they started on (an allowlisted origin, never a free-form URL).
+    oauthReturnOrigin.set(state, requestSiteOrigin(req));
 
     const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
     const url = client.generateAuthUrl({
@@ -460,12 +483,13 @@ export function registerAuthRoutes(app: Express) {
     // Detect popup mode from state suffix
     const isPopup = typeof state === 'string' && state.endsWith('|popup');
 
+    const back = (typeof state === 'string' && oauthReturnOrigin.get(state)) || '';
     const errorRedirect = (msg: string) =>
       isPopup
-        ? res.redirect(`/auth/google/done?popup=1&error=${encodeURIComponent(msg)}`)
-        : res.redirect(`/auth?error=${encodeURIComponent(msg)}`);
+        ? res.redirect(`${back}/auth/google/done?popup=1&error=${encodeURIComponent(msg)}`)
+        : res.redirect(`${back}/auth?error=${encodeURIComponent(msg)}`);
 
-    if (error === 'access_denied') return isPopup ? res.redirect('/auth/google/done?popup=1&error=access_denied') : res.redirect('/auth');
+    if (error === 'access_denied') return isPopup ? res.redirect(`${back}/auth/google/done?popup=1&error=access_denied`) : res.redirect(`${back}/auth`);
     if (error) return errorRedirect(error);
 
     // Validate CSRF state (look up exact state string including |popup suffix)
@@ -474,6 +498,7 @@ export function registerAuthRoutes(app: Express) {
       return errorRedirect('invalid_state');
     }
     oauthStateStore.delete(state);
+    oauthReturnOrigin.delete(state);
 
     if (!code) return errorRedirect('no_code');
 
@@ -507,8 +532,8 @@ export function registerAuthRoutes(app: Express) {
       console.log('[Auth] Google callback OK — id_token length:', tokens.id_token.length);
       const fragment = `token=${encodeURIComponent(sessionToken)}&idToken=${encodeURIComponent(tokens.id_token)}`;
       const donePath = isPopup
-        ? `/auth/google/done?popup=1#${fragment}`
-        : `/auth/google/done#${fragment}`;
+        ? `${back}/auth/google/done?popup=1#${fragment}`
+        : `${back}/auth/google/done#${fragment}`;
       res.redirect(donePath);
     } catch (err: any) {
       console.error('[Auth] Google callback error:', err.message);

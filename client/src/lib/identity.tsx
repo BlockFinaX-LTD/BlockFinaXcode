@@ -101,8 +101,8 @@ export function rememberReturnPath(path = window.location.pathname + window.loca
   try { if (path !== "/auth" && !path.startsWith("/auth/")) sessionStorage.setItem(RETURN_KEY, path); } catch { /* storage unavailable */ }
 }
 
-/** Where to go after signing in: the remembered page (same site only), else the app. */
-export function takeReturnPath(fallback = "/hedge"): string {
+/** Where to go after signing in: the remembered page (same site only), else the app (the portal on the connector site). */
+export function takeReturnPath(fallback = /^connector\./i.test(window.location.hostname) ? "/" : "/hedge"): string {
   try {
     const p = sessionStorage.getItem(RETURN_KEY);
     sessionStorage.removeItem(RETURN_KEY);
