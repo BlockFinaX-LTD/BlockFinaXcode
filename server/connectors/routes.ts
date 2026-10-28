@@ -14,6 +14,9 @@
  *   GET  /api/v2/connectors/engagements              contractor work offers
  *   POST /api/v2/connectors/engagements/:id/accept   accept by typing the full name
  *   POST /api/v2/connectors/engagements/:id/decline
+ *   GET  /api/v2/connectors/offers                   open offers for my kind, and my responses
+ *   POST /api/v2/connectors/offers/:id/respond       say I am interested, with a note
+ *   POST /api/v2/connectors/offers/:id/withdraw
  * Any signed-in user:
  *   POST /api/v2/connectors/attribute                credit a new account to a referral code
  * Admin (x-admin-token):
@@ -26,6 +29,10 @@
  *   GET  /api/v2/admin/connector-registrations       the registration queue
  *   POST /api/v2/admin/connector-registrations/:id/decide
  *   POST /api/v2/admin/connector-engagements/:id/status
+ *   GET  /api/v2/admin/connector-offers              offers with their responses
+ *   POST /api/v2/admin/connector-offers              post an offer (optionally email matching members)
+ *   POST /api/v2/admin/connector-offers/:id/status   open or closed
+ *   POST /api/v2/admin/connector-offers/:id/responses/:userId  selected or not_selected
  */
 import type { Express, Request, Response } from "express";
 import { ApplicationError } from "@shared/domain/types";
@@ -91,6 +98,20 @@ function registrationView(r: any, forAdmin = false) {
     decisionNote: r.decision_note, decidedAt: r.decided_at?.toISOString?.() ?? null, createdAt: r.created_at.toISOString(),
     ...(forAdmin ? { userId: r.user_id, conflictWith: r.conflict_with, memberName: r.member_name, decidedBy: r.decided_by } : {}),
   };
+}
+
+function offerView(o: any) {
+  return {
+    id: o.id, title: o.title, summary: o.summary, details: o.details, area: o.area, country: o.country, audience: o.audience,
+    reward: o.reward, closesOn: o.closes_on ? new Date(o.closes_on).toISOString().slice(0, 10) : null, status: o.status,
+    createdAt: o.created_at.toISOString(),
+  };
+}
+
+/** Offers past their closing date close themselves. */
+async function closeExpiredOffers() {
+  const db = await connectorDb();
+  await db.query(`UPDATE connector_offers SET status = 'closed' WHERE status = 'open' AND closes_on IS NOT NULL AND closes_on < current_date`);
 }
 
 function engagementView(e: any) {
@@ -185,8 +206,11 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
              (SELECT count(*) FROM connector_registrations WHERE user_id = $1 AND status IN ('approved','live'))::int AS approved,
              (SELECT count(*) FROM connector_registrations WHERE user_id = $1 AND counts_for_review AND status IN ('approved','live'))::int AS qualifying,
              (SELECT count(*) FROM connector_referrals WHERE connector_user_id = $1)::int AS referrals,
-             (SELECT count(*) FROM connector_engagements WHERE user_id = $1 AND status = 'offered')::int AS offers`,
-          [uid],
+             (SELECT count(*) FROM connector_engagements WHERE user_id = $1 AND status = 'offered')::int AS offers,
+             (SELECT count(*) FROM connector_offers o WHERE o.status = 'open' AND (o.closes_on IS NULL OR o.closes_on >= current_date)
+                AND o.audience IN ('all', $2)
+                AND NOT EXISTS (SELECT 1 FROM connector_offer_responses r WHERE r.offer_id = o.id AND r.user_id = $1))::int AS new_offers`,
+          [uid, m.kind],
         )).rows[0]
       : null;
     const ready = r.missing.length === 0;
@@ -470,6 +494,62 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     res.json({ ok: true });
   }));
 
+  app.get("/api/v2/connectors/offers", d.wrap(async (req, res) => {
+    const uid = await d.userId(req);
+    const m = await getMember(uid);
+    if (!m) throw bad("Apply to join the programme first");
+    await closeExpiredOffers();
+    const db = await connectorDb();
+    // Open offers for this member's kind, plus closed ones they responded to (so they see the outcome).
+    const { rows } = await db.query(
+      `SELECT o.*, r.status AS my_status, r.note AS my_note, r.created_at AS my_at
+         FROM connector_offers o
+         LEFT JOIN connector_offer_responses r ON r.offer_id = o.id AND r.user_id = $1
+        WHERE (o.status = 'open' AND o.audience IN ('all', $2)) OR r.user_id IS NOT NULL
+        ORDER BY o.status = 'open' DESC, o.created_at DESC`,
+      [uid, m.kind],
+    );
+    res.json({
+      canRespond: m.status === "active",
+      offers: rows.map((o: any) => ({ ...offerView(o), mine: o.my_status ? { status: o.my_status, note: o.my_note, at: o.my_at.toISOString() } : null })),
+    });
+  }));
+
+  app.post("/api/v2/connectors/offers/:id/respond", d.wrap(async (req, res) => {
+    const uid = await d.userId(req);
+    const m = await getMember(uid);
+    if (!m) throw bad("Apply to join the programme first");
+    if (m.status !== "active") throw bad("You can respond to offers once BlockFinaX has approved your application");
+    await closeExpiredOffers();
+    const db = await connectorDb();
+    const { rows } = await db.query(`SELECT * FROM connector_offers WHERE id = $1`, [req.params.id]);
+    const o = rows[0];
+    if (!o || (o.audience !== "all" && o.audience !== m.kind)) throw bad("Offer not found");
+    if (o.status !== "open") throw bad("This offer has closed");
+    const note = str(req.body?.note, 1000);
+    if (note.length < 10) throw bad("Tell BlockFinaX in a sentence or two how you can help with this");
+    const { rowCount } = await db.query(
+      `INSERT INTO connector_offer_responses (offer_id, user_id, note) VALUES ($1,$2,$3)
+       ON CONFLICT (offer_id, user_id) DO UPDATE SET note = $3, status = 'interested', updated_at = now()
+       WHERE connector_offer_responses.status IN ('interested', 'withdrawn')`,
+      [o.id, uid, note],
+    );
+    if (!rowCount) throw bad("BlockFinaX has already decided on this offer");
+    void notifyAdmins(`Interest in "${o.title}" from ${m.full_name}`, [`${m.full_name} is interested in the offer "${o.title}".`, `Their note: ${note}`]);
+    res.json({ ok: true });
+  }));
+
+  app.post("/api/v2/connectors/offers/:id/withdraw", d.wrap(async (req, res) => {
+    const uid = await d.userId(req);
+    const db = await connectorDb();
+    const { rowCount } = await db.query(
+      `UPDATE connector_offer_responses SET status = 'withdrawn', updated_at = now() WHERE offer_id = $1 AND user_id = $2 AND status = 'interested'`,
+      [req.params.id, uid],
+    );
+    if (!rowCount) throw bad("Nothing to withdraw");
+    res.json({ ok: true });
+  }));
+
   // ── Admin ─────────────────────────────────────────────────────────────────
 
   const admin = (h: Handler) => [requireAdmin, d.wrap(h)];
@@ -665,6 +745,84 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
         closed: [`The relationship with ${r.organisation} is now closed in the programme.`],
       };
       void notifyMember(m.email, `Update on ${r.organisation}`, [`Hello ${m.full_name.split(" ")[0]},`, ...lines[status]!]);
+    }
+    res.json({ ok: true });
+  }));
+
+  app.get("/api/v2/admin/connector-offers", ...admin(async (_req, res) => {
+    await closeExpiredOffers();
+    const db = await connectorDb();
+    const { rows: offers } = await db.query(`SELECT * FROM connector_offers ORDER BY status = 'open' DESC, created_at DESC LIMIT 200`);
+    const { rows: responses } = await db.query(
+      `SELECT r.*, c.full_name, c.email, c.country, c.kind FROM connector_offer_responses r JOIN connectors c ON c.user_id = r.user_id ORDER BY r.created_at`);
+    res.json({
+      offers: offers.map((o: any) => ({
+        ...offerView(o),
+        responses: responses.filter((r: any) => r.offer_id === o.id).map((r: any) => ({
+          userId: r.user_id, name: r.full_name, email: r.email, country: r.country, kind: r.kind, note: r.note, status: r.status, at: r.created_at.toISOString(),
+        })),
+      })),
+    });
+  }));
+
+  app.post("/api/v2/admin/connector-offers", ...admin(async (req, res) => {
+    const b = req.body ?? {};
+    const title = str(b.title, 160), summary = str(b.summary, 300), reward = str(b.reward, 300);
+    if (title.length < 3 || summary.length < 10 || reward.length < 2) throw bad("Give the offer a title, a one-line summary and the reward");
+    const audience = ["all", "connector", "contractor"].includes(b.audience) ? b.audience : "all";
+    const area = b.area && areaByKey(b.area) ? b.area : null;
+    const country = /^[A-Z]{2}$/.test(str(b.country, 2).toUpperCase()) ? str(b.country, 2).toUpperCase() : null;
+    const closesOn = /^\d{4}-\d{2}-\d{2}$/.test(str(b.closesOn, 10)) ? str(b.closesOn, 10) : null;
+    const db = await connectorDb();
+    const id = newId("ofr");
+    await db.query(
+      `INSERT INTO connector_offers (id, title, summary, details, area, country, audience, reward, closes_on, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [id, title, summary, str(b.details, 4000) || null, area, country, audience, reward, closesOn, by(req)],
+    );
+    let emailed = 0;
+    if (b.notify === true) {
+      const { rows } = await db.query(
+        `SELECT email, full_name FROM connectors WHERE status = 'active' AND ($1 = 'all' OR kind = $1)`, [audience]);
+      for (const m of rows) {
+        void notifyMember(m.email, `New offer: ${title}`, [
+          `Hello ${String(m.full_name).split(" ")[0]},`, `BlockFinaX has posted a new offer: ${title}.`, summary, `Reward: ${reward}.`,
+          "See the details and say you are interested in the Offers tab of the portal.",
+        ]);
+        emailed++;
+      }
+    }
+    res.json({ id, emailed });
+  }));
+
+  app.post("/api/v2/admin/connector-offers/:id/status", ...admin(async (req, res) => {
+    const status = req.body?.status;
+    if (!["open", "closed"].includes(status)) throw bad("Choose open or closed");
+    const db = await connectorDb();
+    const { rowCount } = await db.query(
+      `UPDATE connector_offers SET status = $2, closes_on = CASE WHEN $2 = 'open' AND closes_on < current_date THEN NULL ELSE closes_on END WHERE id = $1`,
+      [req.params.id, status]);
+    if (!rowCount) throw bad("Offer not found");
+    res.json({ ok: true });
+  }));
+
+  app.post("/api/v2/admin/connector-offers/:id/responses/:userId", ...admin(async (req, res) => {
+    const status = req.body?.status;
+    if (!["selected", "not_selected"].includes(status)) throw bad("Choose selected or not_selected");
+    const db = await connectorDb();
+    const { rows } = await db.query(
+      `UPDATE connector_offer_responses SET status = $3, updated_at = now() WHERE offer_id = $1 AND user_id = $2 AND status <> 'withdrawn'
+       RETURNING (SELECT title FROM connector_offers WHERE id = $1) AS title`,
+      [req.params.id, Number(req.params.userId), status]);
+    if (!rows.length) throw bad("Response not found");
+    const m = await getMember(Number(req.params.userId));
+    if (m) {
+      void notifyMember(m.email, `Update on the offer: ${rows[0].title}`, [
+        `Hello ${m.full_name.split(" ")[0]},`,
+        status === "selected"
+          ? `BlockFinaX has selected you for "${rows[0].title}". We will be in touch with next steps.`
+          : `Thank you for your interest in "${rows[0].title}". BlockFinaX has gone with another member this time.`,
+      ]);
     }
     res.json({ ok: true });
   }));

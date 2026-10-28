@@ -8,6 +8,8 @@
  *   connector_referrals     users who signed up through a member's referral link
  *   connector_ledger        rewards earned and payments made, per quarter
  *   connector_engagements   contractor work offers and their acceptance
+ *   connector_offers        opportunities BlockFinaX posts on the offers board
+ *   connector_offer_responses members' interest in an offer, and who was selected
  *
  * Tables are created on first use, like the other v2 modules.
  */
@@ -135,6 +137,29 @@ export async function connectorDb() {
       created_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS connector_engagements_user_idx ON connector_engagements (user_id);
+    CREATE TABLE IF NOT EXISTS connector_offers (
+      id text PRIMARY KEY,
+      title text NOT NULL,
+      summary text NOT NULL,
+      details text,
+      area text,
+      country text,
+      audience text NOT NULL DEFAULT 'all',
+      reward text NOT NULL,
+      closes_on date,
+      status text NOT NULL DEFAULT 'open',
+      created_by text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS connector_offer_responses (
+      offer_id text NOT NULL,
+      user_id integer NOT NULL,
+      note text,
+      status text NOT NULL DEFAULT 'interested',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (offer_id, user_id)
+    );
   `).then(() => undefined));
   pending.catch(() => { ready = null; });
   await pending;

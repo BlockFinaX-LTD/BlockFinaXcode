@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BookOpen, Briefcase, Check, Circle, Copy, FileSignature, FolderOpen, Gauge, LogOut, Moon, Sun, UserRound, Users, Wallet, Building2,
+  BookOpen, Briefcase, Megaphone, Check, Circle, Copy, FileSignature, FolderOpen, Gauge, LogOut, Moon, Sun, UserRound, Users, Wallet, Building2,
 } from 'lucide-react';
 import {
   AGREEMENTS, AREAS, COMPANY, LEDGER_LABELS, MATERIALS, MODULES, PASS_MARK, areaByKey,
@@ -44,7 +44,7 @@ interface Me {
   missing: string[];
   ready: boolean;
   referral: null | { code: string; link: string };
-  counts: null | { registrations: number; approved: number; qualifying: number; referrals: number; offers: number };
+  counts: null | { registrations: number; approved: number; qualifying: number; referrals: number; offers: number; new_offers: number };
 }
 
 interface Registration {
@@ -123,10 +123,11 @@ function useTheme(): ['light' | 'dark', () => void] {
 
 // ── Portal ────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'agreement' | 'training' | 'prospects' | 'referrals' | 'rewards' | 'engagements' | 'materials' | 'profile';
+type Tab = 'overview' | 'offers' | 'agreement' | 'training' | 'prospects' | 'referrals' | 'rewards' | 'engagements' | 'materials' | 'profile';
 
 const NAV: { key: Tab; label: string; icon: typeof Gauge; contractorOnly?: boolean }[] = [
   { key: 'overview', label: 'Overview', icon: Gauge },
+  { key: 'offers', label: 'Offers', icon: Megaphone },
   { key: 'agreement', label: 'Agreement', icon: FileSignature },
   { key: 'training', label: 'Training', icon: BookOpen },
   { key: 'prospects', label: 'Prospects', icon: Building2 },
@@ -175,6 +176,7 @@ export default function ConnectorPortal() {
           <button key={n.key} className={`bx-nav${tab === n.key ? ' on' : ''}`} onClick={() => go(n.key)}>
             <n.icon />{n.label}
             {n.key === 'engagements' && !!data.counts?.offers && <Tag tone="blue">{data.counts.offers}</Tag>}
+            {n.key === 'offers' && !!data.counts?.new_offers && <Tag tone="blue">{data.counts.new_offers}</Tag>}
           </button>
         ))}
         <div className="bx-rail-foot">
@@ -189,6 +191,7 @@ export default function ConnectorPortal() {
         </nav>
         <main className="bx-cp-main">
           {tab === 'overview' && <Overview me={data} go={go} />}
+          {tab === 'offers' && <OffersTab />}
           {tab === 'agreement' && <AgreementTab me={data} />}
           {tab === 'training' && <TrainingTab me={data} />}
           {tab === 'prospects' && <ProspectsTab me={data} go={go} />}
@@ -323,6 +326,9 @@ function Overview({ me, go }: { me: Me; go: (t: Tab) => void }) {
             ))}
           </ul>
         </section>
+      )}
+      {!!me.counts?.new_offers && (
+        <Note>{me.counts.new_offers === 1 ? 'There is a new offer' : `There are ${me.counts.new_offers} new offers`} from BlockFinaX. <button className="bx-link" onClick={() => go('offers')}>See offers</button></Note>
       )}
       {me.referral && (
         <section className="bx-card">
@@ -731,6 +737,82 @@ function EngagementsTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
           )}
         </section>
       ))}
+    </>
+  );
+}
+
+// ── Offers ────────────────────────────────────────────────────────────────
+
+interface Offer {
+  id: string; title: string; summary: string; details: string | null; area: AreaKey | null; country: string | null;
+  audience: 'all' | 'connector' | 'contractor'; reward: string; closesOn: string | null; status: 'open' | 'closed'; createdAt: string;
+  mine: null | { status: 'interested' | 'selected' | 'not_selected' | 'withdrawn'; note: string | null; at: string };
+}
+
+const MINE_LABEL: Record<string, [string, 'green' | 'blue' | 'grey' | 'amber']> = {
+  interested: ['You are interested', 'blue'], selected: ['You were selected', 'green'], not_selected: ['Not selected this time', 'grey'], withdrawn: ['Withdrawn', 'grey'],
+};
+
+function OffersTab() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['connector-offers'], queryFn: () => api<{ canRespond: boolean; offers: Offer[] }>('/api/v2/connectors/offers') });
+  const { label } = useCountries();
+  const [open, setOpen] = useState<string | null>(null);
+  const [note, setNote] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<Record<string, string>>({});
+  const act = async (id: string, action: 'respond' | 'withdraw') => {
+    setBusy(id); setError({ ...error, [id]: '' });
+    try {
+      await api(`/api/v2/connectors/offers/${id}/${action}`, action === 'respond' ? { note: note[id] ?? '' } : {});
+      await Promise.all([qc.invalidateQueries({ queryKey: ['connector-offers'] }), qc.invalidateQueries({ queryKey: ['connector-me'] })]);
+      setOpen(null);
+    } catch (e) { setError({ ...error, [id]: errMsg(e) }); } finally { setBusy(null); }
+  };
+  return (
+    <>
+      <div>
+        <h1 className="bx-cp-h1">Offers</h1>
+        <p className="bx-cp-lede">Opportunities BlockFinaX is looking for help with right now. Say you are interested and BlockFinaX will get back to you. Any reward is confirmed in writing when you are selected.</p>
+      </div>
+      {q.isLoading ? <Loading /> : !q.data?.offers.length ? (
+        <section className="bx-card"><div className="bx-empty">No open offers right now. New offers appear here, and we email you when one is posted.</div></section>
+      ) : q.data.offers.map((o) => {
+        const area = o.area ? areaByKey(o.area) : null;
+        const mine = o.mine ? MINE_LABEL[o.mine.status] : null;
+        const canAct = q.data!.canRespond && o.status === 'open';
+        return (
+          <section key={o.id} className="bx-card" style={{ display: 'grid', gap: 10 }}>
+            <div className="bx-card-h" style={{ alignItems: 'flex-start' }}>
+              <div>
+                <h2>{o.title}</h2>
+                <div className="sub">{[area?.label, o.country ? label(o.country) : null, o.audience === 'contractor' ? 'For contractors' : o.audience === 'connector' ? 'For connectors' : null,
+                  o.closesOn ? `Closes ${day(o.closesOn)}` : null].filter(Boolean).join(' · ')}</div>
+              </div>
+              {mine ? <Tag tone={mine[1]}>{mine[0]}</Tag> : o.status === 'closed' ? <Tag tone="grey">Closed</Tag> : <Tag tone="amber">Open</Tag>}
+            </div>
+            <p style={{ margin: 0, lineHeight: 1.55 }}>{o.summary}</p>
+            {o.details && <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.55 }} className="muted">{o.details}</p>}
+            <span><b>Reward:</b> {o.reward}</span>
+            {o.mine?.note && <span className="muted" style={{ fontSize: 13 }}>Your note: {o.mine.note}</span>}
+            {canAct && (!o.mine || o.mine.status === 'withdrawn') && (open === o.id ? (
+              <div style={{ display: 'grid', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+                <label htmlFor={`of-${o.id}`} className="muted" style={{ fontSize: 13 }}>How you can help, in a sentence or two</label>
+                <textarea id={`of-${o.id}`} className="bx-input" rows={3} value={note[o.id] ?? ''} onChange={(e) => setNote({ ...note, [o.id]: e.target.value })} />
+                {error[o.id] && <Note warn>{error[o.id]}</Note>}
+                <div className="bx-cp-row">
+                  <button className="bx-btn" disabled={busy === o.id} onClick={() => act(o.id, 'respond')}>{busy === o.id ? <Spin /> : null}Send</button>
+                  <button className="bx-btn ghost" onClick={() => setOpen(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : <button className="bx-btn" style={{ justifySelf: 'start' }} onClick={() => setOpen(o.id)}>I'm interested</button>)}
+            {canAct && o.mine?.status === 'interested' && (
+              <button className="bx-link" style={{ justifySelf: 'start' }} disabled={busy === o.id} onClick={() => act(o.id, 'withdraw')}>Withdraw my interest</button>
+            )}
+            {!q.data!.canRespond && o.status === 'open' && <Note>You can respond to offers once BlockFinaX has approved your application.</Note>}
+          </section>
+        );
+      })}
     </>
   );
 }

@@ -4,6 +4,7 @@
  *   Members        applications and members; open one to approve, countersign, record
  *                  rewards and payments, and offer contractor engagements
  *   Registrations  prospects waiting for a decision, across all members
+ *   Offers         opportunities posted to the portal's offers board, and who is interested
  *
  * Approving a registration sends the member their Approval Notice by email. Marking it
  * live starts the 12-month reward period.
@@ -16,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, Users, ClipboardList, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Users, ClipboardList, AlertTriangle, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AREAS, LEDGER_LABELS, MODULES, areaByKey, type LedgerKind } from "@shared/connector-programme";
 
@@ -47,7 +48,7 @@ function Pill({ s }: { s: string }) {
 }
 
 export function ConnectorsSection({ token }: { token: string }) {
-  const [tab, setTab] = useState<"members" | "registrations">("members");
+  const [tab, setTab] = useState<"members" | "registrations" | "offers">("members");
   const [open, setOpen] = useState<number | null>(null);
   if (open !== null) return <MemberDetail token={token} userId={open} onBack={() => setOpen(null)} />;
   return (
@@ -59,8 +60,11 @@ export function ConnectorsSection({ token }: { token: string }) {
       <div className="flex gap-2">
         <Button variant={tab === "members" ? "default" : "outline"} size="sm" onClick={() => setTab("members")}><Users className="h-4 w-4 mr-1" />Members</Button>
         <Button variant={tab === "registrations" ? "default" : "outline"} size="sm" onClick={() => setTab("registrations")}><ClipboardList className="h-4 w-4 mr-1" />Registrations</Button>
+        <Button variant={tab === "offers" ? "default" : "outline"} size="sm" onClick={() => setTab("offers")}><Megaphone className="h-4 w-4 mr-1" />Offers</Button>
       </div>
-      {tab === "members" ? <Members token={token} onOpen={setOpen} /> : <RegistrationQueue token={token} onOpen={setOpen} />}
+      {tab === "members" && <Members token={token} onOpen={setOpen} />}
+      {tab === "registrations" && <RegistrationQueue token={token} onOpen={setOpen} />}
+      {tab === "offers" && <Offers token={token} onOpen={setOpen} />}
     </div>
   );
 }
@@ -325,6 +329,94 @@ function MemberDetail({ token, userId, onBack }: { token: string; userId: number
         </Card>
       )}
       <p className="text-xs text-gray-400">Areas available: {AREAS.length}. Approval emails are the member's Approval Notice under the Connector Agreement.</p>
+    </div>
+  );
+}
+
+const EMPTY_OFFER = { title: "", summary: "", details: "", reward: "", area: "", country: "", audience: "all", closesOn: "", notify: true };
+
+function Offers({ token, onOpen }: { token: string; onOpen: (id: number) => void }) {
+  const { toast } = useToast();
+  const q = useQuery({ queryKey: ["admin-connector-offers", token], queryFn: () => api("/api/v2/admin/connector-offers", token) });
+  const [form, setForm] = useState({ ...EMPTY_OFFER });
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const run = async (url: string, body: unknown, done: string) => {
+    setBusy(true);
+    try {
+      const r = await api(url, token, body);
+      toast({ title: done, description: typeof r?.emailed === "number" && r.emailed ? `Emailed ${r.emailed} member${r.emailed === 1 ? "" : "s"}.` : undefined });
+      await queryClient.invalidateQueries({ queryKey: ["admin-connector-offers", token] });
+      return true;
+    } catch (e) { toast({ title: "Could not save", description: (e as Error).message, variant: "destructive" }); return false; }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-3">
+      {!adding ? <Button size="sm" onClick={() => setAdding(true)}>Post an offer</Button> : (
+        <Card>
+          <CardHeader><CardTitle className="text-base">New offer</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title, for example: Introduction to a Kenyan commercial bank" aria-label="Title" />
+            <Input value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="One-line summary shown on the board" aria-label="Summary" />
+            <Textarea value={form.details} onChange={(e) => setForm({ ...form, details: e.target.value })} placeholder="Details: what you need, who fits, what happens next" aria-label="Details" rows={4} />
+            <Input value={form.reward} onChange={(e) => setForm({ ...form, reward: e.target.value })} placeholder="Reward, for example: US$1,000 bonus when the bank is live, plus 25% revenue share" aria-label="Reward" />
+            <div className="grid md:grid-cols-4 gap-2">
+              <select className="border rounded-md px-2 py-2 text-sm" aria-label="Area" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })}>
+                <option value="">Any area</option>
+                {AREAS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+              </select>
+              <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase().slice(0, 2) })} placeholder="Country code, e.g. KE" aria-label="Country" />
+              <select className="border rounded-md px-2 py-2 text-sm" aria-label="Audience" value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })}>
+                <option value="all">Everyone</option><option value="connector">Connectors</option><option value="contractor">Contractors</option>
+              </select>
+              <label className="flex items-center gap-2 text-sm">Closes <Input type="date" className="w-auto" value={form.closesOn} onChange={(e) => setForm({ ...form, closesOn: e.target.value })} /></label>
+            </div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.notify} onChange={(e) => setForm({ ...form, notify: e.target.checked })} />Email active members it is for</label>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={busy} onClick={async () => { if (await run("/api/v2/admin/connector-offers", form, "Offer posted")) { setForm({ ...EMPTY_OFFER }); setAdding(false); } }}>Post offer</Button>
+              <Button size="sm" variant="outline" onClick={() => setAdding(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {q.isLoading ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : !(q.data?.offers as any[])?.length ? (
+        <Card><CardContent className="p-6 text-sm text-gray-500">No offers yet.</CardContent></Card>
+      ) : (q.data.offers as any[]).map((o) => (
+        <Card key={o.id}>
+          <CardContent className="p-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-3 flex-wrap">
+              <div>
+                <div className="font-semibold">{o.title}</div>
+                <div className="text-xs text-gray-500">{[areaByKey(o.area)?.label, o.country, o.audience === "all" ? "everyone" : `${o.audience}s`, o.closesOn ? `closes ${day(o.closesOn)}` : null, `posted ${day(o.createdAt)}`].filter(Boolean).join(" · ")}</div>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Pill s={o.status === "open" ? "active" : "closed"} />
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => run(`/api/v2/admin/connector-offers/${o.id}/status`, { status: o.status === "open" ? "closed" : "open" }, o.status === "open" ? "Closed" : "Reopened")}>
+                  {o.status === "open" ? "Close" : "Reopen"}
+                </Button>
+              </div>
+            </div>
+            <p>{o.summary}</p>
+            <p className="text-gray-600">Reward: {o.reward}</p>
+            <div className="border-t pt-2 space-y-2">
+              <div className="text-xs font-medium text-gray-500">{o.responses.length ? `${o.responses.length} interested` : "No responses yet"}</div>
+              {o.responses.map((r: any) => (
+                <div key={r.userId} className="flex justify-between gap-3 flex-wrap border-b pb-2">
+                  <span><button className="underline font-medium" onClick={() => onOpen(r.userId)}>{r.name}</button> <span className="text-gray-500">· {r.kind} · {r.country} · {day(r.at)}</span>
+                    <br /><span className="text-gray-600">{r.note}</span></span>
+                  {r.status === "interested" ? (
+                    <span className="flex gap-2">
+                      <Button size="sm" disabled={busy} onClick={() => run(`/api/v2/admin/connector-offers/${o.id}/responses/${r.userId}`, { status: "selected" }, "Selected and emailed")}>Select</Button>
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => run(`/api/v2/admin/connector-offers/${o.id}/responses/${r.userId}`, { status: "not_selected" }, "Marked not selected and emailed")}>Not this time</Button>
+                    </span>
+                  ) : <Pill s={r.status === "selected" ? "approved" : r.status} />}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
