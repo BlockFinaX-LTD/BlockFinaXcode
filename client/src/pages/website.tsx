@@ -19,6 +19,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
 import './website.css';
+// Where the website's buttons lead (client/src/lib/app-links.ts on the testnet branch).
+// Launch App opens the Stellar testnet app; Apply opens the connector portal.
+const clean = (v: string | undefined, fallback: string) => (v || fallback).trim().replace(/\/$/, '');
+const LAUNCH_APP_HREF = `${clean(import.meta.env.VITE_TESTNET_APP_URL, 'https://testnet.blockfinax.com')}/hedge`;
+const CONNECTOR_PORTAL_URL = clean(import.meta.env.VITE_CONNECTOR_PORTAL_URL, 'https://connector.blockfinax.com');
 
 const logoPath = '/favicon.png';
 
@@ -138,7 +143,7 @@ function useHeroSurface(ref: React.RefObject<HTMLCanvasElement>) {
 
 // ── Hero rotator ────────────────────────────────────────────────────────
 
-const ROTATOR_WORDS = ['Hedging', 'Trading', 'Insuring', 'Underwriting'];
+const ROTATOR_WORDS = ['Hedging', 'Managing', 'Pricing', 'Underwriting'];
 
 function HeroRotator() {
   const ref = useRef<HTMLSpanElement>(null);
@@ -570,11 +575,11 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             BlockFinaX
           </Link>
           <div className="nav-links">
-            <a href="#use">Products</a>
+            <a href="/#use">Products</a>
             <Link href="/hedger">Hedgers</Link>
             <Link href="/liquidity-provider">Underwriters</Link>
             <Link href="/connectors">Connectors</Link>
-            <Link href="/learn">Academy</Link>
+            <Link href="/about">About</Link>
             <div
               className="nav-dropdown"
               onMouseEnter={() => setResourcesOpen(true)}
@@ -585,7 +590,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
               </button>
               {resourcesOpen && (
                 <div className="nav-dropdown-menu">
-                  <Link href="/docs/request">Documentation</Link>
+                  <Link href="/learn">Academy</Link>
                   <Link href="/blog">Blog</Link>
                   <Link href="/faq">FAQ</Link>
                 </div>
@@ -601,9 +606,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             >
               {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <Link href="/hedge" className="btn btn-primary btn-sm">
+            <a href={LAUNCH_APP_HREF} className="btn btn-primary btn-sm">
               Launch App <span className="arrow">→</span>
-            </Link>
+            </a>
           </div>
           <button
             type="button"
@@ -646,8 +651,8 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             <Link href="/connectors" className="nav-mobile-link" onClick={closeMobile}>
               Connectors
             </Link>
-            <Link href="/learn" className="nav-mobile-link" onClick={closeMobile}>
-              Academy
+            <Link href="/about" className="nav-mobile-link" onClick={closeMobile}>
+              About
             </Link>
             <button
               type="button"
@@ -660,7 +665,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
             {mobileResourcesOpen && (
               <div className="nav-mobile-resources">
-                <Link href="/docs/request" onClick={closeMobile}>Documentation</Link>
+                <Link href="/learn" onClick={closeMobile}>Academy</Link>
                 <Link href="/blog" onClick={closeMobile}>Blog</Link>
                 <Link href="/faq" onClick={closeMobile}>FAQ</Link>
               </div>
@@ -677,9 +682,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-ctas">
-            <Link href="/hedge" className="btn btn-primary" onClick={closeMobile}>
+            <a href={LAUNCH_APP_HREF} className="btn btn-primary" onClick={closeMobile}>
               Launch App <span className="arrow">→</span>
-            </Link>
+            </a>
           </div>
         </div>
       )}
@@ -703,12 +708,12 @@ function Hero() {
               currency risk.
             </h1>
             <p className="hero-sub">
-              The market to discover, trade and hedge FX risk in emerging markets.
+              Making currency risk protection more accessible to support trade and investment in emerging markets.
             </p>
             <div className="hero-ctas">
-              <Link href="/hedge" className="btn btn-primary">
+              <a href={LAUNCH_APP_HREF} className="btn btn-primary">
                 Launch App <span className="arrow">→</span>
-              </Link>
+              </a>
             </div>
           </div>
           <div className="hero-visual">
@@ -740,7 +745,7 @@ function UseSection({ theme }: { theme: Theme }) {
                 <Link href="/hedge" className="feat-btn primary">
                   Hedge <span className="arrow">→</span>
                 </Link>
-                <Link href="/learn/hedging-101" className="feat-btn ghost">Learn more</Link>
+                <Link href="/hedger" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>
@@ -754,7 +759,7 @@ function UseSection({ theme }: { theme: Theme }) {
                 <Link href="/hedge" className="feat-btn primary">
                   Underwrite <span className="arrow">→</span>
                 </Link>
-                <Link href="/learn/underwriting-101" className="feat-btn ghost">Learn more</Link>
+                <Link href="/liquidity-provider" className="feat-btn ghost">Learn more</Link>
               </div>
             </div>
           </article>
@@ -777,50 +782,12 @@ function UseSection({ theme }: { theme: Theme }) {
 
 // ── Who this is for / audience cards ─────────────────────────────────────
 
-interface Persona {
-  title: string;
-  tag: string;
-  body: string;
-  cta: string;
-  href: string;
-  Icon: React.ComponentType;
-}
-
-const PERSONAS: Persona[] = [
-  {
-    title: 'Exporters and importers',
-    tag: 'Trade & commerce',
-    body:
-      'You ship goods abroad or bring them in, priced in dollars, while your books run in local currency. Cover the leg of the trade that hurts when the rate moves against you.',
-    cta: 'How hedging protects margin',
-    href: '/learn/hedging-101',
-    Icon: TradeIcon,
-  },
-  {
-    title: 'Treasuries',
-    tag: 'Payments & FX',
-    body:
-      'You hold reserves in one currency and liabilities in another. Corporate treasuries, remittance corridors, neobanks with cross-border float. Hedge at the balance-sheet level, not per transaction.',
-    cta: 'How settlement works',
-    href: '/learn/how-blockfinax-works',
-    Icon: VaultIcon,
-  },
-  {
-    title: 'LPs',
-    tag: 'Capital & yield',
-    body:
-      'You have idle USDC on a wallet, treasury, or DAO. Underwrite parametric cover for the people who need it. Collect premium, back hedgers, hold reserves that back real economic risk.',
-    cta: 'Underwriting mechanics',
-    href: '/learn/underwriting-101',
-    Icon: LiquidityIcon,
-  },
-];
 
 const PILLARS = [
   {
     n: '01',
     title: 'Making currency protection accessible',
-    lede: 'Help businesses protect their margins against exchange-rate movements.',
+    lede: 'Help businesses and investors protect their margins and returns against exchange-rate movements.',
     body: 'Most businesses that pay or earn in another currency have no practical way to protect it: forwards need a credit line and a dealer. BlockFinaX turns protection into a simple purchase. Choose the amount, the end date and the move you fear, pay a known premium in USDC, and get paid if the rate passes your strike.',
   },
   {
@@ -874,9 +841,17 @@ function PillarsSection() {
     <section className="pillars" id="pillars" aria-labelledby="pillars-title">
       <Guilloche />
       <div className="wrap">
-        <div className="assets-head">
-          <h2 id="pillars-title">What we are building.</h2>
-          <p>Currency protection for more businesses, backed by private capital, across more markets.</p>
+        <div className="why-head">
+          <div>
+            <div className="why-label">Why BlockFinaX matters</div>
+            <h2 id="pillars-title">FX risk solutions for <span className="accent">emerging markets</span></h2>
+          </div>
+          <div className="why-copy">
+            <p>
+              An exchange-rate move can make a supplier payment more expensive, a foreign-currency loan heavier or an
+              investment worth less. <strong>BlockFinaX lets you set your worst case in advance.</strong>
+            </p>
+          </div>
         </div>
         <div className="pillar-grid">
           {PILLARS.map((p) => (
@@ -910,32 +885,120 @@ function PillarsSection() {
   );
 }
 
-function WhoSection() {
+const TRUST = [
+  { when: 'When you buy', title: 'Your payout is reserved', line: 'The most it can pay is set aside the moment you buy.' },
+  { when: 'At the end date', title: 'The rate is agreed independently', line: 'Independent operators must agree the rate. No one party chooses it.' },
+  { when: 'When you claim', title: 'Only you can collect it', line: 'Your payout waits for your passkey. Nobody else can move it.' },
+];
+
+const RECEIPT: { step: number; k: string; v: string; proof?: string }[] = [
+  { step: 0, k: 'Contract', v: 'USD/GHS Cap · $500,000' },
+  { step: 0, k: 'Strike and limit', v: '11.83 to 13.01' },
+  { step: 0, k: 'Reserve', v: '$50,862.07', proof: 'Locked at purchase' },
+  { step: 1, k: 'USD/GHS at 14:00 UTC', v: '12.40', proof: 'Agreed by 2 operators' },
+  { step: 2, k: 'Payout', v: '$24,077.59', proof: 'Claimed with your passkey' },
+];
+
+/** Why a business can rely on being paid: three steps beside a contract that fills in as they advance. */
+function TrustSection() {
+  const [step, setStep] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused || prefersReducedMotion()) return;
+    const id = window.setInterval(() => setStep((s) => (s + 1) % 3), 3200);
+    return () => clearInterval(id);
+  }, [paused]);
   return (
-    <section className="who" id="who">
+    <section className="trust" id="trust" aria-labelledby="trust-title">
+      <div className="wrap">
+        <div className="assets-head">
+          <h2 id="trust-title">Why you can trust the payout.</h2>
+          <p>Protection is only worth buying if it pays. At every step, the rules are written into the contracts and recorded on a public ledger.</p>
+        </div>
+        <div className="trust-split" onMouseLeave={() => setPaused(false)}>
+          <ol className="trust-steps">
+            {TRUST.map((t, k) => (
+              <li key={t.title}>
+                <button type="button" className={step === k ? 'on' : ''} aria-pressed={step === k}
+                  onMouseEnter={() => { setPaused(true); setStep(k); }} onFocus={() => { setPaused(true); setStep(k); }} onClick={() => { setPaused(true); setStep(k); }}>
+                  <span className="trust-when">{String(k + 1).padStart(2, '0')} · {t.when}</span>
+                  <span className="trust-title">{t.title}</span>
+                  <span className="trust-text">{t.line}</span>
+                  <span className="trust-bar" aria-hidden="true"><i key={paused ? 'p' : step} className={!paused && step === k ? 'run' : ''} /></span>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <div className="receipt" aria-label="An example protection contract">
+            <div className="receipt-h">
+              <span>Protection #1042</span>
+              <span className={`receipt-status s${step}`}>{step === 0 ? 'Active' : step === 1 ? 'Settled' : 'Paid'}</span>
+            </div>
+            <dl>
+              {RECEIPT.map((r) => (
+                <div key={r.k} className={`receipt-row${r.step <= step ? ' shown' : ''}${r.step === step ? ' now' : ''}`}>
+                  <dt>{r.k}</dt>
+                  <dd>
+                    <span className="v">{r.v}</span>
+                    {r.proof && <span className="proof"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>{r.proof}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div className="receipt-foot">Recorded on a public ledger · example contract</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface WayRow { title: string; line: string; href: string; img: string; alt: string }
+
+/* Photos from Unsplash (free licence). */
+const WAYS: WayRow[] = [
+  { title: 'Exporters and importers', line: 'Protect the dollar side of every trade, from a single supplier invoice upwards.', href: '/hedger',
+    img: '/ways/exporters.jpg', alt: 'A crane loading shipping containers onto a cargo ship' },
+  { title: 'Treasuries', line: 'Manage the currency exposure across your balance sheet, not one payment at a time.', href: '/hedger',
+    img: '/ways/treasuries.jpg', alt: 'A finance team meeting around a boardroom table' },
+  { title: 'Underwriters', line: 'Earn premiums by backing protection that real businesses need.', href: '/liquidity-provider',
+    img: '/ways/underwriters.jpg', alt: 'Currency quotes on a phone in front of a trading screen' },
+  { title: 'Partners', line: 'Offer currency protection inside your own product, with your own fees.', href: '/contact',
+    img: '/ways/partners.jpg', alt: 'A person working on a laptop with a phone in hand' },
+];
+
+/** Who BlockFinaX is for, as hover rows: the hovered row turns blue and its photo slides in. */
+function WhoSection() {
+  const [active, setActive] = useState<number | null>(null);
+  return (
+    <section className="who ways" id="who">
+      <Guilloche />
       <div className="wrap">
         <div className="assets-head">
           <h2>Built for the people who feel the rate.</h2>
-          <p>Anyone whose costs move when a currency moves. Anyone with dollars sitting still. Three shapes of user, one protocol.</p>
+          <p>Anyone whose costs move when a currency moves, and anyone with capital to put to work.</p>
         </div>
-        <div className="who-cards">
-          {PERSONAS.map((p) => (
-            <article className="who-card" key={p.title}>
-              <div className="who-ic"><p.Icon /></div>
-              <div className="who-body">
-                <h3>{p.title}</h3>
-                <div className="who-tag">{p.tag}</div>
-                <p>{p.body}</p>
-              </div>
-              <Link href={p.href} className="who-cta">
-                Learn more
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </Link>
-            </article>
-          ))}
-        </div>
+      </div>
+      <div className="way-list" onMouseLeave={() => setActive(null)}>
+        {WAYS.map((w, i) => (
+          <Link
+            key={w.title}
+            href={w.href}
+            className={`way-row${active === i ? ' on' : ''}`}
+            onMouseEnter={() => setActive(i)}
+            onFocus={() => setActive(i)}
+            onBlur={() => setActive(null)}
+          >
+            <span className="wrap way-in">
+              <span className="way-media"><img className="way-img" src={w.img} alt={w.alt} /></span>
+              <span className="way-title">{w.title}</span>
+              <span className="way-line">{w.line}</span>
+              <span className="way-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 7l5 5-5 5" /></svg>
+              </span>
+            </span>
+          </Link>
+        ))}
       </div>
     </section>
   );
@@ -943,39 +1006,6 @@ function WhoSection() {
 
 /* Circle-shaped icon glyphs sitting inside the persona cards.
    Single-stroke, currentColor, on a hairline outer ring. */
-function TradeIcon() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
-      {/* Top track: right-pointing arrow at y=18 */}
-      <path d="M13 18h18M27 12l6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Bottom track: left-pointing arrow at y=30 (12 units below, no collision) */}
-      <path d="M35 30H17M21 24l-6 6 6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-    </svg>
-  );
-}
-function VaultIcon() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
-      <path d="M12 34h24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M14 34V20l10-6 10 6v14" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      <line x1="18" y1="34" x2="18" y2="22" stroke="currentColor" strokeWidth="1.6" />
-      <line x1="24" y1="34" x2="24" y2="20" stroke="currentColor" strokeWidth="1.6" />
-      <line x1="30" y1="34" x2="30" y2="22" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-function LiquidityIcon() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
-      <ellipse cx="24" cy="18" rx="10" ry="3.5" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M14 18v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M14 24v6c0 1.93 4.48 3.5 10 3.5s10-1.57 10-3.5v-6" stroke="currentColor" strokeWidth="1.6" opacity="0.55" />
-    </svg>
-  );
-}
 
 // ── Request cards / underwriting CTAs ────────────────────────────────────
 // Two contrasting cards in the shape of Circle's "Partner with Circle" +
@@ -983,57 +1013,6 @@ function LiquidityIcon() {
 // with white type. Both target buyers/writers who can't find a fit in the
 // open marketplace and want to work with us directly.
 
-function RequestSection() {
-  return (
-    <section className="reqs" id="request">
-      <div className="wrap">
-        <div className="reqs-grid">
-          <a
-            href="mailto:hello@blockfinax.com?subject=Request%20a%20quote"
-            className="reqcard light"
-          >
-            <div className="reqcard-body">
-              <h2>Request a quote</h2>
-              <p>
-                For businesses, funds, and treasuries whose exposure doesn&apos;t
-                fit the open marketplace. Tell us the notional, the pair, the
-                expiry, and the strike range you want cover on. We&apos;ll
-                structure a bespoke pool and quote you back.
-              </p>
-              <span className="reqcard-cta">
-                Request a quote
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </div>
-          </a>
-          <a
-            href="mailto:hello@blockfinax.com?subject=Apply%20to%20underwrite"
-            className="reqcard dark"
-          >
-            <div className="reqcard-body">
-              <h2>Become an underwriter</h2>
-              <p>
-                Put idle USDC to work as pool liquidity. Every time a hedger
-                buys cover from a pool you back, you earn a share of the
-                premium. If the event settles out of the money, the reserved
-                capital comes back to you. If it settles in the money, your
-                share of the payout is capped and known upfront.
-              </p>
-              <span className="reqcard-cta">
-                Apply to underwrite
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </div>
-          </a>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ── Currencies we cover / flag row ───────────────────────────────────────
 // Six emerging-market currencies with their circular flags, laid out as a
@@ -1178,21 +1157,119 @@ function SignalSection() {
 
 // ── Tail CTA ────────────────────────────────────────────────────────────
 
-function TailCTA() {
+// ── Understand currency risk: learning and community ─────────────────────
+
+/** A rough outline of Africa in a 100 x 100 box, for the dotted map. */
+const AFRICA: [number, number][] = [
+  [30, 8], [42, 4], [55, 6], [64, 9], [70, 14], [74, 22], [78, 30], [86, 34], [94, 36], [90, 44], [82, 52], [78, 60],
+  [74, 70], [68, 80], [62, 88], [56, 94], [50, 96], [46, 92], [44, 84], [42, 74], [40, 64], [36, 56], [30, 52], [22, 50],
+  [14, 46], [8, 40], [6, 32], [10, 24], [16, 16], [22, 11],
+];
+function inAfrica(x: number, y: number) {
+  let inside = false;
+  for (let i = 0, j = AFRICA.length - 1; i < AFRICA.length; j = i++) {
+    const [xi, yi] = AFRICA[i], [xj, yj] = AFRICA[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const AFRICA_DOTS: [number, number][] = [];
+for (let y = 2; y < 98; y += 3.2) for (let x = 2; x < 98; x += 3.2) if (inAfrica(x, y)) AFRICA_DOTS.push([x, y]);
+
+/**
+ * A fictional banknote (engraved baobab, rosette, cedi sign, SPECIMEN), a rate chart over
+ * a dotted Africa, and the BlockFinaX badge. Not any real currency's design.
+ */
+function CurrencyArt() {
+  const rose: string[] = [];
+  for (let k = 0; k < 14; k++) {
+    const pts: string[] = [];
+    for (let t = 0; t <= 360; t += 4) {
+      const a = (t * Math.PI) / 180;
+      const r = 34 + 9 * Math.sin(6 * a + k * 0.45);
+      pts.push(`${(r * Math.cos(a + k * 0.12)).toFixed(1)},${(r * Math.sin(a + k * 0.12)).toFixed(1)}`);
+    }
+    rose.push(`M${pts.join(' L')} Z`);
+  }
+  const candles = [[0, 4], [1, 6], [2, 3], [3, 9], [4, 12], [5, 10], [6, 16], [7, 20], [8, 18], [9, 26]];
   return (
-    <section className="tail">
+    <svg className="learn-art" viewBox="0 0 560 420" role="img" aria-label="A fictional BlockFinaX banknote beside a rate chart over Africa">
+      <defs>
+        <clipPath id="note-clip"><circle cx="190" cy="200" r="150" /></clipPath>
+        <clipPath id="chart-clip"><circle cx="370" cy="215" r="145" /></clipPath>
+        <pattern id="note-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" strokeWidth="0.6" opacity="0.25" />
+        </pattern>
+      </defs>
+
+      {/* The chart circle, behind */}
+      <g clipPath="url(#chart-clip)">
+        <circle cx="370" cy="215" r="145" className="art-chart-bg" />
+        {AFRICA_DOTS.map(([x, y], i) => <circle key={i} cx={318 + x * 1.95} cy={112 + y * 1.95} r="1.5" className="art-dot" />)}
+        <line x1="225" x2="515" y1="210" y2="210" className="art-cap" />
+        {candles.map(([i, h]) => (
+          <rect key={i} x={330 + i * 16} y={300 - h * 6} width="9" height={14 + (i % 3) * 6} rx="1.5" className="art-candle" />
+        ))}
+        <path d="M300 300 C 340 290, 360 270, 390 250 S 450 170, 500 150" className="art-rate" />
+      </g>
+
+      {/* The banknote circle, in front */}
+      <g clipPath="url(#note-clip)" className="art-note">
+        <circle cx="190" cy="200" r="150" className="art-note-bg" />
+        <rect x="40" y="50" width="300" height="300" fill="url(#note-hatch)" />
+        <g transform="translate(250 130)" className="art-rose">{rose.map((d, i) => <path key={i} d={d} />)}</g>
+        {/* Baobab */}
+        <g className="art-ink" transform="translate(95 150)">
+          <path d="M38 150 C 40 110, 34 80, 42 60 C 46 52, 54 52, 58 60 C 66 80, 60 110, 62 150 Z" />
+          <path d="M42 62 C 30 50, 18 48, 8 52 M46 58 C 40 40, 30 30, 20 28 M54 58 C 60 40, 72 32, 84 32 M58 62 C 70 52, 84 50, 94 56" fill="none" strokeWidth="2" />
+          {[[8, 46], [20, 24], [86, 28], [96, 50], [50, 18], [34, 34], [68, 30]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r={10 + (i % 3) * 3} fill="none" strokeWidth="1" />)}
+          <path d="M-20 150 H 140" fill="none" strokeWidth="1" />
+          <path d="M-20 158 Q 30 150, 60 158 T 140 156" fill="none" strokeWidth="0.8" />
+        </g>
+        <text x="92" y="100" className="art-serial">BFX 2026 0100</text>
+        <text x="92" y="118" className="art-specimen">SPECIMEN · NOT LEGAL TENDER</text>
+        <text x="62" y="305" className="art-value">₵100</text>
+        <circle cx="190" cy="200" r="148" fill="none" className="art-rim" />
+      </g>
+
+      {/* The connecting line and badge */}
+      <path d="M0 120 C 120 100, 200 120, 250 160 S 420 330, 560 280" className="art-thread" />
+      <circle cx="250" cy="160" r="5" className="art-thread-dot" />
+      <g transform="translate(300 335)">
+        <image href={logoPath} x="-46" y="-46" width="92" height="92" />
+      </g>
+    </svg>
+  );
+}
+
+function LearnSection() {
+  return (
+    <section className="learn" id="learn">
       <div className="wrap">
-        <h2>Hedge FX risk, or predict it.</h2>
-        <p>Buy protection against currency moves, or predict where a rate is headed.</p>
-        <div className="hero-ctas">
-          <Link href="/hedge" className="btn btn-primary">
-            Launch App <span className="arrow">→</span>
-          </Link>
+        <div className="learn-head">
+          <h2>Understand <span className="accent">currency risk</span></h2>
+          <div className="learn-dots" aria-hidden="true" />
+        </div>
+        <div className="learn-grid">
+          <CurrencyArt />
+          <div className="learn-copy">
+            <h3>Notes on the markets we cover</h3>
+            <p>
+              Our blog brings together worked examples and market notes on the naira, the cedi, the shilling and the other
+              currencies we cover. It is written for business owners and finance teams, so you can see your exposure and decide
+              how to manage it, with or without us.
+            </p>
+            <div className="learn-ctas">
+              <Link href="/blog" className="btn btn-primary">Read the blog <span className="arrow">→</span></Link>
+              <a href="https://www.linkedin.com/company/blockfinax/" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Follow us on LinkedIn <span className="arrow">→</span></a>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
+
 
 // ── Book-a-call cushion ─────────────────────────────────────────────────
 // Big brand-accent panel sitting between the tail CTA and the footer, in
@@ -1220,8 +1297,8 @@ function BookCallCushion() {
               >
                 Book a call <span className="arrow" aria-hidden="true">→</span>
               </a>
-              <Link href="/learn" className="cushion-btn ghost">
-                Read the academy <span className="arrow" aria-hidden="true">→</span>
+              <Link href="/contact" className="cushion-btn ghost">
+                Contact us <span className="arrow" aria-hidden="true">→</span>
               </Link>
             </div>
           </div>
@@ -1244,23 +1321,23 @@ function Footer() {
               BlockFinaX
             </Link>
             <p>
-              Markets for FX risk. Predict it, underwrite it to earn yield, or
-              hedge against it to protect your money.
+              FX risk solutions for emerging markets. Hedge currency risk, or
+              underwrite it to earn premiums.
             </p>
           </div>
           <div className="foot-cols">
             <div className="foot-col">
               <h5>Product</h5>
               <Link href="/apply">Request access</Link>
-              <Link href="/docs/request">Documentation</Link>
               <Link href="/hedger">For buyers</Link>
               <Link href="/liquidity-provider">For capital partners</Link>
               <Link href="/connectors">Connector Programme</Link>
             </div>
             <div className="foot-col">
               <h5>Resources</h5>
-              <Link href="/faq">FAQ</Link>
+              <Link href="/about">About</Link>
               <Link href="/learn">Academy</Link>
+              <Link href="/faq">FAQ</Link>
               <Link href="/blog">Blog</Link>
               <Link href="/contact">Contact</Link>
             </div>
@@ -1350,10 +1427,10 @@ export default function Website() {
       <PillarsSection />
       <WhoSection />
       <UseSection theme={theme} />
-      <RequestSection />
+      <TrustSection />
       <CurrenciesSection />
       <SignalSection />
-      <TailCTA />
+      <LearnSection />
       <BookCallCushion />
       <Footer />
     </div>
@@ -1361,8 +1438,7 @@ export default function Website() {
 }
 
 
-// ── Connector Programme page ─────────────────────────────────────────────
-// Shares its layout with the audience pages on the Stellar site (testnet branch).
+// ── Audience pages: short, one idea per section ─────────────────────────
 
 interface AudienceCopy {
   eyebrow: string;
@@ -1379,11 +1455,61 @@ interface AudienceCopy {
   close: string;
 }
 
+const HEDGERS: AudienceCopy = {
+  eyebrow: 'For businesses',
+  title: ['Protect your', 'margin'],
+  lede: 'When you pay or earn in another currency, a move in the rate can erase your profit. BlockFinaX lets you set the worst case in advance, for a known cost.',
+  primary: { label: 'Launch App', href: LAUNCH_APP_HREF },
+  steps: [
+    { t: 'Choose your cover', d: 'The currency, the amount, the end date and the move that worries you.' },
+    { t: 'Pay once', d: 'One premium in USDC, shown in full before you approve. No credit line, no further calls.' },
+    { t: 'Get paid if it moves', d: 'If the rate passes your strike at expiry, you receive the difference, up to your limit.' },
+  ],
+  pointsTitle: 'Why businesses use it',
+  points: [
+    { t: 'A known cost', d: 'The premium is the most protection can cost you.' },
+    { t: 'Keep the upside', d: 'If the rate moves in your favour, you simply buy at the better rate.' },
+    { t: 'Small amounts welcome', d: 'Protect a single supplier invoice, not only large contracts.' },
+  ],
+  faqs: [
+    { q: 'Who is it for?', a: 'Importers, exporters and treasury teams with costs or revenue in another currency.' },
+    { q: 'How is the rate decided?', a: 'At expiry, the contract settles against an agreed reference rate from its oracle operators, by rules written in code.' },
+    { q: 'Do I need crypto experience?', a: 'No. You sign in with email or Google and approve with a passkey. Network fees are covered.' },
+  ],
+  close: 'Ready to protect a payment?',
+};
+
+const UNDERWRITERS: AudienceCopy = {
+  eyebrow: 'For capital partners',
+  title: ['Earn from', 'currency risk'],
+  lede: 'Businesses pay premiums to protect their payments. As an underwriter, your USDC backs that protection and earns those premiums.',
+  primary: { label: 'Launch App', href: LAUNCH_APP_HREF },
+  steps: [
+    { t: 'Add USDC to a pool', d: 'Each pool covers one currency and one direction, so you know exactly what you back.' },
+    { t: 'Earn at every sale', d: 'When protection is sold from your money, you receive your share of the premium straight away.' },
+    { t: 'Withdraw what is free', d: 'Money not set aside for running cover can be withdrawn whenever you like.' },
+  ],
+  pointsTitle: 'What you control',
+  points: [
+    { t: 'Which risk', d: 'Choose the currency, the direction and the terms you back.' },
+    { t: 'How long', d: 'Set the longest cover your money backs, or stop backing new sales at any time.' },
+    { t: 'Fully reserved', d: 'The most each contract can pay is set aside when it is sold, never more than you put in.' },
+  ],
+  note: { t: 'The risk you take', d: 'If a covered rate moves past the strike, part of your reserve pays the business, up to the most that cover can pay. Only commit money you can leave in a pool until the cover it backs ends.' },
+  faqs: [
+    { q: 'Who is it for?', a: 'Funds, treasuries and individuals with USDC who want returns tied to real economic risk.' },
+    { q: 'Where do returns come from?', a: 'Only from premiums businesses pay for protection, never from new deposits.' },
+    { q: 'Can I lose money?', a: 'Yes, when covered rates move past strikes. Your loss on any contract is limited to what was reserved for it.' },
+  ],
+  close: 'Ready to put your USDC to work?',
+};
+
+
 const CONNECTORS: AudienceCopy = {
   eyebrow: 'Connector Programme',
   title: ['Introduce BlockFinaX,', 'earn on results'],
   lede: 'You know the businesses that pay or earn in other currencies, the capital looking for real returns, and the people who open doors in your market. Introduce them to BlockFinaX and earn a reward for every result.',
-  primary: { label: 'Apply', href: 'https://connector.blockfinax.com' },
+  primary: { label: 'Apply', href: CONNECTOR_PORTAL_URL },
   secondary: { label: 'Read the programme guide', href: 'https://docs.blockfinax.com/connectors' },
   steps: [
     { t: 'Apply', d: 'Create your BlockFinaX account and tell us your markets and how you can help. We review every application.' },
@@ -1479,4 +1605,67 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
   );
 }
 
+export function HedgersPage() { return <AudiencePage copy={HEDGERS} />; }
+export function UnderwritersPage() { return <AudiencePage copy={UNDERWRITERS} />; }
 export function ConnectorsPage() { return <AudiencePage copy={CONNECTORS} />; }
+
+
+// ── About ───────────────────────────────────────────────────────────────
+
+const APPROACH = [
+  { t: 'A protocol, not a counterparty', d: 'BlockFinaX connects businesses that need protection with underwriters who provide it. We build the pricing, the records and the settlement; underwriters carry the risk and earn the premiums.' },
+  { t: 'Simple to use', d: 'Sign in with email, approve with a passkey and pay in USDC. No credit line, no dealer and no network fees to manage.' },
+];
+
+export function AboutPage() {
+  useGeistFont();
+  const [theme, setTheme] = useState<Theme>('light');
+  useEffect(() => { setTheme(readStoredTheme()); window.scrollTo(0, 0); }, []);
+  const toggleTheme = () => setTheme((t) => {
+    const next: Theme = t === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
+  return (
+    <div className="bfx-landing" data-theme={theme}>
+      <TopNav theme={theme} onToggleTheme={toggleTheme} />
+      <section className="aud-hero">
+        <Guilloche />
+        <div className="wrap">
+          <div className="aud-eyebrow">About BlockFinaX</div>
+          <h1 className="aud-title">FX risk solutions for <span className="accent">emerging markets</span></h1>
+          <div className="about-why">
+            <p>
+              Businesses and investors make commitments today whose costs and returns can change tomorrow. An exchange-rate
+              move can make a supplier payment more expensive, increase the burden of foreign-currency debt or reduce the value
+              of an investment.
+            </p>
+            <p>
+              Protection lets people make those commitments with confidence. Yet the tools to manage this risk remain out of
+              reach for many. <strong>BlockFinaX exists to make that protection accessible.</strong>
+            </p>
+          </div>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap">
+          <h2 className="aud-h2">How we work</h2>
+          <div className="about-approach">
+            {APPROACH.map((a) => <div key={a.t}><h3>{a.t}</h3><p>{a.d}</p></div>)}
+          </div>
+        </div>
+      </section>
+      <section className="tail">
+        <div className="wrap">
+          <h2>Work with us.</h2>
+          <p>Businesses, underwriters, partners and development institutions: we would like to hear from you.</p>
+          <div className="hero-ctas">
+            <Link href="/contact" className="btn btn-primary">Contact us <span className="arrow">→</span></Link>
+            <a href={LAUNCH_APP_HREF} className="btn btn-ghost">Launch App</a>
+          </div>
+        </div>
+      </section>
+      <Footer />
+    </div>
+  );
+}

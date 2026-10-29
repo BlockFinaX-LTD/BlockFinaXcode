@@ -1051,7 +1051,41 @@
   .bfx-landing .guilloche { width: 100%; opacity: 0.1; }
 }
 
-/* Connector Programme page (audience layout) */
+/* ── Understand currency risk ─────────────────────────────────────────── */
+.bfx-landing .accent { color: var(--bfx-accent); }
+.bfx-landing .learn { padding: 88px 0 96px; border-top: 1px solid var(--bfx-border); }
+.bfx-landing .learn-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 36px; }
+.bfx-landing .learn-head h2 { font-size: clamp(36px, 5vw, 64px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; max-width: 12ch; }
+.bfx-landing .learn-dots {
+  flex: 0 1 420px; height: 34px; margin-top: 18px;
+  background-image: radial-gradient(circle, var(--bfx-tx) 1.6px, transparent 1.8px); background-size: 20px 17px; opacity: 0.55;
+}
+.bfx-landing .learn-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; }
+.bfx-landing .learn-art { width: 100%; height: auto; color: var(--bfx-tx); overflow: visible; }
+.bfx-landing .learn-copy h3 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
+.bfx-landing .learn-copy p { color: var(--bfx-tx-2); font-size: 17px; line-height: 1.6; max-width: 46ch; }
+.bfx-landing .learn-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.bfx-landing .art-chart-bg { fill: color-mix(in oklab, var(--bfx-accent) 16%, var(--bfx-bg)); }
+.bfx-landing .art-dot { fill: color-mix(in oklab, var(--bfx-accent) 55%, transparent); }
+.bfx-landing .art-cap { stroke: var(--bfx-accent); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.7; }
+.bfx-landing .art-candle { fill: color-mix(in oklab, var(--bfx-accent) 70%, transparent); }
+.bfx-landing .art-rate { fill: none; stroke: var(--bfx-accent-2); stroke-width: 2; }
+.bfx-landing .art-note { color: var(--bfx-tx); }
+.bfx-landing .art-note-bg { fill: color-mix(in oklab, var(--bfx-tx) 7%, var(--bfx-bg)); }
+.bfx-landing .art-rose path { fill: none; stroke: currentColor; stroke-width: 0.5; opacity: 0.45; }
+.bfx-landing .art-ink { stroke: currentColor; fill: color-mix(in oklab, var(--bfx-tx) 22%, transparent); opacity: 0.75; }
+.bfx-landing .art-serial, .bfx-landing .art-specimen { font-family: var(--bfx-mono); font-size: 9.5px; letter-spacing: 0.12em; fill: currentColor; opacity: 0.7; }
+.bfx-landing .art-value { font-family: Georgia, 'Times New Roman', serif; font-size: 54px; fill: currentColor; opacity: 0.55; }
+.bfx-landing .art-rim { stroke: currentColor; stroke-width: 1; opacity: 0.25; }
+.bfx-landing .art-thread { fill: none; stroke: var(--bfx-accent); stroke-width: 1.2; opacity: 0.6; }
+.bfx-landing .art-thread-dot { fill: var(--bfx-accent); }
+@media (max-width: 900px) {
+  .bfx-landing .learn-grid { grid-template-columns: 1fr; gap: 28px; }
+  .bfx-landing .learn-dots { display: none; }
+  .bfx-landing .learn { padding: 64px 0 72px; }
+}
+
+/* ── Audience pages (Hedgers, Underwriters) ──────────────────────────── */
 .bfx-landing .aud-hero { position: relative; overflow: hidden; padding: 150px 0 88px; }
 .bfx-landing .aud-hero .wrap { position: relative; z-index: 1; }
 .bfx-landing .aud-hero .guilloche { width: min(62%, 900px); }
@@ -1076,4 +1110,126 @@
   .bfx-landing .aud-steps, .bfx-landing .aud-points { grid-template-columns: 1fr; }
   .bfx-landing .aud-hero { padding: 120px 0 64px; }
 }
-.bfx-landing .aud-title .accent { color: var(--bfx-accent); }
+
+/* ── Why BlockFinaX matters (heading and intro above the pillars) ─────── */
+.bfx-landing .why-head { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: start; margin-bottom: 44px; }
+.bfx-landing .why-head h2 { font-size: clamp(34px, 4.6vw, 58px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; }
+.bfx-landing .why-copy p { font-size: 17.5px; line-height: 1.6; color: var(--bfx-tx-2); margin: 0 0 14px; max-width: 58ch; }
+.bfx-landing .why-copy strong { color: var(--bfx-tx); font-weight: 600; }
+@media (max-width: 900px) { .bfx-landing .why-head { grid-template-columns: 1fr; gap: 18px; margin-bottom: 30px; } }
+.bfx-landing .pillar-front { justify-content: flex-start; gap: 0; }
+.bfx-landing .pillar-front .pillar-text { margin-top: 34px; }
+.bfx-landing .pillar-front .pillar-more { margin-top: auto; }
+.bfx-landing .hero-eyebrow {
+  display: inline-block; margin-bottom: 18px; padding: 6px 12px; border-radius: 999px;
+  font-family: var(--bfx-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--bfx-accent); background: color-mix(in oklab, var(--bfx-accent) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--bfx-accent) 25%, transparent);
+}
+.bfx-landing .why-label { font-family: var(--bfx-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--bfx-tx-3); margin-bottom: 14px; }
+.bfx-landing .why-head { align-items: end; }
+.bfx-landing .why-copy p { font-size: 19px; }
+
+/* ── Why you can trust the payout: steps beside a contract ─────────────── */
+.bfx-landing .trust { padding: 88px 0 96px; border-top: 1px solid var(--bfx-border); }
+.bfx-landing .trust-split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+.bfx-landing .trust-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.bfx-landing .trust-steps button {
+  appearance: none; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--bfx-border);
+  padding: 22px 0 20px; cursor: pointer; color: inherit; font: inherit; display: block; position: relative;
+}
+.bfx-landing .trust-steps li:last-child button { border-bottom: 1px solid var(--bfx-border); }
+.bfx-landing .trust-when { display: block; font-family: var(--bfx-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bfx-tx-3); margin-bottom: 8px; transition: color .3s; }
+.bfx-landing .trust-title { display: block; font-size: clamp(22px, 2.2vw, 28px); font-weight: 600; letter-spacing: -0.02em; color: var(--bfx-tx-3); transition: color .3s; }
+.bfx-landing .trust-text { display: block; font-size: 15.5px; line-height: 1.5; color: var(--bfx-tx-2); max-height: 0; overflow: hidden; opacity: 0; transition: max-height .4s var(--bfx-ease), opacity .3s, margin .3s; }
+.bfx-landing .trust-steps button.on .trust-when { color: var(--bfx-accent); }
+.bfx-landing .trust-steps button.on .trust-title { color: var(--bfx-tx); }
+.bfx-landing .trust-steps button.on .trust-text { max-height: 80px; opacity: 1; margin-top: 8px; }
+.bfx-landing .trust-bar { position: absolute; left: 0; right: 0; top: -1px; height: 2px; }
+.bfx-landing .trust-bar i { display: block; height: 100%; width: 0; background: var(--bfx-accent); }
+.bfx-landing .trust-steps button.on .trust-bar i { width: 100%; }
+.bfx-landing .trust-steps button.on .trust-bar i.run { animation: bfx-trust-run 3.2s linear forwards; }
+@keyframes bfx-trust-run { from { width: 0; } to { width: 100%; } }
+.bfx-landing .receipt {
+  border-radius: 20px; background: var(--bfx-card); border: 1px solid var(--bfx-border);
+  box-shadow: 0 30px 60px -30px rgba(15, 30, 70, 0.35); padding: 22px 24px 18px; font-variant-numeric: tabular-nums;
+}
+.bfx-landing .receipt-h { display: flex; justify-content: space-between; align-items: center; font-family: var(--bfx-mono); font-size: 12.5px; letter-spacing: 0.06em; color: var(--bfx-tx-3); padding-bottom: 14px; border-bottom: 1px dashed var(--bfx-border-2); }
+.bfx-landing .receipt-status { padding: 4px 10px; border-radius: 999px; font-size: 11px; color: var(--bfx-accent); background: color-mix(in oklab, var(--bfx-accent) 12%, transparent); }
+.bfx-landing .receipt-status.s2 { color: #12a05a; background: color-mix(in oklab, #12a05a 14%, transparent); }
+.bfx-landing .receipt dl { margin: 6px 0 0; }
+.bfx-landing .receipt-row { display: flex; justify-content: space-between; gap: 16px; padding: 13px 10px; margin: 0 -10px; border-radius: 10px; opacity: 0.28; transition: opacity .4s, background .4s; }
+.bfx-landing .receipt-row.shown { opacity: 1; }
+.bfx-landing .receipt-row.now { background: color-mix(in oklab, var(--bfx-accent) 7%, transparent); }
+.bfx-landing .receipt-row dt { color: var(--bfx-tx-3); font-size: 14.5px; }
+.bfx-landing .receipt-row dd { margin: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.bfx-landing .receipt-row .v { color: var(--bfx-tx); font-size: 15.5px; font-weight: 600; }
+.bfx-landing .receipt-row .proof { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #12a05a; }
+.bfx-landing .receipt-foot { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--bfx-border-2); font-family: var(--bfx-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--bfx-tx-4); }
+@media (max-width: 900px) {
+  .bfx-landing .trust { padding: 64px 0 72px; }
+  .bfx-landing .trust-split { grid-template-columns: 1fr; gap: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bfx-landing .trust-text, .bfx-landing .receipt-row { transition: none; }
+}
+
+/* ── Who it is for: hover rows (the row turns blue, its photo slides in) ─── */
+.bfx-landing .ways { position: relative; overflow: hidden; padding-bottom: 0; }
+.bfx-landing .ways .wrap, .bfx-landing .ways .way-list { position: relative; z-index: 1; }
+.bfx-landing .way-list { border-top: 1px solid var(--bfx-border); margin-top: 28px; }
+.bfx-landing .way-row { display: block; color: var(--bfx-tx); text-decoration: none; border-bottom: 1px solid var(--bfx-border); transition: background .35s var(--bfx-ease), color .35s var(--bfx-ease); }
+.bfx-landing .way-in { display: grid; grid-template-columns: 0px minmax(0, 1fr) minmax(0, 1fr) 40px; align-items: start; gap: 0 32px; min-height: 200px; padding-top: 34px; padding-bottom: 34px; transition: grid-template-columns .45s var(--bfx-ease); }
+.bfx-landing .way-media { overflow: hidden; width: 100%; height: 150px; opacity: 0; transform: translateX(-16px); transition: opacity .35s var(--bfx-ease), transform .45s var(--bfx-ease); }
+.bfx-landing .way-img { width: 280px; height: 150px; object-fit: cover; display: block; border-radius: 10px 48px 10px 48px; }
+.bfx-landing .way-title { font-size: clamp(26px, 3vw, 38px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; }
+.bfx-landing .way-line { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; line-height: 1.45; color: var(--bfx-tx-2); max-width: 30ch; transition: color .35s; }
+.bfx-landing .way-arrow { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--bfx-border-2); display: inline-flex; align-items: center; justify-content: center; color: var(--bfx-tx-2); transition: background .35s, color .35s, border-color .35s; }
+@media (hover: hover) and (min-width: 901px) {
+  .bfx-landing .way-row.on { background: linear-gradient(90deg, #0b1a33, #133a7a 60%, var(--bfx-accent)); color: #fff; }
+  .bfx-landing .way-row.on .way-in { grid-template-columns: 270px minmax(0, 1fr) minmax(0, 1fr) 40px; }
+  .bfx-landing .way-row.on .way-media { opacity: 1; transform: none; }
+  .bfx-landing .way-row.on .way-line { color: rgba(255,255,255,0.88); }
+  .bfx-landing .way-row.on .way-arrow { background: #fff; color: #0b1a33; border-color: #fff; }
+}
+.bfx-landing .way-row:focus-visible { outline: 2px solid var(--bfx-accent); outline-offset: -2px; }
+@media (max-width: 900px) {
+  .bfx-landing .way-in { grid-template-columns: minmax(0, 1fr) 34px; gap: 10px 16px; min-height: 0; padding-top: 24px; padding-bottom: 24px; }
+  .bfx-landing .way-media { display: none; }
+  .bfx-landing .way-title { grid-column: 1; }
+  .bfx-landing .way-arrow { grid-column: 2; grid-row: 1; }
+  .bfx-landing .way-line { grid-column: 1 / -1; font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bfx-landing .way-in, .bfx-landing .way-media, .bfx-landing .way-row { transition: none; }
+}
+.bfx-landing .way-media { margin-right: -32px; transition: opacity .35s var(--bfx-ease), transform .45s var(--bfx-ease), margin .45s var(--bfx-ease); }
+@media (hover: hover) and (min-width: 901px) { .bfx-landing .way-row.on .way-media { margin-right: 0; } }
+@media (max-width: 900px) { .bfx-landing .way-media { margin-right: 0; } }
+@media (min-width: 901px) {
+  .bfx-landing .way-in { column-gap: 0; }
+  .bfx-landing .way-title, .bfx-landing .way-line { padding-right: 32px; }
+  .bfx-landing .way-media, .bfx-landing .way-row.on .way-media { margin-right: 0; }
+}
+@media (hover: hover) and (min-width: 901px) { .bfx-landing .way-row.on .way-in { grid-template-columns: 300px minmax(0, 1fr) minmax(0, 1fr) 40px; } }
+
+/* Receipt in brand colours */
+.bfx-landing .receipt { padding: 0 0 18px; overflow: hidden; border-color: color-mix(in oklab, var(--bfx-accent) 22%, var(--bfx-border)); box-shadow: 0 30px 60px -30px color-mix(in oklab, var(--bfx-accent) 55%, transparent); }
+.bfx-landing .receipt-h { padding: 16px 24px; border-bottom: 0; color: rgba(255,255,255,0.82); background: linear-gradient(90deg, #0b1a33, #133a7a 60%, var(--bfx-accent)); }
+.bfx-landing .receipt-status, .bfx-landing .receipt-status.s2 { color: #0b1a33; background: #ffffff; }
+.bfx-landing .receipt dl { margin: 8px 24px 0; }
+.bfx-landing .receipt-row.now { background: color-mix(in oklab, var(--bfx-accent) 9%, transparent); }
+.bfx-landing .receipt-row .proof { color: var(--bfx-accent); }
+.bfx-landing .receipt-foot { margin: 12px 24px 0; }
+
+/* ── About ─────────────────────────────────────────────────────────────── */
+.bfx-landing .about-why { margin-top: 28px; max-width: 64ch; }
+.bfx-landing .about-why p { font-size: 19px; line-height: 1.6; color: var(--bfx-tx-2); margin: 0 0 16px; }
+.bfx-landing .about-why strong { color: var(--bfx-tx); }
+.bfx-landing .about-pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; }
+.bfx-landing .about-pillar { border-top: 2px solid var(--bfx-accent); padding-top: 18px; }
+.bfx-landing .about-pillar h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: var(--bfx-accent); margin: 12px 0 10px; }
+.bfx-landing .about-pillar p, .bfx-landing .about-approach p { color: var(--bfx-tx-2); font-size: 15.5px; line-height: 1.6; }
+.bfx-landing .about-approach { display: grid; grid-template-columns: repeat(2, 1fr); gap: 34px 48px; }
+.bfx-landing .about-approach h3 { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; margin-bottom: 8px; color: var(--bfx-tx); }
+@media (max-width: 900px) { .bfx-landing .about-pillars, .bfx-landing .about-approach { grid-template-columns: 1fr; gap: 24px; } }
