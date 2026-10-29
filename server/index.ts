@@ -413,6 +413,12 @@ app.use((req, res, next) => {
     startProspectScheduler();
   }
 
+  // X signals: public posts about currency pain, searched twice a day for review.
+  {
+    const { startXSignalsScheduler } = await import("./x-signals/service");
+    startXSignalsScheduler();
+  }
+
   // The morning reading. Fetch and brief once a day, not on an interval, so it
   // stays in the morning rather than drifting round the clock.
   {

@@ -18,6 +18,7 @@ import {
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
   FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send, FileSignature, Bot, Scale,
   Handshake,
+  Radar,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -25,6 +26,7 @@ import { LoiSection } from "@/components/admin/loi-section";
 import { AgentSection } from "@/components/admin/agent-section";
 import { ComplianceSection } from "@/components/admin/compliance-section";
 import { ConnectorsSection } from "@/components/admin/connectors-section";
+import { XSignalsSection } from "@/components/admin/x-signals-section";
 
 import { DocumentsSection } from "@/components/admin/documents-section";
 
@@ -41,13 +43,14 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "docs" | "dashboard" | "agent" | "compliance" | "connectors" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "docs" | "dashboard" | "agent" | "compliance" | "connectors" | "xsignals" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   { key: "agent", label: "Agent", icon: Bot },
   { key: "compliance", label: "Compliance", icon: Scale },
   { key: "connectors", label: "Connectors", icon: Handshake },
+  { key: "xsignals", label: "X signals", icon: Radar },
   { key: "users", label: "Users", icon: Users },
   { key: "hedge", label: "Hedge", icon: Shield },
   { key: "revenue", label: "Revenue & Fees", icon: DollarSign },
@@ -2951,6 +2954,7 @@ function AdminLayout({
         {section === "agent" && <AgentSection token={adminToken} />}
         {section === "compliance" && <ComplianceSection token={adminToken} />}
         {section === "connectors" && <ConnectorsSection token={adminToken} />}
+        {section === "xsignals" && <XSignalsSection token={adminToken} />}
         {section === "protocol" && <ProtocolSection />}
       </main>
     </div>

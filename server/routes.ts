@@ -40,6 +40,7 @@ import { registerGateRoutes } from "./routes/gate";
 import { registerLoiRoutes } from "./routes/loi";
 import { registerAgentRoutes } from "./routes/agent";
 import { registerAgentChatRoutes } from "./routes/agent-chat";
+import { registerXSignalRoutes } from "./x-signals/routes";
 import { registerComplianceRoutes } from "./routes/compliance";
 import { registerLeadRoutes } from "./routes/leads";
 import { registerSignatureRoutes } from "./routes/signature";
@@ -80,6 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerLoiRoutes(app);
   registerAgentRoutes(app);
   registerAgentChatRoutes(app);
+  registerXSignalRoutes(app);
   registerComplianceRoutes(app);
   registerLeadRoutes(app);
   registerSalesRoutes(app);
