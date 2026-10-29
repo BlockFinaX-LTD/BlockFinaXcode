@@ -27,7 +27,7 @@ import {
   userAccounts, magicLinks, authSessions, webauthnCredentials, wallets,
 } from '@shared/schema';
 import { eq, and, gt, lt } from 'drizzle-orm';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto';
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -149,15 +149,39 @@ const googleClient = GOOGLE_CLIENT_ID
   ? new OAuth2Client(GOOGLE_CLIENT_ID)
   : null;
 
-// Short-lived OAuth state store (CSRF protection) — state → expiresAt
-const oauthStateStore = new Map<string, number>();
-/** Which of our sites each Google sign-in started on, so it returns there (keyed like oauthStateStore). */
-const oauthReturnOrigin = new Map<string, string>();
-// Clean up expired states every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, exp] of oauthStateStore) if (exp < now) { oauthStateStore.delete(k); oauthReturnOrigin.delete(k); }
-}, 10 * 60 * 1000);
+/**
+ * Google sign-in state, signed rather than remembered.
+ *
+ * The state carries an expiry, whether the flow runs in a popup, and which of our sites
+ * it started on, signed with a key derived from the Google client secret. Nothing is kept
+ * in server memory, so a restart or a second instance between leaving for Google and
+ * coming back no longer loses the user (it used to send them to the app instead of the
+ * site they started on). The origin is checked against our allowlist again on return.
+ */
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const stateKey = () => createHmac('sha256', GOOGLE_CLIENT_SECRET).update('bfx-oauth-state-v1').digest();
+const b64url = (b: Buffer) => b.toString('base64url');
+
+export function signOAuthState(v: { origin: string; popup: boolean }, now = Date.now()): string {
+  const body = b64url(Buffer.from(JSON.stringify({ n: generateToken(12), e: now + OAUTH_STATE_TTL_MS, o: v.origin, p: v.popup ? 1 : 0 })));
+  return `${body}.${b64url(createHmac('sha256', stateKey()).update(body).digest())}`;
+}
+
+export function readOAuthState(state: unknown, now = Date.now()): { origin: string; popup: boolean } | null {
+  if (typeof state !== 'string' || state.length > 600) return null;
+  const [body, sig] = state.split('.');
+  if (!body || !sig) return null;
+  const want = createHmac('sha256', stateKey()).update(body).digest();
+  const got = Buffer.from(sig, 'base64url');
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
+  try {
+    const v = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (typeof v.e !== 'number' || now > v.e || typeof v.o !== 'string') return null;
+    return { origin: v.o, popup: v.p === 1 };
+  } catch {
+    return null;
+  }
+}
 
 export function getAppOrigin(req: any): string {
   const configured = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').trim();
@@ -454,13 +478,9 @@ export function registerAuthRoutes(app: Express) {
     const origin = getAppOrigin(req);
     const redirectUri = `${origin}/api/auth/google/callback`;
     const isPopup = req.query.popup === '1';
-    // Encode popup flag into the state token so we can detect it in the callback
-    const stateToken = generateToken(24);
-    const state = isPopup ? `${stateToken}|popup` : stateToken;
-    oauthStateStore.set(state, Date.now() + 10 * 60 * 1000); // 10-min expiry
     // Google returns to the one registered callback on the app; the user is then sent
     // back to the site they started on (an allowlisted origin, never a free-form URL).
-    oauthReturnOrigin.set(state, requestSiteOrigin(req));
+    const state = signOAuthState({ origin: requestSiteOrigin(req), popup: isPopup });
 
     const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
     const url = client.generateAuthUrl({
@@ -480,10 +500,10 @@ export function registerAuthRoutes(app: Express) {
   app.get('/api/auth/google/callback', async (req, res) => {
     const { code, state, error } = req.query as Record<string, string>;
 
-    // Detect popup mode from state suffix
-    const isPopup = typeof state === 'string' && state.endsWith('|popup');
-
-    const back = (typeof state === 'string' && oauthReturnOrigin.get(state)) || '';
+    const verified = readOAuthState(state);
+    const isPopup = !!verified?.popup;
+    // Only our own sites; anything else (or an unreadable state) returns to the app.
+    const back = verified && getPasskeyOrigins(req).includes(verified.origin) ? verified.origin : '';
     const errorRedirect = (msg: string) =>
       isPopup
         ? res.redirect(`${back}/auth/google/done?popup=1&error=${encodeURIComponent(msg)}`)
@@ -492,13 +512,8 @@ export function registerAuthRoutes(app: Express) {
     if (error === 'access_denied') return isPopup ? res.redirect(`${back}/auth/google/done?popup=1&error=access_denied`) : res.redirect(`${back}/auth`);
     if (error) return errorRedirect(error);
 
-    // Validate CSRF state (look up exact state string including |popup suffix)
-    const stateExpiry = oauthStateStore.get(state);
-    if (!stateExpiry || Date.now() > stateExpiry) {
-      return errorRedirect('invalid_state');
-    }
-    oauthStateStore.delete(state);
-    oauthReturnOrigin.delete(state);
+    // The state must be ours, signed and unexpired (CSRF protection).
+    if (!verified) return errorRedirect('invalid_state');
 
     if (!code) return errorRedirect('no_code');
 
