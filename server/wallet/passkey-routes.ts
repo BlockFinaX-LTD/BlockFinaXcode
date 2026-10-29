@@ -299,7 +299,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const sessionToken = await createSession(passkey.userId, undefined, PASSKEY_SESSION_HOURS);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, passkey.userId));
     const provisioned = await provision(passkey.userId, (await findPasskey(passkey.userId)) ?? passkey);
-    res.json({ sessionToken, user: { id: user.id, name: user.name }, credentialId: passkey.credentialId, ...provisioned });
+    res.json({ sessionToken, user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey.credentialId, ...provisioned });
   }));
 
   app.get("/api/wallet/passkey/me", wrap(async (req, res) => {
