@@ -573,6 +573,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             <a href="#use">Products</a>
             <Link href="/hedger">Hedgers</Link>
             <Link href="/liquidity-provider">Underwriters</Link>
+            <Link href="/connectors">Connectors</Link>
             <Link href="/learn">Academy</Link>
             <div
               className="nav-dropdown"
@@ -641,6 +642,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </Link>
             <Link href="/liquidity-provider" className="nav-mobile-link" onClick={closeMobile}>
               Underwriters
+            </Link>
+            <Link href="/connectors" className="nav-mobile-link" onClick={closeMobile}>
+              Connectors
             </Link>
             <Link href="/learn" className="nav-mobile-link" onClick={closeMobile}>
               Academy
@@ -1251,6 +1255,7 @@ function Footer() {
               <Link href="/docs/request">Documentation</Link>
               <Link href="/hedger">For buyers</Link>
               <Link href="/liquidity-provider">For capital partners</Link>
+              <Link href="/connectors">Connector Programme</Link>
             </div>
             <div className="foot-col">
               <h5>Resources</h5>
@@ -1354,3 +1359,124 @@ export default function Website() {
     </div>
   );
 }
+
+
+// ── Connector Programme page ─────────────────────────────────────────────
+// Shares its layout with the audience pages on the Stellar site (testnet branch).
+
+interface AudienceCopy {
+  eyebrow: string;
+  title: [string, string];
+  lede: string;
+  primary: { label: string; href: string };
+  /** Replaces "Talk to us" beside the main button. */
+  secondary?: { label: string; href: string };
+  steps: { t: string; d: string }[];
+  points: { t: string; d: string }[];
+  pointsTitle: string;
+  note?: { t: string; d: string };
+  faqs: { q: string; a: string }[];
+  close: string;
+}
+
+const CONNECTORS: AudienceCopy = {
+  eyebrow: 'Connector Programme',
+  title: ['Introduce BlockFinaX,', 'earn on results'],
+  lede: 'You know the businesses that pay or earn in other currencies, the capital looking for real returns, and the people who open doors in your market. Introduce them to BlockFinaX and earn a reward for every result.',
+  primary: { label: 'Apply', href: 'https://connector.blockfinax.com' },
+  secondary: { label: 'Read the programme guide', href: 'https://docs.blockfinax.com/connectors' },
+  steps: [
+    { t: 'Apply', d: 'Create your BlockFinaX account and tell us your markets and how you can help. We review every application.' },
+    { t: 'Agree and train', d: 'Once accepted, agree to the programme terms and complete four short lessons.' },
+    { t: 'Introduce and earn', d: 'Register each organisation before you introduce it, share your referral link and follow your rewards in your portal.' },
+  ],
+  pointsTitle: 'Who it is for',
+  points: [
+    { t: 'Connectors', d: 'Consultants, bankers, advisers and community leaders with relationships in their market.' },
+    { t: 'Independent contractors', d: 'People who take on paid pieces of work, such as research, events and onboarding support.' },
+    { t: 'Specialists', d: 'Regulatory, banking and market experts who can open doors to approvals, partners and new countries.' },
+  ],
+  note: { t: 'How rewards work', d: 'You register every introduction in your portal first, and BlockFinaX approves it in writing with the reward that applies. That way it is always clear what you have earned. Rewards are paid every quarter.' },
+  faqs: [
+    { q: 'Do I need to be a customer?', a: 'No. Anyone can apply. You create a free BlockFinaX account as part of applying.' },
+    { q: 'Do I need crypto experience?', a: 'No. You sign in with email or Google. The training covers what you need to explain BlockFinaX well.' },
+    { q: 'Who gets credit for an introduction?', a: 'The first connector to register an organisation, once BlockFinaX approves it. Registering before you introduce protects you.' },
+    { q: 'How long does a review take?', a: 'Usually a few working days. We email you when your application is accepted.' },
+  ],
+  close: 'Ready to join?',
+};
+
+function AudiencePage({ copy }: { copy: AudienceCopy }) {
+  useGeistFont();
+  const [theme, setTheme] = useState<Theme>('light');
+  useEffect(() => { setTheme(readStoredTheme()); window.scrollTo(0, 0); }, []);
+  const toggleTheme = () => setTheme((t) => {
+    const next: Theme = t === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
+  return (
+    <div className="bfx-landing" data-theme={theme}>
+      <TopNav theme={theme} onToggleTheme={toggleTheme} />
+      <section className="aud-hero">
+        <Guilloche />
+        <div className="wrap">
+          <div className="aud-eyebrow">{copy.eyebrow}</div>
+          <h1 className="aud-title">{copy.title[0]} <span className="accent">{copy.title[1]}</span></h1>
+          <p className="aud-lede">{copy.lede}</p>
+          <div className="hero-ctas">
+            {copy.primary.href.startsWith('http')
+              ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
+              : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
+            {copy.secondary
+              ? <a href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</a>
+              : <Link href="/contact" className="btn btn-ghost">Talk to us</Link>}
+          </div>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap">
+          <h2 className="aud-h2">How it works</h2>
+          <ol className="aud-steps">
+            {copy.steps.map((s, i) => (
+              <li key={s.t}><span className="aud-n">{String(i + 1).padStart(2, '0')}</span><h3>{s.t}</h3><p>{s.d}</p></li>
+            ))}
+          </ol>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap">
+          <h2 className="aud-h2">{copy.pointsTitle}</h2>
+          <div className="aud-points">
+            {copy.points.map((p) => <div key={p.t} className="aud-point"><h3>{p.t}</h3><p>{p.d}</p></div>)}
+          </div>
+          {copy.note && <div className="aud-note"><b>{copy.note.t}.</b> {copy.note.d}</div>}
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap">
+          <h2 className="aud-h2">Questions</h2>
+          <div className="aud-faqs">
+            {copy.faqs.map((f) => <details key={f.q}><summary>{f.q}</summary><p>{f.a}</p></details>)}
+          </div>
+        </div>
+      </section>
+      <section className="tail">
+        <div className="wrap">
+          <h2>{copy.close}</h2>
+          <div className="hero-ctas">
+            {copy.primary.href.startsWith('http')
+              ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
+              : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
+            {copy.secondary
+              ? <a href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</a>
+              : <Link href="/contact" className="btn btn-ghost">Talk to us</Link>}
+          </div>
+        </div>
+      </section>
+      <Footer />
+    </div>
+  );
+}
+
+export function ConnectorsPage() { return <AudiencePage copy={CONNECTORS} />; }
