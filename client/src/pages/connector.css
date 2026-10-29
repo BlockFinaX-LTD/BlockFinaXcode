@@ -4,6 +4,7 @@
  */
 .bx-cp-tabs { display: none; }
 @media (max-width: 860px) {
+  .bx-cp-rail { display: none !important; }
   .bx-cp-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 6; }
   .bx-cp-tabs button { flex: none; border: 1px solid var(--line-2); background: var(--panel); color: var(--text-2); border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 13px; cursor: pointer; }
   .bx-cp-tabs button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -75,3 +76,56 @@
 .bx-cp-steps .n { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue); font-weight: 700; }
 .bx-cp-steps b { display: block; }
 .bx-cp-steps span { color: var(--muted); font-size: 13.5px; }
+
+/* Rail: icons with their label underneath */
+.bx-cp-rail { flex: none; width: 92px; background: var(--panel); border-right: 1px solid var(--line); padding: 18px 6px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; position: sticky; top: 0; height: 100dvh; overflow-y: auto; }
+.bx-cp-mark { width: 34px; height: 34px; margin: 0 0 18px; }
+.bx-cp-ri { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 78px; padding: 11px 4px 10px; border: 1px solid transparent; border-radius: 12px; background: none; color: var(--text-2); font-size: 12px; font-weight: 500; cursor: pointer; }
+.bx-cp-ri svg { width: 22px; height: 22px; stroke-width: 1.7; }
+.bx-cp-ri:hover { background: var(--soft); }
+.bx-cp-ri.on { color: var(--blue); background: var(--blue-soft); border-color: color-mix(in srgb, var(--blue) 35%, transparent); }
+.bx-cp-ri.small { padding: 9px 4px; }
+.bx-cp-count { position: absolute; top: 5px; right: 14px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.bx-cp-rail-foot { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.bx-cp-testnet { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--amber-text); background: color-mix(in srgb, var(--amber-text) 12%, transparent); border-radius: 6px; padding: 3px 6px; margin-bottom: 6px; }
+.bx-cp-avatar { width: 40px; height: 40px; margin-top: 8px; border-radius: 12px; border: 0; background: var(--blue); color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
+
+/* Home header */
+.bx-cp-welcome { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.bx-cp-welcome h1 { font-size: clamp(24px, 3vw, 30px); font-weight: 700; letter-spacing: -0.015em; margin: 0; }
+.bx-cp-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 12px; font-size: 13.5px; font-weight: 500; }
+.bx-cp-badge svg { width: 15px; height: 15px; }
+.bx-cp-badge.green { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.bx-cp-badge.amber { color: var(--amber-text); background: color-mix(in srgb, var(--amber-text) 12%, transparent); }
+.bx-cp-badge.blue { color: var(--blue); background: var(--blue-soft); }
+.bx-cp-badge.grey { color: var(--muted); background: var(--soft); }
+
+/* Underlined tabs inside a page */
+.bx-cp-subtabs { display: flex; gap: 28px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.bx-cp-subtabs button { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 0 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font-size: 15px; font-weight: 500; cursor: pointer; }
+.bx-cp-subtabs button:hover { color: var(--text); }
+.bx-cp-subtabs button.on { color: var(--blue); border-bottom-color: var(--blue); }
+.bx-cp-subtabs .n { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--line); color: var(--text-2); font-size: 12.5px; line-height: 22px; text-align: center; }
+.bx-cp-embedded { display: flex; flex-direction: column; gap: 20px; }
+.bx-cp-embedded .bx-cp-h1 { display: none; }
+
+/* Card rows */
+.bx-cp-items { display: grid; gap: 12px; }
+.bx-cp-item { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 16px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 20px 14px 16px; }
+.bx-cp-item .ic { width: 44px; height: 44px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); display: grid; place-items: center; color: var(--text-2); }
+.bx-cp-item .ic svg { width: 20px; height: 20px; }
+.bx-cp-item .body { display: grid; gap: 3px; min-width: 0; }
+.bx-cp-item .t { font-weight: 600; font-size: 15.5px; overflow-wrap: anywhere; }
+.bx-cp-item .s { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.bx-cp-item .meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 13.5px; white-space: nowrap; }
+@media (max-width: 680px) {
+  .bx-cp-item { grid-template-columns: 40px minmax(0, 1fr); padding: 14px; }
+  .bx-cp-item .ic { width: 40px; height: 40px; }
+  .bx-cp-item .meta { grid-column: 2; flex-wrap: wrap; gap: 10px; white-space: normal; }
+}
+
+/* Ask Finax tab on the right edge */
+.bx-cp-ask { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 50; writing-mode: vertical-rl; display: flex; align-items: center; gap: 8px; padding: 14px 9px; border: 1px solid var(--line-2); border-right: 0; border-radius: 12px 0 0 12px; background: var(--panel); color: var(--text); font-size: 13.5px; font-weight: 600; cursor: pointer; box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06); }
+.bx-cp-ask svg { width: 16px; height: 16px; color: var(--blue); transform: rotate(90deg); }
+.bx-cp-ask:hover { color: var(--blue); }
+@media (max-width: 860px) { .bx-cp-ask { top: auto; bottom: 18px; transform: none; padding: 12px 8px; } }

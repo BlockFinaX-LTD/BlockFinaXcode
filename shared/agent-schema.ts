@@ -24,11 +24,12 @@ import { z } from "zod";
  *   public    anonymous website visitor — product information only
  *   customer  signed-in user — their own account, and nobody else's
  *   internal  admin — the whole business
+ *   connector connector portal member — the programme, and their own progress
  *
  * Separation is by tool set, not by instruction. A customer agent has no tool
  * that can name another wallet, so no phrasing gets it to try.
  */
-export const AGENT_SCOPES = ["internal", "public", "customer"] as const;
+export const AGENT_SCOPES = ["internal", "public", "customer", "connector"] as const;
 export type AgentScope = (typeof AGENT_SCOPES)[number];
 
 /**

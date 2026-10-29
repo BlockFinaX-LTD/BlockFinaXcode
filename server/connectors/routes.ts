@@ -17,6 +17,8 @@
  *   GET  /api/v2/connectors/offers                   open offers for my kind, and my responses
  *   POST /api/v2/connectors/offers/:id/respond       say I am interested, with a note
  *   POST /api/v2/connectors/offers/:id/withdraw
+ *   POST /api/v2/connectors/finax                    ask Finax, with this member's own brief
+ *   GET  /api/v2/connectors/finax/:threadId          the conversation so far
  * Any signed-in user:
  *   POST /api/v2/connectors/attribute                credit a new account to a referral code
  * Admin (x-admin-token):
@@ -35,6 +37,11 @@
  *   POST /api/v2/admin/connector-offers/:id/responses/:userId  selected or not_selected
  */
 import type { Express, Request, Response } from "express";
+import { and, eq } from "drizzle-orm";
+import { db as appDb } from "../db";
+import { agentMessages, chatSchema } from "@shared/agent-schema";
+import { agentConfigured, fence, runAgent } from "../agent/runtime";
+import { connectorBrief } from "./finax";
 import { ApplicationError } from "@shared/domain/types";
 import {
   AGREEMENTS, MODULES, areaByKey, moduleById,
@@ -186,6 +193,18 @@ async function loadReferrals(getServices: Deps["getServices"], connectorId: numb
   }
   return list;
 }
+
+/** Finax questions per member per hour. Each one carries the whole programme brief. */
+const FINAX_PER_HOUR = 40;
+const finaxHits = new Map<number, { count: number; resetAt: number }>();
+function finaxLimited(uid: number) {
+  const now = Date.now();
+  const e = finaxHits.get(uid);
+  if (!e || now > e.resetAt) { finaxHits.set(uid, { count: 1, resetAt: now + 3_600_000 }); return false; }
+  e.count += 1;
+  return e.count > FINAX_PER_HOUR;
+}
+const finaxThread = (uid: number, threadId: string) => `con_${uid}_${threadId}`.slice(0, 120);
 
 export function registerConnectorRoutes(app: Express, d: Deps) {
   // ── Members ───────────────────────────────────────────────────────────────
@@ -835,6 +854,65 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     if (!rowCount) throw bad("Engagement not found or already closed");
     res.json({ ok: true });
   }));
+
+  // ── Finax ──────────────────────────────────────────────────────────────
+  app.post("/api/v2/connectors/finax", d.wrap(async (req, res) => {
+    const uid = await d.userId(req);
+    if (!agentConfigured()) throw bad("Finax isn't available right now.");
+    const parsed = chatSchema.safeParse(req.body);
+    if (!parsed.success) throw bad("Write a question for Finax");
+    if (finaxLimited(uid)) throw bad("You've asked Finax a lot this hour. Please try again a little later.");
+    const thread = finaxThread(uid, parsed.data.threadId);
+
+    const m = await getMember(uid);
+    const r = await readiness(uid, m);
+    const db = await connectorDb();
+    const counts = m
+      ? (await db.query(
+          `SELECT
+             (SELECT count(*) FROM connector_registrations WHERE user_id = $1)::int AS registrations,
+             (SELECT count(*) FROM connector_registrations WHERE user_id = $1 AND status IN ('approved','live'))::int AS approved,
+             (SELECT count(*) FROM connector_referrals WHERE connector_user_id = $1)::int AS referrals,
+             (SELECT count(*) FROM connector_engagements WHERE user_id = $1 AND status = 'offered')::int AS offers,
+             (SELECT count(*) FROM connector_offers o WHERE o.status = 'open' AND (o.closes_on IS NULL OR o.closes_on >= current_date)
+                AND o.audience IN ('all', $2)
+                AND NOT EXISTS (SELECT 1 FROM connector_offer_responses x WHERE x.offer_id = o.id AND x.user_id = $1))::int AS new_offers`,
+          [uid, m.kind],
+        )).rows[0]
+      : null;
+    const regs = m
+      ? (await db.query(`SELECT organisation, area, status, reward_terms, created_at FROM connector_registrations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30`, [uid])).rows
+      : [];
+    const brief = connectorBrief({
+      member: m ? { kind: m.kind, fullName: m.full_name, status: m.status, country: m.country, areas: m.areas ?? [] } : null,
+      document: m ? docFor(m) : "connector",
+      signed: r.signed, passed: r.passed, missing: r.missing, counts,
+      registrations: regs.map((x: any) => ({ organisation: x.organisation, area: x.area, status: x.status, rewardTerms: x.reward_terms, createdAt: x.created_at.toISOString() })),
+    });
+
+    const history = await appDb.select().from(agentMessages)
+      .where(and(eq(agentMessages.threadId, thread), eq(agentMessages.scope, "connector")))
+      .orderBy(agentMessages.id).limit(30);
+    await appDb.insert(agentMessages).values({ threadId: thread, scope: "connector", role: "user", content: parsed.data.message });
+    const result = await runAgent({
+      scope: "connector", trigger: "chat", maxTokens: 1024, systemExtra: brief, retrieveFor: parsed.data.message,
+      messages: [
+        ...history.map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
+        { role: "user" as const, content: fence("connector", parsed.data.message) },
+      ],
+    });
+    const [saved] = await appDb.insert(agentMessages).values({
+      threadId: thread, scope: "connector", role: "assistant",
+      content: result.text || "Sorry, I didn't catch that.", toolCalls: result.toolCalls, runId: result.runId,
+    }).returning();
+    res.json({ reply: saved.content, id: saved.id });
+  }));
+
+  app.get("/api/v2/connectors/finax/:threadId", d.wrap(async (req, res) => {
+    const uid = await d.userId(req);
+    const rows = await appDb.select().from(agentMessages)
+      .where(and(eq(agentMessages.threadId, finaxThread(uid, String(req.params.threadId))), eq(agentMessages.scope, "connector")))
+      .orderBy(agentMessages.id).limit(60);
+    res.json(rows.map((h) => ({ id: h.id, role: h.role, content: h.content })));
+  }));
 }
-
-

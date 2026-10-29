@@ -20,7 +20,7 @@ import { AgentMarkdown } from "@/components/agent-markdown";
 // storage directly would eventually send an expired token.
 import { storedSessionToken } from "@/lib/wallets/passkey-wallet";
 
-type Scope = "public" | "customer";
+type Scope = "public" | "customer" | "connector";
 
 interface Msg {
   id: number | string;
@@ -39,6 +39,11 @@ const SUGGESTIONS: Record<Scope, string[]> = {
     "How are my deposits doing?",
     "Show my recent transactions",
   ],
+  connector: [
+    "What should I do next?",
+    "How do I register a prospect?",
+    "How are rewards paid?",
+  ],
 };
 
 const GREETING: Record<Scope, string> = {
@@ -48,6 +53,15 @@ const GREETING: Record<Scope, string> = {
   customer:
     "I can look up your cover, your deposits and your transactions, and explain anything that " +
     "isn't clear. What can I help with?",
+  connector:
+    "I can walk you through the programme, your next steps, your agreement and the training, " +
+    "and explain BlockFinaX so you can introduce it well. What can I help with?",
+};
+
+const ENDPOINT: Record<Scope, string> = {
+  public: "/api/chat/public",
+  customer: "/api/chat/customer",
+  connector: "/api/v2/connectors/finax",
 };
 
 /** Where a visitor's name is kept. Absent means never asked; empty means skipped. */
@@ -71,8 +85,23 @@ function storedName(): string | null {
 
 
 
-export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
-  const [open, setOpen] = useState(false);
+/**
+ * `open` and `onOpenChange` let a page open Finax from its own menu. `launcher="none"`
+ * hides the round button, for pages that place their own way in.
+ */
+export function FinaxChat({ scope = "public", open: openProp, onOpenChange, launcher = "button" }: {
+  scope?: Scope;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  launcher?: "button" | "none";
+}) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = useCallback((next: boolean | ((o: boolean) => boolean)) => {
+    const value = typeof next === "function" ? next(open) : next;
+    setOpenState(value);
+    onOpenChange?.(value);
+  }, [open, onOpenChange]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -85,7 +114,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
   // asking them to introduce themselves would read as the product forgetting
   // who they are. Null means "not answered yet".
   const [name, setName] = useState<string | null>(() =>
-    scope === "customer" ? "" : storedName(),
+    scope === "public" ? storedName() : "",
   );
   const [nameDraft, setNameDraft] = useState("");
   // Only ever asked at the very start of a conversation, and only once the
@@ -125,11 +154,11 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
     }
   });
 
-  const endpoint = scope === "customer" ? "/api/chat/customer" : "/api/chat/public";
+  const endpoint = ENDPOINT[scope];
 
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
-    if (scope === "customer") {
+    if (scope !== "public") {
       try {
         h.Authorization = `Bearer ${storedSessionToken() ?? ""}`;
       } catch {
@@ -174,7 +203,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
         body: JSON.stringify({ threadId, message, visitorName: name || undefined }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message || "Something went wrong.");
+      if (!res.ok) throw new Error(body.error?.message || body.message || "Something went wrong.");
       setMessages((m) => [...m, { id: body.id ?? `a${Date.now()}`, role: "assistant", content: body.reply }]);
       if (body.offerFollowUp) setFollowUp(true);
     } catch (e: any) {
@@ -197,7 +226,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
   return (
     <>
       {/* Launcher */}
-      <button
+      {launcher === "button" && <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close Finax" : "Chat with Finax"}
         className={cn(
@@ -207,7 +236,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
         )}
       >
         {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-6 w-6" />}
-      </button>
+      </button>}
 
       {open && (
         <div
@@ -215,7 +244,9 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
             "fixed z-[60] flex flex-col overflow-hidden bg-card text-card-foreground shadow-2xl",
             // Full-screen on a phone, panel on a desktop.
             "inset-0 rounded-none",
-            "sm:inset-auto sm:bottom-24 sm:right-5 sm:h-[32rem] sm:w-[23rem] sm:rounded-2xl sm:border sm:border-border",
+            launcher === "button"
+              ? "sm:inset-auto sm:bottom-24 sm:right-5 sm:h-[32rem] sm:w-[23rem] sm:rounded-2xl sm:border sm:border-border"
+              : "sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[36rem] sm:w-[25rem] sm:rounded-2xl sm:border sm:border-border",
           )}
         >
           {/* Header */}
@@ -226,7 +257,7 @@ export function FinaxChat({ scope = "public" }: { scope?: Scope }) {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-tight">Finax</p>
               <p className="text-[11px] text-white/70">
-                {scope === "customer" ? "Your account assistant" : "BlockFinaX assistant"}
+                {scope === "customer" ? "Your account assistant" : scope === "connector" ? "Your programme guide" : "BlockFinaX assistant"}
               </p>
             </div>
             <button onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg p-1.5 hover:bg-white/10">

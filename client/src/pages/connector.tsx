@@ -10,7 +10,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BookOpen, Briefcase, Megaphone, Check, Circle, Copy, FileSignature, FolderOpen, Gauge, LogOut, Moon, Sun, UserRound, Users, Wallet, Building2,
+  Banknote, BookOpen, Briefcase, Megaphone, Check, CheckCircle2, Circle, Copy, FileSignature, FolderOpen, GraduationCap, Home, LogOut, Moon,
+  Sparkles, Sun, UserPlus, UserRound, Building2,
 } from 'lucide-react';
 import {
   AGREEMENTS, AREAS, COMPANY, LEDGER_LABELS, MATERIALS, MODULES, PASS_MARK, areaByKey,
@@ -20,6 +21,7 @@ import { COUNTRIES, PRIORITY_COUNTRIES } from '@shared/onboarding';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { rememberReturnPath, useIdentity } from '@/lib/identity';
 import { Loading, Note, Spin, Tag } from '@/components/v2/ui';
+import { FinaxChat } from '@/components/finax-chat';
 import logoPath from '@/assets/logo.png';
 import '@/components/v2/workspace.css';
 import './connector.css';
@@ -123,46 +125,60 @@ function useTheme(): ['light' | 'dark', () => void] {
 
 // ── Portal ────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'offers' | 'agreement' | 'training' | 'prospects' | 'referrals' | 'rewards' | 'engagements' | 'materials' | 'profile';
+type Tab = 'home' | 'prospects' | 'engagements' | 'offers' | 'referrals' | 'training' | 'materials' | 'rewards' | 'profile' | 'agreement';
 
-// Daily work first, then learning and account. Agreement and Training lead the list until
-// they are done; a signed agreement leaves the menu and stays reachable from Profile.
-const NAV: { key: Tab; label: string; icon: typeof Gauge; contractorOnly?: boolean }[] = [
-  { key: 'overview', label: 'Overview', icon: Gauge },
-  { key: 'agreement', label: 'Agreement', icon: FileSignature },
-  { key: 'training', label: 'Training', icon: BookOpen },
-  { key: 'prospects', label: 'Prospects', icon: Building2 },
-  { key: 'referrals', label: 'Referrals', icon: Users },
-  { key: 'offers', label: 'Offers', icon: Megaphone },
-  { key: 'engagements', label: 'Engagements', icon: Briefcase, contractorOnly: true },
-  { key: 'rewards', label: 'Rewards', icon: Wallet },
-  { key: 'materials', label: 'Materials', icon: FolderOpen },
-  { key: 'profile', label: 'Profile', icon: UserRound },
+/** Paths in the address bar. Older paths still open the right page. */
+const PATHS: Record<string, Tab> = {
+  '': 'home', overview: 'home', prospects: 'prospects', engagements: 'engagements', offers: 'offers', referrals: 'referrals',
+  learn: 'training', training: 'training', materials: 'materials', earnings: 'rewards', rewards: 'rewards', profile: 'profile', agreement: 'agreement',
+};
+const PATH_OF: Record<Tab, string> = {
+  home: '', prospects: 'prospects', engagements: 'engagements', offers: 'offers', referrals: 'referrals',
+  training: 'learn', materials: 'materials', rewards: 'earnings', profile: 'profile', agreement: 'agreement',
+};
+
+type Section = 'home' | 'offers' | 'referrals' | 'learn' | 'earnings' | 'profile';
+const RAIL: { key: Section; label: string; icon: typeof Home; to: Tab }[] = [
+  { key: 'home', label: 'Home', icon: Home, to: 'home' },
+  { key: 'offers', label: 'Offers', icon: Megaphone, to: 'offers' },
+  { key: 'referrals', label: 'Referrals', icon: UserPlus, to: 'referrals' },
+  { key: 'learn', label: 'Learn', icon: GraduationCap, to: 'training' },
+  { key: 'earnings', label: 'Earnings', icon: Banknote, to: 'rewards' },
+  { key: 'profile', label: 'Profile', icon: UserRound, to: 'profile' },
 ];
 
-function menuFor(me: Me, contractor: boolean) {
-  const trained = MODULES.filter((m) => m.required).every((m) => me.lessons.some((l) => l.id === m.id && l.passed));
-  const items = NAV.filter((n) => (!n.contractorOnly || contractor) && !(n.key === 'agreement' && me.agreement.signed));
-  if (!trained) return items;
-  // Once training is passed it moves down beside Materials, as reference.
-  const training = items.find((n) => n.key === 'training')!;
-  const rest = items.filter((n) => n.key !== 'training');
-  rest.splice(rest.findIndex((n) => n.key === 'materials'), 0, training);
-  return rest;
+/** Which rail item a page belongs to. A signed agreement is opened from Profile; an unsigned one from Home. */
+function sectionOf(tab: Tab, me: Me): Section {
+  if (tab === 'home' || tab === 'prospects' || tab === 'engagements') return 'home';
+  if (tab === 'training' || tab === 'materials') return 'learn';
+  if (tab === 'rewards') return 'earnings';
+  if (tab === 'agreement') return me.agreement.signed ? 'profile' : 'home';
+  return tab;
+}
+
+function StatusBadge({ me }: { me: Me }) {
+  const s = me.member!.status;
+  const [tone, text] =
+    s === 'applied' ? ['amber', 'Application under review']
+    : s === 'paused' ? ['amber', 'Paused']
+    : s === 'ended' || s === 'declined' ? ['grey', 'Not active']
+    : me.ready ? ['green', me.member!.kind === 'contractor' ? 'Active contractor' : 'Active connector']
+    : ['blue', 'Setup in progress'];
+  return <span className={`bx-cp-badge ${tone}`}>{tone === 'green' ? <CheckCircle2 /> : <Circle />}{text}</span>;
 }
 
 export default function ConnectorPortal() {
   const identity = useIdentity();
   const [location, setLocation] = useLocation();
   const [theme, flipTheme] = useTheme();
+  const [finax, setFinax] = useState(false);
   const signedIn = !!(identity.signedIn ?? identity.isAuthenticated);
   const ready = identity.ready ?? true;
 
   const me = useQuery<Me>({ queryKey: ['connector-me'], queryFn: () => api<Me>('/api/v2/connectors/me'), enabled: signedIn, staleTime: 30_000 });
 
-  const tabFromPath = (location.slice(BASE.length).split('/').filter(Boolean)[0] ?? 'overview') as Tab;
-  const tab: Tab = NAV.some((n) => n.key === tabFromPath) ? tabFromPath : 'overview';
-  const go = (t: Tab) => setLocation(`${BASE}/${t === 'overview' ? '' : t}`.replace(/\/$/, '') || '/');
+  const tab: Tab = PATHS[location.slice(BASE.length).split('/').filter(Boolean)[0] ?? ''] ?? 'home';
+  const go = (t: Tab) => { setLocation(`${BASE}/${PATH_OF[t]}`.replace(/\/$/, '') || '/'); window.scrollTo(0, 0); };
 
   const signIn = () => { rememberReturnPath(window.location.pathname); setLocation('/auth'); };
 
@@ -178,46 +194,101 @@ export default function ConnectorPortal() {
   if (!data.member) return <div className="bx" data-theme={theme}><ApplyPage email={identity.user?.email ?? null} /></div>;
 
   const contractor = data.member.kind === 'contractor';
-  const nav = menuFor(data, contractor);
-  // A signed agreement is opened from Profile, so Profile stays highlighted while it is shown.
-  const current: Tab = tab === 'agreement' && data.agreement.signed ? 'profile' : tab;
+  const section = sectionOf(tab, data);
+  const initial = (data.member.fullName.trim()[0] ?? 'B').toUpperCase();
+  const badge = (key: Section) =>
+    key === 'offers' ? data.counts?.new_offers : key === 'home' && contractor ? data.counts?.offers : 0;
+  const safeTab: Tab = tab === 'engagements' && !contractor ? 'home' : tab;
 
   return (
-    <div className="bx" data-theme={theme}>
-      <aside className="bx-rail">
-        <div className="bx-brand"><img src={logoPath} alt="" />BlockFinaX</div>
-        <div className="muted" style={{ padding: '0 12px 14px', fontSize: 12.5, marginTop: -10 }}>{contractor ? 'Contractor portal' : 'Connector portal'}</div>
-        {nav.map((n) => (
-          <button key={n.key} className={`bx-nav${current === n.key ? ' on' : ''}`} onClick={() => go(n.key)}>
+    <div className="bx bx-cp" data-theme={theme}>
+      <aside className="bx-cp-rail" aria-label="Portal">
+        <img className="bx-cp-mark" src={logoPath} alt="BlockFinaX" />
+        {RAIL.map((n) => (
+          <button key={n.key} className={`bx-cp-ri${section === n.key ? ' on' : ''}`} onClick={() => go(n.to)} aria-current={section === n.key ? 'page' : undefined}>
             <n.icon />{n.label}
-            {n.key === 'engagements' && !!data.counts?.offers && <Tag tone="blue">{data.counts.offers}</Tag>}
-            {n.key === 'offers' && !!data.counts?.new_offers && <Tag tone="blue">{data.counts.new_offers}</Tag>}
+            {!!badge(n.key) && <span className="bx-cp-count">{badge(n.key)}</span>}
           </button>
         ))}
-        <div className="bx-rail-foot">
-          {IS_TESTNET && <div className="bx-testnet">TESTNET</div>}
-          <button className="bx-nav" onClick={flipTheme}>{theme === 'dark' ? <Sun /> : <Moon />}{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
-          <button className="bx-nav" onClick={() => void identity.signOut().then(() => setLocation(BASE || '/'))}><LogOut />Sign out</button>
+        <button className={`bx-cp-ri${finax ? ' on' : ''}`} onClick={() => setFinax(!finax)}><Sparkles />Finax</button>
+        <div className="bx-cp-rail-foot">
+          {IS_TESTNET && <div className="bx-cp-testnet">TESTNET</div>}
+          <button className="bx-cp-ri small" onClick={flipTheme} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>{theme === 'dark' ? <Sun /> : <Moon />}</button>
+          <button className="bx-cp-ri small" onClick={() => void identity.signOut().then(() => setLocation(BASE || '/'))} title="Sign out"><LogOut /></button>
+          <button className="bx-cp-avatar" onClick={() => go('profile')} title={data.member.fullName}>{initial}</button>
         </div>
       </aside>
       <div className="bx-content">
         <nav className="bx-cp-tabs" aria-label="Portal sections">
-          {nav.map((n) => <button key={n.key} className={current === n.key ? 'on' : ''} onClick={() => go(n.key)}>{n.label}</button>)}
+          {RAIL.map((n) => <button key={n.key} className={section === n.key ? 'on' : ''} onClick={() => go(n.to)}>{n.label}{!!badge(n.key) && ` (${badge(n.key)})`}</button>)}
+          <button className={finax ? 'on' : ''} onClick={() => setFinax(!finax)}>Finax</button>
         </nav>
         <main className="bx-cp-main">
-          {tab === 'overview' && <Overview me={data} go={go} />}
-          {tab === 'offers' && <OffersTab />}
-          {tab === 'agreement' && <AgreementTab me={data} />}
-          {tab === 'training' && <TrainingTab me={data} />}
-          {tab === 'prospects' && <ProspectsTab me={data} go={go} />}
-          {tab === 'referrals' && <ReferralsTab me={data} />}
-          {tab === 'rewards' && <RewardsTab />}
-          {tab === 'engagements' && <EngagementsTab me={data} go={go} />}
-          {tab === 'materials' && <MaterialsTab />}
-          {tab === 'profile' && <ProfileTab me={data} go={go} />}
+          {section === 'home' && safeTab !== 'agreement' && <HomePage me={data} tab={safeTab} go={go} />}
+          {safeTab === 'agreement' && <AgreementTab me={data} />}
+          {safeTab === 'offers' && <OffersTab />}
+          {section === 'learn' && <LearnPage me={data} tab={safeTab} go={go} />}
+          {safeTab === 'referrals' && <ReferralsTab me={data} />}
+          {safeTab === 'rewards' && <RewardsTab />}
+          {safeTab === 'profile' && <ProfileTab me={data} go={go} />}
         </main>
       </div>
+      {!finax && <button className="bx-cp-ask" onClick={() => setFinax(true)}><Sparkles />Ask Finax</button>}
+      <FinaxChat scope="connector" launcher="none" open={finax} onOpenChange={setFinax} />
     </div>
+  );
+}
+
+/** Underlined tabs inside a page, with an optional count. */
+function SubTabs({ items, current, go }: { items: { tab: Tab; label: string; count?: number }[]; current: Tab; go: (t: Tab) => void }) {
+  return (
+    <div className="bx-cp-subtabs" role="tablist">
+      {items.map((i) => (
+        <button key={i.tab} role="tab" aria-selected={current === i.tab} className={current === i.tab ? 'on' : ''} onClick={() => go(i.tab)}>
+          {i.label}{!!i.count && <span className="n">{i.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function HomePage({ me, tab, go }: { me: Me; tab: Tab; go: (t: Tab) => void }) {
+  const m = me.member!;
+  const items: { tab: Tab; label: string; count?: number }[] = [
+    { tab: 'home', label: me.ready ? 'Overview' : 'Get started' },
+    { tab: 'prospects', label: 'Prospects', count: me.counts?.registrations },
+  ];
+  if (m.kind === 'contractor') items.push({ tab: 'engagements', label: 'Engagements', count: me.counts?.offers });
+  return (
+    <>
+      <div className="bx-cp-welcome">
+        <h1>Welcome back, {m.fullName.split(' ')[0]}!</h1>
+        <StatusBadge me={me} />
+      </div>
+      <SubTabs items={items} current={tab} go={go} />
+      <div className="bx-cp-embedded">
+        {tab === 'home' && <Overview me={me} go={go} />}
+        {tab === 'prospects' && <ProspectsTab me={me} go={go} />}
+        {tab === 'engagements' && <EngagementsTab me={me} go={go} />}
+      </div>
+    </>
+  );
+}
+
+function LearnPage({ me, tab, go }: { me: Me; tab: Tab; go: (t: Tab) => void }) {
+  const passed = me.lessons.filter((l) => l.passed).length;
+  return (
+    <>
+      <div>
+        <h1 className="bx-cp-h1">Learn</h1>
+        <p className="bx-cp-lede">The training you need before introducing anyone, and the only materials to share with prospects.</p>
+      </div>
+      <SubTabs items={[{ tab: 'training', label: `Training (${passed} of ${MODULES.length})` }, { tab: 'materials', label: 'Materials' }]} current={tab} go={go} />
+      <div className="bx-cp-embedded">
+        {tab === 'training' && <TrainingTab me={me} />}
+        {tab === 'materials' && <MaterialsTab />}
+      </div>
+    </>
   );
 }
 
@@ -325,10 +396,7 @@ function Overview({ me, go }: { me: Me; go: (t: Tab) => void }) {
   ];
   return (
     <>
-      <div>
-        <h1 className="bx-cp-h1">Welcome, {m.fullName.split(' ')[0]}</h1>
-        <p className="bx-cp-lede">{m.kind === 'contractor' ? 'Your engagements, agreement and payments in one place.' : 'Your introductions, referrals and rewards in one place.'}</p>
-      </div>
+      <p className="bx-cp-lede" style={{ marginTop: 0 }}>{m.kind === 'contractor' ? 'Your engagements, agreement and payments in one place.' : 'Your introductions, referrals and rewards in one place.'}</p>
       {m.status === 'paused' && <Note warn>Your access is paused. Rewards already earned are not affected. Contact BlockFinaX to discuss it.</Note>}
       {(m.status === 'ended' || m.status === 'declined') && <Note warn>Your membership is not active.</Note>}
       {!me.ready && (
@@ -550,22 +618,24 @@ function ProspectsTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
           {!me.agreement.signed && <button className="bx-link" onClick={() => go('agreement')}>Open your agreement</button>}</Note>
       )}
       {adding && <RegisterForm onDone={() => setAdding(false)} />}
-      <section className="bx-card">
-        {regs.isLoading ? <Loading /> : !regs.data?.registrations.length ? (
-          <div className="bx-empty">No prospects yet. Registered introductions and their status will appear here.</div>
-        ) : regs.data.registrations.map((r) => (
-          <div key={r.id} className="bx-li" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-            <span>
-              <b>{r.organisation}</b> <span className="muted">· {areaByKey(r.area)?.label} · {label(r.country)}</span><br />
-              <span className="muted" style={{ fontSize: 13 }}>{r.contactName}{r.contactRole ? `, ${r.contactRole}` : ''} · registered {day(r.createdAt)}</span>
-              {r.rewardTerms && r.status !== 'declined' && <><br /><span style={{ fontSize: 13 }}>Reward: {r.rewardTerms}{r.bonusUsd ? `, bonus ${usd(r.bonusUsd)}` : ''}</span></>}
-              {r.periodEnd && <><br /><span className="muted" style={{ fontSize: 13 }}>Reward period {day(r.periodStart)} to {day(r.periodEnd)}</span></>}
-              {r.decisionNote && <><br /><span className="muted" style={{ fontSize: 13 }}>Note from BlockFinaX: {r.decisionNote}</span></>}
-            </span>
-            <Tag tone={REG_TONE[r.status]}>{REG_LABEL[r.status]}</Tag>
-          </div>
-        ))}
-      </section>
+      {regs.isLoading ? <Loading /> : !regs.data?.registrations.length ? (
+        <section className="bx-card"><div className="bx-empty">No prospects yet. Registered introductions and their status will appear here.</div></section>
+      ) : (
+        <div className="bx-cp-items">
+          {regs.data.registrations.map((r) => (
+            <div key={r.id} className="bx-cp-item">
+              <span className="ic"><Building2 /></span>
+              <span className="body">
+                <span className="t">{r.organisation}</span>
+                <span className="s">{[areaByKey(r.area)?.label, label(r.country), r.contactName + (r.contactRole ? `, ${r.contactRole}` : '')].join(' · ')}</span>
+                {r.rewardTerms && r.status !== 'declined' && <span className="s">Reward: {r.rewardTerms}{r.bonusUsd ? `, bonus ${usd(r.bonusUsd)}` : ''}{r.periodEnd ? `, period ${day(r.periodStart)} to ${day(r.periodEnd)}` : ''}</span>}
+                {r.decisionNote && <span className="s">Note from BlockFinaX: {r.decisionNote}</span>}
+              </span>
+              <span className="meta"><span>Registered on {day(r.createdAt)}</span><Tag tone={REG_TONE[r.status]}>{REG_LABEL[r.status]}</Tag></span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -625,21 +695,21 @@ function ReferralsTab({ me }: { me: Me }) {
         <p className="bx-cp-lede">People who created a BlockFinaX account through your link. You see their progress, never their balances or contracts. Estimates are 25% of the protocol fees on their contracts in their first 12 months; the quarterly statement is what is paid.</p>
       </div>
       {me.referral ? <CopyBox value={me.referral.link} /> : <Note>Your referral link appears once your application is approved, your agreement is signed and your training is complete.</Note>}
-      <section className="bx-card">
-        {q.isLoading ? <Loading /> : !q.data?.referrals.length ? <div className="bx-empty">No referrals yet.</div> : (
-          <>
-            <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0,1.4fr) 1fr 1fr 1fr' }}><span>Person</span><span>Joined</span><span>Progress</span><span className="r">Estimated reward</span></div>
-            {q.data.referrals.map((r) => (
-              <div key={r.id} className="bx-li" style={{ gridTemplateColumns: 'minmax(0,1.4fr) 1fr 1fr 1fr' }}>
-                <span>{r.name ?? 'New user'}<br /><span className="muted" style={{ fontSize: 12.5 }}>{r.email}</span></span>
-                <span className="muted">{day(r.joinedAt)}</span>
-                <span>{r.contracts > 0 ? <Tag tone="green">{r.contracts} contract{r.contracts === 1 ? '' : 's'}</Tag> : r.onboarded ? <Tag tone="blue">Profile complete</Tag> : <Tag tone="grey">Signed up</Tag>}</span>
-                <span className="r num">{usd(r.estimatedShare)}</span>
-              </div>
-            ))}
-          </>
-        )}
-      </section>
+      {q.isLoading ? <Loading /> : !q.data?.referrals.length ? <section className="bx-card"><div className="bx-empty">No referrals yet.</div></section> : (
+        <div className="bx-cp-items">
+          {q.data.referrals.map((r) => (
+            <div key={r.id} className="bx-cp-item">
+              <span className="ic"><UserRound /></span>
+              <span className="body">
+                <span className="t">{r.name ?? 'New user'}</span>
+                <span className="s">{[r.email, `estimated reward ${usd(r.estimatedShare)}`].filter(Boolean).join(' · ')}</span>
+              </span>
+              <span className="meta"><span>Joined on {day(r.joinedAt)}</span>
+                {r.contracts > 0 ? <Tag tone="green">{r.contracts} contract{r.contracts === 1 ? '' : 's'}</Tag> : r.onboarded ? <Tag tone="blue">Profile complete</Tag> : <Tag tone="grey">Signed up</Tag>}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -663,7 +733,7 @@ function RewardsTab() {
   return (
     <>
       <div>
-        <h1 className="bx-cp-h1">Rewards</h1>
+        <h1 className="bx-cp-h1">Earnings</h1>
         <p className="bx-cp-lede">Rewards are paid every quarter, within 30 days of quarter end, in US dollars or USDC of equal value. Amounts under $100 roll forward.</p>
       </div>
       <div className="bx-cp-grid">

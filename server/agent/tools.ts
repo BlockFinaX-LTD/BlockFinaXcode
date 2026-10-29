@@ -371,7 +371,7 @@ export const TOOLS: ToolDef[] = [
       required: ["query"],
     },
     // The only tool both agents share — it reads published, already-public content.
-    scopes: ["internal", "public"],
+    scopes: ["internal", "public", "connector"],
     run: async ({ query }) => {
       const q = String(query || "").toLowerCase().slice(0, 200);
       const rows = await db.select().from(articles).where(eq(articles.published, true)).limit(200);
@@ -501,7 +501,7 @@ export const TOOLS: ToolDef[] = [
       "Pools currently open for buying protection, with pair, strike, premium rate and expiry. " +
       "Answers 'what cover can I buy' — public product information, not anyone's account.",
     input_schema: { type: "object", properties: {} },
-    scopes: ["customer", "public"],
+    scopes: ["customer", "public", "connector"],
     run: async () => {
       const rows = await db.select().from(hedgeEvents).where(eq(hedgeEvents.status, "open"));
       return rows.map((r) => ({
@@ -537,7 +537,7 @@ export const TOOLS: ToolDef[] = [
       },
       required: ["pair"],
     },
-    scopes: ["customer", "public"],
+    scopes: ["customer", "public", "connector"],
     run: async ({ pair, years }) => {
       const p = String(pair || "").toUpperCase().replace(/\s/g, "");
       if (!/^[A-Z]{3}\/[A-Z]{3}$/.test(p)) {
@@ -581,7 +581,7 @@ export const TOOLS: ToolDef[] = [
       },
       required: ["pair", "notionalUsd"],
     },
-    scopes: ["customer", "public"],
+    scopes: ["customer", "public", "connector"],
     run: async ({ pair, notionalUsd, tenorDays, premiumRatePercent, triggerPercent }) => {
       const p = String(pair || "").toUpperCase().replace(/\s/g, "");
       if (!/^[A-Z]{3}\/[A-Z]{3}$/.test(p)) return { error: "Use the form USD/GHS." };
