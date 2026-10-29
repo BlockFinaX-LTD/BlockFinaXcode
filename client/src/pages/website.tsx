@@ -19,7 +19,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
 import './website.css';
-import { CONNECTOR_PORTAL_URL, LAUNCH_APP_HREF } from '@/lib/app-links';
+// Where the website's buttons lead (client/src/lib/app-links.ts on the testnet branch).
+// Launch App opens the Stellar testnet app; Apply opens the connector portal.
+const clean = (v: string | undefined, fallback: string) => (v || fallback).trim().replace(/\/$/, '');
+const LAUNCH_APP_HREF = `${clean(import.meta.env.VITE_TESTNET_APP_URL, 'https://testnet.blockfinax.com')}/hedge`;
+const CONNECTOR_PORTAL_URL = clean(import.meta.env.VITE_CONNECTOR_PORTAL_URL, 'https://connector.blockfinax.com');
 
 const logoPath = '/favicon.png';
 
