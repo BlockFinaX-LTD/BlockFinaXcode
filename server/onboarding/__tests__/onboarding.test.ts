@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { COUNTRIES, startingRole, validateOnboarding } from "@shared/onboarding";
-import { combineScreening } from "../service";
+import { combineScreening, predatesOnboarding } from "../service";
 
 const individual = { accountType: "individual", fullName: "  Ama   Mensah ", country: "gh", phone: "+233 24 123 4567", intents: ["payables"] };
 const organisation = {
@@ -60,4 +60,10 @@ test("screening reports the worst result", () => {
   assert.equal(combineScreening(["clear", "clear"]), "clear");
   assert.equal(combineScreening(["clear", "inconclusive"]), "inconclusive");
   assert.equal(combineScreening(["inconclusive", "hit"]), "hit");
+});
+
+test("accounts from before onboarding skip the first-run form", () => {
+  assert.equal(predatesOnboarding(new Date("2026-10-20T18:25:38Z")), true);
+  assert.equal(predatesOnboarding(new Date("2026-10-27T09:00:00Z")), false);
+  assert.equal(predatesOnboarding(null), false);
 });

@@ -7,7 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { ApplicationError } from "@shared/domain/types";
 import { validateOnboarding } from "@shared/onboarding";
-import { getOnboarding, saveOnboarding, screenOnboarding } from "./service";
+import { accountCreatedAt, getOnboarding, predatesOnboarding, saveOnboarding, screenOnboarding } from "./service";
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 interface Deps {
@@ -17,7 +17,7 @@ interface Deps {
 
 async function view(userId: number) {
   const found = await getOnboarding(userId);
-  if (!found) return { completed: false };
+  if (!found) return { completed: predatesOnboarding(await accountCreatedAt(userId)) };
   const { row, organisation } = found;
   return {
     completed: true,

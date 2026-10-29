@@ -82,6 +82,22 @@ export async function onboardingDb() {
   return pool;
 }
 
+/**
+ * Onboarding went live on 26 October 2026. Accounts created before then already use the
+ * workspace, so they are not stopped by the first-run form; they can still fill it in later.
+ */
+export const ONBOARDING_STARTED = new Date("2026-10-27T00:00:00Z");
+
+export function predatesOnboarding(createdAt: Date | null | undefined) {
+  return !!createdAt && createdAt.getTime() < ONBOARDING_STARTED.getTime();
+}
+
+export async function accountCreatedAt(userId: number): Promise<Date | null> {
+  const db = await onboardingDb();
+  const { rows } = await db.query(`SELECT created_at FROM user_accounts WHERE id = $1`, [userId]);
+  return (rows[0] as { created_at: Date | null } | undefined)?.created_at ?? null;
+}
+
 export async function getOnboarding(userId: number) {
   const db = await onboardingDb();
   const { rows } = await db.query(`SELECT * FROM account_onboarding WHERE user_id = $1`, [userId]);
