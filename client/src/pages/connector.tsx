@@ -125,18 +125,31 @@ function useTheme(): ['light' | 'dark', () => void] {
 
 type Tab = 'overview' | 'offers' | 'agreement' | 'training' | 'prospects' | 'referrals' | 'rewards' | 'engagements' | 'materials' | 'profile';
 
+// Daily work first, then learning and account. Agreement and Training lead the list until
+// they are done; a signed agreement leaves the menu and stays reachable from Profile.
 const NAV: { key: Tab; label: string; icon: typeof Gauge; contractorOnly?: boolean }[] = [
   { key: 'overview', label: 'Overview', icon: Gauge },
-  { key: 'offers', label: 'Offers', icon: Megaphone },
   { key: 'agreement', label: 'Agreement', icon: FileSignature },
   { key: 'training', label: 'Training', icon: BookOpen },
   { key: 'prospects', label: 'Prospects', icon: Building2 },
   { key: 'referrals', label: 'Referrals', icon: Users },
-  { key: 'rewards', label: 'Rewards', icon: Wallet },
+  { key: 'offers', label: 'Offers', icon: Megaphone },
   { key: 'engagements', label: 'Engagements', icon: Briefcase, contractorOnly: true },
+  { key: 'rewards', label: 'Rewards', icon: Wallet },
   { key: 'materials', label: 'Materials', icon: FolderOpen },
   { key: 'profile', label: 'Profile', icon: UserRound },
 ];
+
+function menuFor(me: Me, contractor: boolean) {
+  const trained = MODULES.filter((m) => m.required).every((m) => me.lessons.some((l) => l.id === m.id && l.passed));
+  const items = NAV.filter((n) => (!n.contractorOnly || contractor) && !(n.key === 'agreement' && me.agreement.signed));
+  if (!trained) return items;
+  // Once training is passed it moves down beside Materials, as reference.
+  const training = items.find((n) => n.key === 'training')!;
+  const rest = items.filter((n) => n.key !== 'training');
+  rest.splice(rest.findIndex((n) => n.key === 'materials'), 0, training);
+  return rest;
+}
 
 export default function ConnectorPortal() {
   const identity = useIdentity();
@@ -165,7 +178,9 @@ export default function ConnectorPortal() {
   if (!data.member) return <div className="bx" data-theme={theme}><ApplyPage email={identity.user?.email ?? null} /></div>;
 
   const contractor = data.member.kind === 'contractor';
-  const nav = NAV.filter((n) => !n.contractorOnly || contractor);
+  const nav = menuFor(data, contractor);
+  // A signed agreement is opened from Profile, so Profile stays highlighted while it is shown.
+  const current: Tab = tab === 'agreement' && data.agreement.signed ? 'profile' : tab;
 
   return (
     <div className="bx" data-theme={theme}>
@@ -173,7 +188,7 @@ export default function ConnectorPortal() {
         <div className="bx-brand"><img src={logoPath} alt="" />BlockFinaX</div>
         <div className="muted" style={{ padding: '0 12px 14px', fontSize: 12.5, marginTop: -10 }}>{contractor ? 'Contractor portal' : 'Connector portal'}</div>
         {nav.map((n) => (
-          <button key={n.key} className={`bx-nav${tab === n.key ? ' on' : ''}`} onClick={() => go(n.key)}>
+          <button key={n.key} className={`bx-nav${current === n.key ? ' on' : ''}`} onClick={() => go(n.key)}>
             <n.icon />{n.label}
             {n.key === 'engagements' && !!data.counts?.offers && <Tag tone="blue">{data.counts.offers}</Tag>}
             {n.key === 'offers' && !!data.counts?.new_offers && <Tag tone="blue">{data.counts.new_offers}</Tag>}
@@ -187,7 +202,7 @@ export default function ConnectorPortal() {
       </aside>
       <div className="bx-content">
         <nav className="bx-cp-tabs" aria-label="Portal sections">
-          {nav.map((n) => <button key={n.key} className={tab === n.key ? 'on' : ''} onClick={() => go(n.key)}>{n.label}</button>)}
+          {nav.map((n) => <button key={n.key} className={current === n.key ? 'on' : ''} onClick={() => go(n.key)}>{n.label}</button>)}
         </nav>
         <main className="bx-cp-main">
           {tab === 'overview' && <Overview me={data} go={go} />}
@@ -199,7 +214,7 @@ export default function ConnectorPortal() {
           {tab === 'rewards' && <RewardsTab />}
           {tab === 'engagements' && <EngagementsTab me={data} go={go} />}
           {tab === 'materials' && <MaterialsTab />}
-          {tab === 'profile' && <ProfileTab me={data} />}
+          {tab === 'profile' && <ProfileTab me={data} go={go} />}
         </main>
       </div>
     </div>
@@ -839,7 +854,7 @@ function MaterialsTab() {
   );
 }
 
-function ProfileTab({ me }: { me: Me }) {
+function ProfileTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
   const qc = useQueryClient();
   const m = me.member!;
   const [form, setForm] = useState<ProfileForm>({ kind: m.kind, fullName: m.fullName, organisation: m.organisation ?? '', country: m.country, phone: m.phone ?? '', markets: m.markets ?? '', areas: m.areas, about: m.about ?? '' });
@@ -865,6 +880,16 @@ function ProfileTab({ me }: { me: Me }) {
           {msg && <span className={msg.ok ? 'up' : 'down'}>{msg.text}</span>}
         </div>
       </section>
+      {me.agreement.signed && (
+        <section className="bx-card">
+          <h2 style={{ fontSize: 16, marginBottom: 6 }}>Your agreement</h2>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            {AGREEMENTS[me.agreement.kind].title}, version {me.agreement.version}. Signed {day(me.agreement.signed.signedAt)}
+            {me.agreement.signed.countersignedAt ? `, countersigned ${day(me.agreement.signed.countersignedAt)}` : ', waiting for BlockFinaX to countersign'}.
+          </p>
+          <button className="bx-btn ghost" onClick={() => go('agreement')}><FileSignature />View signed agreement</button>
+        </section>
+      )}
     </>
   );
 }
