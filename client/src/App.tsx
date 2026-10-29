@@ -22,7 +22,7 @@ import { MethodChooser } from "@/components/wallet/method-chooser";
 import { useToast } from "@/hooks/use-toast";
 
 // Public pages
-import Website, { ConnectorsPage } from "@/pages/website";
+import Website, { AboutPage, ConnectorsPage, HedgersPage, UnderwritersPage } from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import { InvestorGate } from "@/components/investor-gate";
@@ -56,8 +56,6 @@ import ContactPage from "@/pages/contact";
 import TechnicalDocs from "@/pages/docs-technical";
 import DocsRequestPage from "@/pages/docs-request";
 import DocsIndex from "@/pages/docs-index";
-import LiquidityProviderPage from "@/pages/liquidity-provider";
-import HedgerPage from "@/pages/hedger";
 import AcademyRoute from "@/pages/academy";
 import { DocsSessionRecovery } from "@/components/docs-session-recovery";
 import { DocsGate } from "@/components/docs-gate";
@@ -210,9 +208,10 @@ function Router() {
       <Route path="/predict" component={PredictPage} />
       <Route path="/apply" component={ApplyPage} />
       <Route path="/contact" component={ContactPage} />
+      <Route path="/about" component={AboutPage} />
       <Route path="/docs/request" component={DocsRequestPage} />
-      <Route path="/liquidity-provider" component={LiquidityProviderPage} />
-      <Route path="/hedger" component={HedgerPage} />
+      <Route path="/liquidity-provider" component={UnderwritersPage} />
+      <Route path="/hedger" component={HedgersPage} />
       <Route path="/connectors" component={ConnectorsPage} />
 
       {/* Agreement signing. Deliberately outside PROTECTED_ROUTES: the
