@@ -7,8 +7,14 @@ import { Keypair, hash } from "@stellar/stellar-sdk";
 import { Api, Server } from "@stellar/stellar-sdk/rpc";
 import { Client } from "passkey-kit-sdk";
 
-export const PASSKEY_WALLET_WASM =
-  process.env.WALLET_WASM_HASH || "fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0";
+import { PASSKEY_WALLET_WASM_HASH } from "@shared/wallet-trust";
+
+/**
+ * The wallet code new accounts are deployed with. The app refuses any wallet whose code is
+ * not PASSKEY_WALLET_WASM_HASH (shared/wallet-trust.ts), so changing this setting without
+ * changing that pinned value would only produce wallets the app will not use.
+ */
+export const PASSKEY_WALLET_WASM = process.env.WALLET_WASM_HASH || PASSKEY_WALLET_WASM_HASH;
 
 /** The most the fee payer spends on one deployment (30 XLM, as in the Stellar wallet). */
 const MAX_DEPLOY_FEE_STROOPS = BigInt(300_000_000);

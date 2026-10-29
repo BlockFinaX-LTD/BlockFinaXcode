@@ -35,15 +35,9 @@ function build() {
 }
 export const factoryInterface = () => new ethers.Interface(build().StellarDepositFactory.abi);
 
-/** EIP-1167 minimal proxy creation code for the deposit implementation. */
-function cloneCode(implementation: string) {
-  return ethers.concat(["0x3d602d80600a3d3981f3363d3d373d3d3d363d73", implementation, "0x5af43d82803e903d91602b57fd5bf3"]);
-}
-
-/** The deposit address for a Stellar wallet, computed exactly as the factory does. */
-export function depositAddressFor(factory: string, implementation: string, recipient: string): string {
-  return ethers.getCreate2Address(factory, ethers.keccak256(ethers.toUtf8Bytes(recipient)), ethers.keccak256(cloneCode(implementation)));
-}
+/** Computed in shared/wallet-trust.ts, so the app can recompute and check every address it shows. */
+export { depositAddressFor } from "@shared/wallet-trust";
+import { depositAddressFor } from "@shared/wallet-trust";
 
 /** Funding networks that have a deposit factory. */
 export function depositChains(chains: ChainRegistry): ChainConfig[] {

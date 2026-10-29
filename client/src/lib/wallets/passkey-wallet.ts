@@ -138,6 +138,9 @@ export async function createWalletPasskey(): Promise<PasskeySession & { errors?:
   rememberDeviceCredential(created.credentialId ?? response.id);
   const session = await currentPasskeySession();
   if (!session) throw new Error("Your session ended. Sign in again.");
+  // Check, from the chain, that the new wallet's signer is this passkey's own key.
+  const { recordPasskeyProof } = await import("./verify-wallet");
+  await recordPasskeyProof(session.accounts.find((a) => a.chain.startsWith("stellar"))?.address, session.credentialId, response as any);
   return { ...session, errors: created.errors };
 }
 
@@ -148,6 +151,8 @@ export async function signInWithPasskey(): Promise<PasskeySession> {
   const session = await api<PasskeySession>("/api/wallet/passkey/signin/verify", { flow, response });
   storeSessionToken(session.sessionToken);
   rememberDeviceCredential(session.credentialId);
+  const { recordPasskeyProof } = await import("./verify-wallet");
+  void recordPasskeyProof(session.accounts?.find((a) => a.chain.startsWith("stellar"))?.address, session.credentialId, response as any);
   return session;
 }
 

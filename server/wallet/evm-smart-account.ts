@@ -68,9 +68,7 @@ export interface Call {
 }
 
 /** The passkey as a Coinbase Smart Wallet owner: abi.encode(x, y). */
-export function passkeyOwner(x: string, y: string): string {
-  return ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [x, y]);
-}
+export { passkeyOwner } from "@shared/wallet-trust";
 
 /** Counterfactual account address. Stable before and after the first transaction deploys it. */
 export async function smartAccountAddress(provider: ethers.Provider, owner: string): Promise<string> {

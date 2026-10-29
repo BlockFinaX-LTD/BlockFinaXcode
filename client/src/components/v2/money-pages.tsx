@@ -9,7 +9,8 @@ import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
-import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
+import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain, walletConfig } from '@/lib/wallets/passkey-wallet';
+import { provePasskey, useWalletCheck } from '@/lib/wallets/verify-wallet';
 import { fmt, runTransfer, transferStatus, useChains, useIsDemo, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
@@ -69,6 +70,21 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
   const name = options.find((o) => o.chain === chain)?.name ?? 'this network';
   const hubName = deposits.data?.hub.name ?? 'your BlockFinaX account';
   const leftover = routed ? usdcOn(balances.data?.rows, routed.chain) : 0;
+  // Addresses are shown only once the app has checked them against the chain itself.
+  const { session } = usePasskeySession();
+  const { state: check, recheck } = useWalletCheck(session, deposits.data?.deposits, !deposits.isLoading);
+  const [proving, setProving] = useState(false);
+  const [proofError, setProofError] = useState<string | null>(null);
+  const prove = async () => {
+    if (check.status !== 'needs-proof') return;
+    setProving(true); setProofError(null);
+    try {
+      const ok = await provePasskey(check.contract, check.credentialId, (await walletConfig()).rpId ?? window.location.hostname);
+      if (!ok) setProofError('Your passkey did not match the wallet shown. Do not deposit, and contact BlockFinaX.');
+      await recheck();
+    } catch (e) { setProofError((e as Error).message || 'The check was cancelled.'); }
+    finally { setProving(false); }
+  };
   return (
     <div className="bx-card">
       <CardHead title="Deposit USDC" sub="Send USDC to your BlockFinaX account from an exchange or another wallet." onCancel={onCancel} />
@@ -77,7 +93,21 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
         {options.map((o) => <button key={o.chain} className={chain === o.chain ? 'on' : ''} onClick={() => { setChain(o.chain); setCopied(false); }}>{o.name}</button>)}
       </div>
       <div className="bx-hint" style={{ marginBottom: 20 }}>Sending from an exchange? Choose the network the exchange uses.</div>
-      {deposits.isLoading ? <Loading /> : address && (
+      {check.status === 'failed' && (
+        <div className="bx-error" style={{ marginBottom: 14 }}>
+          <b>Do not deposit.</b> The app could not confirm this account belongs to your passkey:
+          <ul style={{ margin: '6px 0 0 18px' }}>{check.problems.map((p) => <li key={p}>{p}</li>)}</ul>
+          Contact BlockFinaX before sending anything.
+        </div>
+      )}
+      {check.status === 'needs-proof' && (
+        <div style={{ marginBottom: 14 }}>
+          <Note>Before showing your address, confirm with your passkey that this account is yours. It takes a second and moves nothing.</Note>
+          <button className="bx-btn" style={{ marginTop: 10 }} disabled={proving} onClick={prove}>{proving ? <Spin /> : <KeyRound />} Confirm with passkey</button>
+          {proofError && <div className="bx-error" style={{ marginTop: 10 }}>{proofError}</div>}
+        </div>
+      )}
+      {deposits.isLoading || check.status === 'checking' ? <Loading /> : check.status === 'ok' && address && (
         <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={address} size={168} /></div>
           <div style={{ flex: 1, minWidth: 220 }}>
