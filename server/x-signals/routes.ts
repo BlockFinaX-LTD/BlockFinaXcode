@@ -31,6 +31,7 @@ export function registerXSignalRoutes(app: Express) {
       counts: Object.fromEntries(counts.rows.map((r: any) => [r.status, r.n])),
       signals: rows.map((r: any) => ({
         id: r.tweet_id, url: r.url, text: r.text, topic: r.topic, score: r.score, status: r.status, note: r.note,
+        kind: r.ai_kind, reason: r.ai_reason,
         postedAt: r.posted_at, likes: r.likes, replies: r.replies, reposts: r.reposts, views: r.views,
         author: { handle: r.author_handle, name: r.author_name, followers: r.author_followers, location: r.author_location, bio: r.author_bio },
       })),

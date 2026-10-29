@@ -25,6 +25,7 @@ async function api(url: string, token: string, body?: unknown) {
 
 interface Signal {
   id: string; url: string; text: string; topic: string; score: number; status: string; note: string | null;
+  kind: string | null; reason: string | null;
   postedAt: string; likes: number; replies: number; reposts: number; views: number;
   author: { handle: string; name: string; followers: number; location: string | null; bio: string | null };
 }
@@ -128,11 +129,13 @@ export function XSignalsSection({ token }: { token: string }) {
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">{label(s.topic)}</span>
+                    {s.kind && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 capitalize">{s.kind}</span>}
                     <span className={cn("rounded-full px-2 py-0.5 font-semibold", s.score >= 70 ? "bg-green-100 text-green-800" : s.score >= 45 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600")}>Score {s.score}</span>
                   </div>
                 </div>
                 {s.author.bio && <p className="text-xs text-gray-500 line-clamp-2">{s.author.bio}</p>}
                 <p className="text-[15px] whitespace-pre-wrap leading-relaxed">{s.text}</p>
+                {s.reason && <p className="text-sm text-blue-800 bg-blue-50 rounded-md px-3 py-1.5">{s.reason}</p>}
                 <div className="text-xs text-gray-500">{n(s.replies)} replies · {n(s.reposts)} reposts · {n(s.likes)} likes · {n(s.views)} views</div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <a href={`https://x.com/intent/post?in_reply_to=${s.id}`} target="_blank" rel="noopener noreferrer">
