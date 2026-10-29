@@ -5,6 +5,9 @@
  * Step 2: first time only, create the wallet passkey. That creates the user's smart
  *         accounts on Stellar and Base Sepolia, and the passkey approves every transaction.
  * Returning users can also sign in directly with the passkey.
+ *
+ * On the connector site it is a plain "Log in or sign up" card and stops after step 1:
+ * connectors use the portal, which needs an account but no wallet.
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -13,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
 import { takeReturnPath, usePasskeySession } from "@/lib/identity";
+import { CONNECTORS_INFO_HREF } from "@/lib/app-links";
 import {
   acceptGoogleRedirect, createWalletPasskey, currentPasskeySession, finishEmailSignIn, signInWithPasskey,
   signOutPasskey, startEmailSignIn, startGoogleSignIn,
@@ -22,6 +26,8 @@ const GOOGLE_ERRORS: Record<string, string> = {
   google_not_configured: "Google sign-in is not set up on testnet yet. Use your email instead.",
   invalid_state: "The Google sign-in took too long. Please try again.",
 };
+
+const forConnectors = typeof window !== "undefined" && /^connector\./i.test(window.location.hostname);
 
 export function PasskeyAuth() {
   const [, setLocation] = useLocation();
@@ -41,8 +47,8 @@ export function PasskeyAuth() {
   }, [setSession]);
 
   useEffect(() => {
-    if (isAuthenticated && !busy && !warning) setLocation(takeReturnPath());
-  }, [isAuthenticated, busy, warning, setLocation]);
+    if ((isAuthenticated || (forConnectors && signedIn)) && !busy && !warning) setLocation(takeReturnPath());
+  }, [isAuthenticated, signedIn, busy, warning, setLocation]);
 
   async function run(label: string, action: () => Promise<void>) {
     setBusy(label);
@@ -71,7 +77,7 @@ export function PasskeyAuth() {
   );
 
   // Step 2: signed in, wallet passkey not created yet.
-  if (signedIn && !session?.credentialId) {
+  if (signedIn && !session?.credentialId && !forConnectors) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
         <div className="flex flex-col items-center gap-3 text-center max-w-xs w-full">
@@ -108,9 +114,18 @@ export function PasskeyAuth() {
 
   // Step 1: sign in.
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
-      <div className="flex flex-col items-center gap-3 text-center max-w-xs w-full">
-        {header}
+    <div className={`min-h-screen flex flex-col items-center justify-center p-6 ${forConnectors ? "bg-muted/40" : "bg-background"}`}>
+      <div className={forConnectors
+        ? "flex flex-col items-center gap-3 text-center w-full max-w-sm rounded-2xl border border-border bg-card px-8 py-10 shadow-sm"
+        : "flex flex-col items-center gap-3 text-center max-w-xs w-full"}>
+        {forConnectors ? (
+          <>
+            <img src={logoPath} alt="BlockFinaX" className="h-12 w-12 object-contain" />
+            <h1 className="bfx-display text-[24px] font-semibold tracking-tight mt-2">Log in or sign up</h1>
+            <p className="text-[13px] text-muted-foreground -mt-1">to the BlockFinaX Connector Programme</p>
+            {import.meta.env.VITE_NETWORK_MODE !== "mainnet" && <p className="text-xs text-amber-500">TESTNET</p>}
+          </>
+        ) : header}
         <div className="flex flex-col items-stretch gap-2 mt-4 w-full text-left">
           {!requestId ? (
             <>
@@ -147,9 +162,16 @@ export function PasskeyAuth() {
             {spinner("passkey") ?? <><KeyRound className="h-4 w-4 mr-2" />Sign in with your passkey</>}
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
-          New users: sign in with email or Google, then create a passkey for your wallet.
-        </p>
+        {forConnectors ? (
+          <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">
+            New here? Signing in creates your account.{" "}
+            <a href={CONNECTORS_INFO_HREF} className="underline">What is the Connector Programme?</a>
+          </p>
+        ) : (
+          <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+            New users: sign in with email or Google, then create a passkey for your wallet.
+          </p>
+        )}
         {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
       </div>
     </div>

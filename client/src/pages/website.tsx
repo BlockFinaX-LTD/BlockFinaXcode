@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
 import './website.css';
-import { LAUNCH_APP_HREF } from '@/lib/app-links';
+import { CONNECTOR_PORTAL_URL, LAUNCH_APP_HREF } from '@/lib/app-links';
 
 const logoPath = '/favicon.png';
 
@@ -574,6 +574,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             <a href="/#use">Products</a>
             <Link href="/hedger">Hedgers</Link>
             <Link href="/liquidity-provider">Underwriters</Link>
+            <Link href="/connectors">Connectors</Link>
             <Link href="/about">About</Link>
             <div
               className="nav-dropdown"
@@ -642,6 +643,9 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </Link>
             <Link href="/liquidity-provider" className="nav-mobile-link" onClick={closeMobile}>
               Underwriters
+            </Link>
+            <Link href="/connectors" className="nav-mobile-link" onClick={closeMobile}>
+              Connectors
             </Link>
             <Link href="/about" className="nav-mobile-link" onClick={closeMobile}>
               About
@@ -1323,6 +1327,7 @@ function Footer() {
               <Link href="/apply">Request access</Link>
               <Link href="/hedger">For buyers</Link>
               <Link href="/liquidity-provider">For capital partners</Link>
+              <Link href="/connectors">Connector Programme</Link>
             </div>
             <div className="foot-col">
               <h5>Resources</h5>
@@ -1436,6 +1441,8 @@ interface AudienceCopy {
   title: [string, string];
   lede: string;
   primary: { label: string; href: string };
+  /** Replaces "Talk to us" beside the main button. */
+  secondary?: { label: string; href: string };
   steps: { t: string; d: string }[];
   points: { t: string; d: string }[];
   pointsTitle: string;
@@ -1493,6 +1500,34 @@ const UNDERWRITERS: AudienceCopy = {
   close: 'Ready to put your USDC to work?',
 };
 
+
+const CONNECTORS: AudienceCopy = {
+  eyebrow: 'Connector Programme',
+  title: ['Introduce BlockFinaX,', 'earn on results'],
+  lede: 'You know the businesses that pay or earn in other currencies, the capital looking for real returns, and the people who open doors in your market. Introduce them to BlockFinaX and earn a reward for every result.',
+  primary: { label: 'Apply', href: CONNECTOR_PORTAL_URL },
+  secondary: { label: 'Read the programme guide', href: 'https://docs.blockfinax.com/connectors' },
+  steps: [
+    { t: 'Apply', d: 'Create your BlockFinaX account and tell us your markets and how you can help. We review every application.' },
+    { t: 'Sign and train', d: 'Once accepted, sign your agreement online and complete four short lessons.' },
+    { t: 'Introduce and earn', d: 'Register each organisation before you introduce it, share your referral link and follow your rewards in your portal.' },
+  ],
+  pointsTitle: 'Who it is for',
+  points: [
+    { t: 'Connectors', d: 'Consultants, bankers, advisers and community leaders with relationships in their market.' },
+    { t: 'Independent contractors', d: 'People who take on paid pieces of work, such as research, events and onboarding support.' },
+    { t: 'Experts', d: 'Regulatory, banking and market specialists who can grow into advisors with shares in the company.' },
+  ],
+  note: { t: 'How rewards work', d: 'You register every introduction in your portal first, and BlockFinaX approves it in writing with the reward that applies. That way it is always clear what you have earned. Rewards are paid every quarter.' },
+  faqs: [
+    { q: 'Do I need to be a customer?', a: 'No. Anyone can apply. You create a free BlockFinaX account as part of applying.' },
+    { q: 'Do I need crypto experience?', a: 'No. You sign in with email or Google. The training covers what you need to explain BlockFinaX well.' },
+    { q: 'Who gets credit for an introduction?', a: 'The first connector to register an organisation, once BlockFinaX approves it. Registering before you introduce protects you.' },
+    { q: 'How long does a review take?', a: 'Usually a few working days. We email you when your application is accepted.' },
+  ],
+  close: 'Ready to join?',
+};
+
 function AudiencePage({ copy }: { copy: AudienceCopy }) {
   useGeistFont();
   const [theme, setTheme] = useState<Theme>('light');
@@ -1515,7 +1550,9 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
             {copy.primary.href.startsWith('http')
               ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
               : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
-            <Link href="/contact" className="btn btn-ghost">Talk to us</Link>
+            {copy.secondary
+              ? <a href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</a>
+              : <Link href="/contact" className="btn btn-ghost">Talk to us</Link>}
           </div>
         </div>
       </section>
@@ -1553,7 +1590,9 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
             {copy.primary.href.startsWith('http')
               ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
               : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
-            <Link href="/contact" className="btn btn-ghost">Talk to us</Link>
+            {copy.secondary
+              ? <a href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</a>
+              : <Link href="/contact" className="btn btn-ghost">Talk to us</Link>}
           </div>
         </div>
       </section>
@@ -1564,6 +1603,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
 
 export function HedgersPage() { return <AudiencePage copy={HEDGERS} />; }
 export function UnderwritersPage() { return <AudiencePage copy={UNDERWRITERS} />; }
+export function ConnectorsPage() { return <AudiencePage copy={CONNECTORS} />; }
 
 
 // ── About ───────────────────────────────────────────────────────────────

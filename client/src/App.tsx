@@ -17,7 +17,7 @@ import { IdentityProvider, rememberReturnPath, useIdentity } from "@/lib/identit
 import { storedSessionToken } from "@/lib/wallets/passkey-wallet";
 
 // Public pages
-import Website, { AboutPage, HedgersPage, UnderwritersPage } from "@/pages/website";
+import Website, { AboutPage, ConnectorsPage, HedgersPage, UnderwritersPage } from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import DataRoom from "@/pages/data-room";
@@ -165,6 +165,7 @@ function Router() {
       <Route path="/docs/request"><Redirect to="/docs" /></Route>
       <Route path="/liquidity-provider" component={UnderwritersPage} />
       <Route path="/hedger" component={HedgersPage} />
+      <Route path="/connectors" component={ConnectorsPage} />
 
       {/* Agreement signing. Deliberately outside PROTECTED_ROUTES: the
           counterparty has no BlockFinaX account and must never be asked for

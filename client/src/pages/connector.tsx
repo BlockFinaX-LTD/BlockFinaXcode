@@ -22,6 +22,7 @@ import { api } from '@/lib/wallets/passkey-wallet';
 import { rememberReturnPath, useIdentity } from '@/lib/identity';
 import { Loading, Note, Spin, Tag } from '@/components/v2/ui';
 import { FinaxChat } from '@/components/finax-chat';
+import { CONNECTORS_INFO_HREF } from '@/lib/app-links';
 import logoPath from '@/assets/logo.png';
 import '@/components/v2/workspace.css';
 import './connector.css';
@@ -182,17 +183,23 @@ export default function ConnectorPortal() {
   const go = (t: Tab) => { setLocation(`${BASE}/${PATH_OF[t]}`.replace(/\/$/, '') || '/'); window.scrollTo(0, 0); };
 
   const signIn = () => { rememberReturnPath(window.location.pathname); setLocation('/auth'); };
+  // The programme is explained on the website; signed-out visitors go straight to sign in or sign up.
+  useEffect(() => { if (ready && !signedIn) signIn(); }, [ready, signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!ready || (signedIn && me.isLoading)) {
     return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
   }
-  if (!signedIn) return <div className="bx" data-theme={theme}><Landing onStart={signIn} /></div>;
+  if (!signedIn) return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
   if (me.error) {
     return <div className="bx" data-theme={theme}><div className="bx-onboard"><div className="bx-onboard-card"><Note warn>{errMsg(me.error)}</Note>
       <button className="bx-btn" style={{ marginTop: 14 }} onClick={signIn}>Sign in again</button></div></div></div>;
   }
   const data = me.data!;
   if (!data.member) return <div className="bx" data-theme={theme}><ApplyPage email={identity.user?.email ?? null} prefill={data.prefill ?? null} /></div>;
+
+  if (data.member.status === 'applied' || data.member.status === 'declined') {
+    return <div className="bx" data-theme={theme}><ApplicationStatus me={data} onSignOut={() => void identity.signOut().then(() => setLocation('/auth'))} /></div>;
+  }
 
   const contractor = data.member.kind === 'contractor';
   const section = sectionOf(tab, data);
@@ -293,31 +300,7 @@ function LearnPage({ me, tab, go }: { me: Me; tab: Tab; go: (t: Tab) => void }) 
   );
 }
 
-// ── Landing and application ───────────────────────────────────────────────
-
-function Landing({ onStart }: { onStart: () => void }) {
-  return (
-    <div className="bx-onboard">
-      <div className="bx-onboard-card" style={{ maxWidth: 720, display: 'grid', gap: 24 }}>
-        <div className="bx-brand" style={{ padding: 0 }}><img src={logoPath} alt="" />BlockFinaX</div>
-        <section className="bx-cp-hero">
-          <h1>Connector Programme</h1>
-          <p className="bx-cp-lede">Introduce businesses, underwriters, partners and institutions to BlockFinaX, earn a reward for every result, and grow into an advisor with shares in the company. Independent contractors take on paid engagements here too.</p>
-        </section>
-        <ol className="bx-cp-steps">
-          <li><span className="n">1</span><div><b>Apply</b><span>Sign in with your BlockFinaX account and tell us how you can help.</span></div></li>
-          <li><span className="n">2</span><div><b>Sign and train</b><span>Sign your agreement and complete four short lessons.</span></div></li>
-          <li><span className="n">3</span><div><b>Introduce and share</b><span>Register prospects before you introduce them, and share your referral link.</span></div></li>
-          <li><span className="n">4</span><div><b>Earn</b><span>Follow approvals, referrals and quarterly rewards in one place.</span></div></li>
-        </ol>
-        <div className="bx-cp-row">
-          <button className="bx-btn" onClick={onStart}>Sign in to apply</button>
-          <span className="muted" style={{ fontSize: 13 }}>New to BlockFinaX? You can create an account on the next screen.</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Application ───────────────────────────────────────────────────────────
 
 interface ProfileForm { kind: MemberKind; fullName: string; organisation: string; country: string; phone: string; markets: string; areas: AreaKey[]; about: string }
 
@@ -385,6 +368,67 @@ function ApplyPage({ email, prefill }: { email: string | null; prefill: Me['pref
         <ProfileFields form={form} set={setForm} />
         {error && <Note warn>{error}</Note>}
         <button className="bx-btn" style={{ marginTop: 14 }} disabled={busy} onClick={submit}>{busy ? <Spin /> : null}Submit application</button>
+      </div>
+    </div>
+  );
+}
+
+/** Between applying and being accepted: what was sent, and what happens next. */
+function ApplicationStatus({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
+  const m = me.member!;
+  const [editing, setEditing] = useState(false);
+  const qc = useQueryClient();
+  const [form, setForm] = useState<ProfileForm>({ kind: m.kind, fullName: m.fullName, organisation: m.organisation ?? '', country: m.country, phone: m.phone ?? '', markets: m.markets ?? '', areas: m.areas, about: m.about ?? '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { label } = useCountries();
+  const declined = m.status === 'declined';
+  const save = async () => {
+    setBusy(true); setError(null);
+    try { await api('/api/v2/connectors/apply', form); await qc.invalidateQueries({ queryKey: ['connector-me'] }); setEditing(false); }
+    catch (e) { setError(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="bx-onboard">
+      <div className="bx-onboard-card" style={{ maxWidth: 680, display: 'grid', gap: 18 }}>
+        <div className="bx-brand" style={{ padding: 0 }}><img src={logoPath} alt="" />BlockFinaX</div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <span className={`bx-cp-badge ${declined ? 'grey' : 'amber'}`} style={{ justifySelf: 'start' }}><Circle />{declined ? 'Not accepted' : 'Under review'}</span>
+          <h1 className="bx-cp-h1">{declined ? 'Your application was not accepted' : 'Application received'}</h1>
+          <p className="bx-cp-lede" style={{ margin: 0 }}>
+            {declined
+              ? 'Thank you for applying. We are not able to accept your application at this time. You are welcome to apply again later, or contact BlockFinaX to discuss it.'
+              : `Thank you, ${m.fullName.split(' ')[0]}. BlockFinaX reviews every application, usually within a few working days. We will email ${m.email} when you are accepted, and your portal opens here.`}
+          </p>
+        </div>
+        {!declined && (
+          <ul className="bx-cp-check">
+            <li><Check className="done" /><span>Application sent on {day(m.joinedAt)}</span></li>
+            <li><Circle className="todo" /><span>BlockFinaX reviews it</span></li>
+            <li><Circle className="todo" /><span>Once accepted: sign your agreement and complete four short lessons</span></li>
+          </ul>
+        )}
+        {editing ? (
+          <section style={{ display: 'grid', gap: 8 }}>
+            <ProfileFields form={form} set={setForm} />
+            {error && <Note warn>{error}</Note>}
+            <div className="bx-cp-row">
+              <button className="bx-btn" disabled={busy} onClick={save}>{busy ? <Spin /> : null}{declined ? 'Apply again' : 'Save changes'}</button>
+              <button className="bx-btn ghost" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </section>
+        ) : (
+          <section className="bx-card" style={{ display: 'grid', gap: 6 }}>
+            <div className="bx-card-h"><h2>What you sent</h2><button className="bx-link" onClick={() => setEditing(true)}>{declined ? 'Update and apply again' : 'Edit'}</button></div>
+            <span><b>{m.fullName}</b>{m.organisation ? `, ${m.organisation}` : ''} · {m.kind === 'contractor' ? 'Independent contractor' : 'Connector'}</span>
+            <span className="muted">{label(m.country)}{m.markets ? ` · ${m.markets}` : ''}</span>
+            <span className="muted">Where you can help: {m.areas.map((a) => areaByKey(a)?.label ?? a).join(', ')}</span>
+          </section>
+        )}
+        <div className="bx-cp-row" style={{ justifyContent: 'space-between' }}>
+          <a className="bx-link" href={CONNECTORS_INFO_HREF}>About the programme</a>
+          <button className="bx-link" onClick={onSignOut}>Sign out</button>
+        </div>
       </div>
     </div>
   );

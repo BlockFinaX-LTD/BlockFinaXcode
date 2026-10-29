@@ -290,7 +290,9 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     }
     const db = await connectorDb();
     // The kind is fixed once BlockFinaX has decided on the application.
-    const lockedKind = existing && existing.status !== "applied" ? existing.kind : kind;
+    // A declined applicant may apply again: the application goes back to review.
+    const reapplying = existing?.status === "declined";
+    const lockedKind = existing && existing.status !== "applied" && !reapplying ? existing.kind : kind;
     await db.query(
       `INSERT INTO connectors (user_id, kind, full_name, organisation, country, email, phone, markets, areas, about)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -299,10 +301,11 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
       [uid, lockedKind, fullName, organisation, country, email, str(b.phone, 40) || null, str(b.markets, 200) || null,
        JSON.stringify(areas), str(b.about, 1000) || null],
     );
+    if (reapplying) await db.query(`UPDATE connectors SET status = 'applied', decided_at = NULL WHERE user_id = $1`, [uid]);
     const nameChanged = !existing || existing.full_name !== fullName || existing.organisation !== organisation;
     if (nameChanged) void screenMember(uid, { fullName, organisation, country });
-    if (!existing) {
-      void notifyAdmins(`New ${lockedKind} application: ${fullName}`, [
+    if (!existing || reapplying) {
+      void notifyAdmins(`${reapplying ? "Renewed" : "New"} ${lockedKind} application: ${fullName}`, [
         `${fullName}${organisation ? ` (${organisation})` : ""}, ${country}, applied to join the programme as a ${lockedKind}.`,
         `Areas: ${areas.map((a: string) => areaByKey(a)!.label).join(", ")}.`,
         "Review it in the admin dashboard under Connectors.",
