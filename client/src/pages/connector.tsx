@@ -363,7 +363,7 @@ function ApplyPage({ email, prefill }: { email: string | null; prefill: Me['pref
       <div className="bx-onboard-card" style={{ maxWidth: 760 }}>
         <div className="bx-brand" style={{ padding: '0 0 14px' }}><img src={logoPath} alt="" />BlockFinaX</div>
         <h1 className="bx-cp-h1">Apply to the Connector Programme</h1>
-        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>Your BlockFinaX account stays the same; this adds the Connector Programme to it. BlockFinaX reviews every application, and you can sign your agreement and start the training while you wait.{email ? ` We will write to ${email}.` : ''}</p>
+        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you can help. BlockFinaX reviews every application and emails you when you are accepted; your agreement and training open then.</p>
         {filled && <Note>We filled in what your BlockFinaX account already has. Check it, then choose where you can help.</Note>}
         <ProfileFields form={form} set={setForm} />
         {error && <Note warn>{error}</Note>}
