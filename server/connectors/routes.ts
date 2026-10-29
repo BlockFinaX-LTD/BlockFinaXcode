@@ -42,6 +42,7 @@ import { db as appDb } from "../db";
 import { agentMessages, chatSchema } from "@shared/agent-schema";
 import { agentConfigured, fence, runAgent } from "../agent/runtime";
 import { connectorBrief } from "./finax";
+import { getOnboarding } from "../onboarding/service";
 import { ApplicationError } from "@shared/domain/types";
 import {
   AGREEMENTS, MODULES, areaByKey, moduleById,
@@ -233,8 +234,22 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
         )).rows[0]
       : null;
     const ready = r.missing.length === 0;
+    // Someone with a BlockFinaX account who has not applied yet: start the form from what
+    // their account already holds, so they only add what the programme needs.
+    let prefill: null | { fullName: string; country: string; phone: string; organisation: string } = null;
+    if (!m) {
+      const found = await getOnboarding(uid).catch(() => null);
+      const { rows } = await db.query(`SELECT name FROM user_accounts WHERE id = $1`, [uid]);
+      prefill = {
+        fullName: found?.row.full_name ?? rows[0]?.name ?? "",
+        country: found?.row.country ?? "",
+        phone: found?.row.phone ?? "",
+        organisation: found?.organisation?.legal_name ?? "",
+      };
+    }
     res.json({
       member: m ? memberView(m) : null,
+      prefill,
       signing: signingPolicy(environment()),
       agreement: {
         kind, version: AGREEMENTS[kind].version, hash: agreementHash(kind),

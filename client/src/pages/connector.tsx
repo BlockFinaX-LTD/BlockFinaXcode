@@ -34,6 +34,7 @@ const IS_TESTNET = (import.meta.env.VITE_NETWORK_MODE ?? 'testnet') !== 'mainnet
 // ── Types from the API ────────────────────────────────────────────────────
 
 interface Me {
+  prefill?: null | { fullName: string; country: string; phone: string; organisation: string };
   member: null | {
     kind: MemberKind; fullName: string; organisation: string | null; country: string; email: string; phone: string | null;
     markets: string | null; areas: AreaKey[]; about: string | null; status: 'applied' | 'active' | 'paused' | 'ended' | 'declined';
@@ -191,7 +192,7 @@ export default function ConnectorPortal() {
       <button className="bx-btn" style={{ marginTop: 14 }} onClick={signIn}>Sign in again</button></div></div></div>;
   }
   const data = me.data!;
-  if (!data.member) return <div className="bx" data-theme={theme}><ApplyPage email={identity.user?.email ?? null} /></div>;
+  if (!data.member) return <div className="bx" data-theme={theme}><ApplyPage email={identity.user?.email ?? null} prefill={data.prefill ?? null} /></div>;
 
   const contractor = data.member.kind === 'contractor';
   const section = sectionOf(tab, data);
@@ -360,9 +361,13 @@ function ProfileFields({ form, set, lockKind }: { form: ProfileForm; set: (f: Pr
   );
 }
 
-function ApplyPage({ email }: { email: string | null }) {
+function ApplyPage({ email, prefill }: { email: string | null; prefill: Me['prefill'] }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState<ProfileForm>({ kind: 'connector', fullName: '', organisation: '', country: '', phone: '', markets: '', areas: [], about: '' });
+  const [form, setForm] = useState<ProfileForm>({
+    kind: 'connector', fullName: prefill?.fullName ?? '', organisation: prefill?.organisation ?? '', country: prefill?.country ?? '',
+    phone: prefill?.phone ?? '', markets: '', areas: [], about: '',
+  });
+  const filled = !!(prefill?.fullName || prefill?.country);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async () => {
@@ -375,7 +380,8 @@ function ApplyPage({ email }: { email: string | null }) {
       <div className="bx-onboard-card" style={{ maxWidth: 760 }}>
         <div className="bx-brand" style={{ padding: '0 0 14px' }}><img src={logoPath} alt="" />BlockFinaX</div>
         <h1 className="bx-cp-h1">Apply to the Connector Programme</h1>
-        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>BlockFinaX reviews every application. You can sign your agreement and start the training while you wait.{email ? ` We will write to ${email}.` : ''}</p>
+        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>Your BlockFinaX account stays the same; this adds the Connector Programme to it. BlockFinaX reviews every application, and you can sign your agreement and start the training while you wait.{email ? ` We will write to ${email}.` : ''}</p>
+        {filled && <Note>We filled in what your BlockFinaX account already has. Check it, then choose where you can help.</Note>}
         <ProfileFields form={form} set={setForm} />
         {error && <Note warn>{error}</Note>}
         <button className="bx-btn" style={{ marginTop: 14 }} disabled={busy} onClick={submit}>{busy ? <Spin /> : null}Submit application</button>
