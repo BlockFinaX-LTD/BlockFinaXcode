@@ -4,7 +4,7 @@
  * Members (signed-in BlockFinaX account):
  *   GET  /api/v2/connectors/me                       membership, agreement, training, what is missing
  *   POST /api/v2/connectors/apply                    apply, or update the profile
- *   POST /api/v2/connectors/sign                     sign the agreement by typing the full name
+ *   POST /api/v2/connectors/sign                     accept the programme terms (tick box), once accepted
  *   POST /api/v2/connectors/lessons/:id              submit quiz answers for a module
  *   GET  /api/v2/connectors/registrations            my registrations
  *   POST /api/v2/connectors/registrations            register a prospect or opportunity
@@ -12,7 +12,7 @@
  *   GET  /api/v2/connectors/rewards                  ledger, quarterly statement, estimates
  *   POST /api/v2/connectors/payout                   where rewards are paid
  *   GET  /api/v2/connectors/engagements              contractor work offers
- *   POST /api/v2/connectors/engagements/:id/accept   accept by typing the full name
+ *   POST /api/v2/connectors/engagements/:id/accept   accept an engagement (tick box)
  *   POST /api/v2/connectors/engagements/:id/decline
  *   GET  /api/v2/connectors/offers                   open offers for my kind, and my responses
  *   POST /api/v2/connectors/offers/:id/respond       say I am interested, with a note
@@ -25,7 +25,6 @@
  *   GET  /api/v2/admin/connectors                    members with counts
  *   GET  /api/v2/admin/connectors/:userId            everything about one member
  *   POST /api/v2/admin/connectors/:userId/status     approve, pause, end or decline
- *   POST /api/v2/admin/connectors/:userId/countersign
  *   POST /api/v2/admin/connectors/:userId/ledger     record a reward line or a payment
  *   POST /api/v2/admin/connectors/:userId/engagements offer a contractor engagement
  *   GET  /api/v2/admin/connector-registrations       the registration queue
@@ -286,7 +285,7 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     if (!email) throw bad("Add an email address to your BlockFinaX account first");
     const organisation = str(b.organisation, 160) || null;
     if (existing && !sameName(existing.full_name, fullName) && (await signedDocuments(uid)).length) {
-      throw bad("Your signed agreement carries your current name. Contact BlockFinaX to change your legal name.");
+      throw bad("Your accepted terms carry your current name. Contact BlockFinaX to change your legal name.");
     }
     const db = await connectorDb();
     // The kind is fixed once BlockFinaX has decided on the application.
@@ -319,11 +318,12 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     const m = await getMember(uid);
     if (!m) throw bad("Apply to join the programme first");
     if (m.status === "declined" || m.status === "ended") throw bad("Your membership is not active");
+    if (m.status === "applied") throw bad("You can accept the terms once BlockFinaX has accepted your application");
     const policy = signingPolicy(environment());
-    if (!policy.open) throw bad("Signing opens once BlockFinaX has finalised the agreement");
-    const typed = str(req.body?.typedName, 120);
-    if (req.body?.agree !== true) throw bad("Tick the box to confirm you agree and intend your typed name as your signature");
-    if (!sameName(typed, m.full_name)) throw bad(`Type your full legal name exactly as on your profile: ${m.full_name}`);
+    if (!policy.open) throw bad("The terms open for acceptance once BlockFinaX has finalised them");
+    if (req.body?.agree !== true) throw bad("Tick the box to confirm you have read and agree to the terms");
+    // Accepted, not signed: the name recorded is the one on the member's profile.
+    const typed = m.full_name;
     const kind = docFor(m);
     const doc = AGREEMENTS[kind];
     const db = await connectorDb();
@@ -335,14 +335,13 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
        str(req.headers["user-agent"], 300)],
     );
     if (rowCount) {
-      void notifyAdmins(`${doc.title} signed: ${m.full_name}`, [
-        `${m.full_name} signed the ${doc.title} (${doc.version})${policy.binding ? "" : " as a test signature"}.`,
-        "Countersign it in the admin dashboard under Connectors.",
+      void notifyAdmins(`${doc.title} accepted: ${m.full_name}`, [
+        `${m.full_name} accepted the ${doc.title} (${doc.version})${policy.binding ? "" : " on testnet, as a test acceptance"}.`,
       ]);
-      void notifyMember(m.email, `You signed the BlockFinaX ${doc.title}`, [
+      void notifyMember(m.email, `You accepted the BlockFinaX ${doc.title}`, [
         `Hello ${m.full_name.split(" ")[0]},`,
-        `This confirms you signed the ${doc.title}, version ${doc.version}, on ${new Date().toUTCString()}.${policy.binding ? "" : " This was a test signature on BlockFinaX testnet and is not binding."}`,
-        `The text you signed has the fingerprint ${agreementHash(kind)}. You can read it at any time in the portal.`,
+        `This confirms you accepted the ${doc.title}, version ${doc.version}, on ${new Date().toUTCString()}.${policy.binding ? "" : " This was a test acceptance on BlockFinaX testnet and is not binding."}`,
+        `The text you accepted has the fingerprint ${agreementHash(kind)}. You can read it at any time in the portal.`,
       ]);
     }
     res.json({ ok: true });
@@ -505,10 +504,9 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     const uid = await d.userId(req);
     const m = await getMember(uid);
     if (!m) throw bad("Apply to join the programme first");
-    if (!(await hasCurrentSignature(uid, "contractor"))) throw bad("Sign the Independent Contractor Agreement first");
+    if (!(await hasCurrentSignature(uid, "contractor"))) throw bad("Accept the Contractor Terms first");
     if (req.body?.agree !== true) throw bad("Tick the box to confirm you accept this engagement");
-    const typed = str(req.body?.typedName, 120);
-    if (!sameName(typed, m.full_name)) throw bad(`Type your full legal name exactly as on your profile: ${m.full_name}`);
+    const typed = m.full_name;
     const db = await connectorDb();
     const { rows } = await db.query(`SELECT * FROM connector_engagements WHERE id = $1 AND user_id = $2`, [req.params.id, uid]);
     const e = rows[0];
@@ -601,14 +599,13 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
         (SELECT count(*) FROM connector_referrals f WHERE f.connector_user_id = c.user_id)::int AS referrals,
         (SELECT count(*) FROM connector_lessons l WHERE l.user_id = c.user_id AND l.passed)::int AS lessons_passed,
         (SELECT count(*) FROM connector_signatures s WHERE s.user_id = c.user_id)::int AS signatures,
-        (SELECT count(*) FROM connector_signatures s WHERE s.user_id = c.user_id AND s.countersigned_at IS NULL)::int AS to_countersign,
         COALESCE((SELECT sum(CASE WHEN kind = 'payment' THEN -amount_usd ELSE amount_usd END) FROM connector_ledger g WHERE g.user_id = c.user_id), 0)::float AS owed
       FROM connectors c ORDER BY c.created_at DESC`);
     res.json({
       members: rows.map((c: any) => ({
         userId: c.user_id, ...memberView(c), screening: c.screening_status, referralCode: c.referral_code,
         pending: c.pending, approved: c.approved, referrals: c.referrals, lessonsPassed: c.lessons_passed, lessonsTotal: MODULES.length,
-        signatures: c.signatures, toCountersign: c.to_countersign, owed: round2(c.owed),
+        signatures: c.signatures, owed: round2(c.owed),
       })),
     });
   }));
@@ -671,20 +668,6 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     };
     void notifyMember(m.email, status === "active" ? "Welcome to the BlockFinaX Connector Programme" : "Your BlockFinaX connector membership", messages[status]!);
     res.json({ ok: true, referralCode: code });
-  }));
-
-  app.post("/api/v2/admin/connectors/:userId/countersign", ...admin(async (req, res) => {
-    const db = await connectorDb();
-    const { rowCount } = await db.query(
-      `UPDATE connector_signatures SET countersigned_by = $3, countersigned_at = now() WHERE id = $2 AND user_id = $1 AND countersigned_at IS NULL`,
-      [Number(req.params.userId), Number(req.body?.signatureId), by(req)],
-    );
-    if (!rowCount) throw bad("Signature not found or already countersigned");
-    const m = await getMember(Number(req.params.userId));
-    if (m) void notifyMember(m.email, "BlockFinaX has countersigned your agreement", [
-      `Hello ${m.full_name.split(" ")[0]},`, "BlockFinaX has countersigned your agreement. A record of both signatures is in the portal.",
-    ]);
-    res.json({ ok: true });
   }));
 
   app.post("/api/v2/admin/connectors/:userId/ledger", ...admin(async (req, res) => {

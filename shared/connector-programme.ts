@@ -1,9 +1,10 @@
 /**
- * The Connector Programme: what connectors and independent contractors read, sign and
- * learn in the portal (connector.blockfinax.com).
+ * The Connector Programme: the terms connectors and independent contractors accept, and
+ * what they learn, in the portal (connector.blockfinax.com).
  *
- * Shared by the portal and the server. The server hashes the agreement text at signing,
- * so any edit here must come with a new version number. Quiz answers are not here: they
+ * Shared by the portal and the server. Members accept the terms by ticking a box; the
+ * server stores the hash of the exact text accepted, so any edit here must come with a
+ * new version number. Rewards are money only; the programme gives no shares. Quiz answers are not here: they
  * live in server/connectors/course-answers.ts so the browser never receives them.
  */
 
@@ -70,7 +71,7 @@ export const AREAS: Area[] = [
   { key: "regulatory", group: "Market access", label: "Regulatory", revenueShare: false,
     qualifies: "Introductions to regulators, sandbox entry, licences, approvals and legal opinions",
     measured: "The approval, sandbox place or formal engagement, confirmed in writing",
-    reward: "Milestone bonus; counts towards advisory review" },
+    reward: "Milestone bonus" },
   { key: "local_partners", group: "Market access", label: "Local currency partners", revenueShare: true,
     qualifies: "Exchanges, payment providers and on and off ramps between USDC and local currency",
     measured: "The partner live on BlockFinaX, plus revenue where it earns any",
@@ -99,14 +100,17 @@ export const AREAS: Area[] = [
 
 export const areaByKey = (k: string) => AREAS.find((a) => a.key === k);
 
-// ── Agreements ──────────────────────────────────────────────────────────────
+// ── Terms ───────────────────────────────────────────────────────────────────
+// Accepted in the portal by ticking a box and clicking Accept. BlockFinaX's acceptance of
+// the application is its agreement, so there is no countersignature. Investor
+// introductions (fundraising) are the exception: they need a separate signed agreement.
 
 export const CONNECTOR_AGREEMENT: AgreementDoc = {
   kind: "connector",
-  title: "Connector Agreement",
-  version: "CA 1.0",
-  issued: "28 October 2026",
-  intro: "BlockFinaX operates an onchain FX hedging protocol. The Connector has relationships that may help BlockFinaX grow. The parties agree as follows.",
+  title: "Connector Programme Terms",
+  version: "CPT 1.0",
+  issued: "29 October 2026",
+  intro: "BlockFinaX operates an onchain FX hedging protocol. These terms govern the BlockFinaX Connector Programme, in which the Connector introduces organisations and opportunities that may help BlockFinaX grow. They apply once BlockFinaX has accepted the Connector's application and the Connector has accepted these terms in the connector portal.",
   clauses: [
     { n: "1", title: "Definitions", items: [
       ["1.1", "Approval Notice means a written notice from BlockFinaX, which may be sent by email or shown in the connector portal, that approves a Prospect or Opportunity and records the organisation, the opportunity, the Connector, the reward that applies and its period."],
@@ -115,12 +119,11 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
       ["1.4", "Excluded Amounts means amounts belonging to customers, underwriters, partners or other third parties, including premiums owed to underwriters, investment capital, liquidity deposits, the amount a customer protects, and settlement funds."],
       ["1.5", "Opportunity means a contribution in an area listed in Schedule 1 that does not by itself produce Collected Revenue, such as a regulatory approval or a new market launch."],
       ["1.6", "Prospect means an organisation or person the Connector proposes to introduce to BlockFinaX, including a user who signs up through the Connector's referral link."],
-      ["1.7", "Qualifying Partnership has the meaning in clause 6.2."],
-      ["1.8", "Reward Period means 12 months starting on the date BlockFinaX first receives Collected Revenue from an Approved Relationship."],
+      ["1.7", "Reward Period means 12 months starting on the date BlockFinaX first receives Collected Revenue from an Approved Relationship."],
     ] },
     { n: "2", title: "Appointment", items: [
       ["2.1", "BlockFinaX appoints the Connector, on a non-exclusive basis, to identify and introduce Prospects and Opportunities."],
-      ["2.2", "The Connector acts as an independent contractor. Nothing in this agreement creates employment, partnership, agency or a joint venture."],
+      ["2.2", "The Connector acts as an independent contractor. Nothing in these terms creates employment, partnership, agency or a joint venture."],
       ["2.3", "The Connector has no authority to bind BlockFinaX, to agree prices, contracts, investment terms or guarantees, or to accept money on its behalf."],
       ["2.4", "BlockFinaX may work with other connectors and may deal directly with any organisation."],
     ] },
@@ -135,11 +138,12 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
     { n: "4", title: "Rewards", items: [
       ["4.1", "Revenue share. For each Approved Relationship, BlockFinaX pays the Connector 25% of the Collected Revenue it receives during the Reward Period."],
       ["4.2", "Milestone bonuses. For an approved Opportunity, BlockFinaX pays the fixed bonus stated in its Approval Notice once the milestone it describes is met and confirmed in writing."],
-      ["4.3", "Fundraising. The Connector does not solicit investors for BlockFinaX under this agreement. Any reward for introducing investors, including a fee of up to 5% of funds BlockFinaX actually receives from them, is payable only under a separate written fundraising agreement, only where the law of the relevant countries permits it, and only after the investors have been told about it."],
+      ["4.3", "Fundraising. These terms do not cover introducing investors, and the Connector does not solicit investors for BlockFinaX under them. Any reward for introducing investors, including a fee of up to 5% of funds BlockFinaX actually receives from them, is payable only under a separate fundraising agreement signed by both parties before any introduction, only where the law of the relevant countries permits it, and only after the investors have been told about it."],
       ["4.4", "Talent referrals. For a person the Connector refers who joins BlockFinaX, the bonus stated in the Approval Notice is payable once that person has been in role for 6 months."],
       ["4.5", "Grants and development finance bonuses are paid from BlockFinaX's own funds, never from the grant or programme itself."],
       ["4.6", "Rewards are paid on one level only: on the Connector's own introductions, never on business introduced by other connectors."],
-      ["4.7", "No reward is payable on Excluded Amounts, on revenue received after the Reward Period, or for any introduction made in breach of clause 7."],
+      ["4.7", "Rewards are paid in money only. Taking part in the programme gives no right to shares, options or any other interest in BlockFinaX."],
+      ["4.8", "No reward is payable on Excluded Amounts, on revenue received after the Reward Period, or for any introduction made in breach of clause 6."],
     ] },
     { n: "5", title: "Payment and tax", items: [
       ["5.1", "BlockFinaX pays rewards quarterly, within 30 days after the end of each calendar quarter, with a statement in the connector portal showing the Collected Revenue received and the Connector's share."],
@@ -148,54 +152,47 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
       ["5.4", "If Collected Revenue is later refunded or reversed, BlockFinaX may deduct the related reward from future payments."],
       ["5.5", "The Connector may dispute a statement within 60 days of receiving it. The parties will review the records together in good faith."],
     ] },
-    { n: "6", title: "Advisory review", items: [
-      ["6.1", "A Connector who introduces four Qualifying Partnerships becomes eligible for consideration for the BlockFinaX advisory board. An approved regulatory milestone, new country launch or completed funding round may count as one of the four, as stated in its Approval Notice."],
-      ["6.2", "A Qualifying Partnership is an Approved Relationship that is credited to the Connector, has an active commercial relationship with BlockFinaX, has produced Collected Revenue in at least three separate months, and is active and in good standing when reviewed."],
-      ["6.3", "Eligibility gives a right to be considered, not a right to appointment. BlockFinaX considers expertise, conduct, availability and willingness to take on ongoing duties."],
-      ["6.4", "Any advisory shares are granted only under a separate advisory agreement and share option documents, with approval of the BlockFinaX board. That agreement sets the tier, the goals and the vesting. This agreement grants no shares, options or other equity."],
-      ["6.5", "Advisory shares are never granted for introducing investors."],
+    { n: "6", title: "Conduct", items: [
+      ["6.1", "The Connector makes warm introductions only with the contact's permission, explains the Prospect's needs honestly, and supports first meetings and the handover to BlockFinaX."],
+      ["6.2", "Introductions only. The Connector does not give financial, investment, legal or tax advice, does not recommend any specific protection, and uses only product information BlockFinaX has approved."],
+      ["6.3", "Disclosure. The Connector tells each Prospect that the Connector may be rewarded by BlockFinaX, and discloses to BlockFinaX any conflict of interest and any payment the Connector receives from the Prospect."],
+      ["6.4", "Anti-bribery. The Connector complies with all anti-bribery laws that apply, including the US Foreign Corrupt Practices Act, the UK Bribery Act 2010 and local law. The Connector does not offer, give or promise anything of value to any public official, or to any employee, officer or relative of a Prospect, to obtain business or an approval, and does not pass any part of a reward to them. Regulatory engagement takes place through official channels only."],
+      ["6.5", "Sanctions and law. The Connector is not a sanctioned person, does not introduce sanctioned persons, and complies with all laws on financial promotion, securities, data protection and anti-money laundering that apply to their activities."],
+      ["6.6", "Employees of Prospects. A person who is employed by, or an officer of, a Prospect does not earn a reward for introducing that Prospect."],
+      ["6.7", "If the Connector breaches this clause, BlockFinaX may end the Connector's participation at once, stop all unpaid rewards and recover rewards already paid that relate to the breach."],
     ] },
-    { n: "7", title: "Conduct", items: [
-      ["7.1", "The Connector makes warm introductions only with the contact's permission, explains the Prospect's needs honestly, and supports first meetings and the handover to BlockFinaX."],
-      ["7.2", "Introductions only. The Connector does not give financial, investment, legal or tax advice, does not recommend any specific protection, and uses only product information BlockFinaX has approved."],
-      ["7.3", "Disclosure. The Connector tells each Prospect that the Connector may be rewarded by BlockFinaX, and discloses to BlockFinaX any conflict of interest and any payment the Connector receives from the Prospect."],
-      ["7.4", "Anti-bribery. The Connector complies with all anti-bribery laws that apply, including the US Foreign Corrupt Practices Act, the UK Bribery Act 2010 and local law. The Connector does not offer, give or promise anything of value to any public official, or to any employee, officer or relative of a Prospect, to obtain business or an approval, and does not pass any part of a reward to them. Regulatory engagement takes place through official channels only."],
-      ["7.5", "Sanctions and law. The Connector is not a sanctioned person, does not introduce sanctioned persons, and complies with all laws on financial promotion, securities, data protection and anti-money laundering that apply to their activities."],
-      ["7.6", "Employees of Prospects. A person who is employed by, or an officer of, a Prospect does not earn a reward for introducing that Prospect."],
-      ["7.7", "If the Connector breaches this clause, BlockFinaX may end this agreement at once, stop all unpaid rewards and recover rewards already paid that relate to the breach."],
+    { n: "7", title: "Confidentiality and data", items: [
+      ["7.1", "Each party keeps confidential the other's non-public business, technical, financial and customer information, uses it only for the programme, and shares it only with people who need it and are bound by similar duties."],
+      ["7.2", "This duty does not cover information that is public through no fault of the receiving party, already known to it, or required to be disclosed by law."],
+      ["7.3", "The portal shows the Connector each referral's progress but not their balances, contracts or personal documents. The Connector uses contact details of Prospects only to make the introduction."],
+      ["7.4", "This clause continues for 3 years after the Connector's participation ends."],
     ] },
-    { n: "8", title: "Confidentiality and data", items: [
-      ["8.1", "Each party keeps confidential the other's non-public business, technical, financial and customer information, uses it only for this agreement, and shares it only with people who need it and are bound by similar duties."],
-      ["8.2", "This duty does not cover information that is public through no fault of the receiving party, already known to it, or required to be disclosed by law."],
-      ["8.3", "The portal shows the Connector each referral's progress but not their balances, contracts or personal documents. The Connector uses contact details of Prospects only to make the introduction."],
-      ["8.4", "This clause continues for 3 years after this agreement ends."],
+    { n: "8", title: "Brand and materials", items: [
+      ["8.1", "BlockFinaX grants the Connector a limited, revocable licence to use its name and the materials in the connector portal only to make introductions under these terms."],
+      ["8.2", "The Connector does not describe themselves as an employee, agent, partner or representative of BlockFinaX, and does not create websites, social accounts or materials in BlockFinaX's name without written approval."],
     ] },
-    { n: "9", title: "Brand and materials", items: [
-      ["9.1", "BlockFinaX grants the Connector a limited, revocable licence to use its name and the materials in the connector portal only to make introductions under this agreement."],
-      ["9.2", "The Connector does not describe themselves as an employee, agent, partner or representative of BlockFinaX, and does not create websites, social accounts or materials in BlockFinaX's name without written approval."],
+    { n: "9", title: "Term and ending", items: [
+      ["9.1", "These terms apply from when the Connector accepts them, after BlockFinaX has accepted the Connector's application, and continue until the Connector's participation ends under this clause."],
+      ["9.2", "Either party may end the Connector's participation by giving 30 days' notice, including by email or in the portal."],
+      ["9.3", "BlockFinaX may end it at once if the Connector materially breaches these terms, including clause 6."],
+      ["9.4", "Unless participation ends under clause 9.3, rewards already earned on Approved Relationships continue to be paid until the end of their Reward Period."],
+      ["9.5", "BlockFinaX reviews connector activity quarterly and may pause new approvals for an inactive Connector."],
+      ["9.6", "Clauses 5, 6.7, 7, 9.4, 10 and 11 continue after participation ends."],
     ] },
-    { n: "10", title: "Term and termination", items: [
-      ["10.1", "This agreement starts when the Connector signs it and continues until ended under this clause."],
-      ["10.2", "Either party may end it by giving 30 days' written notice, including by email."],
-      ["10.3", "BlockFinaX may end it at once if the Connector materially breaches it, including clause 7."],
-      ["10.4", "Unless this agreement ends under clause 10.3, rewards already earned on Approved Relationships continue to be paid until the end of their Reward Period."],
-      ["10.5", "BlockFinaX reviews connector activity quarterly and may pause new approvals for an inactive Connector."],
-      ["10.6", "Clauses 5, 7.7, 8, 10.4, 11 and 12 continue after this agreement ends."],
+    { n: "10", title: "Liability", items: [
+      ["10.1", "Neither party is liable for indirect or consequential loss, or for loss of profit, revenue or opportunity."],
+      ["10.2", "BlockFinaX's total liability under these terms is limited to the rewards payable to the Connector in the 12 months before the claim."],
+      ["10.3", "The Connector indemnifies BlockFinaX against losses arising from the Connector's breach of clause 6 or 7."],
+      ["10.4", "Nothing in these terms limits liability for fraud or any liability that cannot be limited by law."],
     ] },
-    { n: "11", title: "Liability", items: [
-      ["11.1", "Neither party is liable for indirect or consequential loss, or for loss of profit, revenue or opportunity."],
-      ["11.2", "BlockFinaX's total liability under this agreement is limited to the rewards payable to the Connector in the 12 months before the claim."],
-      ["11.3", "The Connector indemnifies BlockFinaX against losses arising from the Connector's breach of clause 7 or 8."],
-      ["11.4", "Nothing in this agreement limits liability for fraud or any liability that cannot be limited by law."],
-    ] },
-    { n: "12", title: "General", items: [
-      ["12.1", "Whole agreement. This agreement, its Schedule and any Approval Notices form the whole agreement on its subject and replace earlier discussions."],
-      ["12.2", "Changes. BlockFinaX may update the programme terms for future introductions by giving 30 days' written notice. Changes do not reduce rewards on relationships already approved."],
-      ["12.3", "Assignment. The Connector may not transfer this agreement or any reward without BlockFinaX's written consent."],
-      ["12.4", "Notices. Notices may be given by email to the address in the signature block or through the connector portal."],
-      ["12.5", "Electronic signature. The parties agree to sign electronically. Typing a full name in the signature block, with the confirmation ticked, is a signature with the same effect as a handwritten one, under the US Electronic Signatures in Global and National Commerce Act and other applicable law."],
-      ["12.6", "Governing law and disputes. This agreement is governed by the laws of the State of Delaware. The parties will first try to settle any dispute in good faith within 30 days. Any dispute not settled is resolved by binding arbitration administered by the International Centre for Dispute Resolution under its International Arbitration Rules, by one arbitrator, conducted online in English."],
-      ["12.7", "Severability. If any part of this agreement is unenforceable, the rest continues in effect."],
+    { n: "11", title: "General", items: [
+      ["11.1", "Whole agreement. These terms, their Schedule and any Approval Notices form the whole agreement on their subject and replace earlier discussions. A separate fundraising agreement, where one is signed, governs investor introductions."],
+      ["11.2", "Changes. BlockFinaX may update these terms for future introductions by giving 30 days' notice by email or in the portal; the Connector accepts the new version in the portal to keep taking part. Changes do not reduce rewards on relationships already approved."],
+      ["11.3", "Assignment. The Connector may not transfer their participation or any reward without BlockFinaX's written consent."],
+      ["11.4", "Notices. Notices may be given by email to the address on the Connector's BlockFinaX account or through the connector portal."],
+      ["11.5", "Electronic acceptance. The Connector accepts these terms by ticking the confirmation and clicking Accept in the connector portal. BlockFinaX records the version accepted, the time and the account. Acceptance has the same effect as a handwritten signature under the US Electronic Signatures in Global and National Commerce Act and other applicable law. No countersignature is needed: BlockFinaX's acceptance of the application is its agreement."],
+      ["11.6", "Governing law and disputes. These terms are governed by the laws of the State of Delaware. The parties will first try to settle any dispute in good faith within 30 days. Any dispute not settled is resolved by binding arbitration administered by the International Centre for Dispute Resolution under its International Arbitration Rules, by one arbitrator, conducted online in English."],
+      ["11.7", "Severability. If any part of these terms is unenforceable, the rest continues in effect."],
     ] },
   ],
   schedule: {
@@ -206,14 +203,14 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
 
 export const CONTRACTOR_AGREEMENT: AgreementDoc = {
   kind: "contractor",
-  title: "Independent Contractor Agreement",
-  version: "ICA 1.0",
-  issued: "28 October 2026",
-  intro: "BlockFinaX operates an onchain FX hedging protocol and engages independent contractors for defined pieces of work, such as market research, events, client education and onboarding support. These terms apply to every engagement BlockFinaX offers the Contractor in the connector portal.",
+  title: "Contractor Terms",
+  version: "CT 1.0",
+  issued: "29 October 2026",
+  intro: "BlockFinaX operates an onchain FX hedging protocol and engages independent contractors for defined pieces of work, such as market research, events, client education and onboarding support. These terms apply to every engagement BlockFinaX offers the Contractor in the connector portal, once BlockFinaX has accepted the Contractor's application and the Contractor has accepted these terms.",
   clauses: [
     { n: "1", title: "Engagements", items: [
       ["1.1", "BlockFinaX may offer the Contractor engagements in the connector portal. Each engagement states its title, scope of work, fees and dates."],
-      ["1.2", "An engagement starts only when the Contractor accepts it in the portal. Accepted engagements form part of this agreement. If an engagement and these terms conflict, the engagement prevails for that work."],
+      ["1.2", "An engagement starts only when the Contractor accepts it in the portal. Accepted engagements form part of these terms. If an engagement and these terms conflict, the engagement prevails for that work."],
       ["1.3", "The Contractor may decline any engagement. BlockFinaX is not obliged to offer any minimum amount of work."],
     ] },
     { n: "2", title: "Status", items: [
@@ -225,6 +222,7 @@ export const CONTRACTOR_AGREEMENT: AgreementDoc = {
       ["3.1", "BlockFinaX pays the fees stated in each engagement. Unless the engagement says otherwise, the Contractor invoices on completion and BlockFinaX pays within 30 days of a correct invoice."],
       ["3.2", "Fees are paid in US dollars or in USDC of equal value, to an account or wallet in the Contractor's own name."],
       ["3.3", "Expenses are reimbursed only if approved in writing in advance and supported by receipts."],
+      ["3.4", "Fees are paid in money only. Engagements give no right to shares, options or any other interest in BlockFinaX."],
     ] },
     { n: "4", title: "Standard of work and conduct", items: [
       ["4.1", "The Contractor performs the work with reasonable skill and care, on time, and in line with the scope."],
@@ -238,12 +236,12 @@ export const CONTRACTOR_AGREEMENT: AgreementDoc = {
     ] },
     { n: "6", title: "Confidentiality and data", items: [
       ["6.1", "The Contractor keeps BlockFinaX's non-public information and any personal data received confidential, uses it only for the engagement, and returns or deletes it when the engagement ends."],
-      ["6.2", "This clause continues for 3 years after this agreement ends, and indefinitely for personal data."],
+      ["6.2", "This clause continues for 3 years after the Contractor's participation ends, and indefinitely for personal data."],
     ] },
-    { n: "7", title: "Term and termination", items: [
-      ["7.1", "This agreement starts when the Contractor signs it and continues until ended by either party with 14 days' written notice."],
+    { n: "7", title: "Term and ending", items: [
+      ["7.1", "These terms apply from when the Contractor accepts them and continue until either party ends the Contractor's participation with 14 days' notice, including by email or in the portal."],
       ["7.2", "BlockFinaX may end it, or any engagement, at once for a material breach, including clause 4."],
-      ["7.3", "On termination BlockFinaX pays for work properly performed up to the termination date."],
+      ["7.3", "On ending, BlockFinaX pays for work properly performed up to that date."],
     ] },
     { n: "8", title: "Liability", items: [
       ["8.1", "Neither party is liable for indirect or consequential loss. BlockFinaX's total liability under an engagement is limited to the fees for that engagement."],
@@ -251,9 +249,9 @@ export const CONTRACTOR_AGREEMENT: AgreementDoc = {
       ["8.3", "Nothing limits liability for fraud or any liability that cannot be limited by law."],
     ] },
     { n: "9", title: "General", items: [
-      ["9.1", "Electronic signature. Typing a full name in the signature block, with the confirmation ticked, is a signature with the same effect as a handwritten one, under the US Electronic Signatures in Global and National Commerce Act and other applicable law. Accepting an engagement in the portal by typing a full name has the same effect."],
-      ["9.2", "Governing law and disputes. This agreement is governed by the laws of the State of Delaware. Disputes not settled in good faith within 30 days are resolved by binding arbitration administered by the International Centre for Dispute Resolution under its International Arbitration Rules, by one arbitrator, conducted online in English."],
-      ["9.3", "This agreement and accepted engagements form the whole agreement on their subject. The Contractor may not subcontract or transfer it without written consent. If any part is unenforceable, the rest continues."],
+      ["9.1", "Electronic acceptance. The Contractor accepts these terms, and each engagement, by ticking the confirmation and clicking Accept in the connector portal. BlockFinaX records the version accepted, the time and the account. Acceptance has the same effect as a handwritten signature under the US Electronic Signatures in Global and National Commerce Act and other applicable law. No countersignature is needed."],
+      ["9.2", "Governing law and disputes. These terms are governed by the laws of the State of Delaware. Disputes not settled in good faith within 30 days are resolved by binding arbitration administered by the International Centre for Dispute Resolution under its International Arbitration Rules, by one arbitrator, conducted online in English."],
+      ["9.3", "These terms and accepted engagements form the whole agreement on their subject. The Contractor may not subcontract or transfer their participation without written consent. If any part is unenforceable, the rest continues."],
     ] },
   ],
 };
@@ -263,7 +261,7 @@ export const AGREEMENTS: Record<DocumentKind, AgreementDoc> = {
   contractor: CONTRACTOR_AGREEMENT,
 };
 
-/** The exact text that is hashed and stored with each signature. */
+/** The exact text that is hashed and stored with each acceptance. */
 export function agreementText(doc: AgreementDoc): string {
   const lines = [
     `${doc.title}, version ${doc.version}, issued ${doc.issued}`,
@@ -303,9 +301,9 @@ export const MODULES: Module[] = [
       "Connectors open doors for BlockFinaX and are rewarded for results. You register each introduction in this portal before you make it. BlockFinaX reviews it and, if it fits, approves it with the reward that applies.",
       "Revenue relationships earn 25% of the revenue BlockFinaX collects from them for 12 months. The 12 months start when the first revenue arrives, not when you register.",
       "- Revenue means fees BlockFinaX keeps. Premiums owed to underwriters, deposits, the amount a business protects and settlement money are never revenue.",
-      "- Rewards are paid every quarter, within 30 days of quarter end, with a statement in the Rewards tab.",
+      "- Rewards are paid every quarter, within 30 days of quarter end, with a statement under Earnings.",
       "- Milestones such as a regulatory approval or a first bank partner earn a fixed bonus set when BlockFinaX approves them.",
-      "Introduce four relationships that keep producing revenue and you become eligible for an advisory review. Advisors can earn shares in BlockFinaX through a separate advisory agreement with measurable goals.",
+      "Introducing investors is different. It is not covered by the programme terms and needs a separate fundraising agreement, signed by both sides, before you introduce anyone. Rewards are paid in money only; the programme does not give shares.",
       "Users who sign up through your personal referral link are credited to you automatically. You can follow their progress, never their balances or contracts.",
     ],
     questions: [

@@ -1509,14 +1509,14 @@ const CONNECTORS: AudienceCopy = {
   secondary: { label: 'Read the programme guide', href: 'https://docs.blockfinax.com/connectors' },
   steps: [
     { t: 'Apply', d: 'Create your BlockFinaX account and tell us your markets and how you can help. We review every application.' },
-    { t: 'Sign and train', d: 'Once accepted, sign your agreement online and complete four short lessons.' },
+    { t: 'Agree and train', d: 'Once accepted, agree to the programme terms and complete four short lessons.' },
     { t: 'Introduce and earn', d: 'Register each organisation before you introduce it, share your referral link and follow your rewards in your portal.' },
   ],
   pointsTitle: 'Who it is for',
   points: [
     { t: 'Connectors', d: 'Consultants, bankers, advisers and community leaders with relationships in their market.' },
     { t: 'Independent contractors', d: 'People who take on paid pieces of work, such as research, events and onboarding support.' },
-    { t: 'Experts', d: 'Regulatory, banking and market specialists who can grow into advisors with shares in the company.' },
+    { t: 'Specialists', d: 'Regulatory, banking and market experts who can open doors to approvals, partners and new countries.' },
   ],
   note: { t: 'How rewards work', d: 'You register every introduction in your portal first, and BlockFinaX approves it in writing with the reward that applies. That way it is always clear what you have earned. Rewards are paid every quarter.' },
   faqs: [

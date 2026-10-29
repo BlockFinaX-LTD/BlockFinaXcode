@@ -28,7 +28,7 @@ export function connectorBrief(b: BriefInput): string {
         `- Membership: ${b.member.kind}, status ${b.member.status}`,
         `- Country: ${b.member.country}`,
         `- Areas they chose: ${b.member.areas.map((k) => AREAS.find((a) => a.key === k)?.label ?? k).join(", ") || "none yet"}`,
-        `- Agreement (${doc.title}, ${doc.version}): ${b.signed ? "signed" : "not signed yet"}`,
+        `- Terms (${doc.title}, ${doc.version}): ${b.signed ? "accepted" : "not accepted yet"}`,
         `- Training passed: ${b.passed.length} of ${MODULES.length}${b.passed.length ? ` (${b.passed.map((id) => MODULES.find((m) => m.id === id)?.title ?? id).join(", ")})` : ""}`,
         `- Still to do before registering prospects: ${b.missing.length ? b.missing.join("; ") : "nothing, they are ready"}`,
       ].join("\n")
@@ -58,6 +58,6 @@ export function connectorBrief(b: BriefInput): string {
     `## Contribution areas\n${areas}`,
     `## Training (pass mark ${Math.round(PASS_MARK * 100)}% per module)\n${training}`,
     `## Materials they may share\n${materials}`,
-    `## The agreement they are under\n${agreementText(doc)}`,
+    `## The programme terms that apply to them\n${agreementText(doc)}`,
   ].join("\n\n");
 }

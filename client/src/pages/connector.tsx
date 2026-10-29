@@ -1,7 +1,7 @@
 /**
  * Connector portal (connector.blockfinax.com, also at /connector on the app).
  *
- * Connectors and independent contractors apply, sign their agreement, complete the
+ * Connectors and independent contractors apply, accept the programme terms, complete the
  * training, register prospects, share a referral link, follow their referrals, see their
  * rewards and, for contractors, accept engagements. BlockFinaX manages all of it from the
  * admin dashboard (Connectors). Server: server/connectors.
@@ -149,7 +149,7 @@ const RAIL: { key: Section; label: string; icon: typeof Home; to: Tab }[] = [
   { key: 'profile', label: 'Profile', icon: UserRound, to: 'profile' },
 ];
 
-/** Which rail item a page belongs to. A signed agreement is opened from Profile; an unsigned one from Home. */
+/** Which rail item a page belongs to. Accepted terms are opened from Profile; terms still to accept from Home. */
 function sectionOf(tab: Tab, me: Me): Section {
   if (tab === 'home' || tab === 'prospects' || tab === 'engagements') return 'home';
   if (tab === 'training' || tab === 'materials') return 'learn';
@@ -363,7 +363,7 @@ function ApplyPage({ email, prefill }: { email: string | null; prefill: Me['pref
       <div className="bx-onboard-card" style={{ maxWidth: 760 }}>
         <div className="bx-brand" style={{ padding: '0 0 14px' }}><img src={logoPath} alt="" />BlockFinaX</div>
         <h1 className="bx-cp-h1">Apply to the Connector Programme</h1>
-        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you can help. BlockFinaX reviews every application and emails you when you are accepted; your agreement and training open then.</p>
+        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you can help. BlockFinaX reviews every application and emails you when you are accepted; the programme terms and training open then.</p>
         {filled && <Note>We filled in what your BlockFinaX account already has. Check it, then choose where you can help.</Note>}
         <ProfileFields form={form} set={setForm} />
         {error && <Note warn>{error}</Note>}
@@ -405,7 +405,7 @@ function ApplicationStatus({ me, onSignOut }: { me: Me; onSignOut: () => void })
           <ul className="bx-cp-check">
             <li><Check className="done" /><span>Application sent on {day(m.joinedAt)}</span></li>
             <li><Circle className="todo" /><span>BlockFinaX reviews it</span></li>
-            <li><Circle className="todo" /><span>Once accepted: sign your agreement and complete four short lessons</span></li>
+            <li><Circle className="todo" /><span>Once accepted: agree to the programme terms and complete four short lessons</span></li>
           </ul>
         )}
         {editing ? (
@@ -441,12 +441,12 @@ function Overview({ me, go }: { me: Me; go: (t: Tab) => void }) {
   const passed = me.lessons.filter((l) => l.passed).length;
   const steps: { done: boolean; label: string; tab?: Tab }[] = [
     { done: m.status !== 'applied', label: m.status === 'applied' ? 'Application under review' : 'Application approved' },
-    { done: !!me.agreement.signed, label: `Sign the ${AGREEMENTS[me.agreement.kind].title}`, tab: 'agreement' },
+    { done: !!me.agreement.signed, label: `Accept the ${AGREEMENTS[me.agreement.kind].title}`, tab: 'agreement' },
     { done: passed === MODULES.length, label: `Complete the training (${passed} of ${MODULES.length})`, tab: 'training' },
   ];
   return (
     <>
-      <p className="bx-cp-lede" style={{ marginTop: 0 }}>{m.kind === 'contractor' ? 'Your engagements, agreement and payments in one place.' : 'Your introductions, referrals and rewards in one place.'}</p>
+      <p className="bx-cp-lede" style={{ marginTop: 0 }}>{m.kind === 'contractor' ? 'Your engagements, terms and payments in one place.' : 'Your introductions, referrals and rewards in one place.'}</p>
       {m.status === 'paused' && <Note warn>Your access is paused. Rewards already earned are not affected. Contact BlockFinaX to discuss it.</Note>}
       {(m.status === 'ended' || m.status === 'declined') && <Note warn>Your membership is not active.</Note>}
       {!me.ready && (
@@ -475,14 +475,14 @@ function Overview({ me, go }: { me: Me; go: (t: Tab) => void }) {
           <div className="bx-cp-stat"><b>{me.counts.registrations}</b><span>Prospects registered</span></div>
           <div className="bx-cp-stat"><b>{me.counts.approved}</b><span>Approved introductions</span></div>
           <div className="bx-cp-stat"><b>{me.counts.referrals}</b><span>Referred users</span></div>
-          <div className="bx-cp-stat"><b>{Math.min(me.counts.qualifying, 4)} of 4</b><span>Towards an advisory review</span></div>
+          <div className="bx-cp-stat"><b>{me.counts.new_offers}</b><span>New offers</span></div>
         </div>
       )}
     </>
   );
 }
 
-// ── Agreement ─────────────────────────────────────────────────────────────
+// ── Terms ─────────────────────────────────────────────────────────────────
 
 export function AgreementView({ doc }: { doc: AgreementDoc }) {
   return (
@@ -491,7 +491,7 @@ export function AgreementView({ doc }: { doc: AgreementDoc }) {
       <h2 className="bx-cp-h1" style={{ fontFamily: 'Geist, system-ui, sans-serif' }}>{doc.title}</h2>
       <div className="bx-cp-parties">
         <div><span className="r">Company</span><b>{COMPANY.name}</b><span>{COMPANY.description[0]!.toUpperCase() + COMPANY.description.slice(1)}, registered office {COMPANY.address}</span></div>
-        <div><span className="r">{doc.kind === 'contractor' ? 'Contractor' : 'Connector'}</span><b>The person named in the signature block</b><span>Who accepts this agreement by signing it electronically</span></div>
+        <div><span className="r">{doc.kind === 'contractor' ? 'Contractor' : 'Connector'}</span><b>The member who accepts these terms</b><span>By ticking the box and clicking Accept in the portalonically</span></div>
       </div>
       <p>{doc.intro}</p>
       {doc.clauses.map((c) => (
@@ -518,44 +518,36 @@ export function AgreementView({ doc }: { doc: AgreementDoc }) {
 function AgreementTab({ me }: { me: Me }) {
   const qc = useQueryClient();
   const doc = AGREEMENTS[me.agreement.kind];
-  const [typed, setTyped] = useState('');
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const signed = me.agreement.signed;
-  const sign = async () => {
+  const accepted = me.agreement.signed;
+  const accept = async () => {
     setBusy(true); setError(null);
-    try { await api('/api/v2/connectors/sign', { typedName: typed, agree }); await qc.invalidateQueries({ queryKey: ['connector-me'] }); }
+    try { await api('/api/v2/connectors/sign', { agree }); await qc.invalidateQueries({ queryKey: ['connector-me'] }); }
     catch (e) { setError(errMsg(e)); } finally { setBusy(false); }
   };
   return (
     <>
       <section className="bx-card"><AgreementView doc={doc} /></section>
       <section className="bx-cp-sign" aria-labelledby="sig-h">
-        <h2 id="sig-h" style={{ margin: 0, fontSize: 18 }}>Signature</h2>
-        {signed ? (
+        <h2 id="sig-h" style={{ margin: 0, fontSize: 18 }}>{accepted ? 'You accepted these terms' : 'Accept the terms'}</h2>
+        {accepted ? (
           <>
-            <span className="bx-cp-signed">{signed.typedName}</span>
-            <span className="muted">Signed {new Date(signed.signedAt).toUTCString()}{signed.binding ? '' : ' · test signature on testnet, not binding'}</span>
-            <span className="muted">{signed.countersignedAt ? `Countersigned by BlockFinaX on ${day(signed.countersignedAt)}` : 'Waiting for BlockFinaX to countersign'}</span>
+            <span className="muted">Accepted by {accepted.typedName} on {new Date(accepted.signedAt).toUTCString()}{accepted.binding ? '' : ' · test acceptance on testnet, not binding'}</span>
             <span className="muted" style={{ fontSize: 12, wordBreak: 'break-all' }}>Text fingerprint (SHA-256): {me.agreement.hash}</span>
           </>
         ) : !me.signing.open ? (
-          <Note>Signing opens once BlockFinaX has finalised this agreement. You can read it now.</Note>
+          <Note>These terms open for acceptance once BlockFinaX has finalised them. You can read them now.</Note>
         ) : (
           <>
-            <p className="muted" style={{ margin: 0 }}>By signing, you confirm you have read this agreement{doc.schedule ? ', including its Schedule,' : ''} and agree to be bound by it.</p>
-            {!me.signing.binding && <Note>This is testnet. Your signature is recorded as a test signature and is not binding.</Note>}
-            <label htmlFor="cp-typed" className="muted" style={{ fontSize: 13 }}>Type your full legal name to sign: <b>{me.member!.fullName}</b></label>
-            <input id="cp-typed" className="bx-cp-sigline" value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)} />
-            <span className="muted" style={{ fontSize: 13 }}>Date: recorded automatically when you sign</span>
+            {!me.signing.binding && <Note>This is testnet. Your acceptance is recorded as a test and is not binding.</Note>}
             <label className="bx-cp-tick"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-              <span>I agree to this {doc.title} and intend my typed name to be my legal signature.</span></label>
+              <span>I have read and agree to the {doc.title}{doc.schedule ? ', including its Schedule' : ''}.</span></label>
             {error && <Note warn>{error}</Note>}
-            <button className="bx-btn" style={{ justifySelf: 'start' }} disabled={busy || !agree || typed.trim().length < 3} onClick={sign}>{busy ? <Spin /> : <FileSignature />}Sign agreement</button>
+            <button className="bx-btn" style={{ justifySelf: 'start' }} disabled={busy || !agree} onClick={accept}>{busy ? <Spin /> : <Check />}Accept</button>
           </>
         )}
-        <div className="muted" style={{ borderTop: '1px dashed var(--line-2)', paddingTop: 12, fontSize: 13 }}>For {COMPANY.name}: authorised signatory, countersigned after you sign.</div>
       </section>
     </>
   );
@@ -665,7 +657,7 @@ function ProspectsTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
       </div>
       {!me.ready && (
         <Note warn>Before you can register prospects: {me.missing.join('; ')}.{' '}
-          {!me.agreement.signed && <button className="bx-link" onClick={() => go('agreement')}>Open your agreement</button>}</Note>
+          {!me.agreement.signed && <button className="bx-link" onClick={() => go('agreement')}>Open the terms</button>}</Note>
       )}
       {adding && <RegisterForm onDone={() => setAdding(false)} />}
       {regs.isLoading ? <Loading /> : !regs.data?.registrations.length ? (
@@ -715,7 +707,7 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
           </select>
         </Field>
         {area && <div className="wide" style={{ marginBottom: 14 }}><Note>{area.qualifies}. Reward: {area.reward}.</Note></div>}
-        {f.area === 'fundraising' && <div className="wide" style={{ marginBottom: 14 }}><Note warn>Do not ask anyone to invest. Register the investor's interest only; any fee needs a separate written fundraising agreement first.</Note></div>}
+        {f.area === 'fundraising' && <div className="wide" style={{ marginBottom: 14 }}><Note warn>Do not ask anyone to invest. Register the investor's interest only; any fee needs a separate fundraising agreement, signed by both sides, before you introduce anyone.</Note></div>}
         <Field label="Organisation" htmlFor="rg-org"><input id="rg-org" className="bx-input" value={f.organisation} onChange={(e) => setF({ ...f, organisation: e.target.value })} /></Field>
         <Field label="Website" htmlFor="rg-web"><input id="rg-web" className="bx-input" placeholder="acme.com" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} /></Field>
         <Field label="Person you know there" htmlFor="rg-contact"><input id="rg-contact" className="bx-input" value={f.contactName} onChange={(e) => setF({ ...f, contactName: e.target.value })} /></Field>
@@ -744,7 +736,7 @@ function ReferralsTab({ me }: { me: Me }) {
         <h1 className="bx-cp-h1">Referrals</h1>
         <p className="bx-cp-lede">People who created a BlockFinaX account through your link. You see their progress, never their balances or contracts. Estimates are 25% of the protocol fees on their contracts in their first 12 months; the quarterly statement is what is paid.</p>
       </div>
-      {me.referral ? <CopyBox value={me.referral.link} /> : <Note>Your referral link appears once your application is approved, your agreement is signed and your training is complete.</Note>}
+      {me.referral ? <CopyBox value={me.referral.link} /> : <Note>Your referral link appears once your application is approved, you have accepted the terms and your training is complete.</Note>}
       {q.isLoading ? <Loading /> : !q.data?.referrals.length ? <section className="bx-card"><div className="bx-empty">No referrals yet.</div></section> : (
         <div className="bx-cp-items">
           {q.data.referrals.map((r) => (
@@ -831,14 +823,13 @@ function RewardsTab() {
 function EngagementsTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['connector-engagements'], queryFn: () => api<{ engagements: Engagement[] }>('/api/v2/connectors/engagements') });
-  const [typed, setTyped] = useState<Record<string, string>>({});
   const [agree, setAgree] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<Record<string, string>>({});
   const act = async (id: string, action: 'accept' | 'decline') => {
     setBusy(id); setError({ ...error, [id]: '' });
     try {
-      await api(`/api/v2/connectors/engagements/${id}/${action}`, action === 'accept' ? { typedName: typed[id] ?? '', agree: !!agree[id] } : {});
+      await api(`/api/v2/connectors/engagements/${id}/${action}`, action === 'accept' ? { agree: !!agree[id] } : {});
       await Promise.all([qc.invalidateQueries({ queryKey: ['connector-engagements'] }), qc.invalidateQueries({ queryKey: ['connector-me'] })]);
     } catch (e) { setError({ ...error, [id]: errMsg(e) }); } finally { setBusy(null); }
   };
@@ -847,9 +838,9 @@ function EngagementsTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
     <>
       <div>
         <h1 className="bx-cp-h1">Engagements</h1>
-        <p className="bx-cp-lede">Paid pieces of work BlockFinaX offers you under your Independent Contractor Agreement. Accept by typing your full name.</p>
+        <p className="bx-cp-lede">Paid pieces of work BlockFinaX offers you under the Contractor Terms. Tick the box and accept the ones you want to take on.</p>
       </div>
-      {!me.agreement.signed && <Note warn>Sign the Independent Contractor Agreement before accepting engagements. <button className="bx-link" onClick={() => go('agreement')}>Open it</button></Note>}
+      {!me.agreement.signed && <Note warn>Accept the Contractor Terms before accepting engagements. <button className="bx-link" onClick={() => go('agreement')}>Open them</button></Note>}
       {q.isLoading ? <Loading /> : !q.data?.engagements.length ? <section className="bx-card"><div className="bx-empty">No engagements yet. Offers from BlockFinaX will appear here.</div></section> : q.data.engagements.map((e) => (
         <section key={e.id} className="bx-card" style={{ display: 'grid', gap: 10 }}>
           <div className="bx-card-h"><h2>{e.title}</h2><Tag tone={tone[e.status] ?? 'grey'}>{e.status[0]!.toUpperCase() + e.status.slice(1)}</Tag></div>
@@ -859,10 +850,8 @@ function EngagementsTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
           {e.acceptedName && <span className="muted">Accepted by <i>{e.acceptedName}</i> on {day(e.acceptedAt)}</span>}
           {e.status === 'offered' && (
             <div style={{ display: 'grid', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
-              <label className="muted" htmlFor={`eng-${e.id}`} style={{ fontSize: 13 }}>Type your full legal name to accept: <b>{me.member!.fullName}</b></label>
-              <input id={`eng-${e.id}`} className="bx-cp-sigline" value={typed[e.id] ?? ''} onChange={(ev) => setTyped({ ...typed, [e.id]: ev.target.value })} />
               <label className="bx-cp-tick"><input type="checkbox" checked={!!agree[e.id]} onChange={(ev) => setAgree({ ...agree, [e.id]: ev.target.checked })} />
-                <span>I accept this engagement under the Independent Contractor Agreement and intend my typed name to be my signature.</span></label>
+                <span>I accept this engagement under the Contractor Terms.</span></label>
               {error[e.id] && <Note warn>{error[e.id]}</Note>}
               <div className="bx-cp-row">
                 <button className="bx-btn" disabled={busy === e.id || !agree[e.id]} onClick={() => act(e.id, 'accept')}>Accept engagement</button>
@@ -994,7 +983,7 @@ function ProfileTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
       </div>
       <section className="bx-card">
         <ProfileFields form={form} set={setForm} lockKind={m.status !== 'applied'} />
-        {nameChanged && me.agreement.signed && <Note warn>Your signed agreement carries your current name. If your legal name has changed, contact BlockFinaX.</Note>}
+        {nameChanged && me.agreement.signed && <Note warn>Your accepted terms carry your current name. If your legal name has changed, contact BlockFinaX.</Note>}
         <div className="bx-cp-row" style={{ marginTop: 10 }}>
           <button className="bx-btn" disabled={busy} onClick={save}>{busy ? <Spin /> : null}Save profile</button>
           {msg && <span className={msg.ok ? 'up' : 'down'}>{msg.text}</span>}
@@ -1002,12 +991,11 @@ function ProfileTab({ me, go }: { me: Me; go: (t: Tab) => void }) {
       </section>
       {me.agreement.signed && (
         <section className="bx-card">
-          <h2 style={{ fontSize: 16, marginBottom: 6 }}>Your agreement</h2>
+          <h2 style={{ fontSize: 16, marginBottom: 6 }}>Your terms</h2>
           <p className="muted" style={{ marginBottom: 12 }}>
-            {AGREEMENTS[me.agreement.kind].title}, version {me.agreement.version}. Signed {day(me.agreement.signed.signedAt)}
-            {me.agreement.signed.countersignedAt ? `, countersigned ${day(me.agreement.signed.countersignedAt)}` : ', waiting for BlockFinaX to countersign'}.
+            {AGREEMENTS[me.agreement.kind].title}, version {me.agreement.version}. Accepted {day(me.agreement.signed.signedAt)}.
           </p>
-          <button className="bx-btn ghost" onClick={() => go('agreement')}><FileSignature />View signed agreement</button>
+          <button className="bx-btn ghost" onClick={() => go('agreement')}><FileSignature />View the terms</button>
         </section>
       )}
     </>

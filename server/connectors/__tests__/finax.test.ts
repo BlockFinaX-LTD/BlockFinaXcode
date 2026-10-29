@@ -15,7 +15,7 @@ test("the brief carries the member's own status, prospects and next step", () =>
   assert.match(b, /Ama Mensah/);
   assert.match(b, /Complete the training/);
   assert.match(b, /Kumasi Imports Ltd: Hedgers, approved/);
-  assert.match(b, /Connector Agreement, version/);
+  assert.match(b, /Connector Programme Terms, version/);
 });
 
 test("the brief never contains the quiz answers", () => {

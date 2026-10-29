@@ -164,7 +164,7 @@ export function missingSteps(r: Readiness): string[] {
   else if (r.status === "applied") missing.push("Wait for BlockFinaX to approve your application");
   else if (r.status === "paused") missing.push("Your access is paused; contact BlockFinaX");
   else if (r.status === "ended" || r.status === "declined") missing.push("Your membership is not active");
-  if (!r.agreementSigned) missing.push("Sign your agreement");
+  if (!r.agreementSigned) missing.push("Accept the programme terms");
   const needed = MODULES.filter((m) => m.required && !r.modulesPassed.includes(m.id));
   if (needed.length) missing.push(`Pass the training: ${needed.map((m) => m.title).join(", ")}`);
   if (r.screening === "hit") missing.push("Your screening needs review by BlockFinaX");

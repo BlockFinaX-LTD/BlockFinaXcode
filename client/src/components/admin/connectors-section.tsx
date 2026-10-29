@@ -1,7 +1,7 @@
 /**
  * Connectors — the admin side of the connector portal (server/connectors).
  *
- *   Members        applications and members; open one to approve, countersign, record
+ *   Members        applications and members; open one to approve, record
  *                  rewards and payments, and offer contractor engagements
  *   Registrations  prospects waiting for a decision, across all members
  *   Offers         opportunities posted to the portal's offers board, and who is interested
@@ -91,7 +91,7 @@ function Members({ token, onOpen }: { token: string; onOpen: (id: number) => voi
                 <td className="p-3"><Pill s={m.screening} /></td>
                 <td className="p-3">{m.lessonsPassed} of {m.lessonsTotal}</td>
                 <td className="p-3 text-xs">
-                  {[m.pending ? `${m.pending} to review` : "", m.toCountersign ? `${m.toCountersign} to countersign` : ""].filter(Boolean).join(", ") || <span className="text-gray-400">nothing</span>}
+                  {m.pending ? `${m.pending} to review` : <span className="text-gray-400">nothing</span>}
                 </td>
                 <td className="p-3 text-right tabular-nums">{usd(m.owed)}</td>
               </tr>
@@ -161,7 +161,6 @@ function RegistrationCard({ token, r, onOpenMember }: { token: string; r: any; o
             <Input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Reward terms" aria-label="Reward terms" />
             <Input value={bonus} onChange={(e) => setBonus(e.target.value)} placeholder="Bonus in US dollars, if any" aria-label="Bonus" inputMode="decimal" />
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note to the member (shown to them)" aria-label="Note" />
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={counts} onChange={(e) => setCounts(e.target.checked)} />Counts towards the advisory review</label>
             {r.status === "approved" && (
               <label className="flex items-center gap-2 text-sm">First revenue date <Input type="date" className="w-auto" value={firstRevenue} onChange={(e) => setFirstRevenue(e.target.value)} /></label>
             )}
@@ -233,15 +232,13 @@ function MemberDetail({ token, userId, onBack }: { token: string; userId: number
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Signatures and training</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Terms and training</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {!d.signatures.length && <p className="text-gray-500">Nothing signed yet.</p>}
+          {!d.signatures.length && <p className="text-gray-500">Terms not accepted yet.</p>}
           {d.signatures.map((s: any) => (
             <div key={s.id} className="flex justify-between gap-3 flex-wrap border-b pb-2">
-              <span><i className="font-serif text-base">{s.typedName}</i> · {s.document} {s.version} · {new Date(s.signedAt).toUTCString()}{s.binding ? "" : " · test signature"}
+              <span>Accepted by {s.typedName} · {s.document === "contractor" ? "Contractor Terms" : "Connector Programme Terms"} {s.version} · {new Date(s.signedAt).toUTCString()}{s.binding ? "" : " · test acceptance"}
                 <br /><span className="text-xs text-gray-400 break-all">SHA-256 {s.hash}</span></span>
-              {s.countersignedAt ? <span className="text-xs text-gray-500">Countersigned by {s.countersignedBy}, {day(s.countersignedAt)}</span>
-                : <Button size="sm" disabled={busy} onClick={() => run(`/api/v2/admin/connectors/${userId}/countersign`, { signatureId: s.id }, "Countersigned")}>Countersign</Button>}
             </div>
           ))}
           <p className="pt-2">
@@ -328,7 +325,7 @@ function MemberDetail({ token, userId, onBack }: { token: string; userId: number
           </CardContent>
         </Card>
       )}
-      <p className="text-xs text-gray-400">Areas available: {AREAS.length}. Approval emails are the member's Approval Notice under the Connector Agreement.</p>
+      <p className="text-xs text-gray-400">Areas available: {AREAS.length}. Approval emails are the member's Approval Notice under the Connector Programme Terms.</p>
     </div>
   );
 }
