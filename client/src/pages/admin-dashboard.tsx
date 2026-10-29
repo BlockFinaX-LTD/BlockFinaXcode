@@ -19,6 +19,7 @@ import {
   FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send, FileSignature, Bot, Scale,
   Handshake,
   Radar,
+  FileCode2,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -27,6 +28,7 @@ import { AgentSection } from "@/components/admin/agent-section";
 import { ComplianceSection } from "@/components/admin/compliance-section";
 import { ConnectorsSection } from "@/components/admin/connectors-section";
 import { XSignalsSection } from "@/components/admin/x-signals-section";
+import { InternalDocsSection } from "@/components/admin/internal-docs-section";
 
 import { DocumentsSection } from "@/components/admin/documents-section";
 
@@ -43,7 +45,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "docs" | "dashboard" | "agent" | "compliance" | "connectors" | "xsignals" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "docs" | "dashboard" | "agent" | "compliance" | "connectors" | "xsignals" | "devdocs" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -57,6 +59,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "tasks", label: "Tasks & Points", icon: ListChecks },
   { key: "analytics", label: "Analytics", icon: Activity },
   { key: "docs", label: "Documents", icon: FileText },
+  { key: "devdocs", label: "Dev docs", icon: FileCode2 },
   { key: "content", label: "Content", icon: FileText },
   { key: "agreements", label: "Agreements", icon: FileSignature },
   { key: "protocol", label: "Protocol", icon: Settings },
@@ -2955,6 +2958,7 @@ function AdminLayout({
         {section === "compliance" && <ComplianceSection token={adminToken} />}
         {section === "connectors" && <ConnectorsSection token={adminToken} />}
         {section === "xsignals" && <XSignalsSection token={adminToken} />}
+        {section === "devdocs" && <InternalDocsSection token={adminToken} />}
         {section === "protocol" && <ProtocolSection />}
       </main>
     </div>

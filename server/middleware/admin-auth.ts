@@ -23,7 +23,7 @@ setInterval(() => {
   // needs downlevelIteration.
   adminSessions.forEach((s, token) => { if (now > s.expiresAt) adminSessions.delete(token); });
   adminChallenges.forEach((exp, nonce) => { if (now > exp) adminChallenges.delete(nonce); });
-}, 60_000);
+}, 60_000).unref(); // housekeeping only: never keep a process (a test, a script) alive on its own
 
 export function generateAdminToken(): string {
   return randomBytes(32).toString("hex");
