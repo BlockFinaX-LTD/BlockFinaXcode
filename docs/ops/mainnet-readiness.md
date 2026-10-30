@@ -4,6 +4,8 @@ Target: limited mainnet on Stellar by 26 February 2027 (invited businesses and u
 
 Last updated: 30 October 2026.
 
+The full security checklist (contracts, keys, oracle, wallets, server, team devices) is kept in the admin dashboard under **Security checks**, not in this public repository. Every blocker there must be closed too.
+
 ## Decisions needed first (contract freeze)
 
 The audit can only start on frozen contract code. Decide:
