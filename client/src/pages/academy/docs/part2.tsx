@@ -24,7 +24,7 @@ export function GettingStarted() {
       </Section>
 
       <Section n="02" id="funding" title="Adding USDC">
-        <P>BlockFinaX uses USDC only. You never need XLM or ETH, because BlockFinaX pays the network fees.</P>
+        <P>BlockFinaX uses USDC only. You never need XLM or ETH, because network fees are covered.</P>
         <Table
           head={['Method', 'How', 'Notes']}
           rows={[
@@ -114,7 +114,7 @@ export function YourQuote() {
             ['Most you can receive', 'The maximum payout, before the 2% payout fee.'],
             ['Premium', 'The price of the protection.'],
             ['Execution cost', 'The 5% platform fee on the premium.'],
-            ['Network fees', 'Covered by BlockFinaX.'],
+            ['Network fees', 'Covered.'],
             ['Total', 'Premium plus execution cost, taken from your wallet when you confirm.'],
           ]}
         />

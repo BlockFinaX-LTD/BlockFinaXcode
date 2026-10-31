@@ -8,7 +8,7 @@ const QA: [string, React.ReactNode][] = [
   ['What happens to my premium if there is no payout?', 'It stays with the underwriters who backed the contract. It is the price of having been protected.'],
   ['Can I protect several payments?', 'Yes. Buy a separate contract for each amount and date; each runs independently.'],
   ['What if my end date is a public holiday?', 'Only weekends move the end date, to the following Monday. Public holidays do not, so the reference rate on that day is used.'],
-  ['Do I need experience with crypto?', 'No. You sign in with email or Google, approve with a passkey and hold USDC. BlockFinaX pays network fees.'],
+  ['Do I need experience with crypto?', 'No. You sign in with email or Google, approve with a passkey and hold USDC. Network fees are covered.'],
   ['Can I check a contract independently?', <>Yes. Every purchase, settlement and claim is a transaction on the Stellar ledger and can be viewed in a Stellar explorer such as stellar.expert. The test network pool contract is CAEKJTUSZIWY5OMK6EVOSNPMEULI3MDO3BLP6Y5OKPHRNKM6KTH5YURM.</>],
   ['What happens if BlockFinaX stops operating?', 'Balances and contracts stay in the pool contract on Stellar. Settlement needs the rate operators to report, and the app is currently the only supported way to submit transactions.'],
   ['Who are the underwriters?', 'Anyone with a BlockFinaX account can underwrite. Each pool shows its creator\'s wallet address.'],

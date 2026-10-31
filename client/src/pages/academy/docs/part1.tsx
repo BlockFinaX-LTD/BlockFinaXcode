@@ -75,7 +75,7 @@ export function HowProtectionWorks() {
             ['Underwriters', 'Deposit USDC into a pool, receive the premium of each contract their money backs, and pay its payout.'],
             ['Pool creator', 'An underwriter who opened the pool and set its terms: currency, direction, durations, structures and prices.'],
             ['Rate operators', 'Report the exchange rate after each contract ends. Two must agree before a payout is fixed.'],
-            ['BlockFinaX', 'Prices quotes, provides the wallet, pays network fees, runs the rate operators and starts settlement.'],
+            ['BlockFinaX', 'Prices quotes, provides the wallet, arranges network fee cover, runs the rate operators and starts settlement.'],
           ]}
         />
       </Section>
@@ -184,8 +184,8 @@ export function PricingAndCharges() {
     <>
       <Head part={PART} title="Pricing and charges">
         The premium is the price of the protection, paid once at purchase and kept by the underwriters whatever happens. On top
-        of it, a direct buyer pays a 5% platform fee on the premium, and 2% of any payout when it is claimed. BlockFinaX pays the
-        network fees.
+        of it, a direct buyer pays a 5% platform fee on the premium, and 2% of any payout when it is claimed. Network fees
+        are covered.
       </Head>
 
       <Section n="01" id="premium" title="The premium">
@@ -217,7 +217,7 @@ export function PricingAndCharges() {
             ['Payout fee', '2% of the payout', 'Buyer', 'When a payout is claimed'],
             ['Underwriting fee', '2% of the premium', 'Underwriters', 'Taken from the premium at purchase'],
             ['Pool creation fee', '25 USDC', 'Pool creator', 'When a pool is opened'],
-            ['Network fees', 'None for users', 'BlockFinaX', 'Every transaction'],
+            ['Network fees', 'None for users', 'Relayers', 'Every transaction'],
             ['Circle transfer fee', 'Shown before you confirm', 'User', 'Only when moving USDC between Base and Stellar'],
           ]}
         />

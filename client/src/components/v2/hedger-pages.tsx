@@ -964,7 +964,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
             {[
               ['Choose your cover', 'Pick an amount, how long you need it, and where protection starts.'],
-              ['Pay once in USDC', 'The premium is the whole cost. Network fees are covered by BlockFinaX.'],
+              ['Pay once in USDC', 'The premium is the whole cost. Network fees are covered.'],
               ['Get paid if it moves', `If the ${name} ${direction === 'up' ? 'weakens' : 'strengthens'} past your strike at expiry, you receive the difference.`],
             ].map(([t, d], i) => (
               <div key={t}>

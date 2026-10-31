@@ -29,7 +29,7 @@ export const GLOSSARY: Record<string, string> = {
   'Price': 'The premium as a share of the amount protected.',
   'Cost per $1,000': 'What protecting $1,000 would cost for this length.',
   'Execution cost': 'BlockFinaX\'s platform fee on the premium.',
-  'Network fees': 'Blockchain transaction fees. BlockFinaX pays them for you.',
+  'Network fees': 'Blockchain transaction fees. They are covered for you.',
   'Total': 'Everything you pay, in USDC.',
   'Protected': 'The amount of money this protection covers.',
   'Protected exposure': 'The total amount covered by your active protections.',

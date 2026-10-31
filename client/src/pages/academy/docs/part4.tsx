@@ -28,8 +28,8 @@ export function Funds() {
 
       <Section n="02" id="permissions" title="Who can move what">
         <P>
-          Buying, adding capital, withdrawing, sending and claiming each need your passkey. BlockFinaX submits these transactions
-          and pays their network fees, but cannot approve them for you. Settlement can be started by anyone; it only applies the
+          Buying, adding capital, withdrawing, sending and claiming each need your passkey. These transactions are submitted
+          with their network fees covered, but BlockFinaX cannot approve them for you. Settlement can be started by anyone; it only applies the
           recorded rate to the contract's terms.
         </P>
       </Section>
@@ -166,7 +166,7 @@ export function TechnicalRisks() {
             ['Pool and rate contracts', 'An error in the contract code could affect funds held in them.'],
             ['Stellar network', 'If the network is unavailable, no purchase, withdrawal, settlement or claim can be made until it recovers.'],
             ['USDC and Circle', 'Balances are in USDC issued by Circle. Transfers between Base and Stellar depend on Circle\'s transfer service.'],
-            ['BlockFinaX transaction service', 'BlockFinaX submits your approved transactions and pays network fees. If it is down, the app cannot complete actions.'],
+            ['BlockFinaX transaction service', 'BlockFinaX passes your approved transactions to the relayer, with its own fee account as the fallback. If this service is down, the app cannot complete actions.'],
             ['Pricing service', 'If it is down or its data is stale, no quotes are issued.'],
             ['Rate operators and data source', 'If they stop reporting, settlement is delayed until they resume.'],
             ['Your passkey and device', 'Losing every device with your passkey means losing access to your wallet. Add a backup passkey under Account.'],
