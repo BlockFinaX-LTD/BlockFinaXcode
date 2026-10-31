@@ -22,7 +22,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Search, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban } from "lucide-react";
+import { Loader2, Search, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,8 @@ interface Prospect {
   company: string; website: string | null; country: string | null;
   description: string | null; industry: string | null;
   email: string; addressKind: string;
+  contactName: string | null; contactTitle: string | null;
+  source: string; sourceUrl: string | null; notes: string | null;
   segment: string; fit: string | null; fitScore: number | null;
   sendable: boolean; sendableReason: string | null;
   status: string; draftSubject: string | null; draftBody: string | null;
@@ -65,6 +67,7 @@ const SEGMENTS: Record<string, { label: string; tone: string }> = {
   underwriter: { label: "Could underwrite", tone: "text-violet-600 dark:text-violet-400" },
   psp:         { label: "Payments",      tone: "text-blue-600 dark:text-blue-400" },
   bank:        { label: "Bank",          tone: "text-amber-600 dark:text-amber-500" },
+  investor:    { label: "Investor",      tone: "text-rose-600 dark:text-rose-400" },
   unknown:     { label: "Unsorted",      tone: "text-muted-foreground" },
 };
 
@@ -122,6 +125,22 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
       });
     },
     onError: (e: Error) => toast({ title: "Discovery failed", description: e.message, variant: "destructive" }),
+  });
+
+  const importContacts = useMutation({
+    mutationFn: async (file: File) => api("/api/prospects/import", token, {
+      method: "POST",
+      body: JSON.stringify(JSON.parse(await file.text())),
+    }),
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ["prospects"] });
+      toast({
+        title: `${r.added} contact${r.added === 1 ? "" : "s"} added`,
+        description: `${r.duplicates} already known, ${r.invalid} missing an email or company` +
+          (r.skipped ? `, ${r.skipped} over the limit of 500` : ""),
+      });
+    },
+    onError: (e: Error) => toast({ title: "Not imported", description: e.message, variant: "destructive" }),
   });
 
   const write = useMutation({
@@ -332,6 +351,18 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
               ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Searching…</>
               : <><Search className="mr-1.5 h-3.5 w-3.5" /> Find businesses</>}
           </Button>
+          <Button size="sm" variant="outline" disabled={!enabled || importContacts.isPending} asChild>
+            <label className="cursor-pointer">
+              {importContacts.isPending
+                ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                : <Upload className="mr-1.5 h-3.5 w-3.5" />}
+              Import contacts
+              <input
+                type="file" accept=".json,application/json" className="sr-only"
+                onChange={e => { const f = e.target.files?.[0]; if (f) importContacts.mutate(f); e.target.value = ""; }}
+              />
+            </label>
+          </Button>
           <Button size="sm" variant="outline" disabled={!enabled || busy} onClick={() => write.mutate()}>
             {write.isPending
               ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Writing…</>
@@ -472,7 +503,19 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
                       </a>
                     )}
                   </div>
+                  {(p.contactName || p.contactTitle) && (
+                    <p className="mt-0.5 text-[12.5px]">
+                      {[p.contactName, p.contactTitle].filter(Boolean).join(", ")}
+                      {p.source === "import" && p.sourceUrl && (
+                        <a href={p.sourceUrl} target="_blank" rel="noreferrer noopener"
+                           className="ml-2 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline">
+                          LinkedIn <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </p>
+                  )}
                   <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{p.email}</p>
+                  {p.notes && <p className="mt-1 text-[12.5px] text-muted-foreground">{p.notes}</p>}
                   {p.description && <p className="mt-1 text-[12.5px] text-muted-foreground">{p.description}</p>}
                   {p.fit && (
                     <p className="mt-1.5 border-l-2 border-border pl-2.5 text-[12.5px] leading-relaxed">{p.fit}</p>

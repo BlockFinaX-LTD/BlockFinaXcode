@@ -28,7 +28,8 @@
  * cost money to rediscover rows that already exist.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql, ne } from "drizzle-orm";
+import { IMPORT_SOURCE } from "./import";
 import { db } from "../db";
 import { prospects } from "@shared/prospect-schema";
 import { platformSettings } from "@shared/schema";
@@ -121,7 +122,7 @@ async function awaitingPerson(): Promise<number> {
 /** Draft for everything discovered but not yet written. */
 async function draftPending(apiKey: string, model: string, limit: number): Promise<number> {
   const pending = await db.select().from(prospects)
-    .where(and(eq(prospects.status, "new"), isNull(prospects.draftBody)))
+    .where(and(eq(prospects.status, "new"), isNull(prospects.draftBody), ne(prospects.source, IMPORT_SOURCE)))
     .limit(limit);
 
   let written = 0;

@@ -14,7 +14,7 @@
 
 import type { Express } from "express";
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import { prospects, assessSendable, classifyAddress } from "@shared/prospect-schema";
 import { requireAdmin } from "../middleware/admin-auth";
@@ -24,6 +24,7 @@ import { researchAndWrite } from "../prospects/write";
 import { writeInvestorEmail, currentTraction } from "../investors/write";
 import { scanInvestors, INVESTOR_QUERIES, INVESTOR_LOCATIONS, INVESTOR_TITLES } from "../investors/scan";
 import { checkSendConfig, sendProspectEmail, sentToday, DAILY_SEND_CAP, suppress } from "../prospects/send";
+import { IMPORT_SOURCE, importContacts } from "../prospects/import";
 import { sendingHealth, clearHalt, recordBounce, recordComplaint } from "../prospects/health";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
@@ -62,6 +63,7 @@ export function registerProspectRoutes(app: Express): void {
           underwriter: count(r => r.segment === "underwriter"),
           psp: count(r => r.segment === "psp"),
           bank: count(r => r.segment === "bank"),
+          investor: count(r => r.segment === "investor"),
           unknown: count(r => r.segment === "unknown"),
         },
       });
@@ -190,7 +192,7 @@ export function registerProspectRoutes(app: Express): void {
       const limit = Math.min(Math.max(Number(req.body?.limit) || 20, 1), 50);
 
       const pending = await db.select().from(prospects)
-        .where(and(eq(prospects.status, "new"), isNull(prospects.draftBody)))
+        .where(and(eq(prospects.status, "new"), isNull(prospects.draftBody), ne(prospects.source, IMPORT_SOURCE)))
         .orderBy(desc(prospects.createdAt))
         .limit(limit);
 
@@ -211,7 +213,7 @@ export function registerProspectRoutes(app: Express): void {
       }
 
       const [{ left }] = await db.select({ left: sql<number>`count(*)::int` }).from(prospects)
-        .where(and(eq(prospects.status, "new"), isNull(prospects.draftBody)));
+        .where(and(eq(prospects.status, "new"), isNull(prospects.draftBody), ne(prospects.source, IMPORT_SOURCE)));
       return res.json({ written, considered: pending.length, remaining: Number(left) || 0 });
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "drafting failed" });
@@ -266,6 +268,17 @@ export function registerProspectRoutes(app: Express): void {
       return res.json({ added, skipped, considered: rows.length });
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "could not add" });
+    }
+  });
+
+  // ── POST /api/prospects/import ──────────────────────────────────────────
+  app.post("/api/prospects/import", requireAdmin, async (req, res) => {
+    try {
+      const rows = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+      if (!rows.length) return res.status(400).json({ error: "The file needs a list of contacts." });
+      return res.json(await importContacts(rows));
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "could not import" });
     }
   });
 
