@@ -29,7 +29,7 @@ export const quoteCcy = (pair: string) => pair.split('/')[1] ?? pair;
 export const ccyName = (pair: string) => CURRENCY_NAMES[quoteCcy(pair)] ?? quoteCcy(pair);
 export const fmt = (v: string | number | null | undefined, dp = 2) =>
   Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
-export const fmtRate = (v: string | number) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+export const fmtRate = (v: string | number) => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const pct = (fraction: number, dp = 2) => `${(fraction * 100).toFixed(dp)}%`;
 export const dateOf = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 /** The date cover bought now for `days` ends: 14:00 UTC on that date, weekends moved to Monday. */

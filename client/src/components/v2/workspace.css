@@ -258,10 +258,10 @@
 .bx-level-tag { position: absolute; z-index: 2; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--panel); padding: 1px 5px; border-radius: 5px; pointer-events: none; white-space: nowrap; }
 .bx-chart-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #1f5fe0; box-shadow: 0 0 0 4px rgba(31, 95, 224, 0.18); pointer-events: none; z-index: 2; }
 .bx-chart-read { position: absolute; top: -6px; left: 0; z-index: 3; display: flex; gap: 10px; align-items: baseline; background: var(--panel); padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; box-shadow: 0 2px 8px rgba(15, 23, 41, 0.06); }
-.bx-protect-tag { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid; border-radius: 8px; padding: 3px 9px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11.5px; font-weight: 600; white-space: nowrap; pointer-events: none; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
+.bx-protect-tag { width: fit-content; max-width: 100%; margin: 0 0 8px auto; display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid; border-radius: 8px; padding: 3px 9px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11.5px; font-weight: 600; white-space: nowrap; pointer-events: none; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
 .bx-protect-tag i { width: 10px; height: 2px; border-radius: 1px; display: inline-block; }
 .bx-protect-tag b { font-weight: 600; opacity: 0.85; }
-@media (max-width: 640px) { .bx-protect-tag { right: 8px !important; font-size: 10.5px; white-space: normal; max-width: 70%; } }
+@media (max-width: 640px) { .bx-protect-tag { font-size: 10.5px; white-space: normal; } }
 .bx-strike-tag { position: absolute; right: 76px; z-index: 2; background: var(--amber-soft); color: var(--amber-text); font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; font-family: 'Geist Mono', ui-monospace, monospace; }
 
 .bx-spin { animation: bx-spin 1s linear infinite; }
@@ -362,7 +362,7 @@
   }
   .bx-tabs svg { width: 22px; height: 22px; }
   .bx-tabs button.on { color: var(--blue); }
-  .bx-tabs button.primary svg {
+  .bx-tabs button.primary.on svg {
     width: 40px; height: 40px; padding: 9px; margin-top: -14px; border-radius: 50%; background: var(--blue); color: #fff;
     box-shadow: 0 6px 16px rgba(31, 95, 224, 0.35);
   }
@@ -472,3 +472,71 @@
 .bx-network button { border: 0; background: transparent; border-radius: 8px; padding: 6px 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .bx-network button.on { background: var(--panel); color: var(--amber-text); box-shadow: 0 1px 2px rgba(15, 23, 41, 0.08); }
 .bx-network button:not(.on):hover { color: var(--text); }
+
+/* Phone text scale: sizes only. Colours, weights and the desktop layout stay as they are. */
+@media (max-width: 860px) {
+  .bx { font-size: 13px; }
+  .bx-mbrand.bx-show-sm { font-size: 15px; }
+  .bx-balance-pill.bx-show-sm { font-size: 12px; }
+  .bx-demo-banner, .bx-demo-cta, .bx-demo-done { font-size: 11.5px; }
+
+  .bx-card h2, .bx-cta h3 { font-size: 15px; }
+  .bx-card.tight h2 { font-size: 14px; }
+  .bx-card .sub, .bx-cta p, .bx-note, .bx-error, .bx-hero-k { font-size: 12px; }
+  .bx-link { font-size: 13px; }
+
+  .bx-hero-v { font-size: 28px; }
+  .bx-big input { font-size: 26px; }
+  .bx-strip .k { font-size: 11.5px; }
+  .bx-strip .v { font-size: 15px; }
+  .bx-strip .s, .bx-hint, .bx-legend, .bx-quote-note, .bx-buy .bx-hint, .bx-buy .muted { font-size: 11px; }
+  .bx-li > [data-label]::before { font-size: 10.5px; }
+
+  .bx-who .t, .bx-mini .t, .bx-choice .t { font-size: 13px; }
+  .bx-who .d, .bx-choice .p, .bx-payline, .bx-step, .bx-chart-read { font-size: 12px; }
+  .bx-mini .d, .bx-tag, .bx-chip { font-size: 11px; }
+
+  .bx-btn, .bx-btn.block, .bx-cta button, .bx-buy .bx-btn.block, .bx-seg button, .bx-agent-msg { font-size: 13px; }
+  .bx-btn.small, .bx-seg.small button, .bx-pill, .bx-ranges button, .bx-label, .bx-field > span:first-child { font-size: 12px; }
+  .bx-network button { font-size: 12px; }
+
+  .bx-sum, .bx-quote-row, .bx-adjust > summary { font-size: 13px; }
+  .bx-sum.total { font-size: 14px; }
+  .bx-quote-row b, .bx-buy .bx-quote-row b { font-size: 15px; }
+
+  .bx-tabs button { font-size: 10.5px; }
+  .bx-onboard h1 { font-size: 22px; }
+  .bx-onboard .sub { font-size: 13px; }
+  .bx-tour-card h3 { font-size: 15px; }
+  .bx-tour-card p { font-size: 13px; }
+
+  /* Every list row: the name on top, its figures on one line, any button below. */
+  .bx-li { display: flex !important; flex-wrap: wrap; align-items: flex-start; position: relative; }
+  .bx-li > * { flex: 1 1 auto; min-width: 0; }
+  .bx-li > .r .num, .bx-li > .r.num, .bx-li > .r > .muted { white-space: nowrap; }
+  /* A status badge sits beside the name, so the figures keep the line to themselves. */
+  .bx-li > .r:last-child:has(> .bx-tag) { position: absolute; top: 16px; right: 2px; flex: none; }
+  .bx-li:has(> .r:last-child > .bx-tag) > :first-child { padding-right: 64px; }
+  .bx-li > :first-child { flex: 0 0 100%; }
+  .bx-li > :last-child:not(:first-child):not(:has(> .bx-btn, > div > .bx-btn)) { text-align: right; }
+  .bx-li > :has(> .bx-btn), .bx-li > :has(> div > .bx-btn) { flex: 0 0 100%; }
+
+  /* Market rows: the name shares that line too, because it is short. */
+  .bx-li.bx-li-market { display: grid !important; grid-template-columns: minmax(0, 1fr) auto auto !important; column-gap: 16px; align-items: center; }
+  .bx-li.bx-li-market > :first-child { grid-column: auto; }
+  .bx-li.bx-li-market > .r { text-align: right; }
+  .bx-li.bx-li-market > .r:has(> .bx-btn), .bx-li.bx-li-market > .r:has(> .bx-icon-btn) { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+  .bx-strip:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 10px; }
+  .bx-strip:has(> :nth-child(3):last-child) > div { min-width: 0; }
+
+  /* Sizes set directly on page elements. */
+  .bx [style*="font-size: 40px"], .bx [style*="font-size: 36px"] { font-size: 28px !important; }
+  .bx [style*="font-size: 32px"], .bx [style*="font-size: 28px"] { font-size: 24px !important; }
+  .bx [style*="font-size: 22px"] { font-size: 17px !important; }
+  .bx [style*="font-size: 18px"] { font-size: 15px !important; }
+  .bx [style*="font-size: 16px"] { font-size: 14px !important; }
+  .bx [style*="font-size: 14px"] { font-size: 13px !important; }
+  .bx [style*="font-size: 13px"] { font-size: 12px !important; }
+  .bx [style*="font-size: 12px"] { font-size: 11px !important; }
+  .bx [style*="font-size"] .bx-link { font-size: inherit; }
+}

@@ -27,7 +27,6 @@ export const GLOSSARY: Record<string, string> = {
   'Most you can receive': 'The largest payout this protection can make, if the rate reaches the limit. The pool reserves this amount for you.',
   'Premium': 'The price of the protection, paid once when you buy. It goes to the underwriters who back it.',
   'Price': 'The premium as a share of the amount protected.',
-  'Cost per $1,000': 'What protecting $1,000 would cost for this length.',
   'Execution cost': 'BlockFinaX\'s platform fee on the premium.',
   'Network fees': 'Blockchain transaction fees. They are covered for you.',
   'Total': 'Everything you pay, in USDC.',

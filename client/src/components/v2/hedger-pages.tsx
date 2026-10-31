@@ -94,11 +94,10 @@ function usePoolOffers(pool: CurrencyPool) {
     queryFn: () => api<{ reference: { strike: string }; rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}&distance=${distance}`),
     staleTime: 60_000,
   });
-  const feeRate = pool.fees.hedgerFeeRateE6 / 1e6;
   const rows = tenors.map((t) => {
     const f = fair.data?.rows.find((r) => r.tenorDays === t.tenorDays)?.fairRateE6 ?? null;
     const price = f === null ? null : (f / 1e6) * (t.markupBps / 10000);
-    return { tenorDays: t.tenorDays, price, per1000: price === null ? null : 1000 * price * (1 + feeRate) };
+    return { tenorDays: t.tenorDays, price };
   });
   const priced = rows.filter((r) => r.price !== null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.price! < a.price! ? b : a)) : null;
@@ -116,6 +115,8 @@ const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 110px' };
 
+const isPhone = () => window.innerWidth < 860;
+
 function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false, chart }: {
   pool: CurrencyPool; go: Go; expandable?: boolean; action?: string;
   /** Clicking the row chooses the pool (Markets) rather than only opening its prices. */
@@ -125,9 +126,11 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
   /** On the chosen pool: the rate chart switch, shown in place of Select. */
   chart?: { on: boolean; toggle: () => void };
 }) {
-  const [open, setOpen] = useState(focused);
+  // On a phone the buying form sits below, so the chosen market stays closed to keep it in view.
+  const opensWhenChosen = focused && !isPhone();
+  const [open, setOpen] = useState(opensWhenChosen);
   // Opens when chosen, closes again when the full list returns.
-  useEffect(() => { if (selectOnClick) setOpen(focused); }, [focused, selectOnClick]);
+  useEffect(() => { if (selectOnClick) setOpen(opensWhenChosen); }, [opensWhenChosen, selectOnClick]);
   const offers = usePoolOffers(pool);
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
@@ -135,11 +138,11 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
   const spot = useSpot(pool.pair);
   return (
     <>
-      <div className={`bx-li${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
+      <div className={`bx-li bx-li-market${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
         <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
-        <div className="r" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
+        <div className="r bx-hide-sm" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
           {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{action}</button>}
           {focused && chart && (
@@ -151,14 +154,13 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
       </div>
       {open && (
         <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
-          <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span className="r">{hint("Cost per $1,000")}</span><span /></div>
+          <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span /></div>
           {offers.rows.map((r) => (
-            <div key={r.tenorDays} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}>
+            <div key={r.tenorDays} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}>
               <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
               <span className="r">{dateIn(r.tenorDays)}</span>
               <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
-              <span className="r num">{r.per1000 === null ? '-' : `$${fmt(r.per1000)}`}</span>
-              <span className="r"><button className="bx-btn ghost small" onClick={() => buy(r.tenorDays)}>Buy</button></span>
+              <span className="r"><button className="bx-btn ghost small" onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays); }}>Buy</button></span>
             </div>
           ))}
           <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for this pool's closest cover: starting {offers.distance === 0 ? "at today's rate" : `${offers.distance / 100}% from today`}{offers.strike ? ` (${fmtRate(offers.strike)} ${quoteCcy(pool.pair)})` : ''}, with a limit 10% beyond, including the BlockFinaX fee. Cover starting further away costs less. Your exact price is shown before you buy.</div>
@@ -191,7 +193,7 @@ function MarketList({ go, selected, chart }: { go: Go; selected: string | null; 
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-        <div><h2>Markets</h2><div className="sub">{chosen ? 'Set your terms beside it. Your exact price is shown before you buy.' : 'Choose a market to price your protection.'}</div></div>
+        <div><h2>Markets</h2><div className="sub">{chosen ? 'Set your terms. Your exact price is shown before you buy.' : 'Choose a market to price your protection.'}</div></div>
         {chosen ? (
           <button className="bx-link" onClick={() => go('h-protect', { pair: chosen.pair })}>All markets</button>
         ) : pairs.length > 1 && (
@@ -463,6 +465,13 @@ export function RateChart({ points, loading, label, unit, protection = null }: {
   })();
 
   return (
+    <>
+    {band && (
+      <span className="bx-protect-tag" style={{ borderColor: band.color, color: band.color }}>
+        <i style={{ background: '#e0a03a' }} />{band.text}
+        {(band.offAbove || band.offBelow) && <b> {band.offAbove ? '↑' : '↓'} {Math.abs(band.pct).toFixed(1)}% {band.offAbove ? 'above' : 'below'} today</b>}
+      </span>
+    )}
     <div className="bx-chart">
       {h && (
         <div className="bx-chart-read">
@@ -512,18 +521,8 @@ export function RateChart({ points, loading, label, unit, protection = null }: {
         {ticks.map((v, k) => <span key={k} style={{ top: `${(y(v) / VH) * 100}%` }}>{fmtAxis(v, dp)}</span>)}
       </div>
       <span className="bx-chart-dot" style={{ left: `${(x(hover ?? values.length - 1) / VW) * 100}%`, top: `${(y(values[hover ?? values.length - 1]) / VH) * 100}%` }} />
-      {band && (() => {
-        // One label for the whole protection: on the band when it is visible, on the edge strip when it is not.
-        const where = band.offAbove ? { top: 0 } : band.offBelow ? { bottom: 0 } : { top: `calc(${(clampY(band.top) / VH) * 100}% + 6px)` };
-        const off = band.offAbove || band.offBelow;
-        return (
-          <span className="bx-protect-tag" style={{ ...where, right: 80, borderColor: band.color, color: band.color }}>
-            <i style={{ background: '#e0a03a' }} />{band.text}
-            {off && <b> {band.offAbove ? '↑' : '↓'} {Math.abs(band.pct).toFixed(1)}% {band.offAbove ? 'above' : 'below'} today</b>}
-          </span>
-        );
-      })()}
     </div>
+    </>
   );
 }
 
@@ -959,7 +958,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
         </div>}
 
         <MarketList go={go} selected={poolChoice} chart={{ on: showChart, toggle: toggleChart }} />
-        <div className="bx-card">
+        <div className="bx-card bx-hide-sm">
           <h2 style={{ marginBottom: 14 }}>How protection works</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
             {[
@@ -1021,7 +1020,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               {onHub < Number(e.totalCost) && <p className="bx-error">Your balance (${fmt(onHub)}) is too low. Add funds first.</p>}
               <button className="bx-btn block" disabled={!!busy} onClick={confirm}>{busy ? <><Spin /> {busy}</> : left < 5 ? 'Refresh price' : 'Confirm protection'}</button>
               <button className="bx-btn ghost block" disabled={!!busy} onClick={() => setMode('build')}>Back</button>
-              <div className="bx-hint">Price held for {left} seconds · approve with your passkey</div>
+              <div className="bx-hint">{left < 5 ? 'This price has expired. Tap Refresh price, then Confirm protection.' : `Price held for ${left} seconds · approve with your passkey`}</div>
             </>
           ) : (
             <>
@@ -1042,7 +1041,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                     {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} {t.tenorDays === 1 ? 'day' : 'days'}</button>)}
                   </div>
                 )}
-                {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{days} {days === 1 ? 'day' : 'days'} · ends {endsAt(days)}</div>}
+                {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{days} {days === 1 ? 'day' : 'days'} from now · ends {endsAt(days)}</div>}
               </div>
 
               <details className="bx-adjust" open={adjustOpen} onToggle={(ev) => rememberAdjust((ev.target as HTMLDetailsElement).open)}>
@@ -1099,6 +1098,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               {!(Number(amount) > 0) ? (
                 <div className="bx-quote"><div className="bx-quote-note" style={{ margin: 0 }}>Enter an amount to see your price.</div></div>
               ) : <div className="bx-quote" aria-live="polite">
+                <div className="bx-quote-row"><span>Premium</span><b className="num">{e ? pct(e.offerRateE6 / 1e6) : chosen.isFetching ? '...' : '-'}</b></div>
                 <div className="bx-quote-row"><span>You pay</span><b className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</b></div>
                 <div className="bx-quote-row"><span>Pays up to</span><b className="num">{e ? `$${fmt(e.maxPayout)}` : chosen.isFetching ? '...' : '-'}</b></div>
                 {strike && (
