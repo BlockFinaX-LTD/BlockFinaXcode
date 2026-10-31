@@ -22,7 +22,7 @@ import { MethodChooser } from "@/components/wallet/method-chooser";
 import { useToast } from "@/hooks/use-toast";
 
 // Public pages
-import Website, { AboutPage, ConnectorsPage, HedgersPage, UnderwritersPage } from "@/pages/website";
+import Website, { AboutPage, ConnectorsPage, ConnectorsGuidePage, HedgersPage, UnderwritersPage } from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import { InvestorGate } from "@/components/investor-gate";
@@ -213,6 +213,7 @@ function Router() {
       <Route path="/liquidity-provider" component={UnderwritersPage} />
       <Route path="/hedger" component={HedgersPage} />
       <Route path="/connectors" component={ConnectorsPage} />
+      <Route path="/connectors/guide" component={ConnectorsGuidePage} />
 
       {/* Agreement signing. Deliberately outside PROTECTED_ROUTES: the
           counterparty has no BlockFinaX account and must never be asked for
