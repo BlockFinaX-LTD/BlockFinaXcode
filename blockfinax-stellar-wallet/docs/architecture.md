@@ -21,7 +21,3 @@ The approved testnet payment assets are Stellar native XLM and Circle's canonica
 Client: `passkey-kit@0.14.0`, generated wallet binding `passkey-kit-sdk@0.8.0`; dependencies locked in package-lock.json. Network passphrase: `Test SDF Network ; September 2015`.
 
 Wallet WASM: `fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0`. Source and build manifest: https://github.com/stellar/passkey-kit/blob/main/docs/deployments-testnet-2026-07-11.md . Upstream records this as the July 13, 2026 hardened testnet build. The application enforces the hash during browser connection; upgrading requires an explicit version migration.
-
-## Following this release
-
-The next wallet work is additional/recovery signers, institutional approval and spending policies, account lifecycle and storage-TTL operations, durable queues and transaction reconciliation. The Base hedge contracts, FX oracle consensus, event creation, liquidity/LP accounting and settlement logic are not yet implemented on Stellar. A passkey payment wallet does not by itself implement FX protection or an approved institutional custody service.

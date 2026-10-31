@@ -76,16 +76,6 @@ See [BlockFinaX-LTD/v1protocol](https://github.com/BlockFinaX-LTD/v1protocol) fo
 
 ## Stellar wallet
 
-The Stellar testnet wallet is in [blockfinax-stellar-wallet/](blockfinax-stellar-wallet/README.md). It includes Google/email-code sign-in, passkey smart accounts, test funding and payments.
+The wallet runs inside the app. Its code is in [`client/src/lib/wallets`](client/src/lib/wallets) and [`server/wallet`](server/wallet), and the design is in [wallet v2.0](docs/architecture/v2/wallet-v2.0.md). It includes email code and Google sign-in, passkey smart accounts and USDC with network fees covered.
 
-Use Node 22.18 or newer:
-
-```sh
-cd blockfinax-stellar-wallet
-npm ci
-npm run setup:testnet
-# Configure Resend and Google in this folder’s ignored .env.
-npm run dev
-```
-
-Open http://localhost:5173. The wallet API runs on port 4100 with its own environment and local database. Its tests and build run in a separate GitHub workflow.
+[`blockfinax-stellar-wallet/`](blockfinax-stellar-wallet/README.md) is the first standalone version, kept for reference and no longer updated.

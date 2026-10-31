@@ -695,11 +695,6 @@ Access at `/admin` with the `ADMIN_PASSWORD` environment variable.
 - Predetermined payouts prevent oracle manipulation attacks
 - Pool capacity checks prevent over-commitment
 
-### Known Limitations (Testnet)
-- Signature verification is bypassed on testnet
-- No reentrancy guards on HedgeFacet (add before mainnet)
-- No payout caps per position (predetermined model mitigates this)
-
 ---
 
 ## 15. Deployment
@@ -740,7 +735,6 @@ The codebase is fully portable (no vendor lock-in):
 ### Contract Deployment Checklist (Mainnet)
 
 Before deploying to mainnet:
-- [ ] Add reentrancy guards to HedgeFacet
 - [ ] Audit all access control
 - [ ] Set correct USDC mainnet address
 - [ ] Test full flow on testnet

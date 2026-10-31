@@ -1,8 +1,8 @@
 # BlockFinaX Stellar Wallet
 
-A testnet wallet and API for the BlockFinaX Stellar integration. Users sign in with an email verification code or Google, create a passkey, and use that passkey to authorize payments from a Soroban smart account.
+> **This is the first standalone version of the wallet, published in October 2026 and no longer updated.** The current wallet runs inside the BlockFinaX app. Its code is in [`client/src/lib/wallets`](../client/src/lib/wallets) in the browser and [`server/wallet`](../server/wallet) on the server.
 
-This repository is the first implementation of the wallet infrastructure on our roadmap. It runs independently of Rift. BlockFinaX runs the identity service, account registry and fee sponsor; the device holds the user's transaction signing key. The smart account implementation comes from Stellar's open-source Passkey Kit, pinned to a specific testnet WASM hash. We have not written or claimed a new cryptographic wallet contract.
+This folder stays as a small, self-contained example of the design: users sign in with an email code or Google, create a passkey, and use that passkey to authorize payments from a Soroban smart account. BlockFinaX runs the identity service, account registry and fee sponsor. The device holds the user's signing key. The smart account comes from Stellar's open-source Passkey Kit, pinned to a specific testnet WASM hash.
 
 ![BlockFinaX Stellar testnet wallet](docs/assets/wallet-desktop.png)
 
@@ -33,17 +33,17 @@ The setup script generates a fee-payer key, funds it through Friendbot and write
 - SQLite storage and serialized fee-account submission to avoid sequence collisions in this single-process service.
 - The current BlockFinaX app interface: original signed-in styles, Geist fonts, logo, Home/Cover/Earn/Profile navigation, dark/light theme, balance cards and responsive payment sheets. Cover, Earn and oracle feeds show their pending Stellar state.
 
-Email or Google sign-in does not authorize payments or recover a lost passkey. Passkeys may sync through the user's device provider; that is not a BlockFinaX recovery service. Keep your passkey available. Additional signers, recovery, institutional approval policies, hedge contracts, FX oracle integration and mainnet release remain subsequent development. Circle testnet USDC is not real value; the Base hedge contracts and oracle behavior have not been ported to Stellar.
+Email or Google sign-in does not authorize payments or recover a lost passkey. Passkeys may sync through the user's device provider; that is not a BlockFinaX recovery service. Circle testnet USDC is not real value; the Base hedge contracts and oracle behavior have not been ported to Stellar.
 
 ## Configuration
 
 See [.env.example](.env.example). Never put a secret in a `VITE_` variable.
 
-For Google, add a Web Application OAuth client with redirect URI `http://localhost:5173/api/auth/google/callback` locally, or the exact HTTPS production origin plus that path. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the server. Set `RESEND_API_KEY` and a verified `EMAIL_FROM` for email delivery. No existing Rift credentials are used.
+For Google, add a Web Application OAuth client with redirect URI `http://localhost:5173/api/auth/google/callback` locally, or the exact HTTPS production origin plus that path. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the server. Set `RESEND_API_KEY` and a verified `EMAIL_FROM` for email delivery.
 
 For hosted use, build with `npm run build`, set `APP_ORIGIN` to the public HTTPS origin, `RP_ID` to its hostname, `NODE_ENV=production`, Resend and server secrets, then run `npm start`. Set `HOST=0.0.0.0` behind your hosting proxy. Preserve the SQLite database on a persistent volume. Passkeys created on localhost belong to localhost and will not work on another domain.
 
-This release is for testnet evaluation. Before use with customer funds we need independent contract/integration review, recovery and governance design, a durable multi-process submission queue, custody/compliance decisions and operational controls. The grant implementation plan covers those next stages.
+This version runs on Stellar testnet only and is not meant for real funds.
 
 ## Verify
 
@@ -58,7 +58,7 @@ The browser integration test uses a Chromium virtual authenticator and submits r
 
 ## Architecture and API
 
-Read [architecture](docs/architecture.md), [API](docs/api.md), and [threat model](docs/threat-model.md). The existing grant proposal is at https://docs.blockfinax.com/stellar/.
+Read [architecture](docs/architecture.md), [API](docs/api.md), and [threat model](docs/threat-model.md).
 
 Upstream references: [Stellar smart wallets](https://developers.stellar.org/docs/build/guides/contract-accounts/smart-wallets), [Passkey Kit](https://github.com/stellar/passkey-kit), [Stellar JS SDK](https://github.com/stellar/js-stellar-sdk).
 

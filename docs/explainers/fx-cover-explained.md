@@ -575,7 +575,7 @@ None of these are blockers — they're knobs to set during build.
   value (the arbitrage floor).
 - The breakthrough: at expiry the oracle pays out from locked collateral.
   The hedger does **not** need a buyer. The AMM is for entry/exit only.
-- The oracle choice defines what product you sell. Never settle on the
+- The oracle choice defines what the product is. Never settle on the
   official peg for capital-controlled currencies — it produces fake insurance.
 - Ship monthly expiries first, perpetual later (needs careful funding mark).
 - Underwriter economics: yields of 30–80% APY on frontier EM pairs, well
