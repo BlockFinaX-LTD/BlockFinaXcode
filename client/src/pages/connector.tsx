@@ -323,7 +323,7 @@ function ProfileFields({ form, set, lockKind }: { form: ProfileForm; set: (f: Pr
   return (
     <>
       <div className="bx-field">
-        <span>How do you want to earn?</span>
+        <span>How do you want to participate?</span>
         <div className="bx-choice">
           {(['connector', 'contractor'] as MemberKind[]).map((k) => (
             <button key={k} type="button" className={form.kind === k ? 'on' : ''} disabled={lockKind && form.kind !== k} onClick={() => set({ ...form, kind: k })}>
@@ -380,7 +380,7 @@ function ApplyPage({ email, prefill }: { email: string | null; prefill: Me['pref
       <div className="bx-onboard-card" style={{ maxWidth: 760 }}>
         <div className="bx-brand" style={{ padding: '0 0 14px' }}><img src={logoPath} alt="" />BlockFinaX</div>
         <h1 className="bx-cp-h1">Apply to the Connector Programme</h1>
-        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you want to earn. BlockFinaX reviews every application and emails you when you are accepted; the programme terms and training open then.</p>
+        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you want to participate. BlockFinaX reviews every application and emails you when you are accepted; the programme terms and training open then.</p>
         {filled && <Note>We filled in what your BlockFinaX account already has. Check it, then finish the rest.</Note>}
         <ProfileFields form={form} set={setForm} />
         {error && <Note warn>{error}</Note>}

@@ -277,6 +277,8 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     if (fullName.split(/\s+/).length < 2) throw bad("Enter your full legal name, first and last");
     if (!/^[A-Z]{2}$/.test(country)) throw bad("Choose your country");
     if (kind === "connector" && !areas.length) throw bad("Choose at least one group you can introduce");
+    // Required to apply; members accepted before this rule can still edit their profile without it.
+    if ((!existing || existing.status === "applied" || existing.status === "declined") && !str(b.about, 1000)) throw bad("Tell us about your background in a few sentences");
     const { db: authDb } = await import("../db");
     const { userAccounts } = await import("@shared/auth-core-schema");
     const { eq } = await import("drizzle-orm");
