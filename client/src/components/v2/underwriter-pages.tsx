@@ -412,7 +412,7 @@ function FundingSelect({ value, onChange }: { value: string | null; onChange: (k
   const chains = useChains();
   const balances = useUsdcBalances();
   const hub = chains.data?.activeLiquidityHub;
-  const funding = (chains.data?.chains ?? []).filter((c) => c.capabilities.funding);
+  const funding = (chains.data?.chains ?? []).filter((c) => c.key === hub);
   useEffect(() => { if (!value && hub) onChange(hub); }, [hub, value, onChange]);
   return (
     <div>

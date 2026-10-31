@@ -9,9 +9,9 @@ import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
-import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain, walletConfig } from '@/lib/wallets/passkey-wallet';
-import { provePasskey, useWalletCheck } from '@/lib/wallets/verify-wallet';
-import { fmt, runTransfer, transferStatus, useChains, useIsDemo, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
+import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
+import { useWalletCheck } from '@/lib/wallets/verify-wallet';
+import { fmt, runTransfer, transferStatus, useChains, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
 
@@ -20,20 +20,6 @@ function useAccounts() {
   const chains = useChains();
   const name = (key: string) => chains.data?.chains.find((c) => c.key === key)?.name ?? key;
   return (session?.accounts ?? []).map((a) => ({ chain: a.chain, name: name(a.chain), address: a.address, stellar: a.chain.startsWith('stellar') }));
-}
-
-function Balances() {
-  const accounts = useAccounts();
-  const balances = useUsdcBalances();
-  return (
-    <div className="bx-card tight">
-      <h2 style={{ marginBottom: 4 }}>By network</h2>
-      <div className="bx-sums" style={{ borderTop: 0 }}>
-        {accounts.map((a) => <Sum key={a.chain} l={a.name} v={<span className="num">${fmt(usdcOn(balances.data?.rows, a.chain))}</span>} />)}
-        <Sum l="Total" v={<span className="num">${fmt(balances.data?.total)} USDC</span>} total />
-      </div>
-    </div>
-  );
 }
 
 function CardHead({ title, sub, onCancel }: { title: string; sub: string; onCancel: () => void }) {
@@ -45,54 +31,23 @@ function CardHead({ title, sub, onCancel }: { title: string; sub: string; onCanc
   );
 }
 
-interface DepositAddresses {
-  hub: { chain: string; name: string; address: string };
-  deposits: { chain: string; name: string; address: string; assets: string[]; minimum: string }[];
-}
-
 function DepositCard({ onCancel }: { onCancel: () => void }) {
-  const demo = useIsDemo();
   const accounts = useAccounts();
   const chains = useChains();
   const balances = useUsdcBalances();
   const hub = chains.data?.activeLiquidityHub;
-  const deposits = useQuery({ queryKey: ['v2-deposit-addresses'], queryFn: () => api<DepositAddresses>('/api/v2/deposit-addresses'), staleTime: 300_000, retry: false });
-  const [chain, setChain] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!chain && hub) setChain(hub); }, [chain, hub]);
-  // Networks: the hub (direct) and every network with a personal deposit address.
-  const options = [
-    ...(deposits.data ? [{ chain: deposits.data.hub.chain, name: deposits.data.hub.name }] : accounts.filter((a) => a.chain === hub)),
-    ...(deposits.data?.deposits ?? []).map((d) => ({ chain: d.chain, name: d.name })),
-  ];
-  const routed = deposits.data?.deposits.find((d) => d.chain === chain) ?? null;
-  const address = routed?.address ?? (chain === hub ? deposits.data?.hub.address ?? accounts.find((a) => a.chain === hub)?.address : undefined);
-  const name = options.find((o) => o.chain === chain)?.name ?? 'this network';
-  const hubName = deposits.data?.hub.name ?? 'your BlockFinaX account';
-  const leftover = routed ? usdcOn(balances.data?.rows, routed.chain) : 0;
+  const account = accounts.find((a) => a.chain === hub);
+  const address = account?.address;
+  const name = account?.name ?? 'this network';
+  // USDC already on another network (from before deposits were Stellar only) can still come across.
+  const stranded = accounts.filter((a) => a.chain !== hub && usdcOn(balances.data?.rows, a.chain) > 0);
   // Addresses are shown only once the app has checked them against the chain itself.
   const { session } = usePasskeySession();
-  const { state: check, recheck } = useWalletCheck(session, deposits.data?.deposits, !deposits.isLoading);
-  const [proving, setProving] = useState(false);
-  const [proofError, setProofError] = useState<string | null>(null);
-  const prove = async () => {
-    if (check.status !== 'needs-proof') return;
-    setProving(true); setProofError(null);
-    try {
-      const ok = await provePasskey(check.contract, check.credentialId, (await walletConfig()).rpId ?? window.location.hostname);
-      if (!ok) setProofError('Your passkey did not match the wallet shown. Do not deposit, and contact BlockFinaX.');
-      await recheck();
-    } catch (e) { setProofError((e as Error).message || 'The check was cancelled.'); }
-    finally { setProving(false); }
-  };
+  const { state: check } = useWalletCheck(session, undefined, Boolean(chains.data));
   return (
     <div className="bx-card">
-      <CardHead title="Deposit USDC" sub="Send USDC to your BlockFinaX account from an exchange or another wallet." onCancel={onCancel} />
-      <span className="bx-label">Where are you sending from?</span>
-      <div className="bx-seg" style={{ marginBottom: 6 }}>
-        {options.map((o) => <button key={o.chain} className={chain === o.chain ? 'on' : ''} onClick={() => { setChain(o.chain); setCopied(false); }}>{o.name}</button>)}
-      </div>
-      <div className="bx-hint" style={{ marginBottom: 20 }}>Sending from an exchange? Choose the network the exchange uses.</div>
+      <CardHead title="Deposit USDC" sub={`Send USDC on ${name} to your BlockFinaX account.`} onCancel={onCancel} />
       {check.status === 'failed' && (
         <div className="bx-error" style={{ marginBottom: 14 }}>
           <b>Do not deposit.</b> The app could not confirm this account belongs to your passkey:
@@ -100,14 +55,7 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
           Contact BlockFinaX before sending anything.
         </div>
       )}
-      {check.status === 'needs-proof' && (
-        <div style={{ marginBottom: 14 }}>
-          <Note>Before showing your address, confirm with your passkey that this account is yours. It takes a second and moves nothing.</Note>
-          <button className="bx-btn" style={{ marginTop: 10 }} disabled={proving} onClick={prove}>{proving ? <Spin /> : <KeyRound />} Confirm with passkey</button>
-          {proofError && <div className="bx-error" style={{ marginTop: 10 }}>{proofError}</div>}
-        </div>
-      )}
-      {deposits.isLoading || check.status === 'checking' ? <Loading /> : check.status === 'ok' && address && (
+      {!chains.data || check.status === 'checking' ? <Loading /> : check.status === 'ok' && address && (
         <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={address} size={168} /></div>
           <div style={{ flex: 1, minWidth: 220 }}>
@@ -117,27 +65,9 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
           </div>
         </div>
       )}
-      <div style={{ marginTop: 20 }}><Note warn={Boolean(routed)}>Send only USDC on {name} to this address. Other tokens and other networks are not credited.</Note></div>
-      {demo && routed && (
-        <div className="bx-error" style={{ marginTop: 10 }}>
-          Demo: send only <b>test</b> USDC on {name}. Real USDC sent on Base mainnet to this address cannot be recovered.
-        </div>
-      )}
-      {routed && (<>
-        <div style={{ marginTop: 18 }}>
-          <h3 style={{ margin: '0 0 4px 0' }}>What happens next</h3>
-          <div className="sub">Nothing to approve. Your USDC is moved automatically.</div>
-        </div>
-        <div className="bx-sums" style={{ marginTop: 8 }}>
-          <Sum l="1. We detect your USDC on" v={name} />
-          <Sum l="2. Circle moves it to" v={hubName} />
-          <Sum l="Arrives in" v="About a minute" />
-          <Sum l="Circle fee" v="About 0.01%" />
-          <Sum l="Network fees" v="Covered" good />
-          <Sum l="Minimum" v={<span className="num">${routed.minimum}</span>} />
-        </div>
-      </>)}
-      {routed && leftover > 0 && <MoveToHub network={routed.chain} networkName={`your ${routed.name} wallet`} />}
+      <div style={{ marginTop: 20 }}><Note>Send only USDC on {name} to this address. Other tokens and other networks are not credited.</Note></div>
+      <div className="bx-hint" style={{ marginTop: 10 }}>Your address starts with C. Some exchanges can only send to addresses starting with G, so check yours before sending.</div>
+      {stranded.map((a) => <MoveToHub key={a.chain} network={a.chain} networkName={`your ${a.name} wallet`} />)}
     </div>
   );
 }
@@ -224,7 +154,7 @@ function FaucetCard() {
         } catch (e) {
           toast({ title: 'Faucet unavailable', description: (e as Error).message, variant: 'destructive' });
         } finally { setClaiming(false); }
-      }}>{claiming ? 'Sending...' : 'Get 10 test USDC'}</button>
+      }}>{claiming ? 'Sending...' : 'Get 10,000 test USDC'}</button>
     </div>
   );
 }
@@ -234,49 +164,60 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
   const qc = useQueryClient();
   const accounts = useAccounts();
   const balances = useUsdcBalances();
-  const [chain, setChain] = useState<string | null>(null);
+  const chains = useChains();
+  const hub = chains.data?.activeLiquidityHub;
+  const [step, setStep] = useState<'form' | 'review' | 'sent'>('form');
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [hash, setHash] = useState<string | null>(null);
-  const chains = useChains();
-  const hub = chains.data?.activeLiquidityHub;
-  const hubName = chains.data?.chains.find((c) => c.key === hub)?.name ?? 'your main wallet';
-  useEffect(() => { if (!chain && accounts[0]) setChain(accounts.some((a) => a.chain === hub) ? hub! : accounts[0].chain); }, [accounts, chain, hub]);
-  const acct = accounts.find((a) => a.chain === chain);
-  // Withdrawing to another network comes from the hub balance, through Circle CCTP.
-  const viaCctp = Boolean(acct && hub && acct.chain !== hub && chains.data?.chains.find((c) => c.key === acct.chain)?.cctp);
-  const have = usdcOn(balances.data?.rows, (viaCctp ? hub : chain) ?? undefined);
-  const validTo = acct?.stellar ? /^[GC][A-Z2-7]{55}$/.test(to) : /^0x[a-fA-F0-9]{40}$/.test(to);
-  const quote = useTransferQuote({ kind: 'withdraw', network: viaCctp ? chain : null, amount });
+  const name = accounts.find((a) => a.chain === hub)?.name ?? 'Stellar';
+  const have = usdcOn(balances.data?.rows, hub);
+  const validTo = /^[GC][A-Z2-7]{55}$/.test(to);
 
   async function send() {
-    if (!chain) return;
+    if (!hub) return;
     setBusy('Preparing...');
     try {
-      if (viaCctp) {
-        const route = await runTransfer({ kind: 'withdraw', network: chain, amount, recipient: to }, (m) => setBusy(m));
-        setHash(route.sourceTxHash);
-        void qc.invalidateQueries({ queryKey: ['v2-routes'] });
-      } else {
-        setHash(await passkeySend({ chain: toScreenChain(chain), symbol: 'USDC', to, amount }, (m) => setBusy(m)));
-      }
-      setAmount('');
+      setHash(await passkeySend({ chain: toScreenChain(hub), symbol: 'USDC', to, amount }, (m) => setBusy(m)));
+      setStep('sent');
       void qc.invalidateQueries({ queryKey: ['v2-usdc-all'] });
     } catch (e) {
       toast({ title: 'Not sent', description: (e as Error).message, variant: 'destructive' });
     } finally { setBusy(null); }
   }
 
+  if (step === 'sent') {
+    return (
+      <div className="bx-card">
+        <h2 style={{ marginBottom: 6 }}>USDC sent</h2>
+        <div className="sub">${fmt(amount)} USDC is on its way to {to.slice(0, 8)}...{to.slice(-6)}.</div>
+        {hash && <div className="bx-hint" style={{ textAlign: 'left', margin: '10px 0 18px' }}>Reference {hash.slice(0, 10)}...{hash.slice(-6)}</div>}
+        <button className="bx-btn block" onClick={onCancel}>Done</button>
+      </div>
+    );
+  }
+
+  if (step === 'review') {
+    return (
+      <div className="bx-card">
+        <CardHead title="Review" sub="Transfers cannot be reversed, so check the address." onCancel={onCancel} />
+        <div className="bx-sums" style={{ borderTop: 0 }}>
+          <Sum l="To" v={<span className="num" style={{ fontSize: 12, wordBreak: 'break-all' }}>{to}</span>} />
+          <Sum l="Network" v={name} />
+          <Sum l="Network fees" v="Covered" good />
+          <Sum l="Recipient gets" v={<span className="num">${fmt(amount)} USDC</span>} total />
+        </div>
+        <button className="bx-btn block" style={{ marginTop: 16 }} disabled={!!busy} onClick={send}>{busy ? <><Spin /> {busy}</> : 'Confirm'}</button>
+        <button className="bx-btn ghost block" style={{ marginTop: 8 }} disabled={!!busy} onClick={() => setStep('form')}>Back</button>
+      </div>
+    );
+  }
+
   return (
     <div className="bx-card">
-      <CardHead title="Withdraw USDC" sub="Send USDC to an exchange or another wallet. Transfers cannot be reversed, so check the address and network." onCancel={onCancel} />
+      <CardHead title="Withdraw USDC" sub={`Send USDC on ${name} to an exchange or another wallet.`} onCancel={onCancel} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div>
-          <span className="bx-label">Network</span>
-          <div className="bx-seg">{accounts.map((a) => <button key={a.chain} className={chain === a.chain ? 'on' : ''} onClick={() => { setChain(a.chain); setTo(a.chain !== hub ? a.address : ''); }}>{a.name}</button>)}</div>
-          {viaCctp && <div className="bx-hint" style={{ marginTop: 8 }}>Sent from your {hubName} balance through Circle CCTP. It usually arrives within two minutes.</div>}
-        </div>
         <div className="bx-big">
           <label htmlFor="bx-send">Amount (USDC)</label>
           <input id="bx-send" inputMode="decimal" value={`$${amount}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
@@ -284,21 +225,10 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
         </div>
         <label className="bx-field" style={{ margin: 0 }}>
           <span>Recipient address</span>
-          <input className="bx-input num" placeholder={acct?.stellar ? 'G... or C...' : '0x...'} value={to} onChange={(e) => setTo(e.target.value.trim())} />
+          <input className="bx-input num" placeholder="G... or C..." value={to} onChange={(e) => setTo(e.target.value.trim())} />
         </label>
-        {to && !validTo && <div className="bx-error">Enter a valid {acct?.name} address.</div>}
-        {viaCctp ? (
-          <div className="bx-sums">
-            <Sum l="Circle transfer fee (at most)" v={quote.data ? <span className="num">${quote.data.totalFees}</span> : '...'} />
-            <Sum l="Network fees" v="Covered" good />
-            <Sum l="Recipient gets at least" v={<span className="num">{quote.data ? `$${fmt(quote.data.amountOut)}` : '...'}</span>} total />
-          </div>
-        ) : (
-          <div className="bx-sums"><Sum l="Network fees" v="Covered" good /><Sum l="Recipient gets" v={<span className="num">${fmt(amount || 0)}</span>} total /></div>
-        )}
-        {viaCctp && quote.isError && Number(amount) > 0 && <div className="bx-error">{(quote.error as Error).message}</div>}
-        <button className="bx-btn block" disabled={!!busy || !validTo || !(Number(amount) > 0) || Number(amount) > have || (viaCctp && !quote.data)} onClick={send}>{busy ? <><Spin /> {busy}</> : 'Send USDC'}</button>
-        {hash && <div className="bx-hint">Sent · reference {hash.slice(0, 10)}...{hash.slice(-6)}</div>}
+        {to && !validTo && <div className="bx-error">Enter a valid {name} address.</div>}
+        <button className="bx-btn block" disabled={!hub || !validTo || !(Number(amount) > 0) || Number(amount) > have} onClick={() => setStep('review')}>Send USDC</button>
       </div>
     </div>
   );
@@ -325,10 +255,8 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
         </div>
         {mode === 'deposit' && <DepositCard onCancel={close} />}
         {mode === 'withdraw' && <WithdrawPanel onCancel={close} />}
-        {mode === 'none' && <Balances />}
       </section>
       <aside className="bx-aside">
-        {mode !== 'none' && <Balances />}
         <TransfersCard />
         <FaucetCard />
       </aside>

@@ -175,7 +175,8 @@ export function useUsdcBalances() {
     queryKey: ['v2-usdc-all'],
     queryFn: async () => {
       const rows = (await passkeyBalances()).filter((b) => b.token === 'USDC');
-      return { rows, total: rows.reduce((s, b) => s + Number(b.amount || 0), 0) };
+      // The balance people see is Stellar only; rows keep other networks so that USDC can still be moved across.
+      return { rows, total: rows.filter((b) => b.chain.startsWith('STELLAR')).reduce((s, b) => s + Number(b.amount || 0), 0) };
     },
     refetchInterval: 30_000,
   });

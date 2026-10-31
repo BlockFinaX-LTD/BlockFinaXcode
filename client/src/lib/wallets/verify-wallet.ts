@@ -4,9 +4,8 @@
  * through the network settings built into the app, not the server's.
  *
  *   1. The Stellar wallet runs the pinned Passkey Kit code.
- *   2. This device's passkey is a signer of it, and the key stored on chain is the key the
- *      passkey signs with. Proved once per device by checking a passkey signature against
- *      the on-chain key; the proof is remembered and re-checked against the chain each time.
+ *   2. This device's passkey is a signer of it. When the device has seen the passkey sign
+ *      (at registration or passkey sign-in), the key it saw must still be the key on chain.
  *   3. The Base account is the one the primary passkey's key creates.
  *   4. Every deposit address is the one the deposit factory creates for this wallet.
  */
@@ -72,7 +71,7 @@ function remember(contract: string, credentialId: string, key: Uint8Array) {
 /**
  * Record that this device's passkey holds the on-chain key, from a passkey response the app
  * already has: a registration (its public key) or a sign-in (its signature). Silent; a
- * failure here only means the Deposit page asks for a quick check later.
+ * failure here only means this device has no key to compare with later.
  */
 export async function recordPasskeyProof(
   contract: string | undefined,
@@ -90,24 +89,7 @@ export async function recordPasskeyProof(
         ? await assertionMatchesKey(signer.key, { authenticatorData: fromBase64Url(r.authenticatorData), clientDataJSON: fromBase64Url(r.clientDataJSON), signature: fromBase64Url(r.signature) })
         : false;
     if (ok) remember(contract, credentialId, signer.key);
-  } catch { /* checked again on the Deposit page */ }
-}
-
-/** Ask this device's passkey to sign a fresh challenge and check it against the on-chain key. */
-export async function provePasskey(contract: string, credentialId: string, rpId: string): Promise<boolean> {
-  const signer = await onChainSigner(contract, credentialId);
-  if (!signer) return false;
-  const { startAuthentication } = await import("@simplewebauthn/browser");
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const b64 = btoa(Array.from(challenge, (c) => String.fromCharCode(c)).join("")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const res = await startAuthentication({ optionsJSON: { challenge: b64, rpId, allowCredentials: [{ id: credentialId, type: "public-key" }], userVerification: "required" } as any });
-  const ok = await assertionMatchesKey(signer.key, {
-    authenticatorData: fromBase64Url(res.response.authenticatorData),
-    clientDataJSON: fromBase64Url(res.response.clientDataJSON),
-    signature: fromBase64Url(res.response.signature),
-  }, challenge);
-  if (ok) remember(contract, credentialId, signer.key);
-  return ok;
+  } catch { /* nothing recorded, so nothing to compare with later */ }
 }
 
 /** The Base account the primary passkey's key creates (Coinbase Smart Wallet, nonce 0). */
@@ -123,7 +105,6 @@ async function expectedBaseAccount(rpcUrl: string, key: Uint8Array): Promise<str
 export type WalletCheck =
   | { status: "checking" }
   | { status: "ok" }
-  | { status: "needs-proof"; contract: string; credentialId: string }
   | { status: "failed"; problems: string[] };
 
 /** Runs every check that needs no passkey prompt. */
@@ -162,7 +143,8 @@ export async function checkWallet(session: PasskeySession, depositAddresses: { c
   }
 
   if (problems.length) return { status: "failed", problems };
-  if (remembered(stellar.address, credentialId) !== hex(signer!.key)) return { status: "needs-proof", contract: stellar.address, credentialId };
+  const seen = remembered(stellar.address, credentialId);
+  if (seen && seen !== hex(signer!.key)) return { status: "failed", problems: ["The key on your Stellar wallet is not the one this device's passkey signs with."] };
   return { status: "ok" };
 }
 
