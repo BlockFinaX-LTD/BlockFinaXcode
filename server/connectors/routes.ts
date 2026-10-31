@@ -276,7 +276,7 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     const areas = Array.isArray(b.areas) ? b.areas.filter((a: unknown) => typeof a === "string" && areaByKey(a)).slice(0, 11) : [];
     if (fullName.split(/\s+/).length < 2) throw bad("Enter your full legal name, first and last");
     if (!/^[A-Z]{2}$/.test(country)) throw bad("Choose your country");
-    if (!areas.length) throw bad("Choose at least one area you can help with");
+    if (kind === "connector" && !areas.length) throw bad("Choose at least one group you can introduce");
     const { db: authDb } = await import("../db");
     const { userAccounts } = await import("@shared/auth-core-schema");
     const { eq } = await import("drizzle-orm");

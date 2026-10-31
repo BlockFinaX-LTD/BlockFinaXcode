@@ -1506,7 +1506,7 @@ const CONNECTORS: AudienceCopy = {
   title: ['Introduce BlockFinaX,', 'earn on results'],
   lede: 'You know the businesses that pay or earn in other currencies, the capital looking for real returns, and the people who open doors in your market. Introduce them to BlockFinaX and earn a reward for every result.',
   primary: { label: 'Apply', href: CONNECTOR_PORTAL_URL },
-  secondary: { label: 'Read the programme guide', href: 'https://docs.blockfinax.com/connectors' },
+  secondary: { label: 'Read the programme guide', href: '/connectors/guide' },
   steps: [
     { t: 'Apply', d: 'Create your BlockFinaX account and tell us your markets and how you can help. We review every application.' },
     { t: 'Agree and train', d: 'Once accepted, agree to the programme terms and complete four short lessons.' },
@@ -1551,7 +1551,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
               ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
               : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
             {copy.secondary
-              ? <a href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</a>
+              ? <Link href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</Link>
               : <Link href="/contact" className="btn btn-ghost">Talk to us</Link>}
           </div>
         </div>
@@ -1591,7 +1591,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
               ? <a href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></a>
               : <Link href={copy.primary.href} className="btn btn-primary">{copy.primary.label} <span className="arrow">→</span></Link>}
             {copy.secondary
-              ? <a href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</a>
+              ? <Link href={copy.secondary.href} className="btn btn-ghost">{copy.secondary.label}</Link>
               : <Link href="/contact" className="btn btn-ghost">Talk to us</Link>}
           </div>
         </div>
@@ -1604,6 +1604,139 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
 export function HedgersPage() { return <AudiencePage copy={HEDGERS} />; }
 export function UnderwritersPage() { return <AudiencePage copy={UNDERWRITERS} />; }
 export function ConnectorsPage() { return <AudiencePage copy={CONNECTORS} />; }
+
+// One page with everything needed before applying, so nobody has to go through the full docs.
+const GUIDE_STEPS = [
+  { t: 'Apply', d: 'Create a free BlockFinaX account with your email or Google, then tell us your markets and how you can help. To receive gigs, choose Take paid gigs.' },
+  { t: 'We review', d: 'We review every application and check it against sanctions lists. We email you when you are accepted.' },
+  { t: 'Accept the terms and train', d: 'Tick to accept the programme terms, then complete four short lessons. Each has a quiz with an 80% pass mark, and you can retake it as often as you like.' },
+  { t: 'Register, then introduce', d: 'Register each organisation in your portal first. We approve it in writing with the reward that applies. Then you make the introduction, and we handle prices, contracts and onboarding.' },
+  { t: 'Get paid', d: 'Follow every introduction and reward in your portal. Rewards are paid every quarter.' },
+];
+const GUIDE_INTRODUCE = [
+  { t: 'Earn 25% of revenue for 12 months', items: [
+    'Businesses that buy protection: importers, exporters and lenders',
+    'Underwriters: funds, treasuries, banks and individuals who provide cover',
+    'Partners: fintechs, payment apps and trade platforms that offer protection to their customers',
+    'Banks and trade associations that refer their members or clients',
+  ] },
+  { t: 'Earn a fixed bonus', items: [
+    'Local currency partners, such as exchanges and payment providers, plus 25% of any revenue',
+    'Official rate publishers, data vendors and independent rate operators',
+    'A new country launch, plus revenue share on the relationships you introduce',
+    'Grants and development finance awarded to BlockFinaX',
+    'Engineers, risk specialists and market leads who join and stay 6 months',
+  ] },
+];
+const GUIDE_WAYS = [
+  { t: 'Introduce and earn', d: 'Connect BlockFinaX with the businesses, underwriters and partners you know. When an approved introduction produces revenue, you earn 25% of it for 12 months.' },
+  { t: 'Take paid gigs', d: 'We post offers in your portal when we need help on the ground. Pick the ones that suit your skills and schedule, and get paid a set fee for each.' },
+];
+const GUIDE_GIGS = [
+  { t: 'Market research', d: 'Speak with importers in Lagos or Accra about how they manage currency risk today.' },
+  { t: 'Workshops', d: 'Run a session on currency risk for a trade association or chamber of commerce.' },
+  { t: 'Onboarding support', d: 'Guide new businesses through getting started, in person or on WhatsApp.' },
+  { t: 'Events', d: 'Represent BlockFinaX at trade fairs and business meetups in your city.' },
+  { t: 'Finding partners', d: 'Map the payment companies and trade platforms in your market and arrange first meetings.' },
+  { t: 'Translation and local content', d: 'Adapt guides and short videos into French, Pidgin, Twi, Yoruba or Hausa.' },
+];
+const GUIDE_EARN = [
+  'Your 12 months start when BlockFinaX first receives revenue from the relationship, not when you register it.',
+  'Revenue means the fees BlockFinaX keeps. Underwriter premiums, deposits, the amount protected and payouts never count.',
+  'We pay within 30 days of each quarter end, with a statement in your portal.',
+  'Rewards are paid in USDC to the address you provide. Amounts under $100 roll forward to the next quarter.',
+  'Rewards are money only, with no shares or options. You are responsible for your own taxes.',
+  'Either side can end your participation with 30 days\' notice. Rewards already earned continue until their 12 months end.',
+];
+const GUIDE_RULES = [
+  'Do not give financial, legal or tax advice, or recommend a specific contract.',
+  'Use only the materials in your portal, and make no promises about prices, returns or payouts.',
+  'Tell every prospect that BlockFinaX may reward you, and tell us about any conflict of interest.',
+  'Never open an account for someone, ask for their passkey or handle their money.',
+  'Never offer anything of value to a public official, or to anyone at a prospect, to win business or an approval.',
+  'Do not ask anyone to invest in BlockFinaX. Pass their interest to us. Rewards for investor introductions need a separate agreement, signed by both sides first.',
+];
+
+export function ConnectorsGuidePage() {
+  useGeistFont();
+  const [theme, setTheme] = useState<Theme>('light');
+  useEffect(() => { setTheme(readStoredTheme()); window.scrollTo(0, 0); }, []);
+  const toggleTheme = () => setTheme((t) => {
+    const next: Theme = t === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
+  return (
+    <div className="bfx-landing" data-theme={theme}>
+      <TopNav theme={theme} onToggleTheme={toggleTheme} />
+      <section className="aud-hero aud-guide-hero">
+        <Guilloche />
+        <div className="wrap">
+          <Link href="/connectors" className="aud-guide-back">← Connector Programme</Link>
+          <div className="aud-eyebrow">Programme guide</div>
+          <h1 className="aud-title">Your expertise, <span className="accent">more ways to earn</span></h1>
+          <p className="aud-lede">An opportunity for consultants, advisers and market experts. Earn from the introductions you make and the gigs you choose, alongside the work you already do.</p>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap aud-guide">
+          <h2 className="aud-h2">Two ways to earn</h2>
+          <div className="aud-guide-ways">
+            {GUIDE_WAYS.map((w) => <div key={w.t} className="aud-point"><h3>{w.t}</h3><p>{w.d}</p></div>)}
+          </div>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap aud-guide">
+          <h2 className="aud-h2">How it works</h2>
+          <ol className="aud-guide-steps">
+            {GUIDE_STEPS.map((s, i) => <li key={s.t}><span className="aud-n">{String(i + 1).padStart(2, '0')}</span><div><h3>{s.t}</h3><p>{s.d}</p></div></li>)}
+          </ol>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap aud-guide">
+          <h2 className="aud-h2">Who you can introduce</h2>
+          {GUIDE_INTRODUCE.map((g) => <div key={g.t} className="aud-guide-group"><h3>{g.t}</h3><ul>{g.items.map((i) => <li key={i}>{i}</li>)}</ul></div>)}
+          <div className="aud-note"><b>Good prospects.</b> They have real, regular currency exposure in a market we serve: Nigeria, Ghana, Kenya, South Africa or Egypt today. Each organisation counts once, and the first approved registration gets the credit.</div>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap aud-guide">
+          <h2 className="aud-h2">Gigs and offers</h2>
+          <p className="aud-guide-p">New offers appear in your portal as work comes up. Here are the kinds of gig you might see:</p>
+          <div className="aud-guide-gigs">
+            {GUIDE_GIGS.map((g) => <div key={g.t}><h3>{g.t}</h3><p>{g.d}</p></div>)}
+          </div>
+          <p className="aud-guide-p">Each offer shows the scope, fees and dates, and you can decline any of them. Unless it says otherwise, you invoice when the work is done and we pay within 30 days. Work depends on what we need at the time, so the amount is not guaranteed. Contractors can introduce prospects and earn rewards too.</p>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap aud-guide">
+          <h2 className="aud-h2">How rewards are paid</h2>
+          <ul className="aud-guide-list">{GUIDE_EARN.map((i) => <li key={i}>{i}</li>)}</ul>
+        </div>
+      </section>
+      <section className="aud-section">
+        <div className="wrap aud-guide">
+          <h2 className="aud-h2">The rules</h2>
+          <p className="aud-guide-p">You introduce, and BlockFinaX handles the rest. Breaking these rules ends your participation, stops unpaid rewards and lets us recover rewards already paid for that introduction.</p>
+          <ul className="aud-guide-list">{GUIDE_RULES.map((i) => <li key={i}>{i}</li>)}</ul>
+        </div>
+      </section>
+      <section className="tail">
+        <div className="wrap">
+          <h2>Ready to join?</h2>
+          <div className="hero-ctas">
+            <a href={CONNECTOR_PORTAL_URL} className="btn btn-primary">Apply <span className="arrow">→</span></a>
+          </div>
+          <p className="aud-guide-more">Want every detail? <a href="https://docs.blockfinax.com/connectors">Read the full programme docs</a></p>
+        </div>
+      </section>
+      <Footer />
+    </div>
+  );
+}
 
 
 // ── About ───────────────────────────────────────────────────────────────

@@ -304,17 +304,31 @@ function LearnPage({ me, tab, go }: { me: Me; tab: Tab; go: (t: Tab) => void }) 
 
 interface ProfileForm { kind: MemberKind; fullName: string; organisation: string; country: string; phone: string; markets: string; areas: AreaKey[]; about: string }
 
+/** The groups offered on the form, in plain words. Other areas still exist for older profiles and the terms. */
+const INTRODUCE_OPTIONS: { key: AreaKey; label: string }[] = [
+  { key: 'hedgers', label: 'Businesses that need protection' },
+  { key: 'underwriters', label: 'Underwriters and funds' },
+  { key: 'distribution', label: 'Fintechs and payment apps' },
+  { key: 'institutions', label: 'Banks and trade associations' },
+  { key: 'local_partners', label: 'Exchanges and payment providers' },
+  { key: 'market_data', label: 'Market data providers' },
+  { key: 'new_country', label: 'New country launches' },
+  { key: 'grants', label: 'Grants and development finance' },
+  { key: 'talent', label: 'Talent' },
+];
+const introduceLabel = (k: AreaKey) => INTRODUCE_OPTIONS.find((o) => o.key === k)?.label ?? areaByKey(k)?.label ?? k;
+
 function ProfileFields({ form, set, lockKind }: { form: ProfileForm; set: (f: ProfileForm) => void; lockKind?: boolean }) {
   const toggleArea = (k: AreaKey) => set({ ...form, areas: form.areas.includes(k) ? form.areas.filter((a) => a !== k) : [...form.areas, k] });
   return (
     <>
       <div className="bx-field">
-        <span>I am joining as</span>
+        <span>How do you want to earn?</span>
         <div className="bx-choice">
           {(['connector', 'contractor'] as MemberKind[]).map((k) => (
             <button key={k} type="button" className={form.kind === k ? 'on' : ''} disabled={lockKind && form.kind !== k} onClick={() => set({ ...form, kind: k })}>
-              <div className="t">{k === 'connector' ? 'Connector' : 'Independent contractor'}</div>
-              <div className="p">{k === 'connector' ? 'I introduce people and organisations and earn rewards on results.' : 'I take on paid pieces of work, such as research, events or onboarding support.'}</div>
+              <div className="t">{k === 'connector' ? 'Introduce and earn' : 'Take paid gigs'}</div>
+              <div className="p">{k === 'connector' ? 'Introduce people and organisations, and earn when it leads to results.' : 'Take on paid work such as research, workshops or onboarding support. You can make introductions too.'}</div>
             </button>
           ))}
         </div>
@@ -327,18 +341,21 @@ function ProfileFields({ form, set, lockKind }: { form: ProfileForm; set: (f: Pr
         <Field label="Markets you know best" htmlFor="cp-markets" wide><input id="cp-markets" className="bx-input" placeholder="For example: Nigeria and Ghana, importers and fintechs" value={form.markets} onChange={(e) => set({ ...form, markets: e.target.value })} /></Field>
       </div>
       <div className="bx-field">
-        <span>Where you can help</span>
+        <span>{form.kind === 'contractor' ? 'Who can you introduce? Optional' : 'Who can you introduce?'}</span>
         <div className="bx-cp-areas">
-          {AREAS.map((a) => (
-            <label key={a.key} className={form.areas.includes(a.key) ? 'on' : ''}>
-              <input type="checkbox" checked={form.areas.includes(a.key)} onChange={() => toggleArea(a.key)} />
-              <span>{a.label}<small>{a.reward}</small></span>
-            </label>
-          ))}
+          {INTRODUCE_OPTIONS.map((o) => {
+            const on = form.areas.includes(o.key);
+            return (
+              <label key={o.key} className={on ? 'on' : ''}>
+                <input type="checkbox" checked={on} onChange={() => toggleArea(o.key)} />
+                {on && <Check aria-hidden="true" />}{o.label}
+              </label>
+            );
+          })}
         </div>
       </div>
       <Field label="Your background, in a few sentences" htmlFor="cp-about" wide>
-        <textarea id="cp-about" className="bx-input" rows={4} value={form.about} onChange={(e) => set({ ...form, about: e.target.value })} />
+        <textarea id="cp-about" className="bx-input" rows={4} placeholder={form.kind === 'contractor' ? 'Your experience, the languages you speak and the work you can take on' : 'Your experience and the people you know in these markets'} value={form.about} onChange={(e) => set({ ...form, about: e.target.value })} />
       </Field>
     </>
   );
@@ -363,8 +380,8 @@ function ApplyPage({ email, prefill }: { email: string | null; prefill: Me['pref
       <div className="bx-onboard-card" style={{ maxWidth: 760 }}>
         <div className="bx-brand" style={{ padding: '0 0 14px' }}><img src={logoPath} alt="" />BlockFinaX</div>
         <h1 className="bx-cp-h1">Apply to the Connector Programme</h1>
-        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you can help. BlockFinaX reviews every application and emails you when you are accepted; the programme terms and training open then.</p>
-        {filled && <Note>We filled in what your BlockFinaX account already has. Check it, then choose where you can help.</Note>}
+        <p className="bx-cp-lede" style={{ marginBottom: 18 }}>{email ? `You are signed in as ${email}. ` : 'You are signed in. '}One last step: tell us how you want to earn. BlockFinaX reviews every application and emails you when you are accepted; the programme terms and training open then.</p>
+        {filled && <Note>We filled in what your BlockFinaX account already has. Check it, then finish the rest.</Note>}
         <ProfileFields form={form} set={setForm} />
         {error && <Note warn>{error}</Note>}
         <button className="bx-btn" style={{ marginTop: 14 }} disabled={busy} onClick={submit}>{busy ? <Spin /> : null}Submit application</button>
@@ -422,7 +439,7 @@ function ApplicationStatus({ me, onSignOut }: { me: Me; onSignOut: () => void })
             <div className="bx-card-h"><h2>What you sent</h2><button className="bx-link" onClick={() => setEditing(true)}>{declined ? 'Update and apply again' : 'Edit'}</button></div>
             <span><b>{m.fullName}</b>{m.organisation ? `, ${m.organisation}` : ''} · {m.kind === 'contractor' ? 'Independent contractor' : 'Connector'}</span>
             <span className="muted">{label(m.country)}{m.markets ? ` · ${m.markets}` : ''}</span>
-            <span className="muted">Where you can help: {m.areas.map((a) => areaByKey(a)?.label ?? a).join(', ')}</span>
+            {m.areas.length > 0 && <span className="muted">Who you can introduce: {m.areas.map(introduceLabel).join(', ')}</span>}
           </section>
         )}
         <div className="bx-cp-row" style={{ justifyContent: 'space-between' }}>

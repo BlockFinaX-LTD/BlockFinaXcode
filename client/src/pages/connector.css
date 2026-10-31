@@ -29,11 +29,12 @@
 .bx-cp-copy code { flex: 1; min-width: 0; white-space: nowrap; }
 .bx-cp-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 16px; }
 .bx-cp-form .wide { grid-column: 1 / -1; }
-.bx-cp-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
-.bx-cp-areas label { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px; cursor: pointer; font-size: 13.5px; }
+.bx-cp-areas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.bx-cp-areas label { position: relative; display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line-2); border-radius: 999px; padding: 8px 14px; min-height: 38px; cursor: pointer; font-size: 13.5px; font-weight: 500; }
+.bx-cp-areas label:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+.bx-cp-areas svg { width: 14px; height: 14px; color: var(--blue); }
 .bx-cp-areas label.on { border-color: var(--blue); background: var(--blue-soft); }
-.bx-cp-areas input { margin-top: 2px; }
-.bx-cp-areas small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.bx-cp-areas input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .bx-cp-tick { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; margin: 6px 0 14px; cursor: pointer; }
 .bx-cp-tick input { margin-top: 3px; width: 17px; height: 17px; flex: none; }
 
