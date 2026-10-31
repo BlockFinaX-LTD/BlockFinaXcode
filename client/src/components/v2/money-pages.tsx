@@ -11,7 +11,7 @@ import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
 import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
 import { useWalletCheck } from '@/lib/wallets/verify-wallet';
-import { fmt, runTransfer, transferStatus, useChains, useTransferQuote, useTransfers, useUsdcBalances, usdcOn } from './shared';
+import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
 
@@ -111,26 +111,6 @@ function MoveToHub({ network, networkName }: { network: string; networkName: str
       </div>
       {quote.isError && Number(amount) > 0 && <div className="bx-error">{(quote.error as Error).message}</div>}
       <button className="bx-btn block" style={{ marginTop: 14 }} disabled={!!busy || !(Number(amount) > 0) || Number(amount) > have || !quote.data} onClick={move}>{busy ? <><Spin /> {busy}</> : `Move to ${hubName}`}</button>
-    </div>
-  );
-}
-
-/** Transfers between networks, newest first, with their live state. */
-function TransfersCard() {
-  const routes = useTransfers();
-  const chains = useChains();
-  const name = (k: string) => chains.data?.chains.find((c) => c.key === k)?.name ?? k;
-  const list = (routes.data ?? []).filter((r) => r.sourceTxHash).slice(0, 8);
-  if (!list.length) return null;
-  return (
-    <div className="bx-card tight">
-      <h2 style={{ marginBottom: 4 }}>Transfers between networks</h2>
-      <div className="bx-sums" style={{ borderTop: 0 }}>
-        {list.map((r) => {
-          const st = transferStatus(r);
-          return <Sum key={r.id} l={<span><span className="num">${fmt(r.amount)}</span> {name(r.sourceChain)} to {name(r.destinationChain)}</span>} v={<Tag tone={st.tone}>{st.label}</Tag>} />;
-        })}
-      </div>
     </div>
   );
 }
@@ -257,7 +237,6 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
         {mode === 'withdraw' && <WithdrawPanel onCancel={close} />}
       </section>
       <aside className="bx-aside">
-        <TransfersCard />
         <FaucetCard />
       </aside>
     </main>
@@ -465,7 +444,7 @@ function PasskeysCard() {
           <div className="grow">
             <div className="t">{p.label}{p.credentialId === session?.credentialId ? ' · this device' : ''}</div>
             <div className="d">{p.role === 'primary' ? 'First passkey' : 'Backup'} · added {new Date(p.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-              {p.status === 'pending' ? ` · Base ${p.onBase ? 'done' : 'pending'}, Stellar ${p.onStellar ? 'done' : 'pending'}` : ''}</div>
+              {p.status === 'pending' ? ' · Still being set up' : ''}</div>
           </div>
           {p.status === 'active' ? <Tag tone="green">Active</Tag> : (
             <span style={{ display: 'flex', gap: 6 }}>
@@ -481,7 +460,7 @@ function PasskeysCard() {
         <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
           <label className="bx-field"><span>Name it (for example "Work phone" or "YubiKey")</span>
             <input className="bx-input" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} /></label>
-          <Note>Your browser will offer to save it on this device, on another phone by scanning a QR code, or on a security key. You then approve twice with your current passkey: once for Base and once for Stellar. Network fees are covered.</Note>
+          <Note>Your browser will offer to save it on this device, on another phone by scanning a QR code, or on a security key. You then approve twice with your current passkey. Network fees are covered.</Note>
           <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
             <button className="bx-btn" disabled={!!busy} onClick={add}>{busy ? <><Spin /> {busy}</> : 'Create backup passkey'}</button>
             <button className="bx-btn ghost" disabled={!!busy} onClick={() => setAdding(false)}>Cancel</button>
@@ -517,7 +496,7 @@ export function AccountPage() {
         <div className="bx-card tight">
           <h2 style={{ marginBottom: 4 }}>Your accounts</h2>
           <div className="bx-sums" style={{ borderTop: 0 }}>
-            {accounts.map((a) => <Sum key={a.chain} l={a.name} v={<span className="num" style={{ fontSize: 12 }}>{a.address.slice(0, 8)}...{a.address.slice(-6)}</span>} />)}
+            {accounts.filter((a) => a.stellar).map((a) => <Sum key={a.chain} l={a.name} v={<span className="num" style={{ fontSize: 12 }}>{a.address.slice(0, 8)}...{a.address.slice(-6)}</span>} />)}
           </div>
           <div className="sub">Your passkeys control every account. BlockFinaX never holds your keys.</div>
         </div>

@@ -86,12 +86,12 @@ export function PasskeyAuth() {
             Signed in{session?.user.email ? ` as ${session.user.email}` : ""}. Now create your wallet passkey.
           </p>
           <p className="text-[11.5px] text-muted-foreground leading-snug">
-            Your passkey stays on this device and approves every transaction. It creates your accounts on Stellar and
-            Base Sepolia. Your email or Google account signs you in, but it cannot move funds.
+            Your passkey stays on this device and approves every transaction. It creates your wallet on Stellar. Your
+            email or Google account signs you in, but it cannot move funds.
           </p>
           <Button className="w-full h-11 rounded-xl mt-2" disabled={!!busy} onClick={() => run("create", async () => {
             const created = await createWalletPasskey();
-            if (created.errors?.length) setWarning(`Your wallet is ready, but some accounts are still being set up: ${created.errors.join("; ")}. Signing in again retries.`);
+            if (created.errors?.length) setWarning("Your wallet is ready, but part of the setup is still finishing. Signing in again retries.");
             setSession(created);
           })}>
             {spinner("create") ?? <><KeyRound className="h-4 w-4 mr-2" />Create wallet passkey</>}

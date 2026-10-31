@@ -227,18 +227,18 @@ export async function addBackupPasskey(label: string, onStep?: WalletStep): Prom
   if (cfg.evm) {
     const base = await api<{ done: boolean; id?: string; options?: any }>(`/api/wallet/passkeys/${id}/base/prepare`, {});
     if (!base.done) {
-      onStep?.("Approve with your current passkey (Base)...");
+      onStep?.("Approve with your current passkey...");
       const approval = await startAuthentication({ optionsJSON: base.options });
-      onStep?.("Adding it to your Base wallet...");
+      onStep?.("Adding it to your wallet...");
       const sent = await api<{ state: string; hash: string }>("/api/wallet/evm/submit", { id: base.id, response: approval });
-      if (sent.state !== "CONFIRMED") throw new Error(`Adding the passkey on Base failed: ${sent.hash}`);
+      if (sent.state !== "CONFIRMED") throw new Error(`Adding the passkey failed: ${sent.hash}`);
     }
   }
 
   let stellarHash: string | undefined;
   const stellar = cfg.stellar ? session.accounts.find((a) => a.chain === cfg.stellar!.chain) : undefined;
   if (cfg.stellar && stellar) {
-    onStep?.("Approve with your current passkey (Stellar)...");
+    onStep?.("Approve with your current passkey again...");
     const { Buffer } = await import("buffer");
     (globalThis as any).Buffer ??= Buffer;
     const { PasskeyKit, SignerStore } = await import("passkey-kit");
@@ -246,7 +246,7 @@ export async function addBackupPasskey(label: string, onStep?: WalletStep): Prom
     await kit.connectWallet({ keyId: session.credentialId, getContractId: async () => stellar.address });
     const tx = await kit.addSecp256r1(passkey.credentialId, stellarPublicKey, undefined, SignerStore.Persistent);
     const signed = await signStellarAuth(tx.built!.toXDR(), session.credentialId, stellar.address);
-    onStep?.("Adding it to your Stellar wallet...");
+    onStep?.("Finishing up...");
     stellarHash = (await api<{ hash: string }>("/api/v2/transactions/relay", { chain: cfg.stellar.chain, xdr: signed })).hash;
   }
 
