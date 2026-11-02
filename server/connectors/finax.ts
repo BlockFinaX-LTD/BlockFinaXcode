@@ -6,7 +6,7 @@
  * connector data, so it cannot reach another member: everything it knows about this one
  * is in the brief. Training answers are never included (they live in course-answers.ts).
  */
-import { AGREEMENTS, AREAS, MATERIALS, MODULES, PASS_MARK, agreementText, type DocumentKind } from "@shared/connector-programme";
+import { AGREEMENTS, AREAS, OPEN_AREAS, MATERIALS, MODULES, PASS_MARK, agreementText, type DocumentKind } from "@shared/connector-programme";
 
 export interface BriefInput {
   member: null | { kind: string; fullName: string; status: string; country: string; areas: string[] };
@@ -49,7 +49,7 @@ export function connectorBrief(b: BriefInput): string {
     `### ${m.title}${m.required ? " (required)" : ""}\n${m.body.join("\n")}`,
   ).join("\n\n");
 
-  const areas = AREAS.map((a) => `- **${a.label}**: qualifies when ${a.qualifies} Reward: ${a.reward}`).join("\n");
+  const areas = OPEN_AREAS.map((a) => `- **${a.label}**: qualifies when ${a.qualifies} Reward: ${a.reward}`).join("\n");
   const materials = MATERIALS.map((m) => `- ${m.title}: ${m.url}`).join("\n");
 
   return [

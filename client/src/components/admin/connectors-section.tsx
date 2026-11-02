@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Users, ClipboardList, AlertTriangle, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AREAS, LEDGER_LABELS, MODULES, areaByKey, type LedgerKind } from "@shared/connector-programme";
+import { OPEN_AREAS, LEDGER_LABELS, MODULES, areaByKey, type LedgerKind } from "@shared/connector-programme";
 
 async function api(url: string, token: string, body?: unknown) {
   const res = await fetch(url, {
@@ -325,7 +325,7 @@ function MemberDetail({ token, userId, onBack }: { token: string; userId: number
           </CardContent>
         </Card>
       )}
-      <p className="text-xs text-gray-400">Areas available: {AREAS.length}. Approval emails are the member's Approval Notice under the Connector Programme Terms.</p>
+      <p className="text-xs text-gray-400">Areas available: {OPEN_AREAS.length}. Approval emails are the member's Approval Notice under the Connector Programme Terms.</p>
     </div>
   );
 }
@@ -361,7 +361,7 @@ function Offers({ token, onOpen }: { token: string; onOpen: (id: number) => void
             <div className="grid md:grid-cols-4 gap-2">
               <select className="border rounded-md px-2 py-2 text-sm" aria-label="Area" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })}>
                 <option value="">Any area</option>
-                {AREAS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                {OPEN_AREAS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
               </select>
               <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase().slice(0, 2) })} placeholder="Country code, e.g. KE" aria-label="Country" />
               <select className="border rounded-md px-2 py-2 text-sm" aria-label="Audience" value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })}>

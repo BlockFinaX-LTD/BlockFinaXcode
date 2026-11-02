@@ -14,7 +14,7 @@ import {
   Sparkles, Sun, UserPlus, UserRound, Building2,
 } from 'lucide-react';
 import {
-  AGREEMENTS, AREAS, COMPANY, LEDGER_LABELS, MATERIALS, MODULES, PASS_MARK, areaByKey,
+  AGREEMENTS, OPEN_AREAS, COMPANY, LEDGER_LABELS, MATERIALS, MODULES, PASS_MARK, areaByKey,
   type AgreementDoc, type AreaKey, type LedgerKind, type MemberKind, type Module,
 } from '@shared/connector-programme';
 import { COUNTRIES, PRIORITY_COUNTRIES } from '@shared/onboarding';
@@ -310,11 +310,7 @@ const INTRODUCE_OPTIONS: { key: AreaKey; label: string }[] = [
   { key: 'underwriters', label: 'Underwriters and funds' },
   { key: 'distribution', label: 'Fintechs and payment apps' },
   { key: 'institutions', label: 'Banks and trade associations' },
-  { key: 'local_partners', label: 'Exchanges and payment providers' },
-  { key: 'market_data', label: 'Market data providers' },
-  { key: 'new_country', label: 'New country launches' },
-  { key: 'grants', label: 'Grants and development finance' },
-  { key: 'talent', label: 'Talent' },
+  { key: 'other', label: 'Other opportunities, agreed case by case' },
 ];
 const introduceLabel = (k: AreaKey) => INTRODUCE_OPTIONS.find((o) => o.key === k)?.label ?? areaByKey(k)?.label ?? k;
 
@@ -720,7 +716,7 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         <Field label="Area" htmlFor="rg-area" wide>
           <select id="rg-area" className="bx-select" value={f.area} onChange={(e) => setF({ ...f, area: e.target.value as AreaKey })}>
             <option value="">Choose an area</option>
-            {AREAS.map((a) => <option key={a.key} value={a.key}>{a.group}: {a.label}</option>)}
+            {OPEN_AREAS.map((a) => <option key={a.key} value={a.key}>{a.group}: {a.label}</option>)}
           </select>
         </Field>
         {area && <div className="wide" style={{ marginBottom: 14 }}><Note>{area.qualifies}. Reward: {area.reward}.</Note></div>}

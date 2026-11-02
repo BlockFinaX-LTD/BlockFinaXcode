@@ -38,7 +38,7 @@ export const COMPANY = {
 export type AreaKey =
   | "hedgers" | "underwriters" | "distribution" | "institutions"
   | "regulatory" | "local_partners" | "market_data" | "new_country"
-  | "fundraising" | "grants" | "talent";
+  | "fundraising" | "grants" | "talent" | "other";
 
 export interface Area {
   key: AreaKey;
@@ -49,6 +49,8 @@ export interface Area {
   reward: string;
   /** Earns 25% of collected revenue for the reward period. */
   revenueShare: boolean;
+  /** No longer offered or in the terms. Kept so older profiles and registrations still show a label. */
+  retired?: boolean;
 }
 
 export const AREAS: Area[] = [
@@ -68,37 +70,43 @@ export const AREAS: Area[] = [
     qualifies: "Banks, chambers of commerce, exporter and importer associations that refer members or clients",
     measured: "Revenue from the businesses they bring",
     reward: "25% of collected revenue for 12 months" },
-  { key: "regulatory", group: "Market access", label: "Regulatory", revenueShare: false,
+  { key: "regulatory", group: "Market access", label: "Regulatory", revenueShare: false, retired: true,
     qualifies: "Introductions to regulators, sandbox entry, licences, approvals and legal opinions",
     measured: "The approval, sandbox place or formal engagement, confirmed in writing",
     reward: "Milestone bonus" },
-  { key: "local_partners", group: "Market access", label: "Local currency partners", revenueShare: true,
+  { key: "local_partners", group: "Market access", label: "Local currency partners", revenueShare: true, retired: true,
     qualifies: "Exchanges, payment providers and on and off ramps between USDC and local currency",
     measured: "The partner live on BlockFinaX, plus revenue where it earns any",
     reward: "Milestone bonus, plus 25% of any collected revenue" },
-  { key: "market_data", group: "Market access", label: "Market data and fixing sources", revenueShare: false,
+  { key: "market_data", group: "Market access", label: "Market data and fixing sources", revenueShare: false, retired: true,
     qualifies: "Official exchange rate publishers, data vendors and independent oracle operators",
     measured: "A signed data agreement or an operator running in production",
     reward: "Milestone bonus" },
-  { key: "new_country", group: "Market access", label: "New country launch", revenueShare: false,
+  { key: "new_country", group: "Market access", label: "New country launch", revenueShare: false, retired: true,
     qualifies: "Opening a country BlockFinaX does not serve yet, with its first customers and underwriters",
     measured: "The first paid contracts in that country",
     reward: "First in market bonus, plus revenue share on relationships introduced" },
-  { key: "fundraising", group: "Capital", label: "Fundraising", revenueShare: false,
+  { key: "fundraising", group: "Capital", label: "Fundraising", revenueShare: false, retired: true,
     qualifies: "Investors who invest in a BlockFinaX funding round",
     measured: "Funds BlockFinaX actually receives from those investors",
     reward: "Up to 5% of funds received, only under a separate fundraising agreement" },
-  { key: "grants", group: "Capital", label: "Grants and development finance", revenueShare: false,
+  { key: "grants", group: "Capital", label: "Grants and development finance", revenueShare: false, retired: true,
     qualifies: "Grants, ecosystem funds, development finance institutions and currency risk programmes",
     measured: "A grant or programme awarded to BlockFinaX",
     reward: "Milestone bonus, paid from BlockFinaX's own funds" },
-  { key: "talent", group: "People", label: "Talent", revenueShare: false,
+  { key: "talent", group: "People", label: "Talent", revenueShare: false, retired: true,
     qualifies: "Engineers, risk specialists and market leads who join BlockFinaX",
     measured: "The hire still in role after 6 months",
     reward: "Referral bonus" },
+  { key: "other", group: "Market access", label: "Other opportunities", revenueShare: false,
+    qualifies: "Any other organisation or opportunity, such as a local currency partner, that BlockFinaX agrees in writing to reward before the introduction",
+    measured: "The milestone stated in the Approval Notice",
+    reward: "As stated in the Approval Notice, agreed case by case" },
 ];
 
 export const areaByKey = (k: string) => AREAS.find((a) => a.key === k);
+/** The areas offered to members and listed in the terms. */
+export const OPEN_AREAS = AREAS.filter((a) => !a.retired);
 
 // ── Terms ───────────────────────────────────────────────────────────────────
 // Accepted in the portal by ticking a box and clicking Accept. BlockFinaX's acceptance of
@@ -108,8 +116,8 @@ export const areaByKey = (k: string) => AREAS.find((a) => a.key === k);
 export const CONNECTOR_AGREEMENT: AgreementDoc = {
   kind: "connector",
   title: "Connector Programme Terms",
-  version: "CPT 1.0",
-  issued: "29 October 2026",
+  version: "CPT 1.1",
+  issued: "2 November 2026",
   intro: "BlockFinaX operates an onchain FX hedging protocol. These terms govern the BlockFinaX Connector Programme, in which the Connector introduces organisations and opportunities that may help BlockFinaX grow. They apply once BlockFinaX has accepted the Connector's application and the Connector has accepted these terms in the connector portal.",
   clauses: [
     { n: "1", title: "Definitions", items: [
@@ -117,7 +125,7 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
       ["1.2", "Approved Relationship means a Prospect named in an Approval Notice."],
       ["1.3", "Collected Revenue means fees BlockFinaX actually receives from an Approved Relationship, less refunds, chargebacks, taxes and the Excluded Amounts."],
       ["1.4", "Excluded Amounts means amounts belonging to customers, underwriters, partners or other third parties, including premiums owed to underwriters, investment capital, liquidity deposits, the amount a customer protects, and settlement funds."],
-      ["1.5", "Opportunity means a contribution in an area listed in Schedule 1 that does not by itself produce Collected Revenue, such as a regulatory approval or a new market launch."],
+      ["1.5", "Opportunity means a contribution that does not by itself produce Collected Revenue, such as a local currency partner going live, which BlockFinaX agrees in writing to reward before the introduction is made."],
       ["1.6", "Prospect means an organisation or person the Connector proposes to introduce to BlockFinaX, including a user who signs up through the Connector's referral link."],
       ["1.7", "Reward Period means 12 months starting on the date BlockFinaX first receives Collected Revenue from an Approved Relationship."],
     ] },
@@ -137,13 +145,11 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
     ] },
     { n: "4", title: "Rewards", items: [
       ["4.1", "Revenue share. For each Approved Relationship, BlockFinaX pays the Connector 25% of the Collected Revenue it receives during the Reward Period."],
-      ["4.2", "Milestone bonuses. For an approved Opportunity, BlockFinaX pays the fixed bonus stated in its Approval Notice once the milestone it describes is met and confirmed in writing."],
-      ["4.3", "Fundraising. These terms do not cover introducing investors, and the Connector does not solicit investors for BlockFinaX under them. Any reward for introducing investors, including a fee of up to 5% of funds BlockFinaX actually receives from them, is payable only under a separate fundraising agreement signed by both parties before any introduction, only where the law of the relevant countries permits it, and only after the investors have been told about it."],
-      ["4.4", "Talent referrals. For a person the Connector refers who joins BlockFinaX, the bonus stated in the Approval Notice is payable once that person has been in role for 6 months."],
-      ["4.5", "Grants and development finance bonuses are paid from BlockFinaX's own funds, never from the grant or programme itself."],
-      ["4.6", "Rewards are paid on one level only: on the Connector's own introductions, never on business introduced by other connectors."],
-      ["4.7", "Rewards are paid in money only. Taking part in the programme gives no right to shares, options or any other interest in BlockFinaX."],
-      ["4.8", "No reward is payable on Excluded Amounts, on revenue received after the Reward Period, or for any introduction made in breach of clause 6."],
+      ["4.2", "Opportunities. BlockFinaX agrees Opportunities case by case and need not approve any. For an approved Opportunity, BlockFinaX pays the reward stated in its Approval Notice once the milestone it describes is met and confirmed in writing."],
+      ["4.3", "Fundraising. These terms do not cover introducing investors, and the Connector does not solicit investors for BlockFinaX under them. Any reward for introducing investors is payable only under a separate fundraising agreement signed by both parties before any introduction, only where the law of the relevant countries permits it, and only after the investors have been told about it."],
+      ["4.4", "Rewards are paid on one level only: on the Connector's own introductions, never on business introduced by other connectors."],
+      ["4.5", "Rewards are paid in money only. Taking part in the programme gives no right to shares, options or any other interest in BlockFinaX."],
+      ["4.6", "No reward is payable on Excluded Amounts, on revenue received after the Reward Period, or for any introduction made in breach of clause 6."],
     ] },
     { n: "5", title: "Payment and tax", items: [
       ["5.1", "BlockFinaX pays rewards quarterly, within 30 days after the end of each calendar quarter, with a statement in the connector portal showing the Collected Revenue received and the Connector's share."],
@@ -197,7 +203,7 @@ export const CONNECTOR_AGREEMENT: AgreementDoc = {
   ],
   schedule: {
     title: "Schedule 1: Contribution areas and rewards",
-    rows: AREAS.map((a) => [a.label, a.qualifies, a.reward] as [string, string, string]),
+    rows: OPEN_AREAS.map((a) => [a.label, a.qualifies, a.reward] as [string, string, string]),
   },
 };
 
@@ -302,7 +308,7 @@ export const MODULES: Module[] = [
       "Revenue relationships earn 25% of the revenue BlockFinaX collects from them for 12 months. The 12 months start when the first revenue arrives, not when you register.",
       "- Revenue means fees BlockFinaX keeps. Premiums owed to underwriters, deposits, the amount a business protects and settlement money are never revenue.",
       "- Rewards are paid every quarter, within 30 days of quarter end, with a statement under Earnings.",
-      "- Milestones such as a regulatory approval or a first bank partner earn a fixed bonus set when BlockFinaX approves them.",
+      "- Other contributions, such as a local currency partner, are agreed case by case. The reward is set in writing when BlockFinaX approves them, before you introduce anyone.",
       "Introducing investors is different. It is not covered by the programme terms and needs a separate fundraising agreement, signed by both sides, before you introduce anyone. Rewards are paid in money only; the programme does not give shares.",
       "Users who sign up through your personal referral link are credited to you automatically. You can follow their progress, never their balances or contracts.",
     ],

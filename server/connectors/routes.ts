@@ -383,7 +383,7 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     if (r.missing.length) throw bad(`Before registering: ${r.missing[0]}`);
     const b = req.body ?? {};
     const area = areaByKey(str(b.area, 40));
-    if (!area) throw bad("Choose the area this introduction falls under");
+    if (!area || area.retired) throw bad("Choose the area this introduction falls under");
     const organisation = str(b.organisation, 160);
     const contactName = str(b.contactName, 120);
     const country = str(b.country, 2).toUpperCase();
@@ -792,7 +792,7 @@ export function registerConnectorRoutes(app: Express, d: Deps) {
     const title = str(b.title, 160), summary = str(b.summary, 300), reward = str(b.reward, 300);
     if (title.length < 3 || summary.length < 10 || reward.length < 2) throw bad("Give the offer a title, a one-line summary and the reward");
     const audience = ["all", "connector", "contractor"].includes(b.audience) ? b.audience : "all";
-    const area = b.area && areaByKey(b.area) ? b.area : null;
+    const area = b.area && areaByKey(b.area) && !areaByKey(b.area)!.retired ? b.area : null;
     const country = /^[A-Z]{2}$/.test(str(b.country, 2).toUpperCase()) ? str(b.country, 2).toUpperCase() : null;
     const closesOn = /^\d{4}-\d{2}-\d{2}$/.test(str(b.closesOn, 10)) ? str(b.closesOn, 10) : null;
     const db = await connectorDb();
