@@ -1504,22 +1504,24 @@ const UNDERWRITERS: AudienceCopy = {
 const CONNECTORS: AudienceCopy = {
   eyebrow: 'Connector Programme',
   title: ['Introduce BlockFinaX,', 'earn on results'],
-  lede: 'You know the businesses that pay or earn in other currencies, the capital looking for real returns, and the people who open doors in your market. Introduce them to BlockFinaX and earn a reward for every result.',
+  lede: 'You know businesses that pay or earn in another currency, underwriters with capital to put to work, and the platforms they use. Introduce them to BlockFinaX and earn 25% of the revenue each relationship brings in, for 12 months.',
   primary: { label: 'Apply', href: CONNECTOR_PORTAL_URL },
   secondary: { label: 'Read the programme guide', href: '/connectors/guide' },
   steps: [
-    { t: 'Apply', d: 'Create your BlockFinaX account and tell us your markets and how you can help. We review every application.' },
+    { t: 'Apply', d: 'Tell us your markets and the relationships you hold. We review every application and accept connectors with real relationships in the markets we serve.' },
     { t: 'Agree and train', d: 'Once accepted, agree to the programme terms and complete four short lessons.' },
     { t: 'Introduce and earn', d: 'Register each organisation before you introduce it, share your referral link and follow your rewards in your portal.' },
   ],
-  pointsTitle: 'Who it is for',
+  pointsTitle: 'What your contacts get',
   points: [
-    { t: 'Connectors', d: 'Consultants, bankers, advisers and community leaders with relationships in their market.' },
-    { t: 'Independent contractors', d: 'People who take on paid pieces of work, such as research, events and onboarding support.' },
-    { t: 'Specialists', d: 'Regulatory, banking and market experts who can open doors to approvals, partners and new countries.' },
+    { t: 'Businesses', d: 'An importer in Lagos owes a supplier $25,000 in 30 days. They pay one premium in USDC, and if the Naira weakens past their level by the end date, they receive the difference.' },
+    { t: 'Underwriters', d: 'Premiums for backing short-dated currency cover in the markets they choose. Every contract is fully funded when it is sold.' },
+    { t: 'Partners', d: 'Currency protection their customers can buy inside the partner\'s own app, with the partner\'s own fee on top.' },
   ],
   note: { t: 'How rewards work', d: 'You register every introduction in your portal first, and BlockFinaX approves it in writing with the reward that applies. That way it is always clear what you have earned. Rewards are paid every quarter.' },
   faqs: [
+    { q: 'Who is it for?', a: 'Consultants, bankers, advisers and community leaders with real relationships in Nigeria, Ghana, Kenya, South Africa or Egypt. People who take on paid work, such as workshops and onboarding, can apply too.' },
+    { q: 'Can I introduce other kinds of organisation?', a: 'Other relationships are agreed case by case. Register the organisation in your portal and we confirm any reward in writing before you introduce it.' },
     { q: 'Do I need to be a customer?', a: 'No. Anyone can apply. You create a free BlockFinaX account as part of applying.' },
     { q: 'Do I need crypto experience?', a: 'No. You sign in with email or Google. The training covers what you need to explain BlockFinaX well.' },
     { q: 'Who gets credit for an introduction?', a: 'The first connector to register an organisation, once BlockFinaX approves it. Registering before you introduce protects you.' },
@@ -1617,15 +1619,7 @@ const GUIDE_INTRODUCE = [
   { t: 'Earn 25% of revenue for 12 months', items: [
     'Businesses that buy protection: importers, exporters and lenders',
     'Underwriters: funds, treasuries, banks and individuals who provide cover',
-    'Partners: fintechs, payment apps and trade platforms that offer protection to their customers',
-    'Banks and trade associations that refer their members or clients',
-  ] },
-  { t: 'Earn a fixed bonus', items: [
-    'Local currency partners, such as exchanges and payment providers, plus 25% of any revenue',
-    'Official rate publishers, data vendors and independent rate operators',
-    'A new country launch, plus revenue share on the relationships you introduce',
-    'Grants and development finance awarded to BlockFinaX',
-    'Engineers, risk specialists and market leads who join and stay 6 months',
+    'Partners: fintechs, payment apps, banks and trade platforms that offer protection to their customers or members',
   ] },
 ];
 const GUIDE_WAYS = [
@@ -1633,11 +1627,11 @@ const GUIDE_WAYS = [
   { t: 'Take paid gigs', d: 'We post offers in your portal when we need help on the ground. Pick the ones that suit your skills and schedule, and get paid a set fee for each.' },
 ];
 const GUIDE_GIGS = [
-  { t: 'Market research', d: 'Speak with importers in Lagos or Accra about how they manage currency risk today.' },
+  { t: 'Customer meetings', d: 'Meet finance teams at importers and exporters in Lagos or Accra and show them how protection works.' },
   { t: 'Workshops', d: 'Run a session on currency risk for a trade association or chamber of commerce.' },
   { t: 'Onboarding support', d: 'Guide new businesses through getting started, in person or on WhatsApp.' },
   { t: 'Events', d: 'Represent BlockFinaX at trade fairs and business meetups in your city.' },
-  { t: 'Finding partners', d: 'Map the payment companies and trade platforms in your market and arrange first meetings.' },
+  { t: 'Partner meetings', d: 'Set up first meetings with the payment companies and trade platforms in your market.' },
   { t: 'Translation and local content', d: 'Adapt guides and short videos into French, Pidgin, Twi, Yoruba or Hausa.' },
 ];
 const GUIDE_EARN = [
@@ -1675,7 +1669,7 @@ export function ConnectorsGuidePage() {
           <Link href="/connectors" className="aud-guide-back">← Connector Programme</Link>
           <div className="aud-eyebrow">Programme guide</div>
           <h1 className="aud-title">Your expertise, <span className="accent">more ways to earn</span></h1>
-          <p className="aud-lede">An opportunity for consultants, advisers and market experts. Earn from the introductions you make and the gigs you choose, alongside the work you already do.</p>
+          <p className="aud-lede">For consultants, advisers and market experts with real relationships. Earn from the introductions you make and the paid work you take on, alongside what you already do.</p>
         </div>
       </section>
       <section className="aud-section">
@@ -1698,7 +1692,7 @@ export function ConnectorsGuidePage() {
         <div className="wrap aud-guide">
           <h2 className="aud-h2">Who you can introduce</h2>
           {GUIDE_INTRODUCE.map((g) => <div key={g.t} className="aud-guide-group"><h3>{g.t}</h3><ul>{g.items.map((i) => <li key={i}>{i}</li>)}</ul></div>)}
-          <div className="aud-note"><b>Good prospects.</b> They have real, regular currency exposure in a market we serve: Nigeria, Ghana, Kenya, South Africa or Egypt today. Each organisation counts once, and the first approved registration gets the credit.</div>
+          <div className="aud-note"><b>Good prospects.</b> They have real, regular currency exposure in a market we serve: Nigeria, Ghana, Kenya, South Africa or Egypt today. Each organisation counts once, and the first approved registration gets the credit. Other relationships are agreed case by case, in writing, before you introduce them.</div>
         </div>
       </section>
       <section className="aud-section">
@@ -1708,7 +1702,7 @@ export function ConnectorsGuidePage() {
           <div className="aud-guide-gigs">
             {GUIDE_GIGS.map((g) => <div key={g.t}><h3>{g.t}</h3><p>{g.d}</p></div>)}
           </div>
-          <p className="aud-guide-p">Each offer shows the scope, fees and dates, and you can decline any of them. Unless it says otherwise, you invoice when the work is done and we pay within 30 days. Work depends on what we need at the time, so the amount is not guaranteed. Contractors can introduce prospects and earn rewards too.</p>
+          <p className="aud-guide-p">Each offer shows the scope, fees and dates, and you can decline any of them. Unless it says otherwise, you invoice when the work is done and we pay within 30 days. How much work there is varies, so no amount is guaranteed. Contractors can introduce prospects and earn rewards too.</p>
         </div>
       </section>
       <section className="aud-section">
