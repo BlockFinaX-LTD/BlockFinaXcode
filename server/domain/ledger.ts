@@ -67,13 +67,20 @@ export class BalanceLedger {
 
   /** Value entering the ledger from outside (a confirmed on-chain deposit). */
   credit(to: Place, symbol: string, amount: string, reason: string, ref?: string) {
-    this.add(to, symbol, toUnits(amount, SCALE));
+    const v = toUnits(amount, SCALE);
+    // A signed amount would move value the wrong way and still net out in
+    // conservationCheck, which sums the same signed entries. Reject it here, as
+    // transfer does, so no movement can enter the ledger with the wrong sign.
+    if (v <= BigInt(0)) throw new ApplicationError("INVALID_REQUEST", "Amount must be positive");
+    this.add(to, symbol, v);
     this.entries.push({ at: this.clock(), symbol, amount, from: "external", to, reason, ref });
   }
 
   /** Value leaving the ledger (a withdrawal delivered, a provider fee paid). */
   debit(from: Place, symbol: string, amount: string, reason: string, ref?: string) {
-    this.add(from, symbol, -toUnits(amount, SCALE));
+    const v = toUnits(amount, SCALE);
+    if (v <= BigInt(0)) throw new ApplicationError("INVALID_REQUEST", "Amount must be positive");
+    this.add(from, symbol, -v);
     this.entries.push({ at: this.clock(), symbol, amount, from, to: "external", reason, ref });
   }
 
