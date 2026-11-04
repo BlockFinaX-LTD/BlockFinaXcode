@@ -10,7 +10,7 @@ import { VerifyModal } from './verify';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Moon, Search, Store, Sun, Wallet, X } from 'lucide-react';
+import { ArrowUp, Building2, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -26,11 +26,13 @@ import { startingRole } from '@shared/onboarding';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { onActingOrganisationChange, pendingInviteToken } from '@/lib/acting-organisation';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
+import { AccountMenu } from './account-menu';
+import { OrganisationSettingsPage } from './organisation-card';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
 export type Page =
-  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account' | 'pair'
+  | 'h-home' | 'h-markets' | 'h-protect' | 'h-protections' | 'h-rates' | 'wallet' | 'account' | 'org-settings' | 'pair'
   | 'u-home' | 'u-pools' | 'u-create' | 'u-pool' | 'u-risk' | 'u-withdraw' | 'u-requests';
 export interface Target {
   /** Show the chart and buying panel on Markets (someone means to buy), not only the list. */
@@ -134,15 +136,13 @@ export function Workspace() {
   };
   const [more, setMore] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
-  const flipTheme = () => setTheme((t) => {
-    const next: Theme = t === 'dark' ? 'light' : 'dark';
+  const chooseTheme = (next: Theme) => {
+    setTheme(next);
     try { localStorage.setItem(THEME_KEY, next); } catch { /* per-viewer convenience */ }
-    return next;
-  });
+  };
   const content = useRef<HTMLDivElement>(null);
   useListLabels(content);
   const goTab = (p: Page) => { setMore(false); go(p); };
-  const initials = (session?.user.name || session?.user.email || 'BX').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
   // New accounts answer "individual or organisation" and a few basics before the workspace opens.
   // If the check itself fails, the workspace opens anyway: onboarding must never lock a user out.
   const qc = useQueryClient();
@@ -186,8 +186,7 @@ export function Workspace() {
         </div>
         <div className="bx-rail-foot">
           <NetworkSwitch />
-          <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><CircleUser />Account</button>
-          <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
+          <AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="rail" />
         </div>
       </nav>
 
@@ -212,8 +211,7 @@ export function Workspace() {
               </>
             )}
             <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
-            <button className="bx-icon-btn" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={flipTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</button>
-            <button className="bx-avatar" aria-label="Account" onClick={() => go('account')}>{initials}</button>
+            <AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" />
           </div>
         </header>
 
@@ -223,7 +221,8 @@ export function Workspace() {
         {page === 'h-rates' && <RatesPage go={go} target={ratesAt} />}
         {page === 'wallet' && <WalletPage mode={walletMode} />}
         {page === 'pair' && pairAt.pair && <PairPage go={go} pair={pairAt.pair} role={role} focus={pairAt.position} />}
-        {page === 'account' && <AccountPage />}
+        {page === 'account' && <AccountPage go={go} />}
+        {page === 'org-settings' && <OrganisationSettingsPage go={go} />}
         {page === 'u-home' && <UnderwriterHome go={go} />}
         {page === 'u-pools' && <MyPools go={go} />}
         {page === 'u-create' && <CreatePool go={go} />}
@@ -260,7 +259,8 @@ export function Workspace() {
             {NAV[role].filter((n) => !TABS[role].includes(n.page)).map((n) => (
               <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
             ))}
-            <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Account</button>
+            {acting && <button className={`bx-nav${page === 'org-settings' ? ' on' : ''}`} onClick={() => goTab('org-settings')}><Building2 />Business settings</button>}
+            <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Profile settings</button>
             <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
             <div style={{ marginTop: 8 }}><NetworkSwitch /></div>
           </div>

@@ -15,6 +15,7 @@ import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn 
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
 import { OrganisationCard } from './organisation-card';
+import type { Go } from './workspace';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
 import { checkOrganisationAccount, getOrganisation } from '@/lib/organisations';
 
@@ -509,15 +510,19 @@ function PasskeysCard() {
   );
 }
 
-export function AccountPage() {
+export function AccountPage({ go }: { go: Go }) {
   const { session, setSession } = usePasskeySession();
-  const accounts = useAccounts();
+  const chains = useChains();
+  // Profile settings are always about you, so these are your own accounts even when acting for a business.
+  const accounts = (session?.accounts ?? []).map((a) => ({
+    chain: a.chain, name: chains.data?.chains.find((c) => c.key === a.chain)?.name ?? a.chain, address: a.address, stellar: a.chain.startsWith('stellar'),
+  }));
   const [, setLocation] = useLocation();
   return (
     <main className="bx-main">
       <section className="bx-col">
         <div className="bx-card">
-          <h2 style={{ marginBottom: 6 }}>Profile</h2>
+          <h2 style={{ marginBottom: 6 }}>Profile settings</h2>
           <div className="bx-sums" style={{ borderTop: 0 }}>
             <Sum l="Name" v={session?.user.name || '-'} />
             <Sum l="Email" v={session?.user.email || '-'} />
@@ -529,7 +534,7 @@ export function AccountPage() {
         </div>
         <VerificationCard />
         <PasskeysCard />
-        <OrganisationCard />
+        <OrganisationCard go={go} />
       </section>
       <aside className="bx-aside">
         <div className="bx-card tight">
