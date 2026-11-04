@@ -22,7 +22,6 @@ import { api } from '@/lib/wallets/passkey-wallet';
 import { rememberReturnPath, useIdentity } from '@/lib/identity';
 import { Loading, Note, Spin, Tag } from '@/components/v2/ui';
 import { FinaxChat } from '@/components/finax-chat';
-import { CONNECTORS_INFO_HREF } from '@/lib/app-links';
 import logoPath from '@/assets/logo.png';
 import '@/components/v2/workspace.css';
 import './connector.css';
@@ -438,8 +437,7 @@ function ApplicationStatus({ me, onSignOut }: { me: Me; onSignOut: () => void })
             {m.areas.length > 0 && <span className="muted">Who you can introduce: {m.areas.map(introduceLabel).join(', ')}</span>}
           </section>
         )}
-        <div className="bx-cp-row" style={{ justifyContent: 'space-between' }}>
-          <a className="bx-link" href={CONNECTORS_INFO_HREF}>About the programme</a>
+        <div className="bx-cp-row" style={{ justifyContent: 'flex-end' }}>
           <button className="bx-link" onClick={onSignOut}>Sign out</button>
         </div>
       </div>

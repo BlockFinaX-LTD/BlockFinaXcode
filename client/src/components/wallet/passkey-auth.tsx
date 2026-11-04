@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
 import { takeReturnPath, usePasskeySession } from "@/lib/identity";
-import { CONNECTORS_INFO_HREF } from "@/lib/app-links";
 import {
   acceptGoogleRedirect, createWalletPasskey, currentPasskeySession, finishEmailSignIn, signInWithPasskey,
   signOutPasskey, startEmailSignIn, startGoogleSignIn,
@@ -164,8 +163,7 @@ export function PasskeyAuth() {
         </div>
         {forConnectors ? (
           <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">
-            New here? Signing in creates your account.{" "}
-            <a href={CONNECTORS_INFO_HREF} className="underline">What is the Connector Programme?</a>
+            New here? Signing in creates your account.
           </p>
         ) : (
           <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
