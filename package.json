@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "dev:testnet": "sh scripts/dev-testnet.sh",
+    "org:check": "tsx scripts/organisations/testnet-check.ts && tsx scripts/organisations/testnet-service-check.ts",
     "db:push:testnet-local": "sh scripts/dev-testnet.sh push",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
@@ -70,7 +71,7 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
-    "@stellar/stellar-sdk": "^16.0.1",
+    "@stellar/stellar-sdk": "^16.4.1",
     "@tanstack/react-query": "^5.60.5",
     "@types/crypto-js": "^4.2.2",
     "@types/memoizee": "^0.4.12",
@@ -128,6 +129,7 @@
     "recharts": "^2.15.2",
     "remark-gfm": "^4.0.1",
     "resend": "^6.9.4",
+    "smart-account-kit": "^0.10.0",
     "solc": "^0.8.34",
     "swagger-ui-express": "^5.0.1",
     "tailwind-merge": "^2.6.0",
@@ -166,5 +168,10 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "overrides": {
+    "passkey-kit": {
+      "@stellar/stellar-sdk": "$@stellar/stellar-sdk"
+    }
   }
 }

@@ -10,6 +10,7 @@
  * The private key never leaves the device.
  */
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
+import { actingHeaders, actingOrganisation } from "../acting-organisation";
 import type {
   ChainAccount, WalletProvider, WalletStep, WalletTransactionRequest, WalletTransactionResult,
 } from "../wallet-provider";
@@ -75,13 +76,16 @@ function storeSessionToken(token: string | null) {
   } catch { /* storage unavailable: session lasts for this page only */ }
 }
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
   const token = storedSessionToken();
   const res = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Protocol requests act for the chosen organisation; the server checks membership every time.
+      ...(path.startsWith("/api/v2/") ? actingHeaders() : {}),
+      ...extraHeaders,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -276,6 +280,11 @@ export class PasskeyWalletProvider implements WalletProvider {
   async getAccounts(): Promise<ChainAccount[]> {
     const session = await currentPasskeySession();
     const cfg = await walletConfig();
+    const org = actingOrganisation();
+    if (org && cfg.stellar) {
+      // Acting for an organisation: its Stellar account is the only account in play.
+      return [{ chainNamespace: "stellar" as const, networkKey: cfg.stellar.chain, address: org.account, accountType: "soroban_contract" as const, provider: this.id }];
+    }
     return (session?.accounts ?? []).map((a) => ({
       chainNamespace: a.chain === cfg.stellar?.chain ? ("stellar" as const) : ("eip155" as const),
       networkKey: a.chain,
@@ -306,6 +315,16 @@ export class PasskeyWalletProvider implements WalletProvider {
       if (result.state !== "CONFIRMED") throw new Error(`The transaction reverted on chain: ${result.hash}`);
       return { chainNamespace: "eip155", networkKey: result.chain, transactionHash: result.hash };
     }
+    const org = actingOrganisation();
+    if (org) {
+      if (org.role === "viewer") throw new Error("Viewers can see this account but cannot send from it");
+      onStep?.(`Approve for ${org.name} with your passkey...`);
+      const { signForOrganisation } = await import("../organisations");
+      const signedXdr = await signForOrganisation(request.transactionXdr, org.id);
+      onStep?.("Submitting transaction...");
+      const status = await api<{ hash: string }>("/api/v2/transactions/relay", { chain: request.networkKey, xdr: signedXdr });
+      return { chainNamespace: "stellar", networkKey: request.networkKey, transactionHash: status.hash };
+    }
     const session = await currentPasskeySession();
     const account = session?.accounts.find((a) => a.chain === request.networkKey);
     if (!session?.credentialId || !account) throw new Error("No Stellar account for this wallet");
@@ -325,6 +344,7 @@ export const passkeyWalletProvider = new PasskeyWalletProvider();
  * business accepts). Its signature stays valid until the expiry the server set on it.
  */
 export async function signStellarForLater(networkKey: string, transactionXdr: string, onStep?: (m: string) => void): Promise<string> {
+  if (actingOrganisation()) throw new Error("Request a quote works from your personal account for now. Switch back to it in Account.");
   const session = await currentPasskeySession();
   const account = session?.accounts.find((a) => a.chain === networkKey);
   if (!session?.credentialId || !account) throw new Error("No Stellar account for this wallet");

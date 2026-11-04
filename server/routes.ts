@@ -33,6 +33,7 @@ import { registerPricingRoutes } from "./routes/pricing";
 import { registerV2Routes } from "./routes/v2";
 import { registerRateOracleRoutes } from "./routes/rate-oracle";
 import { registerPasskeyWalletRoutes } from "./wallet/passkey-routes";
+import { registerOrganisationRoutes } from "./organisations/routes";
 import { registerPredictRoutes } from "./routes/predict";
 import { registerFundingRoutes } from "./routes/funding";
 import { registerContentRoutes } from "./routes/content";
@@ -76,6 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerV2Routes(app);
   registerRateOracleRoutes(app);
   registerPasskeyWalletRoutes(app);
+  registerOrganisationRoutes(app);
   registerPredictRoutes(app);
   registerFundingRoutes(app);
   registerContentRoutes(app);

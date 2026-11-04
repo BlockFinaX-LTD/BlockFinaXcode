@@ -19,6 +19,7 @@ import { AssetClassTabs, Flag, hint, Loading, Note, SHOW_INTEREST_RATES, Spin, S
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 import { MyQuoteRequests, RequestQuoteModal } from './rfq';
+import { useActingOrganisation } from '@/lib/use-acting-organisation';
 import { isOffered, poolForSale } from '@shared/domain/offered-directions';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
@@ -186,6 +187,7 @@ function useOpenPools() {
  */
 function MarketList({ go, selected, chart }: { go: Go; selected: string | null; chart?: { on: boolean; toggle: () => void } }) {
   const { pools, open } = useOpenPools();
+  const acting = useActingOrganisation();
   const pairs = Array.from(new Set(open.map((p) => p.pair)));
   const [filter, setFilter] = useState<string>('all');
   const chosen = selected ? open.find((p) => poolRef(p) === selected) ?? null : null;
@@ -209,7 +211,7 @@ function MarketList({ go, selected, chart }: { go: Go; selected: string | null; 
           {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" selectOnClick focused={p === chosen} chart={p === chosen ? chart : undefined} />)}
         </div></div>
       )}
-      {!chosen && (
+      {!chosen && !acting && (
         <div className="bx-hint" style={{ marginTop: 12 }}>
           Don't see what you need? <button className="bx-link" onClick={() => go('h-protect', { rfq: true })}>Request a quote</button>
         </div>
@@ -714,6 +716,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // The pool to buy from: one chosen in Markets, or null for the best price.
   const [rfqOpen, setRfqOpen] = useState(Boolean(target?.rfq));
   useEffect(() => { if (target?.rfq) setRfqOpen(true); }, [target?.rfq]);
+  const acting = useActingOrganisation();
+  const viewOnly = acting?.role === 'viewer';
   const [poolChoice, setPoolChoice] = useState<string | null>(target?.pool ?? null);
   useEffect(() => { setPoolChoice(target?.pool ?? null); }, [target?.pool]);
   // Markets shows only its list until someone means to buy: a market chosen, a duration's Buy,
@@ -795,6 +799,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [rateText, setRateText] = useState('');
   const [anchor, setAnchor] = useState<'pct' | 'rate'>('pct');
   const rateDp = (v: number) => (v >= 100 ? 2 : 4);
+  // A strike can be set to 0.0001% (hundredths of a basis point), so percentages keep 4 decimals.
+  const roundPct = (v: number) => Math.round(v * 10_000) / 10_000;
   const rateFromPct = (pctV: number) => (spot.data ? spot.data * (1 + (sign * pctV) / 100) : null);
   const pctFromRate = (r: number) => (spot.data ? (sign * (r / spot.data - 1)) * 100 : null);
   useEffect(() => {
@@ -804,7 +810,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
       if (r && Number.isFinite(r)) setRateText(r.toFixed(rateDp(r)));
     } else {
       const v = pctFromRate(Number(rateText));
-      if (v !== null && Number.isFinite(v)) setPctText(String(Math.round(v * 100) / 100));
+      if (v !== null && Number.isFinite(v)) setPctText(String(roundPct(v)));
     }
   }, [spot.data, direction]);
   // A pool's closest strike may be further than the current entry: move up to it.
@@ -830,7 +836,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     setAnchor('rate');
     setRateText(clean);
     const v = pctFromRate(Number(clean));
-    if (clean !== '' && v !== null && Number.isFinite(v)) setPctText(String(Math.round(v * 100) / 100));
+    if (clean !== '' && v !== null && Number.isFinite(v)) setPctText(String(roundPct(v)));
   }
   const startPct = Number(pctText);
   // The contracts accept a strike between today's rate and 2x (rising) or 0.5x (falling) it.
@@ -838,6 +844,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const strikeError = !spot.data ? null
     : pctText === '' || rateText === '' ? 'Enter a strike'
     : !Number.isFinite(startPct) ? 'Enter a number'
+    : anchor === 'pct' && (pctText.split('.')[1]?.length ?? 0) > 4 ? 'Set the strike to at most 4 decimal places'
     : startPct < 0 ? `The strike must be ${direction === 'up' ? 'above' : 'below'} today's rate for this cover`
     : startPct < minStartPct ? `This pool's closest strike is ${minStartPct}% from today's rate`
     : startPct > maxStartPct ? `The strike can be at most ${maxStartPct}% from today's rate`
@@ -852,7 +859,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // A strike set as a percentage is sent as one, so the server measures it from the rate it prices at.
   const base = pair && days && strike && Number(amount) > 0 ? {
     pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6),
-    ...(anchor === 'rate' ? {} : { strikeDistanceBps: Math.round(startPct * 100) }),
+    // In basis points with up to two decimals: 0.02% is 2, 0.0015% is 0.15.
+    ...(anchor === 'rate' ? {} : { strikeDistanceBps: Math.round(startPct * 10_000) / 100 }),
     ...(poolChoice ? { pool: poolChoice } : {}),
   } : null;
   const cappedReq = useDebounced(base && cap && tenor?.capped ? JSON.stringify({ ...base, structure: 'capped', cap: cap.toFixed(6), capDistanceBps: Math.round(capPct * 100) }) : null, 350);
@@ -915,7 +923,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     } finally { setChecking(false); }
   }
 
-  const rfqModal = rfqOpen && pair ? (
+  // Request a quote works from personal accounts only, for now.
+  const rfqModal = rfqOpen && pair && !acting ? (
     <RequestQuoteModal
       pairs={rfqPairs}
       draft={{ pair, direction, notional: amount, tenorDays: days ?? 30, strike, cap, reason: chosen.error ? (chosen.error as Error).message : undefined }}
@@ -1115,10 +1124,10 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                   {chosen.error && !strikeError && <div className="bx-hint" style={{ textAlign: 'left', marginTop: 6 }}>No pool can price this. <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button> and approved underwriters can make you an offer.</div>}
                 </div>
               )}
-              <button className="bx-btn block" disabled={!e || checking} onClick={review}>{checking ? <Spin /> : null} Review protection</button>
+              <button className="bx-btn block" disabled={!e || checking || viewOnly} onClick={review}>{checking ? <Spin /> : null} {viewOnly ? 'Viewers cannot buy cover' : 'Review protection'}</button>
               <div className="bx-hint">
-                {e ? `Price held for ${left} seconds · ` : ''}approve with your passkey
-                {!chosen.error && <> · <button className="bx-link" style={{ fontSize: 'inherit' }} onClick={() => setRfqOpen(true)}>Request a quote</button></>}
+                {e ? `Price held for ${left} seconds · ` : ''}{acting ? `approve for ${acting.name} with your passkey` : 'approve with your passkey'}
+                {!chosen.error && !acting && <> · <button className="bx-link" style={{ fontSize: 'inherit' }} onClick={() => setRfqOpen(true)}>Request a quote</button></>}
               </div>
             </>
           )}

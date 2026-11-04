@@ -38,6 +38,8 @@ import { registerConnectorRoutes } from "../connectors/routes";
 import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
 import { checkProtectionLimits, verificationRequired, verifiedTier } from "../compliance/protection-limits";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
+import { organisationService } from "../organisations/routes";
+import { organisationChainConfig } from "../organisations/gateway";
 
 const STATUS: Partial<Record<ApplicationErrorCode, number>> = {
   UNAUTHORIZED: 401, VERIFICATION_REQUIRED: 403, POOL_NOT_FOUND: 404, CHAIN_NOT_ENABLED: 503, CHAIN_DRAINING: 409,
@@ -105,14 +107,56 @@ async function enforceVerification(s: Services, uid: number, adds: { cashUsd: nu
   if (!d.allowed) throw new ApplicationError("VERIFICATION_REQUIRED", d.reason, `requiredTier=${d.requiredTier} tier=${d.tier}`);
 }
 
-/** The user's own address on a chain, or a clear error asking them to add one. */
-async function ownerOn(s: Services, uid: number, chain: ChainKey) {
+/**
+ * The organisation a request acts for, from the X-BFX-Organisation header. Only an active
+ * member resolves; their role travels with it so the relay can decide what they may send.
+ * Absent header: the request acts for the user's own account, as before.
+ */
+async function actingOrganisation(req: Request | undefined, uid: number, chain: ChainKey) {
+  const raw = req?.header("x-bfx-organisation");
+  if (!raw) return null;
+  const orgs = await organisationService();
+  if (!orgs) throw new ApplicationError("INVALID_REQUEST", "Business accounts are not available on this deployment");
+  if (organisationChainConfig()?.key !== chain) throw new ApplicationError("INVALID_REQUEST", "Business accounts run on Stellar");
+  try {
+    return await orgs.acting(uid, Number(raw));
+  } catch (e) {
+    throw new ApplicationError("UNAUTHORIZED", e instanceof Error ? e.message : "Not a member of this organisation");
+  }
+}
+
+/**
+ * The address book a request reads: the user's own, or, when acting for an organisation,
+ * only the organisation's account (so a business never sees a member's personal funds).
+ */
+async function bookFor(s: Services, uid: number, req: Request): Promise<Record<ChainKey, string>> {
+  if (!req.header("x-bfx-organisation")) return s.accounts.addressBook(uid);
+  const chain = organisationChainConfig()?.key as ChainKey | undefined;
+  const org = chain ? await actingOrganisation(req, uid, chain) : null;
+  if (!org || !chain) throw new ApplicationError("INVALID_REQUEST", "Business accounts are not available on this deployment");
+  return { [chain]: org.account } as Record<ChainKey, string>;
+}
+
+/** Features organisation accounts do not have yet refuse plainly instead of acting on a personal account. */
+function personalOnly(req: Request, what: string) {
+  if (req.header("x-bfx-organisation")) throw new ApplicationError("INVALID_REQUEST", `${what} is available for personal accounts only, for now`);
+}
+
+/** The address a request acts for on a chain: the user's own, or their organisation's when the request says so. */
+async function ownerOn(s: Services, uid: number, chain: ChainKey, req?: Request) {
+  const org = await actingOrganisation(req, uid, chain);
+  if (org) return org.account;
   const book = await s.accounts.addressBook(uid);
   if (!book[chain]) throw new ApplicationError("INVALID_REQUEST", `No ${chain} account yet; link one first`);
   return book[chain];
 }
 
 export function registerV2Routes(app: Express) {
+  // Request a quote acts on personal accounts only, for now: refuse rather than quietly use one.
+  app.use("/api/v2/rfq", (req, res, next) =>
+    req.header("x-bfx-organisation")
+      ? res.status(400).json({ error: { code: "INVALID_REQUEST", message: "Request a quote is available for personal accounts only, for now" } })
+      : next());
   registerRfqRoutes(app, { getServices, userId, ownerOn, wrap });
   registerOnboardingRoutes(app, { userId, wrap });
   registerConnectorRoutes(app, { getServices, userId, wrap });
@@ -159,7 +203,7 @@ export function registerV2Routes(app: Express) {
     if (s.adapters.adapterForContract(chain, contract) !== s.adapters.adapterFor(chain)) {
       throw new ApplicationError("INVALID_REQUEST", "This pool is on an earlier contract and is closed to new money. Withdraw from it, then use a current pool.");
     }
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareSetStructures(owner, id, req.body) });
   }));
 
@@ -167,7 +211,7 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/pools/:ref/withdrawals/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareWithdrawalRequest(owner, id, String(req.body?.shares ?? "")) });
   }));
 
@@ -175,7 +219,7 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/pools/:ref/preferences/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { prepareLpPreferences?: (o: string, p: number, b: boolean, max: number, min?: number) => Promise<unknown> };
     if (!adapter.prepareLpPreferences) throw new ApplicationError("INVALID_REQUEST", "This pool does not support underwriter preferences");
     const max = Number(req.body?.maxTenorDays ?? 0) || 0;
@@ -188,7 +232,7 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/pools/:ref/takeover", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { takeOverStatus?: (p: number, o: string) => Promise<unknown> };
     res.json(adapter.takeOverStatus ? await adapter.takeOverStatus(id, owner) : { supported: false, eligible: false, reason: null });
   }));
@@ -196,7 +240,7 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/pools/:ref/takeover/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     const adapter = s.adapters.adapterForContract(chain, contract) as unknown as { prepareTakeOver?: (o: string, p: number) => Promise<unknown> };
     if (!adapter.prepareTakeOver) throw new ApplicationError("INVALID_REQUEST", "This pool cannot be taken over");
     res.json({ transactions: await adapter.prepareTakeOver(owner, id) });
@@ -205,7 +249,7 @@ export function registerV2Routes(app: Express) {
   /** The user's withdrawal requests on every settling chain. */
   app.get("/api/v2/withdrawals", wrap(async (req, res) => {
     const s = await getServices();
-    const book = await s.accounts.addressBook(await userId(req));
+    const book = await bookFor(s, await userId(req), req);
     const out = [];
     for (const chain of chainRegistry()!.settlementNetworks()) {
       if (!book[chain.key]) continue;
@@ -220,7 +264,7 @@ export function registerV2Routes(app: Express) {
   /** Complete a withdrawal whose notice has ended. */
   app.post("/api/v2/withdrawals/:chain/:id/execute/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const owner = await ownerOn(s, await userId(req), req.params.chain);
+    const owner = await ownerOn(s, await userId(req), req.params.chain, req);
     const contract = typeof req.query.contract === "string" ? req.query.contract : (req.body?.contract as string | undefined);
     res.json({ transactions: await s.adapters.adapterForContract(req.params.chain, contract).prepareWithdrawalExecute(owner, Number(req.params.id)) });
   }));
@@ -229,7 +273,7 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/pools/:ref/lp", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json(await s.adapters.adapterForContract(chain, contract).getLpPosition(id, owner));
   }));
 
@@ -317,7 +361,7 @@ export function registerV2Routes(app: Express) {
       throw new ApplicationError("INVALID_REQUEST", "pair, notional, tenorDays, structure, direction and strike are required");
     }
     try {
-      res.json(await s.quotes.quote(body, await s.accounts.addressBook(uid)));
+      res.json(await s.quotes.quote(body, await bookFor(s, uid, req)));
     } catch (err) {
       // The pricing engine refusing a quote is an answer, not a server fault: say why, plainly.
       const message = err instanceof Error ? err.message : String(err);
@@ -348,7 +392,7 @@ export function registerV2Routes(app: Express) {
     if (!quote?.economic) throw new ApplicationError("INVALID_REQUEST", "quote is required");
     if (!isOffered(quote.economic.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     const chain = quote.economic.executionChain;
-    if ((await ownerOn(s, uid, chain)) !== quote.buyer) throw new ApplicationError("UNAUTHORIZED", "Quote was issued to a different account");
+    if ((await ownerOn(s, uid, chain, req)) !== quote.buyer) throw new ApplicationError("UNAUTHORIZED", "Quote was issued to a different account");
     chainRegistry()!.require(chain, "newHedges");
     await enforceVerification(s, uid, { cashUsd: Number(quote.economic.totalCost), exposureUsd: Number(quote.economic.maxPayout) });
     res.json({ transactions: await s.adapters.adapterFor(chain).prepareHedge(quote.buyer, quote) });
@@ -356,7 +400,7 @@ export function registerV2Routes(app: Express) {
 
   app.get("/api/v2/hedges", wrap(async (req, res) => {
     const s = await getServices();
-    const book = await s.accounts.addressBook(await userId(req));
+    const book = await bookFor(s, await userId(req), req);
     const out = [];
     for (const chain of chainRegistry()!.settlementNetworks()) {
       if (!book[chain.key]) continue;
@@ -382,7 +426,7 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/hedges/:ref/claim/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "position");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareClaim(owner, id) });
   }));
 
@@ -392,7 +436,7 @@ export function registerV2Routes(app: Express) {
     if (!isOffered(req.body?.direction === "down" ? "down" : "up")) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     const uid = await userId(req);
     await enforceVerification(s, uid, { cashUsd: Number(req.body?.initialLiquidity ?? 0) || 0, exposureUsd: 0 });
-    const owner = await ownerOn(s, uid, chain.key);
+    const owner = await ownerOn(s, uid, chain.key, req);
     res.json({ chain: chain.key, transactions: await s.adapters.adapterFor(chain.key).prepareCreatePool(owner, req.body) });
   }));
 
@@ -402,7 +446,7 @@ export function registerV2Routes(app: Express) {
     if (s.adapters.adapterForContract(chain, contract) !== s.adapters.adapterFor(chain)) {
       throw new ApplicationError("INVALID_REQUEST", "This pool is on an earlier contract and is closed to new money. Withdraw from it, then use a current pool.");
     }
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareSetTenor(owner, id, req.body) });
   }));
 
@@ -417,7 +461,7 @@ export function registerV2Routes(app: Express) {
     if (!["specific", "any", "up-to"].includes(mode) || !Number.isInteger(minDays) || minDays < 1 || (mode === "up-to" && (!Number.isInteger(maxDays) || maxDays < minDays))) {
       throw new ApplicationError("INVALID_REQUEST", "Choose which durations to sell, with a minimum of at least 1 day and a maximum no lower than the minimum.");
     }
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ transactions: await adapter.prepareSetDurationRule(owner, id, { mode, minDays, maxDays: Number(maxDays) || 0 }) });
   }));
 
@@ -430,7 +474,7 @@ export function registerV2Routes(app: Express) {
     }
     const uid = await userId(req);
     await enforceVerification(s, uid, { cashUsd: Number(req.body?.amount ?? 0) || 0, exposureUsd: 0 });
-    const owner = await ownerOn(s, uid, chain);
+    const owner = await ownerOn(s, uid, chain, req);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareDeposit(owner, id, String(req.body?.amount)) });
   }));
 
@@ -448,7 +492,7 @@ export function registerV2Routes(app: Express) {
 
   app.get("/api/v2/balances", wrap(async (req, res) => {
     const s = await getServices();
-    const book = await s.accounts.addressBook(await userId(req));
+    const book = await bookFor(s, await userId(req), req);
     const rows = [];
     for (const chain of chainRegistry()!.all()) {
       if (!book[chain.key] || chain.state === "DISABLED") continue;
@@ -487,6 +531,7 @@ export function registerV2Routes(app: Express) {
 
   app.post("/api/v2/routing/quote", wrap(async (req, res) => {
     const s = await getServices();
+    personalOnly(req, "Moving money between networks");
     const quotes = await s.routing.engine.quote(await routeRequest(s, await userId(req), req.body));
     if (quotes.length === 0) throw new ApplicationError("NO_ROUTE", "No route between these networks right now");
     res.json({ quotes: quotes.map((q) => q.quote) });
@@ -496,6 +541,7 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/routing/execute", wrap(async (req, res) => {
     const s = await getServices();
     if (!s.routing.cctpEnabled) throw new ApplicationError("CHAIN_NOT_ENABLED", "Cross-network transfers are not enabled on this deployment");
+    personalOnly(req, "Moving money between networks");
     const request = await routeRequest(s, await userId(req), req.body);
     const quotes = await s.routing.engine.quote(request);
     const best = quotes.find((q) => q.quote.provider !== "direct") ?? quotes[0];
@@ -525,8 +571,9 @@ export function registerV2Routes(app: Express) {
    * their hub wallet automatically; nothing to sign. Only the canonical USDC is ever moved.
    */
   app.get("/api/v2/deposit-addresses", wrap(async (req, res) => {
+    personalOnly(req, "Funding from other networks");
     const s = await getServices();
-    const book = await s.accounts.addressBook(await userId(req));
+    const book = await bookFor(s, await userId(req), req);
     const hub = chainRegistry()!.hub;
     const wallet = book[hub.key];
     if (!wallet) throw new ApplicationError("INVALID_REQUEST", `No ${hub.name} account yet`);
@@ -552,18 +599,26 @@ export function registerV2Routes(app: Express) {
     const s = await getServices();
     const { chain, symbol, to, amount } = req.body ?? {};
     if (typeof chain !== "string" || typeof to !== "string" || typeof amount !== "string") throw new ApplicationError("INVALID_REQUEST", "chain, to and amount are required");
-    const owner = await ownerOn(s, await userId(req), chain);
+    const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ chain, transactions: await s.adapters.adapterFor(chain).prepareTransfer(owner, to.trim(), String(symbol ?? "USDC"), amount) });
   }));
 
   app.post("/api/v2/transactions/relay", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, xdr } = req.body ?? {};
-    const adapter = s.adapters.adapterFor(String(chain)) as unknown as { relayUserTransaction?: (x: string, w: string) => Promise<unknown>; forgetPools?: () => void };
+    const adapter = s.adapters.adapterFor(String(chain)) as unknown as {
+      relayUserTransaction?: (x: string, w: string, acting?: { organisationRole: "admin" | "operator" | "viewer" }) => Promise<unknown>;
+      forgetPools?: () => void;
+    };
     if (!adapter.relayUserTransaction) throw new ApplicationError("INVALID_REQUEST", `${chain} transactions are sent by the wallet directly`);
     if (typeof xdr !== "string" || xdr.length < 10 || xdr.length > 100_000) throw new ApplicationError("INVALID_REQUEST", "xdr is required");
+    const uid = await userId(req);
+    // Acting for an organisation: its account, with the member's role deciding what may be sent.
+    const org = await actingOrganisation(req, uid, String(chain) as ChainKey);
     try {
-      res.json(await adapter.relayUserTransaction(xdr, await ownerOn(s, await userId(req), String(chain))));
+      res.json(org
+        ? await adapter.relayUserTransaction(xdr, org.account, { organisationRole: org.role })
+        : await adapter.relayUserTransaction(xdr, await ownerOn(s, uid, String(chain), req)));
     } finally {
       adapter.forgetPools?.(); // pools read while it was landing may be out of date
     }
@@ -611,7 +666,7 @@ export function registerV2Routes(app: Express) {
 
   app.post("/api/v2/rate-pools/:id/buy/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const wallet = await ownerOn(s, await userId(req), RATE_POOL_CHAIN as ChainKey);
+    const wallet = await ownerOn(s, await userId(req), RATE_POOL_CHAIN as ChainKey, req);
     const pool = await ratePoolOr404(intParam(req.params.id, "pool"));
     const days = intParam(req.body?.days, "days");
     const notional = String(req.body?.notional ?? "");
@@ -624,7 +679,7 @@ export function registerV2Routes(app: Express) {
 
   app.post("/api/v2/rate-pools/:id/deposits/prepare", wrap(async (req, res) => {
     const s = await getServices();
-    const wallet = await ownerOn(s, await userId(req), RATE_POOL_CHAIN as ChainKey);
+    const wallet = await ownerOn(s, await userId(req), RATE_POOL_CHAIN as ChainKey, req);
     const pool = await ratePoolOr404(intParam(req.params.id, "pool"));
     ratePoolCache = null;
     res.json({ transactions: await ratePools().prepareDeposit(wallet, pool.id, String(req.body?.amount ?? "")) });
@@ -633,7 +688,7 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/rate-protections", wrap(async (req, res) => {
     const s = await getServices();
     const uid = await userId(req);
-    const book = await s.accounts.addressBook(uid);
+    const book = await bookFor(s, uid, req);
     const wallet = book[RATE_POOL_CHAIN as ChainKey];
     res.json({ protections: wallet ? await ratePools().positionsOf(wallet) : [] });
   }));

@@ -109,8 +109,15 @@ export class QuoteService {
    */
   async quote(req: ProtectionRequest, accounts: Record<ChainKey, string>): Promise<ProtectionQuote> {
     if (!isOffered(req.direction)) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
-    if (req.strikeDistanceBps !== undefined && !(Number.isInteger(req.strikeDistanceBps) && req.strikeDistanceBps >= 0 && req.strikeDistanceBps <= 5_000)) {
-      throw new ApplicationError("INVALID_STRIKE", "The strike must be between 0% and 50% from today's rate");
+    if (req.strikeDistanceBps !== undefined) {
+      const d = req.strikeDistanceBps;
+      if (typeof d !== "number" || !Number.isFinite(d) || d < 0 || d > 5_000) {
+        throw new ApplicationError("INVALID_STRIKE", "The strike must be between 0% and 50% from today's rate");
+      }
+      // Hundredths of a basis point (0.0001%) is the finest step a strike can be set in.
+      if (Math.abs(d * 100 - Math.round(d * 100)) > 1e-6) {
+        throw new ApplicationError("INVALID_STRIKE", "Set the strike to at most 4 decimal places of a percent");
+      }
     }
     if (req.capDistanceBps !== undefined && !(Number.isInteger(req.capDistanceBps) && req.capDistanceBps > 0 && req.capDistanceBps <= 10_000)) {
       throw new ApplicationError("INVALID_CAP", "The limit must be between 0% and 100% beyond the strike");
@@ -191,6 +198,10 @@ export class QuoteService {
     if (!priced) return new ApplicationError("QUOTE_EXPIRED", "Spot moved while pricing; request the quote again");
 
     const spot = toRate(priced.spot);
+    // A strike typed as a rate can be overtaken by today's rate before it is priced.
+    if (req.strikeDistanceBps === undefined && (up ? strike < spot : strike > spot)) {
+      return new ApplicationError("INVALID_STRIKE", `Today's rate has moved past this strike. Choose a strike ${up ? "above" : "below"} ${fromRate(spot)}, or set it as a percentage from today's rate.`);
+    }
     // The contract's own rule, against the spot it will see.
     const minBps = BigInt(pool.structures.minStrikeDistanceBps ?? 0);
     if ((up ? strike - spot : spot - strike) * BigInt(10_000) < minBps * spot) {
@@ -237,9 +248,13 @@ export async function enginePricer(): Promise<FairPricer> {
   };
 }
 
-/** A rate `bps` beyond `base` in the protected direction, rounded away from it so the distance is never short. */
+/**
+ * A rate `bps` beyond `base` in the protected direction, rounded away from it so the distance
+ * is never short. `bps` may carry two decimals (hundredths of a basis point, 0.0001%).
+ */
 function awayFrom(base: bigint, bps: number, up: boolean): bigint {
-  const move = (base * BigInt(bps) + BigInt(9_999)) / BigInt(10_000);
+  const hundredths = BigInt(Math.round(bps * 100));
+  const move = (base * hundredths + BigInt(999_999)) / BigInt(1_000_000);
   return up ? base + move : base - move;
 }
 

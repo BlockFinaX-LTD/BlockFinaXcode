@@ -26,6 +26,7 @@ import type { ChainAdapter, CreatePoolInput, LpAccountView, OracleRoundState, Pl
 import { mapStellarError } from "./errors";
 import { stellarQuoteDigest, type StellarBuyParams } from "./stellar-quote";
 import { inspectPoolCall, relay } from "./stellar-relay";
+import { ACCOUNT_ADMIN_FUNCTIONS } from "@shared/smart-accounts";
 import { mapRatePoolError, RATE_POOL_POLICY } from "../rates/pools";
 
 const QUOTE_TTL_SECONDS = 120;
@@ -603,15 +604,24 @@ export class StellarAdapter implements ChainAdapter {
    * Relay a user-authorized pool call with the platform's fee payer, after checking it is an
    * approved call on this pool contract authorized by `wallet`. Returns the transaction hash.
    */
-  async relayUserTransaction(xdrEnvelope: string, wallet: string): Promise<TransactionStatus> {
+  async relayUserTransaction(xdrEnvelope: string, wallet: string, acting?: { organisationRole: "admin" | "operator" | "viewer" }): Promise<TransactionStatus> {
+    const role = acting?.organisationRole;
+    if (role === "viewer") throw new ApplicationError("UNAUTHORIZED", "Viewers can see this account but cannot send from it");
     const ratePool = this.env.STELLAR_RATE_POOL_CONTRACT;
     const extra = ratePool ? [{ contract: ratePool, ...RATE_POOL_POLICY }] : [];
-    // The user's own smart wallet may add a backup passkey as a signer (authorized by itself).
-    extra.push({ contract: wallet, methods: new Set(["add_signer"]), walletArg: {}, permissionless: new Set<string>() });
-    // Circle CCTP: the user's wallet burns its own USDC to move it to another network.
-    const cctp = this.chain.cctp?.tokenMessenger;
+    if (!role) {
+      // A personal smart wallet may add a backup passkey as a signer (authorized by itself).
+      extra.push({ contract: wallet, methods: new Set(["add_signer"]), walletArg: {}, permissionless: new Set<string>() });
+    } else if (role === "admin") {
+      // An organisation account's admins change who controls it. Upgrades and `execute` are never relayed.
+      extra.push({ contract: wallet, methods: new Set(ACCOUNT_ADMIN_FUNCTIONS), walletArg: {}, permissionless: new Set<string>() });
+    }
+    // Circle CCTP: the wallet burns its own USDC to move it to another network. Not for organisation operators.
+    const cctp = role === "operator" ? undefined : this.chain.cctp?.tokenMessenger;
     if (cctp) extra.push({ contract: cctp, methods: new Set(["deposit_for_burn_with_hook"]), walletArg: { deposit_for_burn_with_hook: 0 }, permissionless: new Set<string>() });
-    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract), extra, cctp ? [cctp] : []);
+    const operator = role === "operator";
+    const call = inspectPoolCall(xdrEnvelope, this.chain.networkId, wallet, this.poolId, Object.values(this.chain.assets).map((a) => a.addressOrContract), extra, cctp ? [cctp] : [],
+      operator ? { tokenTransfers: false, tokenApprovals: false } : {});
     const fail = (err: unknown) => (ratePool && call.target === ratePool ? mapRatePoolError(err instanceof Error ? err.message : String(err)) : this.mapError(err));
     // Preferred: OpenZeppelin Relayer Channels builds the envelope and pays the fee.
     const relayerUrl = this.env.STELLAR_RELAYER_URL;

@@ -24,6 +24,8 @@ import { UnderwriterRequests } from './rfq';
 import { Onboarding, type OnboardingView } from './onboarding';
 import { startingRole } from '@shared/onboarding';
 import { api } from '@/lib/wallets/passkey-wallet';
+import { onActingOrganisationChange, pendingInviteToken } from '@/lib/acting-organisation';
+import { useActingOrganisation } from '@/lib/use-acting-organisation';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
@@ -102,7 +104,8 @@ function readRole(): Role {
 
 export function Workspace() {
   const [role, setRole] = useState<Role>(readRole);
-  const [page, setPage] = useState<Page>(role === 'hedger' ? 'h-home' : 'u-home');
+  // An organisation invitation opened before sign-in waits on the Account page.
+  const [page, setPage] = useState<Page>(() => (pendingInviteToken() ? 'account' : role === 'hedger' ? 'h-home' : 'u-home'));
   const [pair, setPair] = useState<string | null>(null);
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
@@ -144,6 +147,10 @@ export function Workspace() {
   // If the check itself fails, the workspace opens anyway: onboarding must never lock a user out.
   const qc = useQueryClient();
   const onboarding = useQuery({ queryKey: ['v2-onboarding'], queryFn: () => api<OnboardingView>('/api/v2/onboarding'), staleTime: Infinity, retry: 1 });
+  // Switching between a personal account and a business must never show the other one's numbers.
+  const acting = useActingOrganisation();
+  useEffect(() => onActingOrganisationChange(() => { void qc.resetQueries(); }), [qc]);
+  const viewOnly = acting?.role === 'viewer';
 
   if (onboarding.isPending) {
     return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
@@ -193,7 +200,7 @@ export function Workspace() {
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
             <button className="bx-balance-pill num bx-hide-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total)} USDC</button>
-            {role === 'hedger' ? (
+            {viewOnly ? null : role === 'hedger' ? (
               <>
                 <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>
                 <button className="bx-btn" data-tour="protect" onClick={() => go('h-protect', { buy: true })}>Protect an exposure</button>

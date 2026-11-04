@@ -34,6 +34,7 @@ import Auth from "@/pages/auth";
 
 // Core features
 import Hedge from "@/pages/hedge";
+import { OrganisationInviteLanding } from "@/components/v2/organisation-card";
 
 // Admin
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -203,6 +204,7 @@ function Router() {
         <Route key={p} path={p}><Redirect to="/hedge" /></Route>
       ))}
       <Route path="/hedge" component={Hedge} />
+      <Route path="/organisations/invite" component={OrganisationInviteLanding} />
 
       {/* Admin */}
       <Route path="/admin" component={AdminDashboard} />

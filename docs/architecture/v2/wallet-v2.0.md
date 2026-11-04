@@ -16,7 +16,9 @@
 BlockFinaX user (one login)
   ├── base     0x...   provider: rift             primary
   ├── bsc      0x...   provider: rift             (lazy)
-  └── stellar  C...    provider: stellar-passkey  primary
+  ├── stellar  C...    provider: stellar-passkey  primary
+  └── member of organisations (business accounts)
+        └── stellar  C...  OpenZeppelin smart account, owned by the organisation
 ```
 
 Chain accounts are rows in `chain_wallet_accounts`, owned by the user. `server/accounts/service.ts` manages them:
@@ -51,6 +53,10 @@ The EVM relayer sponsors only approved calls: approve and transfer on the chain'
 
 A partner's own wallet or custody is a third kind: it skips Wallet Providers and signs the `PreparedTransaction` payloads itself.
 
+### Business (organisation) accounts
+
+A business is its own Stellar account, not a row in `chain_wallet_accounts`: an OpenZeppelin smart account (stellar-accounts 0.8.0) whose context rules hold the members' passkeys by role (admin, operator, viewer). A member signs for it with the same passkey as their personal wallet; the signature format binds the account and the rule, so approvals never transfer between the two. The browser acts for a business by sending `X-BFX-Organisation` on `/api/v2/*`; the server checks active membership on every request and the relay applies the member's role. See [ADR-005](../../adr/ADR-005-organisation-accounts-on-openzeppelin.md) and [Stellar organisation accounts](../stellar-organisation-accounts.md).
+
 ## 3. Wallet Session
 
 `client/src/lib/wallet-session.ts` holds the signed-in user, all their accounts across providers, and the active network.
@@ -74,3 +80,5 @@ Users choose a network only when money enters or leaves BlockFinaX:
 1. Keys never leave the provider. The backend sees signatures and authorizations only.
 2. The Stellar relay pays fees only for one approved method on the configured pool, with the user's own address in the wallet argument and an authorization bound to that exact call (`server/chain/stellar-relay.ts`).
 3. Linking checks ownership of the address string only. Proof of control is the provider's job at connection time.
+4. For a business account the relay sends by role: admins may make pool calls, transfers and account changes (never `upgrade` or `execute`); operators pool calls only; viewers nothing. The account's context rules enforce the same on chain.
+5. The browser checks every business account against the chain: accepted account code, and the member's passkey on the rule their role uses.

@@ -10,16 +10,48 @@ import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
 import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
-import { useWalletCheck } from '@/lib/wallets/verify-wallet';
+import { useWalletCheck, type WalletCheck } from '@/lib/wallets/verify-wallet';
 import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
+import { OrganisationCard } from './organisation-card';
+import { useActingOrganisation } from '@/lib/use-acting-organisation';
+import { checkOrganisationAccount, getOrganisation } from '@/lib/organisations';
 
+/** The accounts money moves through: the user's own, or only the business's Stellar account when acting for one. */
 function useAccounts() {
   const { session } = usePasskeySession();
   const chains = useChains();
+  const acting = useActingOrganisation();
   const name = (key: string) => chains.data?.chains.find((c) => c.key === key)?.name ?? key;
+  if (acting) {
+    const stellar = chains.data?.chains.find((c) => c.key.startsWith('stellar'))?.key ?? 'stellar-testnet';
+    return [{ chain: stellar, name: name(stellar), address: acting.account, stellar: true }];
+  }
   return (session?.accounts ?? []).map((a) => ({ chain: a.chain, name: name(a.chain), address: a.address, stellar: a.chain.startsWith('stellar') }));
+}
+
+/**
+ * The deposit address may be shown only after the app has checked it against the chain:
+ * the personal wallet against the user's passkey, a business account against OpenZeppelin's
+ * account code and this member's passkey on it.
+ */
+function useDepositCheck(ready: boolean): WalletCheck {
+  const acting = useActingOrganisation();
+  const { session } = usePasskeySession();
+  const { state: personal } = useWalletCheck(session, undefined, ready && !acting);
+  const business = useQuery({
+    queryKey: ['org-deposit-check', acting?.id],
+    enabled: ready && Boolean(acting),
+    queryFn: async () => checkOrganisationAccount(await getOrganisation(acting!.id)),
+    staleTime: 60_000,
+  });
+  if (!acting) return personal;
+  if (business.isError) return { status: 'failed', problems: ['The business account could not be checked'] };
+  if (!business.data) return { status: 'checking' };
+  // A viewer has no passkey on the account; only the account code is checked for them.
+  const problems = business.data.problems.filter((p) => !(acting.role === 'viewer' && p.startsWith('Your passkey')));
+  return problems.length ? { status: 'failed', problems } : { status: 'ok' };
 }
 
 function CardHead({ title, sub, onCancel }: { title: string; sub: string; onCancel: () => void }) {
@@ -43,14 +75,14 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
   // USDC already on another network (from before deposits were Stellar only) can still come across.
   const stranded = accounts.filter((a) => a.chain !== hub && usdcOn(balances.data?.rows, a.chain) > 0);
   // Addresses are shown only once the app has checked them against the chain itself.
-  const { session } = usePasskeySession();
-  const { state: check } = useWalletCheck(session, undefined, Boolean(chains.data));
+  const check = useDepositCheck(Boolean(chains.data));
+  const acting = useActingOrganisation();
   return (
     <div className="bx-card">
-      <CardHead title="Deposit USDC" sub={`Send USDC on ${name} to your BlockFinaX account.`} onCancel={onCancel} />
+      <CardHead title="Deposit USDC" sub={acting ? `Send USDC on ${name} to ${acting.name}'s business account.` : `Send USDC on ${name} to your BlockFinaX account.`} onCancel={onCancel} />
       {check.status === 'failed' && (
         <div className="bx-error" style={{ marginBottom: 14 }}>
-          <b>Do not deposit.</b> The app could not confirm this account belongs to your passkey:
+          <b>Do not deposit.</b> The app could not confirm this account {acting ? `is ${acting.name}'s business account` : 'belongs to your passkey'}:
           <ul style={{ margin: '6px 0 0 18px' }}>{check.problems.map((p) => <li key={p}>{p}</li>)}</ul>
           Contact BlockFinaX before sending anything.
         </div>
@@ -59,7 +91,7 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
         <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={address} size={168} /></div>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div className="muted" style={{ fontSize: 13 }}>Your {name} deposit address</div>
+            <div className="muted" style={{ fontSize: 13 }}>{acting ? `${acting.name}'s` : 'Your'} {name} deposit address</div>
             <div className="num" style={{ fontSize: 14, wordBreak: 'break-all', margin: '6px 0 14px' }}>{address}</div>
             <button className="bx-btn ghost" onClick={async () => { await navigator.clipboard.writeText(address); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy address'}</button>
           </div>
@@ -119,8 +151,10 @@ function FaucetCard() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const accounts = useAccounts();
+  const acting = useActingOrganisation();
   const [claiming, setClaiming] = useState(false);
-  if (!accounts.some((a) => a.stellar)) return null;
+  // The faucet pays the personal wallet, so it is hidden while acting for a business.
+  if (acting || !accounts.some((a) => a.stellar)) return null;
   return (
     <div className="bx-cta">
       <h3>Need test USDC?</h3>
@@ -222,19 +256,23 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
   const [mode, setMode] = useState<WalletMode>(initial);
   useEffect(() => setMode(initial), [initial]);
   const close = () => setMode('none');
+  const acting = useActingOrganisation();
+  // Sending money out of a business is for its admins only (the chain enforces this too).
+  const canWithdraw = !acting || acting.role === 'admin';
   return (
     <main className="bx-main">
       <section className="bx-col">
         <div className="bx-card">
-          <div className="bx-hero-k">Wallet balance</div>
+          <div className="bx-hero-k">{acting ? `${acting.name} balance` : 'Wallet balance'}</div>
           <div className="bx-hero-v num">${fmt(balances.data?.total)}</div>
           <div className="bx-wallet-actions">
             <button className={`bx-btn${mode === 'deposit' ? '' : mode === 'none' ? '' : ' ghost'}`} onClick={() => setMode('deposit')} aria-pressed={mode === 'deposit'}><ArrowDown /> Deposit</button>
-            <button className={`bx-btn${mode === 'withdraw' ? '' : ' ghost'}`} onClick={() => setMode('withdraw')} aria-pressed={mode === 'withdraw'}><ArrowUp /> Withdraw</button>
+            {canWithdraw && <button className={`bx-btn${mode === 'withdraw' ? '' : ' ghost'}`} onClick={() => setMode('withdraw')} aria-pressed={mode === 'withdraw'}><ArrowUp /> Withdraw</button>}
           </div>
+          {!canWithdraw && <div className="sub" style={{ marginTop: 10 }}>Only {acting!.name}'s admins can send money out of this account.</div>}
         </div>
         {mode === 'deposit' && <DepositCard onCancel={close} />}
-        {mode === 'withdraw' && <WithdrawPanel onCancel={close} />}
+        {mode === 'withdraw' && canWithdraw && <WithdrawPanel onCancel={close} />}
       </section>
       <aside className="bx-aside">
         <FaucetCard />
@@ -491,6 +529,7 @@ export function AccountPage() {
         </div>
         <VerificationCard />
         <PasskeysCard />
+        <OrganisationCard />
       </section>
       <aside className="bx-aside">
         <div className="bx-card tight">

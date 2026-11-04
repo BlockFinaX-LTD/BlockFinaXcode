@@ -26,7 +26,15 @@ export interface ExtraContractPolicy {
   permissionless: Set<string>;
 }
 
-export function inspectPoolCall(envelope: string, networkPassphrase: string, wallet: string, poolContract: string, tokens: string[] = [], extra: ExtraContractPolicy[] = [], spenders: string[] = []) {
+/** What a caller may send besides pool calls. Personal wallets keep the defaults (everything below allowed). */
+export interface RelayAllowance {
+  /** A plain token transfer from the wallet (a withdrawal or a payment). Organisation operators: no. */
+  tokenTransfers?: boolean;
+  /** A token allowance to an approved spender (CCTP). Organisation operators: no. */
+  tokenApprovals?: boolean;
+}
+
+export function inspectPoolCall(envelope: string, networkPassphrase: string, wallet: string, poolContract: string, tokens: string[] = [], extra: ExtraContractPolicy[] = [], spenders: string[] = [], allow: RelayAllowance = {}) {
   const tx = TransactionBuilder.fromXDR(envelope, networkPassphrase);
   if (!(tx instanceof Transaction) || tx.operations.length !== 1) throw new ApplicationError("UNAUTHORIZED", "Only one pool call is permitted");
   const op = tx.operations[0];
@@ -40,6 +48,8 @@ export function inspectPoolCall(envelope: string, networkPassphrase: string, wal
   const tokenTransfer = tokens.includes(target) && method === "transfer";
   // An allowance for an approved spender (Circle CCTP's TokenMessengerMinter), from the user's wallet.
   const tokenApprove = tokens.includes(target) && method === "approve";
+  if (tokenTransfer && allow.tokenTransfers === false) throw new ApplicationError("UNAUTHORIZED", "Your role cannot send money out of this account");
+  if (tokenApprove && allow.tokenApprovals === false) throw new ApplicationError("UNAUTHORIZED", "Your role cannot approve transfers from this account");
   const policy = extra.find((e) => e.contract === target);
   if (policy) {
     if (!policy.methods.has(method)) throw new ApplicationError("UNAUTHORIZED", "Contract or method is not approved");

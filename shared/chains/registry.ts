@@ -11,6 +11,7 @@
  * through chain states, never a runtime flip (docs/architecture/v2/liquidity-hub-v2.0.md).
  */
 import { ApplicationError, type Asset, type ChainFamily, type ChainKey } from "../domain/types";
+import type { SmartAccountChainConfig } from "../smart-accounts";
 
 /**
  *   ACTIVE       full product: new pools, hedges, LP deposits, settlement, funding, withdrawals
@@ -65,6 +66,11 @@ export interface ChainConfig {
     /** Smallest USDC amount (six-decimal units) the deposit contract will forward. */
     depositMinAmount?: string;
   };
+  /**
+   * Stellar only: OpenZeppelin smart-account contracts that organisation (business)
+   * accounts run on. Absent means organisations are not offered on this chain.
+   */
+  smartAccounts?: SmartAccountChainConfig;
 }
 
 export interface ChainRegistryConfig {

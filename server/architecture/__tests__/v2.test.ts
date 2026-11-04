@@ -210,6 +210,39 @@ test("a strike chosen as a percentage is measured from the rate the quote is pri
   assert.equal(ok.economic.cap, "12.875625");
 });
 
+test("a strike can be set to a fraction of a percent, down to 0.0001%", async () => {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const open = { ...fakeAdapter("stellar", 7), listPools: async () => [{ ...pool("stellar", 7, 11613), structures: { ...pool("stellar", 7, 11613).structures, minStrikeDistanceBps: 0 } }] };
+  const at = (spot: string): FairPricer => ({ spot: async () => spot, fair: async () => ({ fairRateE6: 15500, spot }) });
+  const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: open }), at("1346.07"));
+  const req = { ...request, pair: "USD/GHS", strike: "1346.34", cap: "1480" };
+  // 0.02% of 1346.07 is exactly 0.269214, so the strike is 1346.339214.
+  const two = await qs.quote({ ...req, strikeDistanceBps: 2, capDistanceBps: 900 }, { stellar: STELLAR_USER });
+  assert.equal(two.economic.strike, "1346.339214");
+  // 0.0015% (0.15 bp) is 0.02019105, rounded away from today's rate to 0.020192.
+  const fine = await qs.quote({ ...req, strikeDistanceBps: 0.15, capDistanceBps: 900 }, { stellar: STELLAR_USER });
+  assert.equal(fine.economic.strike, "1346.090192");
+  // Finer than 0.0001% is refused plainly.
+  await assert.rejects(qs.quote({ ...req, strikeDistanceBps: 0.155 }, { stellar: STELLAR_USER }), (e: ApplicationError) => e.code === "INVALID_STRIKE" && /4 decimal places/.test(e.message));
+});
+
+test("a fine strike still respects the underwriter's minimum", async () => {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const strict = { ...fakeAdapter("stellar", 7), listPools: async () => [{ ...pool("stellar", 7, 11613), structures: { ...pool("stellar", 7, 11613).structures, minStrikeDistanceBps: 200 } }] };
+  const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: strict }), pricer);
+  await assert.rejects(qs.quote({ ...request, strikeDistanceBps: 2, capDistanceBps: 900 }, { stellar: STELLAR_USER }), (e: ApplicationError) => e.code === "STRIKE_TOO_CLOSE" && /2%/.test(e.message));
+});
+
+test("a strike typed as a rate that today's rate has moved past gets a plain message", async () => {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const open = { ...fakeAdapter("stellar", 7), listPools: async () => [{ ...pool("stellar", 7, 11613), structures: { ...pool("stellar", 7, 11613).structures, minStrikeDistanceBps: 0 } }] };
+  // The buyer typed 11.21 when the rate was 11.20; it is now 11.25.
+  const moved: FairPricer = { spot: async () => "11.25", fair: async () => ({ fairRateE6: 15500, spot: "11.25" }) };
+  const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: open }), moved);
+  await assert.rejects(qs.quote({ ...request, strike: "11.21", cap: "12.5" }, { stellar: STELLAR_USER }),
+    (e: ApplicationError) => e.code === "INVALID_STRIKE" && /moved past this strike/.test(e.message));
+});
+
 // ── Routing: multi-chain funding, withdrawal, failure ─────────────────────────
 
 function treasury(opts: { sourceFails?: boolean; payoutFails?: boolean } = {}): TreasuryPort {
