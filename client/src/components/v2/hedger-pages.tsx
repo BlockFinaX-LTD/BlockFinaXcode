@@ -406,9 +406,11 @@ export interface ChartProtection {
  * sits beyond the visible prices, a strip on that edge says where it is instead of flattening
  * the price line to fit it.
  */
-export function RateChart({ points, loading, label, unit, protection = null }: {
+export function RateChart({ points, loading, label, unit, protection = null, keepStrike = false }: {
   points: { t: string; v: number }[]; loading: boolean; label?: string; unit?: string;
   protection?: ChartProtection | null;
+  /** Stretch the scale to show the strike even when it is far from today's prices (a chosen position). */
+  keepStrike?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   if (points.length < 2) {
@@ -421,6 +423,7 @@ export function RateChart({ points, loading, label, unit, protection = null }: {
   // A level stretches the scale only when it is just beyond the prices (a quarter of their range).
   const near = (v: number | null | undefined) => v !== null && v !== undefined && Number.isFinite(v) && v >= dLo - span * 0.25 && v <= dHi + span * 0.25;
   const pull = protection ? [protection.strike, protection.cap].filter(near) as number[] : [];
+  if (protection && keepStrike && Number.isFinite(protection.strike)) pull.push(protection.strike);
   const lo0 = Math.min(dLo, ...pull), hi0 = Math.max(dHi, ...pull);
   const pad = (hi0 - lo0) * 0.08 || Math.abs(hi0) * 0.002 || 1;
   const lo = lo0 - pad, hi = hi0 + pad;
@@ -544,6 +547,25 @@ export function riskMark(p: ProtectionPosition, label: string): ChartMark {
 }
 
 const markKey = (p: ProtectionPosition) => `${p.ref.chain}:${p.ref.contract}:${p.ref.id}`;
+
+/** Claim a settled payout: one signature, then refresh balances and protections. */
+function useClaimPayout() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  async function claim(ref: string) {
+    setBusy(ref);
+    try {
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/hedges/${encodeURIComponent(ref)}/claim/prepare`, {});
+      await signAndSend(transactions, () => {});
+      toast({ title: 'Payout received', description: 'The USDC is in your account.' });
+      for (const k of ['v2-hedges', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
+    } catch (err) {
+      toast({ title: 'Not received', description: (err as Error).message, variant: 'destructive' });
+    } finally { setBusy(null); }
+  }
+  return { busy, claim };
+}
 const POS_COLS = { gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr))' };
 
 type Stake = { value: string; account?: { reserved: string } };
@@ -580,6 +602,10 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
   useEffect(() => { if (!focus && activeKeys[0]) setFocus(activeKeys[0]); }, [activeKeys.join(',')]);
   const allPositions = role === 'hedger' ? mineHedges.map((h) => h.position) : under.rows.map((r) => r.pos);
   const focusedPos = allPositions.find((p) => markKey(p) === focus) ?? null;
+  // An ended cover shows what it paid (and a claim button), not "if it ended today".
+  const focusedSettlement = role === 'hedger' ? mineHedges.find((h) => markKey(h.position) === focus)?.settlement ?? null : null;
+  const ended = focusedSettlement !== null && focusedSettlement.status !== 'pending';
+  const { busy: claiming, claim } = useClaimPayout();
 
   return (
     <main className="bx-main">
@@ -601,12 +627,21 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           </div>
           {(() => {
             const m = marks.find((x) => x.key === focus) ?? (marks.length === 1 ? marks[0] : null);
-            return <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy} protection={m ? { strike: m.strike, cap: m.cap, tone: m.tone } : null} />;
+            return <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy} protection={m ? { strike: m.strike, cap: m.cap, tone: m.tone } : null} keepStrike={Boolean(focusedPos)} />;
           })()}
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
-          {focusedPos && (() => {
+          {focusedPos && ended && focusedSettlement && (
+            <div className="bx-payline">
+              <span>Ended {dateOf(focusedPos.expiry)}{focusedSettlement.settlementPrice ? <> at <b className="num">{fmtRate(focusedSettlement.settlementPrice)}</b></> : null}</span>
+              <span>Payout: <b className="num" style={{ color: 'var(--green)' }}>${fmt(focusedSettlement.netPayout)}</b></span>
+              {focusedSettlement.status === 'settled_claimable'
+                ? <button className="bx-btn small" disabled={claiming === focusedSettlement.position} onClick={() => claim(focusedSettlement.position)}>{claiming === focusedSettlement.position ? <Spin /> : 'Receive payout'}</button>
+                : <span className="muted">{focusedSettlement.status === 'claimed' ? 'Paid to your account' : 'No payout was due'}</span>}
+            </div>
+          )}
+          {focusedPos && !ended && (() => {
             const m = marks.find((x) => x.key === focus);
             if (!m?.payout) return null;
             const cost = Number(focusedPos.premium) + Number(focusedPos.fee);
@@ -643,7 +678,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
                       <div style={{ minWidth: 0 }}><div className="t">{title}</div><div className="d">{role === 'hedger' ? 'Bought' : 'Sold'} at {fmtRate(pos.spot)} · covered to {fmtRate(pos.cap)} {ccy}</div></div></div>
                     <div className="r num" style={{ fontWeight: 600 }}>${fmt(pos.notional, 0)}</div>
                     <div className="r num">{fmtRate(pos.strike)}</div>
-                    <div className="r"><div className="num">{dateOf(pos.expiry)}</div><div style={{ fontSize: 12 }}>{status === 'pending' ? <span className="up">Active</span> : <span className="muted">Ended</span>}</div></div>
+                    <div className="r"><div className="num">{dateOf(pos.expiry)}</div><div style={{ fontSize: 12 }}>{status === 'pending' ? <span className="up">Active</span> : status === 'settled_claimable' ? <span className="up">Payout ready</span> : <span className="muted">Ended</span>}</div></div>
                   </div>
                 );
               })}
@@ -1141,25 +1176,12 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 // ── My protections ───────────────────────────────────────────────────────────
 
 export function MyProtections({ go }: { go: Go }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const hedges = useHedges();
   const all = hedges.data ?? [];
   const rates = useRates(Array.from(new Set(all.map((h) => h.pair))));
   const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
-  const [busy, setBusy] = useState<string | null>(null);
+  const { busy, claim } = useClaimPayout();
   const cols = { gridTemplateColumns: 'minmax(0, 2.2fr) repeat(4, minmax(0, 1fr))' };
-  async function claim(ref: string) {
-    setBusy(ref);
-    try {
-      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/hedges/${encodeURIComponent(ref)}/claim/prepare`, {});
-      await signAndSend(transactions, () => {});
-      toast({ title: 'Payout received', description: 'The USDC is in your account.' });
-      for (const k of ['v2-hedges', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
-    } catch (err) {
-      toast({ title: 'Not received', description: (err as Error).message, variant: 'destructive' });
-    } finally { setBusy(null); }
-  }
   const [assetClass, setAssetClass] = useAssetClass();
   return (
     <main className="bx-main">
