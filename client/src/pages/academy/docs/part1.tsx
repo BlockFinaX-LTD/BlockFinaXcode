@@ -124,7 +124,9 @@ export function ContractTerms() {
       <Section n="01" id="markets" title="Markets">
         <P>
           A currency is available when an underwriter has opened a pool for it. The protocol currently allows pools for USD/NGN
-          (naira), USD/GHS (cedi), USD/KES (shilling), USD/ZAR (rand) and USD/EGP (Egyptian pound). Each pool sells one of two
+          (naira), USD/GHS (cedi), USD/KES (Kenyan shilling), USD/ZAR (rand), USD/EGP (Egyptian pound), USD/UGX (Ugandan
+          shilling), USD/TZS (Tanzanian shilling), USD/ZMW (Zambian kwacha), USD/MAD (Moroccan dirham) and USD/XOF (West
+          African CFA franc). Each pool sells one of two
           contracts, named after the pair, such as USD/GHS Cap:
         </P>
         <Table

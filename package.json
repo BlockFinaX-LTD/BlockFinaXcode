@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "dev:testnet": "sh scripts/dev-testnet.sh",
+    "demo:video": "tsx scripts/demo-video/record.ts",
     "org:check": "tsx scripts/organisations/testnet-check.ts && tsx scripts/organisations/testnet-service-check.ts",
     "db:push:testnet-local": "sh scripts/dev-testnet.sh push",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
@@ -160,6 +161,8 @@
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.30.4",
     "esbuild": "^0.25.0",
+    "ffmpeg-static": "^5.2.0",
+    "playwright": "^1.64.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.1",

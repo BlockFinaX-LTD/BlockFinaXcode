@@ -13,6 +13,7 @@
  *               POST /api/v2/rfq/offers/:id/withdraw
  */
 import type { Express, Request, Response } from "express";
+import { hedgePairs } from "@shared/domain/hedge-pairs";
 import { ApplicationError, type EconomicQuote } from "@shared/domain/types";
 import { costBreakdown, fromRate, fromUnits, maxPayout, toRate, toUnits } from "@shared/domain/pool-economics";
 import { chainRegistry } from "../chain/config";
@@ -31,7 +32,7 @@ interface Deps {
 }
 
 const num = (v: unknown) => (typeof v === "string" || typeof v === "number") && Number.isFinite(Number(v)) ? Number(v) : NaN;
-const PAIRS = () => (process.env.POOL_PAIRS || "USD/NGN,USD/GHS,USD/KES,USD/ZAR,USD/EGP").split(",").map((p) => p.trim()).filter(Boolean);
+const PAIRS = () => hedgePairs();
 
 /** What a business sees of an offer: the terms, never who made it. */
 function offerView(o: OfferRow, index: number) {

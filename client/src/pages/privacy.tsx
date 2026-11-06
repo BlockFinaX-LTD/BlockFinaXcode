@@ -2,8 +2,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Lock } from "lucide-react";
 
-const EFFECTIVE_DATE = "4 November 2026";
-const VERSION = "1.4";
+import { PRIVACY_EFFECTIVE_DATE as EFFECTIVE_DATE, PRIVACY_VERSION as VERSION } from "@shared/legal";
 
 export default function PrivacyPage() {
   const [, navigate] = useLocation();

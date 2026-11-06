@@ -170,6 +170,11 @@ export function PasskeyAuth() {
             New users: sign in with email or Google, then create a passkey for your wallet.
           </p>
         )}
+        <p className="text-[11px] text-muted-foreground mt-3 leading-snug">
+          By continuing, you agree to our{" "}
+          <a href="/terms" target="_blank" rel="noreferrer" className="underline">Terms of Use</a> and acknowledge our{" "}
+          <a href="/privacy" target="_blank" rel="noreferrer" className="underline">Privacy Policy</a>.
+        </p>
         {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
       </div>
     </div>

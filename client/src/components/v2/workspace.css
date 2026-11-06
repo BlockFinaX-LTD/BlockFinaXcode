@@ -570,3 +570,8 @@
 .bx-menu-item .grow { flex: 1; min-width: 0; }
 .bx-menu-item .bx-acct-av { width: 28px; height: 28px; font-size: 11px; }
 .bx-rot { transform: rotate(90deg); }
+
+/* Terms of Use and Privacy Policy card */
+.bx-legal-doc { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; font-size: 14px; }
+.bx-legal-doc:hover { border-color: var(--blue-line); background: var(--blue-soft); }
+.bx-legal-doc svg { width: 15px; height: 15px; color: var(--muted); flex-shrink: 0; }

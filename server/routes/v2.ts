@@ -24,6 +24,7 @@
  *   GET  /api/v2/transactions/:chain/:hash     POST /api/v2/transactions/relay (Stellar sponsored calls)
  */
 import type { Express, NextFunction, Request, Response } from "express";
+import { hedgePairs } from "@shared/domain/hedge-pairs";
 import { ApplicationError, parseResourceId, type ApplicationErrorCode, type ChainKey, type ProtectionQuote, type ProtectionRequest } from "@shared/domain/types";
 import { AdapterRegistry } from "../chain";
 import { chainRegistry, registryLoadError } from "../chain/config";
@@ -177,7 +178,7 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/pools/setup", wrap(async (_req, res) => {
     const s = await getServices();
     const hub = chainRegistry()!.hub;
-    const pairs = (process.env.POOL_PAIRS || "USD/NGN,USD/GHS,USD/KES,USD/ZAR,USD/EGP").split(",").map((p) => p.trim()).filter(Boolean);
+    const pairs = hedgePairs();
     res.json({ chain: hub.key, pairs, creationFee: await s.adapters.adapterFor(hub.key).getPoolCreationFee() });
   }));
 

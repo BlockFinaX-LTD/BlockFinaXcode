@@ -2,8 +2,8 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Shield } from "lucide-react";
 
-export const TERMS_VERSION = "1.1";
-export const TERMS_EFFECTIVE_DATE = "4 November 2026";
+import { TERMS_EFFECTIVE_DATE, TERMS_VERSION } from "@shared/legal";
+export { TERMS_EFFECTIVE_DATE, TERMS_VERSION };
 
 export default function TermsPage() {
   const [, navigate] = useLocation();

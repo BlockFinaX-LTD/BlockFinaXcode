@@ -21,6 +21,7 @@ import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
 import { ProductTour } from './tour';
 import { UnderwriterRequests } from './rfq';
+import { LegalCard, useLegalStatus } from './legal-card';
 import { Onboarding, type OnboardingView } from './onboarding';
 import { startingRole } from '@shared/onboarding';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -151,6 +152,16 @@ export function Workspace() {
   const acting = useActingOrganisation();
   useEffect(() => onActingOrganisationChange(() => { void qc.resetQueries(); }), [qc]);
   const viewOnly = acting?.role === 'viewer';
+
+  // Terms of Use and Privacy Policy: accepted once per version, before anything else.
+  // A failed check shows the card too, so nobody continues without a recorded acceptance.
+  const legal = useLegalStatus(Boolean(session));
+  if (session && legal.isPending) {
+    return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
+  }
+  if (session && (legal.isError || legal.data?.needsAcceptance)) {
+    return <div className="bx" data-theme={theme}><LegalCard updated={Boolean(legal.data?.updated)} /></div>;
+  }
 
   if (onboarding.isPending) {
     return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
