@@ -155,7 +155,7 @@ export function Workspace() {
 
   // Terms of Use and Privacy Policy: accepted once per version, before anything else.
   // A failed check shows the card too, so nobody continues without a recorded acceptance.
-  const legal = useLegalStatus(Boolean(session));
+  const legal = useLegalStatus(session?.user.id ?? null);
   if (session && legal.isPending) {
     return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
   }

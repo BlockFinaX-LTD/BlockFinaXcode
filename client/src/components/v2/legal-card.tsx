@@ -11,8 +11,9 @@ import { Spin } from './ui';
 
 interface LegalStatus { needsAcceptance: boolean; updated: boolean }
 
-export function useLegalStatus(enabled: boolean) {
-  return useQuery({ queryKey: ['legal-status'], enabled, queryFn: () => api<LegalStatus>('/api/legal/status'), staleTime: Infinity, retry: 2 });
+/** Keyed by user, so a different person signing in on the same browser is asked again. */
+export function useLegalStatus(userId: number | null) {
+  return useQuery({ queryKey: ['legal-status', userId], enabled: userId !== null, queryFn: () => api<LegalStatus>('/api/legal/status'), staleTime: Infinity, retry: 2 });
 }
 
 export function LegalCard({ updated }: { updated: boolean }) {
@@ -26,7 +27,7 @@ export function LegalCard({ updated }: { updated: boolean }) {
     setError(null);
     try {
       await api('/api/legal/accept', { terms: TERMS_VERSION, privacy: PRIVACY_VERSION });
-      qc.setQueryData(['legal-status'], { needsAcceptance: false, updated });
+      qc.setQueriesData({ queryKey: ['legal-status'] }, { needsAcceptance: false, updated });
     } catch (e) {
       setError((e as Error).message || 'Something went wrong. Please try again.');
     } finally { setBusy(false); }
