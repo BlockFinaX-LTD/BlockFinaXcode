@@ -30,6 +30,13 @@ import { ACCOUNT_ADMIN_FUNCTIONS } from "@shared/smart-accounts";
 import { mapRatePoolError, RATE_POOL_POLICY } from "../rates/pools";
 
 const QUOTE_TTL_SECONDS = 120;
+
+/** What the relay pays for on an earlier pool contract: settling, payouts and withdrawals only. */
+export const LEGACY_POOL_POLICY = {
+  methods: new Set(["settle_position", "claim_payout", "request_withdrawal", "cancel_withdrawal", "execute_withdrawal"]),
+  walletArg: { request_withdrawal: 1 } as Record<string, number>,
+  permissionless: new Set(["settle_position"]),
+};
 type AnyClient = any;
 
 const unwrap = (r: any) => (r && typeof r.unwrap === "function" ? r.unwrap() : r);
@@ -609,6 +616,11 @@ export class StellarAdapter implements ChainAdapter {
     if (role === "viewer") throw new ApplicationError("UNAUTHORIZED", "Viewers can see this account but cannot send from it");
     const ratePool = this.env.STELLAR_RATE_POOL_CONTRACT;
     const extra = ratePool ? [{ contract: ratePool, ...RATE_POOL_POLICY }] : [];
+    // Earlier pool contracts sell nothing, but their cover must still settle and pay out, and
+    // underwriters must still get their money back. Only those wind-down calls are relayed.
+    for (const old of this.chain.contracts.legacy ?? []) {
+      if (old.currencyPool && old.currencyPool !== this.poolId) extra.push({ contract: old.currencyPool, ...LEGACY_POOL_POLICY });
+    }
     if (!role) {
       // A personal smart wallet may add a backup passkey as a signer (authorized by itself).
       extra.push({ contract: wallet, methods: new Set(["add_signer"]), walletArg: {}, permissionless: new Set<string>() });

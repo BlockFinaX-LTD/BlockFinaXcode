@@ -74,3 +74,16 @@ test("a call must be authorised by the account it acts for", () => {
   const someoneElse = envelope(POOL, "deposit", [nativeToScVal(1, { type: "u32" }), addr(ORG), amount(5)], OUTSIDER);
   assert.throws(() => inspectPoolCall(someoneElse, NP, ORG, POOL, [USDC], [], [], operatorAllow), /authorized by your connected wallet/);
 });
+
+test("an earlier pool contract: payouts, settlement and withdrawals are relayed, nothing else", async () => {
+  const { LEGACY_POOL_POLICY } = await import("../stellar-adapter");
+  const OLD = c(5);
+  const legacy: ExtraContractPolicy[] = [{ contract: OLD, ...LEGACY_POOL_POLICY }];
+  const id = nativeToScVal(3, { type: "u32" });
+  assert.equal(inspectPoolCall(envelope(OLD, "claim_payout", [id]), NP, ORG, POOL, [USDC], legacy).method, "claim_payout");
+  assert.equal(inspectPoolCall(envelope(OLD, "execute_withdrawal", [id]), NP, ORG, POOL, [USDC], legacy).method, "execute_withdrawal");
+  assert.throws(() => inspectPoolCall(envelope(OLD, "buy_protection", [addr(ORG)]), NP, ORG, POOL, [USDC], legacy), /not approved/);
+  assert.throws(() => inspectPoolCall(envelope(OLD, "deposit", [id, addr(ORG), amount(5)]), NP, ORG, POOL, [USDC], legacy), /not approved/);
+  // Without the policy, the earlier contract is refused outright (the bug a user hit claiming a payout).
+  assert.throws(() => inspectPoolCall(envelope(OLD, "claim_payout", [id]), NP, ORG, POOL, [USDC], []), /not approved/);
+});
