@@ -119,7 +119,7 @@ export function Support() {
       </Head>
       <Section n="01" id="channels" title="Channels">
         <UL>
-          <li>Ask BlockFinaX: the assistant in the app answers questions about quotes, currencies and payouts.</li>
+          <li>Finax: the assistant in the app, opened with Ask in the top bar, answers questions about quotes, currencies and payouts.</li>
           <li>Email: hello@blockfinax.com.</li>
           <li>Contact page: <a href="/contact" className="ac-link">blockfinax.com/contact</a>, with an enquiry type so your message reaches the right person.</li>
         </UL>

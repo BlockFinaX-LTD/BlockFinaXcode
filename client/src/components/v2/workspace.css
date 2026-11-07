@@ -310,6 +310,7 @@
   .bx-top-r { order: 2; gap: 8px; flex-wrap: nowrap; }
   .bx-top-r .bx-btn { display: none; }
   .bx-balance-pill.bx-show-sm { display: inline-block !important; padding: 6px 12px; font-size: 13px; }
+  .bx-top-account.bx-show-sm { display: inline-flex !important; }
   .bx-avatar, .bx-icon-btn { width: 34px; height: 34px; font-size: 12px; }
   .bx-search { order: 3; flex: 1 1 100%; max-width: none; padding: 9px 14px; }
   .bx-hide-sm { display: none !important; }
@@ -575,3 +576,132 @@
 .bx-legal-doc { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; font-size: 14px; }
 .bx-legal-doc:hover { border-color: var(--blue-line); background: var(--blue-soft); }
 .bx-legal-doc svg { width: 15px; height: 15px; color: var(--muted); flex-shrink: 0; }
+
+/* Compact type and spacing: the standard for every workspace page (first built for the Protect page). */
+.bx-main { max-width: 1440px; gap: 14px; padding: 16px 20px 32px; font-size: 13px; }
+.bx-main .bx-col, .bx-main .bx-full, .bx-main .bx-aside { gap: 14px; }
+.bx-main .bx-card { padding: 14px 16px; border-radius: 12px; }
+.bx-main .bx-card.tight { padding: 14px 16px; }
+.bx-main .bx-card h2, .bx-main .bx-card.tight h2 { font-size: 14px; }
+.bx-main .bx-card .sub { font-size: 12px; margin-top: 2px; }
+.bx-main .bx-chart { height: 200px; margin-top: 10px; }
+.bx-main .bx-ranges { margin-top: 6px; }
+.bx-main .bx-ranges button { font-size: 12px; padding: 5px 9px; min-height: 28px; }
+.bx-main .bx-list-h { font-size: 11px; padding: 6px 4px 5px; }
+.bx-main .bx-li { padding: 8px 4px; gap: 10px; }
+.bx-main .bx-who { gap: 10px; }
+.bx-main .bx-who .t { font-size: 13px; }
+.bx-main .bx-who .d { font-size: 12px; }
+.bx-main .bx-panel { padding: 14px; gap: 12px; border-radius: 12px; top: 80px; }
+.bx-main .bx-label { font-size: 12px; margin-bottom: 5px; }
+.bx-main .bx-input, .bx-main .bx-select { padding: 8px 10px; font-size: 13px; border-radius: 9px; }
+.bx-main .bx-field { gap: 4px; }
+.bx-main .bx-field > span:first-child { font-size: 12px; }
+.bx-main .bx-pill { font-size: 12px; min-height: 30px; padding: 5px 4px; }
+.bx-main .bx-seg { padding: 3px; border-radius: 10px; }
+.bx-main .bx-seg button { padding: 6px; font-size: 12px; border-radius: 8px; }
+.bx-main .bx-adjust { padding: 8px 0; }
+.bx-main .bx-adjust > summary { font-size: 13px; }
+.bx-main .bx-quote { padding: 10px 12px; gap: 4px; border-radius: 10px; font-size: 13px; }
+.bx-main .bx-sum { padding: 5px 0; font-size: 13px; }
+.bx-main .bx-sum.total { font-size: 14px; padding-top: 8px; }
+.bx-main .bx-btn { font-size: 13px; min-height: 36px; padding: 8px 14px; }
+.bx-main .bx-btn.block { padding: 10px; font-size: 14px; min-height: 40px; }
+.bx-main .bx-btn.small { min-height: 28px; padding: 5px 10px; font-size: 12px; }
+.bx-main .bx-hint { font-size: 11px; }
+.bx-main p.muted { font-size: 12px; }
+.bx-main .bx-hero-v { font-size: 26px; margin-top: 4px; }
+.bx-main .bx-strip .v { font-size: 16px; }
+.bx-main .bx-cta h3 { font-size: 15px; }
+.bx-main .bx-big input { font-size: 28px; }
+.bx-main .bx-quote-row b { font-size: 16px; }
+.bx .bx-onboard h1 { font-size: 20px; }
+
+/* The Protect page only: two-column trading layout and its one-line chart heading. */
+.bx-dense { grid-template-columns: minmax(0, 1fr) 340px; }
+.bx-dense .bx-col { grid-column: auto; }
+.bx-dense p.muted { font-size: 12px !important; }
+.bx-dense-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bx-dense-head .muted { font-size: 12px; }
+.bx-dense-name { font-size: 15px; font-weight: 600; }
+.bx-dense-spot { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-left: 12px; padding-left: 14px; border-left: 1px solid var(--line); }
+.bx-dense-spot > .num { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+@media (max-width: 960px) {
+  .bx-dense { grid-template-columns: 1fr; padding: 12px 16px 28px; }
+  .bx-dense-spot { margin-left: 0; padding-left: 0; border-left: 0; width: 100%; }
+}
+
+/* Protect page fills the screen like a trading terminal: no page scroll on desktop.
+   The market list and the order panel scroll inside their own areas. */
+@media (min-width: 961px) {
+  .bx-content:has(> .bx-dense) { height: 100dvh; overflow: hidden; }
+  .bx-dense { flex: 1 1 auto; min-height: 0; overflow: hidden; align-items: stretch; grid-template-rows: minmax(0, 1fr); padding-bottom: 14px; }
+  .bx-dense .bx-col { min-height: 0; overflow-y: auto; }
+  .bx-dense .bx-col > .bx-card:first-child { position: sticky; top: 0; z-index: 2; flex: none; }
+  .bx-dense .bx-aside { min-height: 0; overflow-y: auto; }
+  .bx-dense .bx-panel { position: static; }
+  .bx-dense .bx-chart { height: 170px; }
+}
+.bx-dense .bx-buy { padding: 12px 14px; gap: 10px; }
+.bx-dense .bx-buy .bx-adjust { padding: 6px 0; }
+.bx-dense .bx-buy .bx-pills { margin-top: 4px; }
+.bx-dense .bx-buy .bx-pill { min-height: 26px; }
+.bx-dense .bx-buy .bx-choice button { padding: 6px 8px; }
+.bx-dense .bx-buy .bx-choice button.on { padding: 5px 7px; }
+.bx-dense .bx-buy .bx-quote { padding: 8px 10px; }
+.bx-dense .bx-buy .bx-quote-row b { font-size: 14px; }
+.bx-dense .bx-buy .bx-btn.block { padding: 8px; min-height: 36px; font-size: 13px; }
+
+/* Buy panel layout hooks (normal spacing everywhere, packed on the compact Protect page). */
+.bx-adjust-body { display: grid; gap: 16px; margin-top: 14px; }
+.bx-dense { grid-template-columns: minmax(0, 1fr) 380px; }
+.bx-dense .bx-buy { gap: 8px; }
+.bx-dense .bx-buy-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bx-dense .bx-buy-title > div:first-child { font-size: 15px !important; }
+.bx-dense .bx-buy-title > div:last-child { margin-top: 0 !important; }
+.bx-dense .bx-buy .bx-field .bx-label { margin-bottom: 0 !important; }
+.bx-dense .bx-buy .bx-input-unit .bx-input, .bx-dense .bx-buy .bx-input { padding: 6px 8px; }
+/* The date box alone: the day buttons overlapped here, and a length chosen in the market list fills the date in. */
+.bx-dense .bx-until > .bx-pills { display: none; }
+.bx-dense .bx-until > .bx-input { max-width: 180px; }
+.bx-dense .bx-until > .bx-hint { text-align: left; margin-top: 4px !important; }
+.bx-dense .bx-buy .muted[style] { margin-top: 3px !important; }
+.bx-dense .bx-adjust-body { gap: 8px; margin-top: 8px; }
+.bx-dense .bx-strike-in { gap: 6px; }
+.bx-dense .bx-start-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.bx-dense .bx-start-row .bx-pills { display: flex; gap: 4px; margin-top: 0 !important; }
+.bx-dense .bx-start-row .bx-pill { padding: 3px 10px; white-space: nowrap; min-height: 26px; }
+.bx-dense .bx-start-row .muted { margin-top: 0 !important; font-size: 11px !important; }
+.bx-dense .bx-buy .bx-choice { gap: 6px; }
+.bx-dense .bx-buy .bx-choice button { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.bx-dense .bx-buy .bx-choice .p { margin-top: 0; }
+.bx-dense .bx-buy .bx-range { margin: 4px 0 2px; }
+.bx-dense .bx-buy .bx-quote { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 8px; }
+.bx-dense .bx-buy .bx-quote-row { flex-direction: column; align-items: flex-start; font-size: 11px; color: var(--muted); }
+.bx-dense .bx-buy .bx-quote-row b { color: var(--text); }
+.bx-dense .bx-buy .bx-quote-note { grid-column: 1 / -1; margin-top: 2px; }
+
+/* Top bar at the same compact scale as the pages. */
+.bx-top { padding: 10px 20px; gap: 10px; }
+.bx-top .bx-btn { font-size: 13px; min-height: 36px; padding: 8px 14px; }
+.bx-top .bx-balance-pill { font-size: 13px; padding: 8px 12px; }
+.bx-top .bx-search input, .bx-top input[type="search"] { font-size: 13px; }
+.bx-top .bx-search { padding: 7px 14px; }
+
+/* My protections: running cover and ended cover as separate groups. */
+.bx-prot-group-h { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-2); padding: 4px 4px 0; display: flex; gap: 6px; align-items: baseline; }
+.bx-prot-group.ended .bx-li .bx-who .t, .bx-prot-group.ended .bx-li .num { color: var(--muted); }
+.bx-prot-group.ended .bx-li .bx-who img, .bx-prot-group.ended .bx-li .bx-who svg { opacity: 0.6; }
+
+/* A way back from a detail page. */
+.bx-back { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-bottom: 8px; }
+.bx-back svg { width: 14px; height: 14px; }
+
+/* The Ask button lives in the bottom-right corner; every page keeps a clear strip under its content so it never covers anything. */
+@media (min-width: 861px) { .bx-agent-fab { padding: 9px 16px; font-size: 13px; right: 20px; bottom: 16px; } }
+.bx-main { padding-bottom: 72px; }
+@media (min-width: 961px) {
+  .bx-dense { padding-bottom: 14px; }
+  .bx-dense .bx-aside { padding-bottom: 52px; }
+  .bx-dense .bx-col { padding-bottom: 52px; }
+}

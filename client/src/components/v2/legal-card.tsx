@@ -41,7 +41,7 @@ export function LegalCard({ updated }: { updated: boolean }) {
   return (
     <div className="bx-onboard">
       <div className="bx-onboard-card" role="dialog" aria-labelledby="legal-title" style={{ maxWidth: 520 }}>
-        <h1 id="legal-title" style={{ margin: 0, fontSize: 22 }}>{updated ? 'We have updated our terms' : 'Terms of Use and Privacy Policy'}</h1>
+        <h1 id="legal-title" style={{ margin: 0, fontSize: 18 }}>{updated ? 'We have updated our terms' : 'Terms of Use and Privacy Policy'}</h1>
         <p className="sub" style={{ marginTop: 8, lineHeight: 1.55 }}>
           {updated
             ? 'Please review the updated documents below. You need to accept them to keep using BlockFinaX.'

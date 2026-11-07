@@ -152,6 +152,11 @@ export function Workspace() {
   const acting = useActingOrganisation();
   useEffect(() => onActingOrganisationChange(() => { void qc.resetQueries(); }), [qc]);
   const viewOnly = acting?.role === 'viewer';
+  // Which menu item to highlight on a page that has no item of its own: a cover opened from
+  // My protections lights My protections; a pair opened from Markets lights Markets.
+  const parentPage: Page | undefined = page === 'pair'
+    ? (role === 'hedger' ? (pairAt.position ? 'h-protections' : 'h-protect') : 'u-pools')
+    : PARENT[page];
 
   // Terms of Use and Privacy Policy: accepted once per version, before anything else.
   // A failed check shows the card too, so nobody continues without a recorded acceptance.
@@ -192,7 +197,7 @@ export function Workspace() {
         </div>
         <div className="bx-navs">
           {NAV[role].map((n) => (
-            <button key={n.page} data-tour={n.page} className={`bx-nav${page === n.page || PARENT[page] === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
+            <button key={n.page} data-tour={n.page} className={`bx-nav${page === n.page || parentPage === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
           ))}
         </div>
         <div className="bx-rail-foot">
@@ -210,19 +215,10 @@ export function Workspace() {
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
             <button className="bx-balance-pill num bx-hide-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total)} USDC</button>
-            {viewOnly ? null : role === 'hedger' ? (
-              <>
-                <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>
-                <button className="bx-btn" data-tour="protect" onClick={() => go('h-protect', { buy: true })}>Protect an exposure</button>
-              </>
-            ) : (
-              <>
-                <button className="bx-btn ghost bx-hide-sm" onClick={() => go('u-pools')}>Add liquidity</button>
-                <button className="bx-btn" data-tour="create-pool" onClick={() => go('u-create')}>Create pool</button>
-              </>
-            )}
+            {viewOnly ? null : <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
-            <AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" />
+            {/* The sidebar has the account card on desktop; phones, which hide the sidebar, keep this one. */}
+            <span className="bx-top-account bx-show-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
           </div>
         </header>
 
@@ -231,7 +227,7 @@ export function Workspace() {
         {page === 'h-protections' && <MyProtections go={go} />}
         {page === 'h-rates' && <RatesPage go={go} target={ratesAt} />}
         {page === 'wallet' && <WalletPage mode={walletMode} />}
-        {page === 'pair' && pairAt.pair && <PairPage go={go} pair={pairAt.pair} role={role} focus={pairAt.position} />}
+        {page === 'pair' && pairAt.pair && <PairPage key={pairAt.position ?? pairAt.pair} go={go} pair={pairAt.pair} role={role} focus={pairAt.position} />}
         {page === 'account' && <AccountPage go={go} />}
         {page === 'org-settings' && <OrganisationSettingsPage go={go} />}
         {page === 'u-home' && <UnderwriterHome go={go} />}
@@ -250,12 +246,12 @@ export function Workspace() {
         {TABS[role].map((p) => {
           const n = NAV[role].find((x) => x.page === p)!;
           return (
-            <button key={p} data-tour={p} className={`${(page === p || PARENT[page] === p) && !more ? 'on' : ''}${p === 'h-protect' ? ' primary' : ''}`} onClick={() => goTab(p)}>
+            <button key={p} data-tour={p} className={`${(page === p || parentPage === p) && !more ? 'on' : ''}${p === 'h-protect' ? ' primary' : ''}`} onClick={() => goTab(p)}>
               {n.icon}<span>{SHORT[p] ?? n.label}</span>
             </button>
           );
         })}
-        <button className={more || !(TABS[role].includes(page) || TABS[role].includes(PARENT[page] as Page)) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
+        <button className={more || !(TABS[role].includes(page) || TABS[role].includes(parentPage as Page)) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
           {more ? <X /> : <Menu />}<span>More</span>
         </button>
       </nav>

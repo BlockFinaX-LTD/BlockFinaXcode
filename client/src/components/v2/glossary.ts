@@ -46,7 +46,7 @@ export const GLOSSARY: Record<string, string> = {
   'Reserved for protection you back': 'Your money locked behind protection you funded. It returns to your free balance when that protection ends.',
   'Free (withdraw any time)': 'Your money that backs nothing right now, including premiums paid to you. You can withdraw it at any time.',
   'Premiums paid to you': 'Your share of the premiums from protection you funded, paid the moment each one was sold.',
-  'Your premiums': 'Premiums paid to you from protection you funded.',
+  'Your premiums': 'Premiums paid to you from protection you funded. The percentage is your return: those premiums as a share of your capital in the pool.',
   'Payouts you covered': 'Payouts to hedgers that came from your reserved money.',
   'Your capital': 'Your money in this pool: free plus reserved.',
   'Your capital after': 'Your money in the pool after this deposit or withdrawal.',

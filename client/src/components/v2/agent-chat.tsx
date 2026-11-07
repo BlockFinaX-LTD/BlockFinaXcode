@@ -1,5 +1,6 @@
 /**
- * Ask BlockFinaX: the customer agent inside the workspace.
+ * Finax: the customer agent inside the workspace, opened by the Ask button in the bottom-right
+ * corner. Pages keep a clear strip at the bottom (workspace.css) so the button never covers them.
  *
  * The server scopes every thread to the signed-in wallet, so the agent can answer about this
  * user's own protections and limits. The thread id is remembered per user in this browser.
@@ -83,14 +84,14 @@ export function AgentChat() {
   return (
     <>
       {!open && (
-        <button className="bx-agent-fab" onClick={() => setOpen(true)} aria-label="Ask BlockFinaX">
-          <MessageCircle /> <span>Ask BlockFinaX</span>
+        <button className="bx-agent-fab" data-tour="ask" onClick={() => setOpen(true)} aria-label="Ask Finax">
+          <MessageCircle /> <span>Ask</span>
         </button>
       )}
       {open && (
-        <div className="bx-agent" role="dialog" aria-label="Ask BlockFinaX">
+        <div className="bx-agent" role="dialog" aria-label="Finax">
           <div className="bx-agent-h">
-            <div><div style={{ fontWeight: 600 }}>Ask BlockFinaX</div><div className="muted" style={{ fontSize: 12 }}>Answers about protection, pools, limits and your account</div></div>
+            <div><div style={{ fontWeight: 600 }}>Finax</div><div className="muted" style={{ fontSize: 12 }}>Answers about protection, pools, limits and your account</div></div>
             <div style={{ display: 'flex', gap: 6 }}>
               {msgs.length > 0 && <button className="bx-btn ghost small" onClick={newChat}>New chat</button>}
               <button className="bx-icon-btn" aria-label="Close" onClick={() => setOpen(false)}><X /></button>
