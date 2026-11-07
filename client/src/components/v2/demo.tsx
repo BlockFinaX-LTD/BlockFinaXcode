@@ -9,17 +9,6 @@ import { usePasskeySession } from '@/lib/identity';
 import { openContactSales, useIsDemo } from './shared';
 import { Spin } from './ui';
 
-export function DemoBanner() {
-  const demo = useIsDemo();
-  if (!demo) return null;
-  return (
-    <div className="bx-demo-banner" role="note">
-      <span><b>Demo</b> · runs on test networks with test USDC. Nothing here is real money.</span>
-      <button className="bx-demo-cta" onClick={() => openContactSales('banner')}>Want live protection? Contact sales</button>
-    </div>
-  );
-}
-
 /**
  * Testnet or Mainnet. Everyone starts on testnet; mainnet is not open for self-service yet,
  * so choosing it opens the sales form instead of switching.
