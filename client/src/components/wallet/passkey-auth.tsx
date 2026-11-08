@@ -91,18 +91,13 @@ export function PasskeyAuth() {
           </p>
           <Button className="w-full h-11 rounded-xl mt-2" disabled={!!busy} onClick={() => run("create", async () => {
             const created = await createWalletPasskey();
-            // The one agreement: creating the account accepts the Terms and Privacy Policy shown here.
+            // The agreement shown on the sign-in screen is recorded once, when the account is created.
             await api('/api/legal/accept', { terms: TERMS_VERSION, privacy: PRIVACY_VERSION }).catch(() => undefined);
             if (created.errors?.length) setWarning("Your wallet is ready, but part of the setup is still finishing. Signing in again retries.");
             setSession(created);
           })}>
             {spinner("create") ?? <><KeyRound className="h-4 w-4 mr-2" />Create wallet passkey</>}
           </Button>
-          <p className="text-[11px] text-muted-foreground leading-snug">
-            By creating your wallet, you agree to our{" "}
-            <a href="/terms" target="_blank" rel="noreferrer" className="underline">Terms of Use</a> and acknowledge our{" "}
-            <a href="/privacy" target="_blank" rel="noreferrer" className="underline">Privacy Policy</a>.
-          </p>
           {busy === "create" && <p className="text-[11px] text-muted-foreground">Creating your accounts. This takes about 10 seconds.</p>}
           <button className="text-[11.5px] text-muted-foreground underline mt-2" onClick={() => void signOutPasskey().then(() => setSession(null))}>
             Use a different account
@@ -178,13 +173,11 @@ export function PasskeyAuth() {
             New users: sign in with email or Google, then create a passkey for your wallet.
           </p>
         )}
-        {forConnectors && (
-          <p className="text-[11px] text-muted-foreground mt-3 leading-snug">
-            By continuing, you agree to our{" "}
-            <a href="/terms" target="_blank" rel="noreferrer" className="underline">Terms of Use</a> and acknowledge our{" "}
-            <a href="/privacy" target="_blank" rel="noreferrer" className="underline">Privacy Policy</a>.
-          </p>
-        )}
+        <p className="text-[11px] text-muted-foreground mt-3 leading-snug">
+          By signing up or continuing with email or Google, you agree to our{" "}
+          <a href="/terms" target="_blank" rel="noreferrer" className="underline">Terms of Use</a> and acknowledge our{" "}
+          <a href="/privacy" target="_blank" rel="noreferrer" className="underline">Privacy Policy</a>.
+        </p>
         {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
       </div>
     </div>
