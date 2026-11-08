@@ -65,11 +65,12 @@ export function AccountsSection({ token }: { token: string }) {
               <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-xs text-muted-foreground py-1 border-b"><span>Person</span><span>Signed up</span><span>Wallet</span></div>
               {(list.data?.accounts ?? []).map((a) => (
                 <button key={a.id} className={`w-full grid grid-cols-[1fr_auto_auto] gap-2 text-left py-1.5 border-b hover:bg-muted ${open === a.id ? "bg-muted" : ""}`} onClick={() => setOpen(a.id)}>
-                  <span className="min-w-0"><span className="font-medium">{a.name || a.email || `Account ${a.id}`}</span><span className="block text-xs text-muted-foreground truncate">{a.email} · #{a.id}{a.businesses ? ` · ${a.businesses} business` : ""}</span></span>
+                  <span className="min-w-0"><span className="font-medium">{a.name || a.email || `Account ${a.id}`}</span><span className="block text-xs text-muted-foreground truncate">{a.name ? `${a.email} · ` : ""}#{a.id}{a.country ? ` · ${a.country}` : ""}{a.kyc_tier ? ` · tier ${a.kyc_tier}` : ""}{a.businesses ? ` · ${a.businesses} business` : ""}</span></span>
                   <span className="text-xs">{day(a.created_at)}</span>
                   <span className="text-xs">{a.wallet ? short(a.wallet) : <span className="text-muted-foreground">None yet</span>}</span>
                 </button>
               ))}
+              {list.error && <div className="text-red-700 py-4">The list could not be loaded: {(list.error as Error).message}</div>}
               {list.data && !list.data.accounts.length && <div className="text-muted-foreground py-4">No accounts match.</div>}
             </div>
           </CardContent>
@@ -99,7 +100,15 @@ function AccountDetail({ token, id }: { token: string; id: number }) {
         <Row k="Last sign-in" v={when(x.sessions[0]?.created_at) || "Never"} />
         <Block title="Wallets" empty={!x.wallets.length}>{x.wallets.map((w: any) => <Row key={w.address} k={`${w.network_key} · ${w.account_type ?? w.wallet_provider}`} v={<code className="text-xs">{w.address}</code>} />)}</Block>
         <Block title="Passkeys" empty={!x.passkeys.length}>{x.passkeys.map((p: any) => <Row key={p.id} k="Added" v={when(p.created_at)} />)}</Block>
-        <Block title="Identity check" empty={!x.kyc.length}>{x.kyc.map((k: any) => <Row key={k.wallet_address} k={`Tier ${k.kyc_tier ?? 0}`} v={`${k.kyc_status ?? "not started"}${k.country ? ` · ${k.country}` : ""}`} />)}</Block>
+        <Block title="Identity check" empty={!x.kyc.length}>{x.kyc.map((k: any) => (
+          <div key={k.wallet_address}>
+            {(k.display_name || k.first_name || k.last_name) && <Row k="Name" v={k.display_name || `${k.first_name ?? ""} ${k.last_name ?? ""}`.trim()} />}
+            {k.company_name && <Row k="Company" v={k.company_name} />}
+            {k.phone_number && <Row k="Phone" v={k.phone_number} />}
+            {k.country && <Row k="Country" v={k.country} />}
+            <Row k={`Tier ${k.kyc_tier ?? 0}`} v={k.kyc_status ?? "not started"} />
+          </div>
+        ))}</Block>
         <Block title="Terms and privacy" empty={!x.terms.length}>{x.terms.map((t: any, i: number) => <Row key={i} k={`${t.document} ${t.version}`} v={`${when(t.accepted_at)}${t.ip ? ` · ${t.ip}` : ""}`} />)}</Block>
         <Block title="Businesses" empty={!x.businesses.length}>{x.businesses.map((b: any) => <Row key={b.id} k={b.name} v={`${b.role} · ${b.status}`} />)}</Block>
         <Block title="Complaints" empty={!x.complaints.length}>{x.complaints.map((c: any) => <Row key={c.id} k={`#${c.id} ${c.subject}`} v={`${c.status} · ${day(c.received_at)}`} />)}</Block>

@@ -12,7 +12,13 @@ async function getDb(): Promise<Db> {
   if (!pool) throw new Error("No database");
   return pool as unknown as Db;
 }
-const rows = async (db: Db, sql: string, params: unknown[] = []) => { try { return (await db.query(sql, params)).rows; } catch { return []; } };
+/** One section of a person's record; a table not created yet on this deployment simply has nothing. */
+const rows = async (db: Db, sql: string, params: unknown[] = []) => {
+  try { return (await db.query(sql, params)).rows; } catch (err) {
+    if (!/does not exist/.test((err as Error).message)) console.warn(`[records] accounts: ${(err as Error).message}`);
+    return [];
+  }
+};
 
 export async function accountsSummary(days = 30) {
   const db = await getDb();
@@ -36,20 +42,40 @@ export async function accountsSummary(days = 30) {
   return { ...(totals ?? { total: 0, last7: 0, last14: 0, last30: 0 }), byDay, funnel: funnel ?? { with_wallet: 0, accepted_terms: 0, active7: 0 } };
 }
 
+/** Which optional tables exist here: some are created on first use, so a fresh deployment lacks them. */
+async function existing(db: Db, names: string[]): Promise<Set<string>> {
+  const { rows: found } = await db.query(`SELECT name FROM unnest($1::text[]) AS name WHERE to_regclass(name) IS NOT NULL`, [names]);
+  return new Set(found.map((r) => r.name));
+}
+
+/**
+ * Everyone who signed up. Their email is saved at sign-up; a name and country they give in
+ * the identity check are shown when the account itself has none.
+ */
 export async function listAccounts(search = "", limit = 200) {
   const db = await getDb();
+  const has = await existing(db, ["auth_sessions", "chain_wallet_accounts", "webauthn_credentials", "legal_acceptances", "business_account_members", "user_profiles"]);
   const q = `%${search.trim().toLowerCase()}%`;
-  return rows(db, `
-    SELECT u.id, u.email, u.name, u.created_at,
-           (SELECT max(s.created_at) FROM auth_sessions s WHERE s.user_id = u.id) AS last_sign_in,
-           (SELECT w.address FROM chain_wallet_accounts w WHERE w.user_id = u.id AND w.status = 'active' ORDER BY w.id LIMIT 1) AS wallet,
-           (SELECT count(*)::int FROM webauthn_credentials c WHERE c.user_id = u.id) AS passkeys,
-           (SELECT max(l.accepted_at) FROM legal_acceptances l WHERE l.user_id = u.id) AS terms_accepted_at,
-           (SELECT count(*)::int FROM business_account_members m WHERE m.user_id = u.id AND m.status = 'active') AS businesses
+  const withWallets = has.has("chain_wallet_accounts");
+  const withProfiles = has.has("user_profiles") && withWallets;
+  const { rows: list } = await db.query(`
+    SELECT u.id, u.email, u.created_at,
+           COALESCE(NULLIF(u.name, ''), NULLIF(p.display_name, ''), NULLIF(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), '')) AS name,
+           p.country, p.kyc_tier,
+           ${has.has("auth_sessions") ? "(SELECT max(s.created_at) FROM auth_sessions s WHERE s.user_id = u.id)" : "NULL"} AS last_sign_in,
+           ${withWallets ? "(SELECT w.address FROM chain_wallet_accounts w WHERE w.user_id = u.id AND w.status = 'active' ORDER BY w.id LIMIT 1)" : "NULL"} AS wallet,
+           ${has.has("webauthn_credentials") ? "(SELECT count(*)::int FROM webauthn_credentials c WHERE c.user_id = u.id)" : "0"} AS passkeys,
+           ${has.has("legal_acceptances") ? "(SELECT max(l.accepted_at) FROM legal_acceptances l WHERE l.user_id = u.id)" : "NULL"} AS terms_accepted_at,
+           ${has.has("business_account_members") ? "(SELECT count(*)::int FROM business_account_members m WHERE m.user_id = u.id AND m.status = 'active')" : "0"} AS businesses
     FROM user_accounts u
-    WHERE ($1 = '%%' OR lower(coalesce(u.email,'')) LIKE $1 OR lower(coalesce(u.name,'')) LIKE $1 OR u.id::text = trim($2)
-           OR EXISTS (SELECT 1 FROM chain_wallet_accounts w WHERE w.user_id = u.id AND lower(w.address) LIKE $1))
+    ${withProfiles
+      ? `LEFT JOIN LATERAL (SELECT pr.display_name, pr.first_name, pr.last_name, pr.country, pr.kyc_tier FROM user_profiles pr
+           JOIN chain_wallet_accounts w ON lower(w.address) = lower(pr.wallet_address) WHERE w.user_id = u.id ORDER BY pr.id DESC LIMIT 1) p ON true`
+      : "LEFT JOIN LATERAL (SELECT NULL::text AS display_name, NULL::text AS first_name, NULL::text AS last_name, NULL::text AS country, NULL::int AS kyc_tier) p ON true"}
+    WHERE ($1 = '%%' OR lower(coalesce(u.email, '')) LIKE $1 OR lower(coalesce(u.name, '')) LIKE $1 OR u.id::text = trim($2)
+           ${withWallets ? "OR EXISTS (SELECT 1 FROM chain_wallet_accounts w WHERE w.user_id = u.id AND lower(w.address) LIKE $1)" : ""})
     ORDER BY u.created_at DESC NULLS LAST LIMIT $3`, [q, search, Math.min(Math.max(limit, 1), 1000)]);
+  return list;
 }
 
 export async function accountDetail(id: number, staff: string) {
@@ -61,7 +87,7 @@ export async function accountDetail(id: number, staff: string) {
   const [passkeys, sessions, kyc, terms, businesses, complaints, deletion, activity] = await Promise.all([
     rows(db, `SELECT id, created_at FROM webauthn_credentials WHERE user_id = $1 ORDER BY id`, [id]),
     rows(db, `SELECT created_at, expires_at FROM auth_sessions WHERE user_id = $1 ORDER BY id DESC LIMIT 10`, [id]),
-    rows(db, `SELECT wallet_address, kyc_status, kyc_tier, country, submitted_at, reviewed_at FROM user_profiles WHERE lower(wallet_address) = ANY($1)`, [addresses]),
+    rows(db, `SELECT wallet_address, display_name, first_name, last_name, phone_number, company_name, country, kyc_status, kyc_tier, submitted_at, reviewed_at FROM user_profiles WHERE lower(wallet_address) = ANY($1)`, [addresses]),
     rows(db, `SELECT document, version, accepted_at, ip FROM legal_acceptances WHERE user_id = $1 ORDER BY id`, [id]),
     rows(db, `SELECT b.id, b.name, b.status, m.role FROM business_account_members m JOIN business_accounts b ON b.id = m.organisation_id WHERE m.user_id = $1 AND m.status = 'active'`, [id]),
     rows(db, `SELECT id, category, subject, status, received_at FROM complaints WHERE user_id = $1 ORDER BY id DESC`, [id]),
