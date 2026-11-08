@@ -158,13 +158,13 @@ export function Workspace() {
     ? (role === 'hedger' ? (pairAt.position ? 'h-protections' : 'h-protect') : 'u-pools')
     : PARENT[page];
 
-  // Terms of Use and Privacy Policy: accepted once per version, before anything else.
-  // A failed check shows the card too, so nobody continues without a recorded acceptance.
+  // Terms of Use and Privacy Policy: a new account accepts them once, right after it is created.
+  // Existing accounts are never stopped here, and a failed check does not block anyone.
   const legal = useLegalStatus(session?.user.id ?? null);
   if (session && legal.isPending) {
     return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
   }
-  if (session && (legal.isError || legal.data?.needsAcceptance)) {
+  if (session && legal.data?.needsAcceptance) {
     return <div className="bx" data-theme={theme}><LegalCard updated={Boolean(legal.data?.updated)} /></div>;
   }
 

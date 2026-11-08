@@ -8,7 +8,7 @@
  * there is a record of exactly what each person agreed to and when. Table created on first use.
  */
 import type { Express, NextFunction, Request, Response } from "express";
-import { PRIVACY_VERSION, TERMS_VERSION } from "@shared/legal";
+import { ACCEPTANCE_REQUIRED_FROM, PRIVACY_VERSION, TERMS_VERSION } from "@shared/legal";
 import { getSession } from "../auth-routes";
 
 let ready: Promise<void> | null = null;
@@ -53,9 +53,14 @@ export function registerLegalRoutes(app: Express) {
     const session = await getSession(req);
     if (!session?.userId) return res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Sign in first" } });
     const s = await legalStatus(session.userId);
-    // Accepted an earlier version: the card says the documents were updated.
-    const { rows: [prior] } = await (await legalDb()).query(`SELECT 1 FROM legal_acceptances WHERE user_id = $1 LIMIT 1`, [session.userId]);
-    res.json({ ...s, needsAcceptance: !s.terms.accepted || !s.privacy.accepted, updated: Boolean(prior) });
+    // Asked once, as a new account: never if this account accepted any version before, and never
+    // for accounts that existed before the acceptance step launched (shared/legal.ts).
+    const db = await legalDb();
+    const { rows: [prior] } = await db.query(`SELECT 1 FROM legal_acceptances WHERE user_id = $1 LIMIT 1`, [session.userId]);
+    const { rows: [account] } = await db.query(`SELECT created_at FROM user_accounts WHERE id = $1`, [session.userId]).catch(() => ({ rows: [] as any[] }));
+    const createdAt = account?.created_at ? new Date(account.created_at).getTime() : Date.now();
+    const existedBefore = createdAt < Date.parse(ACCEPTANCE_REQUIRED_FROM);
+    res.json({ ...s, needsAcceptance: !prior && !existedBefore, updated: false });
   }));
 
   app.post("/api/legal/accept", wrap(async (req, res) => {
