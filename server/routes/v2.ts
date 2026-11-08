@@ -25,7 +25,7 @@
  */
 import type { Express, NextFunction, Request, Response } from "express";
 import { hedgePairs } from "@shared/domain/hedge-pairs";
-import { ApplicationError, parseResourceId, type ApplicationErrorCode, type ChainKey, type ProtectionQuote, type ProtectionRequest } from "@shared/domain/types";
+import { ApplicationError, parseResourceId, type ApplicationErrorCode, type ChainKey, type CurrencyPool, type ProtectionPosition, type ProtectionQuote, type ProtectionRequest } from "@shared/domain/types";
 import { AdapterRegistry } from "../chain";
 import { chainRegistry, registryLoadError } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
@@ -150,6 +150,19 @@ async function ownerOn(s: Services, uid: number, chain: ChainKey, req?: Request)
   const book = await s.accounts.addressBook(uid);
   if (!book[chain]) throw new ApplicationError("INVALID_REQUEST", `No ${chain} account yet; link one first`);
   return book[chain];
+}
+
+/** Pool pair, payout fee and decimals for listing cover; cached briefly per contract and pool. */
+const POOL_META_TTL_MS = 5 * 60_000;
+const poolMetaCache = new Map<string, { at: number; value: Promise<{ pair: string; payoutFeeRateE6: number; decimals: number }> }>();
+function poolMeta(chain: string, adapter: { getPool(id: number): Promise<CurrencyPool> }, poolId: number) {
+  const key = `${chain}:${(adapter as { poolId?: string }).poolId ?? "main"}:${poolId}`;
+  const hit = poolMetaCache.get(key);
+  if (hit && Date.now() - hit.at < POOL_META_TTL_MS) return hit.value;
+  const value = adapter.getPool(poolId).then((p) => ({ pair: p.pair, payoutFeeRateE6: p.fees.payoutFeeRateE6, decimals: p.asset.decimals }));
+  value.catch(() => poolMetaCache.delete(key)); // never cache a failure
+  poolMetaCache.set(key, { at: Date.now(), value });
+  return value;
 }
 
 export function registerV2Routes(app: Express) {
@@ -409,20 +422,31 @@ export function registerV2Routes(app: Express) {
     res.json({ transactions });
   }));
 
+  /**
+   * A customer's cover across every settling chain and pool contract (current and earlier).
+   * Contracts are read in parallel, and each pool's pair and payout fee once, from a short
+   * cache: they change rarely, and reading them per cover made this the slowest page.
+   */
   app.get("/api/v2/hedges", wrap(async (req, res) => {
     const s = await getServices();
     const book = await bookFor(s, await userId(req), req);
-    const out = [];
+    const jobs: Promise<{ position: ProtectionPosition; pair: string; settlement: ReturnType<typeof settlementResult> }[]>[] = [];
     for (const chain of chainRegistry()!.settlementNetworks()) {
-      if (!book[chain.key]) continue;
+      const owner = book[chain.key];
+      if (!owner) continue;
       for (const adapter of s.adapters.adaptersFor(chain.key)) {
-        for (const p of await adapter.listPositions(book[chain.key])) {
-          const pool = await adapter.getPool(p.poolId);
-          out.push({ position: p, pair: pool.pair, settlement: settlementResult(p, pool.fees.payoutFeeRateE6, pool.asset.decimals) });
-        }
+        jobs.push((async () => {
+          const positions = await adapter.listPositions(owner);
+          const ids = Array.from(new Set(positions.map((p) => p.poolId)));
+          const meta = new Map(await Promise.all(ids.map(async (id) => [id, await poolMeta(chain.key, adapter, id)] as const)));
+          return positions.map((p) => {
+            const m = meta.get(p.poolId)!;
+            return { position: p, pair: m.pair, settlement: settlementResult(p, m.payoutFeeRateE6, m.decimals) };
+          });
+        })());
       }
     }
-    res.json({ hedges: out });
+    res.json({ hedges: (await Promise.all(jobs)).flat() });
   }));
 
   app.get("/api/v2/hedges/:ref", wrap(async (req, res) => {

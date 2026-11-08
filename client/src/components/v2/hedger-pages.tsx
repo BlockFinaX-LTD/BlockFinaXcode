@@ -29,6 +29,9 @@ function useHedges() {
     queryKey: ['v2-hedges'],
     queryFn: async () => (await api<{ hedges: Hedge[] }>('/api/v2/hedges')).hedges,
     refetchInterval: 30_000,
+    // Show the list already loaded while it refreshes; it changes only on purchase, fixing or claim.
+    staleTime: 20_000,
+    placeholderData: (previous) => previous,
   });
 }
 
