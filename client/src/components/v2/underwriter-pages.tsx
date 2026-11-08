@@ -181,6 +181,11 @@ export function UnderwriterHome({ go }: { go: Go }) {
         </div>
       </section>
       <aside className="bx-aside">
+        <div className="bx-cta">
+          <h3>Earn premiums</h3>
+          <p>Back currency protection with USDC and earn the premiums businesses pay. Add liquidity to a pool, or create one for a new currency.</p>
+          <button onClick={() => go('u-pools')}>Get started</button>
+        </div>
         <div className="bx-card tight">
           <h2 style={{ marginBottom: 4 }}>Upcoming capital releases</h2>
           {!upcoming.length ? <div className="bx-empty">No capital is reserved right now.</div> : upcoming.map(([day, amount]) => (
