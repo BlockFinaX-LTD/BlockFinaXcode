@@ -28,6 +28,7 @@ import type { OrganisationRole } from '@shared/organisations';
 import { CREATE_BUSINESS_FLAG } from './account-menu';
 import { Note, Spin, Sum, Tag } from './ui';
 import type { Go } from './workspace';
+import { BusinessVerificationCard } from './records';
 
 const ROLE_LABEL: Record<OrganisationRole, string> = { admin: 'Admin', operator: 'Operator', viewer: 'Viewer' };
 const ROLE_HELP: Record<OrganisationRole, string> = {
@@ -182,6 +183,7 @@ export function OrganisationSettingsPage({ go }: { go: Go }) {
       <section className="bx-col">
         <DetailsCard view={view} check={check} onRetried={() => load(view.id)} />
         <MembersCard view={view} config={config} onChanged={() => load(view.id)} />
+        <BusinessVerificationCard organisationId={view.id} isAdmin={view.myRole === 'admin'} />
       </section>
       <aside className="bx-aside">
         <ActivityCard view={view} />

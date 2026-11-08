@@ -396,7 +396,17 @@ export function registerV2Routes(app: Express) {
     if ((await ownerOn(s, uid, chain, req)) !== quote.buyer) throw new ApplicationError("UNAUTHORIZED", "Quote was issued to a different account");
     chainRegistry()!.require(chain, "newHedges");
     await enforceVerification(s, uid, { cashUsd: Number(quote.economic.totalCost), exposureUsd: Number(quote.economic.maxPayout) });
-    res.json({ transactions: await s.adapters.adapterFor(chain).prepareHedge(quote.buyer, quote) });
+    const transactions = await s.adapters.adapterFor(chain).prepareHedge(quote.buyer, quote);
+    // The quote and the key facts the customer saw, recorded before they sign (records/log.ts).
+    const { record } = await import("../records/log");
+    const { keyFacts } = await import("../records/key-facts");
+    await record({
+      actor: { type: "user", id: String(uid) },
+      action: "cover.quote_accepted",
+      subject: { type: "account", id: quote.buyer },
+      data: { pair: quote.economic.pair, quote, keyFacts: keyFacts(quote.economic, quote.expiresAt), organisationId: Number(req.header("x-bfx-organisation")) || null },
+    });
+    res.json({ transactions });
   }));
 
   app.get("/api/v2/hedges", wrap(async (req, res) => {
@@ -543,7 +553,13 @@ export function registerV2Routes(app: Express) {
     const s = await getServices();
     if (!s.routing.cctpEnabled) throw new ApplicationError("CHAIN_NOT_ENABLED", "Cross-network transfers are not enabled on this deployment");
     personalOnly(req, "Moving money between networks");
-    const request = await routeRequest(s, await userId(req), req.body);
+    const uid = await userId(req);
+    const request = await routeRequest(s, uid, req.body);
+    // Travel Rule: to your own wallet it is recorded as "self"; to someone else, their details are required.
+    const own = Object.values(await s.accounts.addressBook(uid)).some((a) => String(a).toLowerCase() === request.recipient.toLowerCase());
+    const { travelRuleFor } = await import("../records/store");
+    await travelRuleFor(uid, null, { chain: request.destinationChain, asset: "USDC", amount: Number(request.amount), to: request.recipient },
+      own ? { beneficiaryType: "self" } : req.body?.travelRule);
     const quotes = await s.routing.engine.quote(request);
     const best = quotes.find((q) => q.quote.provider !== "direct") ?? quotes[0];
     if (!best) throw new ApplicationError("NO_ROUTE", "No route between these networks right now");
@@ -600,7 +616,11 @@ export function registerV2Routes(app: Express) {
     const s = await getServices();
     const { chain, symbol, to, amount } = req.body ?? {};
     if (typeof chain !== "string" || typeof to !== "string" || typeof amount !== "string") throw new ApplicationError("INVALID_REQUEST", "chain, to and amount are required");
-    const owner = await ownerOn(s, await userId(req), chain, req);
+    const uid = await userId(req);
+    const owner = await ownerOn(s, uid, chain, req);
+    // Travel Rule: at or above the threshold, the recipient's details are required and kept.
+    const { travelRuleFor } = await import("../records/store");
+    await travelRuleFor(uid, Number(req.header("x-bfx-organisation")) || null, { chain, asset: String(symbol ?? "USDC"), amount: Number(amount), to: to.trim() }, req.body?.travelRule);
     res.json({ chain, transactions: await s.adapters.adapterFor(chain).prepareTransfer(owner, to.trim(), String(symbol ?? "USDC"), amount) });
   }));
 
@@ -617,9 +637,20 @@ export function registerV2Routes(app: Express) {
     // Acting for an organisation: its account, with the member's role deciding what may be sent.
     const org = await actingOrganisation(req, uid, String(chain) as ChainKey);
     try {
-      res.json(org
+      const account = org ? org.account : await ownerOn(s, uid, String(chain), req);
+      const result = org
         ? await adapter.relayUserTransaction(xdr, org.account, { organisationRole: org.role })
-        : await adapter.relayUserTransaction(xdr, await ownerOn(s, uid, String(chain), req)));
+        : await adapter.relayUserTransaction(xdr, account);
+      const { recordSoon } = await import("../records/log");
+      const { describeCall } = await import("../records/key-facts");
+      const r = result as { hash?: string; state?: string };
+      recordSoon({
+        actor: { type: "user", id: String(uid) },
+        action: "transaction.relayed",
+        subject: { type: "account", id: account },
+        data: { chain, ...describeCall(xdr, chainRegistry()!.get(String(chain) as ChainKey).networkId), hash: r?.hash ?? null, state: r?.state ?? null, organisationId: org ? Number(req.header("x-bfx-organisation")) || null : null, role: org?.role ?? null },
+      });
+      res.json(result);
     } finally {
       adapter.forgetPools?.(); // pools read while it was landing may be out of date
     }

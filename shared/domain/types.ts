@@ -88,6 +88,8 @@ export const APPLICATION_ERROR_CODES = [
   "UNAUTHORIZED",
   /** Mainnet: the user must be verified, or verified to a higher tier, first. */
   "VERIFICATION_REQUIRED",
+  /** A transfer at or above the Travel Rule threshold needs the recipient's details. */
+  "TRAVEL_RULE_REQUIRED",
   "TRANSACTION_REJECTED",
   "PAUSED",
   "INVALID_REQUEST",

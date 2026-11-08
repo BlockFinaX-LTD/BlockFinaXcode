@@ -43,6 +43,8 @@ export interface OracleEngineDeps {
   fetchPrices(pairs: string[]): Promise<Record<string, number>>;
   now(): number;
   log(message: string): void;
+  /** Called after each confirmed rate submission, so the evidence can be recorded. */
+  onSubmitted?(e: { chain: ChainKey; contract: string | null; positionId: string; pair: string; price: string; hash: string | null }): void;
 }
 
 /** One poll across every settling chain. Never throws; failures are reported per hedge. */
@@ -108,6 +110,7 @@ export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngin
       state.submittedAt.set(key, now);
       state.lastPrice.set(pair, price);
       report.submitted.push(key);
+      deps.onSubmitted?.({ chain, contract: contract ?? null, positionId: String(position.positionId), pair, price: price.toFixed(6), hash: (sent as { hash?: string }).hash ?? null });
       if ((await adapter.getOracleState(position.positionId)).resolved) {
         const s = await adapter.settle(position.positionId, signer);
         if (s.state === "CONFIRMED") report.settled.push(key);

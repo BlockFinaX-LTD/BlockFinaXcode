@@ -28,6 +28,7 @@ import { LoiSection } from "@/components/admin/loi-section";
 import { AgentSection } from "@/components/admin/agent-section";
 import { ComplianceSection } from "@/components/admin/compliance-section";
 import { ConnectorsSection } from "@/components/admin/connectors-section";
+import { RecordsSection } from "@/components/admin/records-section";
 import { XSignalsSection } from "@/components/admin/x-signals-section";
 import { InternalDocsSection } from "@/components/admin/internal-docs-section";
 import { SecurityChecksSection } from "@/components/admin/security-checks-section";
@@ -47,12 +48,13 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "docs" | "dashboard" | "agent" | "compliance" | "connectors" | "xsignals" | "devdocs" | "security" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "docs" | "dashboard" | "agent" | "compliance" | "records" | "connectors" | "xsignals" | "devdocs" | "security" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   { key: "agent", label: "Agent", icon: Bot },
   { key: "compliance", label: "Compliance", icon: Scale },
+  { key: "records", label: "Records", icon: FileSignature },
   { key: "connectors", label: "Connectors", icon: Handshake },
   { key: "xsignals", label: "X signals", icon: Radar },
   { key: "users", label: "Users", icon: Users },
@@ -2959,6 +2961,7 @@ function AdminLayout({
         {section === "agreements" && <LoiSection token={adminToken} />}
         {section === "agent" && <AgentSection token={adminToken} />}
         {section === "compliance" && <ComplianceSection token={adminToken} />}
+        {section === "records" && <RecordsSection token={adminToken} />}
         {section === "connectors" && <ConnectorsSection token={adminToken} />}
         {section === "xsignals" && <XSignalsSection token={adminToken} />}
         {section === "devdocs" && <InternalDocsSection token={adminToken} />}

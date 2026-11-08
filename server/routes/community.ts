@@ -378,32 +378,12 @@ export function registerCommunityRoutes(app: Express) {
     }
   });
 
-  app.get("/api/terms/accepted/:address", async (req, res) => {
-    try {
-      const { address } = req.params;
-      const row = await db.select().from(termsAcceptances)
-        .where(and(eq(termsAcceptances.walletAddress, address.toLowerCase()), eq(termsAcceptances.version, "1.0")))
-        .limit(1);
-      res.json({ accepted: row.length > 0, acceptedAt: row[0]?.acceptedAt ?? null });
-    } catch {
-      res.status(500).json({ error: "Failed to check acceptance" });
-    }
-  });
-
-  app.post("/api/terms/accept", async (req, res) => {
-    const termsToken = (req.headers['x-session-token'] as string) || null;
-    if (!termsToken) return res.status(401).json({ error: 'Authentication required' });
-    const [termsSess] = await db.select().from(authSessions).where(eq(authSessions.sessionToken, termsToken));
-    if (!termsSess || termsSess.expiresAt < new Date()) return res.status(401).json({ error: 'Session expired' });
-    try {
-      const { walletAddress, version } = req.body;
-      if (!walletAddress || !version) return res.status(400).json({ error: "Missing fields" });
-      await db.insert(termsAcceptances).values({ walletAddress: walletAddress.toLowerCase(), version }).onConflictDoNothing();
-      res.json({ success: true });
-    } catch {
-      res.status(500).json({ error: "Failed to record acceptance" });
-    }
-  });
+  // Retired: acceptances of the old wallet-based terms (Base app). The Terms of Use and Privacy
+  // Policy are now accepted per signed-in person and version at /api/legal (server/legal), the
+  // single source of truth. The terms_acceptances table is kept, unchanged, as history.
+  const termsRetired = (_req: unknown, res: any) => res.status(410).json({ error: "Retired. Use /api/legal/status and /api/legal/accept." });
+  app.get("/api/terms/accepted/:address", termsRetired);
+  app.post("/api/terms/accept", termsRetired);
 
   app.get("/api/articles", async (_req, res) => {
     try {

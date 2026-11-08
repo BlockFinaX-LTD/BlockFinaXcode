@@ -5,6 +5,7 @@
  * supports multiple admin recipients via ADMIN_EMAILS (comma-separated),
  * and falls back to logging when no key is configured (dev mode).
  */
+import { createHash } from 'node:crypto';
 import { Resend } from 'resend';
 import { signatureFor, signatureHtml, signOffHtml, type SignOff } from './brand';
 
@@ -122,7 +123,26 @@ interface SendArgs {
   headers?: Record<string, string>;
 }
 
+/**
+ * Every email is recorded in the compliance log (records/log.ts): recipients as a hash, the
+ * subject, a hash of the body and whether it was accepted, so we can prove what we told a
+ * customer and when without keeping their address in the permanent log.
+ */
 async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string }> {
+  const result = await deliverEmail(args);
+  void import('./records/log').then(({ recordSoon, hashId }) => {
+    const to = (Array.isArray(args.to) ? args.to : [args.to]).map(hashId);
+    recordSoon({
+      actor: { type: 'system', id: 'email' },
+      action: 'email.sent',
+      subject: { type: 'email', id: to[0] ?? 'none' },
+      data: { to, subject: args.subject, bodySha256: createHash('sha256').update(args.html ?? '').digest('hex'), ok: result.ok, error: result.error },
+    });
+  }).catch(() => undefined);
+  return result;
+}
+
+async function deliverEmail(args: SendArgs): Promise<{ ok: boolean; error?: string }> {
   const recipients = Array.isArray(args.to) ? args.to : [args.to];
   if (!resend) {
     console.log(`[email:dev] would send to ${recipients.join(', ')} | subject="${args.subject}"`);

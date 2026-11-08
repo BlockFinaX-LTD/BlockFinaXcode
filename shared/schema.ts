@@ -462,6 +462,7 @@ export const pairClassification = pgTable("pair_classification", {
 export type PairClassification = typeof pairClassification.$inferSelect;
 export type InsertPairClassification = typeof pairClassification.$inferInsert;
 
+/** Retired: old wallet-based terms (Base app), kept as history. Acceptances now live in legal_acceptances (server/legal). */
 export const termsAcceptances = pgTable("terms_acceptances", {
   id: serial("id").primaryKey(),
   walletAddress: text("wallet_address").notNull(),

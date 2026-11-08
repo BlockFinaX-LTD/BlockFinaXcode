@@ -11,7 +11,6 @@
  */
 import { AdapterRegistry } from "../chain";
 import { chainRegistry } from "../chain/config";
-import { enginePricer } from "./quote-service";
 import { newOracleState, ORACLE_POLICY, runOracleEngine, type OracleEngineState } from "./oracle-engine";
 
 export function startPoolOracleRunner(): void {
@@ -30,7 +29,10 @@ export function startPoolOracleRunner(): void {
     if (running) return;
     running = true;
     try {
-      const pricer = await enginePricer();
+      const { getRate } = await import("../fx-oracle");
+      const { recordSoon } = await import("../records/log");
+      // Evidence for each fixing: the source and raw value each rate came from, kept with the submission.
+      const evidence = new Map<string, { rate: number; source: string; fetchedAt: string }>();
       for (let i = 0; i < secrets.length; i++) {
         const report = await runOracleEngine({
           chains,
@@ -40,10 +42,21 @@ export function startPoolOracleRunner(): void {
           fetchPrices: async (pairs) => {
             const out: Record<string, number> = {};
             for (const p of pairs) {
-              try { out[p] = Number(await pricer.spot(p)); } catch { /* reported per hedge as no price */ }
+              try {
+                const r = await getRate(p);
+                if (!r) continue; // reported per hedge as no price
+                out[p] = Number(r.rate);
+                evidence.set(p, { rate: Number(r.rate), source: String((r as { source?: string }).source ?? "unknown"), fetchedAt: new Date().toISOString() });
+              } catch { /* reported per hedge as no price */ }
             }
             return out;
           },
+          onSubmitted: (e) => recordSoon({
+            actor: { type: "oracle", id: `operator-${i + 1}` },
+            action: "fixing.submitted",
+            subject: { type: "position", id: `${e.chain}:${e.contract ?? "current"}:${e.positionId}` },
+            data: { ...e, evidence: evidence.get(e.pair) ?? null },
+          }),
           now: () => Math.floor(Date.now() / 1000),
           log: (m) => console.warn(`[PoolOracle] ${m}`),
         }, states[i]);

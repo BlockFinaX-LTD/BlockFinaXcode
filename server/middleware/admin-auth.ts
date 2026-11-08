@@ -84,7 +84,47 @@ export function requireAdmin(req: any, res: any, next: any) {
   // Downstream handlers read this rather than the map, so attribution can't
   // drift from the token that was actually presented.
   req.adminEmail = session.email;
+  recordStaffActivity(req, res, session.email);
   next();
+}
+
+/** Admin reads that open someone's personal or financial data. */
+const SENSITIVE_READ = /\/(kyc|users?|profiles?|documents?|proofs?|positions|hedges?|withdrawals|wallets?|signatures|sanctions|alerts|compliance|organisations?|otc)(\/|$|\?)/i;
+const REDACT = /secret|password|token|private|mnemonic|seed|key|signature|^data$|file|image|base64/i;
+
+/** A request body for the log: field names kept, sensitive values and large blobs removed. */
+function redactBody(body: unknown, depth = 0): unknown {
+  if (body === null || body === undefined) return undefined;
+  if (typeof body === "string") return body.length > 300 ? `${body.slice(0, 300)}…` : body;
+  if (typeof body !== "object") return body;
+  if (depth > 3) return "[nested]";
+  if (Array.isArray(body)) return body.slice(0, 20).map((v) => redactBody(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body as Record<string, unknown>).slice(0, 40)) out[k] = REDACT.test(k) ? "[redacted]" : redactBody(v, depth + 1);
+  return out;
+}
+
+/**
+ * Every staff change (any method other than GET) is written to the compliance log with who,
+ * what, when and the result; reads that open personal or financial data are logged as views.
+ * The records API logs its own views, so it is skipped here.
+ */
+function recordStaffActivity(req: any, res: any, email: string) {
+  if (req.__staffRecorded) return; // guarded twice (global /api/admin gate and the route's own)
+  req.__staffRecorded = true;
+  const method = String(req.method || "GET").toUpperCase();
+  const path = String(req.originalUrl || req.url || "").split("?")[0];
+  const isRead = method === "GET" || method === "HEAD" || method === "OPTIONS";
+  if (isRead && (!SENSITIVE_READ.test(path) || path.startsWith("/api/admin/records/"))) return;
+  res.on("finish", () => {
+    if (isRead && res.statusCode >= 400) return;
+    import("../records/log").then(({ recordSoon }) => recordSoon({
+      actor: { type: "staff", id: email },
+      action: isRead ? "data.viewed" : "staff.action",
+      subject: { type: "endpoint", id: `${method} ${path}` },
+      data: isRead ? { path } : { method, path, status: res.statusCode, body: redactBody(req.body) },
+    })).catch(() => undefined);
+  });
 }
 
 /**
@@ -104,5 +144,6 @@ export function requireApprover(req: any, res: any, next: any) {
     });
   }
   req.adminEmail = session.email;
+  recordStaffActivity(req, res, session.email);
   next();
 }

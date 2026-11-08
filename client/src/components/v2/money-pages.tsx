@@ -9,11 +9,12 @@ import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
-import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
+import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain, type TravelRuleDetails } from '@/lib/wallets/passkey-wallet';
 import { useWalletCheck, type WalletCheck } from '@/lib/wallets/verify-wallet';
 import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
+import { ComplaintsCard, YourDataCard } from './records';
 import { OrganisationCard } from './organisation-card';
 import type { Go } from './workspace';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
@@ -189,12 +190,23 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
   const name = accounts.find((a) => a.chain === hub)?.name ?? 'Stellar';
   const have = usdcOn(balances.data?.rows, hub);
   const validTo = /^[GC][A-Z2-7]{55}$/.test(to);
+  // Travel Rule: at or above the threshold we must record who is receiving the money.
+  const threshold = useQuery({ queryKey: ['records-retention'], queryFn: () => api<{ travelRuleThresholdUsd: number }>('/api/records/retention'), staleTime: Infinity }).data?.travelRuleThresholdUsd ?? 1000;
+  const needsRecipient = Number(amount) >= threshold;
+  const [rType, setRType] = useState<TravelRuleDetails['beneficiaryType']>('business');
+  const [rName, setRName] = useState('');
+  const [rVasp, setRVasp] = useState('');
+  const [rCountry, setRCountry] = useState('');
+  const recipientOk = !needsRecipient || rType === 'self' || rName.trim().length > 1;
+  const travelRule: TravelRuleDetails | undefined = needsRecipient
+    ? { beneficiaryType: rType, beneficiaryName: rType === 'self' ? undefined : rName.trim(), beneficiaryVasp: rVasp.trim() || undefined, beneficiaryCountry: rCountry.trim() || undefined }
+    : undefined;
 
   async function send() {
     if (!hub) return;
     setBusy('Preparing...');
     try {
-      setHash(await passkeySend({ chain: toScreenChain(hub), symbol: 'USDC', to, amount }, (m) => setBusy(m)));
+      setHash(await passkeySend({ chain: toScreenChain(hub), symbol: 'USDC', to, amount, travelRule }, (m) => setBusy(m)));
       setStep('sent');
       void qc.invalidateQueries({ queryKey: ['v2-usdc-all'] });
     } catch (e) {
@@ -219,6 +231,7 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
         <CardHead title="Review" sub="Transfers cannot be reversed, so check the address." onCancel={onCancel} />
         <div className="bx-sums" style={{ borderTop: 0 }}>
           <Sum l="To" v={<span className="num" style={{ fontSize: 12, wordBreak: 'break-all' }}>{to}</span>} />
+          {travelRule && <Sum l="Recipient" v={travelRule.beneficiaryType === 'self' ? 'You' : `${travelRule.beneficiaryName}${travelRule.beneficiaryVasp ? ` · ${travelRule.beneficiaryVasp}` : ''}`} />}
           <Sum l="Network" v={name} />
           <Sum l="Network fees" v="Covered" good />
           <Sum l="Recipient gets" v={<span className="num">${fmt(amount)} USDC</span>} total />
@@ -243,7 +256,25 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
           <input className="bx-input num" placeholder="G... or C..." value={to} onChange={(e) => setTo(e.target.value.trim())} />
         </label>
         {to && !validTo && <div className="bx-error">Enter a valid {name} address.</div>}
-        <button className="bx-btn block" disabled={!hub || !validTo || !(Number(amount) > 0) || Number(amount) > have} onClick={() => setStep('review')}>Send USDC</button>
+        {needsRecipient && (
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div className="bx-label" style={{ margin: 0 }}>Who is receiving this? <span className="muted">Required for transfers of ${fmt(threshold, 0)} or more.</span></div>
+            <div className="bx-seg small">
+              {(['self', 'person', 'business'] as const).map((t) => <button key={t} className={rType === t ? 'on' : ''} onClick={() => setRType(t)}>{t === 'self' ? 'My own wallet' : t === 'person' ? 'A person' : 'A business'}</button>)}
+            </div>
+            {rType !== 'self' && (
+              <label className="bx-field" style={{ margin: 0 }}>
+                <span>{rType === 'business' ? 'Business name' : 'Full name'}</span>
+                <input className="bx-input" value={rName} onChange={(e) => setRName(e.target.value)} placeholder={rType === 'business' ? 'e.g. Shenzhen Machinery Co' : 'e.g. Ama Mensah'} />
+              </label>
+            )}
+            <div className="bx-strike-in">
+              <label className="bx-field" style={{ margin: 0 }}><span>Exchange or wallet provider (optional)</span><input className="bx-input" value={rVasp} onChange={(e) => setRVasp(e.target.value)} placeholder="e.g. Binance" /></label>
+              <label className="bx-field" style={{ margin: 0 }}><span>Country (optional)</span><input className="bx-input" value={rCountry} onChange={(e) => setRCountry(e.target.value)} placeholder="e.g. China" /></label>
+            </div>
+          </div>
+        )}
+        <button className="bx-btn block" disabled={!hub || !validTo || !(Number(amount) > 0) || Number(amount) > have || !recipientOk} onClick={() => setStep('review')}>Send USDC</button>
       </div>
     </div>
   );
@@ -535,6 +566,8 @@ export function AccountPage({ go }: { go: Go }) {
         <VerificationCard />
         <PasskeysCard />
         <OrganisationCard go={go} />
+        <ComplaintsCard />
+        <YourDataCard />
       </section>
       <aside className="bx-aside">
         <div className="bx-card tight">

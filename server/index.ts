@@ -365,6 +365,8 @@ app.use((req, res, next) => {
     // Expired currency-pool hedges on Stellar (current and legacy contracts) get prices and settle.
     void import("./domain/oracle-runner").then((m) => m.startPoolOracleRunner());
   }
+  // Compliance log: anchor each day's last entry hash on Stellar (records/anchor.ts).
+  void import("./records/anchor").then((m) => m.startLogAnchoring());
   // Cross-network transfers (Circle CCTP): follow attestations and deliver on the destination.
   void import("./routing/service").then(async (m) => {
     const { chainRegistry } = await import("./chain/config");
