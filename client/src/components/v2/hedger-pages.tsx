@@ -603,6 +603,11 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
   const focusedSettlement = role === 'hedger' ? mineHedges.find((h) => markKey(h.position) === focus)?.settlement ?? null : null;
   const ended = focusedSettlement !== null && focusedSettlement.status !== 'pending';
   const { busy: claiming, claim } = useClaimPayout();
+  // Running and finished cover are listed apart; start on the group of the cover that was opened.
+  const runningCount = mineHedges.filter((h) => h.settlement.status === 'pending').length;
+  const endedCount = mineHedges.length - runningCount;
+  const [listView, setListView] = useState<'active' | 'ended' | null>(null);
+  const listShowing = listView ?? (ended ? 'ended' : runningCount || !endedCount ? 'active' : 'ended');
 
   return (
     <main className="bx-main">
@@ -656,13 +661,21 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
         </div>
 
         <div className="bx-card">
-          <div className="bx-card-h"><div><h2>{role === 'hedger' ? 'Your protections on this pair' : 'Protection your pools back on this pair'}</h2><div className="sub">Select one to show it on the chart.</div></div></div>
+          <div className="bx-card-h" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div><h2>{role === 'hedger' ? 'Your protections on this pair' : 'Protection your pools back on this pair'}</h2><div className="sub">Select one to show it on the chart.</div></div>
+            {role === 'hedger' && mineHedges.length > 0 && (
+              <div className="bx-seg small" role="group" aria-label="Show">
+                <button className={listShowing === 'active' ? 'on' : ''} aria-pressed={listShowing === 'active'} onClick={() => setListView('active')}>Active <span className="muted">{runningCount}</span></button>
+                <button className={listShowing === 'ended' ? 'on' : ''} aria-pressed={listShowing === 'ended'} onClick={() => setListView('ended')}>Ended <span className="muted">{endedCount}</span></button>
+              </div>
+            )}
+          </div>
           {(role === 'hedger' ? hedges.isLoading : under.loading) ? <Loading /> : marks.length === 0 ? (
             <div className="bx-empty">{role === 'hedger' ? 'You have no protection on this pair.' : 'Your pools have no running protection on this pair.'}</div>
           ) : (
             <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
               <div className="bx-list-h" style={POS_COLS}><span>{hint('Protection')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Expires')}</span></div>
-              {(role === 'hedger' ? mineHedges.map((h) => ({ pos: h.position, title: `${exposureLabel(pair, h.position.direction).title} · ${h.position.structure === 'open' ? 'Open' : 'Limited'}`, status: h.settlement.status }))
+              {(role === 'hedger' ? mineHedges.filter((h) => (h.settlement.status === 'pending') === (listShowing === 'active')).map((h) => ({ pos: h.position, title: `${exposureLabel(pair, h.position.direction).title} · ${h.position.structure === 'open' ? 'Open' : 'Limited'}`, status: h.settlement.status }))
                 : under.rows.map(({ pool, pos }) => ({ pos, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
               ).map(({ pos, title, status }) => {
                 const k = markKey(pos);
