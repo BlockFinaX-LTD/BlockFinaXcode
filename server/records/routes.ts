@@ -16,6 +16,7 @@
  *   GET  /api/admin/records/kyb   GET .../kyb/:id   GET .../kyb/:id/documents/:doc   POST .../kyb/:id/decision
  *   GET  /api/admin/records/cases   POST same   GET .../cases/:id   POST .../cases/:id/notes   POST .../cases/:id/decision
  *   GET  /api/admin/records/deletion   POST .../deletion/:id/complete
+ *   GET  /api/admin/records/accounts/summary?days=   GET .../accounts?search=   GET .../accounts/:id
  *   GET  /api/admin/records/travel-rule
  *   GET  /api/admin/records/report?from=&to=&format=csv
  */
@@ -24,6 +25,7 @@ import { ApplicationError } from "@shared/domain/types";
 import { retentionSummary } from "@shared/records/retention";
 import { getSession } from "../auth-routes";
 import { requireAdmin } from "../middleware/admin-auth";
+import { accountDetail, accountsSummary, listAccounts } from "./accounts";
 import { anchorYesterday, listAnchors } from "./anchor";
 import { listLog, verifyLog } from "./log";
 import { regulatoryReport, reportCsv } from "./reports";
@@ -102,6 +104,13 @@ export function registerRecordsRoutes(app: Express) {
   admin("/api/admin/records/deletion", "get", async (_req, res) => { res.json({ requests: await store.listDeletionRequests() }); });
   admin("/api/admin/records/deletion/:id/complete", "post", async (req, res) => { res.json({ summary: await store.completeDeletion(num(req.params.id, "id"), staffOf(req)) }); });
 
+  admin("/api/admin/records/accounts/summary", "get", async (req, res) => { res.json(await accountsSummary(Number(req.query.days) || 30)); });
+  admin("/api/admin/records/accounts", "get", async (req, res) => { res.json({ accounts: await listAccounts(String(req.query.search ?? "")) }); });
+  admin("/api/admin/records/accounts/:id", "get", async (req, res) => {
+    const detail = await accountDetail(num(req.params.id, "id"), staffOf(req));
+    if (!detail) throw new ApplicationError("INVALID_REQUEST", "Account not found");
+    res.json(detail);
+  });
   admin("/api/admin/records/travel-rule", "get", async (_req, res) => { res.json({ records: await store.listTravelRule(), thresholdUsd: store.travelRuleThreshold() }); });
 
   admin("/api/admin/records/report", "get", async (req, res) => {

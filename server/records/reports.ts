@@ -12,7 +12,18 @@ async function getDb(): Promise<Db> {
   return pool as unknown as Db;
 }
 
-const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => { try { return await fn(); } catch { return fallback; } };
+/**
+ * Read one figure. A failure is not reported as zero: the figure is named in `unavailable`
+ * (and logged), so "nobody" and "could not be read" never look the same.
+ */
+let unavailable: string[] = [];
+const safe = async <T>(fn: () => Promise<T>, fallback: T, label = "a figure"): Promise<T> => {
+  try { return await fn(); } catch (err) {
+    unavailable.push(label);
+    console.warn(`[records] report: ${label} unavailable: ${(err as Error).message}`);
+    return fallback;
+  }
+};
 
 export interface RegulatoryReport {
   period: { from: string; to: string };
@@ -24,14 +35,17 @@ export interface RegulatoryReport {
   complaints: { received: number; resolved: number; open: number; averageDaysToResolve: number | null; overdue: number };
   staff: { actions: number; dataViews: number };
   log: { entries: number; lastHash: string | null };
+  /** Figures that could not be read this time; shown as 0 above but not to be relied on. */
+  unavailable: string[];
 }
 
 export async function regulatoryReport(from: string, to: string): Promise<RegulatoryReport> {
   const db = await getDb();
   const range = [from, to];
+  unavailable = [];
 
   const quotes = await safe(async () => (await db.query(
-    `SELECT data FROM compliance_log WHERE action = 'cover.quote_accepted' AND at >= $1 AND at < $2`, range)).rows, [] as any[]);
+    `SELECT data FROM compliance_log WHERE action = 'cover.quote_accepted' AND at >= $1 AND at < $2`, range)).rows, [] as any[], "cover quotes");
   const byPair: Record<string, { count: number; notionalUsd: number }> = {};
   let notional = 0, premium = 0, maxPayout = 0;
   for (const { data } of quotes) {
@@ -43,26 +57,26 @@ export async function regulatoryReport(from: string, to: string): Promise<Regula
   }
 
   const tx = await safe(async () => (await db.query(
-    `SELECT data->>'method' AS method, count(*)::int AS n FROM compliance_log WHERE action = 'transaction.relayed' AND at >= $1 AND at < $2 AND data->>'state' <> 'FAILED' GROUP BY 1`, range)).rows, [] as any[]);
+    `SELECT data->>'method' AS method, count(*)::int AS n FROM compliance_log WHERE action = 'transaction.relayed' AND at >= $1 AND at < $2 AND data->>'state' <> 'FAILED' GROUP BY 1`, range)).rows, [] as any[], "transactions");
   const transactions = Object.fromEntries(tx.map((r) => [r.method ?? "unknown", r.n]));
 
-  const newAccounts = await safe(async () => Number((await db.query(`SELECT count(*) AS n FROM user_accounts WHERE created_at >= $1 AND created_at < $2`, range)).rows[0].n), 0);
-  const tiers = await safe(async () => (await db.query(`SELECT COALESCE(kyc_tier, 0)::text AS tier, count(*)::int AS n FROM user_profiles GROUP BY 1`)).rows, [] as any[]);
-  const kyb = await safe(async () => (await db.query(`SELECT status, count(*)::int AS n FROM kyb_submissions GROUP BY 1`)).rows, [] as any[]);
-  const alerts = await safe(async () => (await db.query(`SELECT severity, count(*)::int AS n FROM compliance_alerts WHERE opened_at >= $1 AND opened_at < $2 GROUP BY 1`, range)).rows, [] as any[]);
+  const newAccounts = await safe(async () => Number((await db.query(`SELECT count(*) AS n FROM user_accounts WHERE created_at >= $1 AND created_at < $2`, range)).rows[0].n), 0, "new accounts");
+  const tiers = await safe(async () => (await db.query(`SELECT COALESCE(kyc_tier, 0)::text AS tier, count(*)::int AS n FROM user_profiles GROUP BY 1`)).rows, [] as any[], "KYC tiers");
+  const kyb = await safe(async () => (await db.query(`SELECT status, count(*)::int AS n FROM kyb_submissions GROUP BY 1`)).rows, [] as any[], "business checks");
+  const alerts = await safe(async () => (await db.query(`SELECT severity, count(*)::int AS n FROM compliance_alerts WHERE opened_at >= $1 AND opened_at < $2 GROUP BY 1`, range)).rows, [] as any[], "alerts");
   const cases = await safe(async () => (await db.query(
-    `SELECT count(*) FILTER (WHERE opened_at >= $1 AND opened_at < $2)::int AS opened, count(*) FILTER (WHERE reported_at >= $1 AND reported_at < $2)::int AS reported FROM sar_cases`, range)).rows[0], { opened: 0, reported: 0 });
-  const travel = await safe(async () => (await db.query(`SELECT count(*)::int AS n, COALESCE(sum(amount), 0)::float AS usd FROM travel_rule_records WHERE created_at >= $1 AND created_at < $2`, range)).rows[0], { n: 0, usd: 0 });
+    `SELECT count(*) FILTER (WHERE opened_at >= $1 AND opened_at < $2)::int AS opened, count(*) FILTER (WHERE reported_at >= $1 AND reported_at < $2)::int AS reported FROM sar_cases`, range)).rows[0], { opened: 0, reported: 0 }, "cases");
+  const travel = await safe(async () => (await db.query(`SELECT count(*)::int AS n, COALESCE(sum(amount), 0)::float AS usd FROM travel_rule_records WHERE created_at >= $1 AND created_at < $2`, range)).rows[0], { n: 0, usd: 0 }, "Travel Rule");
   const complaints = await safe(async () => (await db.query(
     `SELECT count(*) FILTER (WHERE received_at >= $1 AND received_at < $2)::int AS received,
             count(*) FILTER (WHERE resolved_at >= $1 AND resolved_at < $2)::int AS resolved,
             count(*) FILTER (WHERE resolved_at IS NULL)::int AS open,
             avg(EXTRACT(EPOCH FROM (resolved_at - received_at)) / 86400) FILTER (WHERE resolved_at >= $1 AND resolved_at < $2) AS avg_days,
             count(*) FILTER (WHERE resolved_at IS NULL AND received_at < now() - interval '15 days')::int AS overdue
-     FROM complaints`, range)).rows[0], { received: 0, resolved: 0, open: 0, avg_days: null, overdue: 0 });
+     FROM complaints`, range)).rows[0], { received: 0, resolved: 0, open: 0, avg_days: null, overdue: 0 }, "complaints");
   const staff = await safe(async () => (await db.query(
-    `SELECT count(*) FILTER (WHERE action = 'staff.action')::int AS actions, count(*) FILTER (WHERE action = 'data.viewed')::int AS views FROM compliance_log WHERE at >= $1 AND at < $2`, range)).rows[0], { actions: 0, views: 0 });
-  const log = await safe(async () => (await db.query(`SELECT count(*)::int AS n, (SELECT hash FROM compliance_log ORDER BY id DESC LIMIT 1) AS last FROM compliance_log`)).rows[0], { n: 0, last: null });
+    `SELECT count(*) FILTER (WHERE action = 'staff.action')::int AS actions, count(*) FILTER (WHERE action = 'data.viewed')::int AS views FROM compliance_log WHERE at >= $1 AND at < $2`, range)).rows[0], { actions: 0, views: 0 }, "staff activity");
+  const log = await safe(async () => (await db.query(`SELECT count(*)::int AS n, (SELECT hash FROM compliance_log ORDER BY id DESC LIMIT 1) AS last FROM compliance_log`)).rows[0], { n: 0, last: null }, "log size");
 
   return {
     period: { from, to },
@@ -79,6 +93,7 @@ export async function regulatoryReport(from: string, to: string): Promise<Regula
     complaints: { received: complaints.received, resolved: complaints.resolved, open: complaints.open, averageDaysToResolve: complaints.avg_days === null ? null : Number(Number(complaints.avg_days).toFixed(1)), overdue: complaints.overdue },
     staff: { actions: staff.actions, dataViews: staff.views },
     log: { entries: log.n, lastHash: log.last },
+    unavailable: [...unavailable],
   };
 }
 
