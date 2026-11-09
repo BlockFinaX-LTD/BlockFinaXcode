@@ -20,8 +20,8 @@ import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
 import { takeReturnPath, usePasskeySession } from "@/lib/identity";
 import {
-  acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, finishEmailSignIn, signInWithPasskey,
-  signOutPasskey, startEmailSignIn, startGoogleSignIn,
+  acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, finishEmailSignIn, inAppBrowser,
+  preparePasskeyOptions, signInWithPasskey, signOutPasskey, startEmailSignIn, startGoogleSignIn,
 } from "@/lib/wallets/passkey-wallet";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@shared/legal";
 import { ProfileStep } from "./profile-step";
@@ -42,6 +42,7 @@ export function PasskeyAuth() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   // Whether a signed-in account without a wallet still has to give its profile.
   // If the check fails, carry on to the passkey: the profile must never lock anyone out.
   const [profile, setProfile] = useState<"checking" | "needed" | "done">("checking");
@@ -66,14 +67,30 @@ export function PasskeyAuth() {
     if ((isAuthenticated || (forConnectors && signedIn)) && !busy && !warning) setLocation(takeReturnPath());
   }, [isAuthenticated, signedIn, busy, warning, setLocation]);
 
+  // Fetch the passkey options while the screen shows, so a tap goes straight to the prompt.
+  const passkeyScreen = needsWallet && profile === "done";
+  useEffect(() => { if (passkeyScreen) preparePasskeyOptions("register"); }, [passkeyScreen]);
+  useEffect(() => { if (!signedIn && !forConnectors) preparePasskeyOptions("signin"); }, [signedIn]);
+  const embedded = inAppBrowser();
+
   async function run(label: string, action: () => Promise<void>) {
     setBusy(label);
     setError(null);
     try {
       await action();
     } catch (e) {
-      const message = (e as Error).message || "Something went wrong";
-      setError(/NotAllowedError|cancel|timed out/i.test(message) ? "The passkey request was cancelled. Try again when you are ready." : message);
+      const err = e as Error;
+      const message = err.message || "Something went wrong";
+      if (err.name === "NotAllowedError" || /not allowed|cancel|timed out/i.test(message)) {
+        setError(embedded
+          ? "This app's built-in browser blocked the passkey. Open testnet.blockfinax.com in Safari or Chrome and sign in there."
+          : "The passkey was not created. Tap the button again and approve with Face ID, Touch ID or your device PIN. If it keeps failing, open the page in Safari or Chrome.");
+      } else {
+        setError(message);
+      }
+      // A refused prompt used its challenge; have a fresh one ready for the next tap.
+      if (label === "create") preparePasskeyOptions("register");
+      if (label === "passkey") preparePasskeyOptions("signin");
     } finally {
       setBusy(null);
     }
@@ -124,6 +141,14 @@ export function PasskeyAuth() {
             {spinner("create") ?? <><KeyRound className="h-4 w-4 mr-2" />Create wallet passkey</>}
           </Button>
           {busy === "create" && <p className="text-[11px] text-muted-foreground">Creating your accounts. This takes about 10 seconds.</p>}
+          {embedded && (
+            <div className="w-full rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-left text-[11.5px] leading-snug">
+              You are in another app's built-in browser, where passkeys often do not work. Open this page in Safari or Chrome.
+              <Button size="sm" variant="outline" className="mt-2 h-8 w-full" onClick={() => void navigator.clipboard?.writeText(window.location.origin).then(() => setCopied(true))}>
+                {copied ? "Link copied. Paste it in Safari or Chrome" : "Copy link"}
+              </Button>
+            </div>
+          )}
           <button className="text-[11.5px] text-muted-foreground underline mt-2" onClick={signOut}>
             Use a different account
           </button>

@@ -135,8 +135,41 @@ export function acceptGoogleRedirect(): boolean {
 }
 
 /** Create the wallet passkey for the signed-in user; this creates their smart accounts. */
+/**
+ * iPhone and iPad only allow a passkey prompt straight after a tap. Fetching the options
+ * after the tap can use that up and the prompt is refused (NotAllowedError), so the
+ * options are fetched as soon as the screen shows and the tap goes straight to the prompt.
+ * The server keeps a challenge for 5 minutes; anything older than 4 is fetched again.
+ */
+type PasskeyOptions = { flow: string; options: any };
+const prefetched = new Map<string, { at: number; promise: Promise<PasskeyOptions> }>();
+const FRESH_MS = 4 * 60_000;
+export function preparePasskeyOptions(path: "register" | "signin") {
+  const url = `/api/wallet/passkey/${path}/options`;
+  const held = prefetched.get(url);
+  if (held && Date.now() - held.at < FRESH_MS) return;
+  const promise = api<PasskeyOptions>(url, {});
+  promise.catch(() => { if (prefetched.get(url)?.promise === promise) prefetched.delete(url); });
+  prefetched.set(url, { at: Date.now(), promise });
+}
+async function passkeyOptions(path: "register" | "signin"): Promise<PasskeyOptions> {
+  const url = `/api/wallet/passkey/${path}/options`;
+  const held = prefetched.get(url);
+  prefetched.delete(url); // each challenge is used once
+  if (held && Date.now() - held.at < FRESH_MS) {
+    try { return await held.promise; } catch { /* fetch a fresh one below */ }
+  }
+  return api<PasskeyOptions>(url, {});
+}
+
+/** True inside another app's built-in browser (Gmail, Google, Facebook, Instagram, LinkedIn...), where passkeys often fail. */
+export function inAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /FBAN|FBAV|Instagram|LinkedInApp|GSA\/|Line\/|Twitter|Snapchat|TikTok|; wv\)/i.test(navigator.userAgent);
+}
+
 export async function createWalletPasskey(): Promise<PasskeySession & { errors?: string[] }> {
-  const { flow, options } = await api<{ flow: string; options: any }>("/api/wallet/passkey/register/options", {});
+  const { flow, options } = await passkeyOptions("register");
   const response = await startRegistration({ optionsJSON: options });
   const created = await api<{ errors?: string[]; credentialId?: string }>("/api/wallet/passkey/register/verify", { flow, response });
   rememberDeviceCredential(created.credentialId ?? response.id);
@@ -150,7 +183,7 @@ export async function createWalletPasskey(): Promise<PasskeySession & { errors?:
 
 /** Sign in with an existing passkey (the browser offers the user's saved passkeys). */
 export async function signInWithPasskey(): Promise<PasskeySession> {
-  const { flow, options } = await api<{ flow: string; options: any }>("/api/wallet/passkey/signin/options", {});
+  const { flow, options } = await passkeyOptions("signin");
   const response = await startAuthentication({ optionsJSON: options });
   const session = await api<PasskeySession>("/api/wallet/passkey/signin/verify", { flow, response });
   storeSessionToken(session.sessionToken);
@@ -175,6 +208,7 @@ export async function currentPasskeySession(): Promise<PasskeySession | null> {
 }
 
 export async function signOutPasskey() {
+  prefetched.clear(); // passkey options belong to the account that fetched them
   try { await api("/api/auth/logout", {}); } catch { /* the token is dropped either way */ }
   storeSessionToken(null);
 }
