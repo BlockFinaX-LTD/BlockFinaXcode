@@ -1,7 +1,6 @@
 /**
  * Customer side of the compliance records (server/records):
- *   ComplaintsCard          make a complaint and follow it (Account page)
- *   YourDataCard            what we keep, for how long, and a deletion request (Account page)
+ *   YourDataCard            a link to the Privacy Policy and a deletion request (Account page)
  *   BusinessVerificationCard  the business identity check, KYB (Business settings, admins)
  */
 import { useState } from 'react';
@@ -12,89 +11,13 @@ import { Spin, Sum, Tag } from './ui';
 
 const day = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
-// ── Complaints ───────────────────────────────────────────────────────────────
-
-const CATEGORY_LABEL: Record<string, string> = {
-  cover_or_payout: 'Cover or a payout', pricing: 'Pricing', deposit_or_withdrawal: 'A deposit or withdrawal',
-  account_or_access: 'My account or signing in', service: 'Our service', other: 'Something else',
-};
-const COMPLAINT_STATUS: Record<string, [string, 'green' | 'grey' | 'amber']> = {
-  open: ['Received', 'amber'], acknowledged: ['Being looked at', 'amber'], resolved: ['Resolved', 'green'], closed: ['Closed', 'grey'],
-};
-interface Complaint { id: number; category: string; subject: string; status: string; received_at: string; resolved_at: string | null; response: string | null }
-
-export function ComplaintsCard() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const list = useQuery({ queryKey: ['records-complaints'], queryFn: () => api<{ complaints: Complaint[]; sla: { acknowledgeDays: number; resolveDays: number } }>('/api/records/complaints') });
-  const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState('cover_or_payout');
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
-  const [reference, setReference] = useState('');
-  const [busy, setBusy] = useState(false);
-  const sla = list.data?.sla;
-
-  async function submit() {
-    setBusy(true);
-    try {
-      await api('/api/records/complaints', { category, subject, description, reference });
-      toast({ title: 'Complaint received', description: sla ? `We will reply within ${sla.acknowledgeDays} business days.` : 'We will be in touch.' });
-      setOpen(false); setSubject(''); setDescription(''); setReference('');
-      void qc.invalidateQueries({ queryKey: ['records-complaints'] });
-    } catch (e) {
-      toast({ title: 'Not sent', description: (e as Error).message, variant: 'destructive' });
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div className="bx-card">
-      <div className="bx-card-h">
-        <div><h2>Complaints</h2><div className="sub">Not happy with something? Tell us and we will look into it.{sla ? ` We reply within ${sla.acknowledgeDays} business days and aim to resolve within ${sla.resolveDays}.` : ''}</div></div>
-        {!open && <button className="bx-btn ghost small" onClick={() => setOpen(true)}>Make a complaint</button>}
-      </div>
-      {open && (
-        <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-          <label className="bx-field" style={{ margin: 0 }}><span>What is it about?</span>
-            <select className="bx-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {Object.entries(CATEGORY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </label>
-          <label className="bx-field" style={{ margin: 0 }}><span>Summary</span><input className="bx-input" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. My payout was lower than I expected" /></label>
-          <label className="bx-field" style={{ margin: 0 }}><span>What happened?</span><textarea className="bx-input" rows={4} value={description} maxLength={5000} onChange={(e) => setDescription(e.target.value)} /></label>
-          <label className="bx-field" style={{ margin: 0 }}><span>Reference (optional)</span><input className="bx-input" value={reference} maxLength={200} onChange={(e) => setReference(e.target.value)} placeholder="A transaction reference or date" /></label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="bx-btn" disabled={busy || !subject.trim() || !description.trim()} onClick={submit}>{busy ? <Spin /> : null} Send complaint</button>
-            <button className="bx-btn ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
-      {(list.data?.complaints ?? []).map((c) => {
-        const [label, tone] = COMPLAINT_STATUS[c.status] ?? [c.status, 'grey'];
-        return (
-          <div key={c.id} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>{c.subject}</div>
-              <div className="muted" style={{ fontSize: 12 }}>{CATEGORY_LABEL[c.category] ?? c.category} · sent {day(c.received_at)}{c.resolved_at ? ` · resolved ${day(c.resolved_at)}` : ''}</div>
-              {c.response && <div style={{ fontSize: 12, marginTop: 4 }}>Our reply: {c.response}</div>}
-            </div>
-            <Tag tone={tone}>{label}</Tag>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Your data ────────────────────────────────────────────────────────────────
 
-interface Rule { key: string; label: string; years: number; onRequest: 'delete' | 'anonymise' | 'keep'; basis: string }
 interface Deletion { id: number; status: string; requested_at: string; completed_at: string | null }
 
 export function YourDataCard() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const rules = useQuery({ queryKey: ['records-retention'], queryFn: () => api<{ rules: Rule[] }>('/api/records/retention'), staleTime: Infinity });
   const request = useQuery({ queryKey: ['records-deletion'], queryFn: () => api<{ request: Deletion | null }>('/api/records/deletion') });
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -115,12 +38,7 @@ export function YourDataCard() {
   return (
     <div className="bx-card">
       <h2 style={{ marginBottom: 6 }}>Your data</h2>
-      <div className="sub">What we keep, for how long, and why. See our <a href="/privacy" target="_blank" rel="noreferrer" className="bx-link">Privacy Policy</a> for the full detail.</div>
-      <div className="bx-sums">
-        {(rules.data?.rules ?? []).map((r) => (
-          <Sum key={r.key} l={r.label} v={<span title={r.basis}>{r.years ? `${r.years} years` : 'While your account is open'}</span>} />
-        ))}
-      </div>
+      <div className="sub">What we keep and for how long is set out in our <a href="/privacy" target="_blank" rel="noreferrer" className="bx-link">Privacy Policy</a>.</div>
       {current?.status === 'received' ? (
         <div className="bx-hint" style={{ textAlign: 'left', marginTop: 12 }}>You asked us to delete your data on {day(current.requested_at)}. We are handling it.</div>
       ) : current?.status === 'completed' ? (
@@ -129,7 +47,7 @@ export function YourDataCard() {
         <button className="bx-btn ghost small" style={{ marginTop: 12 }} onClick={() => setConfirming(true)}>Ask us to delete your data</button>
       ) : (
         <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 13 }}>We will delete your profile and conversations and close sign-in. The law requires us to keep identity and transaction records for the periods above, and records on the blockchain cannot be erased. Continue?</div>
+          <div style={{ fontSize: 13 }}>We will delete your profile and conversations and close sign-in. The law requires us to keep identity and transaction records for the periods in our Privacy Policy, and records on the blockchain cannot be erased. Continue?</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="bx-btn" disabled={busy} onClick={ask}>{busy ? <Spin /> : null} Yes, send my request</button>
             <button className="bx-btn ghost" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>

@@ -2,7 +2,7 @@
  * Compliance records API.
  *
  * Customers (signed in):
- *   GET  /api/records/retention                       what we keep, how long and why
+ *   GET  /api/records/retention                       the Travel Rule threshold
  *   GET  /api/records/complaints   POST same           their complaints / make one
  *   GET  /api/records/deletion     POST same           their deletion request / ask for one
  *   GET  /api/records/kyb/:org     POST same           a business's identity check (admins of it)
@@ -54,7 +54,9 @@ const orgHeader = (req: Request) => { const n = Number(req.header("x-bfx-organis
 
 export function registerRecordsRoutes(app: Express) {
   // ── Customers ──
-  app.get("/api/records/retention", (_req, res) => { res.json({ rules: retentionSummary(), travelRuleThresholdUsd: store.travelRuleThreshold() }); });
+  // Customers only need the Travel Rule threshold; retention periods are in the Privacy Policy
+  // (the staff endpoint below lists the internal rules).
+  app.get("/api/records/retention", (_req, res) => { res.json({ travelRuleThresholdUsd: store.travelRuleThreshold() }); });
 
   app.get("/api/records/complaints", wrap(async (req, res) => { res.json({ complaints: await store.myComplaints(await signedIn(req)), sla: store.COMPLAINT_SLA, categories: store.COMPLAINT_CATEGORIES }); }));
   app.post("/api/records/complaints", wrap(async (req, res) => { res.json({ complaint: await store.submitComplaint(await signedIn(req), orgHeader(req), req.body ?? {}) }); }));

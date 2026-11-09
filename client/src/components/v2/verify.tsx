@@ -207,7 +207,7 @@ export function VerifyModal() {
             </label>
             {error && <div className="bx-error">{error}</div>}
             <button className="bx-btn block" disabled={busy} onClick={submit}>{busy ? <><Spin /> Sending...</> : 'Submit for review'}</button>
-            <div className="bx-hint">Your details are checked against sanctions lists and kept for six years, as the law requires.</div>
+            <div className="bx-hint">Your details are checked against sanctions lists.</div>
           </div>
         )}
       </div>

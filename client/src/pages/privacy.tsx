@@ -106,15 +106,8 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="9. Data Retention">
-            <ul>
-              <li>Account, passkey, wallet and business account details: for as long as the account exists, and up to 3 years afterwards for legal compliance.</li>
-              <li>Verification details, screening results and transaction records: 6 years after our relationship ends, as required by the Anti-Money Laundering Act, 2020 (Act 1044).</li>
-              <li>Invitations: an unused invitation code expires after 7 days. The record that someone was invited is kept with the business account's history.</li>
-              <li>Server logs: 90 days.</li>
-              <li>Assistant conversations: 12 months, then deleted.</li>
-              <li>Follow-up contact details: retained until you unsubscribe or ask us to delete them. The record that you consented, and the wording you agreed to, is kept for 6 years after that as proof that we had permission to contact you. This is the only part we keep, and it is kept because data protection law requires us to be able to demonstrate consent.</li>
-              <li>Terms acceptance records: retained indefinitely as a legal audit trail.</li>
-            </ul>
+            <p>We keep personal data only for as long as we need it: to provide the service, to meet our legal and regulatory obligations, including anti-money laundering record keeping, to resolve disputes and to enforce our agreements. When we no longer need it, we delete it or anonymise it.</p>
+            <p>The law requires us to keep some records for a set period after our relationship ends, even if you ask us to delete your data. Records written to a public blockchain cannot be changed or erased by anyone, including BlockFinaX.</p>
           </Section>
 
           <Section title="10. Your Rights">

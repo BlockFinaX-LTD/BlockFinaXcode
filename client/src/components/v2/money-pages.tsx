@@ -14,7 +14,7 @@ import { useWalletCheck, type WalletCheck } from '@/lib/wallets/verify-wallet';
 import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
-import { ComplaintsCard, YourDataCard } from './records';
+import { YourDataCard } from './records';
 import { OrganisationCard } from './organisation-card';
 import type { Go } from './workspace';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
@@ -566,7 +566,6 @@ export function AccountPage({ go }: { go: Go }) {
         <VerificationCard />
         <PasskeysCard />
         <OrganisationCard go={go} />
-        <ComplaintsCard />
         <YourDataCard />
       </section>
       <aside className="bx-aside">
