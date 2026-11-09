@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { explain } from './glossary';
 import { Info, Loader2 } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
-import { quoteCcy } from './shared';
+import { ccyName, quoteCcy } from './shared';
 
 export function Flag({ pair, large }: { pair: string; large?: boolean }) {
   return <span className={`bx-flag${large ? ' lg' : ''}`}><FlagSvg code={quoteCcy(pair)} /></span>;
@@ -17,7 +17,7 @@ export function Flag({ pair, large }: { pair: string; large?: boolean }) {
  * drawn in a portal inside the workspace root with fixed positioning, so scrolling tables
  * cannot clip it, and it inherits the light or dark theme.
  */
-export function Term({ children, tip }: { children: ReactNode; tip: string }) {
+export function Term({ children, tip, label, plain }: { children: ReactNode; tip: string; label?: string; plain?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
   const show = () => {
@@ -37,7 +37,7 @@ export function Term({ children, tip }: { children: ReactNode; tip: string }) {
   const root = typeof document !== 'undefined' ? document.querySelector('.bx') : null;
   return (
     <span
-      ref={ref} className="bx-term" tabIndex={0} aria-label={`${typeof children === 'string' ? children : ''}: ${tip}`}
+      ref={ref} className={`bx-term${plain ? ' plain' : ''}`} tabIndex={0} aria-label={`${label ?? (typeof children === 'string' ? children : '')}: ${tip}`}
       onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
       onClick={(e) => { e.stopPropagation(); if (pos) hide(); else show(); }}
     >
@@ -47,6 +47,33 @@ export function Term({ children, tip }: { children: ReactNode; tip: string }) {
         root,
       )}
     </span>
+  );
+}
+
+/**
+ * A cover's name: the pair, then "Up cover" or "Down cover" a size smaller, with a plain
+ * explanation of what it pays for on hover, focus or tap.
+ */
+export function CoverName({ pair, direction }: { pair: string; direction: 'up' | 'down' | 'both' }) {
+  const kind = direction === 'down' ? 'Down cover' : direction === 'both' ? 'Up and Down cover' : 'Up cover';
+  const name = ccyName(pair);
+  const local = name.includes(' ') ? `the ${name}` : `the ${name.toLowerCase()}`;
+  const up = `pays you if the dollar rises above your strike rate by the end date, meaning ${local} weakens. For dollars you have to pay.`;
+  const down = `pays you if the dollar falls below your strike rate by the end date, meaning ${local} strengthens. For dollars you will receive.`;
+  const tip = direction === 'down' ? `${kind} ${down}` : direction === 'both' ? `Up cover ${up} Down cover ${down}` : `${kind} ${up}`;
+  return (
+    <Term tip={tip} label={`${pair} ${kind}`} plain>
+      <span className="bx-cover-name">{pair}<span className="bx-cover-kind">{kind}</span></span>
+    </Term>
+  );
+}
+
+/** "Ref.": the reference rate, never called spot (it is a guide, not a dealing rate). */
+export function RefRate() {
+  return (
+    <Term tip="Reference rate: the market rate BlockFinaX uses to price and settle cover. It is a guide only, not a rate you can buy or sell currency at." label="Reference rate" plain>
+      Ref.
+    </Term>
   );
 }
 

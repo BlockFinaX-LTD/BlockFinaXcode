@@ -111,7 +111,7 @@ export function CodeInline({ children }: { children: ReactNode }) {
 export function RangePayoffSVG({
   strikeLabel = 'Strike',
   capLabel = 'Limit',
-  underlyingLabel = 'Spot rate at expiry',
+  underlyingLabel = 'Rate at expiry',
   payoutLabel = 'Payout',
 }: {
   strikeLabel?: string;

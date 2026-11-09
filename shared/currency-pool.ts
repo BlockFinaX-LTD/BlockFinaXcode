@@ -34,6 +34,8 @@ export interface PoolStructures {
   minCapDistanceBps: number;
   maxCapDistanceBps: number;
   openMaxPayoutBps: number;
+  /** The closest a strike may be to today's rate; 0 when the pool sets none. */
+  minStrikeDistanceBps?: number;
 }
 
 // The arithmetic lives once, in shared/domain/pool-economics.ts. These names are kept
@@ -62,6 +64,7 @@ export function checkTerms(a: {
       minCapDistanceBps: a.structures.minCapDistanceBps,
       maxCapDistanceBps: a.structures.maxCapDistanceBps,
       openMaxPayoutBps: a.structures.openMaxPayoutBps,
+      minStrikeDistanceBps: a.structures.minStrikeDistanceBps ?? 0,
     },
   });
   return problem ? problem.message : null;

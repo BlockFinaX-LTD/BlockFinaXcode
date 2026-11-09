@@ -16,7 +16,7 @@ import {
   useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction,
 } from './shared';
 import { usePasskeySession } from '@/lib/identity';
-import { AssetClassTabs, Flag, hint, Loading, Note, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
+import { AssetClassTabs, CoverName, Flag, hint, RefRate, Loading, Note, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 import { MyQuoteRequests, RequestQuoteModal } from './rfq';
@@ -148,13 +148,12 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
   useEffect(() => { if (selectOnClick) setOpen(opensWhenChosen); }, [opensWhenChosen, selectOnClick]);
   const offers = usePoolOffers(pool);
   const direction = pool.direction === 'down' ? 'down' : 'up';
-  const label = exposureLabel(pool.pair, pool.direction === 'both' ? 'up' : pool.direction);
   const buy = (days?: number) => go('h-protect', { pair: pool.pair, direction, pool: poolRef(pool), days });
   const spot = useSpot(pool.pair);
   return (
     <>
       <div className={`bx-li bx-li-market${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
-        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t">{label.title}</div><div className="d">Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
+        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pool.pair} direction={pool.direction} /></div><div className="d"><RefRate /> <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
         <div className="r bx-hide-sm" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
@@ -278,7 +277,7 @@ export function HedgerHome({ go }: { go: Go }) {
                   <div className="bx-who">
                     <Flag pair={pair} />
                     <div style={{ minWidth: 0 }}>
-                      <div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Limited'}</div>
+                      <div className="t"><CoverName pair={pair} direction={p.direction} /> · {p.structure === 'open' ? 'Open' : 'Limited'}</div>
                       <div className="d">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div>
                     </div>
                   </div>
@@ -1086,8 +1085,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           ) : (
             <>
               <div className="bx-buy-title">
-                <div style={{ fontSize: 16, fontWeight: 600 }}>{exposureLabel(pair, direction).title}</div>
-                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Spot <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}><CoverName pair={pair} direction={direction} /></div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}><RefRate /> <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span> {ccy} per USD</div>
               </div>
               <div className="bx-field" style={{ margin: 0 }}>
                 <label htmlFor="bx-amount" className="bx-label" style={{ margin: 0 }}>How much?</label>
@@ -1235,7 +1234,7 @@ export function MyProtections({ go }: { go: Go }) {
                       const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
                       return (
                         <div key={s.position} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
-                          <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t">{exposureLabel(pair, p.direction).title} · {p.structure === 'open' ? 'Open' : 'Limited'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
+                          <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={p.direction} /> · {p.structure === 'open' ? 'Open' : 'Limited'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
                           <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
                           <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
                           <div className="r num" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>

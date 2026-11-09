@@ -1397,7 +1397,7 @@ function ProtocolSection() {
         usdtAddr ? c.isAllowedPaymentToken(usdtAddr).catch(() => false) : Promise.resolve(false),
         fetchTotalWithdrawn(cfg, cfg.primaryFeeToken, cfg.usdcDecimals, token),
         usdtAddr ? fetchTotalWithdrawn(cfg, usdtAddr, cfg.usdtDecimals, token) : Promise.resolve(0),
-        readDiamondOwner(cfg, c.runner.provider).catch(() => ""),
+        readDiamondOwner(cfg, c.runner?.provider).catch(() => ""),
       ]);
       const rawPrimaryFees = BigInt(rawPrimaryTokenFees) > BigInt(rawLegacyFees) ? rawPrimaryTokenFees : rawLegacyFees;
       const feeConfig = rawFees ? {

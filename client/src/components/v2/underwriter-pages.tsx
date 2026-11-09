@@ -17,7 +17,7 @@ import {
   ccyName, dateOf, exposureLabel, fmt, pct, poolRef, routeFunding, signAndSend, useChains, usePools, useUsdcBalances,
   usdcOn, type Direction,
 } from './shared';
-import { Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
+import { CoverName, Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
 import type { Go } from './workspace';
 import { isOffered } from '@shared/domain/offered-directions';
 import { durationsOffered } from '@shared/domain/durations';
@@ -97,7 +97,7 @@ function PoolRows({ pools, stakes, go }: { pools: CurrencyPool[]; stakes: Map<st
           const used = nav > 0 ? Number(p.liquidity.reserved) / nav : 0;
           return (
             <div key={poolRef(p)} className="bx-li click" style={POOL_COLS} onClick={() => go('u-pool', { pool: poolRef(p) })}>
-              <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t">{poolName(p)}</div><div className="d">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Limited', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</div></div></div>
+              <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={p.pair} direction={p.direction} />{p.legacy ? ' (earlier contract)' : ''}</div><div className="d">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Limited', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</div></div></div>
               <div className="r num" style={{ fontWeight: 600 }}>${fmt(nav, 0)}</div>
               <div className="r"><div className="num" style={{ fontWeight: 600 }}>{pct(used, 0)}</div><div className="bx-bar thin" style={{ width: 64, marginLeft: 'auto', marginTop: 6 }}><i style={{ width: `${used * 100}%`, background: 'var(--blue)' }} /></div></div>
               {(() => {

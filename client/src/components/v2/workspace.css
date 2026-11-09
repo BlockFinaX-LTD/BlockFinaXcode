@@ -717,3 +717,14 @@
   .bx-li.bx-li-tenor > [data-label]::before { display: none; }
   .bx-li.bx-li-tenor > .r:last-child, .bx-li.bx-li-tenor > :first-child { grid-column: auto; }
 }
+
+/* Cover names: the pair, then Up cover or Down cover a size smaller; explained on hover. */
+.bx-term.plain { border-bottom: 0; cursor: help; }
+.bx-cover-name { white-space: nowrap; }
+.bx-cover-kind { margin-left: 5px; font-size: 0.8em; font-weight: 500; color: var(--text-2); }
+@media (max-width: 860px) {
+  /* On a phone the market line is narrow: Up cover / Down cover sits under the pair instead of being cut short. */
+  .bx-li.bx-li-market .bx-who .t { white-space: normal; overflow: visible; }
+  .bx-li.bx-li-market .bx-cover-name { white-space: normal; }
+  .bx-li.bx-li-market .bx-cover-kind { display: block; margin-left: 0; line-height: 1.2; }
+}
