@@ -148,7 +148,7 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
         <div className="r bx-hide-sm" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-          {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{action}</button>}
+          {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{isPhone() ? 'Buy' : action}</button>}
           {focused && chart && (
             <button className={`bx-icon-btn bx-chart-toggle${chart.on ? ' on' : ''}`} aria-pressed={chart.on} aria-label={chart.on ? 'Hide rate chart' : 'Show rate chart'} title={chart.on ? 'Hide rate chart' : 'Show rate chart'}
               onClick={(e) => { e.stopPropagation(); chart.toggle(); }}><ChartIcon /></button>
@@ -160,11 +160,12 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
         <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
           <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span /></div>
           {offers.rows.map((r) => (
-            <div key={r.tenorDays} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}>
+            <div key={r.tenorDays} className="bx-li bx-li-tenor click" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}
+              onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays); }}>
               <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
               <span className="r">{dateIn(r.tenorDays)}</span>
               <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
-              <span className="r"><button className="bx-btn ghost small" onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays); }}>Buy</button></span>
+              <span className="r"><button className="bx-btn ghost small" onClick={(e) => { e.stopPropagation(); if (isPhone()) setOpen(false); buy(r.tenorDays); }}>Buy</button></span>
             </div>
           ))}
           <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for this pool's closest cover: starting {offers.distance === 0 ? "at today's rate" : `${offers.distance / 100}% from today`}{offers.strike ? ` (${fmtRate(offers.strike)} ${quoteCcy(pool.pair)})` : ''}, with a limit 10% beyond, including the BlockFinaX fee. Cover starting further away costs less. Your exact price is shown before you buy.</div>

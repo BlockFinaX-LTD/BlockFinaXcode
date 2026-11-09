@@ -690,3 +690,25 @@
   .bx-dense .bx-aside { padding-bottom: 52px; }
   .bx-dense .bx-col { padding-bottom: 52px; }
 }
+
+/* ── Phones: fixes, and each market or length on one line with its Buy button ──
+   The desktop two-column Protect layout above was also applying on phones, squeezing the
+   market list beside the buying panel; and the 72px bottom space above let the bottom
+   tab bar cover Review protection. Both are set back for phones here. */
+@media (max-width: 960px) {
+  .bx-dense { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .bx-main, .bx-dense { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+
+  /* A market on one line: pair and spot, available, price, then a small Buy. */
+  .bx-li.bx-li-market { grid-template-columns: minmax(0, 1fr) auto auto auto !important; column-gap: 10px; padding: 12px 2px; }
+  .bx-li.bx-li-market > .r:has(> .bx-btn), .bx-li.bx-li-market > .r:has(> .bx-icon-btn) { grid-column: auto; justify-content: flex-end; gap: 4px; }
+  .bx-li.bx-li-market .bx-btn.small, .bx-li.bx-li-tenor .bx-btn.small { padding: 5px 12px; min-height: 30px; font-size: 12px; white-space: nowrap; }
+
+  /* A length on one line: length, end date, price, then a small Buy. */
+  .bx-li.bx-li-tenor { display: grid !important; grid-template-columns: minmax(0, 1fr) auto auto auto !important; column-gap: 12px; align-items: center; padding: 10px 0 !important; }
+  .bx-li.bx-li-tenor > * { flex: none; }
+  .bx-li.bx-li-tenor > [data-label]::before { display: none; }
+  .bx-li.bx-li-tenor > .r:last-child { grid-column: auto; }
+}
