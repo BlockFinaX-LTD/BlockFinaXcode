@@ -172,10 +172,10 @@ test("one quote service prices the same economic quote on either chain", async (
 test("a quote only uses pools that sell the requested direction", async () => {
   const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
   const qs = new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: fakeAdapter("stellar", 7) }), pricer);
-  // Falling-rate (receivables) protection is not on offer for launch (shared/domain/offered-directions.ts).
+  // These test pools sell Cap ("up") only, so a Floor ("down") finds no pool.
   await assert.rejects(
     qs.quote({ ...request, direction: "down", strike: "10.8", cap: "10" }, { stellar: STELLAR_USER }),
-    (e: ApplicationError) => e.code === "INVALID_REQUEST" && /not on offer yet/.test(e.message),
+    (e: ApplicationError) => /No pool is offering .* Floor/.test(e.message),
   );
   assert.deepEqual((await qs.options("USD/GHS", "down")).tenors, []);
   // A request for one specific pool only uses that pool.

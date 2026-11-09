@@ -2,14 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isOffered, OFFERED_DIRECTIONS, poolForSale } from "@shared/domain/offered-directions";
 
-test("only depreciation protection is on sale for launch", () => {
-  assert.deepEqual([...OFFERED_DIRECTIONS], ["up"]);
+test("Cap and Floor are both on sale", () => {
+  assert.deepEqual([...OFFERED_DIRECTIONS], ["up", "down"]);
   assert.equal(isOffered("up"), true);
-  assert.equal(isOffered("down"), false);
+  assert.equal(isOffered("down"), true);
 });
 
-test("pools sell only in an offered direction; older two-way pools still sell it", () => {
+test("pools in either direction sell, and so do older two-way pools", () => {
   assert.equal(poolForSale("up"), true);
-  assert.equal(poolForSale("down"), false);
+  assert.equal(poolForSale("down"), true);
   assert.equal(poolForSale("both"), true);
 });

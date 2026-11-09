@@ -296,7 +296,7 @@ export function HedgerHome({ go }: { go: Go }) {
       <aside className="bx-aside">
         <div className="bx-cta">
           <h3>Protect an exposure</h3>
-          <p>Protect a dollar payment against the local currency weakening. Pay a premium in USDC, and get paid if the rate moves against you.</p>
+          <p>Protect a dollar payment you make, or dollar income you receive, against the rate moving the wrong way. Pay a premium in USDC, and get paid if it does.</p>
           <button onClick={() => go('h-protect', { buy: true })}>Get started</button>
         </div>
         <div className="bx-card tight">
