@@ -704,11 +704,23 @@
   /* A market on one line: pair and spot, available, price, then a small Buy. */
   .bx-li.bx-li-market { grid-template-columns: minmax(0, 1fr) auto auto auto !important; column-gap: 10px; padding: 12px 2px; }
   .bx-li.bx-li-market > .r:has(> .bx-btn), .bx-li.bx-li-market > .r:has(> .bx-icon-btn) { grid-column: auto; justify-content: flex-end; gap: 4px; }
-  .bx-li.bx-li-market .bx-btn.small, .bx-li.bx-li-tenor .bx-btn.small { padding: 5px 12px; min-height: 30px; font-size: 12px; white-space: nowrap; }
+  .bx-li.bx-li-market .bx-btn.small, .bx-li.bx-li-tenor .bx-btn.small { flex: none; padding: 5px 12px; min-height: 30px; font-size: 12px; white-space: nowrap; }
+  .bx-li.bx-li-market > [data-label]::before { display: none; }
+  /* The whole line opens the market, so the arrow is not needed on a phone; that room goes to the name. */
+  .bx-li.bx-li-market > .r:last-child > svg { display: none; }
+  .bx-li.bx-li-market { column-gap: 8px; }
+  .bx-li.bx-li-market .bx-btn.small { padding: 5px 11px; }
+  .bx-li.bx-li-market .bx-flag { width: 24px; height: 24px; }
+  .bx-li.bx-li-market .bx-flag svg { width: 24px; height: 24px; }
+  .bx-li.bx-li-market .bx-who { gap: 8px; }
+  .bx-li.bx-li-market .bx-who .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bx-li.bx-li-market .bx-who .d { white-space: nowrap; }
+  .bx-li.bx-li-market > .r .num { font-size: 12.5px; }
+  .bx-li.bx-li-market > .r .muted { font-size: 10.5px !important; }
 
   /* A length on one line: length, end date, price, then a small Buy. */
   .bx-li.bx-li-tenor { display: grid !important; grid-template-columns: minmax(0, 1fr) auto auto auto !important; column-gap: 12px; align-items: center; padding: 10px 0 !important; }
   .bx-li.bx-li-tenor > * { flex: none; }
   .bx-li.bx-li-tenor > [data-label]::before { display: none; }
-  .bx-li.bx-li-tenor > .r:last-child { grid-column: auto; }
+  .bx-li.bx-li-tenor > .r:last-child, .bx-li.bx-li-tenor > :first-child { grid-column: auto; }
 }
