@@ -277,8 +277,8 @@ export function HedgerHome({ go }: { go: Go }) {
                   <div className="bx-who">
                     <Flag pair={pair} />
                     <div style={{ minWidth: 0 }}>
-                      <div className="t"><CoverName pair={pair} direction={p.direction} /> · {p.structure === 'open' ? 'Open' : 'Limited'}</div>
-                      <div className="d">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div>
+                      <div className="t"><CoverName pair={pair} direction={p.direction} /></div>
+                      <div className="d">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}{p.structure === 'open' ? ', no limit' : ''}</div>
                     </div>
                   </div>
                   <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
@@ -662,6 +662,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
             return (
               <div className="bx-payline">
                 <span>{role === 'hedger' ? 'If it ended today' : 'Your pool would pay today'}: <b className="num" style={{ color: role === 'hedger' ? 'var(--green)' : 'var(--red)' }}>${fmt(today ?? 0)}</b></span>
+                <span>Cover type: <b>{focusedPos.structure === 'open' ? 'Open' : 'Limited'}</b></span>
                 <span>{role === 'hedger' ? 'Most it can pay' : 'Most your pool can pay'}: <b className="num">${fmt(m.maxPayout ?? 0)}</b> at {fmtRate(focusedPos.cap)}</span>
                 {role === 'hedger'
                   ? <span>Breaks even after premium at <b className="num">{fmtRate(breakeven)}</b></span>
@@ -686,7 +687,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           ) : (
             <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
               <div className="bx-list-h" style={POS_COLS}><span>{hint('Protection')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Expires')}</span></div>
-              {(role === 'hedger' ? mineHedges.filter((h) => (h.settlement.status === 'pending') === (listShowing === 'active')).map((h) => ({ pos: h.position, title: `${exposureLabel(pair, h.position.direction).title} · ${h.position.structure === 'open' ? 'Open' : 'Limited'}`, status: h.settlement.status }))
+              {(role === 'hedger' ? mineHedges.filter((h) => (h.settlement.status === 'pending') === (listShowing === 'active')).map((h) => ({ pos: h.position, title: exposureLabel(pair, h.position.direction).title, status: h.settlement.status }))
                 : under.rows.map(({ pool, pos }) => ({ pos, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
               ).map(({ pos, title, status }) => {
                 const k = markKey(pos);
@@ -1234,7 +1235,7 @@ export function MyProtections({ go }: { go: Go }) {
                       const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
                       return (
                         <div key={s.position} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
-                          <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={p.direction} /> · {p.structure === 'open' ? 'Open' : 'Limited'}</div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}</div></div></div>
+                          <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={p.direction} /></div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}{p.structure === 'open' ? ', no limit' : ''}</div></div></div>
                           <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
                           <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
                           <div className="r num" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>
