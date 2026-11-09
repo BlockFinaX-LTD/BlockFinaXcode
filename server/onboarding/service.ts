@@ -122,7 +122,9 @@ export async function saveOnboarding(userId: number, input: OnboardingInput) {
     await client.query("BEGIN");
     const existing = await client.query(`SELECT * FROM account_onboarding WHERE user_id = $1 FOR UPDATE`, [userId]);
     let organisationId: number | null = null;
-    if (input.accountType === "organisation") {
+    // A business gives its company details later (business account and KYB); only then is
+    // an organisations row created.
+    if (input.accountType === "organisation" && input.legalName) {
       const current = (existing.rows[0] as OnboardingRow | undefined)?.organisation_id ?? null;
       const orgValues = [input.legalName, input.registrationCountry, input.registrationNumber, input.industry, input.monthlyVolume];
       if (current) {

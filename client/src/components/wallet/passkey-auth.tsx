@@ -2,6 +2,9 @@
  * Testnet sign-in for the BlockFinaX passkey wallet.
  *
  * Step 1: sign in with an email code or Google (recoverable identity).
+ * Profile: first time only, "Let's create your profile" (name, country, individual or
+ *          business). The server already knows whether the email or Google account
+ *          exists: an account with a wallet or a saved profile skips this.
  * Step 2: first time only, create the wallet passkey. That creates the user's smart
  *         accounts on Stellar and Base Sepolia, and the passkey approves every transaction.
  * Returning users can also sign in directly with the passkey.
@@ -21,6 +24,7 @@ import {
   signOutPasskey, startEmailSignIn, startGoogleSignIn,
 } from "@/lib/wallets/passkey-wallet";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@shared/legal";
+import { ProfileStep } from "./profile-step";
 
 const GOOGLE_ERRORS: Record<string, string> = {
   google_not_configured: "Google sign-in is not set up on testnet yet. Use your email instead.",
@@ -38,6 +42,18 @@ export function PasskeyAuth() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  // Whether a signed-in account without a wallet still has to give its profile.
+  // If the check fails, carry on to the passkey: the profile must never lock anyone out.
+  const [profile, setProfile] = useState<"checking" | "needed" | "done">("checking");
+  const needsWallet = signedIn && !session?.credentialId && !forConnectors;
+  useEffect(() => {
+    if (!needsWallet) return;
+    let live = true;
+    api<{ completed: boolean }>("/api/v2/onboarding")
+      .then((v) => { if (live) setProfile(v.completed ? "done" : "needed"); })
+      .catch(() => { if (live) setProfile("done"); });
+    return () => { live = false; };
+  }, [needsWallet, session?.user.id]);
 
   // Back from Google: keep the session it created and carry on to the passkey step.
   useEffect(() => {
@@ -76,8 +92,17 @@ export function PasskeyAuth() {
     </>
   );
 
+  const signOut = () => void signOutPasskey().then(() => { setProfile("checking"); setSession(null); });
+
+  if (needsWallet && profile === "checking") {
+    return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  }
+  if (needsWallet && profile === "needed") {
+    return <ProfileStep email={session?.user.email} defaultName={session?.user.name} onDone={() => setProfile("done")} onSignOut={signOut} />;
+  }
+
   // Step 2: signed in, wallet passkey not created yet.
-  if (signedIn && !session?.credentialId && !forConnectors) {
+  if (needsWallet) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
         <div className="flex flex-col items-center gap-3 text-center max-w-xs w-full">
@@ -99,7 +124,7 @@ export function PasskeyAuth() {
             {spinner("create") ?? <><KeyRound className="h-4 w-4 mr-2" />Create wallet passkey</>}
           </Button>
           {busy === "create" && <p className="text-[11px] text-muted-foreground">Creating your accounts. This takes about 10 seconds.</p>}
-          <button className="text-[11.5px] text-muted-foreground underline mt-2" onClick={() => void signOutPasskey().then(() => setSession(null))}>
+          <button className="text-[11.5px] text-muted-foreground underline mt-2" onClick={signOut}>
             Use a different account
           </button>
           {warning && (
@@ -170,7 +195,7 @@ export function PasskeyAuth() {
           </p>
         ) : (
           <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
-            New users: sign in with email or Google, then create a passkey for your wallet.
+            New users: sign in with email or Google, add your name and country, then create a passkey for your wallet.
           </p>
         )}
         <p className="text-[11px] text-muted-foreground mt-3 leading-snug">

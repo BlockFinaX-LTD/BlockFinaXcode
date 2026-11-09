@@ -22,8 +22,6 @@ import { AgentChat } from './agent-chat';
 import { ProductTour } from './tour';
 import { UnderwriterRequests } from './rfq';
 import { LegalCard, useLegalStatus } from './legal-card';
-import { Onboarding, type OnboardingView } from './onboarding';
-import { startingRole } from '@shared/onboarding';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { onActingOrganisationChange, pendingInviteToken } from '@/lib/acting-organisation';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
@@ -144,10 +142,9 @@ export function Workspace() {
   const content = useRef<HTMLDivElement>(null);
   useListLabels(content);
   const goTab = (p: Page) => { setMore(false); go(p); };
-  // New accounts answer "individual or organisation" and a few basics before the workspace opens.
-  // If the check itself fails, the workspace opens anyway: onboarding must never lock a user out.
+  // New accounts give their profile (name, country, individual or business) at sign-up,
+  // before their passkey (wallet/profile-step.tsx); the workspace never stops for it.
   const qc = useQueryClient();
-  const onboarding = useQuery({ queryKey: ['v2-onboarding'], queryFn: () => api<OnboardingView>('/api/v2/onboarding'), staleTime: Infinity, retry: 1 });
   // Switching between a personal account and a business must never show the other one's numbers.
   const acting = useActingOrganisation();
   useEffect(() => onActingOrganisationChange(() => { void qc.resetQueries(); }), [qc]);
@@ -166,25 +163,6 @@ export function Workspace() {
   }
   if (session && legal.data?.needsAcceptance) {
     return <div className="bx" data-theme={theme}><LegalCard updated={Boolean(legal.data?.updated)} /></div>;
-  }
-
-  if (onboarding.isPending) {
-    return <div className="bx" data-theme={theme}><div className="bx-onboard"><Spin /></div></div>;
-  }
-  if (onboarding.data && !onboarding.data.completed) {
-    return (
-      <div className="bx" data-theme={theme}>
-        <Onboarding
-          email={session?.user.email}
-          defaultName={session?.user.name}
-          onDone={(v) => {
-            if (v.intents?.length) switchRole(startingRole(v.intents));
-            qc.setQueryData(['v2-onboarding'], v);
-            window.scrollTo(0, 0);
-          }}
-        />
-      </div>
-    );
   }
 
   return (

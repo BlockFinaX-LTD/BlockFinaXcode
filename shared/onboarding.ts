@@ -1,10 +1,11 @@
 /**
- * Onboarding: the short form every new account completes after sign-in.
+ * Onboarding: the profile a new account gives right after it first signs in with email
+ * or Google, before it creates its wallet passkey.
  *
- * It asks whether the account is for an individual or an organisation, and a few
- * basic details. No ID numbers or documents: those are asked for when the user
- * first buys protection or creates a pool (see shared/compliance-schema.ts).
- * The same rules run in the app and on the server.
+ * Required: individual or business, full name and country of residence. Phone, intents
+ * and organisation details are optional here and checked only when given. No ID numbers
+ * or documents: those are asked for when the user first buys protection or creates a
+ * pool (see shared/compliance-schema.ts). The same rules run in the app and on the server.
  */
 
 export const ACCOUNT_TYPES = ["individual", "organisation"] as const;
@@ -81,7 +82,7 @@ export function validateOnboarding(raw: unknown): { value: OnboardingInput; prob
   const b = (raw ?? {}) as Record<string, unknown>;
   const problems: string[] = [];
   const accountType = (ACCOUNT_TYPES as readonly string[]).includes(b.accountType as string) ? (b.accountType as AccountType) : null;
-  if (!accountType) problems.push("Choose individual or organisation.");
+  if (!accountType) problems.push("Choose individual or business.");
   const org = accountType === "organisation";
 
   const fullName = text(b.fullName);
@@ -93,18 +94,19 @@ export function validateOnboarding(raw: unknown): { value: OnboardingInput; prob
   const intents = Array.isArray(b.intents)
     ? INTENTS.filter((i) => (b.intents as unknown[]).includes(i))
     : [];
-  if (!intents.length) problems.push("Choose at least one thing you want to do.");
 
   const value: OnboardingInput = { accountType: accountType ?? "individual", fullName, country, intents };
 
-  if (accountType === "individual") {
-    const phone = text(b.phone);
+  const phone = text(b.phone);
+  if (accountType === "individual" && phone) {
     const digits = phone.replace(/\D/g, "");
     if (!/^\+?[\d\s()-]+$/.test(phone) || digits.length < 7 || digits.length > 15) problems.push("Enter a phone number, with the country code.");
     value.phone = phone;
   }
 
-  if (org) {
+  // Organisation details are optional at sign-up; when any is given, all are checked.
+  const orgFields = ["jobTitle", "legalName", "registrationCountry", "registrationNumber", "industry", "monthlyVolume"];
+  if (org && orgFields.some((k) => text(b[k]))) {
     const jobTitle = text(b.jobTitle);
     const legalName = text(b.legalName);
     const registrationCountry = text(b.registrationCountry).toUpperCase();

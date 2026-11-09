@@ -27,15 +27,15 @@ test("a complete organisation form passes and keeps the company details", () => 
 
 test("missing choices are reported in form order", () => {
   const { problems } = validateOnboarding({});
-  assert.deepEqual(problems, ["Choose individual or organisation.", "Enter your full name.", "Choose your country of residence.", "Choose at least one thing you want to do."]);
+  assert.deepEqual(problems, ["Choose individual or business.", "Enter your full name.", "Choose your country of residence."]);
 });
 
-test("individuals need a phone number with enough digits", () => {
+test("a phone number, when given, needs enough digits", () => {
   assert.ok(validateOnboarding({ ...individual, phone: "12345" }).problems.includes("Enter a phone number, with the country code."));
   assert.ok(validateOnboarding({ ...individual, phone: "call me" }).problems.length > 0);
 });
 
-test("organisations need every company field, from the lists", () => {
+test("company details, when given, are all checked against the lists", () => {
   const { problems } = validateOnboarding({ ...organisation, industry: "Crypto", monthlyVolume: "lots", registrationNumber: "" });
   assert.deepEqual(problems, ["Enter the registration number.", "Choose an industry.", "Choose the expected monthly amount."]);
 });
@@ -43,6 +43,15 @@ test("organisations need every company field, from the lists", () => {
 test("unknown intents are dropped", () => {
   const { value } = validateOnboarding({ ...individual, intents: ["payables", "trading"] });
   assert.deepEqual(value.intents, ["payables"]);
+});
+
+test("the sign-up profile needs only account type, name and country", () => {
+  for (const accountType of ["individual", "organisation"]) {
+    const { value, problems } = validateOnboarding({ accountType, fullName: "Ama Mensah", country: "GH" });
+    assert.deepEqual(problems, []);
+    assert.deepEqual(value.intents, []);
+    assert.equal(value.phone, undefined);
+  }
 });
 
 test("the country list has no duplicates and starts with the countries we cover", () => {
