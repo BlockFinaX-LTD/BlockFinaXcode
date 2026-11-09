@@ -423,10 +423,6 @@
 .bx-quote-row b { font-size: 20px; font-weight: 600; }
 .bx-quote-note { color: var(--muted); font-size: 12.5px; line-height: 1.45; margin-top: 2px; }
 .bx-adjust { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 12px 0; }
-.bx-adjust > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--blue); list-style: none; display: flex; justify-content: space-between; align-items: center; }
-.bx-adjust > summary::-webkit-details-marker { display: none; }
-.bx-adjust > summary::after { content: '▾'; color: var(--muted); transition: transform .15s; }
-.bx-adjust[open] > summary::after { transform: rotate(180deg); }
 
 /* Buying panel: smaller type and tighter spacing, so the form reads as one short card. */
 .bx-buy { padding: 18px; gap: 14px; }
@@ -445,11 +441,9 @@
 .bx-buy .bx-quote-row b { font-size: 16px; }
 .bx-buy .bx-quote-note { font-size: 11.5px; }
 .bx-buy .bx-adjust { padding: 10px 0; }
-.bx-buy .bx-adjust > summary { font-size: 13px; }
 .bx-buy .bx-btn.block { padding: 11px; font-size: 14px; min-height: 42px; }
 .bx-buy .bx-hint, .bx-buy .muted { font-size: 11.5px; }
 .bx-buy .bx-sums { font-size: 13px; }
-.bx-adjust > summary:focus:not(:focus-visible) { outline: none; }
 .bx-chart-toggle { flex: none; }
 .bx-chart-toggle.on { background: var(--blue-soft); color: var(--blue); border-color: var(--blue-line); }
 
@@ -486,7 +480,7 @@
   .bx-btn.small, .bx-seg.small button, .bx-pill, .bx-ranges button, .bx-label, .bx-field > span:first-child { font-size: 12px; }
   .bx-network button { font-size: 12px; }
 
-  .bx-sum, .bx-quote-row, .bx-adjust > summary { font-size: 13px; }
+  .bx-sum, .bx-quote-row { font-size: 13px; }
   .bx-sum.total { font-size: 14px; }
   .bx-quote-row b, .bx-buy .bx-quote-row b { font-size: 15px; }
 
@@ -586,7 +580,6 @@
 .bx-main .bx-seg { padding: 3px; border-radius: 10px; }
 .bx-main .bx-seg button { padding: 6px; font-size: 12px; border-radius: 8px; }
 .bx-main .bx-adjust { padding: 8px 0; }
-.bx-main .bx-adjust > summary { font-size: 13px; }
 .bx-main .bx-quote { padding: 10px 12px; gap: 4px; border-radius: 10px; font-size: 13px; }
 .bx-main .bx-sum { padding: 5px 0; font-size: 13px; }
 .bx-main .bx-sum.total { font-size: 14px; padding-top: 8px; }
@@ -638,7 +631,7 @@
 .bx-dense .bx-buy .bx-btn.block { padding: 8px; min-height: 36px; font-size: 13px; }
 
 /* Buy panel layout hooks (normal spacing everywhere, packed on the compact Protect page). */
-.bx-adjust-body { display: grid; gap: 16px; margin-top: 14px; }
+.bx-adjust-body { display: grid; gap: 16px; }
 .bx-dense { grid-template-columns: minmax(0, 1fr) 380px; }
 .bx-dense .bx-buy { gap: 8px; }
 .bx-dense .bx-buy-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -651,7 +644,7 @@
 .bx-dense .bx-until > .bx-input { max-width: 180px; }
 .bx-dense .bx-until > .bx-hint { text-align: left; margin-top: 4px !important; }
 .bx-dense .bx-buy .muted[style] { margin-top: 3px !important; }
-.bx-dense .bx-adjust-body { gap: 8px; margin-top: 8px; }
+.bx-dense .bx-adjust-body { gap: 8px; }
 .bx-dense .bx-strike-in { gap: 6px; }
 .bx-dense .bx-start-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .bx-dense .bx-start-row .bx-pills { display: flex; gap: 4px; margin-top: 0 !important; }

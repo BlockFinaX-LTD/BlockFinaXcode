@@ -65,10 +65,30 @@ export async function signAndSend(transactions: PreparedTransaction[], onStep: (
   return hash;
 }
 
+/**
+ * The last answer this device saw for a list, shown straight away while a fresh one loads
+ * (the Stellar network can take seconds to answer). A per-device convenience only: it is
+ * replaced as soon as the fresh answer arrives, and cleared on sign-out (signOutPasskey).
+ */
+const CACHE_PREFIX = 'bfx:cache:';
+export function remembered<T>(key: string) {
+  return {
+    initialData: (): T | undefined => {
+      try { const raw = localStorage.getItem(CACHE_PREFIX + key); return raw ? (JSON.parse(raw) as T) : undefined; } catch { return undefined; }
+    },
+    initialDataUpdatedAt: 0, // always counts as old, so a fresh answer is fetched at once
+  };
+}
+export function remember<T>(key: string, value: T): T {
+  try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch { /* storage full or blocked: nothing kept */ }
+  return value;
+}
+
 export function usePools() {
   return useQuery({
     queryKey: ['v2-pools'],
-    queryFn: async () => (await api<{ pools: CurrencyPool[] }>('/api/v2/pools')).pools,
+    queryFn: async () => remember('pools', (await api<{ pools: CurrencyPool[] }>('/api/v2/pools')).pools),
+    ...remembered<CurrencyPool[]>('pools'),
     refetchInterval: 30_000,
   });
 }

@@ -209,6 +209,8 @@ export async function currentPasskeySession(): Promise<PasskeySession | null> {
 
 export async function signOutPasskey() {
   prefetched.clear(); // passkey options belong to the account that fetched them
+  // Lists remembered on this device for a fast start belong to this account too.
+  try { Object.keys(localStorage).filter((k) => k.startsWith("bfx:cache:")).forEach((k) => localStorage.removeItem(k)); } catch { /* nothing to clear */ }
   try { await api("/api/auth/logout", {}); } catch { /* the token is dropped either way */ }
   storeSessionToken(null);
 }

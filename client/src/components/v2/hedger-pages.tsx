@@ -13,8 +13,9 @@ import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
   ccyName, dateIn, dateOf, endsAt, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
-  useUsdcBalances, usdcOn, useIsDemo, openContactSales, type Direction,
+  useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction,
 } from './shared';
+import { usePasskeySession } from '@/lib/identity';
 import { AssetClassTabs, Flag, hint, Loading, Note, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
@@ -25,9 +26,14 @@ import { isOffered, poolForSale } from '@shared/domain/offered-directions';
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
 function useHedges() {
+  // Remembered per person and per account they act for, so a business never shows personal cover.
+  const { session } = usePasskeySession();
+  const acting = useActingOrganisation();
+  const key = `hedges:${session?.user.id ?? 'anon'}:${acting?.id ?? 'me'}`;
   return useQuery({
-    queryKey: ['v2-hedges'],
-    queryFn: async () => (await api<{ hedges: Hedge[] }>('/api/v2/hedges')).hedges,
+    queryKey: ['v2-hedges', key],
+    queryFn: async () => remember(key, (await api<{ hedges: Hedge[] }>('/api/v2/hedges')).hedges),
+    ...remembered<Hedge[]>(key),
     refetchInterval: 30_000,
     // Show the list already loaded while it refreshes; it changes only on purchase, fixing or claim.
     staleTime: 20_000,
@@ -39,7 +45,8 @@ function useSpot(pair: string | null) {
   return useQuery({
     queryKey: ['v2-spot', pair],
     enabled: Boolean(pair),
-    queryFn: async () => Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(pair!)}`)).spot),
+    queryFn: async () => remember(`spot:${pair}`, Number((await api<{ spot: string }>(`/api/v2/spot?pair=${encodeURIComponent(pair!)}`)).spot)),
+    ...remembered<number>(`spot:${pair}`),
     refetchInterval: 60_000,
   });
 }
@@ -49,7 +56,8 @@ function useSpot(pair: string | null) {
 function useWatchlist() {
   return useQuery({
     queryKey: ['v2-rates'],
-    queryFn: async () => (await api<{ rates: { pair: string; spot: number | null; change: number | null }[] }>('/api/v2/rates')).rates,
+    queryFn: async () => remember('rates', (await api<{ rates: { pair: string; spot: number | null; change: number | null }[] }>('/api/v2/rates')).rates),
+    ...remembered<{ pair: string; spot: number | null; change: number | null }[]>('rates'),
     refetchInterval: 60_000,
   });
 }
@@ -87,15 +95,18 @@ function ChangeText({ change }: { change: number | null }) {
  * A pool's price per tenor: BlockFinaX's fair price on a reference cover (protection
  * 2% from today, capped 10% beyond) times the pool's markup, plus its hedger fee.
  */
+type FairTable = { reference: { strike: string }; rows: { tenorDays: number; fairRateE6: number | null }[] };
 function usePoolOffers(pool: CurrencyPool) {
   const direction = pool.direction === 'down' ? 'down' : 'up';
   const tenors = pool.tenors.filter((t) => t.active).sort((a, b) => a.tenorDays - b.tenorDays);
   // Priced at the closest strike this pool sells: its most protective cover.
   const distance = pool.structures.minStrikeDistanceBps ?? 0;
+  const fairKey = `fair:${pool.pair}:${direction}:${tenors.map((t) => t.tenorDays).join(',')}:${distance}`;
   const fair = useQuery({
     queryKey: ['v2-fair', pool.pair, direction, tenors.map((t) => t.tenorDays).join(','), distance],
     enabled: tenors.length > 0,
-    queryFn: () => api<{ reference: { strike: string }; rows: { tenorDays: number; fairRateE6: number | null }[] }>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}&distance=${distance}`),
+    queryFn: async () => remember(fairKey, await api<FairTable>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}&distance=${distance}`)),
+    ...remembered<FairTable>(fairKey),
     staleTime: 60_000,
   });
   const rows = tenors.map((t) => {
@@ -824,9 +835,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // The strike, typed either as a % from today's rate or as a rate. Whichever the user typed
   // last stays fixed when the live rate moves; the other follows.
   const [pctText, setPctText] = useState('0');
-  // "Adjust protection" stays open for buyers who opened it before (a per-viewer convenience).
-  const [adjustOpen, setAdjustOpen] = useState(() => { try { return localStorage.getItem('bfx:buy-adjust') === '1'; } catch { return false; } });
-  const rememberAdjust = (v: boolean) => { setAdjustOpen(v); try { localStorage.setItem('bfx:buy-adjust', v ? '1' : '0'); } catch { /* storage unavailable */ } };
   // The rate chart shows beside the buying form only when asked for (remembered per viewer).
   const [showChart, setShowChart] = useState(() => { try { return localStorage.getItem('bfx:buy-chart') === '1'; } catch { return false; } });
   const chartRef = useRef<HTMLDivElement | null>(null);
@@ -1097,8 +1105,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 {days && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{days} {days === 1 ? 'day' : 'days'} from now · ends {endsAt(days)}</div>}
               </div>
 
-              <details className="bx-adjust" open={adjustOpen} onToggle={(ev) => rememberAdjust((ev.target as HTMLDetailsElement).open)}>
-                <summary>Adjust protection</summary>
+              {/* Strike, cover type, limit and pool: always shown, the panel is compact enough. */}
+              <div className="bx-adjust">
                 <div className="bx-adjust-body">
                   {directions.length > 1 && (
                     <div className="bx-seg">
@@ -1148,7 +1156,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                     </div>
                   )}
                 </div>
-              </details>
+              </div>
 
               {!(Number(amount) > 0) ? (
                 <div className="bx-quote"><div className="bx-quote-note" style={{ margin: 0 }}>Enter an amount to see your price.</div></div>
