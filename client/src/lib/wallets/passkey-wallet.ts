@@ -408,9 +408,7 @@ export async function passkeyBalances() {
 }
 
 /** Prepare and send a transfer with the passkey; returns the transaction hash. */
-export interface TravelRuleDetails { beneficiaryType: 'self' | 'person' | 'business'; beneficiaryName?: string; beneficiaryVasp?: string; beneficiaryCountry?: string }
-
-export async function passkeySend(input: { chain: string; symbol: string; to: string; amount: string; travelRule?: TravelRuleDetails }, onStep?: (m: string) => void) {
+export async function passkeySend(input: { chain: string; symbol: string; to: string; amount: string }, onStep?: (m: string) => void) {
   const { toWalletRequest } = await import("../wallet-provider");
   const chain = fromScreenChain(input.chain);
   const { transactions } = await api<{ transactions: import("../wallet-provider").PreparedTransaction[] }>("/api/v2/transfers/prepare", { ...input, chain });

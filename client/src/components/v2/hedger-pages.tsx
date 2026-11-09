@@ -626,7 +626,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
       <section className="bx-full">
         <div className="bx-card">
           <button className="bx-link bx-back" onClick={() => go(role === 'hedger' ? 'h-protections' : 'u-pools')}>
-            <ChevronLeft aria-hidden="true" /> {role === 'hedger' ? 'My protections' : 'My pools'}
+            <ChevronLeft aria-hidden="true" /> {role === 'hedger' ? 'My protections' : 'Pools'}
           </button>
           <div className="bx-dense-head">
             <Flag pair={pair} />

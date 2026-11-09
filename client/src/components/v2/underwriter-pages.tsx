@@ -1,6 +1,6 @@
 /**
  * Underwriter pages: "How do you want your capital exposed?"
- * Home, My pools, Create pool, Pool (tenor pricing, protection settings, docked
+ * Home, Pools (all pools, and My pools), Create pool, Pool (tenor pricing, protection settings, docked
  * Add liquidity / Withdraw panel), Risk and exposure, Withdraw.
  * All tenors share one pool's liquidity. BlockFinaX computes the fair price; the
  * underwriter sets the offer, stored on chain as a markup on fair (90% to 500%).
@@ -206,15 +206,15 @@ export function UnderwriterHome({ go }: { go: Go }) {
   );
 }
 
-// ── My pools ─────────────────────────────────────────────────────────────────
+// ── Pools ────────────────────────────────────────────────────────────────────
 
+/** Every pool, so an underwriter can add liquidity to any of them, and My pools: the ones they fund or created. */
 export function MyPools({ go }: { go: Go }) {
   const { pools, all, stakes, yours } = useBook();
-  const others = all.filter((p) => !yours.includes(p));
-  const [view, setView] = useState<'yours' | 'open' | null>(null);
+  const [view, setView] = useState<'yours' | 'all' | null>(null);
   if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
-  const showing = view ?? (yours.length || !others.length ? 'yours' : 'open');
-  const rows = showing === 'yours' ? yours : others;
+  const showing = view ?? (yours.length ? 'yours' : 'all');
+  const rows = showing === 'yours' ? yours : all;
   return (
     <main className="bx-main">
       <section className="bx-full">
@@ -223,14 +223,15 @@ export function MyPools({ go }: { go: Go }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <h2>Pools</h2>
               <div className="bx-seg small" role="group" aria-label="Show">
-                <button className={showing === 'yours' ? 'on' : ''} aria-pressed={showing === 'yours'} onClick={() => setView('yours')}>Yours <span className="muted">{yours.length}</span></button>
-                <button className={showing === 'open' ? 'on' : ''} aria-pressed={showing === 'open'} onClick={() => setView('open')}>Open to new capital <span className="muted">{others.length}</span></button>
+                <button className={showing === 'all' ? 'on' : ''} aria-pressed={showing === 'all'} onClick={() => setView('all')}>Pools <span className="muted">{all.length}</span></button>
+                <button className={showing === 'yours' ? 'on' : ''} aria-pressed={showing === 'yours'} onClick={() => setView('yours')}>My pools <span className="muted">{yours.length}</span></button>
               </div>
             </div>
             <button className="bx-btn small" data-tour="create-pool" onClick={() => go('u-create')}>Create pool</button>
           </div>
+          {showing === 'all' && rows.length > 0 && <div className="sub" style={{ marginBottom: 8 }}>Open any pool to add liquidity and earn a share of its premiums.</div>}
           {!rows.length
-            ? <div className="bx-empty">{showing === 'yours' ? 'You have no pools yet.' : 'No other pools are open to new capital.'}</div>
+            ? <div className="bx-empty">{showing === 'yours' ? <>You have no pools yet. <button className="bx-link" onClick={() => setView('all')}>See all pools</button> to add liquidity to one.</> : 'No pools yet.'}</div>
             : <PoolRows pools={rows} stakes={stakes} go={go} />}
         </div>
       </section>
@@ -255,7 +256,7 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
     <main className="bx-main">
       <section className="bx-col">
         <div className="bx-card">
-          <button className="bx-link bx-back" onClick={() => go('u-pools')}><ChevronLeft aria-hidden="true" /> My pools</button>
+          <button className="bx-link bx-back" onClick={() => go('u-pools')}><ChevronLeft aria-hidden="true" /> Pools</button>
           <div className="bx-dense-head">
             <Flag pair={pool.pair} />
             <div><div className="bx-dense-name">{poolName(pool)} pool</div><div className="muted">Pays hedgers if {pool.pair} {pool.direction === 'down' ? 'falls below' : 'rises past'} their strike</div></div>

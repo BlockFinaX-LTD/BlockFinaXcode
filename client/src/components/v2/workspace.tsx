@@ -49,7 +49,7 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   ],
   underwriter: [
     { page: 'u-home', label: 'Home', icon: <Home /> },
-    { page: 'u-pools', label: 'My pools', icon: <Layers /> },
+    { page: 'u-pools', label: 'Pools', icon: <Layers /> },
     { page: 'u-requests', label: 'Quote requests', icon: <Inbox /> },
     { page: 'u-risk', label: 'Risk and exposure', icon: <LineChart /> },
     { page: 'u-withdraw', label: 'Withdraw capital', icon: <ArrowUp /> },

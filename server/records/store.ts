@@ -418,7 +418,11 @@ export function travelRuleThreshold(): number {
 
 export interface TravelRuleInput { beneficiaryName?: unknown; beneficiaryType?: unknown; beneficiaryVasp?: unknown; beneficiaryCountry?: unknown }
 
-/** Check and store recipient details for a transfer at or above the threshold. Returns null below it. */
+/**
+ * Check and store recipient details for a transfer at or above the threshold. Returns null below it.
+ * Not used for USDC transfers from a user's own wallet (no details are asked for); kept for
+ * fiat payouts, where the recipient must be recorded.
+ */
 export async function travelRuleFor(userId: number, organisationId: number | null, t: { chain: string; asset: string; amount: number; to: string }, input: TravelRuleInput | undefined) {
   if (!(t.amount >= travelRuleThreshold())) return null;
   const type = ["self", "person", "business"].includes(String(input?.beneficiaryType)) ? String(input!.beneficiaryType) : null;

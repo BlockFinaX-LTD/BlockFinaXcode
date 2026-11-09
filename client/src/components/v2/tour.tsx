@@ -24,7 +24,7 @@ const STEPS: Record<Role, Step[]> = {
   underwriter: [
     { title: 'Earn as an underwriter', body: 'Put USDC into currency pools and earn the premiums businesses pay for protection. You choose the currency, the direction and the terms you back. This is the demo, so everything uses test USDC.' },
     { target: '[data-tour="roles"]', title: 'Hedger or underwriter', body: 'Switch back to Hedger at any time to buy protection yourself.' },
-    { target: '[data-tour="u-pools"]', title: 'My pools', body: 'Add liquidity to your pools or to pools open to new capital, see what each one has earned, and create a pool for a new currency.' },
+    { target: '[data-tour="u-pools"]', title: 'Pools', body: 'See every pool and add liquidity to any of them. My pools shows the ones you fund or created, and what each has earned. You can also create a pool for a new currency.' },
     { target: '[data-tour="u-risk"]', title: 'Risk and exposure', body: 'See how much of your USDC is set aside for open protections and what you could pay at most.' },
     { target: '[data-tour="u-withdraw"]', title: 'Withdraw capital', body: 'USDC not set aside for open protections can be withdrawn whenever you like.' },
     { title: 'You are ready', body: 'Get free test USDC in Wallet, then create a pool or add liquidity. You can replay this tour from Account.' },

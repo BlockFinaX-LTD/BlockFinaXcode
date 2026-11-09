@@ -579,11 +579,6 @@ export function registerV2Routes(app: Express) {
     personalOnly(req, "Moving money between networks");
     const uid = await userId(req);
     const request = await routeRequest(s, uid, req.body);
-    // Travel Rule: to your own wallet it is recorded as "self"; to someone else, their details are required.
-    const own = Object.values(await s.accounts.addressBook(uid)).some((a) => String(a).toLowerCase() === request.recipient.toLowerCase());
-    const { travelRuleFor } = await import("../records/store");
-    await travelRuleFor(uid, null, { chain: request.destinationChain, asset: "USDC", amount: Number(request.amount), to: request.recipient },
-      own ? { beneficiaryType: "self" } : req.body?.travelRule);
     const quotes = await s.routing.engine.quote(request);
     const best = quotes.find((q) => q.quote.provider !== "direct") ?? quotes[0];
     if (!best) throw new ApplicationError("NO_ROUTE", "No route between these networks right now");
@@ -642,9 +637,6 @@ export function registerV2Routes(app: Express) {
     if (typeof chain !== "string" || typeof to !== "string" || typeof amount !== "string") throw new ApplicationError("INVALID_REQUEST", "chain, to and amount are required");
     const uid = await userId(req);
     const owner = await ownerOn(s, uid, chain, req);
-    // Travel Rule: at or above the threshold, the recipient's details are required and kept.
-    const { travelRuleFor } = await import("../records/store");
-    await travelRuleFor(uid, Number(req.header("x-bfx-organisation")) || null, { chain, asset: String(symbol ?? "USDC"), amount: Number(amount), to: to.trim() }, req.body?.travelRule);
     res.json({ chain, transactions: await s.adapters.adapterFor(chain).prepareTransfer(owner, to.trim(), String(symbol ?? "USDC"), amount) });
   }));
 
