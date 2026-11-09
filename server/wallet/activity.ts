@@ -6,10 +6,12 @@
  * a BlockFinaX wallet (personal or business) in wallet_activity. History therefore runs from
  * about a week before the job first ran, and is kept from then on.
  *
- * Each movement is labelled when read: by the call that caused it (from the compliance log's
- * transaction.relayed entries, matched on transaction hash) or by who was on the other side
- * (a pool contract, the test USDC faucet, Circle CCTP). Several transfers in one transaction
- * and direction (a premium and its fee, say) are shown as one line.
+ * Each movement is labelled by what caused it. The pool contracts' own events in the same
+ * transaction say exactly that (cover bought, liquidity added, LP withdrawal, payout), so
+ * the job reads them alongside the USDC events and keeps one action per transaction.
+ * Otherwise the label comes from who was on the other side (the test USDC faucet, Circle
+ * CCTP) or the direction: Deposit or Withdrawal. Several transfers in one transaction and
+ * direction (a premium and its fee, say) are shown as one line.
  */
 import { Keypair, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import { chainRegistry } from "../chain/config";
@@ -40,6 +42,7 @@ async function activityDb(): Promise<Db> {
     );
     CREATE INDEX IF NOT EXISTS wallet_activity_address_idx ON wallet_activity (network_key, address, at DESC);
     CREATE TABLE IF NOT EXISTS wallet_activity_cursor (network_key text PRIMARY KEY, cursor text, ledger integer, updated_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE IF NOT EXISTS wallet_activity_action (tx_hash text PRIMARY KEY, action text NOT NULL, rank integer NOT NULL);
   `).then(() => undefined);
   await ready;
   return db;
@@ -73,7 +76,17 @@ export function movementsOf(topics: unknown[], data: unknown): { from: string | 
   return null;
 }
 
-/** Read new USDC events since the saved cursor and keep those that touch our wallets. */
+/** Pool contract events that explain a USDC movement, strongest first. */
+const POOL_ACTIONS: Record<string, number> = {
+  protection_purchased: 1, liquidity_added: 2, pool_created: 3, withdrawal_executed: 4, payout_claimed: 5, creator_earnings_withdrawn: 6,
+};
+
+/** The pool contracts on a hub: the current one and earlier ones still settling. */
+function poolContracts(hub: any): string[] {
+  return [hub?.contracts?.currencyPool, ...((hub?.contracts?.legacy ?? []) as any[]).map((l) => l.currencyPool)].filter(Boolean);
+}
+
+/** Read new USDC and pool events since the saved cursor and keep those that touch our wallets. */
 export async function indexWalletActivity(): Promise<{ saved: number }> {
   const hub = chainRegistry()?.hub;
   const usdc = hub?.assets?.USDC;
@@ -82,7 +95,10 @@ export async function indexWalletActivity(): Promise<{ saved: number }> {
   const server = new rpc.Server(hub.rpcUrls[0], { allowHttp: hub.rpcUrls[0].startsWith("http://") });
   const ours = await knownAddresses(db, hub.key);
   const decimals = usdc.decimals;
-  const { rows: [saved] } = await db.query(`SELECT cursor FROM wallet_activity_cursor WHERE network_key = $1`, [hub.key]);
+  const pools = poolContracts(hub);
+  // The cursor key names what is read: USDC and the pool contracts (v2), so a change re-reads the week.
+  const cursorKey = `${hub.key}:usdc+pools`;
+  const { rows: [saved] } = await db.query(`SELECT cursor FROM wallet_activity_cursor WHERE network_key = $1`, [cursorKey]);
 
   let count = 0;
   let cursor: string | undefined = saved?.cursor ?? undefined;
@@ -97,10 +113,22 @@ export async function indexWalletActivity(): Promise<{ saved: number }> {
   for (let page = 0; page < 200; page++) {
     const res = await server.getEvents({
       ...(cursor ? { cursor } : { startLedger: start! }),
-      filters: [{ type: "contract", contractIds: [usdc.addressOrContract] }],
+      filters: [{ type: "contract", contractIds: [usdc.addressOrContract, ...pools].slice(0, 5) }],
       limit: 200,
     });
     for (const e of res.events) {
+      if (e.contractId?.toString() !== usdc.addressOrContract) {
+        const name = String(native(e.topic[0]!) ?? "");
+        const rank = POOL_ACTIONS[name];
+        if (rank) {
+          await db.query(
+            `INSERT INTO wallet_activity_action (tx_hash, action, rank) VALUES ($1,$2,$3)
+             ON CONFLICT (tx_hash) DO UPDATE SET action = EXCLUDED.action, rank = EXCLUDED.rank WHERE wallet_activity_action.rank > EXCLUDED.rank`,
+            [e.txHash, name, rank],
+          );
+        }
+        continue;
+      }
       const m = movementsOf(e.topic.map(native), native(e.value));
       if (!m) continue;
       const at = new Date(e.ledgerClosedAt);
@@ -123,7 +151,7 @@ export async function indexWalletActivity(): Promise<{ saved: number }> {
     await db.query(
       `INSERT INTO wallet_activity_cursor (network_key, cursor, updated_at) VALUES ($1,$2,now())
        ON CONFLICT (network_key) DO UPDATE SET cursor = $2, updated_at = now()`,
-      [hub.key, cursor],
+      [cursorKey, cursor],
     );
   }
   return { saved: count };
@@ -151,21 +179,30 @@ export interface ActivityRow {
   counterparty: string | null;
 }
 
+/** Labels by the pool event in the same transaction, then by the call the app relayed. */
+const ACTION_KIND: Record<string, { in?: string; out?: string }> = {
+  protection_purchased: { out: "Premium paid" },
+  liquidity_added: { out: "Added liquidity" },
+  pool_created: { out: "Created a pool" },
+  withdrawal_executed: { in: "LP withdrawal" },
+  payout_claimed: { in: "Payout received" },
+  creator_earnings_withdrawn: { in: "Pool creator earnings" },
+};
 const METHOD_KIND: Record<string, { in?: string; out?: string }> = {
-  buy_protection: { out: "Bought cover" },
+  buy_protection: { out: "Premium paid" },
   claim_payout: { in: "Payout received" },
   deposit: { out: "Added liquidity" },
   create_pool: { out: "Created a pool" },
-  execute_withdrawal: { in: "Withdrew from a pool" },
+  execute_withdrawal: { in: "LP withdrawal" },
   withdraw_creator_earnings: { in: "Pool creator earnings" },
-  transfer: { out: "Sent", in: "Received" },
+  transfer: { out: "Withdrawal", in: "Deposit" },
 };
 
 /** The latest movements for one wallet, newest first, each labelled in plain words. */
 export async function walletActivity(network: string, address: string, limit = 50): Promise<ActivityRow[]> {
   const db = await activityDb();
   const hub = chainRegistry()?.get(network as never) as any;
-  const pools = new Set<string>([hub?.contracts?.currencyPool, ...((hub?.contracts?.legacy ?? []) as any[]).map((l) => l.currencyPool)].filter(Boolean));
+  const pools = new Set<string>(poolContracts(hub));
   const cctp = new Set<string>([hub?.cctp?.tokenMessenger, hub?.cctp?.forwarder, hub?.cctp?.messageTransmitter].filter(Boolean));
   let faucet: string | null = null;
   try { faucet = process.env.TESTNET_USDC_FAUCET_SECRET ? Keypair.fromSecret(process.env.TESTNET_USDC_FAUCET_SECRET).publicKey() : null; } catch { faucet = null; }
@@ -175,6 +212,7 @@ export async function walletActivity(network: string, address: string, limit = 5
     SELECT a.tx_hash, max(a.at) AS at, a.direction, sum(a.amount) AS amount,
            (array_agg(a.counterparty ORDER BY a.amount DESC))[1] AS counterparty,
            bool_or(a.event = 'mint') AS minted, bool_or(a.event = 'burn') AS burned,
+           (SELECT x.action FROM wallet_activity_action x WHERE x.tx_hash = a.tx_hash) AS action,
            ${hasLog ? `(SELECT l.data->>'method' FROM compliance_log l WHERE l.action = 'transaction.relayed' AND l.data->>'hash' = a.tx_hash LIMIT 1)` : "NULL"} AS method
     FROM wallet_activity a
     WHERE a.network_key = $1 AND a.address = $2
@@ -185,13 +223,12 @@ export async function walletActivity(network: string, address: string, limit = 5
   return rows.map((r) => {
     const dir = r.direction as "in" | "out";
     const cp: string | null = r.counterparty;
-    let kind = METHOD_KIND[r.method ?? ""]?.[dir]
+    const kind = ACTION_KIND[r.action ?? ""]?.[dir]
+      ?? METHOD_KIND[r.method ?? ""]?.[dir]
       ?? (cp && cp === faucet ? "Test USDC"
-        : r.burned || (cp && cctp.has(cp)) ? (dir === "out" ? "Sent to another network" : "From another network")
-        : r.minted ? "Received"
+        : r.burned || (cp && cctp.has(cp)) ? (dir === "out" ? "Withdrawal to another network" : "Deposit from another network")
         : cp && pools.has(cp) ? (dir === "out" ? "Paid to a pool" : "From a pool")
-        : dir === "out" ? "Sent" : "Received");
-    if (kind === "Sent" && cp && pools.has(cp)) kind = "Paid to a pool";
+        : dir === "out" ? "Withdrawal" : "Deposit");
     return { txHash: r.tx_hash, at: new Date(r.at).toISOString(), direction: dir, amount: String(r.amount), kind, counterparty: cp };
   });
 }
