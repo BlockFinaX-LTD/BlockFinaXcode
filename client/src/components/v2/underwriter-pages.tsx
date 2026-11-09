@@ -220,9 +220,9 @@ export function MyPools({ go }: { go: Go }) {
       <section className="bx-full">
         <div className="bx-card">
           <div className="bx-card-h" style={{ gap: 16, flexWrap: 'wrap' }}>
+            {/* The two tabs are the heading: the menu already says Pools. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <h2>Pools</h2>
-              <div className="bx-seg small" role="group" aria-label="Show">
+              <div className="bx-seg small" role="group" aria-label="Pools">
                 <button className={showing === 'all' ? 'on' : ''} aria-pressed={showing === 'all'} onClick={() => setView('all')}>Pools <span className="muted">{all.length}</span></button>
                 <button className={showing === 'yours' ? 'on' : ''} aria-pressed={showing === 'yours'} onClick={() => setView('yours')}>My pools <span className="muted">{yours.length}</span></button>
               </div>

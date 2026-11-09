@@ -1215,9 +1215,10 @@ export function MyProtections({ go }: { go: Go }) {
         <AssetClassTabs value={assetClass} onChange={setAssetClass} />
         {assetClass === 'ir' ? <RateProtections go={go} /> : <div className="bx-card">
           <div className="bx-card-h" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-            <h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2>
+            {/* With protections, the two tabs are the heading: the menu already says Protections. */}
+            {!all.length && <h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2>}
             {all.length > 0 && (
-              <div className="bx-seg small" role="group" aria-label="Show">
+              <div className="bx-seg small" role="group" aria-label="My protections">
                 <button className={showing === 'active' ? 'on' : ''} aria-pressed={showing === 'active'} onClick={() => setView('active')}>Active <span className="muted">{running.length}</span></button>
                 <button className={showing === 'ended' ? 'on' : ''} aria-pressed={showing === 'ended'} onClick={() => setView('ended')}>Ended <span className="muted">{ended.length}</span></button>
               </div>
