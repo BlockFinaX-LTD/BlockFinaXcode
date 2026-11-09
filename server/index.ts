@@ -367,6 +367,8 @@ app.use((req, res, next) => {
   }
   // Compliance log: anchor each day's last entry hash on Stellar (records/anchor.ts).
   void import("./records/anchor").then((m) => m.startLogAnchoring());
+  // Wallet activity: USDC in and out of BlockFinaX wallets, kept beyond the RPC's week of events.
+  void import("./wallet/activity").then((m) => m.startWalletActivity());
   // Cross-network transfers (Circle CCTP): follow attestations and deliver on the destination.
   void import("./routing/service").then(async (m) => {
     const { chainRegistry } = await import("./chain/config");

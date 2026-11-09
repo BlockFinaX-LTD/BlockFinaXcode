@@ -3,8 +3,10 @@
  * email or Google and before it creates its wallet passkey. Accounts that already have a
  * wallet or a profile never see it.
  *
- * Asks only who the account is for, the person's name and their country of residence.
- * Saved through POST /api/v2/onboarding, which also starts sanctions screening.
+ * Asks only the person's name, their country of residence and whether they start as a
+ * hedger or an underwriter (both stay one switch apart in the app; a business account is
+ * added from the app too). The email comes from sign-up. Saved through
+ * POST /api/v2/onboarding, which also starts sanctions screening.
  */
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -12,7 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
 import { api } from "@/lib/wallets/passkey-wallet";
-import { COUNTRIES, PRIORITY_COUNTRIES, validateOnboarding, type AccountType } from "@shared/onboarding";
+import { COUNTRIES, PRIORITY_COUNTRIES, validateOnboarding } from "@shared/onboarding";
+
+type StartAs = "hedger" | "underwriter";
 
 /** A first guess from the device's time zone, for the countries we cover first. */
 const ZONES: Record<string, string> = {
@@ -44,12 +48,13 @@ export function ProfileStep({ email, defaultName, onDone, onSignOut }: {
   const { first, rest } = useCountries();
   const [fullName, setFullName] = useState(defaultName ?? "");
   const [country, setCountry] = useState(guessCountry);
-  const [accountType, setAccountType] = useState<AccountType>("individual");
+  const [startAs, setStartAs] = useState<StartAs>("hedger");
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const form = { accountType, fullName, country };
+  // Every sign-up starts as a personal account; the workspace opens on the side they chose.
+  const form = { accountType: "individual" as const, fullName, country, intents: [startAs === "underwriter" ? "underwrite" : "payables"] };
   const { problems } = validateOnboarding(form);
 
   async function submit() {
@@ -59,6 +64,7 @@ export function ProfileStep({ email, defaultName, onDone, onSignOut }: {
     setError(null);
     try {
       await api("/api/v2/onboarding", form);
+      try { localStorage.setItem("bfx:cover-role", startAs); } catch { /* the app opens as a hedger */ }
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -92,10 +98,10 @@ export function ProfileStep({ email, defaultName, onDone, onSignOut }: {
             </select>
           </label>
           <label className="block space-y-1.5">
-            <span className="text-[13px] font-medium">Account type</span>
-            <select className={field} value={accountType} onChange={(e) => setAccountType(e.target.value as AccountType)}>
-              <option value="individual">Individual</option>
-              <option value="organisation">Business</option>
+            <span className="text-[13px] font-medium">I want to</span>
+            <select className={field} value={startAs} onChange={(e) => setStartAs(e.target.value as StartAs)}>
+              <option value="hedger">Protect payments or income (Hedger)</option>
+              <option value="underwriter">Earn premiums by backing cover (Underwriter)</option>
             </select>
           </label>
         </div>
@@ -106,9 +112,7 @@ export function ProfileStep({ email, defaultName, onDone, onSignOut }: {
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue"}
         </Button>
         <p className="text-[11.5px] text-muted-foreground mt-4 leading-snug">
-          {accountType === "organisation"
-            ? "Next you create your passkey. You can add your business and invite your team from the app."
-            : "Next you create your passkey. We ask for ID only before your first purchase or pool."}
+          Next you create your passkey. You can switch between Hedger and Underwriter, or add a business account, at any time in the app.
         </p>
       </div>
     </div>

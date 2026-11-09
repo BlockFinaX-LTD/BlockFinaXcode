@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Check, Compass, Copy, KeyRound, LogOut, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowDownLeft, ArrowUp, ArrowUpRight, Check, Compass, Copy, KeyRound, LogOut, Plus, Share2, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
@@ -90,12 +90,19 @@ function DepositCard({ onCancel }: { onCancel: () => void }) {
         </div>
       )}
       {!chains.data || check.status === 'checking' ? <Loading /> : check.status === 'ok' && address && (
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={address} size={168} /></div>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <div className="muted" style={{ fontSize: 13 }}>{acting ? `${acting.name}'s` : 'Your'} {name} deposit address</div>
-            <div className="num" style={{ fontSize: 14, wordBreak: 'break-all', margin: '6px 0 14px' }}>{address}</div>
-            <button className="bx-btn ghost" onClick={async () => { await navigator.clipboard.writeText(address); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy address'}</button>
+        // QR code, then the address under it, then Copy and Share side by side.
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center' }}>
+          <div style={{ background: '#fff', padding: 12, borderRadius: 14, border: '1px solid var(--line)' }}><QRCodeComponent value={address} size={180} /></div>
+          <div className="muted" style={{ fontSize: 13 }}>{acting ? `${acting.name}'s` : 'Your'} {name} deposit address</div>
+          <div className="num" style={{ fontSize: 13, wordBreak: 'break-all', maxWidth: 360, lineHeight: 1.5 }}>{address}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 360 }}>
+            <button className="bx-btn ghost" onClick={async () => { await navigator.clipboard.writeText(address); setCopied(true); }}>{copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy'}</button>
+            <button className="bx-btn ghost" onClick={async () => {
+              const text = `My BlockFinaX USDC deposit address on ${name}: ${address}\nSend only USDC on ${name}.`;
+              // The phone's share sheet (WhatsApp, email, messages); where there is none, copy instead.
+              if (navigator.share) { try { await navigator.share({ title: 'BlockFinaX deposit address', text }); } catch { /* closed without sharing */ } }
+              else { await navigator.clipboard.writeText(text); setCopied(true); }
+            }}><Share2 /> Share</button>
           </div>
         </div>
       )}
@@ -277,11 +284,42 @@ export function WalletPage({ mode: initial = 'none' }: { mode?: WalletMode }) {
         </div>
         {mode === 'deposit' && <DepositCard onCancel={close} />}
         {mode === 'withdraw' && canWithdraw && <WithdrawPanel onCancel={close} />}
+        <WalletActivity />
       </section>
       <aside className="bx-aside">
         <FaucetCard />
       </aside>
     </main>
+  );
+}
+
+// ── Wallet activity ──────────────────────────────────────────────────────────
+
+interface ActivityRow { txHash: string; at: string; direction: 'in' | 'out'; amount: string; kind: string }
+
+/** Every USDC movement in and out of the acting wallet, newest first (server/wallet/activity.ts). */
+function WalletActivity() {
+  const q = useQuery({
+    queryKey: ['v2-wallet-activity'],
+    queryFn: () => api<{ chain: string; activity: ActivityRow[] }>('/api/v2/wallet/activity'),
+    refetchInterval: 30_000,
+  });
+  const explorer = q.data?.chain?.includes('testnet') ? 'https://stellar.expert/explorer/testnet/tx/' : 'https://stellar.expert/explorer/public/tx/';
+  const rows = q.data?.activity ?? [];
+  const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return (
+    <div className="bx-card">
+      <h2 style={{ marginBottom: 10 }}>Activity</h2>
+      {q.isLoading ? <Loading /> : q.error ? <div className="bx-empty">Activity could not be loaded right now.</div> : !rows.length ? (
+        <div className="bx-empty">No activity yet. Deposits, cover, payouts and transfers will show here.</div>
+      ) : rows.map((r) => (
+        <a key={`${r.txHash}:${r.direction}`} className="bx-mini" href={explorer + r.txHash} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <span className="bx-ic" style={{ color: r.direction === 'in' ? 'var(--green)' : 'var(--text-2)' }}>{r.direction === 'in' ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}</span>
+          <div className="grow"><div className="t">{r.kind}</div><div className="d">{when(r.at)}</div></div>
+          <div className="num" style={{ fontWeight: 600, color: r.direction === 'in' ? 'var(--green)' : 'var(--text)' }}>{r.direction === 'in' ? '+' : '−'}${fmt(r.amount)}</div>
+        </a>
+      ))}
+    </div>
   );
 }
 

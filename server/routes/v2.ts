@@ -617,6 +617,15 @@ export function registerV2Routes(app: Express) {
     res.json({ hub: { chain: hub.key, name: hub.name, address: wallet }, deposits: depositAddressesFor(chainRegistry()!, wallet) });
   }));
 
+  /** USDC in and out of the acting wallet on the hub, newest first (server/wallet/activity.ts). */
+  app.get("/api/v2/wallet/activity", wrap(async (req, res) => {
+    const s = await getServices();
+    const hub = chainRegistry()!.hub;
+    const owner = await ownerOn(s, await userId(req), hub.key, req);
+    const { walletActivity } = await import("../wallet/activity");
+    res.json({ chain: hub.key, activity: await walletActivity(hub.key, owner) });
+  }));
+
   app.get("/api/v2/routing", wrap(async (req, res) => {
     const s = await getServices();
     res.json({ routes: (await s.routing.store.listByUser(String(await userId(req)))).map(routeView) });
