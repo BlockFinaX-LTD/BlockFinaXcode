@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isOffered, OFFERED_DIRECTIONS, poolForSale } from "@shared/domain/offered-directions";
 
-test("Cap and Floor are both on sale", () => {
+test("Up cover and Down cover are both on sale", () => {
   assert.deepEqual([...OFFERED_DIRECTIONS], ["up", "down"]);
   assert.equal(isOffered("up"), true);
   assert.equal(isOffered("down"), true);

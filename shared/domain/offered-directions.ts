@@ -1,8 +1,8 @@
 /**
  * Which currency moves BlockFinaX sells protection against right now.
  *
- * Both are on sale: "up" is a Cap (the dollar rising against the local currency, for
- * payments a business makes) and "down" is a Floor (the dollar falling, for dollar
+ * Both are on sale: "up" is an Up cover (the dollar rising against the local currency, for
+ * payments a business makes) and "down" is a Down cover (the dollar falling, for dollar
  * income a business receives). Removing a direction here stops new sales of it; existing
  * contracts and pools in that direction keep running, settle and pay either way.
  */

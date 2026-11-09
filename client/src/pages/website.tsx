@@ -884,7 +884,7 @@ const TRUST = [
 ];
 
 const RECEIPT: { step: number; k: string; v: string; proof?: string }[] = [
-  { step: 0, k: 'Contract', v: 'USD/GHS Cap · $500,000' },
+  { step: 0, k: 'Contract', v: 'USD/GHS Up cover · $500,000' },
   { step: 0, k: 'Strike and limit', v: '11.83 to 13.01' },
   { step: 0, k: 'Reserve', v: '$50,862.07', proof: 'Locked at purchase' },
   { step: 1, k: 'USD/GHS at 14:00 UTC', v: '12.40', proof: 'Agreed by 2 operators' },

@@ -59,14 +59,14 @@ export function ChoosingProtection() {
   return (
     <>
       <Head part={PART} title="Choosing your protection">
-        On the Protect page you choose the currency, a Cap or a Floor depending on the move you are protecting against, the amount, the end
+        On the Protect page you choose the currency, Up cover or Down cover depending on the move you are protecting against, the amount, the end
         date, where protection starts and how far it reaches. The price updates as you change each one.
       </Head>
 
       <Section n="01" id="steps" title="Making your choices">
         <Steps>
           <Step title="Currency">Choose from the currencies with open pools, for example the cedi.</Step>
-          <Step title="Cap or Floor">A Cap for dollars you will pay, which pays if the local currency weakens; a Floor for dollars you will receive, which pays if it strengthens.</Step>
+          <Step title="Up or Down cover">An Up cover for dollars you will pay, which pays if the local currency weakens; a Down cover for dollars you will receive, which pays if it strengthens.</Step>
           <Step title="Amount">The dollar amount to protect, usually the size of the invoice or payment.</Step>
           <Step title="End date">Pick a date or a duration, usually the day the payment is due. Pools offering any day show a date picker; others show their fixed durations.</Step>
           <Step title="Where protection starts">The strike, set as a percentage from today's rate or as a rate. Some pools require a minimum distance from today's rate.</Step>
@@ -122,7 +122,7 @@ export function YourQuote() {
 
       <Section n="02" id="exposure" title="What remains your risk">
         <P>
-          {EX.convention} Hypothetical figures: a $500,000 USD/GHS Cap bought at 11.60 with the strike at 11.83. The
+          {EX.convention} Hypothetical figures: a $500,000 USD/GHS Up cover bought at 11.60 with the strike at 11.83. The
           limited version has a limit at 13.01. The open version is from a pool whose maximum payout is 30% of the amount, which
           places its effective limit at 11.83 + (11.60 × 30%) = 15.31.
         </P>
@@ -191,7 +191,7 @@ export function ActiveContracts() {
 
       <Section n="01" id="view" title="What you can see">
         <UL>
-          <li>The pair, whether it is a Cap or a Floor, the amount, strike, limit and end date.</li>
+          <li>The pair, whether it is Up cover or Down cover, the amount, strike, limit and end date.</li>
           <li>What the contract would pay if it ended at today's rate. This is an estimate; only the rate at the end date counts.</li>
           <li>The status: active, settled with the payout amount, or claimed.</li>
         </UL>
@@ -249,7 +249,7 @@ export function ExpiryAndSettlement() {
 
       <Section n="05" id="examples" title="Outcomes compared">
         <P>
-          {EX.convention} Hypothetical: a $500,000 USD/GHS Cap bought at 11.60 with the strike at 11.83. Limited cover has a
+          {EX.convention} Hypothetical: a $500,000 USD/GHS Up cover bought at 11.60 with the strike at 11.83. Limited cover has a
           limit at 13.01 and costs $6,037.50 in total. Open cover comes from a pool with a 30% maximum, so its effective limit is 15.31
           and its maximum payout $150,000; its premium would be higher.
         </P>

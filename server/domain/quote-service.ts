@@ -150,7 +150,7 @@ export class QuoteService {
         throw new ApplicationError("STRIKE_TOO_CLOSE", `Protection must start at least ${Math.min(...closest) / 100}% from today's rate for this cover`);
       }
     }
-    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering a ${req.tenorDays}-day ${req.structure === "open" ? "open" : "limited"} ${req.pair} ${req.direction === "up" ? "Cap" : "Floor"}. Request a quote instead.`);
+    if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering a ${req.tenorDays}-day ${req.structure === "open" ? "open" : "limited"} ${req.pair} ${req.direction === "up" ? "Up cover" : "Down cover"}. Request a quote instead.`);
 
     let last: ApplicationError = new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
     for (const { pool, markupBps } of candidates) {

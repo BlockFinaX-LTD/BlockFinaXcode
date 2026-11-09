@@ -93,7 +93,7 @@ export function HowProtectionWorks() {
       <Section n="03" id="example" title="A worked example">
         <P>{EX.convention} All figures are hypothetical.</P>
         <Example
-          title="limited USD/GHS Cap"
+          title="limited USD/GHS Up cover"
           rows={[
             ['Rate when bought', '11.60'],
             ['Amount protected', '$500,000'],
@@ -127,13 +127,13 @@ export function ContractTerms() {
           (naira), USD/GHS (cedi), USD/KES (Kenyan shilling), USD/ZAR (rand), USD/EGP (Egyptian pound), USD/UGX (Ugandan
           shilling), USD/TZS (Tanzanian shilling), USD/ZMW (Zambian kwacha), USD/MAD (Moroccan dirham) and USD/XOF (West
           African CFA franc). Each pool sells one of two
-          contracts, named after the pair, such as USD/GHS Cap:
+          contracts, named after the pair, such as USD/GHS Up cover:
         </P>
         <Table
           head={['Contract', 'It pays if', 'Suits']}
           rows={[
-            ['Cap', 'the rate rises above your strike: the local currency weakens', 'dollars you have to pay'],
-            ['Floor', 'the rate falls below your strike: the local currency strengthens', 'dollars you will receive'],
+            ['Up cover', 'the rate rises above your strike: the local currency weakens', 'dollars you have to pay'],
+            ['Down cover', 'the rate falls below your strike: the local currency strengthens', 'dollars you will receive'],
           ]}
         />
         <P>Buyers and underwriters use the same names. The Markets page in the app lists the open pools and how much capacity each has.</P>
@@ -146,7 +146,7 @@ export function ContractTerms() {
             ['Reference rate', 'The USD exchange rate the contract settles on, recorded by the rate operators. See Exchange-rate data.'],
             ['Amount (notional)', 'The dollar amount protected. The contract minimum is 10 USDC.'],
             ['Protection period', 'From purchase until 14:00 UTC on the end date.'],
-            ['Strike', 'The rate where the payout starts. For a Cap it is at or above the rate when bought.'],
+            ['Strike', 'The rate where the payout starts. For an Up cover it is at or above the rate when bought.'],
             ['Limit', 'For limited cover, the rate where the payout stops growing. Set within the pool\'s allowed distance from the strike.'],
             ['Maximum payout', 'For open cover, a percentage of the amount set by the pool, for example 30%.'],
           ]}
@@ -155,13 +155,13 @@ export function ContractTerms() {
 
       <Section n="03" id="formula" title="The payout formula">
         <P>With S the rate when bought, K the strike, L the limit and R the settlement rate:</P>
-        <Callout label="Cap">Payout = amount × (lower of R and L, minus K) ÷ S, and zero if R is at or below K.</Callout>
-        <Callout label="Floor">Payout = amount × (K minus higher of R and L) ÷ S, and zero if R is at or above K.</Callout>
+        <Callout label="Up cover">Payout = amount × (lower of R and L, minus K) ÷ S, and zero if R is at or below K.</Callout>
+        <Callout label="Down cover">Payout = amount × (K minus higher of R and L) ÷ S, and zero if R is at or above K.</Callout>
         <P>
           The result never exceeds the maximum payout reserved at purchase. A 2% fee is deducted when the payout is claimed.
           Dividing by S, the rate when bought, converts the rate difference into dollars on the amount you protected.
         </P>
-        <Fig label="Figure 1" caption=" Payout against the settlement rate for a limited Cap.">
+        <Fig label="Figure 1" caption=" Payout against the settlement rate for a limited Up cover.">
           <RangePayoffSVG strikeLabel="Strike (K)" capLabel="Limit (L)" underlyingLabel="Settlement rate (R)" payoutLabel="Payout" />
         </Fig>
         <P>
@@ -233,7 +233,7 @@ export function PricingAndCharges() {
       <Section n="04" id="example" title="All charges on one contract">
         <P>{EX.convention} Hypothetical figures, assuming a fair rate of 1.00% and a markup of 1.15.</P>
         <Example
-          title="$500,000 limited USD/GHS Cap, rate 12.40 at the end date"
+          title="$500,000 limited USD/GHS Up cover, rate 12.40 at the end date"
           rows={[
             ['Premium: 500,000 × 1.00% × 1.15', '$5,750.00'],
             ['Platform fee: 5% of 5,750', '$287.50'],

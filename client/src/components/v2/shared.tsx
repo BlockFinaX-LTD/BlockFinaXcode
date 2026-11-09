@@ -40,14 +40,14 @@ export const poolRef = (p: CurrencyPool) => `${p.ref.chain}:${p.ref.contract}:${
 
 /**
  * How a direction is named. Both sides of the trade see the same product name:
- *   Cap:   pays if the rate rises above the strike (the local currency weakens).
- *   Floor: pays if the rate falls below the strike (the local currency strengthens).
+ *   Up cover:   pays if the rate rises above the strike (the local currency weakens).
+ *   Down cover: pays if the rate falls below the strike (the local currency strengthens).
  * `verb` is for plain explanations ("if the naira weakens past your strike").
  */
 export function exposureLabel(pair: string, d: Direction | 'both') {
   return d === 'down'
-    ? { title: `${pair} Floor`, kind: 'Floor', flow: 'receipts', who: 'For USD you will receive', cover: `${pair} Floor`, verb: 'strengthens' }
-    : { title: `${pair} Cap`, kind: 'Cap', flow: 'payments', who: 'For USD you have to pay', cover: `${pair} Cap`, verb: 'weakens' };
+    ? { title: `${pair} Down cover`, kind: 'Down cover', flow: 'receipts', who: 'For USD you will receive', cover: `${pair} Down cover`, verb: 'strengthens' }
+    : { title: `${pair} Up cover`, kind: 'Up cover', flow: 'payments', who: 'For USD you have to pay', cover: `${pair} Up cover`, verb: 'weakens' };
 }
 
 

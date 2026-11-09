@@ -27,10 +27,10 @@ export function Faq() {
 
 const TERMS: [string, string][] = [
   ['Amount (notional)', 'The dollar amount a contract protects.'],
-  ['Cap', 'A contract that pays if the rate rises above the strike, meaning the local currency weakens. Suits dollars you have to pay. Named after its pair, such as USD/GHS Cap.'],
+  ['Up cover', 'A contract that pays if the rate rises above the strike, meaning the local currency weakens. Suits dollars you have to pay. Named after its pair, such as USD/GHS Up cover.'],
   ['End date', 'The date a contract ends, at 14:00 UTC, moved to Monday if it falls on a weekend.'],
   ['Execution cost', 'The 5% platform fee on the premium for direct purchases.'],
-  ['Floor', 'A contract that pays if the rate falls below the strike, meaning the local currency strengthens. Suits dollars you will receive.'],
+  ['Down cover', 'A contract that pays if the rate falls below the strike, meaning the local currency strengthens. Suits dollars you will receive.'],
   ['Fair rate', 'The price per dollar protected calculated by BlockFinaX\'s pricing engine, before the pool\'s markup.'],
   ['Free capital', 'Underwriting capital not reserved for running contracts, available to back new sales or withdraw.'],
   ['Limit', 'In limited cover, the rate beyond which the payout stops growing.'],
@@ -38,7 +38,7 @@ const TERMS: [string, string][] = [
   ['Markup', 'The multiple of the fair rate a pool charges, set by the pool creator.'],
   ['Open cover', 'Protection whose maximum payout is a percentage of the amount set by the pool.'],
   ['Passkey', 'A credential on your device, approved with your fingerprint, face or PIN, used to approve every transaction.'],
-  ['Pool', 'Underwriters\' USDC that backs one contract, a Cap or a Floor, on one currency.'],
+  ['Pool', 'Underwriters\' USDC that backs one contract, Up cover or Down cover, on one currency.'],
   ['Pool creator', 'The underwriter who opened a pool and sets its terms.'],
   ['Premium', 'The price of a contract, paid once at purchase.'],
   ['Rate operator', 'A party that reports the reference rate after a contract ends.'],
@@ -71,7 +71,7 @@ export function Troubleshooting() {
         <Table
           head={['Message', 'Meaning and next step']}
           rows={[
-            ['No pool is offering a 30-day limited USD/GHS Cap. Request a quote instead. (with your own terms)', 'No open pool sells these terms. Change the end date or structure, or request a quote.'],
+            ['No pool is offering a 30-day limited USD/GHS Up cover. Request a quote instead. (with your own terms)', 'No open pool sells these terms. Change the end date or structure, or request a quote.'],
             ['Not enough free liquidity for that amount', 'The pool\'s free capital is smaller than the maximum payout. Lower the amount, narrow the limit or request a quote.'],
             ['Protection must start at least X% from today\'s rate for this cover', 'The pool sets a minimum distance for the strike. Move the strike further from today\'s rate.'],
             ['This protection is too cheap for what it could pay', 'The maximum payout is more than 100 times the premium. Move the strike closer to today\'s rate or bring the limit closer.'],

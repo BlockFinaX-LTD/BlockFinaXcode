@@ -33,7 +33,7 @@ type Withdrawal = { chain: string; contract?: string; requestId: number; poolId:
 const withdrawalUsd = (w: Withdrawal, p: CurrencyPool | undefined) => Number(w.shares) * (p?.legacy ? sharePrice(p) : 1);
 
 const sharePrice = (p: CurrencyPool) => (Number(p.totalShares) > 0 ? Number(p.liquidity.nav) / Number(p.totalShares) : 1);
-const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${p.pair} Cap and Floor` : exposureLabel(p.pair, p.direction).cover) + (p.legacy ? ' (earlier contract)' : '');
+const poolName = (p: CurrencyPool) => (p.direction === 'both' ? `${p.pair} Up and Down cover` : exposureLabel(p.pair, p.direction).cover) + (p.legacy ? ' (earlier contract)' : '');
 const shortDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const inDays = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000));
 

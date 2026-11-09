@@ -89,10 +89,10 @@ export function checkTerms(a: {
   if (spot <= ZERO || strike <= ZERO || cap <= ZERO) return { code: "INVALID_REQUEST", message: "Spot, strike and cap required" };
   if (strikeAbove) {
     if (!(strike >= spot && strike < spot * TWO)) return { code: "INVALID_STRIKE", message: "Strike must be at or above spot, below 2x" };
-    if (!(cap > strike && cap <= spot * TWO)) return { code: "INVALID_CAP", message: "Cap must be above strike, at most 2x spot" };
+    if (!(cap > strike && cap <= spot * TWO)) return { code: "INVALID_CAP", message: "The limit must be above the strike, at most 2x spot" };
   } else {
     if (!(strike <= spot && strike > spot / TWO)) return { code: "INVALID_STRIKE", message: "Strike must be at or below spot, above 0.5x" };
-    if (!(cap < strike && cap >= spot / TWO)) return { code: "INVALID_CAP", message: "Cap must be below strike, at least 0.5x spot" };
+    if (!(cap < strike && cap >= spot / TWO)) return { code: "INVALID_CAP", message: "The limit must be below the strike, at least 0.5x spot" };
   }
   if (a.structure === "capped") {
     if (!a.structures.capped) return { code: "STRUCTURE_NOT_OFFERED", message: "Capped protection not offered" };
@@ -101,7 +101,7 @@ export function checkTerms(a: {
       const distance = strikeAbove ? cap - strike : strike - cap;
       const distanceBps = (distance * BPS) / strike;
       if (distanceBps < BigInt(a.structures.minCapDistanceBps) || distanceBps > maxBps) {
-        return { code: "INVALID_CAP", message: "Cap outside the pool's boundaries" };
+        return { code: "INVALID_CAP", message: "The limit is outside the pool's boundaries" };
       }
     }
   } else {

@@ -133,9 +133,9 @@ export function UnderwritingRisks() {
 
       <Section n="02" id="correlated" title="Losses that arrive together">
         <P>
-          A pool sells one contract on one currency, so a sharp devaluation affects every running contract in a Cap
+          A pool sells one contract on one currency, so a sharp devaluation affects every running contract in an Up cover
           pool at the same time. Several contracts drawing on the same capital can together consume most of it, even though each
-          is limited to its own reserve. Spreading capital across currencies, Caps and Floors, and end dates reduces this concentration.
+          is limited to its own reserve. Spreading capital across currencies, Up and Down cover, and end dates reduces this concentration.
         </P>
       </Section>
 

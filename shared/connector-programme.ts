@@ -323,7 +323,7 @@ export const MODULES: Module[] = [
     id: "product", title: "What BlockFinaX does", minutes: 6, required: true,
     body: [
       "BlockFinaX is an onchain FX hedging protocol. Businesses protect payments and receipts against currency volatility, underwriters provide the cover, and every contract is fully collateralised.",
-      "A business that owes dollars and earns naira worries that the naira will weaken. It buys a USD/NGN Cap: if the dollar rises above the strike by the end date, the contract pays the difference, up to a limit. A business that receives dollars and worries the dollar will fall buys a Floor.",
+      "A business that owes dollars and earns naira worries that the naira will weaken. It buys a USD/NGN Up cover: if the dollar rises above the strike by the end date, the contract pays the difference, up to a limit. A business that receives dollars and worries the dollar will fall buys a Down cover.",
       "- The business pays a premium once, in USDC, when it buys the protection.",
       "- The most a contract can pay is locked in full when it is sold, so a payout never depends on anyone paying later.",
       "- Underwriters deposit USDC into pools and earn the premiums on contracts their money backs. They can lose up to what they put behind a contract.",
@@ -331,7 +331,7 @@ export const MODULES: Module[] = [
       "Users sign in with a passkey, the network fees are paid for them, and they only ever need USDC.",
     ],
     questions: [
-      { id: "d1", q: "A Nigerian importer pays a dollar invoice in 60 days. Which protection fits?", options: ["A USD/NGN Floor", "A USD/NGN Cap", "A savings account", "No protection exists for this"] },
+      { id: "d1", q: "A Nigerian importer pays a dollar invoice in 60 days. Which protection fits?", options: ["A USD/NGN Down cover", "A USD/NGN Up cover", "A savings account", "No protection exists for this"] },
       { id: "d2", q: "How is the payout of a contract secured?", options: ["BlockFinaX promises to pay", "The most it can pay is locked in full when it is sold", "Underwriters pay later if they can", "It is insured by a bank"] },
       { id: "d3", q: "Who provides the cover?", options: ["BlockFinaX", "The central bank", "Underwriters who deposit USDC", "The connector"] },
       { id: "d4", q: "Which description is correct?", options: ["BlockFinaX is an insurance company", "BlockFinaX guarantees every payout", "BlockFinaX is a protocol; underwriters provide the cover", "BlockFinaX lends money to importers"] },

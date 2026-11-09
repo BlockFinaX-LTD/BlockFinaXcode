@@ -68,7 +68,7 @@ test("Open cap sits at the pool's max payout and never past the settlement band"
 test("checkTerms returns the contract's own revert reasons", () => {
   const base = { structures, structure: "capped" as const, strikeAbove: true, spot, strike };
   assert.equal(checkTerms({ ...base, cap: toFixed6(12.5) }), null);
-  assert.equal(checkTerms({ ...base, cap: toFixed6(11.7) }), "Cap outside the pool's boundaries");
+  assert.equal(checkTerms({ ...base, cap: toFixed6(11.7) }), "The limit is outside the pool's boundaries");
   assert.equal(checkTerms({ ...base, strike: toFixed6(11), cap: toFixed6(12) }), "Strike must be at or above spot, below 2x");
   assert.equal(checkTerms({ ...base, structure: "open", cap: toFixed6(12.5) }), "Open cap mismatch");
   assert.equal(
