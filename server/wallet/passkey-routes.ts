@@ -201,9 +201,40 @@ export function registerPasskeyWalletRoutes(app: Express) {
     });
   });
 
+  /**
+   * Bots request sign-in codes to throwaway inboxes, which costs emails and harms our sender
+   * reputation. Throwaway domains are refused, and one network can ask for codes for at most
+   * CODE_EMAILS_PER_HOUR different addresses and CODE_REQUESTS_PER_HOUR codes in an hour.
+   */
+  const CODE_EMAILS_PER_HOUR = 5;
+  const CODE_REQUESTS_PER_HOUR = 10;
+  const codeRequests = new Map<string, { at: number; email: string }[]>();
+  const allowCodeRequest = (ip: string, email: string) => {
+    const now = Date.now();
+    const recent = (codeRequests.get(ip) ?? []).filter((r) => now - r.at < 3_600_000);
+    const emails = new Set(recent.map((r) => r.email));
+    if (recent.length >= CODE_REQUESTS_PER_HOUR || (!emails.has(email) && emails.size >= CODE_EMAILS_PER_HOUR)) {
+      codeRequests.set(ip, recent);
+      return false;
+    }
+    recent.push({ at: now, email });
+    codeRequests.set(ip, recent);
+    if (codeRequests.size > 10_000) for (const [k, v] of codeRequests) if (!v.some((r) => now - r.at < 3_600_000)) codeRequests.delete(k);
+    return true;
+  };
+
   app.post("/api/wallet/auth/email/start", wrap(async (req, res) => {
     const email = String(req.body?.email ?? "").trim().toLowerCase();
     if (!EMAIL.test(email) || email.length > 254) throw httpError(400, "Enter a valid email address");
+    const { isDisposableEmail } = await import("./disposable-domains");
+    if (isDisposableEmail(email)) {
+      console.warn(`[auth] refused a sign-in code for a throwaway domain: ${email.split("@")[1]}`);
+      throw httpError(400, "Please use a permanent email address. Temporary email services are not accepted.");
+    }
+    if (!allowCodeRequest(String(req.ip ?? "unknown"), email)) {
+      console.warn(`[auth] sign-in code limit reached for ${req.ip}`);
+      throw httpError(429, "Too many sign-in codes were requested from this network. Please try again in an hour.");
+    }
     const { requestId, code } = otp.issue(email);
     try {
       await sendCode(email, code, requestId);

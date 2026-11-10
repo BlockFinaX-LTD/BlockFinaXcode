@@ -1,0 +1,169 @@
+/**
+ * Emails for leads, from SalesQL, looked up by the person's LinkedIn profile.
+ *
+ * Finax finds people from LinkedIn posts and sorts them. When one is a match (a buyer or a
+ * partner with a fit score of SALESQL_MIN_FIT or more), or when Anthony verifies them, their
+ * profile is looked up once in SalesQL and the email is attached to the lead. A lookup that
+ * finds nothing costs no SalesQL credit; one that finds data costs 1. At most
+ * SALESQL_DAILY_CAP automatic lookups run per day; the Find email button always runs.
+ *
+ * Results live in their own table keyed by the lead, so the leads table is unchanged.
+ *
+ * Without a REST API key, the same lookups run from a Claude session that has the SalesQL
+ * connector: it lists the matches still missing an email (leadsNeedingEmail) and saves
+ * what SalesQL returns (saveLookups), through two endpoints guarded by OUTREACH_ENRICH_TOKEN.
+ *
+ *   SALESQL_API_KEY     REST API key (Professional plan or above); without it nothing runs
+ *   SALESQL_MIN_FIT     fit score from which a buyer or partner is looked up (default 50)
+ *   SALESQL_DAILY_CAP   automatic lookups per UTC day (default 25)
+ */
+type Db = { query: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }> };
+/** The database, loaded on first use so this module can be imported without one (tests). */
+async function getPool(): Promise<Db | null> {
+  const { pool } = await import("../db");
+  return (pool as unknown as Db) ?? null;
+}
+
+const ENDPOINT = "https://api-public.salesql.com/v1/persons/enrich";
+const MATCH_SEGMENTS = new Set(["buyer", "partner"]);
+
+export interface LeadEmail {
+  email: string | null;
+  emailType: string | null;
+  emailStatus: string | null;
+  /** found | not_found | error */
+  result: string;
+  lookedUpAt: string;
+}
+
+let ready: Promise<void> | null = null;
+async function table(): Promise<Db> {
+  const pool = await getPool();
+  if (!pool) throw new Error("No database");
+  ready ??= pool.query(`
+    CREATE TABLE IF NOT EXISTS outreach_people_email (
+      person_id integer PRIMARY KEY,
+      email text,
+      email_type text,
+      email_status text,
+      result text NOT NULL,
+      detail text,
+      looked_up_at timestamptz NOT NULL DEFAULT now()
+    )`).then(() => undefined);
+  await ready;
+  return pool;
+}
+
+export const salesqlConfigured = () => Boolean(process.env.SALESQL_API_KEY?.trim());
+
+/** The best email from a SalesQL person: a valid work address first, then any valid one, then any. */
+export function bestEmail(body: any): { email: string; type: string | null; status: string | null } | null {
+  const person = body?.person ?? body;
+  const emails: { email?: string; type?: string; status?: string }[] = Array.isArray(person?.emails) ? person.emails : [];
+  const usable = emails.filter((e) => typeof e.email === "string" && e.email.includes("@"));
+  const rank = (e: { type?: string; status?: string }) => (e.status === "Valid" ? 0 : 2) + (e.type === "Work" ? 0 : 1);
+  const pick = usable.sort((a, b) => rank(a) - rank(b))[0];
+  return pick ? { email: pick.email!, type: pick.type ?? null, status: pick.status ?? null } : null;
+}
+
+/** Look one lead up in SalesQL and save what comes back. Throws only when SalesQL is not set up. */
+export async function findEmail(personId: number, profileUrl: string): Promise<LeadEmail> {
+  const key = process.env.SALESQL_API_KEY?.trim();
+  if (!key) throw new Error("SalesQL is not connected. Add SALESQL_API_KEY on the server.");
+  const db = await table();
+  let result = "error", detail = "", found: ReturnType<typeof bestEmail> = null;
+  try {
+    const res = await fetch(`${ENDPOINT}?${new URLSearchParams({ linkedin_url: profileUrl })}`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (res.status === 404) { result = "not_found"; }
+    else if (res.ok) { found = bestEmail(await res.json()); result = found ? "found" : "not_found"; }
+    else {
+      detail = `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
+      // Rate limits and credit checks are temporary: keep no record, so it is tried again later.
+      if (res.status === 429 || res.status === 503) throw new Error(`SalesQL is busy (${res.status}). Try again shortly.`);
+      if (res.status === 401 || res.status === 403) throw new Error("SalesQL refused the API key. Check SALESQL_API_KEY.");
+    }
+  } catch (err) {
+    if (/SalesQL/.test((err as Error).message)) throw err;
+    detail = (err as Error).message;
+  }
+  await saveLookup(db, personId, found, result, detail || null);
+  return { email: found?.email ?? null, emailType: found?.type ?? null, emailStatus: found?.status ?? null, result, lookedUpAt: new Date().toISOString() };
+}
+
+async function saveLookup(db: Db, personId: number, found: { email: string; type: string | null; status: string | null } | null, result: string, detail: string | null) {
+  await db.query(
+    `INSERT INTO outreach_people_email (person_id, email, email_type, email_status, result, detail, looked_up_at)
+     VALUES ($1,$2,$3,$4,$5,$6,now())
+     ON CONFLICT (person_id) DO UPDATE SET email = $2, email_type = $3, email_status = $4, result = $5, detail = $6, looked_up_at = now()`,
+    [personId, found?.email ?? null, found?.type ?? null, found?.status ?? null, result, detail],
+  );
+}
+
+/** Matches (buyers and partners at or above the fit score, and verified leads) not yet looked up. */
+export async function leadsNeedingEmail(limit = 50) {
+  const db = await table();
+  const minFit = Number(process.env.SALESQL_MIN_FIT) || 50;
+  const { rows } = await db.query(
+    `SELECT p.id, p.name, p.company, p.headline, p.profile_url AS "profileUrl", p.segment, p.fit_score AS "fitScore", p.verified
+     FROM outreach_people p
+     LEFT JOIN outreach_people_email e ON e.person_id = p.id AND e.result <> 'error'
+     WHERE e.person_id IS NULL AND (p.verified OR (p.segment IN ('buyer', 'partner') AND coalesce(p.fit_score, 0) >= $1))
+     ORDER BY p.verified DESC, p.fit_score DESC NULLS LAST
+     LIMIT $2`,
+    [minFit, Math.min(Math.max(limit, 1), 100)],
+  );
+  return rows as { id: number; name: string | null; company: string | null; headline: string | null; profileUrl: string; segment: string | null; fitScore: number | null; verified: boolean }[];
+}
+
+/**
+ * Save lookups made elsewhere (a Claude session with the SalesQL connector). Each item names
+ * the lead and either the emails SalesQL returned or that it found nothing.
+ */
+export async function saveLookups(items: { id: number; emails?: { email?: string; type?: string; status?: string }[]; notFound?: boolean }[]) {
+  const db = await table();
+  let found = 0, missing = 0;
+  for (const it of items.slice(0, 100)) {
+    if (!Number.isInteger(it.id)) continue;
+    const pick = bestEmail({ emails: it.emails ?? [] });
+    await saveLookup(db, it.id, pick, pick ? "found" : "not_found", "via Claude SalesQL connector");
+    if (pick) found++; else missing++;
+  }
+  return { found, notFound: missing };
+}
+
+/** Saved lookups for a set of leads, by lead id. */
+export async function emailsFor(personIds: number[]): Promise<Map<number, LeadEmail>> {
+  const out = new Map<number, LeadEmail>();
+  if (!personIds.length) return out;
+  const db = await table();
+  const { rows } = await db.query(`SELECT * FROM outreach_people_email WHERE person_id = ANY($1::int[])`, [personIds]);
+  for (const r of rows) {
+    out.set(r.person_id, { email: r.email, emailType: r.email_type, emailStatus: r.email_status, result: r.result, lookedUpAt: new Date(r.looked_up_at).toISOString() });
+  }
+  return out;
+}
+
+/**
+ * Called after a lead is sorted or verified: looks them up once if they are a match, SalesQL
+ * is set up, nobody has looked them up before and today's cap is not reached. Never throws.
+ */
+export async function autoFindEmail(p: { id: number; profileUrl: string; segment?: string | null; fitScore?: number | null; verified?: boolean | null }) {
+  try {
+    if (!salesqlConfigured()) return;
+    const minFit = Number(process.env.SALESQL_MIN_FIT) || 50;
+    const match = p.verified || (MATCH_SEGMENTS.has(String(p.segment)) && (p.fitScore ?? 0) >= minFit);
+    if (!match) return;
+    const db = await table();
+    const { rows: [seen] } = await db.query(`SELECT 1 FROM outreach_people_email WHERE person_id = $1 AND result <> 'error'`, [p.id]);
+    if (seen) return;
+    const cap = Number(process.env.SALESQL_DAILY_CAP) || 25;
+    const { rows: [{ n }] } = await db.query(`SELECT count(*)::int AS n FROM outreach_people_email WHERE looked_up_at >= date_trunc('day', now() AT TIME ZONE 'UTC')`);
+    if (n >= cap) return;
+    await findEmail(p.id, p.profileUrl);
+  } catch (err) {
+    console.warn(`[salesql] lead ${p.id}: ${(err as Error).message}`);
+  }
+}

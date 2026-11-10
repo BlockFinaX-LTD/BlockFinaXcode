@@ -54,6 +54,7 @@ import { assessRelevance, type Relevance } from "../outreach/relevance";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 import { qualifyPerson } from "../outreach/qualify";
+import { autoFindEmail, emailsFor, findEmail, leadsNeedingEmail, salesqlConfigured, saveLookups } from "../outreach/salesql";
 import {
   loadAuth, saveAuth, clearAuth, isExpired, authorizeUrl, exchangeCode,
   redirectUri, candidateRedirectUris, activityUrnFrom,
@@ -102,6 +103,18 @@ async function liveContext(): Promise<string> {
 function requireIngestAuth(req: any, res: any, next: any) {
   const configured = (process.env.OUTREACH_INGEST_TOKEN || "").trim();
   const presented = (req.headers["x-admin-token"] || "").toString().trim();
+  if (configured && presented && timingSafeEqualStr(presented, configured)) return next();
+  return requireAdmin(req, res, next);
+}
+
+/**
+ * Email lookups from a Claude session that has the SalesQL connector. OUTREACH_ENRICH_TOKEN
+ * lets that session list matched leads still missing an email and save the emails it finds,
+ * and nothing else. An admin session is still accepted.
+ */
+function requireEnrichAuth(req: any, res: any, next: any) {
+  const configured = (process.env.OUTREACH_ENRICH_TOKEN || "").trim();
+  const presented = (req.headers["x-enrich-token"] || "").toString().trim();
   if (configured && presented && timingSafeEqualStr(presented, configured)) return next();
   return requireAdmin(req, res, next);
 }
@@ -922,8 +935,11 @@ export function registerOutreachRoutes(app: Express): void {
       const filtered = status && status !== "all"
         ? rows.filter(r => r.status === status)
         : rows;
+      // Emails found through SalesQL, attached to each lead that has been looked up.
+      const emails = await emailsFor(filtered.map(r => r.id)).catch(() => new Map());
       return res.json({
-        people: filtered,
+        people: filtered.map(r => ({ ...r, lookup: emails.get(r.id) ?? null })),
+        salesql: salesqlConfigured(),
         counts: {
           all: rows.length,
           new: rows.filter(r => r.status === "new").length,
@@ -979,6 +995,8 @@ export function registerOutreachRoutes(app: Express): void {
       const [row] = await db.update(outreachPeople)
         .set({ segment: q.segment, fit: q.fit, fitScore: q.fitScore })
         .where(eq(outreachPeople.id, id)).returning();
+      // A match gets its email looked up in SalesQL, in the background.
+      if (row) void autoFindEmail(row);
       return res.json(row);
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "could not qualify" });
@@ -1001,6 +1019,7 @@ export function registerOutreachRoutes(app: Express): void {
         .limit(limit);
 
       let done = 0;
+      const matches: { id: number; profileUrl: string; segment: string; fitScore: number; verified: boolean | null }[] = [];
       for (const p of pending) {
         const q = await qualifyPerson(apiKey, MODEL, {
           name: p.name, headline: p.headline, company: p.company,
@@ -1011,8 +1030,11 @@ export function registerOutreachRoutes(app: Express): void {
         await db.update(outreachPeople)
           .set({ segment: q.segment, fit: q.fit, fitScore: q.fitScore })
           .where(eq(outreachPeople.id, p.id));
+        matches.push({ id: p.id, profileUrl: p.profileUrl, segment: q.segment, fitScore: q.fitScore, verified: p.verified });
         done++;
       }
+      // Matches get their emails looked up in SalesQL one by one, in the background.
+      void (async () => { for (const m of matches) await autoFindEmail(m); })();
       const [{ left }] = await db.select({ left: sqlCount() }).from(outreachPeople)
         .where(isNull(outreachPeople.segment));
       return res.json({ qualified: done, considered: pending.length, remaining: Number(left) || 0 });
@@ -1041,9 +1063,47 @@ export function registerOutreachRoutes(app: Express): void {
         })
         .where(eq(outreachPeople.id, id)).returning();
       if (!row) return res.status(404).json({ error: "not found" });
+      // A verified lead is a match by definition: look its email up in SalesQL.
+      if (on) void autoFindEmail(row);
       return res.json(row);
     } catch {
       return res.status(500).json({ error: "Could not verify that." });
+    }
+  });
+
+  // ── GET /api/outreach/people/needs-email ───────────────────────────────
+  // Matched leads with no email lookup yet: name, company, headline and LinkedIn profile only.
+  app.get("/api/outreach/people/needs-email", requireEnrichAuth, async (req, res) => {
+    try {
+      return res.json({ leads: await leadsNeedingEmail(Number(req.query.limit) || 50) });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "Could not list leads." });
+    }
+  });
+
+  // ── POST /api/outreach/people/emails ────────────────────────────────────
+  // { results: [{ id, emails: [{ email, type, status }] } | { id, notFound: true }] }
+  app.post("/api/outreach/people/emails", requireEnrichAuth, async (req, res) => {
+    try {
+      const results = Array.isArray(req.body?.results) ? req.body.results : [];
+      return res.json(await saveLookups(results));
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : "Could not save emails." });
+    }
+  });
+
+  // ── POST /api/outreach/people/:id/email ─────────────────────────────────
+  //
+  // Find email: look this lead up in SalesQL now, whatever its fit, and attach the result.
+  app.post("/api/outreach/people/:id/email", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+      const [p] = await db.select().from(outreachPeople).where(eq(outreachPeople.id, id)).limit(1);
+      if (!p) return res.status(404).json({ error: "not found" });
+      return res.json(await findEmail(p.id, p.profileUrl));
+    } catch (err) {
+      return res.status(502).json({ error: err instanceof Error ? err.message : "Could not look that up." });
     }
   });
 

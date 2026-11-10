@@ -24,10 +24,13 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ExternalLink, Users, Sparkles, BadgeCheck } from "lucide-react";
+import { Loader2, ExternalLink, Users, Sparkles, BadgeCheck, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+const seenDate = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 interface Person {
   id: number;
@@ -43,12 +46,16 @@ interface Person {
   status: string;
   notes: string | null;
   lastSeen: string | null;
+  firstSeen: string | null;
+  location: string | null;
   segment: string | null;
   fit: string | null;
   fitScore: number | null;
   about: string | null;
   verified: boolean;
   verifiedBy: string | null;
+  /** The SalesQL lookup for this lead, once one has run. */
+  lookup: { email: string | null; emailType: string | null; emailStatus: string | null; result: string; lookedUpAt: string } | null;
 }
 
 /**
@@ -96,7 +103,7 @@ export function OutreachPeople({ token }: { token: string }) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<string>("all");
 
-  const { data, isLoading } = useQuery<{ people: Person[]; counts: Record<string, number> }>({
+  const { data, isLoading } = useQuery<{ people: Person[]; counts: Record<string, number>; salesql?: boolean }>({
     queryKey: ["outreach-people", filter, token],
     queryFn: () => api(`/api/outreach/people?status=${filter}`, token),
   });
@@ -139,6 +146,15 @@ export function OutreachPeople({ token }: { token: string }) {
     onError: (e: Error) => toast({ title: "Could not sort that one", description: e.message, variant: "destructive" }),
   });
 
+  const findEmail = useMutation({
+    mutationFn: (id: number) => api(`/api/outreach/people/${id}/email`, token, { method: "POST" }),
+    onSuccess: (r: { result?: string }) => {
+      qc.invalidateQueries({ queryKey: ["outreach-people"] });
+      if (r?.result === "not_found") toast({ title: "No email found", description: "SalesQL has no email for this profile. No credit was used." });
+    },
+    onError: (e: Error) => toast({ title: "Could not find an email", description: e.message, variant: "destructive" }),
+  });
+
   const verify = useMutation({
     mutationFn: ({ id, on }: { id: number; on: boolean }) =>
       api(`/api/outreach/people/${id}/verify`, token, {
@@ -175,6 +191,9 @@ export function OutreachPeople({ token }: { token: string }) {
         </Button>
         <span className="text-[12px] text-muted-foreground">
           Works out what each person is and how BlockFinaX relates to them. 25 at a time.
+          {data?.salesql
+            ? " Buyers and partners that fit well, and anyone you verify, get their email looked up in SalesQL."
+            : " SalesQL is not connected yet, so emails are not looked up."}
         </span>
       </div>
 
@@ -289,6 +308,28 @@ export function OutreachPeople({ token }: { token: string }) {
                           {p.headline && (
                             <p className="mt-0.5 text-[12.5px] text-muted-foreground">{p.headline}</p>
                           )}
+                          {/* The email SalesQL found from their LinkedIn profile. */}
+                          {p.lookup?.email ? (
+                            <p className="mt-1 inline-flex flex-wrap items-center gap-1.5 text-[12.5px]">
+                              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                              <a href={`mailto:${p.lookup.email}`} className="font-medium text-foreground hover:underline">{p.lookup.email}</a>
+                              <span className="text-[11px] text-muted-foreground">
+                                {[p.lookup.emailType, p.lookup.emailStatus === "Valid" ? "verified" : p.lookup.emailStatus?.toLowerCase()].filter(Boolean).join(", ")} · SalesQL
+                              </span>
+                            </p>
+                          ) : p.lookup?.result === "not_found" ? (
+                            <p className="mt-1 text-[11.5px] text-muted-foreground">No email found in SalesQL</p>
+                          ) : null}
+                          {/* When Finax first found them and last saw them post, and where they are. */}
+                          {(p.firstSeen || p.lastSeen || p.location) && (
+                            <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                              {[
+                                p.firstSeen && `Found ${seenDate(p.firstSeen)}`,
+                                p.lastSeen && p.lastSeen !== p.firstSeen && `last seen ${seenDate(p.lastSeen)}`,
+                                p.location,
+                              ].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
                           {/* How we relate. The reason this person is on the list at all. */}
                           {p.fit && (
                             <p className="mt-1.5 border-l-2 border-border pl-2.5 text-[12.5px] leading-relaxed">
@@ -314,6 +355,16 @@ export function OutreachPeople({ token }: { token: string }) {
                                 className="rounded-md border border-border px-2 py-1 text-[11.5px] text-muted-foreground hover:text-foreground"
                               >
                                 Sort
+                              </button>
+                            )}
+                            {!p.lookup?.email && (
+                              <button
+                                onClick={() => findEmail.mutate(p.id)}
+                                disabled={findEmail.isPending && findEmail.variables === p.id}
+                                title="Look this person's email up in SalesQL from their LinkedIn profile"
+                                className="rounded-md border border-border px-2 py-1 text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                              >
+                                {findEmail.isPending && findEmail.variables === p.id ? "Finding…" : "Find email"}
                               </button>
                             )}
                             <button
