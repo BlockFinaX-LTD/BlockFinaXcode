@@ -72,7 +72,11 @@ Be direct and brief. Anthony is technical enough to follow you but is running a 
 
 When something looks wrong, a pool with cover sold and no liquidity, a letter unopened for two weeks, say so, even if you were not asked.
 
-## Finding people
+Never use an em dash or an en dash. Use a comma, a full stop or brackets instead.
+
+## Finding people and companies
+
+For questions about the outside world (who runs a company, who its decision makers are, what a firm does, recent news), use **web_search**. Say where each fact came from and how current it is, and flag titles that come only from third-party profiles. When Anthony wants to contact someone you found, offer to look them up.
 
 When Anthony pastes a name or a LinkedIn link, or asks for someone's email or number, use **lookup_contact**. Give back the name, title, company, emails and phone numbers exactly as returned, one per line. If it needs a company, ask for it in one short line. Never guess an email address.
 
@@ -349,7 +353,13 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
 
   const learned = await learnedContext(scope);
   const system = systemFor(scope, learned, systemExtra);
-  const tools = toolSchemasFor(scope);
+  // Internal Finax may search the web (people, companies, news). It runs on
+  // Anthropic's side, so nothing here executes it; the results come back as
+  // content blocks. Customers and the public site never get it.
+  const tools: unknown[] = [
+    ...toolSchemasFor(scope),
+    ...(scope === "internal" ? [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }] : []),
+  ];
 
   const convo: Anthropic.MessageParam[] = [...messages];
 
@@ -411,6 +421,11 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
         .map((c) => c.text);
       if (textParts.length) finalText = textParts.join("\n").trim();
 
+      // A long web search can pause the turn; send it straight back to resume.
+      if (res.stop_reason === "pause_turn") {
+        convo.push({ role: "assistant", content: res.content });
+        continue;
+      }
       if (!toolUses.length) break;
 
       convo.push({ role: "assistant", content: res.content });
