@@ -167,3 +167,131 @@ export async function autoFindEmail(p: { id: number; profileUrl: string; segment
     console.warn(`[salesql] lead ${p.id}: ${(err as Error).message}`);
   }
 }
+
+/* ── Look anyone up (Finax) ────────────────────────────────────────────────
+ *
+ * Finax's admin chat can look a person up by LinkedIn link, or by name plus company
+ * (name or website). A bare name is matched against the outreach leads first, so a lead
+ * Finax already found can be looked up from their name alone. SalesQL has no search by
+ * name only, so a bare name with no lead match comes back asking for the company.
+ * One SalesQL credit per person found; nothing found costs nothing.
+ */
+
+export interface PersonDetails {
+  name: string | null;
+  title: string | null;
+  company: string | null;
+  companyWebsite: string | null;
+  location: string | null;
+  linkedinUrl: string | null;
+  emails: { email: string; type: string | null; status: string | null }[];
+  phones: { phone: string; type: string | null; valid: boolean | null }[];
+}
+
+/** The fields worth showing from a SalesQL person. */
+export function personDetails(body: any): PersonDetails {
+  const p = body?.person ?? body ?? {};
+  const loc = p.location;
+  const location = typeof loc === "string" ? loc
+    : loc ? [loc.city, loc.state, loc.country].filter(Boolean).join(", ") || null : null;
+  const emails = (Array.isArray(p.emails) ? p.emails : [])
+    .filter((e: any) => typeof e?.email === "string" && e.email.includes("@"))
+    .map((e: any) => ({ email: e.email, type: e.type ?? null, status: e.status ?? null }));
+  const phones = (Array.isArray(p.phones) ? p.phones : [])
+    .filter((x: any) => typeof x?.phone === "string" && x.phone.trim())
+    .map((x: any) => ({ phone: x.phone, type: x.type ?? null, valid: typeof x.is_valid === "boolean" ? x.is_valid : null }));
+  return {
+    name: p.full_name ?? ([p.first_name, p.last_name].filter(Boolean).join(" ") || null),
+    title: p.title ?? p.headline ?? null,
+    company: p.organization?.name ?? p.organization_name ?? null,
+    companyWebsite: p.organization?.website ?? p.organization?.website_domain ?? null,
+    location,
+    linkedinUrl: p.linkedin_url ?? null,
+    emails,
+    phones,
+  };
+}
+
+/** Turns "https://www.acme.com/about" or "acme.com" into "acme.com"; anything else is null. */
+export function asDomain(v?: string | null): string | null {
+  const s = (v ?? "").trim().toLowerCase();
+  if (!s || /\s/.test(s) || !s.includes(".")) return null;
+  return s.replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0] || null;
+}
+
+type LookupInput = { name?: string; company?: string; linkedinUrl?: string };
+
+export async function lookupPerson(input: LookupInput): Promise<
+  | { found: true; person: PersonDetails; savedToLead?: number }
+  | { found: false; reason: string; candidates?: { id: number; name: string | null; company: string | null; headline: string | null }[] }
+> {
+  const key = process.env.SALESQL_API_KEY?.trim();
+  if (!key) return { found: false, reason: "SalesQL is not connected. SALESQL_API_KEY is missing on the server." };
+
+  const name = input.name?.trim() || "";
+  const company = input.company?.trim() || "";
+  let linkedinUrl = input.linkedinUrl?.trim() || (/linkedin\.com\/in\//i.test(name) ? name : "");
+  let leadId: number | undefined;
+
+  // A bare name: try the outreach leads, which carry a LinkedIn link.
+  if (!linkedinUrl && name && !company) {
+    const db = await table();
+    const { rows } = await db.query(
+      `SELECT id, name, company, headline, profile_url AS "profileUrl" FROM outreach_people
+       WHERE lower(name) LIKE '%' || lower($1) || '%' ORDER BY verified DESC, fit_score DESC NULLS LAST LIMIT 5`,
+      [name],
+    );
+    if (rows.length === 1 && /linkedin\.com\/in\//i.test(rows[0].profileUrl ?? "")) {
+      linkedinUrl = rows[0].profileUrl;
+      leadId = rows[0].id;
+    } else {
+      return {
+        found: false,
+        reason: rows.length > 1
+          ? "Several leads match that name. Say which one, or give the company."
+          : "SalesQL needs a company (name or website) or a LinkedIn link along with the name.",
+        candidates: rows.length > 1 ? rows.map(({ id, name, company, headline }: any) => ({ id, name, company, headline })) : undefined,
+      };
+    }
+  }
+
+  const params = new URLSearchParams();
+  if (linkedinUrl) params.set("linkedin_url", linkedinUrl);
+  else {
+    if (!name) return { found: false, reason: "Give a name or a LinkedIn link." };
+    params.set("full_name", name);
+    const domain = asDomain(company);
+    params.set(domain ? "organization_domain" : "organization_name", domain ?? company);
+  }
+
+  const res = await fetch(`${ENDPOINT}?${params}`, {
+    headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (res.status === 404) return { found: false, reason: "SalesQL has no match for that person." };
+  if (res.status === 401 || res.status === 403) return { found: false, reason: "SalesQL refused the API key. Check SALESQL_API_KEY." };
+  if (res.status === 429 || res.status === 503) return { found: false, reason: `SalesQL is busy (${res.status}). Try again shortly.` };
+  if (!res.ok) return { found: false, reason: `SalesQL error ${res.status}: ${(await res.text()).slice(0, 200)}` };
+
+  const body = await res.json();
+  const person = personDetails(body);
+  if (!person.emails.length && !person.phones.length && !person.name) {
+    return { found: false, reason: "SalesQL has no match for that person." };
+  }
+
+  // If this person is one of Finax's leads, keep the email on the lead too.
+  if (!leadId && person.linkedinUrl) {
+    const db = await table();
+    const slug = person.linkedinUrl.toLowerCase().replace(/\/+$/, "").split("/in/")[1];
+    if (slug) {
+      const { rows } = await db.query(`SELECT id FROM outreach_people WHERE lower(profile_url) LIKE '%/in/' || $1 || '%' LIMIT 1`, [slug]);
+      leadId = rows[0]?.id;
+    }
+  }
+  if (leadId) {
+    const db = await table();
+    const pick = bestEmail(body);
+    await saveLookup(db, leadId, pick, pick ? "found" : "not_found", "via Finax lookup");
+  }
+  return { found: true, person, savedToLead: leadId };
+}

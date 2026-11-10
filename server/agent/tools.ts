@@ -744,6 +744,35 @@ TOOLS.push(
   },
 );
 
+/* ── Contact lookup ──────────────────────────────────────────────────────────
+ *
+ * Internal only (admin chat). Looks a person up in SalesQL and returns their emails and
+ * phone numbers. It spends a SalesQL credit when someone is found, and it writes nothing
+ * except the email onto a matching outreach lead.
+ */
+TOOLS.push({
+  name: "lookup_contact",
+  description:
+    "Find a person's email addresses and phone numbers through SalesQL. Use it whenever Anthony pastes " +
+    "a name, a LinkedIn profile link, or asks for someone's contact details. Pass a LinkedIn link if you " +
+    "have one; otherwise the full name plus the company name or company website. A bare name is matched " +
+    "against Finax's outreach leads. Each person found costs one SalesQL credit, so look up one person per " +
+    "request unless asked for more.",
+  input_schema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Full name, e.g. Jane Doe." },
+      company: { type: "string", description: "Company name or website, e.g. Acme or acme.com." },
+      linkedinUrl: { type: "string", description: "LinkedIn profile link (linkedin.com/in/...)." },
+    },
+  },
+  scopes: ["internal"],
+  run: async (input: any) => {
+    const { lookupPerson } = await import("../outreach/salesql");
+    return lookupPerson({ name: input?.name, company: input?.company, linkedinUrl: input?.linkedinUrl });
+  },
+});
+
 /**
  * Executes a tool by name, refusing anything outside the caller's scope.
  * The scope check is here rather than at the call site so a future caller
