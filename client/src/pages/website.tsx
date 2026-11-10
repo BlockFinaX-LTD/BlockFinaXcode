@@ -1265,8 +1265,8 @@ function LearnSection() {
 
 // ── Book-a-call cushion ─────────────────────────────────────────────────
 // Big brand-accent panel sitting between the tail CTA and the footer, in
-// the shape of a Rift/Vercel-style "Schedule" cushion. Solid accent fill,
-// subtle grid overlay, one primary + one secondary CTA.
+// the shape of a "Contact" cushion. Solid accent fill, subtle grid overlay,
+// one call to action.
 
 function BookCallCushion() {
   return (
@@ -1275,21 +1275,13 @@ function BookCallCushion() {
         <div className="cushion-card">
           <div className="cushion-grid" aria-hidden="true" />
           <div className="cushion-body">
-            <div className="cushion-tag">Schedule</div>
-            <h2 id="cushion-title" className="cushion-h">Book a call.</h2>
+            <div className="cushion-tag">Contact</div>
+            <h2 id="cushion-title" className="cushion-h">Talk to us.</h2>
             <p className="cushion-sub">
-              15 minutes. We walk you through BlockFinaX and answer your questions.
+              We walk you through BlockFinaX and answer your questions.
             </p>
             <div className="cushion-actions">
-              <a
-                href="https://calendly.com/anthonykumako8/30min"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cushion-btn primary"
-              >
-                Book a call <span className="arrow" aria-hidden="true">→</span>
-              </a>
-              <Link href="/contact" className="cushion-btn ghost">
+              <Link href="/contact" className="cushion-btn primary">
                 Contact us <span className="arrow" aria-hidden="true">→</span>
               </Link>
             </div>
