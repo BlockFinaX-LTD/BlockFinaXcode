@@ -1175,7 +1175,7 @@ export function registerOutreachRoutes(app: Express): void {
       const limit = Math.min(Math.max(Number(req.body?.limit) || 10, 1), 30);
       const wanted: string[] = Array.isArray(req.body?.segments) && req.body.segments.length
         ? req.body.segments
-        : ["buyer", "investor", "partner", "peer"];
+        : ["buyer", "underwriter", "investor", "partner", "peer"];
 
       const people = await db.select().from(outreachPeople)
         .where(and(isNotNull(outreachPeople.segment), eq(outreachPeople.status, "new")))

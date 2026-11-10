@@ -52,10 +52,9 @@ export interface PlannedSearch {
 const PLANNER_SYSTEM = `You are the senior marketer for BlockFinaX, planning where to
 spend attention on LinkedIn this week.
 
-BlockFinaX is developing tools for FX risk management and cross-border payments.
-Do not assume target customers lack access to bank products. Select prospects
-based on evidence in their public profile or post, not country, industry or job
-title alone. Do not represent features, corridors, pricing or settlement as
+BlockFinaX sells FX protection to emerging-market businesses, backed by
+underwriters who supply USDC. Select prospects on evidence in their public
+profile or post, not country, industry or job title alone. Do not represent features, corridors, pricing or settlement as
 available without current verified evidence supplied to this workflow.
 
 Your job is to decide what to go looking for, and the answer changes with the
@@ -84,8 +83,33 @@ writes a note. Nobody posts "elevated realised volatility". They post "the cedi
 is killing our margins". Two to five words, no boolean operators, no quotes, no
 hashtags.
 
+## Who the searches are for
+
+Every search exists to surface the authors of posts, and only two kinds of
+author are the goal:
+
+Hedgers. Owners, managing directors, CFOs, finance managers and treasury leads
+at importers, distributors, wholesalers, manufacturers and service businesses in
+emerging markets (Ghana and Nigeria first) that earn in local currency and pay
+foreign suppliers. They post about supplier payments, dollar invoices, landed
+cost, price lists they cannot hold, forex shortages and bank FX lines.
+
+Underwriters. Heads of FX, portfolio managers and investment leads at FX trading
+firms and market makers, digital-asset funds and onchain liquidity providers
+that deploy USDC, and trade finance or emerging-market credit funds. They post
+about emerging-market FX trading, stablecoin yield, onchain credit and private
+credit or trade finance funds.
+
+A plan must include at least two searches aimed at hedgers and at least one
+aimed at underwriters. Use the market data to choose the hedger angle. The
+underwriter search does not depend on the market; vary its wording between
+plans. Write queries in the words the author would use, not ours: a Lagos
+distributor writes "dollar supplier payments", a fund manager writes "emerging
+markets FX desk" or "stablecoin yield".
+
 Return between 3 and 5 searches. Make each one hunt different ground; two
-queries that would return the same posts are one wasted search.`;
+queries that would return the same posts are one wasted search. In "angle",
+start with "hedgers:" or "underwriters:" so the plan shows who it is for.`;
 
 const SCHEMA = {
   name: "plan_searches",
@@ -176,9 +200,10 @@ export async function planSearches(apiKey: string, model: string): Promise<{
   }
 
   const fallbackPlan: PlannedSearch[] = [
-    { query: "cedi importers margins", angle: "operational damage", why: "Standing angle, used because the planner could not run." },
-    { query: "naira stability planning", angle: "relief posts", why: "Standing angle, used because the planner could not run." },
-    { query: "trade finance gap africa", angle: "structural", why: "Standing angle, used because the planner could not run." },
+    { query: "cedi importers margins", angle: "hedgers: operational damage", why: "Standing angle, used because the planner could not run." },
+    { query: "naira supplier payments dollars", angle: "hedgers: paying abroad", why: "Standing angle, used because the planner could not run." },
+    { query: "emerging markets FX desk", angle: "underwriters: FX traders", why: "Standing angle, used because the planner could not run." },
+    { query: "stablecoin yield private credit", angle: "underwriters: onchain capital", why: "Standing angle, used because the planner could not run." },
   ];
 
   if (!market) return { searches: fallbackPlan, market: "", fallback: true };

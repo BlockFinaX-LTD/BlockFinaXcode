@@ -1,7 +1,7 @@
 /**
  * Emails for leads, from SalesQL, looked up by the person's LinkedIn profile.
  *
- * Finax finds people from LinkedIn posts and sorts them. When one is a match (a buyer or a
+ * Finax finds people from LinkedIn posts and sorts them. When one is a match (a buyer, underwriter or
  * partner with a fit score of SALESQL_MIN_FIT or more), or when Anthony verifies them, their
  * profile is looked up once in SalesQL and the email is attached to the lead. A lookup that
  * finds nothing costs no SalesQL credit; one that finds data costs 1. At most
@@ -25,7 +25,7 @@ async function getPool(): Promise<Db | null> {
 }
 
 const ENDPOINT = "https://api-public.salesql.com/v1/persons/enrich";
-const MATCH_SEGMENTS = new Set(["buyer", "partner"]);
+const MATCH_SEGMENTS = new Set(["buyer", "underwriter", "partner"]);
 
 export interface LeadEmail {
   email: string | null;
@@ -110,7 +110,7 @@ export async function leadsNeedingEmail(limit = 50) {
     `SELECT p.id, p.name, p.company, p.headline, p.profile_url AS "profileUrl", p.segment, p.fit_score AS "fitScore", p.verified
      FROM outreach_people p
      LEFT JOIN outreach_people_email e ON e.person_id = p.id AND e.result <> 'error'
-     WHERE e.person_id IS NULL AND (p.verified OR (p.segment IN ('buyer', 'partner') AND coalesce(p.fit_score, 0) >= $1))
+     WHERE e.person_id IS NULL AND (p.verified OR (p.segment IN ('buyer', 'underwriter', 'partner') AND coalesce(p.fit_score, 0) >= $1))
      ORDER BY p.verified DESC, p.fit_score DESC NULLS LAST
      LIMIT $2`,
     [minFit, Math.min(Math.max(limit, 1), 100)],
