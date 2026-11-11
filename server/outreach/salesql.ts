@@ -249,7 +249,7 @@ export async function lookupPerson(input: LookupInput): Promise<
         found: false,
         reason: rows.length > 1
           ? "Several leads match that name. Say which one, or give the company."
-          : "SalesQL needs a company (name or website) or a LinkedIn link along with the name.",
+          : "Not one of Finax's leads. Use web_search to find their LinkedIn profile or company, then call lookup_contact again with the link or the company.",
         candidates: rows.length > 1 ? rows.map(({ id, name, company, headline }: any) => ({ id, name, company, headline })) : undefined,
       };
     }
