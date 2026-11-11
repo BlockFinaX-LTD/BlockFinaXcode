@@ -773,6 +773,35 @@ TOOLS.push({
   },
 });
 
+TOOLS.push({
+  name: "draft_message",
+  description:
+    "Draft an email or LinkedIn message from Anthony to one person, written to their profile and following " +
+    "Anthony's outreach guide. Pass everything known about the person in `profile` (name, title, company, " +
+    "location, what the company does, anything they posted, what web_search or lookup_contact returned). " +
+    "Drafts only; nothing is sent.",
+  input_schema: {
+    type: "object",
+    properties: {
+      profile: { type: "string", description: "All known facts about the recipient and their company." },
+      channel: { type: "string", enum: ["email", "linkedin_message", "connection_note"], description: "Default email." },
+      relationship: {
+        type: "string",
+        enum: ["hedger", "underwriter", "integration_partner", "investor", "other"],
+        description: "Who they are to BlockFinaX. Omit to let the writer decide from the profile.",
+      },
+      goal: { type: "string", description: "What Anthony wants from the message, if he said." },
+      notes: { type: "string", description: "Anything else Anthony asked for (tone, a point to mention)." },
+    },
+    required: ["profile"],
+  },
+  scopes: ["internal"],
+  run: async (input: any) => {
+    const { draftMessage } = await import("./outreach-writer");
+    return draftMessage(input ?? {});
+  },
+});
+
 /**
  * Executes a tool by name, refusing anything outside the caller's scope.
  * The scope check is here rather than at the call site so a future caller

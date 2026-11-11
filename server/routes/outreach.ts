@@ -38,7 +38,7 @@ import type { Express } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { eq, desc, and, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
-import { outreachDrafts, outreachPeople, marketMemory } from "@shared/schema";
+import { outreachDrafts, outreachPeople, marketMemory, platformSettings } from "@shared/schema";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { requireAdmin } from "../middleware/admin-auth";
 import { relevanceScore } from "./outreach-relevance";
@@ -54,6 +54,7 @@ import { assessRelevance, type Relevance } from "../outreach/relevance";
 import { searchLinkedIn, type RawItem } from "../outreach/provider";
 import { runAutoScan, lastScanAt } from "../outreach/auto-scan";
 import { qualifyPerson } from "../outreach/qualify";
+import { GUIDE_KEY } from "../agent/outreach-writer";
 import { autoFindEmail, emailsFor, findEmail, leadsNeedingEmail, salesqlConfigured, saveLookups } from "../outreach/salesql";
 import {
   loadAuth, saveAuth, clearAuth, isExpired, authorizeUrl, exchangeCode,
@@ -1069,6 +1070,21 @@ export function registerOutreachRoutes(app: Express): void {
     } catch {
       return res.status(500).json({ error: "Could not verify that." });
     }
+  });
+
+  // ── Finax writing guide ─────────────────────────────────────────────────
+  // The internal outreach guide Finax drafts from. Stored in the database because
+  // this repository is public. Admin or the enrich token.
+  app.get("/api/outreach/writing-guide", requireEnrichAuth, async (_req, res) => {
+    const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, GUIDE_KEY)).limit(1);
+    res.json({ set: Boolean(row?.value), length: row?.value?.length ?? 0, updatedAt: row?.updatedAt ?? null });
+  });
+  app.put("/api/outreach/writing-guide", requireEnrichAuth, async (req, res) => {
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (text.length < 200 || text.length > 200_000) return res.status(400).json({ error: "Guide must be 200 to 200,000 characters." });
+    await db.insert(platformSettings).values({ key: GUIDE_KEY, value: text, updatedBy: "writing-guide" })
+      .onConflictDoUpdate({ target: platformSettings.key, set: { value: text, updatedAt: new Date(), updatedBy: "writing-guide" } });
+    res.json({ ok: true, length: text.length });
   });
 
   // ── GET /api/outreach/people/needs-email ───────────────────────────────
