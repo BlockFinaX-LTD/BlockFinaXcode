@@ -1084,3 +1084,9 @@
 .bx-simple .bx-sbuy { padding: 0; }
 .bx-desk > .bx-col, .bx-desk > .bx-aside, .bx-desk > .bx-full { gap: 0; background: var(--panel); }
 .bx-desk > .bx-col > .bx-card, .bx-desk > .bx-aside > .bx-card, .bx-desk > .bx-aside > .bx-panel, .bx-desk > .bx-full > .bx-card { border-bottom: 1px solid var(--line); }
+/* Up or Down: neutral like the other choices; the chosen side is outlined in blue. */
+.bx-sideswitch button, .bx-sideswitch button span { color: var(--muted); }
+.bx-sideswitch button b { color: var(--text-2); }
+.bx-sideswitch button.on.up, .bx-sideswitch button.on.down { background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.bx-sideswitch button.on b { color: var(--text); }
+.bx-sideswitch button.on span { color: var(--text-2); }
