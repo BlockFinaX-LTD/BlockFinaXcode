@@ -890,3 +890,9 @@
   .bx-shead { flex-wrap: wrap; }
 }
 @media (max-width: 420px) { .bx-sdir { grid-template-columns: 1fr; } }
+.bx-sstarts { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-flow: column; gap: 8px; }
+.bx-sstarts button { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; text-align: left; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--text); cursor: pointer; }
+.bx-sstarts button b { font-size: 13px; }
+.bx-sstarts button span { font-size: 12px; color: var(--muted); }
+.bx-sstarts button.on { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); background: var(--blue-soft); }
+.bx-snote { margin-top: 8px; font-size: 12px; color: var(--muted); }

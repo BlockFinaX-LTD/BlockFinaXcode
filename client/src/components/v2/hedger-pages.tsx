@@ -1275,6 +1275,28 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 )}
               </div>
 
+              <div>
+                <div className="bx-sq">Protect from which rate?</div>
+                <div className="bx-sstarts">
+                  {startChoices.map((m) => {
+                    const r = rateFromPct(m);
+                    const on = anchor === 'pct' && startPct === m;
+                    return (
+                      <button key={m} className={on ? 'on' : ''} aria-pressed={on} onClick={() => choosePct(m)}>
+                        <b>{m === 0 ? "Today's rate" : `${m}% ${rises ? 'above' : 'below'}`}</b>
+                        <span className="num">{r ? fmtRate(r) : '...'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="bx-tfield" style={{ marginTop: 8 }}>
+                  <span className="l">Or type a rate</span>
+                  <input className="num" inputMode="decimal" aria-label={`Rate protection starts from, ${ccy} per dollar`} value={rateText} onChange={(ev) => typeRate(ev.target.value)} />
+                  <span className="u">{ccy}</span>
+                </label>
+                <div className="bx-snote">Starting at today's rate pays on any move. Starting further away costs less.</div>
+              </div>
+
               <div className="bx-sanswer" aria-live="polite">
                 {!(Number(amount) > 0) ? (
                   <span className="muted">Enter an amount to see your price.</span>
@@ -1287,6 +1309,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                     </p>
                     {e.warning && <div className="bx-warn" role="note">{e.warning}</div>}
                   </>
+                ) : strikeError ? (
+                  <span className="bx-error">{strikeError}</span>
                 ) : chosen.error ? (
                   <span className="bx-error">{(chosen.error as Error).message} {!acting && <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button>}</span>
                 ) : (
