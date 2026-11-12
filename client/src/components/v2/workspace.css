@@ -856,3 +856,37 @@
   .bx-trade .bx-tchart .bx-pane-h { flex-wrap: wrap; }
 }
 .bx-trade .bx-until .bx-hint { white-space: normal; text-align: left; }
+
+/* ── Markets, Simple view: three questions and a one-sentence answer ───────── */
+.bx-viewswitch { display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 3px; background: var(--soft); border-radius: 6px; }
+.bx-viewswitch button { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 5px; cursor: pointer; }
+.bx-viewswitch button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(15, 23, 41, 0.08); }
+.bx-main.bx-simple { display: block; max-width: 560px; margin: 0 auto; padding: 32px 16px 96px; }
+.bx-scard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 22px; }
+.bx-shead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.bx-sq { display: block; font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.bx-sdir { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bx-sdir button { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--text); cursor: pointer; }
+.bx-sdir button b { font-size: 14px; }
+.bx-sdir button span { font-size: 12px; color: var(--muted); }
+.bx-sdir button.on { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); background: var(--blue-soft); }
+.bx-sdir button:disabled { opacity: 0.45; cursor: not-allowed; }
+.bx-tfield.bx-sbig { height: 52px; }
+.bx-tfield.bx-sbig input { font-size: 20px; text-align: left; }
+.bx-simple .bx-pills.wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.bx-simple .bx-pill { border-radius: 6px; padding: 6px 12px; min-height: 34px; }
+.bx-simple .bx-until .bx-input { max-width: none !important; width: 100%; }
+.bx-simple .bx-until .bx-hint { white-space: normal; text-align: left; }
+.bx-sanswer { background: var(--soft); border-radius: 8px; padding: 16px; font-size: 14px; line-height: 1.55; }
+.bx-sanswer p { margin: 8px 0 0; }
+.bx-scost { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.bx-scost span { font-weight: 600; }
+.bx-scost b { font-size: 26px; font-weight: 600; }
+.bx-simple .bx-btn { border-radius: 8px; min-height: 48px; font-size: 15px; }
+.bx-simple .bx-tfoot { font-size: 12px; }
+@media (max-width: 860px) {
+  .bx-main.bx-simple { padding: 14px 12px calc(96px + env(safe-area-inset-bottom)); }
+  .bx-scard { padding: 16px; }
+  .bx-shead { flex-wrap: wrap; }
+}
+@media (max-width: 420px) { .bx-sdir { grid-template-columns: 1fr; } }

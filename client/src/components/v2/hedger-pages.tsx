@@ -270,7 +270,7 @@ function Stat({ l, v }: { l: string; v: ReactNode }) {
 }
 
 /** The market's numbers along the top, with the market switcher. */
-function MarketStrip({ pair, markets, onPair, spot }: { pair: string; markets: Market[]; onPair: (p: string) => void; spot: number | undefined }) {
+function MarketStrip({ pair, markets, onPair, spot, extra }: { pair: string; markets: Market[]; onPair: (p: string) => void; spot: number | undefined; extra?: ReactNode }) {
   const day = useChart(pair, '24H');
   const values = (day.data ?? []).map((p) => p.v);
   const watch = useWatchlist();
@@ -294,6 +294,7 @@ function MarketStrip({ pair, markets, onPair, spot }: { pair: string; markets: M
       <Stat l="24h low" v={<span className="num">{values.length ? fmtRate(Math.min(...values)) : '-'}</span>} />
       <Stat l="Liquidity" v={<span className="num">{market ? `$${fmt(market.capacity, 0)}` : '-'}</span>} />
       <Stat l="Durations" v={market ? durationsLabel(market) : '-'} />
+      {extra && <div style={{ marginLeft: 'auto' }}>{extra}</div>}
     </div>
   );
 }
@@ -1002,6 +1003,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // last stays fixed when the live rate moves; the other follows.
   const [pctText, setPctText] = useState('0');
   const [checking, setChecking] = useState(false);
+  const [view, setView] = useState<'simple' | 'advanced'>(() => { try { return localStorage.getItem('bfx:markets-view') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } });
+  function chooseView(v: 'simple' | 'advanced') {
+    setView(v);
+    try { localStorage.setItem('bfx:markets-view', v); } catch { /* per-viewer convenience */ }
+  }
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
   const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
@@ -1060,6 +1066,13 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [capPct, setCapPct] = useState(10);
   useEffect(() => { setCapPct((c) => Math.min(Math.max(c, capMin), capMax)); }, [capMin, capMax]);
   const [structure, setStructure] = useState<'capped' | 'open'>('capped');
+  useEffect(() => {
+    if (view !== 'simple') return;
+    choosePct(minStartPct, false);
+    setStrikeTouched(false);
+    setStructure('capped');
+    setCapPct(Math.min(Math.max(10, capMin), capMax));
+  }, [view, minStartPct, capMin, capMax]);
   useEffect(() => { if (tenor && !tenor[structure]) setStructure(tenor.capped ? 'capped' : 'open'); }, [tenor, structure]);
   const strike = spot.data && !strikeError ? (anchor === 'rate' ? Number(rateText) : spot.data * (1 + (sign * startPct) / 100)) : null;
   // The list beside the panel prices the cover set here, once the buyer changes it.
@@ -1152,31 +1165,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     if (window.innerWidth < 860) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  return (
-    <main className="bx-main bx-trade">
-      <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} />
-
-      <section className="bx-tchart" aria-label="Rate chart">
-        <div className="bx-pane-h">
-          <span>{pair} <ChangeText change={periodChange} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
-          <div className="bx-ranges" role="group" aria-label="Chart range">
-            {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
-          </div>
-        </div>
-        <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy}
-          protection={strike ? { strike, cap: structure === 'capped' ? cap : null, tone: 'pay' } : null} />
-      </section>
-
-      {market && (
-        <PriceLadder market={market} days={days} limitBps={listTerms.limitBps} direction={direction} spot={spot.data} onPick={pick}
-          startBps={strikeError || anchor === 'rate' ? null : Math.round(startPct * 100)} />
-      )}
-
-      <CoverTable pair={pair} go={go} spot={spot.data} />
-
-      <aside className="bx-tpanel" aria-label="Protect" ref={panelRef}>
-        <div className="bx-buy">
-          {mode === 'done' ? (
+  const doneView = (
             <div style={{ textAlign: 'center', padding: '12px 0' }}>
               <CheckCircle2 style={{ width: 48, height: 48, color: 'var(--green)' }} />
               <h3 style={{ fontSize: 15, margin: '10px 0 4px' }}>Your exposure is protected</h3>
@@ -1191,7 +1180,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 <button className="bx-btn ghost block" onClick={() => setMode('build')}>Protect another</button>
               </div>
             </div>
-          ) : mode === 'review' && e ? (
+  );
+  const reviewView = e ? (
             <>
               <div><div style={{ fontSize: 15, fontWeight: 600 }}>Review protection</div><div className="muted" style={{ fontSize: 13, marginTop: 2 }}>You are protecting ${fmt(e.notional, 0)} of {ccy} exposure.</div></div>
               <div className="bx-sums" style={{ borderTop: 0, paddingTop: 0 }}>
@@ -1221,7 +1211,126 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <button className="bx-btn ghost block" disabled={!!busy} onClick={() => setMode('build')}>Back</button>
               <div className="bx-hint">{left < 5 ? 'This price has expired. Tap Refresh price, then Confirm protection.' : `Price held for ${left} seconds · approve with your passkey`}</div>
             </>
-          ) : (
+  ) : null;
+
+  const viewSwitch = (
+    <div className="bx-viewswitch" role="group" aria-label="View">
+      {(['simple', 'advanced'] as const).map((v) => (
+        <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => chooseView(v)}>{v === 'simple' ? 'Simple' : 'Advanced'}</button>
+      ))}
+    </div>
+  );
+
+  if (view === 'simple') {
+    const ends = days ? endsAt(days) : null;
+    const rises = direction === 'up';
+    return (
+      <main className="bx-main bx-simple">
+        <div className="bx-scard" ref={panelRef as unknown as React.RefObject<HTMLDivElement>}>
+          <div className="bx-shead">
+            <label className="bx-mstrip-pair">
+              <Flag pair={pair} />
+              <span><span className="n">{ccyName(pair)}</span><span className="s">{spot.data ? `Today: ${fmtRate(spot.data)} ${ccy} per dollar` : '...'}</span></span>
+              {markets.length > 1 && <ChevronDown size={16} aria-hidden="true" />}
+              {markets.length > 1 && (
+                <select aria-label="Currency" value={pair} onChange={(ev) => setPair(ev.target.value)}>
+                  {markets.map((m) => <option key={m.pair} value={m.pair}>{ccyName(m.pair)} ({m.pair})</option>)}
+                </select>
+              )}
+            </label>
+            {viewSwitch}
+          </div>
+
+          {mode === 'done' ? doneView : mode === 'review' && reviewView ? reviewView : (
+            <>
+              <div>
+                <div className="bx-sq">Which way does your money go?</div>
+                <div className="bx-sdir">
+                  {(['up', 'down'] as Direction[]).map((d) => (
+                    <button key={d} className={direction === d ? 'on' : ''} aria-pressed={direction === d} disabled={!directions.includes(d)} onClick={() => setDirection(d)}>
+                      <b>{d === 'up' ? 'I pay in dollars' : "I'm paid in dollars"}</b>
+                      <span>{d === 'up' ? 'For example, a supplier invoice' : 'For example, export income'}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="bx-sq" htmlFor="bx-samount">How much?</label>
+                <label className="bx-tfield bx-sbig">
+                  <span className="u">$</span>
+                  <input id="bx-samount" className="num" inputMode="decimal" placeholder="25,000" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} />
+                  <span className="u">USD</span>
+                </label>
+              </div>
+
+              <div>
+                <div className="bx-sq">{rises ? 'When is the payment due?' : 'When do you expect the money?'}</div>
+                {dayRange ? (
+                  <ProtectUntil days={days} range={dayRange} onChange={setDays} />
+                ) : (
+                  <div className="bx-pills wrap">
+                    {tenorList.map((t) => <button key={t.tenorDays} className={`bx-pill${t.tenorDays === days ? ' on' : ''}`} onClick={() => setDays(t.tenorDays)}>{t.tenorDays} days</button>)}
+                  </div>
+                )}
+              </div>
+
+              <div className="bx-sanswer" aria-live="polite">
+                {!(Number(amount) > 0) ? (
+                  <span className="muted">Enter an amount to see your price.</span>
+                ) : e && strike ? (
+                  <>
+                    <div className="bx-scost"><span>You pay</span><b className="num">${fmt(e.totalCost)}</b></div>
+                    <p>
+                      If the dollar {rises ? 'goes above' : 'falls below'} <b className="num">{fmtRate(e.strike)} {ccy}</b> on {ends}, you receive the difference,
+                      up to <b className="num">${fmt(e.maxPayout)}</b>.
+                    </p>
+                    {e.warning && <div className="bx-warn" role="note">{e.warning}</div>}
+                  </>
+                ) : chosen.error ? (
+                  <span className="bx-error">{(chosen.error as Error).message} {!acting && <button className="bx-link" onClick={() => setRfqOpen(true)}>Request a quote</button>}</span>
+                ) : (
+                  <span className="muted">Working out your price...</span>
+                )}
+              </div>
+
+              <button className="bx-btn block" disabled={!e || checking || viewOnly} onClick={review}>
+                {checking ? <Spin /> : null} {viewOnly ? 'Viewers cannot buy cover' : 'Protect this payment'}
+              </button>
+              <div className="bx-tfoot"><span>Paid once in USDC. Network fees covered.</span>{e ? <span>Price held {left}s</span> : null}</div>
+            </>
+          )}
+        </div>
+        {rfqModal}
+      </main>
+    );
+  }
+
+  return (
+    <main className="bx-main bx-trade">
+      <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} extra={viewSwitch} />
+
+      <section className="bx-tchart" aria-label="Rate chart">
+        <div className="bx-pane-h">
+          <span>{pair} <ChangeText change={periodChange} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
+          <div className="bx-ranges" role="group" aria-label="Chart range">
+            {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
+          </div>
+        </div>
+        <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy}
+          protection={strike ? { strike, cap: structure === 'capped' ? cap : null, tone: 'pay' } : null} />
+      </section>
+
+      {market && (
+        <PriceLadder market={market} days={days} limitBps={listTerms.limitBps} direction={direction} spot={spot.data} onPick={pick}
+          startBps={strikeError || anchor === 'rate' ? null : Math.round(startPct * 100)} />
+      )}
+
+      <CoverTable pair={pair} go={go} spot={spot.data} />
+
+      <aside className="bx-tpanel" aria-label="Protect" ref={panelRef}>
+        <div className="bx-buy">
+          {mode === 'done' ? doneView : mode === 'review' && reviewView ? reviewView : (
             <>
               <div className="bx-sideswitch" role="group" aria-label="Cover">
                 {(['up', 'down'] as Direction[]).map((d) => (
