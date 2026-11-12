@@ -10,12 +10,12 @@ import { VerifyModal } from './verify';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Building2, Check, ChevronDown, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, Settings, ShieldCheck, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, Building2, Check, ChevronDown, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
-import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, useIsDemo, usePools, useUsdcBalances } from './shared';
+import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, useChains, useIsDemo, usePools, useUsdcBalances } from './shared';
 import { Flag, Spin } from './ui';
-import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage, useHedges } from './hedger-pages';
+import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
@@ -205,32 +205,26 @@ export function Workspace() {
 
   return (
     <div className="bx" data-theme={theme}>
-      <nav className="bx-srail" aria-label="Main">
-        <img className="bx-srail-logo" src={logoPath} alt="BlockFinaX" />
-        {nav.map((n) => {
-          const on = page === n.page || parentPage === n.page;
-          return <button key={n.page} data-tour={n.page} className={`bx-sitem${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined} onClick={() => go(n.page)}>{n.icon}<span>{RAIL_LABEL[n.page] ?? n.label}</span></button>;
-        })}
-        <div className="bx-srail-foot">
-          <button className={`bx-sitem${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><Settings /><span>Settings</span></button>
-          <span className="bx-srail-acct"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
-        </div>
-      </nav>
-
       <div className="bx-content" ref={content}>
         <ContactSales />
         <VerifyModal />
         <header className="bx-top">
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
-          <div className="bx-tbrand bx-hide-sm">BlockFinaX{demo && <span className="bx-env">Testnet</span>}</div>
+          <div className="bx-tbrand bx-hide-sm"><img src={logoPath} alt="" />BlockFinaX{demo && <span className="bx-env">Testnet</span>}</div>
           {!simple && <RoleMenu role={role} onChange={switchRole} />}
-          <TopNumbers go={go} />
+          <nav className="bx-topnav bx-hide-sm" aria-label="Main">
+            {nav.filter((n) => n.page !== 'wallet').map((n) => {
+              const on = page === n.page || parentPage === n.page;
+              return <button key={n.page} data-tour={n.page} className={`bx-tnav${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined} onClick={() => go(n.page)}>{RAIL_LABEL[n.page] ?? n.label}</button>;
+            })}
+          </nav>
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
+            <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet · <span className="num">${fmt(balances.data?.total)} USDC</span></button>
             <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>
             {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
-            <span className="bx-top-account bx-show-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
+            <span className="bx-top-account"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
           </div>
         </header>
 
@@ -249,7 +243,7 @@ export function Workspace() {
         {page === 'u-risk' && <RiskPage go={go} poolRef={pool} />}
         {page === 'u-withdraw' && <WithdrawCapital go={go} poolRef={pool} />}
         {page === 'u-requests' && <UnderwriterRequests />}
-        <StatusBar demo={demo} />
+        <StatusBar />
       </div>
 
       <AgentChat />
@@ -339,32 +333,16 @@ function SearchBox({ role, go }: { role: Role; go: Go }) {
   );
 }
 
-/** Where the buyer stands, across the top: wallet, cover running, payouts waiting. */
-function TopNumbers({ go }: { go: Go }) {
-  const balances = useUsdcBalances();
-  const hedges = useHedges();
-  const all = hedges.data ?? [];
-  const running = all.filter((h) => h.settlement.status === 'pending');
-  const protectedUsd = running.reduce((sum, h) => sum + Number(h.position.notional), 0);
-  const ready = all.filter((h) => h.settlement.status === 'settled_claimable').reduce((sum, h) => sum + Number(h.settlement.netPayout), 0);
-  return (
-    <div className="bx-nums bx-hide-sm">
-      <button className="bx-numb" data-tour="balance" onClick={() => go('wallet')}><span className="l">Wallet</span><span className="v num">${fmt(balances.data?.total)}</span></button>
-      <button className="bx-numb" onClick={() => go('h-protections')}><span className="l">Cover running</span><span className="v num">${fmt(protectedUsd, 0)}</span></button>
-      <button className="bx-numb" onClick={() => go('h-protections')}><span className="l">Payouts ready</span><span className={`v num${ready > 0 ? ' up' : ''}`}>${fmt(ready)}</span></button>
-    </div>
-  );
-}
-
 /** The thin bar along the bottom: network, live rates and the time cover ends by (UTC). */
-function StatusBar({ demo }: { demo: boolean }) {
+function StatusBar() {
+  const env = useChains().data?.environment;
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t); }, []);
   const utc = now.toISOString().slice(11, 16);
   return (
     <footer className="bx-status bx-hide-sm">
       <span><i className="bx-dot" aria-hidden="true" />Live rates</span>
-      <span>{demo ? 'Testnet, test USDC only' : 'Mainnet'}</span>
+      {env && <span>{env === 'testnet' ? 'Testnet, test USDC only' : 'Mainnet'}</span>}
       <span className="r">{utc} UTC · cover ends at 14:00 UTC</span>
     </footer>
   );
