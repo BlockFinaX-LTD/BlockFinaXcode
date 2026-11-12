@@ -12,6 +12,7 @@ import { usePasskeySession } from '@/lib/identity';
 import { signOutPasskey } from '@/lib/wallets/passkey-wallet';
 import { setActingOrganisation } from '@/lib/acting-organisation';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
+import { NetworkSwitch } from './demo';
 import { actAs, listOrganisations, organisationsConfig, type OrganisationSummary } from '@/lib/organisations';
 import { startTour } from './tour';
 import type { Go, Page } from './workspace';
@@ -107,6 +108,8 @@ export function AccountMenu({ go, page, theme, onTheme, placement }: {
             <button className={theme === 'light' ? 'on' : ''} aria-label="Light" aria-pressed={theme === 'light'} onClick={() => onTheme('light')}><Sun /></button>
             <button className={theme === 'dark' ? 'on' : ''} aria-label="Dark" aria-pressed={theme === 'dark'} onClick={() => onTheme('dark')}><Moon /></button>
           </div>
+          {/* The network switch lives here at the top; the side menu kept it at its foot. */}
+          {placement === 'top' && <div className="bx-menu-net"><NetworkSwitch /></div>}
           <div className="bx-menu-sep" />
 
           <div className="bx-menu-anchor">

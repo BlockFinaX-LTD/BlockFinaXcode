@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, Building2, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
-import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
+import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, useIsDemo, usePools, useUsdcBalances } from './shared';
 import { Flag, Spin } from './ui';
 import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
@@ -127,6 +127,7 @@ function readRole(): Role {
 
 export function Workspace() {
   const [viewMode, setViewMode] = useViewMode();
+  const demo = useIsDemo();
   const simple = viewMode === 'simple';
   const [chosenRole, setRole] = useState<Role>(readRole);
   const role: Role = simple ? 'hedger' : chosenRole;
@@ -196,38 +197,32 @@ export function Workspace() {
 
   return (
     <div className="bx" data-theme={theme}>
-      <nav className="bx-rail" aria-label="Main">
-        <div className="bx-brand"><img src={logoPath} alt="" />BlockFinaX</div>
-        <ViewSwitch mode={viewMode} onChange={setViewMode} />
-        {!simple && (
-          <div className="bx-roles" data-tour="roles">
-            <button className={role === 'hedger' ? 'on' : ''} onClick={() => switchRole('hedger')}>Hedger</button>
-            <button className={role === 'underwriter' ? 'on' : ''} onClick={() => switchRole('underwriter')}>Underwriter</button>
-          </div>
-        )}
-        <div className="bx-navs">
-          {nav.map((n) => (
-            <button key={n.page} data-tour={n.page} className={`bx-nav${page === n.page || parentPage === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
-          ))}
-        </div>
-        <div className="bx-rail-foot">
-          <NetworkSwitch />
-          <AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="rail" />
-        </div>
-      </nav>
-
       <div className="bx-content" ref={content}>
         <ContactSales />
         <VerifyModal />
         <header className="bx-top">
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
+          <div className="bx-tbrand bx-hide-sm"><img src={logoPath} alt="" />BlockFinaX{demo && <span className="bx-env">Testnet</span>}</div>
+          <div className="bx-tswitches bx-hide-sm">
+            <ViewSwitch mode={viewMode} onChange={setViewMode} />
+            {!simple && (
+              <div className="bx-roles" data-tour="roles">
+                <button className={role === 'hedger' ? 'on' : ''} onClick={() => switchRole('hedger')}>Hedger</button>
+                <button className={role === 'underwriter' ? 'on' : ''} onClick={() => switchRole('underwriter')}>Underwriter</button>
+              </div>
+            )}
+          </div>
+          <nav className="bx-topnav bx-hide-sm" aria-label="Main">
+            {nav.map((n) => (
+              <button key={n.page} data-tour={n.page} className={`bx-tnav${page === n.page || parentPage === n.page ? ' on' : ''}`} aria-current={page === n.page ? 'page' : undefined} onClick={() => go(n.page)}>{n.label}</button>
+            ))}
+          </nav>
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
             <button className="bx-balance-pill num bx-hide-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total)} USDC</button>
             {viewOnly ? null : <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
-            {/* The sidebar has the account card on desktop; phones, which hide the sidebar, keep this one. */}
-            <span className="bx-top-account bx-show-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
+            <span className="bx-top-account"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
           </div>
         </header>
 
