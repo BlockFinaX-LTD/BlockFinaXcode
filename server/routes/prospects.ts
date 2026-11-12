@@ -19,6 +19,7 @@ import { db } from "../db";
 import { prospects, assessSendable, classifyAddress } from "@shared/prospect-schema";
 import { requireAdmin } from "../middleware/admin-auth";
 import { discoverProspects, SEED_QUERIES, SEED_LOCATIONS } from "../prospects/discover";
+import { discoverFrom, JOB_QUERIES, NEWS_QUERIES, NEWS_COUNTRIES } from "../prospects/sources";
 import { discoveryStatus } from "../prospects/scheduler";
 import { researchAndWrite } from "../prospects/write";
 import { writeInvestorEmail, currentTraction } from "../investors/write";
@@ -87,7 +88,10 @@ export function registerProspectRoutes(app: Express): void {
       dailyCap: DAILY_SEND_CAP,
       health: await sendingHealth(),
       schedule: await discoveryStatus(),
-      seeds: { queries: SEED_QUERIES, locations: SEED_LOCATIONS },
+      seeds: {
+        queries: SEED_QUERIES, locations: SEED_LOCATIONS,
+        jobs: JOB_QUERIES, news: NEWS_QUERIES, countries: NEWS_COUNTRIES.map(c => c.name),
+      },
     });
   });
 
@@ -165,16 +169,31 @@ export function registerProspectRoutes(app: Express): void {
       const token = process.env.APIFY_TOKEN;
       if (!token) return res.status(503).json({ error: "Discovery needs APIFY_TOKEN." });
 
-      const { query, location, segment, limit } = req.body ?? {};
+      const { query, location, segment, limit, kind, url } = req.body ?? {};
       const q = typeof query === "string" ? query.trim() : "";
       const loc = typeof location === "string" ? location.trim() : "";
-      if (!q || !loc) return res.status(400).json({ error: "Give it a business type and a place." });
+      const seg = ["hedger", "underwriter", "psp", "bank", "investor"].includes(segment) ? segment : "unknown";
+      const n = Math.min(Math.max(Number(limit) || 60, 1), 300);
 
-      const out = await discoverProspects({
-        token, query: q, location: loc,
-        segment: ["hedger", "underwriter", "psp", "bank", "investor"].includes(segment) ? segment : "unknown",
-        limit: Math.min(Math.max(Number(limit) || 60, 1), 300),
-      });
+      if (kind === "jobs" || kind === "news" || kind === "list") {
+        const page = typeof url === "string" ? url.trim() : "";
+        if (kind === "list" && !/^https?:\/\//i.test(page)) {
+          return res.status(400).json({ error: "Paste the full address of the list page, starting with https://." });
+        }
+        if (kind !== "list" && (!q || !loc)) {
+          return res.status(400).json({ error: kind === "jobs" ? "Give it a job title and a place." : "Give it a topic and a country." });
+        }
+        const out = await discoverFrom({
+          kind, token,
+          apiKey: process.env.ANTHROPIC_API_KEY,
+          model: (process.env.AGENT_MODEL || "claude-sonnet-5").trim(),
+          query: q, location: loc, url: page, segment: seg, limit: Math.min(n, 100),
+        });
+        return res.json(out);
+      }
+
+      if (!q || !loc) return res.status(400).json({ error: "Give it a business type and a place." });
+      const out = await discoverProspects({ token, query: q, location: loc, segment: seg, limit: n });
       return res.json(out);
     } catch (err) {
       return res.status(500).json({ error: err instanceof Error ? err.message : "discovery failed" });

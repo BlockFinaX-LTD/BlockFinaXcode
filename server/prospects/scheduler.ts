@@ -35,6 +35,7 @@ import { prospects } from "@shared/prospect-schema";
 import { platformSettings } from "@shared/schema";
 import { discoverProspects, SEED_QUERIES, SEED_LOCATIONS } from "./discover";
 import { researchAndWrite } from "./write";
+import { discoverFrom, JOB_QUERIES, NEWS_QUERIES, NEWS_COUNTRIES, type SourceKind } from "./sources";
 
 const CURSOR_KEY = "prospect_seed_cursor";
 const LAST_RUN_KEY = "prospect_last_discovery";
@@ -75,13 +76,40 @@ const QUEUE_BACKPRESSURE = Number(process.env.PROSPECT_QUEUE_CAP || 250);
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
-/** Every (segment, query, location) combination, in a stable order. */
-function seedMatrix(): Array<{ segment: string; query: string; location: string }> {
-  const out: Array<{ segment: string; query: string; location: string }> = [];
+interface Seed { kind: SourceKind; segment: string; query: string; location: string }
+
+/**
+ * Every search worth running, in a stable order.
+ *
+ * Google Maps, job posts and news are interleaved rather than run one after
+ * another, so each cycle draws on more than one kind of signal instead of
+ * spending three weeks on Maps before the first job post is read. Job posts
+ * and news search for hedgers only: they are the signals that mean someone
+ * has the problem, and the other segments are better found by name.
+ */
+function seedMatrix(): Seed[] {
+  const places: Seed[] = [];
   for (const location of SEED_LOCATIONS) {
     for (const [segment, queries] of Object.entries(SEED_QUERIES)) {
-      for (const query of queries) out.push({ segment, query, location });
+      for (const query of queries) places.push({ kind: "places", segment, query, location });
     }
+  }
+  const jobs: Seed[] = [];
+  const cities = SEED_LOCATIONS.filter(l => /^(Accra|Lagos|Abuja|Nairobi|Johannesburg)/.test(l));
+  for (const location of cities) {
+    for (const query of JOB_QUERIES.hedger) jobs.push({ kind: "jobs", segment: "hedger", query, location });
+  }
+  const news: Seed[] = [];
+  for (const c of NEWS_COUNTRIES) {
+    for (const query of NEWS_QUERIES.hedger) news.push({ kind: "news", segment: "hedger", query, location: c.name });
+  }
+
+  const out: Seed[] = [];
+  const longest = Math.max(places.length, jobs.length, news.length);
+  for (let i = 0; i < longest; i++) {
+    if (i < places.length) out.push(places[i]);
+    if (i < jobs.length) out.push(jobs[i]);
+    if (i < news.length) out.push(news[i]);
   }
   return out;
 }
@@ -175,16 +203,27 @@ async function tick(intervalMs: number): Promise<void> {
     for (let i = 0; i < Math.max(1, SEEDS_PER_CYCLE); i++) {
       const seed = matrix[cursor];
       try {
-        const found = await discoverProspects({
-          token: apifyToken,
-          query: seed.query,
-          location: seed.location,
-          segment: seed.segment,
-          limit: 40,
-        });
+        const found = seed.kind === "places"
+          ? await discoverProspects({
+              token: apifyToken,
+              query: seed.query,
+              location: seed.location,
+              segment: seed.segment,
+              limit: 40,
+            })
+          : await discoverFrom({
+              kind: seed.kind,
+              token: apifyToken,
+              apiKey,
+              model: (process.env.AGENT_MODEL || "claude-sonnet-5").trim(),
+              query: seed.query,
+              location: seed.location,
+              segment: seed.segment,
+              limit: 40,
+            });
         inserted += found.inserted;
         lines.push(
-          `"${seed.query}" in ${seed.location}: ${found.found} found, ${found.inserted} new, ` +
+          `${seed.kind === "places" ? "" : seed.kind + " "}"${seed.query}" in ${seed.location}: ${found.found} found, ${found.inserted} new, ` +
           `${found.duplicates} known, ${found.sendable} contactable` +
           (found.errors.length ? ` (${found.errors[0]})` : ""),
         );

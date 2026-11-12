@@ -27,13 +27,16 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+/** Sources found by a signal, where the reason is worth showing next to the company. */
+const SOURCE_LABEL: Record<string, string> = { jobs: "Job post", news: "In the news", directory: "On a list" };
+
 interface Prospect {
   id: number;
   company: string; website: string | null; country: string | null;
   description: string | null; industry: string | null;
   email: string; addressKind: string;
   contactName: string | null; contactTitle: string | null;
-  source: string; sourceUrl: string | null; notes: string | null;
+  source: string; sourceUrl: string | null; notes: string | null; evidence?: string | null;
   segment: string; fit: string | null; fitScore: number | null;
   sendable: boolean; sendableReason: string | null;
   status: string; draftSubject: string | null; draftBody: string | null;
@@ -59,7 +62,10 @@ interface Config {
     queueCap: number; waiting: number; paused: boolean;
     lastResult: { at: string; inserted: number; drafted: number; lines: string[] } | null;
   };
-  seeds: { queries: Record<string, string[]>; locations: string[] };
+  seeds: {
+    queries: Record<string, string[]>; locations: string[];
+    jobs?: Record<string, string[]>; news?: Record<string, string[]>; countries?: string[];
+  };
 }
 
 const SEGMENTS: Record<string, { label: string; tone: string }> = {
@@ -91,6 +97,17 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
   const [query, setQuery] = useState("food importer");
   const [location, setLocation] = useState("Accra, Ghana");
   const [seedSegment, setSeedSegment] = useState("hedger");
+  const [kind, setKind] = useState<"places" | "jobs" | "news" | "list">("places");
+  const [listUrl, setListUrl] = useState("");
+
+  // Each source starts from a sensible example, so switching never leaves a
+  // Maps search term sitting in a job title box.
+  const pickKind = (k: typeof kind) => {
+    setKind(k);
+    if (k === "places") { setQuery("food importer"); setLocation("Accra, Ghana"); }
+    if (k === "jobs") { setQuery("import manager"); setLocation("Lagos, Nigeria"); }
+    if (k === "news") { setQuery("foreign exchange loss company results"); setLocation("Nigeria"); }
+  };
 
   const { data: cfg } = useQuery<Config>({
     queryKey: ["prospects-config", token],
@@ -109,7 +126,7 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
   const discover = useMutation({
     mutationFn: () => api("/api/prospects/discover", token, {
       method: "POST",
-      body: JSON.stringify({ query, location, segment: seedSegment, limit: 60 }),
+      body: JSON.stringify({ kind, query, location, url: listUrl, segment: seedSegment, limit: kind === "places" ? 60 : 40 }),
     }),
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ["prospects"] });
@@ -222,6 +239,7 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
 
   const rows = data?.prospects ?? [];
   const counts = data?.counts ?? {};
+  const seedList = kind === "jobs" ? cfg?.seeds?.jobs : kind === "news" ? cfg?.seeds?.news : cfg?.seeds?.queries;
   const busy = discover.isPending || write.isPending || sendAll.isPending;
 
   return (
@@ -309,17 +327,52 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
 
       {/* ── find ── */}
       <div className="rounded-lg border border-border bg-muted/20 p-4">
-        <div className="grid gap-2.5 sm:grid-cols-[1fr_1fr_auto]">
-          <input
-            value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="What kind of business, e.g. freight forwarder"
-            className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-          <input
-            value={location} onChange={e => setLocation(e.target.value)}
-            placeholder="Where, e.g. Tema, Ghana"
-            className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
+          {([
+            ["places", "Google Maps"],
+            ["jobs", "Job posts"],
+            ["news", "News"],
+            ["list", "A list page"],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => pickKind(k)}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-[12px]",
+                kind === k ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mb-2.5 text-[12px] text-muted-foreground">
+          {kind === "places" && "Businesses of a type in a city, from Google Maps."}
+          {kind === "jobs" && "Companies hiring for roles that mean paying in dollars, from LinkedIn job posts in the last month."}
+          {kind === "news" && "Companies named in recent news about exchange rate losses."}
+          {kind === "list" && "Paste a trade fair exhibitor list, a chamber of commerce member list or a directory page. Every business on it is read."}
+        </p>
+        <div className={cn("grid gap-2.5", kind === "list" ? "sm:grid-cols-[1fr_auto]" : "sm:grid-cols-[1fr_1fr_auto]")}>
+          {kind === "list" ? (
+            <input
+              value={listUrl} onChange={e => setListUrl(e.target.value)}
+              placeholder="https://… the page that lists the businesses"
+              className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          ) : (
+            <>
+              <input
+                value={query} onChange={e => setQuery(e.target.value)}
+                placeholder={kind === "jobs" ? "Job title, e.g. procurement manager" : kind === "news" ? "Topic, e.g. naira depreciation importers" : "What kind of business, e.g. freight forwarder"}
+                className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              <input
+                value={location} onChange={e => setLocation(e.target.value)}
+                placeholder={kind === "news" ? "Country, e.g. Ghana" : "Where, e.g. Tema, Ghana"}
+                className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </>
+          )}
           <select
             value={seedSegment} onChange={e => setSeedSegment(e.target.value)}
             className="rounded-md border border-border bg-background px-3 py-2 text-[13px]"
@@ -331,9 +384,9 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
           </select>
         </div>
 
-        {cfg?.seeds?.queries?.[seedSegment] && (
+        {kind !== "list" && seedList?.[seedSegment] && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {cfg.seeds.queries[seedSegment].slice(0, 9).map(q => (
+            {seedList[seedSegment].slice(0, 9).map(q => (
               <button
                 key={q}
                 onClick={() => setQuery(q)}
@@ -349,7 +402,7 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
           <Button size="sm" disabled={!enabled || busy || !cfg?.discovery} onClick={() => discover.mutate()}>
             {discover.isPending
               ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Searching…</>
-              : <><Search className="mr-1.5 h-3.5 w-3.5" /> Find businesses</>}
+              : <><Search className="mr-1.5 h-3.5 w-3.5" /> {kind === "list" ? "Read the list" : "Find businesses"}</>}
           </Button>
           <Button size="sm" variant="outline" disabled={!enabled || importContacts.isPending} asChild>
             <label className="cursor-pointer">
@@ -510,6 +563,17 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
                         <a href={p.sourceUrl} target="_blank" rel="noreferrer noopener"
                            className="ml-2 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline">
                           LinkedIn <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </p>
+                  )}
+                  {SOURCE_LABEL[p.source] && (
+                    <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                      <span className="text-foreground">{SOURCE_LABEL[p.source]}:</span> {p.evidence}
+                      {p.sourceUrl && (
+                        <a href={p.sourceUrl} target="_blank" rel="noreferrer noopener"
+                           className="ml-2 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline">
+                          source <ExternalLink className="h-3 w-3" />
                         </a>
                       )}
                     </p>

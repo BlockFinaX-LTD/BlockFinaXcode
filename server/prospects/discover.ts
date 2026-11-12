@@ -43,6 +43,10 @@ export interface Business {
   address: string | null;
   /** Emails the places actor found on the business's own site, when asked. */
   emails: string[];
+  /** Why this business is worth writing to, quoted from where it was found. */
+  evidence?: string | null;
+  /** The page the business was found on: a job post, an article, a list. */
+  sourceUrl?: string | null;
 }
 
 /**
@@ -112,7 +116,7 @@ function cleanEmails(raw: unknown[]): string[] {
   return Array.from(new Set(out));
 }
 
-async function apify<T>(actor: string, token: string, input: unknown, timeoutMs = 240_000): Promise<T[]> {
+export async function apify<T>(actor: string, token: string, input: unknown, timeoutMs = 240_000): Promise<T[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -144,7 +148,7 @@ const COUNTRY_CODES: Record<string, string> = {
   "united arab emirates": "AE", india: "IN", china: "CN", netherlands: "NL",
 };
 
-function countryCode(v: unknown): string | null {
+export function countryCode(v: unknown): string | null {
   if (typeof v !== "string" || !v.trim()) return null;
   const s = v.trim();
   if (/^[A-Z]{2}$/.test(s)) return s;
@@ -246,17 +250,38 @@ export async function discoverProspects(opts: {
   segment: string;
   limit: number;
 }): Promise<DiscoverResult> {
-  const errors: string[] = [];
   let businesses: Business[] = [];
   try {
     businesses = await findBusinesses(opts.token, opts.query, opts.location, opts.limit);
   } catch (e) {
-    return {
-      found: 0, withSite: 0, withEmail: 0, inserted: 0, duplicates: 0, sendable: 0,
-      errors: [e instanceof Error ? e.message : "places search failed"],
-    };
+    return emptyResult(e instanceof Error ? e.message : "places search failed");
   }
+  return saveBusinesses(opts.token, businesses, {
+    source: "search",
+    sourceQuery: `${opts.query} in ${opts.location}`,
+    segment: opts.segment,
+  });
+}
 
+export function emptyResult(error?: string): DiscoverResult {
+  return {
+    found: 0, withSite: 0, withEmail: 0, inserted: 0, duplicates: 0, sendable: 0,
+    errors: error ? [error] : [],
+  };
+}
+
+/**
+ * Find an address for each business and store the ones that have one.
+ *
+ * Shared by every source. Maps, job posts, news and lists differ only in how
+ * the business is found; how to write to it is the same problem each time.
+ */
+export async function saveBusinesses(
+  token: string,
+  businesses: Business[],
+  meta: { source: string; sourceQuery: string; segment: string },
+): Promise<DiscoverResult> {
+  const errors: string[] = [];
   const sites = businesses.filter(b => b.website);
 
   // The places run already returns contacts for most businesses. Only crawl the
@@ -272,7 +297,7 @@ export async function discoverProspects(opts: {
 
   if (stillMissing.length) {
     try {
-      const crawled = await findEmails(opts.token, stillMissing);
+      const crawled = await findEmails(token, stillMissing);
       crawled.forEach((v, k) => { if (!emailsByHost.has(k)) emailsByHost.set(k, v); });
     } catch (e) {
       // Not fatal. Whatever the places run found is still usable, and saying so
@@ -314,13 +339,13 @@ export async function discoverProspects(opts: {
         website: b.website,
         country: b.country,
         industry: b.industry,
-        evidence: b.address ? `Listed at ${b.address}` : null,
+        evidence: b.evidence ?? (b.address ? `Listed at ${b.address}` : null),
         email,
         addressKind: kind,
-        sourceUrl: b.website,
-        source: "search",
-        sourceQuery: `${opts.query} in ${opts.location}`,
-        segment: opts.segment,
+        sourceUrl: b.sourceUrl ?? b.website,
+        source: meta.source,
+        sourceQuery: meta.sourceQuery,
+        segment: meta.segment,
         sendable: verdict.sendable,
         sendableReason: verdict.reason,
         unsubscribeToken: randomBytes(24).toString("hex"),
