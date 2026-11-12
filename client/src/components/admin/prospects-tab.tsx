@@ -26,7 +26,6 @@ import { Loader2, Search, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban,
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { FinderPanel, finderInput } from "./finder";
 
 /** Sources found by a signal, where the reason is worth showing next to the company. */
 const SOURCE_LABEL: Record<string, string> = { jobs: "Job post", news: "In the news", directory: "On a list" };
@@ -95,20 +94,7 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
   const qc = useQueryClient();
   const [status, setStatus] = useState("all");
   const [segment, setSegment] = useState("all");
-  const [query, setQuery] = useState("food importer");
-  const [location, setLocation] = useState("Accra, Ghana");
-  const [seedSegment, setSeedSegment] = useState("hedger");
-  const [kind, setKind] = useState<"places" | "jobs" | "news" | "list">("places");
-  const [listUrl, setListUrl] = useState("");
 
-  // Each source starts from a sensible example, so switching never leaves a
-  // Maps search term sitting in a job title box.
-  const pickKind = (k: typeof kind) => {
-    setKind(k);
-    if (k === "places") { setQuery("food importer"); setLocation("Accra, Ghana"); }
-    if (k === "jobs") { setQuery("import manager"); setLocation("Lagos, Nigeria"); }
-    if (k === "news") { setQuery("foreign exchange loss company results"); setLocation("Nigeria"); }
-  };
 
   const { data: cfg } = useQuery<Config>({
     queryKey: ["prospects-config", token],
@@ -122,27 +108,6 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
   }>({
     queryKey: ["prospects", status, segment, token],
     queryFn: () => api(`/api/prospects?status=${status}&segment=${segment}`, token),
-  });
-
-  const discover = useMutation({
-    mutationFn: () => api("/api/prospects/discover", token, {
-      method: "POST",
-      body: JSON.stringify({ kind, query, location, url: listUrl, segment: seedSegment, limit: kind === "places" ? 60 : 40 }),
-    }),
-    onSuccess: (r: any) => {
-      qc.invalidateQueries({ queryKey: ["prospects"] });
-      toast({
-        title: r.inserted ? `${r.inserted} new businesses` : "Nothing new found",
-        // Say what happened at every stage. "Nothing found" cannot distinguish
-        // an empty search from a crawl that found sites with no contact page.
-        description:
-          `${r.found} found, ${r.withSite} had a website, ${r.withEmail} had an address, ` +
-          `${r.duplicates} already known` +
-          (r.errors?.length ? ` · ${r.errors[0]}` : ""),
-        variant: r.inserted ? undefined : "destructive",
-      });
-    },
-    onError: (e: Error) => toast({ title: "Discovery failed", description: e.message, variant: "destructive" }),
   });
 
   const importContacts = useMutation({
@@ -240,15 +205,13 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
 
   const rows = data?.prospects ?? [];
   const counts = data?.counts ?? {};
-  const seedList = kind === "jobs" ? cfg?.seeds?.jobs : kind === "news" ? cfg?.seeds?.news : cfg?.seeds?.queries;
-  const busy = discover.isPending || write.isPending || sendAll.isPending;
+  const busy = write.isPending || sendAll.isPending;
 
   return (
     <div className="space-y-5">
       <p className="max-w-[70ch] text-sm text-muted-foreground">
-        Finax finds businesses that move money across a border, works out what they do and which
-        side they are on, and writes the first email. It does that on its own every four hours.
-        You only need to read and approve.
+        Businesses found by the searches above, with an email address. Finax works out what each
+        one does and writes the first email. You read and approve.
       </p>
 
       {/* Where the automatic search has got to. A background job nobody can see
@@ -325,59 +288,6 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
           )}
         </div>
       )}
-
-      {/* ── find ── */}
-      <FinderPanel
-        sources={[
-          { key: "places", label: "Google Maps", about: "Businesses of a type in a city, from Google Maps." },
-          { key: "jobs", label: "Job posts", about: "Companies hiring for roles that mean paying in dollars, from LinkedIn job posts in the last month." },
-          { key: "news", label: "News", about: "Companies named in recent news about exchange rate losses." },
-          { key: "list", label: "A list page", about: "Paste a trade fair exhibitor list, a chamber of commerce member list or a directory page. Every business on it is read." },
-        ]}
-        source={kind}
-        onSource={pickKind}
-        suggestions={kind !== "list" ? seedList?.[seedSegment]?.slice(0, 9) : undefined}
-        onSuggest={setQuery}
-        action={{
-          label: kind === "list" ? "Read the list" : "Find businesses",
-          busy: discover.isPending,
-          disabled: !enabled || busy || !cfg?.discovery,
-          onClick: () => discover.mutate(),
-        }}
-        note={cfg && !cfg.discovery ? "Searching needs APIFY_TOKEN in Railway." : "Found businesses get an address looked up, then Finax drafts the email."}
-      >
-        <div className={cn("grid gap-2.5", kind === "list" ? "sm:grid-cols-[1fr_auto]" : "sm:grid-cols-[1fr_1fr_auto]")}>
-          {kind === "list" ? (
-            <input
-              value={listUrl} onChange={e => setListUrl(e.target.value)}
-              placeholder="https://… the page that lists the businesses"
-              className={finderInput}
-            />
-          ) : (
-            <>
-              <input
-                value={query} onChange={e => setQuery(e.target.value)}
-                placeholder={kind === "jobs" ? "Job title, e.g. procurement manager" : kind === "news" ? "Topic, e.g. naira depreciation importers" : "What kind of business, e.g. freight forwarder"}
-                className={finderInput}
-              />
-              <input
-                value={location} onChange={e => setLocation(e.target.value)}
-                placeholder={kind === "news" ? "Country, e.g. Ghana" : "Where, e.g. Tema, Ghana"}
-                className={finderInput}
-              />
-            </>
-          )}
-          <select
-            value={seedSegment} onChange={e => setSeedSegment(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-          >
-            <option value="hedger">Needs cover</option>
-            <option value="underwriter">Could underwrite</option>
-            <option value="psp">Payments</option>
-            <option value="bank">Bank</option>
-          </select>
-        </div>
-      </FinderPanel>
 
       <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={!enabled || importContacts.isPending} asChild>

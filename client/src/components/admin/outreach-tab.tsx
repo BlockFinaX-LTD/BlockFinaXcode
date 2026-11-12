@@ -26,17 +26,14 @@ import {
   Loader2, Copy, Check, ExternalLink, Trash2, Send, Sparkles, Linkedin, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OutreachPeople } from "./outreach-people";
+import { Leads } from "./leads";
 import { OutreachMemory } from "./outreach-memory";
-import { FinderPanel, finderInput } from "./finder";
+import { INTENTS, howLongAgo, adminApi as api, type Intent } from "./finder";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type Intent = "reply" | "comment" | "connect" | "dm" | "insight_call";
 type Status = "waiting" | "sent" | "discarded";
 
-interface PlannedSearch { query: string; angle: string; why: string }
-interface SearchOutcome { query: string; fetched: number; error: string | null }
 
 interface Draft {
   id: number;
@@ -86,46 +83,6 @@ function canPost(d: Draft): boolean {
       || /-activity-\d{10,}/.test(d.sourceUrl);
 }
 
-/**
- * How long ago, in words.
- *
- * The same wording the drafter is given, so a card cannot say "2 days ago"
- * while the draft it holds was written as though the thread were live.
- */
-function howLongAgo(iso: string | null): string | null {
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return null;
-  const mins = Math.floor((Date.now() - t) / 60_000);
-  if (mins < 2) return "just now";
-  if (mins < 60) return `${mins} minutes ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return days === 1 ? "1 day ago" : `${days} days ago`;
-  if (days < 30) {
-    const w = Math.floor(days / 7);
-    return w === 1 ? "1 week ago" : `${w} weeks ago`;
-  }
-  if (days < 365) {
-    const m = Math.floor(days / 30);
-    return m === 1 ? "1 month ago" : `${m} months ago`;
-  }
-  const y = Math.floor(days / 365);
-  return y === 1 ? "1 year ago" : `${y} years ago`;
-}
-
-/** "about 3 hours", for the next scheduled run. */
-function minutesUntil(iso: string | null): string {
-  if (!iso) return "a while";
-  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
-  if (mins <= 0) return "a few minutes";
-  if (mins < 60) return `${mins} minutes`;
-  const h = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return rem >= 15 ? `${h}h ${rem}m` : `${h} hour${h === 1 ? "" : "s"}`;
-}
-
 /** Past a week the thread is cold, and that changes whether it is worth sending. */
 function isStale(iso: string | null): boolean {
   if (!iso) return false;
@@ -133,48 +90,15 @@ function isStale(iso: string | null): boolean {
   return !Number.isNaN(t) && Date.now() - t > 7 * 86400_000;
 }
 
-const INTENTS: { key: Intent; label: string; hint: string }[] = [
-  { key: "comment", label: "Insight comment", hint: "70 to 110 words: mechanism, a number, then the second-order effect" },
-  { key: "reply", label: "Public reply", hint: "under 60 words, has to add something to the thread" },
-  { key: "insight_call", label: "Ask for their view", hint: "under 120 words, asks about their subject rather than ours" },
-  { key: "connect", label: "Connection note", hint: "under 300 characters, LinkedIn's limit" },
-  { key: "dm", label: "Direct message", hint: "under 120 words, one question worth answering" },
-];
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 export function OutreachTab({ token, enabled }: { token: string; enabled: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [intent, setIntent] = useState<Intent>("comment");
-  /**
-   * "search" = Finax searches LinkedIn through a provider that uses its own
-   *            infrastructure rather than your session. Empty means Finax plans
-   *            the searches itself.
-   * "paste"  = one post (with its link) or a whole page pasted at once.
-   */
-  const [mode, setMode] = useState<"search" | "paste">("search");
-  const [blob, setBlob] = useState("");
-  const [query, setQuery] = useState("");
-  const [postedLimit, setPostedLimit] = useState("month");
-  /** The plan from the last automatic scan, kept so the reasoning stays visible. */
-  const [plan, setPlan] = useState<PlannedSearch[] | null>(null);
-  const [searched, setSearched] = useState<SearchOutcome[] | null>(null);
   const [tab, setTab] = useState<Status>("waiting");
   /** Drafts, the people behind them, or what Finax knows. */
-  const [section, setSection] = useState<"drafts" | "people" | "memory">("drafts");
+  const [section, setSection] = useState<"leads" | "drafts" | "memory">("leads");
   const [copied, setCopied] = useState<number | null>(null);
   const [showRedirect, setShowRedirect] = useState(false);
 
@@ -217,106 +141,9 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
     onError: (e: Error) => toast({ title: "Could not queue that", description: e.message, variant: "destructive" }),
   });
 
-  const { data: schedule } = useQuery<{
-    lastScanAt: string | null; nextScanAt: string | null; intervalHours: number; configured: boolean;
-  }>({
-    queryKey: ["outreach-schedule", token],
-    queryFn: () => api("/api/outreach/schedule", token),
-    // The scan runs on the server, so the console has to ask rather than be told.
-    refetchInterval: 120_000,
-  });
-
   const { data: drafts = [], isLoading } = useQuery<Draft[]>({
     queryKey: ["outreach", tab, token],
     queryFn: () => api(`/api/outreach?status=${tab}`, token),
-  });
-
-  const draftIt = useMutation({
-    mutationFn: () =>
-      api("/api/outreach/draft", token, {
-        method: "POST",
-        body: JSON.stringify({ sourceText: blob, sourceUrl, intent }),
-      }),
-    onSuccess: () => {
-      setBlob(""); setSourceUrl("");
-      setTab("waiting");
-      qc.invalidateQueries({ queryKey: ["outreach"] });
-      toast({ title: "Draft ready", description: "It's waiting below." });
-    },
-    onError: (e: Error) => toast({ title: "Couldn't draft that", description: e.message, variant: "destructive" }),
-  });
-
-  const scan = useMutation({
-    mutationFn: () =>
-      api("/api/outreach/scan", token, { method: "POST", body: JSON.stringify({ blob, intent }) }),
-    onSuccess: (r: { drafted: number; skipped: number; failed: number; note?: string }) => {
-      setBlob("");
-      setTab("waiting");
-      qc.invalidateQueries({ queryKey: ["outreach"] });
-      toast({
-        title: r.drafted ? `${r.drafted} draft${r.drafted === 1 ? "" : "s"} ready` : "Nothing to draft",
-        description:
-          r.note ??
-          ([r.skipped ? `${r.skipped} item${r.skipped === 1 ? "" : "s"} had no text worth replying to` : null,
-            r.failed ? `${r.failed} failed` : null].filter(Boolean).join(" · ") || undefined),
-        variant: r.drafted ? undefined : "destructive",
-      });
-    },
-    onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
-  });
-
-  const search = useMutation({
-    mutationFn: () =>
-      api("/api/outreach/search", token, {
-        method: "POST",
-        body: JSON.stringify({ query, intent, postedLimit, maxPosts: 50 }),
-      }),
-    onSuccess: (r: { drafted: number; relevant: number; considered: number; fetched?: number }) => {
-      setTab("waiting");
-      qc.invalidateQueries({ queryKey: ["outreach"] });
-      toast({
-        // Say what the search actually did at each stage. "Nothing to draft" on
-        // its own is indistinguishable from a broken search — the counts tell
-        // you whether LinkedIn had nothing or the filter rejected it all.
-        title: r.drafted
-          ? `${r.drafted} draft${r.drafted === 1 ? "" : "s"} ready`
-          : r.fetched
-            ? "Nothing relevant found"
-            : "LinkedIn returned nothing",
-        description: r.fetched
-          ? `${r.fetched} post${r.fetched === 1 ? "" : "s"} found · ${r.relevant} about currency risk`
-          : "Try a broader search, or a longer time window.",
-        variant: r.drafted ? undefined : "destructive",
-      });
-    },
-    onError: (e: Error) => toast({ title: "Search failed", description: e.message, variant: "destructive" }),
-  });
-
-  const auto = useMutation({
-    mutationFn: () =>
-      api("/api/outreach/auto", token, {
-        method: "POST",
-        body: JSON.stringify({ intent, postedLimit: "week" }),
-      }),
-    onSuccess: (r: {
-      drafted: number; relevant: number; fetched: number;
-      plan: PlannedSearch[]; plannerFallback: boolean; searched: SearchOutcome[]; note?: string;
-    }) => {
-      setPlan(r.plan ?? null);
-      setSearched(r.searched ?? null);
-      setTab("waiting");
-      qc.invalidateQueries({ queryKey: ["outreach"] });
-      qc.invalidateQueries({ queryKey: ["outreach-people"] });
-      toast({
-        title: r.drafted
-          ? `${r.drafted} draft${r.drafted === 1 ? "" : "s"} ready`
-          : r.fetched ? "Nothing relevant found" : "LinkedIn returned nothing",
-        description: r.note
-          ?? `${r.searched?.length ?? 0} searches · ${r.fetched} posts · ${r.relevant} about currency risk`,
-        variant: r.drafted ? undefined : "destructive",
-      });
-    },
-    onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
   });
 
   const markOutcome = useMutation({
@@ -366,8 +193,8 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
       {/* ── which of the three things you came here for ── */}
       <div className="flex gap-1.5 border-b border-border pb-3">
         {([
+          ["leads", "Leads"],
           ["drafts", "Drafts"],
-          ["people", "Leads"],
           ["memory", "What Finax knows"],
         ] as const).map(([k, label]) => (
           <button
@@ -385,14 +212,13 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         ))}
       </div>
 
-      {section === "people" ? <OutreachPeople token={token} />
+      {section === "leads" ? <Leads token={token} enabled={enabled} onDrafts={() => { setTab("waiting"); setSection("drafts"); }} />
        : section === "memory" ? <OutreachMemory token={token} />
        : (
       <>
       <p className="max-w-[68ch] text-sm text-muted-foreground">
         Finax finds posts worth answering and drafts against real market data: open pools, real premiums, what has
-        settled. Give it one post, paste a whole page, or let it search LinkedIn itself. Drafts wait
-        here for you to copy.{" "}
+        settled. Find people under Leads; the drafts wait here for you to copy.{" "}
         <span className="text-foreground">Nothing is ever posted from here</span>: LinkedIn prohibits
         automated posting, and the account is worth more than the keystrokes.
       </p>
@@ -474,118 +300,6 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         </div>
       )}
 
-      {/* ── find ── */}
-      <FinderPanel
-        sources={[
-          { key: "search", label: "Search LinkedIn", about: "Finds posts about currency risk and drafts for the strongest. Leave the box empty and Finax chooses the searches from what your currencies did this week." },
-          { key: "paste", label: "Paste", about: "Paste one post, or select a whole notifications page and paste it. Finax separates the items and drafts for each." },
-        ]}
-        source={mode}
-        onSource={setMode}
-        action={{
-          label: mode === "paste" ? "Draft" : query.trim() ? "Search and draft" : "Scan for me",
-          busy: draftIt.isPending || scan.isPending || search.isPending || auto.isPending,
-          busyLabel: auto.isPending ? "Reading the market, then searching…"
-            : search.isPending ? "Searching LinkedIn…" : "Finax is writing…",
-          disabled: !enabled || (mode === "paste" && blob.trim().length < 20),
-          onClick: () =>
-            mode === "search"
-              ? (query.trim().length >= 3 ? search.mutate() : auto.mutate())
-              // A link or a short paste is one post; anything longer is a page to separate.
-              : sourceUrl.trim() || blob.trim().length < 400 ? draftIt.mutate() : scan.mutate(),
-        }}
-        extra={
-          <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            Write as
-            <select
-              value={intent} onChange={e => setIntent(e.target.value as Intent)}
-              className="rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground"
-            >
-              {INTENTS.map(i => <option key={i.key} value={i.key}>{i.label}</option>)}
-            </select>
-            <span className="hidden sm:inline">{INTENTS.find(i => i.key === intent)?.hint}</span>
-          </label>
-        }
-        note={mode === "search" && (
-          !schedule ? "Checking the schedule…"
-          : !schedule.configured ? "Also runs by itself every 5 hours once APIFY_TOKEN is set in Railway."
-          : schedule.lastScanAt
-            ? `Runs by itself every 5 hours. Last run ${howLongAgo(schedule.lastScanAt)}, next in about ${minutesUntil(schedule.nextScanAt)}. Your LinkedIn account is never used.`
-            : "Runs by itself every 5 hours. The first run is due within ten minutes."
-        )}
-      >
-        {mode === "search" ? (
-          <>
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { if (query.trim().length >= 3) search.mutate(); else auto.mutate(); } }}
-              placeholder="Leave empty for Finax to choose, or type e.g. cedi depreciation importers"
-              disabled={!enabled}
-              className={finderInput}
-            />
-            {query.trim() && (
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-[12px] text-muted-foreground">Posted within</span>
-                {([["24h", "a day"], ["week", "a week"], ["month", "a month"]] as const).map(([k, label]) => (
-                  <button
-                    key={k}
-                    onClick={() => setPostedLimit(k)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[12px] transition-colors",
-                      postedLimit === k
-                        ? "border-primary bg-primary/10 font-medium text-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {plan && (
-              <div className="mt-3 space-y-2 rounded-md border border-border bg-background p-3">
-                <p className="text-[12px] font-medium text-foreground">What Finax went looking for</p>
-                {plan.map((p, i) => {
-                  const outcome = searched?.find(s2 => s2.query === p.query);
-                  return (
-                    <div key={i} className="border-l-2 border-border pl-2.5">
-                      <p className="text-[12.5px] font-medium">
-                        “{p.query}”
-                        {outcome && (
-                          <span className="ml-2 font-normal text-[11.5px] text-muted-foreground">
-                            {outcome.error ? `failed: ${outcome.error}` : `${outcome.fetched} posts`}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[11.5px] text-muted-foreground">{p.why}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <textarea
-              value={blob}
-              onChange={e => setBlob(e.target.value)}
-              placeholder="Paste a post, a thread of comments, or a whole page of LinkedIn notifications…"
-              rows={6}
-              disabled={!enabled}
-              className={cn(finderInput, "resize-y leading-relaxed")}
-            />
-            <input
-              value={sourceUrl}
-              onChange={e => setSourceUrl(e.target.value)}
-              placeholder="Link to the post, if it is just one (optional)"
-              disabled={!enabled}
-              className={cn(finderInput, "mt-2.5")}
-            />
-          </>
-        )}
-      </FinderPanel>
-
       {/* ── the waiting room ── */}
       <div className="flex gap-1 border-b border-border">
         {(["waiting", "sent", "discarded"] as Status[]).map(s => (
@@ -626,7 +340,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : drafts.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          {tab === "waiting" ? "Nothing waiting. Paste a post above." : `Nothing ${tab}.`}
+          {tab === "waiting" ? "Nothing waiting. Search or paste under Leads." : `Nothing ${tab}.`}
         </p>
       ) : (
         <div className="space-y-4">

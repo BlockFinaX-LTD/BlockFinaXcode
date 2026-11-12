@@ -19,7 +19,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Sparkles, Send, Check, ExternalLink, Plus, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FinderPanel, finderInput } from "./finder";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -69,8 +68,6 @@ export function InvestorsTab({ token, enabled }: { token: string; enabled: boole
   const qc = useQueryClient();
   const [paste, setPaste] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [scanQuery, setScanQuery] = useState("pre-seed African fintech");
-  const [scanLocation, setScanLocation] = useState("Lagos, Nigeria");
 
   const { data: cfg } = useQuery<any>({
     queryKey: ["prospects-config", token],
@@ -80,30 +77,6 @@ export function InvestorsTab({ token, enabled }: { token: string; enabled: boole
   const { data, isLoading } = useQuery<{ prospects: P[]; counts: Record<string, number> }>({
     queryKey: ["investors", token],
     queryFn: () => api("/api/prospects?segment=investor&status=all", token),
-  });
-
-  const { data: seeds } = useQuery<{
-    queries: string[]; locations: string[]; titles: string[]; configured: boolean;
-  }>({
-    queryKey: ["investor-seeds", token],
-    queryFn: () => api("/api/prospects/investors/seeds", token),
-  });
-
-  const scan = useMutation({
-    mutationFn: () => api("/api/prospects/investors/scan", token, {
-      method: "POST", body: JSON.stringify({ query: scanQuery, location: scanLocation, maxItems: 25 }),
-    }),
-    onSuccess: (r: any) => {
-      qc.invalidateQueries({ queryKey: ["outreach-people"] });
-      toast({
-        title: r.recorded ? `${r.recorded} investors found` : "Nobody new found",
-        description: r.recorded
-          ? "They're in Outreach, Leads. Sort them, then reach them on LinkedIn where a comment lands better than a cold email."
-          : (r.errors?.[0] ?? `${r.found} profiles, all already known`),
-        variant: r.recorded ? undefined : "destructive",
-      });
-    },
-    onError: (e: Error) => toast({ title: "Scan failed", description: e.message, variant: "destructive" }),
   });
 
   const add = useMutation({
@@ -181,36 +154,6 @@ export function InvestorsTab({ token, enabled }: { token: string; enabled: boole
         </div>
       )}
 
-      {/* Finding them, as opposed to typing them.
-          Results go to Leads rather than here, because a profile search returns
-          people and not addresses, and reaching an investor after commenting on
-          their own post beats being one of forty cold emails that morning. */}
-      <FinderPanel
-        about="Searches LinkedIn for people who actually write cheques: partners, principals and angels. They land in Outreach, Leads so you can reach them there."
-        suggestions={seeds?.queries}
-        onSuggest={setScanQuery}
-        action={{
-          label: "Find investors",
-          busy: scan.isPending,
-          disabled: !enabled || !seeds?.configured,
-          onClick: () => scan.mutate(),
-        }}
-        note={seeds && !seeds.configured ? "Searching needs APIFY_TOKEN in Railway. Adding by hand works without it." : undefined}
-      >
-        <div className="grid gap-2.5 sm:grid-cols-[1fr_1fr]">
-          <input
-            value={scanQuery} onChange={e => setScanQuery(e.target.value)}
-            placeholder="What they invest in"
-            className={finderInput}
-          />
-          <select
-            value={scanLocation} onChange={e => setScanLocation(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-          >
-            {(seeds?.locations ?? ["Lagos, Nigeria"]).map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
-      </FinderPanel>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => setShowAdd(v => !v)}>

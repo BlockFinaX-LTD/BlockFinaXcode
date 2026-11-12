@@ -96,3 +96,68 @@ export function FinderPanel<K extends string>(props: {
     </div>
   );
 }
+
+// ── Shared by the finder and the drafts list ──────────────────────────────
+
+export type Intent = "reply" | "comment" | "connect" | "dm" | "insight_call";
+
+export const INTENTS: { key: Intent; label: string; hint: string }[] = [
+  { key: "comment", label: "Insight comment", hint: "70 to 110 words: mechanism, a number, then the second-order effect" },
+  { key: "reply", label: "Public reply", hint: "under 60 words, has to add something to the thread" },
+  { key: "insight_call", label: "Ask for their view", hint: "under 120 words, asks about their subject rather than ours" },
+  { key: "connect", label: "Connection note", hint: "under 300 characters, LinkedIn's limit" },
+  { key: "dm", label: "Direct message", hint: "under 120 words, one question worth answering" },
+];
+
+/**
+ * How long ago, in words.
+ *
+ * The same wording the drafter is given, so a card cannot say "2 days ago"
+ * while the draft it holds was written as though the thread were live.
+ */
+export function howLongAgo(iso: string | null): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const mins = Math.floor((Date.now() - t) / 60_000);
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? "1 day ago" : `${days} days ago`;
+  if (days < 30) {
+    const w = Math.floor(days / 7);
+    return w === 1 ? "1 week ago" : `${w} weeks ago`;
+  }
+  if (days < 365) {
+    const m = Math.floor(days / 30);
+    return m === 1 ? "1 month ago" : `${m} months ago`;
+  }
+  const y = Math.floor(days / 365);
+  return y === 1 ? "1 year ago" : `${y} years ago`;
+}
+
+/** "about 3 hours", for the next scheduled run. */
+export function minutesUntil(iso: string | null): string {
+  if (!iso) return "a while";
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return "a few minutes";
+  if (mins < 60) return `${mins} minutes`;
+  const h = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem >= 15 ? `${h}h ${rem}m` : `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+
+export async function adminApi(url: string, token: string, options?: RequestInit) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.message || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
