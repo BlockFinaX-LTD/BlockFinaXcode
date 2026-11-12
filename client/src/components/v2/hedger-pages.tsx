@@ -121,7 +121,7 @@ function useSideOffers(market: Market, direction: Direction) {
   const on = market.directions.includes(direction) && pools.length > 0;
   const distance = pools.length ? Math.min(...pools.map((p) => p.structures.minStrikeDistanceBps ?? 0)) : 0;
   const sellers = pools.filter((p) => (p.structures.minStrikeDistanceBps ?? 0) <= distance);
-  const tenors = Array.from(new Set(sellers.flatMap((p) => p.tenors.filter((t) => t.active).map((t) => t.tenorDays)))).sort((a, b) => a - b);
+  const tenors = Array.from(new Set(sellers.flatMap((p) => durationsOffered(p).days))).sort((a, b) => a - b);
   const fairKey = `fair:${market.pair}:${direction}:${tenors.join(',')}:${distance}`;
   const fair = useQuery({
     queryKey: ['v2-fair', market.pair, direction, tenors.join(','), distance],
@@ -183,7 +183,7 @@ function MarketRow({ market, go, expandable = true, action = 'Buy cover', select
   const spot = useSpot(pair);
   const both = market.directions.length > 1;
   const sides = ([['up', offers.up], ['down', offers.down]] as const).filter(([d]) => market.directions.includes(d));
-  const SUB = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' };
+  const SUB = { gridTemplateColumns: 'minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 0.8fr) 58px' };
   return (
     <>
       <div className={`bx-li bx-li-market${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
@@ -202,21 +202,24 @@ function MarketRow({ market, go, expandable = true, action = 'Buy cover', select
       </div>
       {open && (
         <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
-          {sides.map(([d, side]) => (
-            <div key={d}>
-              {both && <div style={{ fontSize: 13, fontWeight: 600, paddingTop: 8 }}>{exposureLabel(pair, d).kind} <span className="muted" style={{ fontWeight: 400 }}>{exposureLabel(pair, d).who}</span></div>}
-              <div className="bx-list-h" style={SUB}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span /></div>
-              {side.rows.map((r) => (
-                <div key={r.tenorDays} className="bx-li bx-li-tenor click" style={{ ...SUB, padding: '10px 0' }}
-                  onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays, d); }}>
-                  <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
-                  <span className="r">{dateIn(r.tenorDays)}</span>
-                  <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
-                  <span className="r"><button className="bx-btn ghost small" onClick={(e) => { e.stopPropagation(); if (isPhone()) setOpen(false); buy(r.tenorDays, d); }}>Buy</button></span>
-                </div>
-              ))}
-            </div>
-          ))}
+          {/* Up and Down cover side by side; stacked on phones. */}
+          <div className={`bx-sides${sides.length > 1 ? ' two' : ''}`}>
+            {sides.map(([d, side]) => (
+              <div key={d} className="bx-side-col">
+                <div style={{ fontSize: 13, fontWeight: 600, padding: '8px 0 2px' }}>{exposureLabel(pair, d).kind} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>{exposureLabel(pair, d).who}</span></div>
+                <div className="bx-list-h" style={SUB}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span /></div>
+                {side.rows.map((r) => (
+                  <div key={r.tenorDays} className="bx-li bx-li-tenor bx-li-slim click" style={SUB}
+                    onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays, d); }}>
+                    <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
+                    <span className="r">{dateIn(r.tenorDays)}</span>
+                    <span className="r num">{r.price === null ? (side.loading ? '...' : '-') : pct(r.price)}</span>
+                    <span className="r"><button className="bx-btn ghost small" onClick={(e) => { e.stopPropagation(); if (isPhone()) setOpen(false); buy(r.tenorDays, d); }}>Buy</button></span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
           <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Best prices across every pool, for the closest cover on sale{offers.up.strike && market.directions.includes('up') ? ` (Up cover from ${fmtRate(offers.up.strike)} ${quoteCcy(pair)})` : ''}{offers.down.strike && market.directions.includes('down') ? ` (Down cover from ${fmtRate(offers.down.strike)} ${quoteCcy(pair)})` : ''}, with a limit 10% beyond. Cover starting further away costs less. Your exact price, including the BlockFinaX fee, is shown before you buy.</div>
         </div>
       )}
