@@ -18,16 +18,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { adminFetch as api } from "@/lib/admin-api";
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || body.message || `Request failed (${res.status})`);
-  return body;
-}
 
 interface Opp {
   id: number; name: string; funder: string | null; kind: string; url: string | null;

@@ -11,17 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ExternalLink, FileCode2, Loader2, Upload } from "lucide-react";
+import { adminCall as api } from "@/lib/admin-api";
 
-async function api(url: string, token: string, body?: unknown) {
-  const res = await fetch(url, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "Content-Type": "application/json", "x-admin-token": token },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.message || `Request failed (${res.status})`);
-  return json;
-}
 
 interface Doc { slug: string; title: string; description: string | null; updatedBy: string | null; updatedAt: string; size: number }
 

@@ -35,6 +35,7 @@ import {
   RELATIONSHIP_LABELS, DOC_TYPE_LABELS, STATUS_LABELS,
   type RelationshipType, type DocType, type LoiStatus,
 } from "@shared/loi-schema";
+import { adminFetch as api } from "@/lib/admin-api";
 
 // ── Shared bits ──────────────────────────────────────────────────────────
 
@@ -84,17 +85,6 @@ function relativeTime(d: string | Date | null | undefined): string {
   return fmt(d);
 }
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 // ── Section root ─────────────────────────────────────────────────────────
 

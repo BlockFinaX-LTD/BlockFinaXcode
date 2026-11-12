@@ -20,6 +20,7 @@ import { Loader2, ExternalLink, RefreshCw, BookmarkPlus, Check, X } from "lucide
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { adminFetch as api } from "@/lib/admin-api";
 
 interface Item {
   id: number; title: string; url: string; source: string; kind: string;
@@ -28,17 +29,6 @@ interface Item {
   status: string; savedToMemoryAt: string | null;
 }
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const b = await res.json().catch(() => ({}));
-    throw new Error(b.error || b.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 function ago(iso: string | null): string {
   if (!iso) return "";

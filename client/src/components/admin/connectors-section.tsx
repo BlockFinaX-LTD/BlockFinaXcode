@@ -20,17 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Users, ClipboardList, AlertTriangle, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OPEN_AREAS, LEDGER_LABELS, MODULES, areaByKey, type LedgerKind } from "@shared/connector-programme";
+import { adminCall as api } from "@/lib/admin-api";
 
-async function api(url: string, token: string, body?: unknown) {
-  const res = await fetch(url, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "Content-Type": "application/json", "x-admin-token": token },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error?.message || json?.message || `Request failed (${res.status})`);
-  return json;
-}
 
 const usd = (n: number) => `$${Number(n ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "");

@@ -24,18 +24,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, ShieldAlert, Users, Search, Check, X, Clock, Loader2, ArrowLeft, AlertTriangle, ExternalLink, RefreshCw, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KYC_TIERS, ALERT_LABELS, type AlertKind } from "@shared/compliance-schema";
+import { adminFetch as api } from "@/lib/admin-api";
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 const usd = (n: number) => "$" + Number(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const short = (a?: string | null) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a ?? "—");

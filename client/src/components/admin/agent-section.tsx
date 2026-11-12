@@ -32,18 +32,8 @@ import {
   CAPABILITIES, CAPABILITY_LABELS, AUTONOMY_LEVELS, PROPOSAL_KIND_LABELS,
   type Capability, type AutonomyLevel, type ProposalKind,
 } from "@shared/agent-schema";
+import { adminFetch as api } from "@/lib/admin-api";
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 const kindLabel = (k: string) => PROPOSAL_KIND_LABELS[k as ProposalKind] ?? k;
 

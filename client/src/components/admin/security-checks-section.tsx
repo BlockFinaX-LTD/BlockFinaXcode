@@ -13,17 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronRight, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { adminCall as api } from "@/lib/admin-api";
 
-async function api(url: string, token: string, body?: unknown) {
-  const res = await fetch(url, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "Content-Type": "application/json", "x-admin-token": token },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.message || `Request failed (${res.status})`);
-  return json;
-}
 
 type Status = "todo" | "in_progress" | "done" | "not_needed";
 type Priority = "blocker" | "high" | "medium" | "low";

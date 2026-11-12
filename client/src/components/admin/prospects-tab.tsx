@@ -26,6 +26,7 @@ import { Loader2, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban, Upload 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { adminFetch as api } from "@/lib/admin-api";
 
 /** Sources found by a signal, where the reason is worth showing next to the company. */
 const SOURCE_LABEL: Record<string, string> = { jobs: "Job post", news: "In the news", directory: "On a list" };
@@ -77,17 +78,6 @@ const SEGMENTS: Record<string, { label: string; tone: string }> = {
   unknown:     { label: "Unsorted",      tone: "text-muted-foreground" },
 };
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const b = await res.json().catch(() => ({}));
-    throw new Error(b.error || b.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 export function ProspectsTab({ token, enabled }: { token: string; enabled: boolean }) {
   const { toast } = useToast();

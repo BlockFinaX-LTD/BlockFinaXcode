@@ -21,6 +21,7 @@ import { Loader2, Sparkles, Send, Check, ExternalLink, Plus, ShieldAlert } from 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { adminFetch as api } from "@/lib/admin-api";
 
 interface P {
   id: number; company: string; website: string | null; country: string | null;
@@ -31,17 +32,6 @@ interface P {
   approvedAt: string | null; sentAt: string | null; providerMessageId: string | null;
 }
 
-async function api(url: string, token: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
-  });
-  if (!res.ok) {
-    const b = await res.json().catch(() => ({}));
-    throw new Error(b.error || b.message || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 /**
  * One investor per line: firm, email, then anything else you know.

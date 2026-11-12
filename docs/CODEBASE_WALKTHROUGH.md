@@ -30,7 +30,6 @@ BlockFinaxcode-merge/
 ├── shared/           Drizzle schema + types shared by server & client
 ├── docs/             Architecture notes, pricing model, upgrade logs
 ├── scripts/          Repo-wide tooling
-├── main.py           Python helper (see pyproject.toml / uv.lock)
 ├── drizzle.config.ts
 ├── vite.config.ts
 └── package.json
