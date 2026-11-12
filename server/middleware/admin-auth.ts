@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 
 /**
  * Admin sessions.
@@ -78,14 +78,84 @@ export function adminEmail(req: any): string | null {
   return sessionOf(req)?.email ?? null;
 }
 
+/*
+ * Sessions are kept in the database as well as in memory, so a deploy or restart
+ * does not sign every admin out. Only a SHA-256 hash of the token is stored; the
+ * token itself never leaves the browser and this process. Expiry slides: each use
+ * pushes it ADMIN_SESSION_TTL_MS ahead, so an idle session still ends.
+ */
+type Db = { query: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }> };
+let tableReady: Promise<Db | null> | null = null;
+function store(): Promise<Db | null> {
+  tableReady ??= import("../db").then(async ({ pool }) => {
+    const db = pool as unknown as Db;
+    if (!db) return null;
+    await db.query(`CREATE TABLE IF NOT EXISTS admin_sessions (
+      token_hash text PRIMARY KEY, email text NOT NULL, expires_at timestamptz NOT NULL)`);
+    return db;
+  }).catch(() => null);
+  return tableReady;
+}
+const hashOf = (token: string) => createHash("sha256").update(token).digest("hex");
+const lastWrite = new Map<string, number>();
+
+/** Start a session: in memory now, in the database in the background. */
+export function startAdminSession(token: string, email: string): number {
+  const expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
+  adminSessions.set(token, { expiresAt, email });
+  void store().then((db) => db?.query(
+    `INSERT INTO admin_sessions (token_hash, email, expires_at) VALUES ($1, $2, $3)
+     ON CONFLICT (token_hash) DO UPDATE SET email = $2, expires_at = $3`,
+    [hashOf(token), email, new Date(expiresAt)],
+  )).catch(() => undefined);
+  return expiresAt;
+}
+
+/** End a session everywhere. */
+export function endAdminSession(token: string): void {
+  adminSessions.delete(token);
+  void store().then((db) => db?.query(`DELETE FROM admin_sessions WHERE token_hash = $1 OR expires_at < now()`, [hashOf(token)]))
+    .catch(() => undefined);
+}
+
+/** Push an active session's expiry forward; the database copy at most every 10 minutes. */
+function touch(token: string, s: AdminSession) {
+  s.expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
+  const last = lastWrite.get(token) ?? 0;
+  if (Date.now() - last < 10 * 60_000) return;
+  lastWrite.set(token, Date.now());
+  void store().then((db) => db?.query(`UPDATE admin_sessions SET expires_at = $2 WHERE token_hash = $1`, [hashOf(token), new Date(s.expiresAt)]))
+    .catch(() => undefined);
+}
+
+/** A session from the database, after a restart emptied memory. */
+async function loadSession(token: string): Promise<AdminSession | null> {
+  const db = await store();
+  if (!db) return null;
+  const { rows } = await db.query(
+    `SELECT email, expires_at FROM admin_sessions WHERE token_hash = $1 AND expires_at > now()`, [hashOf(token)]);
+  if (!rows[0]) return null;
+  const s: AdminSession = { email: rows[0].email, expiresAt: new Date(rows[0].expires_at).getTime() };
+  adminSessions.set(token, s);
+  return s;
+}
+
 export function requireAdmin(req: any, res: any, next: any) {
+  const pass = (session: AdminSession) => {
+    // Downstream handlers read this rather than the map, so attribution can't
+    // drift from the token that was actually presented.
+    req.adminEmail = session.email;
+    touch(String(req.headers["x-admin-token"]), session);
+    recordStaffActivity(req, res, session.email);
+    next();
+  };
   const session = sessionOf(req);
-  if (!session) return res.status(401).json({ message: "Unauthorized" });
-  // Downstream handlers read this rather than the map, so attribution can't
-  // drift from the token that was actually presented.
-  req.adminEmail = session.email;
-  recordStaffActivity(req, res, session.email);
-  next();
+  if (session) return pass(session);
+  const token = req.headers["x-admin-token"];
+  if (!token || typeof token !== "string") return res.status(401).json({ message: "Unauthorized" });
+  loadSession(token)
+    .then((s) => (s ? pass(s) : res.status(401).json({ message: "Unauthorized" })))
+    .catch(() => res.status(401).json({ message: "Unauthorized" }));
 }
 
 /** Admin reads that open someone's personal or financial data. */

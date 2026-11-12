@@ -9,8 +9,8 @@ import { userProfiles } from "../../shared/profile-schema";
 import { referrals, referralCodes, userPoints, pointTransactions } from "../../shared/referral-schema";
 import { strictLimiter } from "../middleware/rate-limiter";
 import {
-  adminSessions, requireAdmin, generateAdminToken,
-  getOwnerEmails, ADMIN_SESSION_TTL_MS,
+  requireAdmin, generateAdminToken, startAdminSession, endAdminSession,
+  getOwnerEmails,
 } from "../middleware/admin-auth";
 import { verifySessionToken } from "../middleware/session-auth";
 
@@ -49,13 +49,8 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
       }
 
       const token = generateAdminToken();
-      adminSessions.set(token, { expiresAt: Date.now() + ADMIN_SESSION_TTL_MS, email: email.toLowerCase() });
-      res.json({
-        token,
-        email,
-        address: user.address,
-        expiresAt: Date.now() + ADMIN_SESSION_TTL_MS,
-      });
+      const expiresAt = startAdminSession(token, email.toLowerCase());
+      res.json({ token, email, address: user.address, expiresAt });
     } catch (err: any) {
       console.error("[Admin login]", err);
       res.status(500).json({ message: "Admin login failed." });
@@ -64,7 +59,7 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
 
   app.post("/api/admin/logout", (req, res) => {
     const token = req.headers["x-admin-token"] as string;
-    if (token) adminSessions.delete(token);
+    if (token) endAdminSession(token);
     res.json({ success: true });
   });
 

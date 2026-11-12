@@ -924,14 +924,13 @@ export function registerOutreachRoutes(app: Express): void {
 
   // ── GET /api/outreach/people ────────────────────────────────────────────
   //
-  // The list, built as a by-product of drafting. Ordered by best score then
-  // most recently seen, so the people who write the sharpest things about
-  // currency risk sit at the top rather than whoever posted last.
+  // The list, built as a by-product of drafting. Newest first, so the people
+  // found in the latest scan are at the top and older leads sit lower.
   app.get("/api/outreach/people", requireAdmin, async (req, res) => {
     try {
       const status = typeof req.query.status === "string" ? req.query.status : "";
       const rows = await db.select().from(outreachPeople)
-        .orderBy(desc(outreachPeople.topScore), desc(outreachPeople.lastSeen))
+        .orderBy(desc(outreachPeople.firstSeen), desc(outreachPeople.id))
         .limit(500);
       const filtered = status && status !== "all"
         ? rows.filter(r => r.status === status)

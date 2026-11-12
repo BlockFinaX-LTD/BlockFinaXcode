@@ -92,6 +92,12 @@ async function api(url: string, token: string, options?: RequestInit) {
     ...options,
     headers: { "Content-Type": "application/json", ...options?.headers, "x-admin-token": token },
   });
+  if (res.status === 401) {
+    // Same as the rest of the admin area: an ended sign-in goes back to the login screen.
+    sessionStorage.removeItem("admin_token");
+    window.location.reload();
+    throw new Error("Your admin sign-in has ended. Sign in again.");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || body.message || `Request failed (${res.status})`);
@@ -250,7 +256,7 @@ export function OutreachPeople({ token }: { token: string }) {
         </div>
       ) : (
         <div className="space-y-6">
-          {SEGMENT_ORDER.concat(["unsorted"]).map(seg => {
+          {["unsorted"].concat(SEGMENT_ORDER).map(seg => {
             const group = people.filter(p =>
               seg === "unsorted" ? !p.segment : p.segment === seg,
             );
