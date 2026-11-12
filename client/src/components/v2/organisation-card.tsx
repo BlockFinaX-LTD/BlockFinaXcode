@@ -49,13 +49,20 @@ export function OrganisationInviteLanding() {
 
 // ── Profile settings: your businesses ────────────────────────────────────────
 
-export function OrganisationCard({ go }: { go: Go }) {
+/**
+ * Business accounts on the profile page. With `onCreating`, the page owns the create step and
+ * shows it on its own (only the form, nothing else from the profile).
+ */
+export function OrganisationCard({ go, creating: creatingProp, onCreating }: { go: Go; creating?: boolean; onCreating?: (v: boolean) => void }) {
   const { toast } = useToast();
   const [config, setConfig] = useState<OrganisationsConfig | null>(null);
   const [orgs, setOrgs] = useState<OrganisationSummary[]>([]);
-  const [creating, setCreating] = useState(() => {
+  const [creatingOwn, setCreatingOwn] = useState(() => {
+    if (onCreating) return false;
     try { const v = sessionStorage.getItem(CREATE_BUSINESS_FLAG) === '1'; sessionStorage.removeItem(CREATE_BUSINESS_FLAG); return v; } catch { return false; }
   });
+  const creating = onCreating ? Boolean(creatingProp) : creatingOwn;
+  const setCreating = (v: boolean) => (onCreating ? onCreating(v) : setCreatingOwn(v));
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [invite, setInvite] = useState(pendingInviteToken());
@@ -101,6 +108,19 @@ export function OrganisationCard({ go }: { go: Go }) {
     }
   }
 
+  const form = (
+    <div style={{ marginTop: onCreating ? 0 : 16, borderTop: onCreating ? 0 : '1px solid var(--line)', paddingTop: onCreating ? 0 : 16 }}>
+      <label className="bx-field"><span>Business name</span>
+        <input className="bx-input" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="For example, Acme Imports Ltd" autoFocus /></label>
+      <Note>The business gets its own account on Stellar and you become its first admin. Add a second admin soon, so the business never depends on one phone. Network fees are covered.</Note>
+      <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+        <button className="bx-btn" disabled={!!busy || name.trim().length < 2} onClick={create}>{busy ? <><Spin /> {busy}</> : 'Create business account'}</button>
+        <button className="bx-btn ghost" disabled={!!busy} onClick={() => setCreating(false)}>Cancel</button>
+      </div>
+    </div>
+  );
+  if (onCreating && creating) return <div className="bx-card">{form}</div>;
+
   return (
     <div className="bx-card">
       <div className="bx-card-h">
@@ -130,17 +150,7 @@ export function OrganisationCard({ go }: { go: Go }) {
 
       {!creating ? (
         <button className="bx-btn" style={{ marginTop: 16 }} onClick={() => setCreating(true)}><Plus /> Create a business account</button>
-      ) : (
-        <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
-          <label className="bx-field"><span>Business name</span>
-            <input className="bx-input" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="For example, Acme Imports Ltd" autoFocus /></label>
-          <Note>This creates a new account on Stellar that belongs to the business. You become its first admin and your passkey approves for it. Add a second admin soon, so the business never depends on one phone. Network fees are covered.</Note>
-          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-            <button className="bx-btn" disabled={!!busy || name.trim().length < 2} onClick={create}>{busy ? <><Spin /> {busy}</> : 'Create business account'}</button>
-            <button className="bx-btn ghost" disabled={!!busy} onClick={() => setCreating(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
+      ) : form}
     </div>
   );
 }

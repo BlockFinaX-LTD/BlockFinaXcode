@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowDownLeft, ArrowUp, ArrowUpRight, Check, Compass, Copy, KeyRound, LogOut, Plus, Share2, X } from 'lucide-react';
+import { ArrowDown, ArrowDownLeft, ArrowUp, ArrowUpRight, Check, ChevronLeft, Compass, Copy, KeyRound, LogOut, Plus, Share2, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeComponent } from '@/components/wallet/qr-code';
@@ -16,6 +16,7 @@ import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
 import { YourDataCard } from './records';
 import { OrganisationCard } from './organisation-card';
+import { CREATE_BUSINESS_FLAG } from './account-menu';
 import type { Go } from './workspace';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
 import { checkOrganisationAccount, getOrganisation } from '@/lib/organisations';
@@ -559,6 +560,20 @@ export function AccountPage({ go }: { go: Go }) {
     chain: a.chain, name: chains.data?.chains.find((c) => c.key === a.chain)?.name ?? a.chain, address: a.address, stellar: a.chain.startsWith('stellar'),
   }));
   const [, setLocation] = useLocation();
+  // Creating a business account is its own page: only the form, nothing else from the profile.
+  const [creatingBusiness, setCreatingBusiness] = useState(() => {
+    try { const v = sessionStorage.getItem(CREATE_BUSINESS_FLAG) === '1'; sessionStorage.removeItem(CREATE_BUSINESS_FLAG); return v; } catch { return false; }
+  });
+  useEffect(() => { window.scrollTo(0, 0); }, [creatingBusiness]);
+  if (creatingBusiness) {
+    return (
+      <main className="bx-main bx-settings">
+        <button className="bx-link bx-back" onClick={() => setCreatingBusiness(false)}><ChevronLeft aria-hidden="true" /> Profile settings</button>
+        <h1 className="bx-page-title">Create a business account</h1>
+        <OrganisationCard go={go} creating onCreating={setCreatingBusiness} />
+      </main>
+    );
+  }
   return (
     <main className="bx-main bx-settings">
       <h1 className="bx-page-title">Profile settings</h1>
@@ -576,7 +591,7 @@ export function AccountPage({ go }: { go: Go }) {
       </div>
       <VerificationCard />
       <PasskeysCard />
-      <OrganisationCard go={go} />
+      <OrganisationCard go={go} creating={false} onCreating={setCreatingBusiness} />
       <YourDataCard />
     </main>
   );
