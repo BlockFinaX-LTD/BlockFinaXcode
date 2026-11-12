@@ -71,13 +71,13 @@ const SIMPLE_PAGES: Page[] = [...SIMPLE_TABS, 'account', 'org-settings', 'pair']
 /** Short names for the icon rail. */
 const RAIL_LABEL: Partial<Record<Page, string>> = { 'h-protections': 'My cover', 'u-requests': 'Requests', 'u-risk': 'Risk', 'u-withdraw': 'Withdraw' };
 
-/** The Simple or Advanced switch, styled like the Hedger and Underwriter switch. */
+/** One button to the other view: Advanced while in Simple, Simple while in Advanced. */
 function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (v: ViewMode) => void }) {
+  const other: ViewMode = mode === 'simple' ? 'advanced' : 'simple';
   return (
-    <div className="bx-roles" role="group" aria-label="View">
-      <button className={mode === 'simple' ? 'on' : ''} aria-pressed={mode === 'simple'} onClick={() => onChange('simple')}>Simple</button>
-      <button className={mode === 'advanced' ? 'on' : ''} aria-pressed={mode === 'advanced'} onClick={() => onChange('advanced')}>Advanced</button>
-    </div>
+    <button className="bx-viewbtn" onClick={() => onChange(other)} title={other === 'advanced' ? 'Show the full app' : 'Show the simple view'}>
+      {other === 'advanced' ? 'Advanced' : 'Simple'}
+    </button>
   );
 }
 

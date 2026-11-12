@@ -1014,3 +1014,6 @@
   .bx-top .bx-top-r .bx-btn { display: none; }
   .bx-top .bx-env { display: none; }
 }
+.bx-viewbtn { border: 1px solid var(--line-2); background: var(--panel); color: var(--text-2); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.bx-viewbtn:hover { border-color: var(--blue); color: var(--blue); }
+.bx-sheet .bx-viewbtn { width: 100%; padding: 10px; margin-bottom: 8px; }
