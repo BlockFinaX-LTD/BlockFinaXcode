@@ -10,12 +10,12 @@ import { VerifyModal } from './verify';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Building2, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, Building2, Check, ChevronDown, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, Settings, ShieldCheck, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, useIsDemo, usePools, useUsdcBalances } from './shared';
 import { Flag, Spin } from './ui';
-import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage } from './hedger-pages';
+import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage, useHedges } from './hedger-pages';
 import { CreatePool, MyPools, PoolPage, RiskPage, UnderwriterHome, WithdrawCapital } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
@@ -58,30 +58,18 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
   ],
 };
 
-/** Simple: for businesses. Buy cover, their cover, rates and wallet; nothing else. */
-const SIMPLE_NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
-  hedger: [
-    { page: 'h-protect', label: 'Hedge', icon: <ShieldCheck /> },
-    { page: 'h-protections', label: 'My cover', icon: <List /> },
-    { page: 'h-rates', label: 'Rates', icon: <LineChart /> },
-    { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
-  ],
-  underwriter: [
-    { page: 'u-home', label: 'Home', icon: <Home /> },
-    { page: 'u-pools', label: 'Pools', icon: <Layers /> },
-    { page: 'u-withdraw', label: 'Withdraw', icon: <ArrowUp /> },
-    { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
-  ],
-};
-const SIMPLE_TABS: Record<Role, Page[]> = {
-  hedger: ['h-protect', 'h-protections', 'h-rates', 'wallet'],
-  underwriter: ['u-home', 'u-pools', 'u-withdraw', 'wallet'],
-};
-/** Pages Simple can show: its menu, plus settings and pages opened from its lists. */
-const SIMPLE_PAGES: Record<Role, Page[]> = {
-  hedger: [...SIMPLE_TABS.hedger, 'account', 'org-settings', 'pair'],
-  underwriter: [...SIMPLE_TABS.underwriter, 'account', 'org-settings', 'pair', 'u-pool', 'u-create'],
-};
+/** Simple: for businesses. Hedge, their cover, rates and wallet; no underwriting. */
+const SIMPLE_NAV: { page: Page; label: string; icon: ReactNode }[] = [
+  { page: 'h-protect', label: 'Hedge', icon: <ShieldCheck /> },
+  { page: 'h-protections', label: 'My cover', icon: <List /> },
+  { page: 'h-rates', label: 'Rates', icon: <LineChart /> },
+  { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
+];
+const SIMPLE_TABS: Page[] = ['h-protect', 'h-protections', 'h-rates', 'wallet'];
+/** Pages Simple can show: its menu, plus settings and a rate or cover opened from a list. */
+const SIMPLE_PAGES: Page[] = [...SIMPLE_TABS, 'account', 'org-settings', 'pair'];
+/** Short names for the icon rail. */
+const RAIL_LABEL: Partial<Record<Page, string>> = { 'h-protections': 'My cover', 'u-requests': 'Requests', 'u-risk': 'Risk', 'u-withdraw': 'Withdraw' };
 
 /** The Simple or Advanced switch, styled like the Hedger and Underwriter switch. */
 function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (v: ViewMode) => void }) {
@@ -144,13 +132,13 @@ export function Workspace() {
   const demo = useIsDemo();
   const simple = viewMode === 'simple';
   const [chosenRole, setRole] = useState<Role>(readRole);
-  const role: Role = chosenRole;
-  const nav = simple ? SIMPLE_NAV[role] : NAV[role];
-  const tabs = simple ? SIMPLE_TABS[role] : TABS[role];
+  const role: Role = simple ? 'hedger' : chosenRole;
+  const nav = simple ? SIMPLE_NAV : NAV[role];
+  const tabs = simple ? SIMPLE_TABS : TABS[role];
   // An organisation invitation opened before sign-in waits on the Account page.
-  const [page, setPage] = useState<Page>(() => (pendingInviteToken() ? 'account' : simple && role === 'hedger' ? 'h-protect' : role === 'hedger' ? 'h-home' : 'u-home'));
+  const [page, setPage] = useState<Page>(() => (pendingInviteToken() ? 'account' : simple ? 'h-protect' : role === 'hedger' ? 'h-home' : 'u-home'));
   // Switching to Simple from a page it does not have opens Buy cover.
-  useEffect(() => { if (simple && !SIMPLE_PAGES[role].includes(page)) setPage(SIMPLE_TABS[role][0]); }, [simple, page, role]);
+  useEffect(() => { if (simple && !SIMPLE_PAGES.includes(page)) setPage('h-protect'); }, [simple, page]);
   const [pair, setPair] = useState<string | null>(null);
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
@@ -169,6 +157,12 @@ export function Workspace() {
     if (p === 'h-rates') setRatesAt(target ?? {});
     if (p === 'pair') setPairAt(target ?? {});
     if (p === 'wallet') setWalletMode(target?.wallet ?? 'none');
+    // The rail has no role switch: opening an underwriting or hedging page sets the side.
+    const side: Role | null = p.startsWith('u-') ? 'underwriter' : p.startsWith('h-') ? 'hedger' : null;
+    if (side && side !== chosenRole) {
+      setRole(side);
+      try { localStorage.setItem('bfx:cover-role', side); } catch { /* per-viewer convenience */ }
+    }
     setPage(p);
     window.scrollTo(0, 0);
   };
@@ -211,31 +205,32 @@ export function Workspace() {
 
   return (
     <div className="bx" data-theme={theme}>
+      <nav className="bx-srail" aria-label="Main">
+        <img className="bx-srail-logo" src={logoPath} alt="BlockFinaX" />
+        {nav.map((n) => {
+          const on = page === n.page || parentPage === n.page;
+          return <button key={n.page} data-tour={n.page} className={`bx-sitem${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined} onClick={() => go(n.page)}>{n.icon}<span>{RAIL_LABEL[n.page] ?? n.label}</span></button>;
+        })}
+        <div className="bx-srail-foot">
+          <button className={`bx-sitem${page === 'account' ? ' on' : ''}`} onClick={() => go('account')}><Settings /><span>Settings</span></button>
+          <span className="bx-srail-acct"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
+        </div>
+      </nav>
+
       <div className="bx-content" ref={content}>
         <ContactSales />
         <VerifyModal />
         <header className="bx-top">
           <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
-          <div className="bx-tbrand bx-hide-sm"><img src={logoPath} alt="" />BlockFinaX{demo && <span className="bx-env">Testnet</span>}</div>
-          <div className="bx-roles bx-hide-sm" data-tour="roles">
-            <button className={role === 'hedger' ? 'on' : ''} onClick={() => switchRole('hedger')}>Hedger</button>
-            <button className={role === 'underwriter' ? 'on' : ''} onClick={() => switchRole('underwriter')}>Underwriter</button>
-          </div>
+          <div className="bx-tbrand bx-hide-sm">BlockFinaX{demo && <span className="bx-env">Testnet</span>}</div>
+          {!simple && <RoleMenu role={role} onChange={switchRole} />}
+          <TopNumbers go={go} />
           <SearchBox role={role} go={go} />
           <div className="bx-top-r">
-            <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet · <span className="num">${fmt(balances.data?.total)} USDC</span></button>
-            {viewOnly ? null : <button className="bx-btn ghost bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
+            <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>
+            {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
-            <span className="bx-top-account"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
-          </div>
-          {/* Second row: the pages as tabs (Wallet is the button above), Simple or Advanced on the right. */}
-          <div className="bx-trow2 bx-hide-sm">
-            <nav className="bx-topnav" aria-label="Main">
-              {nav.filter((n) => n.page !== 'wallet').map((n) => (
-                <button key={n.page} data-tour={n.page} className={`bx-tnav${page === n.page || parentPage === n.page ? ' on' : ''}`} aria-current={page === n.page ? 'page' : undefined} onClick={() => go(n.page)}>{n.label}</button>
-              ))}
-            </nav>
-            <ViewSwitch mode={viewMode} onChange={setViewMode} />
+            <span className="bx-top-account bx-show-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
           </div>
         </header>
 
@@ -254,6 +249,7 @@ export function Workspace() {
         {page === 'u-risk' && <RiskPage go={go} poolRef={pool} />}
         {page === 'u-withdraw' && <WithdrawCapital go={go} poolRef={pool} />}
         {page === 'u-requests' && <UnderwriterRequests />}
+        <StatusBar demo={demo} />
       </div>
 
       <AgentChat />
@@ -277,10 +273,12 @@ export function Workspace() {
         <div className="bx-sheet-bg" onClick={() => setMore(false)}>
           <div className="bx-sheet" role="dialog" aria-label="More" onClick={(e) => e.stopPropagation()}>
             <ViewSwitch mode={viewMode} onChange={(v) => { setViewMode(v); setMore(false); }} />
-            <div className="bx-roles">
-              <button className={role === 'hedger' ? 'on' : ''} onClick={() => { switchRole('hedger'); setMore(false); }}>Hedger</button>
-              <button className={role === 'underwriter' ? 'on' : ''} onClick={() => { switchRole('underwriter'); setMore(false); }}>Underwriter</button>
-            </div>
+            {!simple && (
+              <div className="bx-roles">
+                <button className={role === 'hedger' ? 'on' : ''} onClick={() => { switchRole('hedger'); setMore(false); }}>Hedger</button>
+                <button className={role === 'underwriter' ? 'on' : ''} onClick={() => { switchRole('underwriter'); setMore(false); }}>Underwriter</button>
+              </div>
+            )}
             {nav.filter((n) => !tabs.includes(n.page)).map((n) => (
               <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
             ))}
@@ -338,5 +336,69 @@ function SearchBox({ role, go }: { role: Role; go: Go }) {
         </div>
       )}
     </label>
+  );
+}
+
+/** Where the buyer stands, across the top: wallet, cover running, payouts waiting. */
+function TopNumbers({ go }: { go: Go }) {
+  const balances = useUsdcBalances();
+  const hedges = useHedges();
+  const all = hedges.data ?? [];
+  const running = all.filter((h) => h.settlement.status === 'pending');
+  const protectedUsd = running.reduce((sum, h) => sum + Number(h.position.notional), 0);
+  const ready = all.filter((h) => h.settlement.status === 'settled_claimable').reduce((sum, h) => sum + Number(h.settlement.netPayout), 0);
+  return (
+    <div className="bx-nums bx-hide-sm">
+      <button className="bx-numb" data-tour="balance" onClick={() => go('wallet')}><span className="l">Wallet</span><span className="v num">${fmt(balances.data?.total)}</span></button>
+      <button className="bx-numb" onClick={() => go('h-protections')}><span className="l">Cover running</span><span className="v num">${fmt(protectedUsd, 0)}</span></button>
+      <button className="bx-numb" onClick={() => go('h-protections')}><span className="l">Payouts ready</span><span className={`v num${ready > 0 ? ' up' : ''}`}>${fmt(ready)}</span></button>
+    </div>
+  );
+}
+
+/** The thin bar along the bottom: network, live rates and the time cover ends by (UTC). */
+function StatusBar({ demo }: { demo: boolean }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t); }, []);
+  const utc = now.toISOString().slice(11, 16);
+  return (
+    <footer className="bx-status bx-hide-sm">
+      <span><i className="bx-dot" aria-hidden="true" />Live rates</span>
+      <span>{demo ? 'Testnet, test USDC only' : 'Mainnet'}</span>
+      <span className="r">{utc} UTC · cover ends at 14:00 UTC</span>
+    </footer>
+  );
+}
+
+/** Hedger or Underwriter: a small dropdown that swaps the menu in the rail (Advanced only). */
+function RoleMenu({ role, onChange }: { role: Role; onChange: (r: Role) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const options: [Role, string, string][] = [
+    ['hedger', 'Hedger', 'Protect payments and income'],
+    ['underwriter', 'Underwriter', 'Fund pools and earn premiums'],
+  ];
+  return (
+    <div className="bx-rolemenu bx-hide-sm" ref={box} data-tour="roles">
+      <button className="bx-rolemenu-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {role === 'hedger' ? 'Hedger' : 'Underwriter'} <ChevronDown size={15} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="bx-rolemenu-list" role="menu">
+          {options.map(([r, label, sub]) => (
+            <button key={r} role="menuitemradio" aria-checked={role === r} className={role === r ? 'on' : ''} onClick={() => { onChange(r); setOpen(false); }}>
+              <span><b>{label}</b><span>{sub}</span></span>
+              {role === r && <Check size={15} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

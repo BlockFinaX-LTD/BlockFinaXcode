@@ -26,7 +26,7 @@ import { useViewMode } from './view-mode';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
-function useHedges() {
+export function useHedges() {
   // Remembered per person and per account they act for, so a business never shows personal cover.
   const { session } = usePasskeySession();
   const acting = useActingOrganisation();

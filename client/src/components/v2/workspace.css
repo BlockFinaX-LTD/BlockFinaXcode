@@ -945,3 +945,54 @@
   .bx-tnav.on { border-bottom-color: var(--blue); color: var(--blue); }
   .bx-trade .bx-tpanel .bx-buy { top: 112px; }
 }
+
+/* ── Slim icon rail (desktop), numbers bar on top, status bar at the foot ───── */
+.bx-srail { display: none; }
+@media (min-width: 861px) {
+  .bx-srail { display: flex; flex-direction: column; flex: none; width: 78px; gap: 2px; padding: 10px 6px; background: var(--panel); border-right: 1px solid var(--line); position: sticky; top: 0; height: 100dvh; z-index: 6; }
+  .bx-srail-logo { width: 32px; height: 32px; border-radius: 8px; margin: 4px auto 14px; }
+  .bx-sitem { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 2px; border: 0; border-radius: 8px; background: none; color: var(--text-2); font-size: 11px; font-weight: 500; cursor: pointer; }
+  .bx-sitem svg { width: 20px; height: 20px; }
+  .bx-sitem:hover { background: var(--soft); color: var(--text); }
+  .bx-sitem.on { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+  .bx-srail-foot { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  .bx-srail-acct { display: flex; justify-content: center; position: relative; }
+  .bx-srail-acct .bx-avatar { width: 36px; height: 36px; font-size: 12px; }
+  .bx-srail-acct .bx-menu.top { top: auto; bottom: 0; left: calc(100% + 10px); right: auto; }
+
+  .bx-content { min-height: 100dvh; }
+  .bx-top { flex-wrap: nowrap; height: auto; min-height: 60px; padding: 0 20px; gap: 24px; }
+  .bx-tbrand { font-size: 16px; font-weight: 700; }
+  .bx-nums { display: flex; align-items: center; }
+  .bx-numb { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 4px 16px; border: 0; border-left: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; text-align: left; }
+  .bx-numb:first-child { border-left: 0; padding-left: 0; }
+  .bx-numb .l { font-size: 11px; color: var(--muted); }
+  .bx-numb .v { font-size: 15px; font-weight: 600; }
+  .bx-numb:hover .v { color: var(--blue); }
+  .bx-top .bx-top-r { margin-left: auto; gap: 10px; }
+  .bx-top .bx-top-r .bx-roles { display: inline-grid; grid-template-columns: auto auto; margin: 0; padding: 2px; border-radius: 6px; }
+  .bx-top .bx-top-r .bx-roles button { padding: 4px 10px; font-size: 12px; border-radius: 5px; }
+  .bx-top .bx-top-r .bx-btn { border-radius: 8px; }
+
+  .bx-subnav { display: flex; gap: 26px; padding: 0 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bx-subnav button { border: 0; border-bottom: 2px solid transparent; background: none; padding: 10px 0 9px; font-size: 14px; font-weight: 500; color: var(--text-2); cursor: pointer; }
+  .bx-subnav button:hover { color: var(--text); }
+  .bx-subnav button.on { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+
+  .bx-status { margin-top: auto; position: sticky; bottom: 0; z-index: 4; display: flex; align-items: center; gap: 18px; padding: 5px 20px; font-size: 11.5px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+  .bx-status .r { margin-left: auto; }
+  .bx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: 1px; }
+  .bx-agent-fab { bottom: 40px !important; }
+  .bx-trade .bx-tpanel .bx-buy { top: 72px; }
+  .bx-main.bx-trade { padding-bottom: 0; }
+}
+.bx-rolemenu { position: relative; }
+.bx-rolemenu-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+.bx-rolemenu-btn:hover { border-color: var(--blue); }
+.bx-rolemenu-list { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: 250px; padding: 6px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 12px 40px rgba(15, 23, 41, 0.16); }
+.bx-rolemenu-list button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.bx-rolemenu-list button:hover { background: var(--soft); }
+.bx-rolemenu-list button > span { display: flex; flex-direction: column; gap: 2px; }
+.bx-rolemenu-list b { font-size: 13px; }
+.bx-rolemenu-list span span { font-size: 12px; color: var(--muted); }
+.bx-rolemenu-list button.on svg { color: var(--blue); }
