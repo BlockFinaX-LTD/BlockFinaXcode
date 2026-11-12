@@ -28,7 +28,6 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { prospects, classifyAddress, assessSendable } from "@shared/prospect-schema";
 
@@ -194,7 +193,7 @@ export async function findBusinesses(
 }
 
 /** Stage two: how do I write to them. */
-export async function findEmails(
+async function findEmails(
   token: string,
   urls: string[],
 ): Promise<Map<string, string[]>> {

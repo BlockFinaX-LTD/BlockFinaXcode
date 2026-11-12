@@ -101,14 +101,6 @@ function holidaysFor(calendar: CalendarId): Set<string> {
   return new Set([...list.confirmed, ...list.provisional]);
 }
 
-export function hasCalendar(calendar: CalendarId): boolean {
-  return Boolean(CALENDARS[calendar]);
-}
-
-export function isProvisionalHoliday(calendar: CalendarId, date: string): boolean {
-  return Boolean(CALENDARS[calendar]?.provisional.includes(date));
-}
-
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);

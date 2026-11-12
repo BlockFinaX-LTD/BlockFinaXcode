@@ -1,19 +1,11 @@
-/**
- * auto-scan.ts, one run of the automatic scan.
- *
- * Separated from the route so the scheduler and the button share it exactly. A
- * scheduled job that reimplements what the button does is a job that drifts
- * from it, and the drift is invisible until the drafts stop matching.
- */
 
-import Anthropic from "@anthropic-ai/sdk";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { platformSettings } from "@shared/schema";
 import { planSearches, type PlannedSearch } from "./planner";
 import { searchLinkedIn, type RawItem } from "./provider";
 
-export interface ScanResult {
+interface ScanResult {
   drafted: number;
   relevant: number;
   considered: number;

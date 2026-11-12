@@ -3,7 +3,7 @@ import { storage } from './storage';
 import { db } from './db';
 import { sql } from 'drizzle-orm';
 
-export type AssetClass = 'fx' | 'commodity' | 'crypto';
+type AssetClass = 'fx' | 'commodity' | 'crypto';
 
 const FX_PAIRS: Record<string, { base: string; quote: string }> = {
   "USD/GHS": { base: "USD", quote: "GHS" },
@@ -91,7 +91,6 @@ const CRYPTO_IDS: Record<string, string> = {
   "ADA/USD": "cardano",
 };
 
-const SUPPORTED_PAIRS = { ...FX_PAIRS };
 
 interface FXRate {
   pair: string;
@@ -103,20 +102,9 @@ interface FXRate {
   assetClass: AssetClass;
 }
 
-export function getAssetClass(pair: string): AssetClass {
-  if (pair in CRYPTO_IDS) return 'crypto';
-  if (pair in COMMODITY_PAIRS || pair in YAHOO_COMMODITY_TICKERS) return 'commodity';
-  return 'fx';
-}
-
 interface OracleCache {
   rates: Record<string, FXRate>;
   lastFetch: number;
-}
-
-interface RateSnapshot {
-  rate: number;
-  timestamp: number;
 }
 
 const cache: OracleCache = {
@@ -678,11 +666,6 @@ export async function checkAndSettleEvents(): Promise<{ settled: number; oneTouc
   return { settled, oneTouchSettled, expirySettled, errors };
 }
 
-export async function checkExpiredEvents(): Promise<{ settled: number; errors: string[] }> {
-  const result = await checkAndSettleEvents();
-  return { settled: result.settled, errors: result.errors };
-}
-
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let cycleRunning = false;
 
@@ -748,11 +731,4 @@ export function startOraclePoller(intervalMs: number = 5 * 60 * 1000) {
   setTimeout(() => { void runSettlementCycle("startup"); }, 30_000);
 
   intervalId = setInterval(() => { void runSettlementCycle("cycle"); }, intervalMs);
-}
-
-export function stopOraclePoller() {
-  if (intervalId) {
-    clearInterval(intervalId);
-    intervalId = null;
-  }
 }

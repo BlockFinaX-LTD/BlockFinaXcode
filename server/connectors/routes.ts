@@ -77,7 +77,7 @@ const QUARTER = /^\d{4}-Q[1-4]$/;
 const docFor = (m: ConnectorRow): DocumentKind => (m.kind === "contractor" ? "contractor" : "connector");
 
 /** The referral link a member shares. */
-export function referralLink(code: string) {
+function referralLink(code: string) {
   const base = (process.env.PUBLIC_APP_URL || "https://www.blockfinax.com").replace(/\/$/, "");
   return `${base}/auth?ref=${code}`;
 }

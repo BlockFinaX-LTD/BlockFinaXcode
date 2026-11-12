@@ -21,7 +21,7 @@
  * megabytes, and re-fetching per screen would be both slow and rude.
  */
 
-export interface ListEntry {
+interface ListEntry {
   name: string;
   /** Aliases, which is where most real matches are found. */
   aliases: string[];
@@ -38,7 +38,7 @@ export interface ListEntry {
   wallets?: string[];
 }
 
-export interface LoadedLists {
+interface LoadedLists {
   entries: ListEntry[];
   sources: { list: string; count: number; error?: string }[];
   loadedAt: Date;
@@ -172,7 +172,7 @@ async function loadUn(): Promise<{ entries: ListEntry[]; count: number }> {
 }
 
 /** Loads and caches both lists. Concurrent callers share one fetch. */
-export async function loadLists(force = false): Promise<LoadedLists> {
+async function loadLists(force = false): Promise<LoadedLists> {
   if (!force && cache && Date.now() - cache.loadedAt.getTime() < CACHE_TTL_MS) return cache;
   if (loading) return loading;
 
@@ -205,7 +205,7 @@ export async function loadLists(force = false): Promise<LoadedLists> {
 // ── Matching ──────────────────────────────────────────────────────────────
 
 /** Strips accents, punctuation and case so spelling variants still meet. */
-export function normalise(s: string): string {
+function normalise(s: string): string {
   return s
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -259,7 +259,7 @@ export function similarity(a: string, b: string): number {
   return shared / Math.min(A.size, B.size);
 }
 
-export interface LocalMatch {
+interface LocalMatch {
   name: string;
   matchedOn: string;
   score: number;

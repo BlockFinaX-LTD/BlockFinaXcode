@@ -61,7 +61,7 @@ function toNum(value: bigint, decimals: number): number {
   return parseFloat(ethers.formatUnits(value, decimals));
 }
 
-export interface ChainEvent {
+interface ChainEvent {
   id: number;
   chainId: number;
   chainName: string;
@@ -88,7 +88,7 @@ export interface ChainEvent {
   totalMaxPayout: number;
 }
 
-export interface ChainPosition {
+interface ChainPosition {
   id: number;
   eventId: number;
   chainId: number;
@@ -101,7 +101,7 @@ export interface ChainPosition {
   claimed: boolean;
 }
 
-export interface ChainDeposit {
+interface ChainDeposit {
   id: number;
   eventId: number;
   chainId: number;
@@ -252,7 +252,7 @@ export async function readChainEvents(): Promise<ChainEvent[]> {
 // Per-chain inspection: does each step of the chain read actually work?
 // Returns no event data — only booleans, counts, durations, and error
 // strings. Safe to expose via an admin endpoint without leaking PII.
-export interface ChainDiagnosis {
+interface ChainDiagnosis {
   chainId: number;
   name: string;
   diamond: string;
@@ -404,7 +404,7 @@ export async function readChainDepositsByEvent(eventId: number, chainId?: number
   return all;
 }
 
-export interface ChainFeeResult {
+interface ChainFeeResult {
   chainId: number;
   chainName: string;
   fees: number;
@@ -433,7 +433,7 @@ export async function readPlatformFeesPerChain(): Promise<ChainFeeResult[]> {
   return results;
 }
 
-export interface ChainCreationFee {
+interface ChainCreationFee {
   chainId: number;
   chainName: string;
   /** Creation fee charged per pool, in USD. */
@@ -523,8 +523,4 @@ export async function readCreationFeePerChain(): Promise<ChainCreationFee[]> {
 export async function readPlatformFees(): Promise<number> {
   const perChain = await readPlatformFeesPerChain();
   return perChain.reduce((s, c) => s + c.fees, 0);
-}
-
-export function invalidateChainCache() {
-  _cache = null;
 }

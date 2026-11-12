@@ -60,7 +60,7 @@ function asBigint(v: number | bigint | string): bigint {
   return BigInt(v);
 }
 
-export interface SignableQuote {
+interface SignableQuote {
   /** EIP-155 chain id of the target Diamond. */
   chainId: number | bigint;
   /** Diamond contract address (the verifier). */
@@ -91,26 +91,6 @@ export interface SignedQuote {
   quoteTimestamp: bigint;    // unix seconds
   quoteNonce: string;        // 0x-prefixed 32-byte hex
   signerAddress: string;     // public address of the signer (matches on-chain pricingEngineSigner)
-}
-
-/** Build the same keccak256(abi.encode(...)) payload the contract recovers against. */
-export function buildSignableHash(q: SignableQuote, quoteTimestamp: bigint, quoteNonce: string): string {
-  return ethers.solidityPackedKeccak256(
-    [
-      "uint256", "address", "address",
-      "string",
-      "uint256", "uint256", "uint256", "uint256", "uint256", "bool",
-      "bool",
-      "uint256", "bytes32",
-    ],
-    [
-      asBigint(q.chainId), ethers.getAddress(q.diamondAddress), ethers.getAddress(q.creator),
-      q.underlying,
-      q.strike, q.payoutCap, q.premiumRate, q.expiryDate, q.initialRate, q.strikeAbove,
-      q.dynamicPricing,
-      quoteTimestamp, quoteNonce,
-    ],
-  );
 }
 
 /**
@@ -167,7 +147,7 @@ export async function signQuote(q: SignableQuote): Promise<SignedQuote | null> {
 
 /* ── Purchase quotes ─────────────────────────────────────────────────────── */
 
-export interface SignablePurchase {
+interface SignablePurchase {
   chainId: number | bigint;
   diamondAddress: string;
   /** The wallet that will call buyProtectionQuoted. The quote is bound to it. */
@@ -235,7 +215,7 @@ export async function signPurchaseQuote(q: SignablePurchase): Promise<SignedQuot
 /** Tag in the signed payload. Must equal POOL_BUY_TAG in BlockFinaXPoolTradeFacet. */
 export const POOL_BUY_TAG = ethers.keccak256(ethers.toUtf8Bytes("BLOCKFINAX_POOL_BUY_V1"));
 
-export interface SignablePoolBuy {
+interface SignablePoolBuy {
   chainId: number | bigint;
   diamondAddress: string;
   /** The wallet that will call buyPoolProtection. The quote is bound to it. */

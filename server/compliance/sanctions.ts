@@ -37,7 +37,7 @@ import { db } from "../db";
 import { sanctionsScreenings, type SanctionMatch } from "@shared/compliance-schema";
 import { raiseAlert } from "./limits";
 
-import { matchName, matchWallet, listStatus } from "./lists";
+import { matchName, matchWallet } from "./lists";
 
 const API = "https://api.opensanctions.org/match/default";
 const API_KEY = (process.env.OPENSANCTIONS_API_KEY || "").trim();
@@ -56,16 +56,6 @@ export interface ScreeningResult {
 
 /** Lists the free path does not reach, so callers can say so plainly. */
 export const UNCOVERED_FREE = ["EU Consolidated", "Ghana FIC"];
-
-export async function screeningCoverage() {
-  const status = await listStatus();
-  return {
-    provider: (process.env.OPENSANCTIONS_API_KEY || "").trim() ? "opensanctions" : "direct",
-    sources: status.sources,
-    loadedAt: status.loadedAt,
-    notCovered: (process.env.OPENSANCTIONS_API_KEY || "").trim() ? [] : UNCOVERED_FREE,
-  };
-}
 
 /**
  * Screens a person or company name.

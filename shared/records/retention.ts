@@ -10,9 +10,9 @@
  * when its retention period ends. Review these periods with a lawyer before mainnet.
  */
 
-export type RetentionAction = "delete" | "anonymise" | "keep";
+type RetentionAction = "delete" | "anonymise" | "keep";
 
-export interface RetentionRule {
+interface RetentionRule {
   /** What the records are. */
   label: string;
   /** Years kept after the account closes (or after the record's own date, where noted). */

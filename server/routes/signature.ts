@@ -31,7 +31,6 @@ import type { Express, Request, Response } from "express";
 
 import { signatureHtml, PEOPLE, type Person } from "../brand";
 
-const APP_URL = (process.env.PUBLIC_APP_URL || "https://www.blockfinax.com").replace(/\/$/, "");
 
 export function registerSignatureRoutes(app: Express) {
   /**

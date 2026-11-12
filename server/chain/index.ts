@@ -53,4 +53,4 @@ export class AdapterRegistry {
   }
 }
 
-export type { ChainAdapter, PreparedTransaction } from "./adapter";
+export type { ChainAdapter } from "./adapter";

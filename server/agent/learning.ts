@@ -30,7 +30,7 @@ const MIN_DECISIONS = 6;
 /** How much history each extraction considers. */
 const WINDOW = 40;
 
-export interface ExtractionResult {
+interface ExtractionResult {
   considered: number;
   added: string[];
   skipped: string;

@@ -25,7 +25,7 @@ import { seedDefaultClassifications, listAllClassifications } from "../data/clas
 import { backfillPair, getCloseCount } from "../data/historical";
 import { fetchUsdRate } from "../data/usdRate";
 import { quote } from "../quote";
-import { SUPPORTED_PAIRS, getPairSpec } from "../data/pairs";
+import { getPairSpec } from "../data/pairs";
 
 const TWELVEDATA_INTER_CALL_MS = 8500;   // 8s + 0.5s buffer; free tier is 8 calls/min
 

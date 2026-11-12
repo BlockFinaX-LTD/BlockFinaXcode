@@ -67,7 +67,7 @@ const resend = apiKey ? new Resend(apiKey) : null;
  * markup our own templates produce, which is headings, paragraphs, lists,
  * tables and anchors.
  */
-export function htmlToText(html: string): string {
+function htmlToText(html: string): string {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<head[\s\S]*?<\/head>/gi, "")

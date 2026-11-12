@@ -211,7 +211,7 @@ function toBusiness(c: Extracted, fallbackCountry: string | null, fallbackUrl: s
 // ── News ──────────────────────────────────────────────────────────────────
 
 /** Companies named in recent search results about currency pain. */
-export async function newsBusinesses(
+async function newsBusinesses(
   token: string,
   apiKey: string,
   model: string,
@@ -249,7 +249,7 @@ export async function newsBusinesses(
 // ── A list page ───────────────────────────────────────────────────────────
 
 /** Businesses on one page: exhibitors, members, a directory category. */
-export async function listBusinesses(
+async function listBusinesses(
   token: string,
   apiKey: string,
   model: string,

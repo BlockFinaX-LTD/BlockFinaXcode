@@ -35,7 +35,7 @@
  * that, and anything else is refused.
  */
 
-import { pgTable, serial, text, timestamp, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 /**

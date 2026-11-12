@@ -13,7 +13,7 @@ import type { WalletProvider } from "./wallet-provider";
 /** Kept for older call sites: the passkey wallet is the only wallet. */
 export const usesPasskeyWallet = true;
 
-export interface IdentityUser {
+interface IdentityUser {
   user: string;
   address: string;
   accessToken: string;
@@ -22,7 +22,7 @@ export interface IdentityUser {
   name?: string | null;
 }
 
-export interface Identity {
+interface Identity {
   isAuthenticated: boolean;
   user: IdentityUser | null;
   error: string | null;

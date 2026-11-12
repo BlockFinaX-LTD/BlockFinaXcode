@@ -34,7 +34,7 @@ const num = (v: unknown) => {
 
 const windowStart = () => new Date(Date.now() - LIMIT_WINDOW_DAYS * 86_400_000);
 
-export interface WalletStanding {
+interface WalletStanding {
   walletAddress: string;
   tier: number;
   tierDef: TierDef;
@@ -124,7 +124,7 @@ export async function walletStanding(walletAddress: string): Promise<WalletStand
   };
 }
 
-export interface LimitCheck {
+interface LimitCheck {
   allowed: boolean;
   reason?: string;
   /** The tier that would permit this, when the current one does not. */

@@ -26,7 +26,6 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { and, eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { fundingOpportunities, fundingNotes } from "@shared/schema";
 import {
@@ -37,7 +36,7 @@ export { DEFAULT_QUERIES };
 
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
-export interface Candidate {
+interface Candidate {
   name: string;
   funder?: string;
   kind: string;
@@ -124,7 +123,7 @@ async function searchOnce(client: Anthropic, query: string): Promise<Candidate[]
   } catch { return []; }
 }
 
-export interface SweepResult {
+interface SweepResult {
   queries: number;
   proposed: number;
   droppedUnreachable: number;

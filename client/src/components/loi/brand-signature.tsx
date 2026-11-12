@@ -26,7 +26,7 @@ const NAVY = "#0a2540";
 const BLUE = "#1a4480";
 const INK = "#33415c";
 
-export interface MarkFields {
+interface MarkFields {
   name: string;
   title: string;
   company: string;

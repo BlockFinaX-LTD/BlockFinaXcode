@@ -19,7 +19,7 @@ const ENOUGH_CLOSES = 250;
 const TOP_UP_DAYS = 30;
 const REFRESH_MS = 12 * 60 * 60 * 1000;
 
-export async function bootstrapTestnetPricing() {
+async function bootstrapTestnetPricing() {
   const pairs = (process.env.TESTNET_PRICING_PAIRS || DEFAULT_PAIRS).split(",").map((p) => p.trim()).filter(Boolean);
   try {
     const seeded = await seedDefaultClassifications();

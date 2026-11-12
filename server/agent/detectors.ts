@@ -26,7 +26,7 @@ import { runAgent, fence } from "./runtime";
 
 const SETTINGS_KEY = "thresholds";
 
-export interface Thresholds {
+interface Thresholds {
   /** Days of silence before nudging an unopened letter. */
   followupDays: number;
   /** Days before expiry to send a reminder. */
@@ -402,7 +402,7 @@ async function draft(c: Candidate): Promise<{ body: string; runId: number | null
 
 // ── Scan ─────────────────────────────────────────────────────────────────
 
-export interface ScanResult {
+interface ScanResult {
   found: number;
   suppressed: number;
   created: number;

@@ -49,7 +49,7 @@ function tokenise(text: string): string[] {
  * The overlap matters: a fact that straddles a boundary would otherwise be
  * retrievable by neither half.
  */
-export function chunkText(text: string, target = 1200, overlap = 150): string[] {
+function chunkText(text: string, target = 1200, overlap = 150): string[] {
   const clean = text.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (clean.length <= target) return clean ? [clean] : [];
 
@@ -108,7 +108,7 @@ export function extractText(buffer: Buffer, mime: string, filename: string): str
   return "";
 }
 
-export interface StoredSource {
+interface StoredSource {
   id: number;
   title: string;
   kind: string;
@@ -188,7 +188,7 @@ export async function deleteSource(id: number): Promise<void> {
   await db.delete(agentSources).where(eq(agentSources.id, id));
 }
 
-export interface Retrieved {
+interface Retrieved {
   text: string[];
   images: { title: string; dataUrl: string; mime: string }[];
 }

@@ -13,7 +13,7 @@ import { dateOf, fmt, signAndSend, useUsdcBalances, usdcOn } from './shared';
 import { hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag } from './ui';
 import type { Go } from './workspace';
 
-export interface RatePool {
+interface RatePool {
   id: number; benchmark: string; direction: 'rise' | 'fall'; strikeOffsetPercent: string; capWidthPercent: string;
   lookbackDays: number; basis: number; capital: string; locked: string; available: string; active: boolean;
   tenors: { days: number; premiumBps: number }[];
@@ -21,7 +21,7 @@ export interface RatePool {
   strikePercent: string | null; capPercent: string | null;
 }
 
-export interface RateProtection {
+interface RateProtection {
   id: number; poolId: number; benchmark: string; direction: 'rise' | 'fall'; notional: string; premium: string; days: number;
   strikePercent: string; capPercent: string; startDate: string; startRatePercent: string; windowEndDate: string;
   expiry: number; createdAt: number; maxPayout: string; status: 'active' | 'settleable' | 'settled' | 'refunded';
@@ -34,13 +34,13 @@ const CHAIN = 'stellar-testnet';
 const pct = (s: string | null, dp = 2) => (s === null ? '-' : `${Number(s).toFixed(dp)}%`);
 const day = (iso: string) => dateOf(Date.parse(`${iso}T12:00:00Z`) / 1000);
 
-export function rateCoverLabel(direction: 'rise' | 'fall', benchmark: string) {
+function rateCoverLabel(direction: 'rise' | 'fall', benchmark: string) {
   return direction === 'rise'
     ? { title: 'Rate rise protection', who: 'For floating-rate borrowers', pays: `Pays if ${benchmark} averages above the strike` }
     : { title: 'Rate fall protection', who: 'For depositors and lenders', pays: `Pays if ${benchmark} averages below the strike` };
 }
 
-export function useRatePools() {
+function useRatePools() {
   return useQuery({
     queryKey: ['v2-rate-pools'],
     queryFn: async () => (await api<{ pools: RatePool[] }>('/api/v2/rate-pools')).pools,

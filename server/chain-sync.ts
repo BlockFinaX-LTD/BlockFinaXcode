@@ -20,14 +20,6 @@ const HEDGE_READ_ABI_EXPANDED = [
   "function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 lpCount, uint256 hedgerCount, uint256 totalMaxPayout)",
 ];
 
-// Base / BSC Diamond ABI — compact format, no underlying/initialRate/strikeAbove fields.
-// status enum on Base: 1 = Active/Open, 2 = Settled, 3 = Expired
-const HEDGE_READ_ABI_COMPACT = [
-  "function getTotalHedgeEvents() view returns (uint256)",
-  "function getHedgeEventCore(uint256) view returns (uint256 id, address creator, string name, uint256 premiumRate, uint256 payoutPercent, uint256 strikePrice, uint256 expiryDate, bool poolOpen, bool allowExternalLp, uint8 status)",
-  "function getHedgeEventStats(uint256) view returns (uint256 settlementPrice, bool triggered, uint256 settledAt, uint256 creatorEarnings, uint256 totalLiquidity, uint256 totalExposure, uint256 totalPremiums, uint256 lpCount, uint256 hedgerCount, uint256 totalMaxPayout)",
-];
-
 // Base/BSC status map (deployed Diamond): 0=Open, 1=Settled, 2=Expired.
 // (Lisk used the same enum but Lisk support has been removed.)
 const STATUS_MAP_BASE: Record<number, string> = { 0: "open", 1: "settled", 2: "expired" };
@@ -82,7 +74,7 @@ function getChains(): ChainConfig[] {
   return chains.filter(c => !!c.diamond);
 }
 
-export interface SyncChainResult {
+interface SyncChainResult {
   chain: string;
   chainId: number;
   totalOnChain: number;

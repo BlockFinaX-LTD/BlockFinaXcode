@@ -28,7 +28,7 @@ import {
 
 const TOKEN_METHODS = new Set(["0x095ea7b3", "0xa9059cbb"]); // approve, transfer
 
-export interface RelayerPolicy {
+interface RelayerPolicy {
   /** Token contracts: only approve and transfer. */
   tokens: string[];
   /** BlockFinaX contracts: any method (the contract enforces its own rules). */
@@ -257,7 +257,7 @@ export class EvmRelayer {
 }
 
 /** A UserOperation in the JSON-RPC shape bundlers and paymasters expect. */
-export function toRpc(op: UserOperation) {
+function toRpc(op: UserOperation) {
   return {
     sender: op.sender,
     nonce: ethers.toQuantity(op.nonce),

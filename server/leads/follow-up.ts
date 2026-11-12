@@ -40,7 +40,7 @@ import { isContactable } from "@shared/lead-schema";
  */
 const POSTAL_ADDRESS = (process.env.COMPANY_POSTAL_ADDRESS || "").trim();
 
-export function followUpConfigured(): boolean {
+function followUpConfigured(): boolean {
   return POSTAL_ADDRESS.length > 0;
 }
 

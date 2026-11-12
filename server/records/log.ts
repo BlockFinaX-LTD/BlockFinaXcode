@@ -24,13 +24,13 @@ import { createHash } from "node:crypto";
 
 export type ActorType = "user" | "staff" | "system" | "oracle";
 export interface Actor { type: ActorType; id: string }
-export interface RecordInput {
+interface RecordInput {
   actor: Actor;
   action: string;
   subject?: { type: string; id: string };
   data?: unknown;
 }
-export interface LogEntry extends RecordInput {
+interface LogEntry extends RecordInput {
   id: number;
   at: string;
   prevHash: string;
@@ -72,7 +72,7 @@ async function getDb(): Promise<Db> {
   return pool as unknown as Db;
 }
 
-export async function ensureLog(db?: Db) {
+async function ensureLog(db?: Db) {
   const d = db ?? (await getDb());
   ready ??= d.query(`
     CREATE TABLE IF NOT EXISTS compliance_log (

@@ -54,7 +54,7 @@ export function resolve(p: Pools, yesHappened: boolean): Outcome {
   return yesHappened ? "yes" : "no";
 }
 
-export interface Payout {
+interface Payout {
   /** Returned to the staker, total. Stake plus winnings, or stake on a void. */
   total: number;
   /** Their original stake, always returned in full when they win or void. */

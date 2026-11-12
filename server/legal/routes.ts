@@ -32,7 +32,7 @@ async function legalDb() {
 }
 
 /** Which of the current documents the user has accepted. */
-export async function legalStatus(userId: number) {
+async function legalStatus(userId: number) {
   const db = await legalDb();
   const { rows } = await db.query(
     `SELECT document, version FROM legal_acceptances WHERE user_id = $1 AND ((document = 'terms' AND version = $2) OR (document = 'privacy' AND version = $3))`,

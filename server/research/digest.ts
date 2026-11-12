@@ -21,13 +21,13 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { desc, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { researchItems } from "@shared/schema";
 import { relevanceScore } from "../routes/outreach-relevance";
 import { FEEDS, fetchFeed, type FeedItem } from "./feeds";
 
-export interface DigestResult {
+interface DigestResult {
   fetched: number;
   fresh: number;
   scored: number;

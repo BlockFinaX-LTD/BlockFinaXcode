@@ -70,7 +70,7 @@ export function payoutAfterFee(gross: bigint, payoutFeeRate: bigint) {
   return { fee, net: gross - fee };
 }
 
-export interface TermsProblem {
+interface TermsProblem {
   code: ApplicationErrorCode;
   /** The same wording the contracts use, for display and logs. */
   message: string;
@@ -110,15 +110,6 @@ export function checkTerms(a: {
       return { code: "INVALID_CAP", message: "Open cap mismatch" };
     }
   }
-  return null;
-}
-
-export function validateTenor(t: { tenorDays: number; markupBps: number }): TermsProblem | null {
-  if (!Number.isInteger(t.tenorDays) || t.tenorDays < TENOR_LIMITS.minDays || t.tenorDays > TENOR_LIMITS.maxDays) {
-    return { code: "INVALID_TENOR", message: "Tenor must be 1 to 365 days" };
-  }
-  if (t.markupBps < MARKUP_LIMITS.minBps) return { code: "INVALID_TENOR", message: "Offer below 90% of fair price" };
-  if (t.markupBps > MARKUP_LIMITS.maxBps) return { code: "INVALID_TENOR", message: "Offer above 5x fair price" };
   return null;
 }
 

@@ -22,7 +22,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Search, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban, Upload } from "lucide-react";
+import { Loader2, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { usePasskeySession } from '@/lib/identity';
-import { openContactSales, useIsDemo } from './shared';
+import { openContactSales } from './shared';
 import { Spin } from './ui';
 
 /**

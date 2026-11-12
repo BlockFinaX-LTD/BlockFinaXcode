@@ -92,17 +92,3 @@ export async function fetchLatestClose(pair: string): Promise<DailyClose> {
   const series = await fetchDailyTimeSeries(pair, 1);
   return series[series.length - 1];
 }
-
-/**
- * Probe whether a pair is supported on TwelveData.
- * Returns true if a 1-day fetch succeeds, false on any error.
- * Used by the bootstrap script before adding a pair.
- */
-export async function isPairSupported(pair: string): Promise<boolean> {
-  try {
-    await fetchLatestClose(pair);
-    return true;
-  } catch {
-    return false;
-  }
-}

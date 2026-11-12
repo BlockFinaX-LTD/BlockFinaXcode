@@ -87,17 +87,3 @@ export function requireSignature(req: AuthenticatedRequest, res: Response, next:
     });
   }
 }
-
-export function optionalSignature(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const walletAddress = req.headers["x-wallet-address"] as string;
-  const signature = req.headers["x-signature"] as string;
-
-  if (walletAddress && signature) {
-    return requireSignature(req, res, next);
-  }
-
-  if (walletAddress) {
-    req.walletAddress = walletAddress.toLowerCase();
-  }
-  next();
-}

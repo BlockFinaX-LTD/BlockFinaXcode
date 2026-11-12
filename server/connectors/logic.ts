@@ -44,7 +44,7 @@ export function orgDomain(input?: string | null): string | null {
   return FREE_MAIL.has(s) ? null : s;
 }
 
-export interface ExistingRegistration {
+interface ExistingRegistration {
   id: string;
   userId: number;
   orgKey: string;
@@ -74,7 +74,7 @@ export function findConflict(
   return null;
 }
 
-export interface QuizResult {
+interface QuizResult {
   correct: number;
   total: number;
   score: number;
@@ -114,7 +114,7 @@ export function paymentDue(quarter: string): Date {
 }
 
 /** The 12-month reward period that starts at the first revenue. */
-export function rewardPeriod(firstRevenue: Date): { start: Date; end: Date } {
+function rewardPeriod(firstRevenue: Date): { start: Date; end: Date } {
   const end = new Date(firstRevenue);
   end.setUTCMonth(end.getUTCMonth() + REWARD_MONTHS);
   return { start: new Date(firstRevenue), end };
@@ -150,7 +150,7 @@ export function referralRevenue(positions: FeePosition[], now = new Date()) {
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export interface Readiness {
+interface Readiness {
   status: MemberStatus | "none";
   agreementSigned: boolean;
   modulesPassed: string[];
@@ -171,7 +171,7 @@ export function missingSteps(r: Readiness): string[] {
   return missing;
 }
 
-export interface LedgerLine {
+interface LedgerLine {
   kind: LedgerKind;
   quarter: string;
   amountUsd: number;

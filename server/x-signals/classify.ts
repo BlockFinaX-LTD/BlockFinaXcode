@@ -8,9 +8,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 export const KINDS = ["hedger", "underwriter", "partner", "connector", "competitor", "news", "politics", "advert", "other"] as const;
-export type Kind = (typeof KINDS)[number];
+type Kind = (typeof KINDS)[number];
 
-export interface Verdict { id: string; relevance: number; kind: Kind; reason: string }
+interface Verdict { id: string; relevance: number; kind: Kind; reason: string }
 
 const MODEL = process.env.X_SIGNALS_MODEL || "claude-haiku-4-5-20251001";
 
@@ -52,7 +52,7 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-export interface PostForReview { id: string; text: string; handle: string; bio: string | null; location: string | null }
+interface PostForReview { id: string; text: string; handle: string; bio: string | null; location: string | null }
 
 /** Keeps only well-formed verdicts for posts that were asked about. */
 export function cleanVerdicts(raw: unknown, ids: Set<string>): Verdict[] {

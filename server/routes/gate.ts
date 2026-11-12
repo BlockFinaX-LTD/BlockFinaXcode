@@ -26,16 +26,7 @@ import { requireAdmin, getOwnerEmails } from '../middleware/admin-auth';
 import { verifySessionToken } from '../middleware/session-auth';
 import { mintInvestorSession, revokeDocsInvestorSessions } from './investor';
 
-import {
-  emailAdminNewAccessRequest,
-  emailUserAccessReceived,
-  emailUserAccessApproved,
-  emailUserAccessRejected,
-  emailAdminNewDocsRequest,
-  emailDocsToken,
-  APP_URL,
-  DOCS_URL,
-} from '../email';
+import { emailAdminNewAccessRequest, emailUserAccessReceived, emailUserAccessApproved, emailUserAccessRejected, emailAdminNewDocsRequest, emailDocsToken, DOCS_URL } from '../email';
 
 // App sign-in tokens renew on use. Document links have a fixed seven-day
 // window and require admin approval before issue.

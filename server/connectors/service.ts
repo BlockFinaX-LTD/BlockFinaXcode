@@ -286,7 +286,7 @@ export async function notifyMember(to: string, subject: string, lines: string[])
 }
 
 /** Where the portal lives: CONNECTOR_PORTAL_URL, else the app's own /connector page. */
-export function portalUrl() {
+function portalUrl() {
   const configured = (process.env.CONNECTOR_PORTAL_URL || "").trim().replace(/\/$/, "");
   if (configured) return configured;
   return `${(process.env.PUBLIC_APP_URL || "https://www.blockfinax.com").replace(/\/$/, "")}/connector`;

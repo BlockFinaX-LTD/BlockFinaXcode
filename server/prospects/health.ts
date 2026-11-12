@@ -46,7 +46,7 @@ export const MAX_BOUNCE_RATE = 0.04;
 /** Below this, one bad address is a large percentage and means nothing. */
 export const MIN_SAMPLE = 40;
 
-export interface Health {
+interface Health {
   sent: number;
   bounced: number;
   complained: number;
@@ -115,7 +115,7 @@ export async function clearHalt(by: string): Promise<void> {
  * lands within one event of the threshold being crossed rather than up to an
  * interval later. At two hundred a day, an interval is a lot of mail.
  */
-export async function evaluateBreaker(): Promise<Health> {
+async function evaluateBreaker(): Promise<Health> {
   const h = await sendingHealth();
   if (h.halted || !h.meaningful) return h;
 

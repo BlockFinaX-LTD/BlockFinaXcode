@@ -42,7 +42,7 @@ export function normalCDF(x: number): number {
   return 0.5 * (1.0 + sign * y);
 }
 
-export interface GKInputs {
+interface GKInputs {
   S: number;       // spot (quote/base)
   K: number;       // strike (quote/base)
   T: number;       // years to expiry
@@ -76,7 +76,7 @@ export function garmanKohlhagenPut(input: GKInputs): number {
   return K * Math.exp(-r * T) * normalCDF(-d2) - S * Math.exp(-q * T) * normalCDF(-d1);
 }
 
-export interface SpreadInputs {
+interface SpreadInputs {
   S: number;
   K_lower: number;
   K_upper: number;
@@ -157,7 +157,7 @@ export function premiumInBaseCurrency(perUnitValue: number, notional: number, S:
 //     correct fix for the "1% premium on a 4.5% range" problem the old engine
 //     had (see vol-math.ts comments).
 
-export interface MertonInputs extends GKInputs {
+interface MertonInputs extends GKInputs {
   /** Jump intensity (events per year). λ=0 collapses to plain GK. */
   lambda: number;
   /** Mean log-jump size. For frontier-EM USD/local-currency, ~+0.05 to +0.10. */

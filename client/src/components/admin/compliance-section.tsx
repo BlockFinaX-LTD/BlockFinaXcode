@@ -21,10 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import {
-  ShieldCheck, ShieldAlert, Users, Search, Check, X, Clock, Loader2, ArrowLeft,
-  AlertTriangle, FileText, ExternalLink, RefreshCw, Scale,
-} from "lucide-react";
+import { ShieldCheck, ShieldAlert, Users, Search, Check, X, Clock, Loader2, ArrowLeft, AlertTriangle, ExternalLink, RefreshCw, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KYC_TIERS, ALERT_LABELS, type AlertKind } from "@shared/compliance-schema";
 

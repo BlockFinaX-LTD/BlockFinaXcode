@@ -71,7 +71,7 @@ export function readPostedAt(p: any): string | null {
   return d.toISOString();
 }
 
-export interface SearchOutcome {
+interface SearchOutcome {
   query: string;
   items: RawItem[];
   fetched: number;
@@ -88,7 +88,7 @@ export interface SearchOutcome {
  * no error, which is the worst failure available. Trying a handful degrades to
  * a missing author name instead of a missing post.
  */
-export function mapApifyPost(p: any): RawItem | null {
+function mapApifyPost(p: any): RawItem | null {
   if (!p || typeof p !== "object") return null;
   const text = p.content ?? p.text ?? p.postContent ?? p.description ?? "";
   if (typeof text !== "string" || !text.trim()) return null;

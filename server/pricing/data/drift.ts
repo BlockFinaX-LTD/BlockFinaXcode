@@ -21,7 +21,7 @@ const ABS_DRIFT_FLOOR = 0.50;            // ±50%/yr cap
 const TARGET_CLOSES = TARGET_YEARS * TRADING_DAYS_PER_YEAR;   // ~1260
 const MIN_CLOSES   = MIN_YEARS * TRADING_DAYS_PER_YEAR;       // ~756
 
-export interface DriftResult {
+interface DriftResult {
   /** Annualized log-return, capped at ±ABS_DRIFT_FLOOR. */
   mu: number;
   /** Annualized log-return BEFORE capping — for diagnostics. */

@@ -22,9 +22,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Loader2, Copy, Check, ExternalLink, Trash2, Send, Sparkles, Linkedin, Clock,
-} from "lucide-react";
+import { Loader2, Copy, Check, ExternalLink, Trash2, Send, Linkedin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Leads } from "./leads";
 import { OutreachMemory } from "./outreach-memory";

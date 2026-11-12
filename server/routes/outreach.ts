@@ -192,13 +192,6 @@ async function writeDraft(
   return out || null;
 }
 
-/** What one draft returned, once the demand header is separated from the text. */
-export interface DraftedMessage {
-  draft: string;
-  demandLevel: string | null;
-  demandEvidence: string | null;
-}
-
 const sqlCount = () => sql<number>`count(*)::int`;
 
 export async function draftBatch(

@@ -32,7 +32,7 @@ function quoteFor(provider: string, req: RouteRequest, feeBps: number, seconds: 
 }
 
 /** The user's own wallet sends the transfer; the adapter prepares it. */
-export interface TransferPort {
+interface TransferPort {
   prepareTransfer(req: RouteRequest, to: string): Promise<PreparedTransaction[]>;
   /** Has the prepared transfer (by tracking id) confirmed on its network? */
   transferStatus(trackingId: string): Promise<"pending" | "confirmed" | "failed">;

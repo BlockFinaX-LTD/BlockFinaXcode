@@ -19,7 +19,7 @@ const SIGNATURE_NAME_KEY = "brand_signature_name";
 
 // ── Signature ────────────────────────────────────────────────────────────
 
-export interface StoredSignature {
+interface StoredSignature {
   /** Full data URL, e.g. "data:image/png;base64,…". */
   dataUrl: string;
   /** Name printed beneath the signature. */

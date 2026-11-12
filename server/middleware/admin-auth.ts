@@ -8,7 +8,7 @@ import { randomBytes, createHash } from "crypto";
  * actions belong to one person, and you cannot enforce that without knowing
  * who is holding the token.
  */
-export interface AdminSession {
+interface AdminSession {
   expiresAt: number;
   email: string;
 }
@@ -27,11 +27,6 @@ setInterval(() => {
 
 export function generateAdminToken(): string {
   return randomBytes(32).toString("hex");
-}
-
-export function getOwnerAddresses(): string[] {
-  const raw = process.env.ADMIN_WALLET_ADDRESSES || "";
-  return raw.split(",").map(a => a.trim().toLowerCase()).filter(Boolean);
 }
 
 /**
@@ -62,7 +57,7 @@ export function getApproverEmails(): string[] {
 }
 
 /** The session behind this request, or null. */
-export function sessionOf(req: any): AdminSession | null {
+function sessionOf(req: any): AdminSession | null {
   const token = req.headers["x-admin-token"] as string;
   if (!token) return null;
   const s = adminSessions.get(token);
@@ -71,11 +66,6 @@ export function sessionOf(req: any): AdminSession | null {
     return null;
   }
   return s;
-}
-
-/** Email on the current session, or null. Used to attribute decisions. */
-export function adminEmail(req: any): string | null {
-  return sessionOf(req)?.email ?? null;
 }
 
 /*

@@ -28,14 +28,14 @@ export interface OracleEngineState {
 
 export const newOracleState = (): OracleEngineState => ({ submittedAt: new Map(), lastPrice: new Map() });
 
-export interface OracleCycleReport {
+interface OracleCycleReport {
   submitted: string[];
   settled: string[];
   skipped: { position: string; reason: string }[];
   failed: { position: string; error: string }[];
 }
 
-export interface OracleEngineDeps {
+interface OracleEngineDeps {
   chains: ChainRegistry;
   adapters: AdapterRegistry;
   /** This operator's key on a chain, or null if it does not run that chain. */
@@ -120,9 +120,4 @@ export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngin
     }
   }
   return report;
-}
-
-/** "USD/GHS" pairs to the FX source's base/quote map. */
-export function pairMap(pairs: string[]) {
-  return Object.fromEntries(pairs.map((p) => { const [base, quote] = p.split("/"); return [p, { base, quote }]; }));
 }

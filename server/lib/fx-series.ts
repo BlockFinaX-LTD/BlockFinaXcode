@@ -25,12 +25,12 @@
  * Pure and dependency free so it can be tested without a database.
  */
 
-export interface Close {
+interface Close {
   date: string;
   close: number;
 }
 
-export interface SpikeResult {
+interface SpikeResult {
   clean: Close[];
   dropped: Close[];
 }

@@ -19,14 +19,14 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { eq, ne, and, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { fundingOpportunities, fundingNotes } from "@shared/schema";
 import { CLOSED_STAGES, parseDeadline, type Stage } from "./spec";
 
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
-export interface RecheckFinding {
+interface RecheckFinding {
   id: number;
   name: string;
   url: string | null;
@@ -35,7 +35,7 @@ export interface RecheckFinding {
   detail: string;
 }
 
-export interface RecheckResult {
+interface RecheckResult {
   checked: number;
   findings: RecheckFinding[];
 }

@@ -1,33 +1,4 @@
-/**
- * scan.ts, finding investors rather than typing them in.
- *
- * ## Why LinkedIn profiles and not Crunchbase
- *
- * Crunchbase has better structured investor data and its scraper requires a
- * logged-in session cookie, which means driving somebody's account and
- * re-supplying the cookie every time it rotates. That is the pattern this
- * codebase has avoided everywhere else and there is no reason to adopt it here.
- *
- * harvestapi/linkedin-profile-search needs no cookie, no proxy configuration
- * and no session. Checked against its published schema rather than guessed: the
- * last actor added here failed silently on every call for days because a
- * required field was assumed rather than read.
- *
- * ## Why profiles and not emails
- *
- * A profile search returns people, not addresses, and that is the right shape
- * for this. An investor reached cold by email is one of forty that morning. The
- * same person reached after a comment on their own post about African fintech
- * has already seen the name. So these land in the leads list, where the
- * LinkedIn machinery already works, rather than in the email queue.
- *
- * The firm behind them is a separate problem, and the business pipeline already
- * solves it: a fund website goes through the same contact crawl as any other.
- */
 
-import { randomBytes } from "node:crypto";
-import { db } from "../db";
-import { outreachPeople } from "@shared/schema";
 import { notePerson, normaliseProfileUrl } from "../outreach/people";
 
 const ACTOR = "harvestapi~linkedin-profile-search";
@@ -61,7 +32,7 @@ export const INVESTOR_QUERIES = [
   "Africa venture capital",
 ];
 
-export interface ScanResult {
+interface ScanResult {
   found: number;
   recorded: number;
   duplicates: number;

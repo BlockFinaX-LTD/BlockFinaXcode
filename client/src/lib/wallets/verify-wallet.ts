@@ -108,7 +108,7 @@ export type WalletCheck =
   | { status: "failed"; problems: string[] };
 
 /** Runs every check that needs no passkey prompt. */
-export async function checkWallet(session: PasskeySession, depositAddresses: { chain: string; address: string }[] = []): Promise<WalletCheck> {
+async function checkWallet(session: PasskeySession, depositAddresses: { chain: string; address: string }[] = []): Promise<WalletCheck> {
   const problems: string[] = [];
   const stellar = session.accounts.find((a) => a.chain === STELLAR.key);
   const credentialId = session.credentialId;

@@ -229,7 +229,7 @@ export function getPasskeyOrigins(req: any): string[] {
  * of ours: the app or a PASSKEY_RELATED_ORIGINS entry. Anything else falls back to the
  * app, so a forged Host header can never send a signed-in user to another site.
  */
-export function requestSiteOrigin(req: any): string {
+function requestSiteOrigin(req: any): string {
   const app = getAppOrigin(req);
   const host = String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]!.trim();
   const proto = String(req.headers?.['x-forwarded-proto'] || req.protocol || 'https').split(',')[0]!.trim();

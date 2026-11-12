@@ -25,7 +25,7 @@ export const RATE_POOL_POLICY = {
   permissionless: new Set(["settle"]),
 };
 
-export function ratePoolContract(): string | null {
+function ratePoolContract(): string | null {
   return process.env.STELLAR_RATE_POOL_CONTRACT || null;
 }
 
@@ -62,7 +62,7 @@ export interface RatePoolView {
   capPercent: string | null;
 }
 
-export interface RatePositionView {
+interface RatePositionView {
   id: number;
   poolId: number;
   benchmark: string;

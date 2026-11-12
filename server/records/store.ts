@@ -174,8 +174,8 @@ export async function updateComplaint(id: number, by: string, input: { status?: 
 
 // ── KYB: business identity checks ────────────────────────────────────────────
 
-export const KYB_DOC_KINDS = ["certificate_of_incorporation", "company_register_extract", "proof_of_address", "director_id", "owner_id", "ownership_structure", "other"] as const;
-export const KYB_MAX_DOC_BYTES = 5 * 1024 * 1024;
+const KYB_DOC_KINDS = ["certificate_of_incorporation", "company_register_extract", "proof_of_address", "director_id", "owner_id", "ownership_structure", "other"] as const;
+const KYB_MAX_DOC_BYTES = 5 * 1024 * 1024;
 const KYB_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 
 async function requireOrgAdmin(db: Db, userId: number, organisationId: number) {

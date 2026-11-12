@@ -18,7 +18,7 @@ import { db } from "../db";
 import { outreachPeople } from "@shared/schema";
 import { matchedTopics } from "../routes/outreach-relevance";
 
-export interface Sighting {
+interface Sighting {
   profileUrl: string;
   name?: string | null;
   headline?: string | null;

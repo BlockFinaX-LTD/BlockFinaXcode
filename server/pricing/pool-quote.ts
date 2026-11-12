@@ -145,7 +145,7 @@ async function readPoolsForPair(chainId: number, pair: string): Promise<(ChainPo
   return Promise.all(ids.map(async (poolId) => ({ ...(await readPool(chainId, poolId)), poolId })));
 }
 
-export interface PoolBuyRequest {
+interface PoolBuyRequest {
   chainId: number;
   /** A specific pool. Omit it and pass `pair` to let the engine pick one. */
   poolId?: number;
@@ -314,7 +314,7 @@ export async function poolOptions(chainId: number, pair: string) {
   };
 }
 
-export interface TenorPriceRequest {
+interface TenorPriceRequest {
   pair: string;
   tenors: { tenorDays: number; active: boolean; markupBps: number }[];
   structure: StructureName;

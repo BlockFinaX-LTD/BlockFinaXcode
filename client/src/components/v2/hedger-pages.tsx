@@ -16,7 +16,7 @@ import {
   useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction,
 } from './shared';
 import { usePasskeySession } from '@/lib/identity';
-import { AssetClassTabs, CoverName, Flag, hint, RefRate, Loading, Note, SHOW_INTEREST_RATES, Spin, Sum, Tag, Toggle, useAssetClass } from './ui';
+import { AssetClassTabs, CoverName, Flag, hint, RefRate, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
 import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from './rate-pages';
 import { MyQuoteRequests, RequestQuoteModal } from './rfq';
@@ -26,7 +26,7 @@ import { useViewMode } from './view-mode';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
-export function useHedges() {
+function useHedges() {
   // Remembered per person and per account they act for, so a business never shows personal cover.
   const { session } = usePasskeySession();
   const acting = useActingOrganisation();
@@ -117,7 +117,7 @@ function useMarkets() {
  * the same cover the buying panel starts on; once the buyer changes the panel, the list
  * follows it, so the two prices never disagree.
  */
-export interface MarketTerms { distanceBps: number; limitBps: number; fromPanel: boolean }
+interface MarketTerms { distanceBps: number; limitBps: number; fromPanel: boolean }
 const DEFAULT_TERMS: MarketTerms = { distanceBps: 0, limitBps: 1_000, fromPanel: false };
 /** The duration the headline price is for: common supplier payment terms. */
 const HEADLINE_DAYS = 30;
@@ -558,7 +558,7 @@ function fmtWhen(t: string) {
 }
 
 /** A position drawn on a pair's chart. `pay`: where a hedger is paid. `risk`: where an underwriter pays. */
-export interface ChartMark {
+interface ChartMark {
   key: string;
   label: string;
   tone: 'pay' | 'risk';
@@ -574,10 +574,8 @@ export interface ChartMark {
   maxPayout?: number;
 }
 
-const toSec = (t: string) => Date.parse(t.length === 10 ? `${t}T12:00:00Z` : t) / 1000;
-
 /** One protection drawn on a chart: where it starts paying, where it stops, and whose side it is. */
-export interface ChartProtection {
+interface ChartProtection {
   strike: number;
   /** null for Open cover with no visible cap. */
   cap: number | null;
@@ -591,7 +589,7 @@ export interface ChartProtection {
  * sits beyond the visible prices, a strip on that edge says where it is instead of flattening
  * the price line to fit it.
  */
-export function RateChart({ points, loading, label, unit, protection = null, keepStrike = false }: {
+function RateChart({ points, loading, label, unit, protection = null, keepStrike = false }: {
   points: { t: string; v: number }[]; loading: boolean; label?: string; unit?: string;
   protection?: ChartProtection | null;
   /** Stretch the scale to show the strike even when it is far from today's prices (a chosen position). */
@@ -719,7 +717,7 @@ export function RateChart({ points, loading, label, unit, protection = null, kee
 // ── Pair page: one pair's chart with your positions on it ───────────────────
 
 /** A hedger's protection as a chart mark: the band where it pays them. */
-export function hedgeMark(p: ProtectionPosition, label: string): ChartMark {
+function hedgeMark(p: ProtectionPosition, label: string): ChartMark {
   const n = Number(p.notional), k = Number(p.strike), c = Number(p.cap), entry = Number(p.spot), up = p.direction === 'up';
   // The contract's formula: amount x (min(rate, cap) - strike) / rate when bought, and the mirror for falling cover.
   const payout = (r: number) => Math.max(0, up ? Math.min(r, c) - k : k - Math.max(r, c)) * n / entry;
@@ -727,7 +725,7 @@ export function hedgeMark(p: ProtectionPosition, label: string): ChartMark {
 }
 
 /** The same protection seen by an underwriter: the band where their pool pays. */
-export function riskMark(p: ProtectionPosition, label: string): ChartMark {
+function riskMark(p: ProtectionPosition, label: string): ChartMark {
   return { ...hedgeMark(p, label), tone: 'risk' };
 }
 
@@ -927,7 +925,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const { toast } = useToast();
   const qc = useQueryClient();
   const pools = usePools();
-  const hedgesAll = useHedges();
   const chains = useChains();
   const balances = useUsdcBalances();
 

@@ -14,7 +14,7 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 
-export interface Block {
+interface Block {
   key: string;
   kind: "h1" | "h2" | "h3" | "p" | "li";
   text: string;
@@ -23,7 +23,7 @@ export interface Block {
 }
 
 /** Splits the document into addressable blocks. */
-export function parseBlocks(markdown: string): Block[] {
+function parseBlocks(markdown: string): Block[] {
   const out: Block[] = [];
   let section = "Preamble";
   markdown.split("\n").forEach((raw, i) => {

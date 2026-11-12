@@ -11,7 +11,7 @@
  * smaller verifiable one: the first thing a serious reader does is look it up.
  */
 
-export interface Figure {
+interface Figure {
   /** Numeric value in USD, for arithmetic. */
   value: number;
   /** How it should be written wherever it is displayed. */

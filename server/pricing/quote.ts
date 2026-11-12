@@ -35,7 +35,7 @@ import type { PairTier } from "./data/pairs";
 export { MAX_LEVERAGE_RATIO, MIN_LEVERAGE_RATIO } from "./bounds";
 import { MAX_LEVERAGE_RATIO, MIN_LEVERAGE_RATIO } from "./bounds";
 
-export interface QuoteRequest {
+interface QuoteRequest {
   pair: string;            // e.g. "USD/GHS"
   strike: number;          // entry-edge of the payout zone
   payoutCap: number;       // far-edge of the payout zone
@@ -73,7 +73,7 @@ export interface QuoteRequest {
   creator?: string;
 }
 
-export interface QuoteResponse {
+interface QuoteResponse {
   /** Set when the cover could pay more than MAX_LEVERAGE_RATIO times its price (warning-only quotes). */
   leverageWarning?: string;
   premiumRate: number;     // premium / notional, e.g. 0.023 = 2.3%

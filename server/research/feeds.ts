@@ -14,7 +14,7 @@
  * because the pricing engine's own methods come from that literature.
  */
 
-export interface Feed {
+interface Feed {
   name: string;
   url: string;
   /** news | research | policy | analysis */
@@ -93,7 +93,7 @@ const tag = (block: string, name: string): string | null => {
  * not worth it: an item is a block bounded by <item> or <entry>, a title is a
  * title in both, and the only real difference is where the link lives.
  */
-export function parseFeed(xml: string, feed: Feed): FeedItem[] {
+function parseFeed(xml: string, feed: Feed): FeedItem[] {
   const blocks = xml.match(/<(item|entry)[\s>][\s\S]*?<\/(item|entry)>/gi) ?? [];
   const out: FeedItem[] = [];
 

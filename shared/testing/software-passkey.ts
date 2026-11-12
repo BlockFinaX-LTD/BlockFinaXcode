@@ -10,7 +10,7 @@
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { passkeySigner, passkeySignatureBytes, type ContractSigner, type DigestSigner } from "../smart-accounts";
 
-export interface SoftwarePasskey extends DigestSigner {
+interface SoftwarePasskey extends DigestSigner {
   readonly credentialId: string;
   readonly publicKey: Buffer;
   readonly privateKey: KeyObject;

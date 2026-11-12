@@ -18,7 +18,7 @@ export const PRIORITIES = ["blocker", "high", "medium", "low"] as const;
 type Status = (typeof STATUSES)[number];
 type Priority = (typeof PRIORITIES)[number];
 
-export interface SecurityCheck {
+interface SecurityCheck {
   id: string;
   area: string;
   title: string;

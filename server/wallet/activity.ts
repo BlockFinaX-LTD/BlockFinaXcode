@@ -64,7 +64,7 @@ const native = (v: xdr.ScVal) => { try { return scValToNative(v); } catch { retu
 const isAddress = (v: unknown) => typeof v === "string" && /^[GCM][A-Z2-7]{55}$/.test(v);
 
 /** One USDC event as movements: [address, direction, amount, counterparty]. */
-export function movementsOf(topics: unknown[], data: unknown): { from: string | null; to: string | null; amount: bigint } | null {
+function movementsOf(topics: unknown[], data: unknown): { from: string | null; to: string | null; amount: bigint } | null {
   const name = String(topics[0] ?? "");
   const amount = typeof data === "bigint" ? data : typeof data === "object" && data && "amount" in data ? BigInt((data as { amount: bigint }).amount) : null;
   if (amount === null) return null;
@@ -87,7 +87,7 @@ function poolContracts(hub: any): string[] {
 }
 
 /** Read new USDC and pool events since the saved cursor and keep those that touch our wallets. */
-export async function indexWalletActivity(): Promise<{ saved: number }> {
+async function indexWalletActivity(): Promise<{ saved: number }> {
   const hub = chainRegistry()?.hub;
   const usdc = hub?.assets?.USDC;
   if (!hub || hub.family !== "stellar" || !usdc) return { saved: 0 };
@@ -170,7 +170,7 @@ export function startWalletActivity() {
   setInterval(tick, 30_000);
 }
 
-export interface ActivityRow {
+interface ActivityRow {
   txHash: string;
   at: string;
   direction: "in" | "out";

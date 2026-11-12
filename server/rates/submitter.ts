@@ -22,7 +22,7 @@ const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 /** Must not exceed the contract's per-benchmark max_age_days (30). */
 const LOOKBACK_DAYS = 25;
 
-export interface SubmitterConfig {
+interface SubmitterConfig {
   contractId: string;
   nodes: Keypair[];
   rpcUrl?: string;

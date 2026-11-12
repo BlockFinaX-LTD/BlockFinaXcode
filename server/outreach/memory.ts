@@ -25,7 +25,7 @@
  * gain that does not exist at this scale.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { marketMemory, type MarketMemory } from "@shared/schema";
 

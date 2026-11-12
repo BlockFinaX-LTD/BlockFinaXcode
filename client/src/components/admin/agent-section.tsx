@@ -18,16 +18,10 @@ import { queryClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Bot, Send, Sparkles, Check, X, Pencil, Trash2, Loader2, AlertTriangle,
-  BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText, Landmark, PenLine,
-  Mail,
-  BookOpen,
-} from "lucide-react";
+import { Bot, Send, Sparkles, Check, X, Pencil, Trash2, Loader2, AlertTriangle, BrainCircuit, Activity, Inbox, Plus, RefreshCw, Wrench, DollarSign, ShieldCheck, Radar, FileText, Landmark, PenLine, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ResearchTab } from "./research-tab";
 import { FundingTab } from "./funding-tab";

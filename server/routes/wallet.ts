@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { storage } from "../storage";
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { wallets } from "../../shared/schema";
 import { authSessions } from "../../shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";

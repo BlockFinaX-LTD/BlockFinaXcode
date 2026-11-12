@@ -11,7 +11,7 @@
  * which is the figure the contract actually committed to.
  */
 
-export interface PayoutInputs {
+interface PayoutInputs {
   /** Size of the exposure being protected, in USD. */
   notional: number;
   /** The rate when the pool was created, which the payout is scaled against. */
@@ -27,7 +27,7 @@ export interface PayoutInputs {
   payoutFeeRate?: number;
 }
 
-export interface PayoutModel {
+interface PayoutModel {
   valid: boolean;
   /** The rate at which the payout stops growing. */
   cap: number;

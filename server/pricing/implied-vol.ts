@@ -48,7 +48,7 @@ const MAX_ITERATIONS = 60;
 /** Stop when the premium rate is within this of the target (1e-9 = 0.0000001%). */
 const RATE_TOLERANCE = 1e-9;
 
-export interface ImpliedVolInputs {
+interface ImpliedVolInputs {
   /** The LP's premium as a fraction of notional, e.g. 0.03 for 3%. */
   targetRate: number;
   /** Spot at the moment being inverted — creation, for an anchor. */
@@ -65,7 +65,7 @@ export interface ImpliedVolInputs {
   q?: number;
 }
 
-export type ImpliedVolResult =
+type ImpliedVolResult =
   | {
       ok: true;
       /** The σ that reproduces targetRate. */
@@ -210,7 +210,7 @@ export const SIGMA_BAND_HIGH = 2.5;
  */
 export const MIN_CREATION_LEVERAGE = 1.5;
 
-export interface PremiumValidation {
+interface PremiumValidation {
   ok: boolean;
   /** Present when ok — the volatility the LP's price implies. */
   sigma?: number;

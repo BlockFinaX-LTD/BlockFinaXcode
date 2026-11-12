@@ -10,14 +10,7 @@
 
 import { eq } from "drizzle-orm";
 import { db } from "../db";
-import {
-  notificationPrefs,
-  mayNotify,
-  DEFAULT_PREFS,
-  type NotificationCategory,
-  type NotificationPrefs,
-} from "@shared/notification-schema";
-import { sendEmail } from "../email";
+import { notificationPrefs, DEFAULT_PREFS, type NotificationPrefs } from "@shared/notification-schema";
 
 const key = (address: string) => address.trim().toLowerCase();
 
@@ -56,34 +49,4 @@ export async function setPrefs(
     })
     .returning();
   return row ?? null;
-}
-
-export async function allowed(address: string, category: NotificationCategory): Promise<boolean> {
-  if (category === "account") return true;
-  return mayNotify(await getPrefs(address), category);
-}
-
-/**
- * Send, unless this customer has asked not to hear about this.
- *
- * Every optional email goes through here. Anything that skips it is either an
- * account notice — which is exempt by design and should say so at the call
- * site — or a bug.
- */
-export async function sendIfAllowed(args: {
-  walletAddress: string;
-  category: NotificationCategory;
-  to: string | string[];
-  subject: string;
-  html: string;
-  from?: string;
-  replyTo?: string;
-}): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
-  const { walletAddress, category, ...mail } = args;
-
-  if (!(await allowed(walletAddress, category))) {
-    console.log(`[notify] skipped "${mail.subject}" — ${walletAddress} has ${category} turned off`);
-    return { ok: true, skipped: true };
-  }
-  return sendEmail(mail);
 }

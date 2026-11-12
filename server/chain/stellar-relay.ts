@@ -27,7 +27,7 @@ export interface ExtraContractPolicy {
 }
 
 /** What a caller may send besides pool calls. Personal wallets keep the defaults (everything below allowed). */
-export interface RelayAllowance {
+interface RelayAllowance {
   /** A plain token transfer from the wallet (a withdrawal or a payment). Organisation operators: no. */
   tokenTransfers?: boolean;
   /** A token allowance to an approved spender (CCTP). Organisation operators: no. */

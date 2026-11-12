@@ -36,7 +36,6 @@
 
 import { ethers } from "ethers";
 import { getRate } from "../fx-oracle";
-import { mertonCallSpread, mertonPutSpread } from "./kernel";
 import { resolveSigmaStar } from "./sigma-star";
 import { getPairJumpParams } from "./data/jump-params";
 
@@ -76,7 +75,7 @@ export { pricePurchase, UTILISATION_K, MIN_TENOR_HOURS } from "./purchase-math";
 import { pricePurchase, MIN_TENOR_HOURS } from "./purchase-math";
 
 // Defined in ./purchase-math beside the function that builds them.
-export type { PurchaseQuote, PurchaseQuoteError } from "./purchase-math";
+export type { PurchaseQuote } from "./purchase-math";
 import type { PurchaseQuote, PurchaseQuoteError } from "./purchase-math";
 
 export async function provider(chainId: number): Promise<{ p: ethers.JsonRpcProvider; diamond: string }> {

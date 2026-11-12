@@ -18,7 +18,7 @@ import { fromUnits, toUnits } from "@shared/domain/pool-economics";
 import type { BalanceLedger } from "../domain/ledger";
 import type { RouteRecord, RouteRequest, RouteStore, RoutingProvider } from "./types";
 
-export interface RankingPolicy {
+interface RankingPolicy {
   /** Quotes above this risk are never chosen. */
   maxRisk: number;
   /** Value of one hour of waiting, as a fraction of the amount. */
@@ -30,14 +30,14 @@ export interface RankingPolicy {
 export const DEFAULT_POLICY: RankingPolicy = { maxRisk: 0.5, timeWeightPerHour: 0.001, riskWeight: 0.01 };
 
 /** Higher is better: what the user receives, less a price on waiting and on risk. */
-export function scoreQuote(q: RoutingQuote, policy: RankingPolicy): number {
+function scoreQuote(q: RoutingQuote, policy: RankingPolicy): number {
   const amountIn = Number(q.amountIn);
   if (!(amountIn > 0)) return -Infinity;
   return Number(q.amountOut) / amountIn - (q.estimatedSeconds / 3600) * policy.timeWeightPerHour - q.riskScore * policy.riskWeight;
 }
 
 /** Runs once funds are on the destination: an LP deposit, a hedge, or a plain credit. */
-export type ActionRunner = (route: RouteRecord) => Promise<"completed" | "failed">;
+type ActionRunner = (route: RouteRecord) => Promise<"completed" | "failed">;
 
 export class RoutingEngine {
   constructor(

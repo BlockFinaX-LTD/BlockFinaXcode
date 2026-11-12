@@ -11,7 +11,7 @@
  */
 import type { OnboardingInput } from "@shared/onboarding";
 
-export interface OnboardingRow {
+interface OnboardingRow {
   user_id: number;
   account_type: "individual" | "organisation";
   full_name: string;
@@ -25,7 +25,7 @@ export interface OnboardingRow {
   updated_at: Date;
 }
 
-export interface OrganisationRow {
+interface OrganisationRow {
   id: number;
   legal_name: string;
   registration_country: string;

@@ -36,7 +36,7 @@
  */
 
 import { ethers } from "ethers";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { hedgeActivity } from "@shared/schema";
 import { sanctionsScreenings } from "@shared/compliance-schema";
@@ -86,7 +86,7 @@ async function getProvider(chainId: number): Promise<ethers.JsonRpcProvider | nu
 
 const topicToAddress = (topic: string) => ethers.getAddress("0x" + topic.slice(26));
 
-export interface DepositTrace {
+interface DepositTrace {
   txHash: string;
   chainId: number;
   depositor: string;
@@ -132,7 +132,7 @@ export async function traceDeposit(txHash: string, chainId: number): Promise<Dep
   }
 }
 
-export interface DepositScreenResult {
+interface DepositScreenResult {
   txHash: string;
   screened: string[];
   hits: { address: string; name: string; list: string; program?: string }[];
@@ -229,7 +229,7 @@ async function alreadyScreened(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.subject));
 }
 
-export interface SweepResult {
+interface SweepResult {
   checked: number;
   screened: number;
   flagged: number;

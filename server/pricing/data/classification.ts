@@ -11,7 +11,7 @@
 
 import { db } from "../../db";
 import { pairClassification, type PairClassification } from "../../../shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { SUPPORTED_PAIRS } from "./pairs";
 
 /**
@@ -55,12 +55,4 @@ export async function getPairClassification(pair: string): Promise<PairClassific
 /** All classifications, for admin views / debugging. */
 export async function listAllClassifications(): Promise<PairClassification[]> {
   return db.select().from(pairClassification).orderBy(pairClassification.pair);
-}
-
-/** Mark when the drift was last recomputed for a pair (admin / governance trigger). */
-export async function markDriftRecomputed(pair: string): Promise<void> {
-  await db
-    .update(pairClassification)
-    .set({ lastDriftRecompute: sql`now()`, updatedAt: sql`now()` })
-    .where(eq(pairClassification.pair, pair));
 }

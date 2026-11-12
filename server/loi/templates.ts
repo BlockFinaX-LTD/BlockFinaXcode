@@ -16,7 +16,7 @@
  */
 
 import type { LoiTerms, DocType, RelationshipType, CustomClause } from "@shared/loi-schema";
-import { RELATIONSHIP_LABELS, DOC_TYPE_LABELS } from "@shared/loi-schema";
+import { DOC_TYPE_LABELS } from "@shared/loi-schema";
 
 export interface TemplateInput {
   docType: DocType;

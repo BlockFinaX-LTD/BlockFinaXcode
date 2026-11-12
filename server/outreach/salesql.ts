@@ -27,7 +27,7 @@ async function getPool(): Promise<Db | null> {
 const ENDPOINT = "https://api-public.salesql.com/v1/persons/enrich";
 const MATCH_SEGMENTS = new Set(["buyer", "underwriter", "partner"]);
 
-export interface LeadEmail {
+interface LeadEmail {
   email: string | null;
   emailType: string | null;
   emailStatus: string | null;
@@ -177,7 +177,7 @@ export async function autoFindEmail(p: { id: number; profileUrl: string; segment
  * One SalesQL credit per person found; nothing found costs nothing.
  */
 
-export interface PersonDetails {
+interface PersonDetails {
   name: string | null;
   title: string | null;
   company: string | null;

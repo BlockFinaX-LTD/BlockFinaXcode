@@ -19,9 +19,9 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
-export type KycStatus = "not_started" | "pending" | "approved" | "rejected";
+type KycStatus = "not_started" | "pending" | "approved" | "rejected";
 
-export interface KycUserInfo {
+interface KycUserInfo {
   walletAddress: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -31,14 +31,14 @@ export interface KycUserInfo {
   nationality?: string | null;
 }
 
-export interface KycSessionResult {
+interface KycSessionResult {
   ref: string;
   redirectUrl?: string;
   sdkToken?: string;
   expiresAt?: Date;
 }
 
-export interface KycWebhookResult {
+interface KycWebhookResult {
   status: KycStatus;
   tier: number;
   providerRef?: string;
@@ -46,7 +46,7 @@ export interface KycWebhookResult {
   rawData?: any;
 }
 
-export interface KycProvider {
+interface KycProvider {
   readonly name: string;
   createSession(user: KycUserInfo): Promise<KycSessionResult>;
   verifyWebhook(rawBody: string, signature: string): boolean;

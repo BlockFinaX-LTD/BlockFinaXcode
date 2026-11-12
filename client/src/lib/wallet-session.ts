@@ -17,9 +17,9 @@ import {
   type WalletProvider,
 } from "./wallet-provider";
 
-export type TransactionState = "PREPARED" | "AWAITING_SIGNATURE" | "SUBMITTED" | "CONFIRMED" | "FAILED";
+type TransactionState = "PREPARED" | "AWAITING_SIGNATURE" | "SUBMITTED" | "CONFIRMED" | "FAILED";
 
-export interface TransactionProgress {
+interface TransactionProgress {
   index: number;
   label: string;
   state: TransactionState;
@@ -30,7 +30,7 @@ export interface TransactionProgress {
 }
 
 /** Resolves a submitted hash to CONFIRMED or FAILED, e.g. GET /api/v2/transactions/:chain/:hash. */
-export type ConfirmationWatcher = (chain: string, hash: string) => Promise<"CONFIRMED" | "FAILED">;
+type ConfirmationWatcher = (chain: string, hash: string) => Promise<"CONFIRMED" | "FAILED">;
 
 export class WalletSession {
   private accounts: ChainAccount[] = [];

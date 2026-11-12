@@ -28,7 +28,7 @@ const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 
 export { treasuryAddress };
 
-export type DepositResult =
+type DepositResult =
   | { ok: true; amount: number; token: "USDC" | "USDT"; alreadyCredited: boolean }
   | { ok: false; reason: string };
 

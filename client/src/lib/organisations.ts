@@ -42,7 +42,7 @@ export interface OrganisationView {
   ruleIds: OrganisationRuleIds; accountWasmHash: string | null;
   me: { memberId: number; credentialId: string | null; publicKey: string | null };
 }
-export interface PreparedStep { memberId: number; step: ChainStep; stepsLeft: number; xdr: string; account: string }
+interface PreparedStep { memberId: number; step: ChainStep; stepsLeft: number; xdr: string; account: string }
 type StepResult = PreparedStep | { done: true; member: MemberView };
 
 let configPromise: Promise<OrganisationsConfig> | null = null;

@@ -20,7 +20,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-export interface ProspectFacts {
+interface ProspectFacts {
   company: string;
   website?: string | null;
   country?: string | null;
@@ -30,11 +30,11 @@ export interface ProspectFacts {
   addressKind?: string | null;
 }
 
-export type Angle =
+type Angle =
   | "importer" | "exporter" | "manufacturer"
   | "treasury" | "underwriter" | "psp" | "general";
 
-export interface Written {
+interface Written {
   segment: "hedger" | "underwriter" | "psp" | "bank" | "unknown";
   /** Which template shaped the email. Recorded so a weak angle is traceable. */
   angle: Angle;

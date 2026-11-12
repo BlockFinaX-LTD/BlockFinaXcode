@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, CheckCircle2, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, HandCoins, Users, Megaphone, Building2, ArrowLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, TrendingUp, DollarSign, Rocket, Globe, Shield, Wallet, Download, HandCoins, Users, Megaphone, Building2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import logoPath from "@/assets/logo.png";
 import problemImagePath from "@/assets/problem-story.png";
 import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
-import { TAM, SAM, SOURCES_NOTE } from "@/lib/market-figures";
+import { TAM, SAM } from "@/lib/market-figures";
 
 const slides = [
   { id: 1, type: "cover" },

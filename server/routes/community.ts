@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { storage } from "../storage";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { dailyTasks, userTaskCompletions, termsAcceptances, authSessions, hedgeActivity } from "../../shared/schema";
+import { dailyTasks, userTaskCompletions, hedgeActivity } from "../../shared/schema";
 import { userPoints, pointTransactions, referrals, referralCodes } from "../../shared/referral-schema";
 import { requireUser } from "../middleware/session-auth";
 import { v2 as cloudinary } from "cloudinary";

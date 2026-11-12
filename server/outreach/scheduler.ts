@@ -36,7 +36,7 @@ const TICK_MS = 10 * 60 * 1000;
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
-export interface SchedulerDeps {
+interface SchedulerDeps {
   draft: (items: RawItem[], kind: any, threshold: number) => Promise<{
     drafted: number; considered: number; relevant: number; drafts: unknown[];
   }>;
@@ -105,8 +105,4 @@ export function startOutreachScanner(deps: SchedulerDeps, intervalMs = FIVE_HOUR
           : "No previous run recorded, first scan within ten minutes."),
     );
   })();
-}
-
-export function stopOutreachScanner(): void {
-  if (timer) { clearInterval(timer); timer = null; }
 }

@@ -17,12 +17,12 @@ export type ContractSigner =
   | { tag: "Delegated"; values: readonly [string] }
   | { tag: "External"; values: readonly [string, Buffer] };
 
-export interface AuthPayload {
+interface AuthPayload {
   context_rule_ids: number[];
   signers: Map<ContractSigner, Buffer>;
 }
 
-export function signerToScVal(signer: ContractSigner): xdr.ScVal {
+function signerToScVal(signer: ContractSigner): xdr.ScVal {
   if (signer.tag === "Delegated") {
     return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("Delegated"), xdr.ScVal.scvAddress(Address.fromString(signer.values[0]).toScAddress())]);
   }
@@ -33,7 +33,7 @@ export function signerToScVal(signer: ContractSigner): xdr.ScVal {
   ]);
 }
 
-export function parseSignerScVal(value: xdr.ScVal): ContractSigner {
+function parseSignerScVal(value: xdr.ScVal): ContractSigner {
   if (value.switch().name !== "scvVec") throw new Error("Signer key is not encoded as a vector");
   const items = value.vec() ?? [];
   if (items.length < 2 || items[0].switch().name !== "scvSymbol") throw new Error("Signer key is not a valid enum encoding");
@@ -52,7 +52,7 @@ export function signersEqual(a: ContractSigner, b: ContractSigner): boolean {
   return a.tag === "Delegated" || Buffer.from(a.values[1] as Buffer).equals(Buffer.from((b as { values: readonly [string, Buffer] }).values[1]));
 }
 
-export function emptyAuthPayload(): AuthPayload {
+function emptyAuthPayload(): AuthPayload {
   return { context_rule_ids: [], signers: new Map() };
 }
 
@@ -89,7 +89,7 @@ export function readAuthPayload(signature: xdr.ScVal): AuthPayload {
  * The host's ordering for map keys (not a byte comparison of XDR: lengths are compared
  * element-wise, so a shorter prefix sorts first). The account rejects an unsorted map.
  */
-export function compareScVal(a: xdr.ScVal, b: xdr.ScVal): number {
+function compareScVal(a: xdr.ScVal, b: xdr.ScVal): number {
   const aType = a.switch().value;
   const bType = b.switch().value;
   if (aType !== bType) return aType < bType ? -1 : 1;

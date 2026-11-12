@@ -38,7 +38,7 @@ function providerFor(chainId: number): ethers.JsonRpcProvider | null {
   return p;
 }
 
-export interface VerifyResult { ok: boolean; reason?: string }
+interface VerifyResult { ok: boolean; reason?: string }
 
 /**
  * Verify a hedge tx for the given action and expected sender. Returns ok=true

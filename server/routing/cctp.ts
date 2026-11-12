@@ -40,7 +40,7 @@ const tokenMessenger = new ethers.Interface([
 ]);
 const messageTransmitter = new ethers.Interface(["function usedNonces(bytes32) view returns (uint256)"]);
 
-export interface IrisMessage {
+interface IrisMessage {
   status: string;
   message: string;
   attestation: string;
@@ -50,7 +50,7 @@ export interface IrisMessage {
   destinationMintTxHash?: string;
 }
 
-export interface CctpEstimate {
+interface CctpEstimate {
   /** Most Circle may charge, in the source asset's units, as a decimal string. */
   maxFee: string;
   seconds: number;

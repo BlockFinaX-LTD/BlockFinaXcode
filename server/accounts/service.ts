@@ -15,7 +15,7 @@ import { ethers } from "ethers";
 import type { ChainRegistry } from "@shared/chains/registry";
 import { ApplicationError, type ChainKey } from "@shared/domain/types";
 
-export interface LinkedAccount {
+interface LinkedAccount {
   userId: number;
   chain: ChainKey;
   address: string;
@@ -24,7 +24,7 @@ export interface LinkedAccount {
   isPrimary: boolean;
 }
 
-export interface AccountRepository {
+interface AccountRepository {
   list(userId: number): Promise<LinkedAccount[]>;
   insert(account: LinkedAccount): Promise<void>;
   findByAddress(chain: ChainKey, address: string): Promise<LinkedAccount | undefined>;
@@ -67,7 +67,7 @@ export class AccountService {
 }
 
 /** Address validity and canonical form per chain family. */
-export function canonical(family: "evm" | "stellar", address: string): string {
+function canonical(family: "evm" | "stellar", address: string): string {
   if (family === "evm") {
     if (!ethers.isAddress(address)) throw new ApplicationError("INVALID_REQUEST", "Not a valid EVM address");
     return ethers.getAddress(address);

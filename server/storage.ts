@@ -52,13 +52,13 @@ import {
   type InsertArticle,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, or, and, sql, lt, lte, gt } from "drizzle-orm";
+import { eq, desc, and, sql, lt, lte, gt } from "drizzle-orm";
 
 /**
  * Storage interface defining all database operations
  * Ensures consistent data access patterns across the application
  */
-export interface IStorage {
+interface IStorage {
   // ═══════════════════════════════════════════════════════
   // TABLE OF CONTENTS
   // ═══════════════════════════════════════════════════════
@@ -156,7 +156,7 @@ export interface IStorage {
   deleteArticle(id: number): Promise<boolean>;
 }
 
-export class DatabaseStorage implements IStorage {
+class DatabaseStorage implements IStorage {
   // ═══════════════════════════════════════════════════════
   // [WALLET] Wallet Management
   // ═══════════════════════════════════════════════════════

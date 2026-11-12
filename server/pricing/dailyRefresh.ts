@@ -18,7 +18,7 @@ const INITIAL_DELAY_MS    = 60_000 + Math.floor(Math.random() * 60_000); // 1-2 
 let timer: NodeJS.Timeout | null = null;
 
 /** Run one refresh cycle: pull latest close for every classified pair. */
-export async function runRefreshCycle(): Promise<{ refreshed: string[]; alreadyCurrent: string[]; errors: string[] }> {
+async function runRefreshCycle(): Promise<{ refreshed: string[]; alreadyCurrent: string[]; errors: string[] }> {
   const refreshed: string[] = [];
   const alreadyCurrent: string[] = [];
   const errors: string[] = [];
@@ -74,12 +74,4 @@ export function startDailyRefresh(): void {
       timer = setTimeout(tick, REFRESH_INTERVAL_MS);
     }
   }, INITIAL_DELAY_MS);
-}
-
-/** Stop the loop (mainly for tests). */
-export function stopDailyRefresh(): void {
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
-  }
 }

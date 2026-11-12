@@ -126,7 +126,7 @@ export function checkFreshness(
 }
 
 /** Weekdays between two instants — the ceiling on what an FX feed can deliver. */
-export function countWeekdays(fromMs: number, toMs: number): number {
+function countWeekdays(fromMs: number, toMs: number): number {
   let n = 0;
   for (let t = fromMs; t <= toMs; t += 86_400_000) {
     const day = new Date(t).getUTCDay();

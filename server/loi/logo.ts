@@ -13,7 +13,6 @@
 
 import fs from "fs";
 import path from "path";
-import { APP_URL } from "../email";
 
 /**
  * Candidate locations, in resolution order.
@@ -47,10 +46,4 @@ export function logoBase64(): string | null {
   console.warn("[brand] logo not found; documents will render without it");
   logoCache = null;
   return logoCache;
-}
-
-/** Absolute URL of the logo, for email. Must be publicly reachable. */
-export function logoUrl(origin?: string): string {
-  const base = (origin || APP_URL).replace(/\/$/, "");
-  return `${base}/assets/logo-mark.png`;
 }

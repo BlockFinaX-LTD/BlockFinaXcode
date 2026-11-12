@@ -17,8 +17,8 @@ import { platformSettings } from "@shared/schema";
 export const GUIDE_KEY = "outreach_writing_guide";
 const MODEL = (process.env.AGENT_MODEL || "claude-sonnet-5").trim();
 
-export type Channel = "email" | "linkedin_message" | "connection_note";
-export type Relationship = "hedger" | "underwriter" | "integration_partner" | "investor" | "other";
+type Channel = "email" | "linkedin_message" | "connection_note";
+type Relationship = "hedger" | "underwriter" | "integration_partner" | "investor" | "other";
 
 const FALLBACK_GUIDE = `Write as Anthony Kumako, founder of BlockFinaX, in plain, direct, confident language.
 

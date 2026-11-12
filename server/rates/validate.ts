@@ -21,7 +21,7 @@ export interface RawObservation {
   tenor?: string;
 }
 
-export interface Observation {
+interface Observation {
   benchmark: BenchmarkId;
   currency: string;
   observationDate: string;
@@ -39,7 +39,7 @@ export class RateValidationError extends Error {
   }
 }
 
-export type RateRejection =
+type RateRejection =
   | "UNKNOWN_SOURCE" | "BAD_DATE" | "NOT_BUSINESS_DAY" | "FUTURE_DATE" | "MALFORMED"
   | "OUT_OF_RANGE" | "ZERO_NOT_ALLOWED" | "NEGATIVE_NOT_ALLOWED" | "TOO_PRECISE" | "WRONG_TENOR";
 
@@ -82,7 +82,7 @@ export function validateObservation(raw: RawObservation, now = new Date()): Obse
 
 export type FreshnessState = "PUBLISHED" | "PENDING" | "DELAYED";
 
-export interface Expectation {
+interface Expectation {
   /** The observation date the latest publication should carry. */
   observationDate: string;
   /** Local publication day of that observation. */
@@ -94,7 +94,7 @@ export interface Expectation {
 }
 
 /** For daily benchmarks published the business day after the observation. */
-export function publicationDayFor(b: Benchmark, observationDate: string): string {
+function publicationDayFor(b: Benchmark, observationDate: string): string {
   return b.observationConvention === "PREVIOUS_BUSINESS_DAY" ? nextBusinessDay(b.calendar, observationDate) : observationDate;
 }
 

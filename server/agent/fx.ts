@@ -28,7 +28,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { historicalFxCloses, rateSnapshots } from "@shared/schema";
 
-export interface Close {
+interface Close {
   date: string;
   close: number;
 }
@@ -54,7 +54,7 @@ function median(xs: number[]): number {
  * move 40% in a day and then back again — the cedi's worst year was roughly
  * 50% over twelve months, not overnight.
  */
-export function dropBadTicks(series: Close[], window = 5, tolerance = 0.4): { clean: Close[]; dropped: Close[] } {
+function dropBadTicks(series: Close[], window = 5, tolerance = 0.4): { clean: Close[]; dropped: Close[] } {
   const clean: Close[] = [];
   const dropped: Close[] = [];
 
@@ -78,7 +78,7 @@ export function dropBadTicks(series: Close[], window = 5, tolerance = 0.4): { cl
 }
 
 /** Cleaned daily closes for a pair, oldest first. */
-export async function history(pair: string, years = 5): Promise<{ clean: Close[]; droppedCount: number }> {
+async function history(pair: string, years = 5): Promise<{ clean: Close[]; droppedCount: number }> {
   const cutoff = new Date(Date.now() - years * 365 * 86_400_000).toISOString().slice(0, 10);
   const rows = await db
     .select({ date: historicalFxCloses.date, close: historicalFxCloses.close })
@@ -95,7 +95,7 @@ export async function history(pair: string, years = 5): Promise<{ clean: Close[]
 }
 
 /** The most recent live rate, from the oracle snapshots. */
-export async function liveRate(pair: string): Promise<{ rate: number; at: Date | null } | null> {
+async function liveRate(pair: string): Promise<{ rate: number; at: Date | null } | null> {
   const [row] = await db
     .select()
     .from(rateSnapshots)
@@ -119,7 +119,7 @@ export async function availablePairs(): Promise<string[]> {
 
 // ── Analysis ──────────────────────────────────────────────────────────────
 
-export interface PairSummary {
+interface PairSummary {
   pair: string;
   liveRate: number | null;
   asOf: string | null;
@@ -233,7 +233,7 @@ export async function summarise(pair: string, years = 5, windowDays = 60): Promi
   return base;
 }
 
-export interface Scenario {
+interface Scenario {
   pair: string;
   notionalUsd: number;
   tenorDays: number;

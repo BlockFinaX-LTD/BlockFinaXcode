@@ -336,7 +336,3 @@ export function startProspectScheduler(intervalMs = FOUR_HOURS_MS): void {
     );
   })();
 }
-
-export function stopProspectScheduler(): void {
-  if (timer) { clearInterval(timer); timer = null; }
-}

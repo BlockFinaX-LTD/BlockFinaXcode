@@ -25,7 +25,7 @@ import {
 import { walletStanding, checkTransaction, raiseAlert, MONITORING } from "../compliance/limits";
 import { screenName, screenWallet, rescreenApproved } from "../compliance/sanctions";
 import { emailKycReceived, emailKycApproved, emailKycRejected, emailUrgentReview } from "../compliance/notify";
-import { screenDeposit, sweepDeposits, traceDeposit } from "../compliance/wallet-watch";
+import { screenDeposit, sweepDeposits } from "../compliance/wallet-watch";
 import { agentProposals } from "@shared/agent-schema";
 
 export function registerComplianceRoutes(app: Express) {

@@ -47,7 +47,7 @@ export interface RateRepository {
   markOnChain(benchmark: BenchmarkId, observationDate: string, round: number, tx: string, contract?: string): Promise<void>;
 }
 
-export interface IngestSummary {
+interface IngestSummary {
   benchmark: BenchmarkId;
   source: string;
   accepted: number;
@@ -134,7 +134,7 @@ export async function refreshBenchmark(repo: RateRepository, id: BenchmarkId, ad
 
 // ── Read model ───────────────────────────────────────────────────────────────
 
-export interface ObservationView {
+interface ObservationView {
   benchmark: BenchmarkId;
   currency: string;
   observationDate: string;
@@ -150,7 +150,7 @@ export interface ObservationView {
 }
 
 /** On chain only if it formed on the rate-oracle contract in use now. */
-export function onCurrentChain(o: StoredObservation): boolean {
+function onCurrentChain(o: StoredObservation): boolean {
   const current = process.env.STELLAR_RATE_ORACLE_CONTRACT;
   if (o.onChainRound === null) return false;
   return !current || o.onChainContract === current;
@@ -168,7 +168,7 @@ export function toView(o: StoredObservation, now = new Date()): ObservationView 
   };
 }
 
-export interface BenchmarkStatus {
+interface BenchmarkStatus {
   id: BenchmarkId;
   name: string;
   currency: string;

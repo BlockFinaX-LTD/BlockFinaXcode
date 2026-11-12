@@ -259,7 +259,7 @@ export const ghanaInterbankAdapter: RateAdapter = {
 
 // ── Policy rates: decisions to a daily "rate in force" ──────────────────────
 
-export interface Decision { effectiveDate: string; ratePercent: string }
+interface Decision { effectiveDate: string; ratePercent: string }
 
 /**
  * The rate in force on each weekday, newest first, from a list of decisions with effective

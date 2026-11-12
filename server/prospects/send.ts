@@ -45,7 +45,7 @@ function transactionalDomain(): string {
   return (m?.[1] || "blockfinax.com").toLowerCase();
 }
 
-export interface SendGuard {
+interface SendGuard {
   ok: boolean;
   reason?: string;
   /** Non-blocking. Something worth knowing that does not stop the send. */
@@ -138,7 +138,7 @@ export async function checkSendConfig(): Promise<SendGuard> {
 }
 
 /** Has this address asked never to be contacted? */
-export async function isSuppressed(email: string): Promise<boolean> {
+async function isSuppressed(email: string): Promise<boolean> {
   try {
     const [row] = await db.select().from(emailSuppressions)
       .where(eq(emailSuppressions.email, email.trim().toLowerCase())).limit(1);
@@ -192,7 +192,7 @@ ${paras}
 </div>`;
 }
 
-export interface SendOutcome {
+interface SendOutcome {
   ok: boolean;
   messageId?: string;
   error?: string;

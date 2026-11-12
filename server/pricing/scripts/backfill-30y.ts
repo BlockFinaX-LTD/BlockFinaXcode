@@ -25,9 +25,9 @@
  * `quote()` orchestrator pulls σ_LR and μ from the DB automatically.
  */
 
-import { seedDefaultClassifications, listAllClassifications } from "../data/classification";
+import { seedDefaultClassifications } from "../data/classification";
 import { backfillPairWithRange, getCloseCount } from "../data/historical";
-import { SUPPORTED_PAIRS, getPairSpec, type PairTier, type AssetClass } from "../data/pairs";
+import { SUPPORTED_PAIRS, type PairTier, type AssetClass } from "../data/pairs";
 
 // 1996-01-01 UTC. Yahoo will clamp to whatever's earlier available.
 const PERIOD1_1996_01_01 = 820454400;

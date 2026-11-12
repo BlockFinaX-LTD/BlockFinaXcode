@@ -28,7 +28,7 @@ export {
   computeRealizedVol, applyRiskPremium, applyPeggedFloor, applyTierFloor, checkFreshness,
 } from "./vol-math";
 
-export interface VolResult {
+interface VolResult {
   /** σ that the pricing kernel uses — realized × (1 + markup), tier-floored, clamped. */
   sigma: number;
   /** Realized vol BEFORE markup, annualized — for diagnostics. */

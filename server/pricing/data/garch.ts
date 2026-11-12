@@ -58,7 +58,7 @@ export const TIER_PERSISTENCE: Record<PairTier, number> = {
 
 const TRADING_DAYS_PER_YEAR = 252;
 
-export interface IntegratedVarianceInputs {
+interface IntegratedVarianceInputs {
   /** Spot annualized volatility (the EWMA result we already compute). */
   sigma0: number;
   /** Long-run annualized volatility (sample stdev over the full history window). */
@@ -69,7 +69,7 @@ export interface IntegratedVarianceInputs {
   persistence?: number;
 }
 
-export interface IntegratedVarianceResult {
+interface IntegratedVarianceResult {
   /**
    * The expected average variance over [0,T], annualized. This is the variance
    * the pricing kernel should consume.
@@ -174,7 +174,7 @@ export function persistenceForTier(tier: PairTier): number {
  *
  * Falls back to the tier default if no per-pair override is set.
  */
-export interface GarchParams {
+interface GarchParams {
   /** α: weight on the most recent squared return */
   alpha: number;
   /** β: weight on the previous variance estimate */

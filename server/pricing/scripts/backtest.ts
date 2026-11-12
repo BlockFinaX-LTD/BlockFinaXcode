@@ -306,7 +306,6 @@ function printHumanResults(results: BacktestResult[], params: BacktestParams): v
   // Sort by loss ratio (best at bottom)
   const sorted = [...results].sort((a, b) => a.lossRatio - b.lossRatio);
   for (const r of sorted) {
-    const lossPct = r.totalPremium > 0 ? (r.totalPayouts / r.totalPremium) * 100 : 0;
     const profitable = r.lossRatio < 1.0 && r.meanPnl > 0;
     const flag = profitable ? "✓" : r.lossRatio < 1.5 ? " " : "!";
     console.log(

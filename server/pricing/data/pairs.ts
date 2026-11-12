@@ -34,7 +34,7 @@
  */
 
 export type AssetClass = "fx" | "commodity" | "crypto";
-export type DataSource = "twelvedata" | "yahoo";
+type DataSource = "twelvedata" | "yahoo";
 
 export type PairTier =
   | "g10"               // EUR/USD, USD/JPY, etc. — IRP holds
@@ -48,7 +48,7 @@ export type PairTier =
   | "cryptoMajor"       // BTC, ETH
   | "cryptoOther";      // BNB, SOL, XRP, ADA
 
-export interface PairSpec {
+interface PairSpec {
   displayPair: string;
   assetClass: AssetClass;
   source: DataSource;
@@ -280,9 +280,4 @@ export function requirePairSpec(pair: string): PairSpec {
   const s = BY_PAIR.get(pair);
   if (!s) throw new Error(`Pair "${pair}" is not in the pricing-engine registry.`);
   return s;
-}
-
-/** All registered display pairs, for bootstrap and admin views. */
-export function listAllPairs(): string[] {
-  return SUPPORTED_PAIRS.map(p => p.displayPair);
 }

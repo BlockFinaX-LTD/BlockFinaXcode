@@ -42,15 +42,6 @@
 import { pgTable, serial, text, timestamp, index, boolean, integer, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
-/** What BlockFinaX wants from each kind of prospect. */
-export type ProspectSegment =
-  | "hedger"       // carries currency exposure. Buys cover.
-  | "underwriter"  // has capital to put behind a pool. The LP side.
-  | "psp"          // payment provider, could distribute or integrate
-  | "bank"         // could partner or refer what it cannot underwrite
-  | "investor"     // backs the company rather than a pool. Pre-seed funds and angels.
-  | "unknown";
-
 export const prospects = pgTable(
   "prospects",
   {
@@ -158,10 +149,6 @@ export const emailSuppressions = pgTable(
 export const insertProspectSchema = createInsertSchema(prospects).omit({
   id: true, createdAt: true, updatedAt: true, sentAt: true, approvedAt: true,
 });
-
-export type Prospect = typeof prospects.$inferSelect;
-export type InsertProspect = typeof prospects.$inferInsert;
-export type EmailSuppression = typeof emailSuppressions.$inferSelect;
 
 /**
  * Role inboxes, the addresses a business publishes to be written to.

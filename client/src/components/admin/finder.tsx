@@ -17,7 +17,7 @@ import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export interface FinderSource<K extends string> {
+interface FinderSource<K extends string> {
   key: K;
   label: string;
   /** One sentence on what this source finds. */

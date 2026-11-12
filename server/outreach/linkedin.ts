@@ -34,10 +34,8 @@ import { platformSettings } from "@shared/schema";
 
 const OAUTH_KEY = "linkedin_oauth";
 const API = "https://api.linkedin.com";
-/** Pinned rather than floating: LinkedIn sunsets versions, and a silent bump changes behaviour. */
-const LINKEDIN_VERSION = "202605";
 
-export interface LinkedInAuth {
+interface LinkedInAuth {
   accessToken: string;
   /** urn:li:person:xxxx, the author every comment is attributed to. */
   personUrn: string;
@@ -231,15 +229,6 @@ export function postedAtFromUrn(urn: string | null): string | null {
   }
 }
 
-export interface PostResult {
-  ok: boolean;
-  commentUrn?: string;
-  commentId?: string;
-  error?: string;
-  /** True when the failure is worth retrying later rather than never. */
-  retryable?: boolean;
-}
-
 /**
  * Publish one comment.
  *
@@ -275,65 +264,4 @@ export function urnVariants(activityUrn: string): string[] {
   const id = m[2];
   const order = [m[1], "activity", "ugcPost", "share"];
   return Array.from(new Set(order)).map(t => `urn:li:${t}:${id}`);
-}
-
-export async function postComment(
-  auth: LinkedInAuth,
-  activityUrn: string,
-  text: string,
-): Promise<PostResult> {
-  let lastBody = "";
-  let lastStatus = 0;
-
-  for (const urn of urnVariants(activityUrn)) {
-    try {
-      const r = await fetch(commentEndpoint(urn), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${auth.accessToken}`,
-          "Linkedin-Version": LINKEDIN_VERSION,
-          "X-Restli-Protocol-Version": "2.0.0",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ actor: auth.personUrn, object: urn, message: { text } }),
-      });
-
-      if (r.ok) {
-        const id = r.headers.get("x-restli-id");
-        const body: any = await r.json().catch(() => ({}));
-        return {
-          ok: true,
-          commentId: id || body?.id,
-          commentUrn: body?.commentUrn || (id ? `urn:li:comment:(${urn},${id})` : undefined),
-        };
-      }
-
-      lastStatus = r.status;
-      lastBody = await r.text().catch(() => "");
-
-      if (r.status === 429) {
-        return { ok: false, retryable: true, error: "LinkedIn is rate limiting comments. Wait a few minutes." };
-      }
-      if (r.status === 401 || r.status === 403) {
-        // A 403 here usually means the token is fine but the app was never
-        // granted w_member_social, which is a Products tab problem rather than
-        // a stale token. The two have different fixes, so they are separated.
-        const scopeIssue = /permission|scope|ACCESS_DENIED|not authorized/i.test(lastBody);
-        return {
-          ok: false,
-          error: scopeIssue
-            ? `LinkedIn refused the permission. The app needs w_member_social, which comes with ` +
-              `the "Share on LinkedIn" product. Check the Products tab. ${lastBody.slice(0, 160)}`
-            : `LinkedIn rejected the token (${r.status}). Reconnect the account. ${lastBody.slice(0, 160)}`,
-        };
-      }
-      // Only an ILLEGAL_ARGUMENT is worth another urn form. Anything else is a
-      // real failure and retrying would just repeat it.
-      if (!(r.status === 400 && /ILLEGAL_ARGUMENT|path variables/i.test(lastBody))) break;
-    } catch (e) {
-      return { ok: false, retryable: true, error: e instanceof Error ? e.message : "network error" };
-    }
-  }
-
-  return { ok: false, error: `LinkedIn returned ${lastStatus}. ${lastBody.slice(0, 240)}` };
 }

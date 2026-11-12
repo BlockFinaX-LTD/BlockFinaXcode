@@ -118,7 +118,7 @@ export const CURRENCY_POOL_ABI = [
 // which chain they came from. Amounts are decimal USDC strings, FX rates decimal strings,
 // rates integers on the 1e6 scale, times unix seconds.
 
-export interface NormalizedPool {
+interface NormalizedPool {
   chain: string;
   poolId: number;
   creator: string;
@@ -134,7 +134,7 @@ export interface NormalizedPool {
   latestExpiry: number;
 }
 
-export interface NormalizedPosition {
+interface NormalizedPosition {
   chain: string;
   positionId: number;
   poolId: number;
@@ -159,7 +159,7 @@ export interface NormalizedPosition {
 }
 
 /** Exact decimal string from an integer amount, trailing zeros trimmed. */
-export function decimalString(value: bigint, decimals: number): string {
+function decimalString(value: bigint, decimals: number): string {
   const neg = value < BigInt(0);
   const abs = neg ? -value : value;
   let unit = BigInt(1);

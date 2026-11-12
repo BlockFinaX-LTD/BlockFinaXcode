@@ -40,7 +40,7 @@ export type AreaKey =
   | "regulatory" | "local_partners" | "market_data" | "new_country"
   | "fundraising" | "grants" | "talent" | "other";
 
-export interface Area {
+interface Area {
   key: AreaKey;
   group: "Revenue" | "Market access" | "Capital" | "People";
   label: string;
@@ -383,7 +383,7 @@ export const moduleById = (id: string) => MODULES.find((m) => m.id === id);
 
 // ── Materials ───────────────────────────────────────────────────────────────
 
-export interface Material {
+interface Material {
   title: string;
   description: string;
   url: string;
@@ -403,7 +403,6 @@ export const MATERIALS: Material[] = [
 
 export type MemberStatus = "applied" | "active" | "paused" | "ended" | "declined";
 export type RegistrationStatus = "pending" | "approved" | "declined" | "live" | "closed";
-export type EngagementStatus = "offered" | "accepted" | "declined" | "completed" | "cancelled";
 export type LedgerKind = "revenue_share" | "bonus" | "fundraising" | "engagement_fee" | "adjustment" | "payment";
 
 export const LEDGER_LABELS: Record<LedgerKind, string> = {

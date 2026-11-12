@@ -5,7 +5,7 @@
  * renderer in <BlogArticle /> turns into actual diagrams.
  */
 
-export interface ArticleMeta {
+interface ArticleMeta {
   slug: string;
   title: string;
   subtitle?: string;

@@ -8,7 +8,7 @@
  */
 
 import type { Express } from "express";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { desc, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { researchItems, marketMemory } from "@shared/schema";
 import { requireAdmin } from "../middleware/admin-auth";

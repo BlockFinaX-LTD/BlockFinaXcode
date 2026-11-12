@@ -9,10 +9,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Banknote, BookOpen, Briefcase, Megaphone, Check, CheckCircle2, Circle, Copy, FileSignature, FolderOpen, GraduationCap, Home, LogOut, Moon,
-  Sparkles, Sun, UserPlus, UserRound, Building2,
-} from 'lucide-react';
+import { Banknote, Megaphone, Check, CheckCircle2, Circle, Copy, FileSignature, GraduationCap, Home, LogOut, Moon, Sparkles, Sun, UserPlus, UserRound, Building2 } from 'lucide-react';
 import {
   AGREEMENTS, OPEN_AREAS, COMPANY, LEDGER_LABELS, MATERIALS, MODULES, PASS_MARK, areaByKey,
   type AgreementDoc, type AreaKey, type LedgerKind, type MemberKind, type Module,
@@ -495,7 +492,7 @@ function Overview({ me, go }: { me: Me; go: (t: Tab) => void }) {
 
 // ── Terms ─────────────────────────────────────────────────────────────────
 
-export function AgreementView({ doc }: { doc: AgreementDoc }) {
+function AgreementView({ doc }: { doc: AgreementDoc }) {
   return (
     <article className="bx-cp-doc">
       <div className="muted" style={{ fontFamily: 'Geist Mono, monospace', fontSize: 12 }}>{doc.version} · Issued {doc.issued}</div>

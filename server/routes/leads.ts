@@ -14,7 +14,7 @@
 
 import type { Express, Request, Response } from "express";
 import { randomBytes } from "crypto";
-import { and, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { leads, CONSENT_WORDING } from "@shared/lead-schema";
@@ -134,7 +134,7 @@ export function registerLeadRoutes(app: Express) {
  * person who unsubscribes during the delay window must not receive the message
  * that was already queued for them.
  */
-export async function sweepFollowUps(limit = 20): Promise<{ sent: number; skipped: number; failed: number }> {
+async function sweepFollowUps(limit = 20): Promise<{ sent: number; skipped: number; failed: number }> {
   const result = { sent: 0, skipped: 0, failed: 0 };
 
   const due = await db

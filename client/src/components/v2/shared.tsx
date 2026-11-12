@@ -93,7 +93,7 @@ export function usePools() {
   });
 }
 
-export interface ChainInfo {
+interface ChainInfo {
   key: string;
   name: string;
   state: string;
@@ -104,7 +104,7 @@ export interface ChainInfo {
 
 // ── Cross-network transfers (Circle CCTP) ────────────────────────────────────
 
-export interface RouteView {
+interface RouteView {
   id: string;
   kind: 'fund' | 'withdraw';
   sourceChain: string;
@@ -120,17 +120,7 @@ export interface RouteView {
   error: string | null;
 }
 
-export interface TransferQuote { amountIn: string; amountOut: string; totalFees: string; estimatedSeconds: number; provider: string }
-
-const OPEN_STATES = new Set(['REQUESTED', 'SOURCE_CONFIRMED', 'ROUTING', 'DESTINATION_CONFIRMED', 'ACTION_PENDING', 'RECOVERY_REQUIRED']);
-
-export function useTransfers() {
-  return useQuery({
-    queryKey: ['v2-routes'],
-    queryFn: () => api<{ routes: RouteView[] }>('/api/v2/routing').then((r) => r.routes),
-    refetchInterval: (q) => ((q.state.data as RouteView[] | undefined)?.some((r) => OPEN_STATES.has(r.state) && r.sourceTxHash) ? 5_000 : 60_000),
-  });
-}
+interface TransferQuote { amountIn: string; amountOut: string; totalFees: string; estimatedSeconds: number; provider: string }
 
 export function useTransferQuote(input: { kind: 'fund' | 'withdraw'; network: string | null; amount: string; recipient?: string }) {
   const amount = useDebounced(input.amount, 400);
@@ -169,16 +159,6 @@ export async function runTransfer(input: { kind: 'fund' | 'withdraw'; network: s
   }
   onStep('Sending to Circle...');
   return (await api<{ route: RouteView }>(`/api/v2/routing/${route.id}/source`, { txHash: hash })).route;
-}
-
-/** How a transfer's state reads to a person. */
-export function transferStatus(r: RouteView): { label: string; tone: 'green' | 'amber' | 'grey' | 'blue' } {
-  if (r.state === 'ACTION_COMPLETED' || r.state === 'DESTINATION_CONFIRMED' || r.state === 'ACTION_PENDING') return { label: 'Arrived', tone: 'green' };
-  if (r.state === 'REFUNDED') return { label: 'Refunded', tone: 'grey' };
-  if (r.state === 'CANCELLED') return { label: 'Not sent', tone: 'grey' };
-  if (r.state === 'RECOVERY_REQUIRED') return { label: 'Retrying delivery', tone: 'amber' };
-  if (r.state === 'REQUESTED' && !r.sourceTxHash) return { label: 'Not approved', tone: 'grey' };
-  return { label: 'Moving', tone: 'blue' };
 }
 
 export function useChains() {

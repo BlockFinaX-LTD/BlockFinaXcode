@@ -41,7 +41,7 @@ export interface Identity {
   walletAddress?: string;
 }
 
-export interface ToolDef {
+interface ToolDef {
   name: string;
   description: string;
   input_schema: {
@@ -632,7 +632,7 @@ export const TOOLS: ToolDef[] = [
 ];
 
 /** Tools visible to a given agent. The public agent gets a strict subset. */
-export function toolsFor(scope: AgentScope): ToolDef[] {
+function toolsFor(scope: AgentScope): ToolDef[] {
   return TOOLS.filter((t) => t.scopes.includes(scope));
 }
 

@@ -31,15 +31,15 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-export type Segment = "buyer" | "underwriter" | "amplifier" | "partner" | "peer" | "investor" | "observer";
+type Segment = "buyer" | "underwriter" | "amplifier" | "partner" | "peer" | "investor" | "observer";
 
-export interface Qualification {
+interface Qualification {
   segment: Segment;
   fit: string;
   fitScore: number;
 }
 
-export interface PersonInput {
+interface PersonInput {
   name?: string | null;
   headline?: string | null;
   company?: string | null;

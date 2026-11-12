@@ -63,7 +63,7 @@ async function anyProvider(chainId: number): Promise<ethers.JsonRpcProvider | nu
  * search, and the caller degrades to the mirror's timestamp rather than
  * failing. Returns unix seconds.
  */
-export async function chainCreationTime(chainId: number, eventId: number): Promise<number | null> {
+async function chainCreationTime(chainId: number, eventId: number): Promise<number | null> {
   const p = await anyProvider(chainId);
   const diamond = DIAMONDS[chainId];
   if (!p || !diamond) return null;
@@ -97,7 +97,7 @@ export async function chainCreationTime(chainId: number, eventId: number): Promi
   return null;
 }
 
-export interface SigmaStar {
+interface SigmaStar {
   sigma: number;
   /** How the tenor behind it was established. */
   tenorSource: "chain" | "mirror";

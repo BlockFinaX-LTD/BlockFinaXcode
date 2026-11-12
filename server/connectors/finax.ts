@@ -8,7 +8,7 @@
  */
 import { AGREEMENTS, AREAS, OPEN_AREAS, MATERIALS, MODULES, PASS_MARK, agreementText, type DocumentKind } from "@shared/connector-programme";
 
-export interface BriefInput {
+interface BriefInput {
   member: null | { kind: string; fullName: string; status: string; country: string; areas: string[] };
   document: DocumentKind;
   signed: boolean;

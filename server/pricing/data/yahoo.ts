@@ -33,7 +33,7 @@ interface YahooChartResult {
   };
 }
 
-export interface DailyClose {
+interface DailyClose {
   date: string;        // ISO YYYY-MM-DD
   close: number;
 }

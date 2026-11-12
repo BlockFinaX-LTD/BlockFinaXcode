@@ -24,7 +24,7 @@ export const PASSKEY_WALLET_WASM_HASH = "fdefad64b96837147e1c333e51f537b696eab92
 /** Coinbase Smart Wallet factory (same address on every EVM network). */
 export const CSW_FACTORY = "0x0BA5ED0c6AA8c49038F819E587E2633c4A9F428a";
 
-export interface TrustedChain {
+interface TrustedChain {
   key: string;
   family: "stellar" | "evm";
   name: string;

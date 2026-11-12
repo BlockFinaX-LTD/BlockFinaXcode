@@ -1,4 +1,4 @@
-import { isWalletSandbox, walletDefaultChainId, sandboxTokenAddress, sandboxDiamondAddress, assertWalletTransactionsEnabled } from "./wallet-environment";
+import { isWalletSandbox, walletDefaultChainId, sandboxTokenAddress, sandboxDiamondAddress } from "./wallet-environment";
 /**
  * Hedge Contract Integration - Direct on-chain calls to the HedgeFacet
  *
@@ -50,10 +50,6 @@ export const CHAIN_USDT_MAP: Record<number, string> = isWalletSandbox ? {} : {
   56:   '0x55d398326f99059fF775485246999027B3197955',
 };
 
-export function getUsdtAddress(chainId: number): string {
-  return CHAIN_USDT_MAP[chainId] || '';
-}
-
 export const CHAIN_SAFE_MAP: Record<number, string> = isWalletSandbox ? {} : {
   8453: '0x7909a2f1fAd63678eEDcC5A75462B66D062189Bb',
   56:   '0x2a0ab363E01b518B189218e39f79Bfc3AE310807',
@@ -63,22 +59,6 @@ export const CHAIN_EXPLORER_MAP: Record<number, string> = isWalletSandbox ? { 84
   8453: 'https://basescan.org',
   56:   'https://bscscan.com',
 };
-
-export function getDiamondAddress(chainId: number): string {
-  return CHAIN_DIAMOND_MAP[chainId] || DIAMOND_ADDRESS;
-}
-
-export function getUsdcAddress(chainId: number): string {
-  return CHAIN_USDC_MAP[chainId] || USDC_ADDRESS;
-}
-
-export function getSafeAddress(chainId: number): string {
-  return CHAIN_SAFE_MAP[chainId] || '';
-}
-
-export function getExplorerUrl(chainId: number): string {
-  return CHAIN_EXPLORER_MAP[chainId] || (isWalletSandbox ? 'https://sepolia.basescan.org' : 'https://basescan.org');
-}
 
 const PROTECTION_BOUGHT_TOPIC = '0x4481909ec72817de979b2b76609a83284e6faacdfa26174543ad38431274eed5';
 const LIQUIDITY_DEPOSITED_TOPIC = '0xbff736a88c4d6fc1bc430cb94a5d36706a0d4b369de04ea80fc121296def3cb2';
@@ -174,7 +154,7 @@ const POSITION_STATUS_MAP: Record<number, 'active' | 'claimable' | 'claimed' | '
   4: 'settled_win',
 };
 
-export interface HedgeEventData {
+interface HedgeEventData {
   id: number;
   creator: string;
   name: string;
@@ -216,7 +196,7 @@ export interface HedgeEventData {
   description?: string;
 }
 
-export interface HedgePositionData {
+interface HedgePositionData {
   id: number;
   eventId: number;
   hedger: string;
@@ -229,7 +209,7 @@ export interface HedgePositionData {
   createdAt: Date | null;
 }
 
-export interface HedgeLpDepositData {
+interface HedgeLpDepositData {
   id: number;
   eventId: number;
   lp: string;

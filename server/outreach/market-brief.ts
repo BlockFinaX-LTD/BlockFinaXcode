@@ -232,13 +232,6 @@ const signed = (v: number | null) =>
 /** A magnitude — volatility has no direction, so a + sign would be noise. */
 const mag = (v: number | null) => (v === null ? "n/a" : `${v.toFixed(1)}%`);
 
-/** 1st, 2nd, 3rd, 4th — including the teens, which are all "th". */
-function ordinal(n: number): string {
-  const t = n % 100;
-  if (t >= 11 && t <= 13) return `${n}th`;
-  return `${n}${["th", "st", "nd", "rd"][n % 10] || "th"}`;
-}
-
 /**
  * A reference invoice, for turning a percentage into money.
  *

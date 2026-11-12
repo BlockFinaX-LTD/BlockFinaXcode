@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 
-export type Mood = "happy" | "worried" | "sad" | "shocked";
+type Mood = "happy" | "worried" | "sad" | "shocked";
 
 const skin = "#f4c89c";
 const skinDark = "#d49860";
@@ -114,37 +114,5 @@ export function Character({ mood, facing = 0, scale = 1 }: CharacterProps) {
       )}
       </motion.g>
     </g>
-  );
-}
-
-export function MoneyBag({ size = 1, label }: { size?: number; label?: string }) {
-  return (
-    <motion.g animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 2.4, ease: "easeInOut" }}>
-      <g transform={`scale(${size})`}>
-        <ellipse cx="0" cy="20" rx="20" ry="3" fill="#000" opacity="0.15" />
-        <path
-          d="M -22 -6 Q -22 22 0 22 Q 22 22 22 -6 Q 18 -2 10 -2 L -10 -2 Q -18 -2 -22 -6 Z"
-          fill="#c9aa56"
-          stroke="#7a5d20"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M -22 -6 Q -22 22 0 22 Q 22 22 22 -6"
-          fill="url(#bagGrad)"
-        />
-        <path d="M -10 -2 L -8 -10 L 8 -10 L 10 -2 Z" fill="#a3853d" />
-        <path d="M -8 -10 Q -2 -14 2 -14 Q 8 -14 8 -10" fill="none" stroke="#7a5d20" strokeWidth="1.4" />
-        <text x="0" y="14" textAnchor="middle" fontSize="14" fontWeight="800" fill="#3a2410">$</text>
-        {label && (
-          <text x="0" y="34" textAnchor="middle" fontSize="6.5" fontWeight="700" fill="#3a2410">{label}</text>
-        )}
-        <defs>
-          <linearGradient id="bagGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#e8c976" />
-            <stop offset="100%" stopColor="#a3853d" />
-          </linearGradient>
-        </defs>
-      </g>
-    </motion.g>
   );
 }

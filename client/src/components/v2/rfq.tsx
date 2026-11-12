@@ -16,7 +16,7 @@ import { isOffered } from '@shared/domain/offered-directions';
 
 const MIN_REQUEST = 5_000;
 
-export interface RequestDraft {
+interface RequestDraft {
   pair: string;
   direction: Direction;
   notional?: string;
@@ -112,7 +112,7 @@ export function RequestQuoteModal({ draft, pairs, onClose }: { draft: RequestDra
 
 // ── Businesses: requests and offers ─────────────────────────────────────────
 
-export function useMyQuoteRequests() {
+function useMyQuoteRequests() {
   return useQuery({ queryKey: ['v2-rfq-mine'], queryFn: async () => (await api<{ requests: MyRequest[] }>('/api/v2/rfq/mine')).requests, refetchInterval: 30_000 });
 }
 

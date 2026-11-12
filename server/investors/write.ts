@@ -16,7 +16,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-export interface InvestorFacts {
+interface InvestorFacts {
   firm: string;
   website?: string | null;
   country?: string | null;
@@ -27,14 +27,14 @@ export interface InvestorFacts {
   addressKind?: string | null;
 }
 
-export interface Traction {
+interface Traction {
   poolsSettled: number;
   pairs: number;
   closes: number;
   historyFrom: string;
 }
 
-export interface InvestorDraft {
+interface InvestorDraft {
   fit: string;
   fitScore: number;
   subject: string;

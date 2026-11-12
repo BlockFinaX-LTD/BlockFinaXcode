@@ -41,7 +41,7 @@ export type MonthRow = {
   cashFlow: number; fundingReceived: number; cumulativeCash: number; burnRate: number; runway: number;
 };
 
-export type AnnualRow = {
+type AnnualRow = {
   year: string;
   months: number[];
   totalRevenue: number;
@@ -108,7 +108,7 @@ export const MODEL_FEE_ASSUMPTIONS = {
  * payoutRate — cover pays this share of notional when triggered.
  * triggerRate — share of positions that end in a claim.
  */
-export function blendedHedgeYield(a = { avgPremiumRate: 0.015, payoutRate: 0.30, triggerRate: 0.20 }): number {
+function blendedHedgeYield(a = { avgPremiumRate: 0.015, payoutRate: 0.30, triggerRate: 0.20 }): number {
   const entry = MODEL_FEE_ASSUMPTIONS.entryOnPremium * a.avgPremiumRate;
   const lp = MODEL_FEE_ASSUMPTIONS.lpProfitOnPremium * a.avgPremiumRate;
   const payout = MODEL_FEE_ASSUMPTIONS.payoutOnPayout * a.payoutRate * a.triggerRate;
@@ -351,8 +351,4 @@ export function fmtUSD(n: number, decimals = 0): string {
   if (Math.abs(n) >= 1_000_000)     return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000)         return `$${(n / 1_000).toFixed(decimals === 0 ? 0 : 1)}K`;
   return `$${n.toFixed(decimals)}`;
-}
-
-export function fmtPct(n: number): string {
-  return `${n.toFixed(1)}%`;
 }

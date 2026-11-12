@@ -7,7 +7,7 @@
  * text from website visitors should not be able to mark a grant submitted.
  */
 
-import { and, asc, desc, eq, isNotNull, lte, ne, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { fundingOpportunities, fundingNotes } from "@shared/schema";
 
@@ -16,7 +16,7 @@ import { STAGES, CLOSED_STAGES, type Stage, daysToDeadline, parseDeadline } from
 
 const num = (v: unknown) => (v == null ? null : Number(v));
 
-export interface OpportunityView {
+interface OpportunityView {
   id: number;
   name: string;
   funder: string | null;

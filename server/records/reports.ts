@@ -25,7 +25,7 @@ const safe = async <T>(fn: () => Promise<T>, fallback: T, label = "a figure"): P
   }
 };
 
-export interface RegulatoryReport {
+interface RegulatoryReport {
   period: { from: string; to: string };
   generatedAt: string;
   cover: { quotesAccepted: number; notionalUsd: number; premiumUsd: number; maxPayoutUsd: number; byPair: Record<string, { count: number; notionalUsd: number }> };

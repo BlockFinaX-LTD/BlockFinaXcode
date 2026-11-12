@@ -9,7 +9,7 @@
  * defaults below a run reads at most TOPICS x pages x 20 posts.
  */
 
-export interface Topic {
+interface Topic {
   key: string;
   label: string;
   /** X search syntax. Retweets and replies are excluded so each post is someone's own words, not a side argument. */
@@ -129,7 +129,7 @@ export function score(p: Post): number {
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
-export interface SearchResult {
+interface SearchResult {
   posts: Post[];
   pages: number;
 }

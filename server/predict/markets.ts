@@ -6,7 +6,7 @@
  * a rate at expiry into payouts.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { predictionMarkets, predictionPositions } from "@shared/schema";
 import { getRate } from "../fx-oracle";
@@ -17,7 +17,7 @@ import {
 
 const num = (v: unknown): number => (v == null ? 0 : Number(v));
 
-export interface MarketView {
+interface MarketView {
   id: number;
   pair: string;
   question: string;

@@ -28,20 +28,12 @@ export function Section({ n, title, id, children }: { n: string; title: string; 
   );
 }
 
-export function H3({ children }: { children: ReactNode }) {
-  return <h3 className="ac-h3">{children}</h3>;
-}
-
 export function P({ children }: { children: ReactNode }) {
   return <p className="ac-p">{children}</p>;
 }
 
 export function UL({ children }: { children: ReactNode }) {
   return <ul className="ac-ul">{children}</ul>;
-}
-
-export function OL({ children }: { children: ReactNode }) {
-  return <ol className="ac-ol">{children}</ol>;
 }
 
 export function Callout({
@@ -59,10 +51,6 @@ export function Callout({
       <p>{children}</p>
     </div>
   );
-}
-
-export function Pull({ children }: { children: ReactNode }) {
-  return <div className="ac-pull">{children}</div>;
 }
 
 export function KV({ children }: { children: ReactNode }) {
@@ -99,10 +87,6 @@ export function Fig({ label, caption, children }: { label: string; caption: stri
       </figcaption>
     </figure>
   );
-}
-
-export function CodeInline({ children }: { children: ReactNode }) {
-  return <code className="ac-code">{children}</code>;
 }
 
 /**
@@ -147,16 +131,6 @@ export function RangePayoffSVG({
   );
 }
 
-/** The two-line answer at the top of every lesson. */
-export function InShort({ children }: { children: ReactNode }) {
-  return (
-    <div className="ac-inshort">
-      <div className="k">In short</div>
-      <p>{children}</p>
-    </div>
-  );
-}
-
 /** A worked example with real numbers: a few labelled rows and a sentence on what it means. */
 export function Example({ title, rows, children }: { title: string; rows: Array<[string, ReactNode]>; children?: ReactNode }) {
   return (
@@ -168,26 +142,6 @@ export function Example({ title, rows, children }: { title: string; rows: Array<
         ))}
       </dl>
       {children && <p>{children}</p>}
-    </div>
-  );
-}
-
-/** A link from the idea to the product. */
-export function TryIt({ label = 'Try it in the app', href = '/hedge', children }: { label?: string; href?: string; children: ReactNode }) {
-  return (
-    <div className="ac-tryit">
-      <p>{children}</p>
-      <a href={href} className="ac-btn primary">{label} <span aria-hidden="true">→</span></a>
-    </div>
-  );
-}
-
-/** Where the figures in a lesson come from. */
-export function Sources({ items }: { items: string[] }) {
-  return (
-    <div className="ac-sources">
-      <div className="k">Sources</div>
-      <ol>{items.map((s) => <li key={s}>{s}</li>)}</ol>
     </div>
   );
 }

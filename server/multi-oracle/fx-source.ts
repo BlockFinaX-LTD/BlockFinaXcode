@@ -6,8 +6,8 @@
  * independent; keep that limitation visible in operations and monitoring.
  */
 
-export type FxPairMap = Record<string, { base: string; quote: string }>;
-export type FxPriceMap = Record<string, number>;
+type FxPairMap = Record<string, { base: string; quote: string }>;
+type FxPriceMap = Record<string, number>;
 
 const API_URL = "https://open.er-api.com/v6/latest";
 const REQUEST_TIMEOUT_MS = 8_000;

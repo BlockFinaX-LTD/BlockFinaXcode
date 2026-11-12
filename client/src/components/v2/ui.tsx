@@ -17,7 +17,7 @@ export function Flag({ pair, large }: { pair: string; large?: boolean }) {
  * drawn in a portal inside the workspace root with fixed positioning, so scrolling tables
  * cannot clip it, and it inherits the light or dark theme.
  */
-export function Term({ children, tip, label, plain }: { children: ReactNode; tip: string; label?: string; plain?: boolean }) {
+function Term({ children, tip, label, plain }: { children: ReactNode; tip: string; label?: string; plain?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
   const show = () => {
@@ -127,7 +127,7 @@ export function Loading({ label = 'Loading...' }: { label?: string }) {
 
 // ── Asset class switch: FX or interest rates ─────────────────────────────────
 
-export type AssetClass = 'fx' | 'ir';
+type AssetClass = 'fx' | 'ir';
 
 /**
  * Interest-rate protection is hidden from the workspace for now (the oracle and pools keep

@@ -315,7 +315,7 @@ export function fence(label: string, text: string): string {
 
 // ── Loop ─────────────────────────────────────────────────────────────────
 
-export interface RunResult {
+interface RunResult {
   text: string;
   toolCalls: { name: string; input: unknown }[];
   runId: number | null;
@@ -324,7 +324,7 @@ export interface RunResult {
   costUsd: number;
 }
 
-export interface RunOptions {
+interface RunOptions {
   scope: AgentScope;
   trigger: string;
   messages: Anthropic.MessageParam[];

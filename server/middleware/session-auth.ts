@@ -8,7 +8,7 @@
  */
 import type { Request, Response, NextFunction } from "express";
 
-export interface SessionUser {
+interface SessionUser {
   /** The user's EVM smart account, lowercased. */
   address: string;
   email: string | null;

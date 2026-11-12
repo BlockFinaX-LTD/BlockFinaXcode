@@ -18,7 +18,7 @@ export function verificationRequired(env: NodeJS.ProcessEnv = process.env, envir
   return environment === "mainnet";
 }
 
-export interface LimitDecision {
+interface LimitDecision {
   allowed: boolean;
   tier: number;
   /** The lowest tier that would allow it, when the current one does not. */

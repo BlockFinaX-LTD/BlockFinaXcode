@@ -14,7 +14,7 @@ export const WATCHLIST = [
   "EUR/NGN", "EUR/GHS", "EUR/KES", "EUR/ZAR", "EUR/XOF", "GBP/GHS",
 ] as const;
 
-export interface RateRow {
+interface RateRow {
   pair: string;
   spot: number | null;
   /** Change over about 24 hours, or null when there is no snapshot that old yet. */

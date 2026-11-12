@@ -21,7 +21,7 @@ let loadError: string | null = null;
 
 const envKey = (key: string) => key.toUpperCase().replace(/-/g, "_");
 
-export function loadRegistryConfig(env: NodeJS.ProcessEnv = process.env): ChainRegistryConfig {
+function loadRegistryConfig(env: NodeJS.ProcessEnv = process.env): ChainRegistryConfig {
   const path = env.BLOCKFINAX_CHAIN_CONFIG
     || join(process.cwd(), "config", "chains", `${env.BLOCKFINAX_ENV === "testnet" ? "testnet" : "mainnet"}.json`);
   const config = JSON.parse(readFileSync(path, "utf8")) as ChainRegistryConfig;
@@ -50,10 +50,4 @@ export function chainRegistry(): ChainRegistry | null {
 
 export function registryLoadError(): string | null {
   return loadError;
-}
-
-/** For tests. */
-export function setChainRegistry(registry: ChainRegistry | null): void {
-  cached = registry;
-  loadError = null;
 }

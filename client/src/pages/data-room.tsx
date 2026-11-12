@@ -4,12 +4,7 @@ import { DEFAULT_ANNUALS, fmtUSD } from "@/lib/financial-model-data";
 import { TAM, SAM } from "@/lib/market-figures";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Lock, LogOut, ExternalLink, FileText, BarChart2, Globe,
-  PlayCircle, Beaker, ShieldCheck, BookOpen, ChevronRight,
-  Eye, Clock, Building2, ArrowLeft, Pencil, Check, X, Video, Edit3, Calendar,
-  Users, PieChart, TrendingUp, Activity, RefreshCw, Paperclip, Trash2, Plus
-} from "lucide-react";
+import { LogOut, ExternalLink, FileText, BarChart2, Globe, PlayCircle, Beaker, ShieldCheck, BookOpen, ChevronRight, Eye, Clock, Building2, ArrowLeft, Pencil, Check, Video, Edit3, Calendar, Users, PieChart, TrendingUp, Activity, RefreshCw, Paperclip, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -546,7 +541,6 @@ const MARKET_D = {
 function MarketOpportunityDoc({ token }: { token: string }) {
   const { data, draft, editing, saving, editUnlocked, startEdit, cancelEdit, save, setField, requestEdit } = useEditableDoc("market-opportunity-evidence-v2", token, MARKET_D);
   const setDriver = (i: number, k: string, v: string) => setField("drivers", draft.drivers.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const samValue = SAM.value;
   const som27 = DEFAULT_ANNUALS[1].notionalHedged;
   const som28 = DEFAULT_ANNUALS[2].notionalHedged;
   const som29 = DEFAULT_ANNUALS[3].notionalHedged;
@@ -2910,57 +2904,6 @@ function DocContent({ docId, token }: { docId: string; token: string }) {
       {docId !== "revenue-breakdown" && docId !== "cost-breakdown" && (
         <AdminNotesSection docId={docId} token={token} />
       )}
-    </div>
-  );
-}
-
-/* ─── PASSWORD GATE ─── */
-function PasswordGate({ onSuccess }: { onSuccess: (token: string, editEnabled: boolean) => void }) {
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const { toast } = useToast();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password.trim()) return;
-    setLoading(true); setError("");
-    try {
-      const res = await fetch("/api/investor/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message || "Invalid access code"); return; }
-      localStorage.setItem(SESSION_KEY, data.token);
-      onSuccess(data.token, !!data.editEnabled);
-      toast({ title: "Access granted", description: "Welcome to the BlockFinaX Investor Data Room." });
-    } catch { setError("Connection error. Please try again."); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a1628 0%, #0f2044 50%, #0a1628 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ width: "100%", maxWidth: "420px" }}>
-        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "16px", padding: "40px", backdropFilter: "blur(12px)" }}>
-          <div style={{ textAlign: "center", marginBottom: "32px" }}>
-            <div style={{ width: "56px", height: "56px", borderRadius: "12px", background: "rgba(61,142,245,0.1)", border: "1px solid rgba(61,142,245,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Lock style={{ width: "24px", height: "24px", color: "#3d8ef5" }} />
-            </div>
-            <h1 style={{ fontSize: "22px", fontWeight: 700, color: "white", marginBottom: "8px" }}>Investor Data Room</h1>
-            <p style={{ fontSize: "14px", color: "#94a3b8", lineHeight: 1.6 }}>Confidential — restricted to authorised investors and advisors. Enter your access code to continue.</p>
-          </div>
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <Input type="password" placeholder="Enter access code" value={password} onChange={e => { setPassword(e.target.value); setError(""); }}
-              className="bg-white/[0.06] border-white/10 text-white placeholder:text-slate-500 h-12 text-center tracking-widest" autoFocus />
-            {error && <p style={{ color: "#f87171", fontSize: "14px", textAlign: "center" }}>{error}</p>}
-            <Button type="submit" disabled={loading || !password.trim()} style={{ height: "48px", background: "#2563eb", color: "white", fontWeight: 600, border: "none", borderRadius: "8px", cursor: "pointer" }}>
-              {loading ? "Verifying…" : "Access Data Room"}
-            </Button>
-          </form>
-          <p style={{ textAlign: "center", color: "#475569", fontSize: "13px", marginTop: "24px" }}>
-            No access code? <a href="mailto:anthonykumako8@gmail.com?subject=BlockFinaX%20Data%20Room%20Access" style={{ color: "#3d8ef5" }}>Request access</a>
-          </p>
-        </div>
-        <p style={{ textAlign: "center", color: "#334155", fontSize: "12px", marginTop: "16px" }}>BlockFinaX · Confidential · Not for public distribution</p>
-      </motion.div>
     </div>
   );
 }

@@ -309,7 +309,7 @@ export async function finalizeBackupPasskey(credentialId: string) {
   return (await api<{ passkey: PasskeyInfo }>(`/api/wallet/passkeys/${encodeURIComponent(credentialId)}/finalize`, {})).passkey;
 }
 
-export class PasskeyWalletProvider implements WalletProvider {
+class PasskeyWalletProvider implements WalletProvider {
   readonly id = "blockfinax-passkey";
   readonly namespaces = ["eip155" as const, "stellar" as const];
 

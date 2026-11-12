@@ -37,7 +37,7 @@ import type { PairTier } from "./pairs";
 // the database — tests and the CLI use TIER_JUMP_PARAMS / jumpParamsForTier
 // without any DB; only the async resolver below pulls the per-pair override.
 
-export interface JumpParams {
+interface JumpParams {
   /** Jump intensity, events/year. λ=0 → engine falls back to pure GK. */
   lambda: number;
   /** Mean log-jump. Positive = upward bias on the rate. */
@@ -105,14 +105,4 @@ export async function getPairJumpParams(pair: string): Promise<JumpParams> {
   }
 
   return defaults;
-}
-
-/**
- * Synchronous variant for use in tests / CLI when you have the tier directly
- * and don't want to hit the DB.
- */
-export function jumpParamsForTier(tier: PairTier): JumpParams {
-  const p = TIER_JUMP_PARAMS[tier];
-  if (!p) throw new Error(`No jump-params default for tier ${tier}`);
-  return p;
 }
