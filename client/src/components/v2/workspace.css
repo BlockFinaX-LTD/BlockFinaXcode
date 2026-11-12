@@ -744,3 +744,115 @@
 
 /* A note the buyer should read, which does not stop them buying. */
 .bx-warn { grid-column: 1 / -1; margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45; background: var(--amber-soft); color: var(--amber-text); }
+
+/* ── Markets as a trading screen ──────────────────────────────────────────────
+   One fixed layout, like an exchange: market strip on top, chart, price ladder, buy panel,
+   and the buyer's cover underneath. Panels are split by 1px lines, not floating cards.
+   One corner size (6px), numbers right-aligned in mono, colour only for Up and Down. */
+.bx-main.bx-trade {
+  max-width: none; padding: 0; gap: 1px; background: var(--line); align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) 300px 340px;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "strip strip strip" "chart ladder panel" "covers covers panel";
+}
+.bx-trade > * { background: var(--panel); min-width: 0; }
+.bx-trade .r { text-align: right; }
+
+.bx-mstrip { grid-area: strip; display: flex; align-items: center; gap: 28px; padding: 10px 20px; overflow-x: auto; white-space: nowrap; }
+.bx-mstrip-pair { position: relative; display: flex; align-items: center; gap: 10px; cursor: pointer; padding-right: 4px; }
+.bx-mstrip-pair .n { display: block; font-size: 16px; font-weight: 600; }
+.bx-mstrip-pair .s { display: block; font-size: 12px; color: var(--muted); }
+.bx-mstrip-pair select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.bx-mstrip-rate { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.bx-stat { display: flex; flex-direction: column; gap: 2px; }
+.bx-stat .l { font-size: 12px; color: var(--muted); }
+.bx-stat .v { font-size: 13px; font-weight: 500; }
+
+.bx-pane-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; min-height: 40px; }
+.bx-pane-h .muted { font-size: 12px; font-weight: 400; }
+
+.bx-tchart { grid-area: chart; padding-bottom: 10px; }
+.bx-trade .bx-tchart .bx-ranges { margin: 0; gap: 2px; }
+.bx-trade .bx-tchart .bx-ranges button { min-height: 26px; padding: 4px 7px; font-size: 12px; border-radius: 6px; }
+.bx-trade .bx-tchart .bx-chart { height: 360px; margin: 6px 12px 0; }
+.bx-tchart .bx-protect-tag { margin: 8px 14px 0; }
+
+.bx-ladder { grid-area: ladder; display: flex; flex-direction: column; }
+.bx-lhead, .bx-lrow { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr); gap: 8px; padding: 0 14px; align-items: center; }
+.bx-lhead { font-size: 11px; color: var(--muted); padding-top: 8px; padding-bottom: 4px; }
+.bx-lrow { position: relative; width: 100%; height: 30px; border: 0; background: transparent; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; }
+.bx-lrow > span { position: relative; }
+.bx-lrow > i { position: absolute; right: 0; top: 2px; bottom: 2px; opacity: 0.12; pointer-events: none; }
+.bx-lrow.up > i { background: var(--green); }
+.bx-lrow.down > i { background: var(--red); }
+.bx-lrow.up > span:first-of-type { color: var(--green); }
+.bx-lrow.down > span:first-of-type { color: var(--red); }
+.bx-lrow .p { font-weight: 600; }
+.bx-lrow:hover { background: var(--soft); }
+.bx-lrow.on { background: var(--blue-soft); box-shadow: inset 2px 0 0 var(--blue); }
+.bx-lside { font-size: 11px; font-weight: 600; padding: 6px 14px 2px; }
+.bx-lside.up { color: var(--green); }
+.bx-lside.down { color: var(--red); }
+.bx-lmid { display: flex; align-items: baseline; gap: 8px; padding: 8px 14px; margin: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.bx-lmid .num { font-size: 20px; font-weight: 600; }
+.bx-lmid .muted { font-size: 12px; }
+
+.bx-covers { grid-area: covers; padding-bottom: 8px; }
+.bx-ctabs { display: flex; align-items: center; gap: 22px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.bx-ctabs button { border: 0; border-bottom: 2px solid transparent; background: none; padding: 11px 0 9px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.bx-ctabs button.on { color: var(--text); border-bottom-color: var(--blue); }
+.bx-ctabs .bx-ctabs-link { margin-left: auto; color: var(--blue); font-weight: 500; }
+.bx-thead, .bx-trow { display: grid; gap: 10px; padding: 0 14px; align-items: center; }
+.bx-thead { font-size: 11px; color: var(--muted); padding-top: 8px; padding-bottom: 6px; }
+.bx-trow { min-height: 38px; font-size: 13px; border-top: 1px solid var(--line); cursor: pointer; }
+.bx-trow:hover { background: var(--soft); }
+.bx-tempty { padding: 22px 14px; color: var(--muted); font-size: 13px; }
+
+.bx-tpanel { grid-area: panel; }
+.bx-trade .bx-tpanel .bx-buy { display: flex; flex-direction: column; gap: 14px; padding: 14px 14px 72px; position: sticky; top: 64px; }
+.bx-trade .bx-tpanel .bx-until .bx-input { max-width: none !important; width: 100%; }
+.bx-covers { padding-bottom: 72px !important; }
+.bx-sideswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; background: var(--soft); border-radius: 6px; }
+.bx-sideswitch button { display: flex; flex-direction: column; align-items: center; gap: 1px; border: 0; border-radius: 5px; padding: 6px 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.bx-sideswitch b { font-size: 13px; }
+.bx-sideswitch span { font-size: 11px; }
+.bx-sideswitch button.on.up { background: var(--green); color: #fff; }
+.bx-sideswitch button.on.down { background: var(--red); color: #fff; }
+.bx-sideswitch button:disabled { opacity: 0.4; cursor: not-allowed; }
+.bx-tfield { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; background: var(--soft); border: 1px solid transparent; border-radius: 6px; }
+.bx-tfield:focus-within { border-color: var(--blue); }
+.bx-tfield .l { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.bx-tfield input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 14px; text-align: right; }
+.bx-tfield .u { font-size: 12px; font-weight: 600; color: var(--muted); }
+.bx-tpair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 6px; }
+.bx-trow-l { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+.bx-trow-l .num { color: var(--text); }
+.bx-trade .bx-tpanel .bx-pill { min-height: 28px; padding: 4px; border-radius: 6px; font-size: 12px; }
+.bx-trade .bx-tpanel .bx-choice button { border-radius: 6px; padding: 8px 10px; }
+.bx-trade .bx-tpanel .bx-choice button.on { padding: 7px 9px; }
+.bx-tsum { border-top: 1px solid var(--line); padding-top: 4px; }
+.bx-trade .bx-tsum .bx-sum { padding: 4px 0; font-size: 13px; }
+.bx-trade .bx-tsum .bx-sum.total { font-size: 14px; padding-top: 8px; }
+.bx-trade .bx-tpanel .bx-btn { border-radius: 6px; }
+.bx-tfoot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+.bx-tfoot .bx-link { font-size: 11px; }
+
+@media (max-width: 1279px) {
+  .bx-main.bx-trade {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: auto;
+    grid-template-areas: "strip strip" "chart panel" "ladder panel" "covers covers";
+  }
+}
+@media (max-width: 860px) {
+  .bx-main.bx-trade {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "strip" "ladder" "panel" "chart" "covers";
+    padding: 0 0 calc(96px + env(safe-area-inset-bottom));
+  }
+  .bx-mstrip { gap: 18px; padding: 10px 16px; }
+  .bx-trade .bx-tpanel .bx-buy { position: static; padding: 14px 16px; }
+  .bx-trade .bx-tchart .bx-chart { height: 200px; }
+  .bx-trade .bx-tchart .bx-pane-h { flex-wrap: wrap; }
+}
+.bx-trade .bx-until .bx-hint { white-space: normal; text-align: left; }
