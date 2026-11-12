@@ -8,7 +8,7 @@
  * The hedger never names a chain or a pool. This replaces the two copies of pool
  * selection that lived in server/pricing/pool-quote.ts and the Stellar wallet server.
  */
-import { durationsOffered, expiryAt, markupForDays } from "@shared/domain/durations";
+import { durationsOffered, expiryAt, markupForDays, saleMarkup } from "@shared/domain/durations";
 import { isOffered, NOT_OFFERED_MESSAGE, poolForSale } from "@shared/domain/offered-directions";
 import type { ChainRegistry } from "@shared/chains/registry";
 import {
@@ -36,7 +36,7 @@ import type { AdapterRegistry } from "../chain";
 /** The shared pricing engine, behind a seam so it can be replaced or stubbed. */
 export interface FairPricer {
   /** Fair premium rate (1e6 scale) for exact terms, and the spot it was priced at. */
-  fair(a: { pair: string; strike: string; cap: string; tenorDays: number; notional: string; direction: "up" | "down" }): Promise<{ fairRateE6: number; spot: string }>;
+  fair(a: { pair: string; strike: string; cap: string; tenorDays: number; notional: string; direction: "up" | "down"; vol?: number }): Promise<{ fairRateE6: number; spot: string; vol?: number }>;
   spot(pair: string): Promise<string>;
 }
 
@@ -58,7 +58,7 @@ export class QuoteService {
    * a reference cover (protection `strikeDistanceBps` from today, default 2%, capped 10%
    * beyond, 1,000 notional) so tenors compare on the same terms. Returned as a fraction of notional.
    */
-  async fairTable(pair: string, direction: "up" | "down", tenors: number[], strikeDistanceBps = 200) {
+  async fairTable(pair: string, direction: "up" | "down", tenors: number[], strikeDistanceBps = 200, view?: { vol: number; ceilingBps: number }) {
     const spot = Number(await this.pricer.spot(pair));
     const sign = direction === "up" ? 1 : -1;
     const strike = spot * (1 + (sign * strikeDistanceBps) / 10_000);
@@ -66,8 +66,14 @@ export class QuoteService {
     const rows = [];
     for (const tenorDays of tenors) {
       try {
-        const f = await this.pricer.fair({ pair, notional: "1000", tenorDays, structure: "capped", direction, strike: strike.toFixed(6), cap: cap.toFixed(6) } as any);
-        rows.push({ tenorDays, fairRateE6: f.fairRateE6 });
+        const terms = { pair, notional: "1000", tenorDays, structure: "capped", direction, strike: strike.toFixed(6), cap: cap.toFixed(6) } as any;
+        const f = await this.pricer.fair(terms);
+        if (!view) { rows.push({ tenorDays, fairRateE6: f.fairRateE6 }); continue; }
+        // An underwriter's volatility view, as the markup that charges it: their price over ours.
+        const mine = await this.pricer.fair({ ...terms, vol: view.vol });
+        const raw = f.fairRateE6 > 0 ? Math.round((mine.fairRateE6 / f.fairRateE6) * 10_000) : null;
+        rows.push({ tenorDays, fairRateE6: f.fairRateE6, marketVol: f.vol ?? null, viewRateE6: mine.fairRateE6,
+          markupBps: raw === null ? null : Math.min(Math.max(raw, 9_000), view.ceilingBps), capped: raw !== null && raw > view.ceilingBps });
       } catch {
         rows.push({ tenorDays, fairRateE6: null });
       }
@@ -132,7 +138,7 @@ export class QuoteService {
     const requestedDistanceBps = req.strikeDistanceBps ?? strikeDistanceBps(req, spotNow);
 
     const candidates = pools
-      .map((pool) => ({ pool, markupBps: markupForDays(pool, req.tenorDays) }))
+      .map((pool) => ({ pool, markupBps: saleMarkup(pool, req.tenorDays, req.direction) }))
       .filter(({ pool, markupBps }) => pool.pair === req.pair && pool.acceptingHedges && (pool.direction === "both" || pool.direction === req.direction)
         && (!req.pool || formatResourceId(pool.ref) === req.pool)
         && requestedDistanceBps >= (pool.structures.minStrikeDistanceBps ?? 0)
@@ -151,6 +157,16 @@ export class QuoteService {
       }
     }
     if (candidates.length === 0) throw new ApplicationError("TENOR_DISABLED", `No pool is offering a ${req.tenorDays}-day ${req.structure === "open" ? "open" : "limited"} ${req.pair} ${req.direction === "up" ? "Up cover" : "Down cover"}. Request a quote instead.`);
+
+    // Fill from the cheapest pools first, across up to six pools when one cannot take it all.
+    const routed = await this.route(req, candidates as { pool: CurrencyPool; markupBps: number }[], chain.key);
+    if (routed && !(routed instanceof ApplicationError)) {
+      if (routed.length === 1) return adapter.signQuote(routed[0].economic, buyer, routed[0].pool.poolId);
+      const legs = [];
+      for (const leg of routed) legs.push(await adapter.signQuote(leg.economic, buyer, leg.pool.poolId));
+      return { economic: combine(legs.map((l) => l.economic), routed[0].pool.asset.decimals), buyer, expiresAt: Math.min(...legs.map((l) => l.expiresAt)), executable: legs[0].executable, legs: legs.map((l) => ({ economic: l.economic, executable: l.executable })) };
+    }
+    if (routed instanceof ApplicationError && routed.code === "INSUFFICIENT_LIQUIDITY") throw routed;
 
     let last: ApplicationError = new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount");
     for (const { pool, markupBps } of candidates) {
@@ -172,9 +188,81 @@ export class QuoteService {
     return a.capacityFor ? a.capacityFor(pool.poolId, days).catch(() => null) : null;
   }
 
-  /** The economic quote for one pool, or the reason it cannot take the hedge. */
-  async economic(req: ProtectionRequest, pool: CurrencyPool, markupBps: number, chain: ChainKey): Promise<EconomicQuote | ApplicationError> {
-    const d = pool.asset.decimals;
+  /**
+   * The legs of one protection: the cheapest pools first, pools at the same price sharing
+   * in proportion to the room each has, at most six pools. Every leg shares the spot,
+   * strike, cap and fair rate priced once, as the contract requires. Null when the
+   * cheapest pool cannot be priced (the caller falls back to pricing pool by pool).
+   */
+  private async route(req: ProtectionRequest, candidates: { pool: CurrencyPool; markupBps: number }[], chain: ChainKey) {
+    if (!candidates.length) return null;
+    const first = candidates[0].pool;
+    const terms = await this.terms(req, first);
+    if (terms instanceof ApplicationError) return null;
+    const { spot, strike, cap } = terms;
+    const up = req.direction === "up";
+    const d = first.asset.decimals;
+    const width = up ? cap - strike : strike - cap;
+    const total = toUnits(req.notional, d);
+    const minLeg = BigInt(10) * BigInt(10) ** BigInt(d);
+
+    // Pools that can sell these exact terms, and how much notional each can back now.
+    const usable: { pool: CurrencyPool; markupBps: number; room: bigint }[] = [];
+    for (const c of candidates) {
+      const p = c.pool;
+      if (p.asset.decimals !== d) continue;
+      if (req.structure === "open" && p.structures.openMaxPayoutBps !== first.structures.openMaxPayoutBps) continue;
+      const minBps = BigInt(p.structures.minStrikeDistanceBps ?? 0);
+      if ((up ? strike - spot : spot - strike) * BigInt(10_000) < minBps * spot) continue;
+      if (checkTerms({ structures: p.structures, structure: req.structure, strikeAbove: up, spot, strike, cap })) continue;
+      let reserveRoom = toUnits((await this.capacityFor(p, req.tenorDays)) ?? p.liquidity.capacity, d);
+      const sideMax = p.sideTerms ? toUnits(up ? p.sideTerms.upMaxReserve : p.sideTerms.downMaxReserve, d) : BigInt(0);
+      if (sideMax > BigInt(0)) {
+        const held = toUnits(p.sideReserved ? (up ? p.sideReserved.up : p.sideReserved.down) : "0", d);
+        const left = sideMax - held;
+        if (left < reserveRoom) reserveRoom = left;
+      }
+      const room = reserveRoom > BigInt(0) ? (reserveRoom * spot) / width : BigInt(0);
+      if (room >= minLeg) usable.push({ ...c, room });
+    }
+
+    // Allocate, cheapest price first; a price shared by several pools is split by room.
+    const legs: { pool: CurrencyPool; markupBps: number; notional: bigint }[] = [];
+    let left = total;
+    const prices = Array.from(new Set(usable.map((u) => u.markupBps))).sort((a, b) => a - b);
+    for (const price of prices) {
+      if (left === BigInt(0)) break;
+      const group = usable.filter((u) => u.markupBps === price).slice(0, 6 - legs.length);
+      if (!group.length) break;
+      const room = group.reduce((sum, g) => sum + g.room, BigInt(0));
+      const take = room < left ? room : left;
+      const parts = group.map((g) => (take * g.room) / room);
+      let rest = take - parts.reduce((a, b) => a + b, BigInt(0));
+      for (let i = 0; i < group.length && rest > BigInt(0); i++) {
+        const extra = group[i].room - parts[i] < rest ? group[i].room - parts[i] : rest;
+        parts[i] += extra;
+        rest -= extra;
+      }
+      group.forEach((g, i) => { if (parts[i] > BigInt(0)) legs.push({ pool: g.pool, markupBps: g.markupBps, notional: parts[i] }); });
+      left -= take;
+      if (legs.length >= 6) break;
+    }
+    if (left > BigInt(0)) return new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity across all pools for that amount and duration");
+    // A sliver below the contract's minimum joins the largest leg in its price group when it fits, else the whole route fails.
+    if (legs.some((l) => l.notional < minLeg)) {
+      const small = legs.filter((l) => l.notional < minLeg);
+      for (const s of small) {
+        const home = legs.find((l) => l !== s && l.notional >= minLeg && usable.find((u) => u.pool === l.pool)!.room - l.notional >= s.notional);
+        if (!home) return null;
+        home.notional += s.notional;
+        legs.splice(legs.indexOf(s), 1);
+      }
+    }
+    return legs.map((l) => ({ pool: l.pool, economic: this.leg(req, l.pool, l.markupBps, chain, terms, l.notional) }));
+  }
+
+  /** Price the terms once against a pool's rules: spot, exact strike and cap, fair rate. */
+  private async terms(req: ProtectionRequest, pool: CurrencyPool): Promise<{ priced: { fairRateE6: number; spot: string }; spot: bigint; strike: bigint; cap: bigint } | ApplicationError> {
     const up = req.direction === "up";
     // A strike or limit given as a distance is measured from the rate actually priced at.
     const strikeFor = (spot: bigint) => req.strikeDistanceBps === undefined ? toRate(req.strike) : awayFrom(spot, req.strikeDistanceBps, up);
@@ -209,17 +297,32 @@ export class QuoteService {
     }
     const problem = checkTerms({ structures: pool.structures, structure: req.structure, strikeAbove: up, spot, strike, cap });
     if (problem) return new ApplicationError(problem.code, problem.message);
+    return { priced, spot, strike, cap };
+  }
 
+  /** The economic quote for one pool, or the reason it cannot take the hedge. */
+  async economic(req: ProtectionRequest, pool: CurrencyPool, markupBps: number, chain: ChainKey): Promise<EconomicQuote | ApplicationError> {
+    const t = await this.terms(req, pool);
+    if (t instanceof ApplicationError) return t;
+    const d = pool.asset.decimals;
     const notional = toUnits(req.notional, d);
-    const reserve = maxPayout(notional, strike, cap, spot);
+    const reserve = maxPayout(notional, t.strike, t.cap, t.spot);
     // Underwriters may back only some durations, so what is free for this one can be less than the pool's total.
     const capacity = (await this.capacityFor(pool, req.tenorDays)) ?? pool.liquidity.capacity;
     if (reserve > toUnits(capacity, d)) return new ApplicationError("INSUFFICIENT_LIQUIDITY", "Not enough free liquidity for that amount and duration");
+    return this.leg(req, pool, markupBps, chain, t, notional);
+  }
 
+  /** One pool's share of a protection, at terms already priced. */
+  private leg(req: ProtectionRequest, pool: CurrencyPool, markupBps: number, chain: ChainKey,
+    t: { priced: { fairRateE6: number; spot: string }; spot: bigint; strike: bigint; cap: bigint }, notional: bigint): EconomicQuote {
+    const d = pool.asset.decimals;
+    const { priced, spot, strike, cap } = t;
+    const reserve = maxPayout(notional, strike, cap, spot);
     const fair = BigInt(priced.fairRateE6);
     const cost = costBreakdown({ notional, fairRate: fair, markupBps: BigInt(markupBps), hedgerFeeRate: BigInt(pool.fees.hedgerFeeRateE6) });
     return {
-      pair: req.pair, notional: req.notional, tenorDays: req.tenorDays, structure: req.structure, direction: req.direction,
+      pair: req.pair, notional: fromUnits(notional, d), tenorDays: req.tenorDays, structure: req.structure, direction: req.direction,
       spot: priced.spot, strike: fromRate(strike), cap: fromRate(cap), fairRateE6: priced.fairRateE6, markupBps,
       offerRateE6: Number(offerRate(fair, BigInt(markupBps))), premium: fromUnits(cost.premium, d), hedgerFee: fromUnits(cost.platformFee, d),
       totalCost: fromUnits(cost.totalCost, d), maxPayout: fromUnits(reserve, d), pool: pool.ref, executionChain: chain,
@@ -241,9 +344,9 @@ export async function enginePricer(): Promise<FairPricer> {
       const q = await quote({
         pair: a.pair, strike: Number(a.strike), payoutCap: Number(a.cap),
         expiryUnixSeconds: expiryAt(Math.floor(Date.now() / 1000), a.tenorDays),
-        notional: Number(a.notional), strikeAbove: a.direction === "up",
+        notional: Number(a.notional), strikeAbove: a.direction === "up", sigmaOverride: a.vol,
       });
-      return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot) };
+      return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot), vol: q.breakdown.inputs.sigma };
     },
   };
 }
@@ -261,4 +364,13 @@ function awayFrom(base: bigint, bps: number, up: boolean): bigint {
 /** How far the requested strike is from today's rate, in bps of spot. */
 function strikeDistanceBps(req: ProtectionRequest, spot: number) {
   return spot > 0 ? (Math.abs(Number(req.strike) - spot) / spot) * 10_000 : 0;
+}
+
+/** The whole of a protection split across pools: amounts summed, rates weighted by amount. */
+function combine(legs: EconomicQuote[], decimals: number): EconomicQuote {
+  const sum = (k: "notional" | "premium" | "hedgerFee" | "totalCost" | "maxPayout") =>
+    fromUnits(legs.reduce((a, l) => a + toUnits(l[k], decimals), BigInt(0)), decimals);
+  const notional = legs.reduce((a, l) => a + Number(l.notional), 0);
+  const weighted = (k: "markupBps" | "offerRateE6") => Math.round(legs.reduce((a, l) => a + l[k] * Number(l.notional), 0) / notional);
+  return { ...legs[0], notional: sum("notional"), premium: sum("premium"), hedgerFee: sum("hedgerFee"), totalCost: sum("totalCost"), maxPayout: sum("maxPayout"), markupBps: weighted("markupBps"), offerRateE6: weighted("offerRateE6") };
 }

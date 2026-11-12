@@ -50,8 +50,8 @@ export interface WithdrawalRequestView {
 
 export interface CreatePoolInput {
   pair: string;
-  /** The move the pool covers. Each pool sells one direction. */
-  direction: "up" | "down";
+  /** The move the pool covers: one side, or both (a two-way pool). */
+  direction: "up" | "down" | "both";
   allowExternalLp: boolean;
   structures: { open: boolean; capped: boolean; minCapDistanceBps: number; maxCapDistanceBps: number; openMaxPayoutBps: number; minStrikeDistanceBps?: number };
   tenors: TenorInput[];

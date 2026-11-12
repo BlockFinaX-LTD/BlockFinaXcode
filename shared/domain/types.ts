@@ -146,8 +146,14 @@ export interface CurrencyPool {
   poolId: number;
   creator: string;
   pair: string;
-  /** The move the pool covers: "up" (rate rises, quote currency weakens) or "down". "both" only on pools created before the one-direction rule. */
+  /** The move the pool covers: "up" (rate rises, quote currency weakens), "down", or "both" (a two-way pool). */
   direction: Direction | "both";
+  /** The most any pool on this pair may charge, in bps of fair (contract's per-pair ceiling). Absent on older contracts. */
+  markupCeilingBps?: number;
+  /** Per-side limits and prices (mostly two-way pools). Max 0 = no limit; markups multiply the tenor's (10,000 = unchanged). */
+  sideTerms?: { upMaxReserve: string; downMaxReserve: string; upMarkupBps: number; downMarkupBps: number };
+  /** Reserve held for running cover on each side now. */
+  sideReserved?: { up: string; down: string };
   asset: Asset;
   acceptingHedges: boolean;
   allowExternalLp: boolean;
@@ -191,6 +197,8 @@ export interface ProtectionPosition {
   maxPayout: string;
   settlementPrice: string | null;
   payout: string;
+  /** The order this hedge was bought in, when one protection was split across pools. */
+  orderId?: number;
 }
 
 /** What a hedger asks for. No chain anywhere: BlockFinaX picks the Execution Network. */
@@ -243,6 +251,12 @@ export interface ProtectionQuote {
   expiresAt: number;
   /** Chain-specific, opaque to the product layer; passed back to the adapter to build the transaction. */
   executable: Record<string, unknown>;
+  /**
+   * When one pool cannot take the whole amount: the same cover bought from several pools in
+   * one transaction, cheapest first. `economic` is then the total across legs and
+   * `executable` the first leg's; each leg carries its own signed payload.
+   */
+  legs?: { economic: EconomicQuote; executable: Record<string, unknown> }[];
 }
 
 export interface SettlementResult {

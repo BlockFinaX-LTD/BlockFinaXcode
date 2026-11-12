@@ -3,7 +3,8 @@
  * Home, Pools (all pools, and My pools), Create pool, Pool (tenor pricing, protection settings, docked
  * Add liquidity / Withdraw panel), Risk and exposure, Withdraw.
  * All tenors share one pool's liquidity. BlockFinaX computes the fair price; the
- * underwriter sets the offer, stored on chain as a markup on fair (90% to 500%).
+ * underwriter sets the offer, stored on chain as a markup on fair, from 90% up to the
+ * pair's ceiling (2x unless the protocol owner set another, never above 3x).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,10 +21,16 @@ import {
 import { CoverName, Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
 import type { Go } from './workspace';
 import { isOffered } from '@shared/domain/offered-directions';
-import { durationsOffered } from '@shared/domain/durations';
+import { DEFAULT_MARKUP_CEILING_BPS, durationsOffered, saleMarkup } from '@shared/domain/durations';
 
 const MARKUP_MIN = 9000;
-const MARKUP_MAX = 50000;
+/** The most a pool on `pair` may charge, from any pool the server has read on that pair. */
+const ceilingFor = (pools: CurrencyPool[] | undefined, pair: string) =>
+  pools?.find((p) => p.pair === pair && p.markupCeilingBps)?.markupCeilingBps ?? DEFAULT_MARKUP_CEILING_BPS;
+const times = (bps: number) => `${(bps / 10000).toFixed(bps % 1000 === 0 ? 1 : 2)}x`;
+const ordinal = (n: number) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+/** A pool's own name for a side, or both. */
+const coverOf = (pair: string, d: Direction | 'both') => (d === 'both' ? `${pair} Up and Down cover` : exposureLabel(pair, d).cover);
 /** Per-hedge underwriting (current Stellar pools): each underwriter's own balances in USDC. */
 type LpAccount = { free: string; reserved: string; earned: string; paid: string; pendingWithdraw: string; withdrawable: string; backing: boolean; maxTenorDays: number; minTenorDays?: number };
 type Stake = { shares: string; value: string; account?: LpAccount };
@@ -259,7 +266,7 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
           <button className="bx-link bx-back" onClick={() => go('u-pools')}><ChevronLeft aria-hidden="true" /> Pools</button>
           <div className="bx-dense-head">
             <Flag pair={pool.pair} />
-            <div><div className="bx-dense-name">{poolName(pool)} pool</div><div className="muted">Pays hedgers if {pool.pair} {pool.direction === 'down' ? 'falls below' : 'rises past'} their strike</div></div>
+            <div><div className="bx-dense-name">{poolName(pool)} pool</div><div className="muted">Pays hedgers if {pool.pair} {pool.direction === 'down' ? 'falls below' : pool.direction === 'both' ? 'moves past' : 'rises past'} their strike</div></div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
 <button className="bx-btn ghost small" onClick={() => go('pair', { pair: pool.pair })}>Chart and positions</button>
               <Tag tone={pool.acceptingHedges ? 'green' : 'grey'}>{pool.acceptingHedges ? 'Accepting hedges' : 'Paused'}</Tag>
@@ -275,6 +282,7 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
           </div>
         </div>
         <TenorPricing pool={pool} editable={creator} />
+        <SideTerms pool={pool} editable={creator} />
         <ProtectionSettings pool={pool} editable={creator} />
       </section>
       <aside className="bx-aside" aria-label="Liquidity"><LiquidityPanel pool={pool} /><TakeOverCard pool={pool} /></aside>
@@ -285,7 +293,21 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
 function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const all = usePools();
   const direction: Direction = pool.direction === 'down' ? 'down' : 'up';
+  const MARKUP_MAX = pool.markupCeilingBps ?? ceilingFor(all.data, pool.pair);
+  // Where this pool is filled among every pool selling the same cover: cheapest first.
+  const rivals = (all.data ?? []).filter((p) => poolRef(p) !== poolRef(pool) && !p.legacy && p.pair === pool.pair && p.acceptingHedges
+    && Number(p.liquidity.capacity) > 0 && (p.direction === direction || p.direction === 'both'));
+  const rankOf = (d: number, markup: number) => {
+    const theirs = rivals.map((p) => saleMarkup(p, d, direction)).filter((m): m is number => m !== null);
+    const cheaper = theirs.filter((m) => m < markup).length;
+    return { rank: cheaper + 1, of: theirs.length + 1, best: theirs.length ? Math.min(...theirs) : null };
+  };
+  // An underwriter's own view of how much the currency moves, turned into offers.
+  const [vol, setVol] = useState('');
+  const [view, setView] = useState<{ rows: { tenorDays: number; fairRateE6: number | null; marketVol?: number | null; markupBps?: number | null; capped?: boolean }[] } | null>(null);
+  const [viewBusy, setViewBusy] = useState(false);
   const [extra, setExtra] = useState<number[]>([]);
   const days = Array.from(new Set([...pool.tenors.map((t) => t.tenorDays), ...extra])).sort((a, b) => a - b);
   const fair = useFair(pool.pair, direction, days, pool.structures.minStrikeDistanceBps ?? 0);
@@ -295,8 +317,21 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
   const [busy, setBusy] = useState<number | null>(null);
   const sold = new Map<number, number>();
   for (const p of usePoolPositions([pool]).get(poolRef(pool)) ?? []) sold.set(p.tenorDays, (sold.get(p.tenorDays) ?? 0) + Number(p.maxPayout));
-  useEffect(() => { setOffers({}); setExtra([]); }, [pool.ref.id]);
-  const cols = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 150px' };
+  useEffect(() => { setOffers({}); setExtra([]); setView(null); }, [pool.ref.id]);
+  const cols = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 150px' };
+  const marketVol = view?.rows.find((r) => r.marketVol)?.marketVol ?? null;
+  async function priceFromView() {
+    setViewBusy(true);
+    try {
+      const v = await api<NonNullable<typeof view>>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${days.join(',')}&distance=${pool.structures.minStrikeDistanceBps ?? 0}&vol=${Number(vol)}`);
+      setView(v);
+      const next: Record<number, string> = {};
+      for (const r of v.rows) if (r.fairRateE6 && r.markupBps) next[r.tenorDays] = ((r.fairRateE6 / 1e6) * (r.markupBps / 10000) * 100).toFixed(2);
+      setOffers(next);
+    } catch (e) {
+      toast({ title: 'Could not price your view', description: (e as Error).message, variant: 'destructive' });
+    } finally { setViewBusy(false); }
+  }
   const range = durationsOffered(pool).range;
 
   async function save(tenorDays: number, active: boolean, markupBps: number) {
@@ -320,7 +355,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ minWidth: 640 }}>
-          <div className="bx-list-h" style={cols}><span>{hint("Tenor")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Offer")}</span><span className="r">{hint("Difference")}</span><span className="r">{hint("Active cover")}</span><span className="r">On</span></div>
+          <div className="bx-list-h" style={cols}><span>{hint("Tenor")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Offer")}</span><span className="r">{hint("Difference")}</span><span className="r">Filled</span><span className="r">{hint("Active cover")}</span><span className="r">On</span></div>
           {days.map((d) => {
             const t = pool.tenors.find((x) => x.tenorDays === d);
             const f = fairOf(d);
@@ -339,6 +374,11 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
                 <span className="r num" style={{ color: 'var(--text-2)' }}>{f ? pct(f / 1e6) : fair.isLoading ? '...' : '-'}</span>
                 <span className="r">{editable ? <label className="bx-mini-input"><input aria-label={`Offer for ${d} days`} value={offer} onChange={(e) => setOffers((o) => ({ ...o, [d]: e.target.value.replace(/[^0-9.]/g, '') }))} /><span className="muted">%</span></label> : <span className="num" style={{ fontWeight: 600 }}>{offer}%</span>}</span>
                 <span className={`r num ${diff !== null && diff >= 0 ? 'up' : 'down'}`} style={{ fontWeight: 600 }}>{diff === null ? '-' : `${diff >= 0 ? '+' : ''}${diff} bps`}</span>
+                {(() => {
+                  const r = rankOf(d, Math.min(newMarkup, MARKUP_MAX));
+                  const beat = r.rank > 1 && r.best !== null && f ? `Offer ${((f / 1e6) * (r.best / 10000) * 100).toFixed(2)}% or less to be filled first` : undefined;
+                  return <span className="r num" title={beat} style={{ color: r.rank === 1 ? 'var(--green)' : undefined }}>{r.of === 1 ? 'Only pool' : `${ordinal(r.rank)} of ${r.of}`}</span>;
+                })()}
                 <span className="r num">${fmt(sold.get(d) ?? 0, 0)}</span>
                 <span className="r" style={{ display: 'inline-flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
                   {busy === d ? <Spin /> : <>
@@ -358,7 +398,91 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
           )}
         </div>
       </div>
-      {editable && <div className="sub" style={{ marginTop: 10 }}>Offers must be 90% to 500% of the fair price.</div>}
+      {editable && (
+        <div style={{ marginTop: 14, padding: 14, border: '1px solid var(--line-2)', borderRadius: 12 }}>
+          <div style={{ fontWeight: 600 }}>Price from your view of the {ccyName(pool.pair)}</div>
+          <div className="sub" style={{ margin: '4px 0 10px' }}>
+            If you think it moves more than our model does, enter how much a year. We work out the offer for every duration from it, and you can still change any offer before saving.
+            {marketVol ? ` Our model uses ${(marketVol * 100).toFixed(0)}% a year right now.` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="bx-mini-input"><input aria-label="Your view of yearly movement" value={vol} onChange={(e) => setVol(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="45" /><span className="muted">% a year</span></label>
+            <button className="bx-btn ghost small" disabled={viewBusy || !(Number(vol) >= 1 && Number(vol) <= 300)} onClick={priceFromView}>{viewBusy ? <Spin /> : 'Fill offers from my view'}</button>
+          </div>
+          {view?.rows.some((r) => r.capped) && <div className="bx-hint" style={{ textAlign: 'left', marginTop: 8 }}>Some offers stop at the {pool.pair} ceiling of {times(MARKUP_MAX)} fair. For cover you think is worth more, answer requests for a quote, where there is no ceiling.</div>}
+        </div>
+      )}
+      {editable && <div className="sub" style={{ marginTop: 10 }}>Offers can be 90% of the fair price up to the {pool.pair} ceiling of {times(MARKUP_MAX)}. Businesses buy from the cheapest pools first; "Filled" shows where your offer stands. Hover it to see the offer that would be filled first.</div>}
+    </div>
+  );
+}
+
+/**
+ * Two-way pools: a limit and a price for each side, and the balance between them. One-way
+ * pools see only their side's limit.
+ */
+function SideTerms({ pool, editable }: { pool: CurrencyPool; editable: boolean }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const st = pool.sideTerms;
+  const [upMax, setUpMax] = useState(st?.upMaxReserve ?? '0');
+  const [downMax, setDownMax] = useState(st?.downMaxReserve ?? '0');
+  const [upPct, setUpPct] = useState(String((st?.upMarkupBps ?? 10000) / 100));
+  const [downPct, setDownPct] = useState(String((st?.downMarkupBps ?? 10000) / 100));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setUpMax(st?.upMaxReserve ?? '0'); setDownMax(st?.downMaxReserve ?? '0');
+    setUpPct(String((st?.upMarkupBps ?? 10000) / 100)); setDownPct(String((st?.downMarkupBps ?? 10000) / 100));
+  }, [pool.ref.id, st?.upMaxReserve, st?.downMaxReserve, st?.upMarkupBps, st?.downMarkupBps]);
+  const positions = usePoolPositions([pool]).get(poolRef(pool)) ?? [];
+  if (!st) return null;
+  const two = pool.direction === 'both';
+  const sides = (two ? ['up', 'down'] : [pool.direction]) as Direction[];
+  const held = { up: Number(pool.sideReserved?.up ?? 0), down: Number(pool.sideReserved?.down ?? 0) };
+  // What running cover would pay if the rate moved this far from where each was bought.
+  const payIf = (side: Direction, move: number) => positions.filter((p) => p.direction === side && p.status === 'active').reduce((sum, p) => {
+    const spot = Number(p.spot), k = Number(p.strike), c = Number(p.cap), n = Number(p.notional);
+    const rate = side === 'up' ? spot * (1 + move) : spot * (1 - move);
+    const gain = side === 'up' ? Math.min(rate, c) - k : k - Math.max(rate, c);
+    return sum + (gain > 0 ? (n * gain) / spot : 0);
+  }, 0);
+  const bps = (v: string) => Math.round(Number(v) * 100);
+  const valid = [upMax, downMax].every((v) => Number(v) >= 0) && [upPct, downPct].every((v) => bps(v) >= 9000 && bps(v) <= 30000);
+  const dirty = upMax !== st.upMaxReserve || downMax !== st.downMaxReserve || bps(upPct) !== st.upMarkupBps || bps(downPct) !== st.downMarkupBps;
+  async function save() {
+    setBusy(true);
+    try {
+      const { transactions } = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(pool))}/sides/prepare`, {
+        upMaxReserve: upMax || '0', downMaxReserve: downMax || '0', upMarkupBps: bps(upPct), downMarkupBps: bps(downPct),
+      });
+      await signAndSend(transactions, () => {});
+      toast({ title: 'Side terms saved' });
+      void qc.invalidateQueries({ queryKey: ['v2-pools'] });
+    } catch (e) {
+      toast({ title: 'Not saved', description: (e as Error).message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  }
+  const cols = { gridTemplateColumns: two ? 'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1.4fr) minmax(0, 1fr)' };
+  return (
+    <div className="bx-card">
+      <div className="bx-card-h">
+        <div><h2>{two ? 'Each side' : 'Sales limit'}</h2><div className="sub">{two
+          ? 'This pool sells both Up and Down cover. When the rate moves sharply one way, premiums from cover sold the other way help pay. Limit and price each side here.'
+          : 'The most this pool will have set aside for running cover at once. 0 means no limit beyond the money in the pool.'}</div></div>
+        {editable && dirty && <button className="bx-btn small" disabled={busy || !valid} onClick={save}>{busy ? <Spin /> : 'Save'}</button>}
+      </div>
+      <div className="bx-list-h" style={cols}><span /> {sides.map((d) => <span key={d} className="r">{exposureLabel(pool.pair, d).kind}</span>)}</div>
+      <div className="bx-li" style={cols}><span>Set aside now</span>{sides.map((d) => <span key={d} className="r num">${fmt(held[d], 0)}</span>)}</div>
+      <div className="bx-li" style={cols}><span>Most to set aside (0 = no limit)</span>{sides.map((d) => (
+        <span key={d} className="r">{editable ? <label className="bx-mini-input"><span className="muted">$</span><input aria-label={`Limit for ${exposureLabel(pool.pair, d).kind}`} value={d === 'up' ? upMax : downMax} onChange={(e) => (d === 'up' ? setUpMax : setDownMax)(e.target.value.replace(/[^0-9.]/g, ''))} /></label> : <span className="num">{Number(d === 'up' ? upMax : downMax) > 0 ? `$${fmt(d === 'up' ? upMax : downMax, 0)}` : 'No limit'}</span>}</span>
+      ))}</div>
+      {two && <div className="bx-li" style={cols}><span>Price, % of your tenor offer</span>{sides.map((d) => (
+        <span key={d} className="r">{editable ? <label className="bx-mini-input"><input aria-label={`Price for ${exposureLabel(pool.pair, d).kind}`} value={d === 'up' ? upPct : downPct} onChange={(e) => (d === 'up' ? setUpPct : setDownPct)(e.target.value.replace(/[^0-9.]/g, ''))} /><span className="muted">%</span></label> : <span className="num">{d === 'up' ? upPct : downPct}%</span>}</span>
+      ))}</div>}
+      {[0.1, 0.3].map((m) => (
+        <div key={m} className="bx-li" style={cols}><span>Pays out if the rate moves {m * 100}%</span>{sides.map((d) => <span key={d} className="r num">${fmt(payIf(d, m), 0)}</span>)}</div>
+      ))}
+      <div className="sub" style={{ marginTop: 8 }}>Moves are measured from the rate each cover was bought at.{two ? ' A side priced at 120% charges 1.2 times your tenor offer for that side, up to the pair ceiling.' : ''}</div>
     </div>
   );
 }
@@ -636,10 +760,17 @@ export function CreatePool({ go }: { go: Go }) {
   const balances = useUsdcBalances();
   const setup = useQuery({ queryKey: ['v2-pool-setup'], queryFn: () => api<{ chain: string; pairs: string[]; creationFee: string }>('/api/v2/pools/setup') });
   const [step, setStep] = useState(0);
-  const exposures = useMemo(() => (setup.data?.pairs ?? []).flatMap((pair) => (['up', 'down'] as Direction[]).filter(isOffered).map((d) => `${pair}:${d}`)), [setup.data]);
+  const allPools = usePools();
+  const exposures = useMemo(() => (setup.data?.pairs ?? []).flatMap((pair) => {
+    const ds = (['up', 'down'] as Direction[]).filter(isOffered);
+    return [...ds, ...(ds.length === 2 ? ['both'] : [])].map((d) => `${pair}:${d}`);
+  }), [setup.data]);
   const [key, setKey] = useState('');
   useEffect(() => { if (!key && exposures[0]) setKey(exposures[0]); }, [exposures, key]);
-  const [pair, direction] = (key || ':up').split(':') as [string, Direction];
+  const [pair, side] = (key || ':up').split(':') as [string, Direction | 'both'];
+  // A two-way pool lists one offer per duration for both sides; it is priced on Up cover.
+  const direction: Direction = side === 'down' ? 'down' : 'up';
+  const MARKUP_MAX = ceilingFor(allPools.data, pair);
   const [amount, setAmount] = useState('500');
   const [network, setNetwork] = useState<string | null>(null);
   const [tenors, setTenors] = useState<TenorDraft[]>([3, 7, 14, 30].map((d) => ({ tenorDays: d, offerPct: '', active: true })));
@@ -669,7 +800,7 @@ export function CreatePool({ go }: { go: Go }) {
   const have = usdcOn(balances.data?.rows, network ?? hub);
   const problems = [
     !(Number(amount) >= 10) ? 'Commit at least $10' : total > have ? `You need $${fmt(total)} USDC on this network` : null,
-    !tenors.some((t) => t.active) ? 'Turn on at least one tenor' : tenors.some((t) => markupOf(t) < MARKUP_MIN || markupOf(t) > MARKUP_MAX) ? 'Each offer must be 90% to 500% of the fair price' : null,
+    !tenors.some((t) => t.active) ? 'Turn on at least one tenor' : tenors.some((t) => markupOf(t) < MARKUP_MIN || markupOf(t) > MARKUP_MAX) ? `Each offer must be 90% of the fair price up to ${times(MARKUP_MAX)} (the ${pair} ceiling)` : null,
     !openOn && !cappedOn ? 'Offer at least one protection type' : Number(maxCap) > 0 && Number(minCap) > Number(maxCap) ? 'The smallest limit must be below the largest' : !(Number(minStrike) >= 0 && Number(minStrike) <= 50) ? 'Closest strike must be 0% to 50%' : null,
     null,
   ];
@@ -679,7 +810,7 @@ export function CreatePool({ go }: { go: Go }) {
     try {
       if (network && hub && network !== hub) await routeFunding({ network, amount: String(total), hubName });
       const { transactions } = await api<{ transactions: PreparedTransaction[] }>('/api/v2/pools/prepare', {
-        pair, direction, allowExternalLp: true, initialLiquidity: amount,
+        pair, direction: side, allowExternalLp: true, initialLiquidity: amount,
         structures: { open: openOn, capped: cappedOn, minCapDistanceBps: Math.round(Number(minCap) * 100), maxCapDistanceBps: Math.round(Number(maxCap) * 100), openMaxPayoutBps: Math.round(Number(openMax) * 100), minStrikeDistanceBps: Math.round(Number(minStrike) * 100) },
         tenors: tenors.map((t) => ({ tenorDays: t.tenorDays, active: t.active, markupBps: markupOf(t) })),
       });
@@ -688,7 +819,7 @@ export function CreatePool({ go }: { go: Go }) {
       if (durMode !== 'any' || Number(durMin) > 1) {
         setBusy('Setting durations...');
         const mine = (await api<{ pools: CurrencyPool[] }>('/api/v2/pools')).pools
-          .filter((p) => p.pair === pair && p.direction === direction && !p.legacy)
+          .filter((p) => p.pair === pair && p.direction === side && !p.legacy)
           .sort((a, b) => b.createdAt - a.createdAt)[0];
         if (mine) {
           const rule = await api<{ transactions: PreparedTransaction[] }>(`/api/v2/pools/${encodeURIComponent(poolRef(mine))}/durations/prepare`, {
@@ -697,7 +828,7 @@ export function CreatePool({ go }: { go: Go }) {
           await signAndSend(rule.transactions, (m) => setBusy(m));
         }
       }
-      toast({ title: 'Pool created', description: `Your ${exposureLabel(pair, direction).cover} pool is live.` });
+      toast({ title: 'Pool created', description: `Your ${coverOf(pair, side)} pool is live.` });
       for (const k of ['v2-pools', 'v2-usdc-all']) void qc.invalidateQueries({ queryKey: [k] });
       go('u-pools');
     } catch (e) {
@@ -720,10 +851,12 @@ export function CreatePool({ go }: { go: Go }) {
             <>
               <label className="bx-field"><span>{hint("Underwrite")}</span>
                 <select className="bx-select" value={key} onChange={(e) => setKey(e.target.value)}>
-                  {exposures.map((k) => { const [p, d] = k.split(':') as [string, Direction]; return <option key={k} value={k}>{exposureLabel(p, d).cover} ({p})</option>; })}
+                  {exposures.map((k) => { const [p, d] = k.split(':') as [string, Direction | 'both']; return <option key={k} value={k}>{coverOf(p, d)}{d === 'both' ? ', two-way' : ''} ({p})</option>; })}
                 </select>
               </label>
-              {pair && <div className="sub" style={{ marginTop: -8, marginBottom: 16 }}>You pay out if the {ccyName(pair)} {exposureLabel(pair, direction).verb} past what buyers chose, and earn their premiums otherwise.</div>}
+              {pair && <div className="sub" style={{ marginTop: -8, marginBottom: 16 }}>{side === 'both'
+                ? `You sell both sides. You pay out if the ${ccyName(pair)} moves past what buyers chose in either direction, and a sharp move one way is partly paid for by premiums from the other side. You can limit and price each side after creating the pool.`
+                : `You pay out if the ${ccyName(pair)} ${exposureLabel(pair, direction).verb} past what buyers chose, and earn their premiums otherwise.`}</div>}
               <label className="bx-field"><span>{hint("Commit liquidity (USDC)")}</span><input className="bx-input num" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
               <div className="bx-pills" style={{ marginBottom: 16, marginTop: -8 }}>{[100, 250, 500, 1000].map((c) => <button key={c} className={`bx-pill${Number(amount) === c ? ' on' : ''}`} onClick={() => setAmount(String(c))}>${c.toLocaleString()}</button>)}</div>
               <FundingSelect value={network} onChange={setNetwork} />
@@ -797,7 +930,7 @@ export function CreatePool({ go }: { go: Go }) {
           )}
           {step === 3 && (
             <div className="bx-sums" style={{ borderTop: 0 }}>
-              <Sum l="Underwrite" v={exposureLabel(pair, direction).cover} />
+              <Sum l="Underwrite" v={coverOf(pair, side)} />
               <Sum l="Committed liquidity" v={<span className="num">${fmt(amount)}</span>} />
               {tenors.filter((t) => t.active).map((t) => <Sum key={t.tenorDays} l={`${t.tenorDays}-day offer`} v={<span className="num">{t.offerPct}%</span>} />)}
               {cappedOn && <Sum l="Limited Protection" v={`limits ${minCap}% to ${maxCap}%`} />}
@@ -817,7 +950,7 @@ export function CreatePool({ go }: { go: Go }) {
       <aside className="bx-aside">
         <div className="bx-panel">
           <div style={{ fontSize: 16, fontWeight: 600 }}>Pool summary</div>
-          {pair && <div className="bx-who"><Flag pair={pair} /><div><div className="t">{exposureLabel(pair, direction).cover}</div><div className="d">{pair}</div></div></div>}
+          {pair && <div className="bx-who"><Flag pair={pair} /><div><div className="t">{coverOf(pair, side)}</div><div className="d">{pair}</div></div></div>}
           <div className="bx-sums">
             <Sum l="Liquidity" v={<span className="num">${fmt(amount)}</span>} />
             <Sum l="Funding network" v={chains.data?.chains.find((c) => c.key === (network ?? hub))?.name ?? '-'} />

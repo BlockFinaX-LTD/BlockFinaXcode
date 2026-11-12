@@ -57,6 +57,29 @@ export function markupForDays(pool: { tenors: Tenor[]; durations?: DurationRule 
   return (lo ?? hi)?.markupBps ?? null;
 }
 
+/** The contract's floor on any markup: 90% of fair. */
+export const MIN_MARKUP_BPS = 9_000;
+/** The ceiling a pair has when the owner has set none. */
+export const DEFAULT_MARKUP_CEILING_BPS = 20_000;
+
+/**
+ * The markup a pool sells at for a duration and side, exactly as the contract applies it:
+ * the tenor's markup times the side's, held between 90% of fair and the pair's ceiling.
+ * Pools from contracts without ceilings or side terms keep their listed markup.
+ */
+export function saleMarkup(
+  pool: { tenors: Tenor[]; durations?: DurationRule; markupCeilingBps?: number; sideTerms?: { upMarkupBps: number; downMarkupBps: number } },
+  days: number,
+  direction: "up" | "down",
+): number | null {
+  const tenor = markupForDays(pool, days);
+  if (tenor === null) return null;
+  if (pool.markupCeilingBps === undefined) return tenor;
+  const side = pool.sideTerms ? (direction === "up" ? pool.sideTerms.upMarkupBps : pool.sideTerms.downMarkupBps) : 10_000;
+  const m = Math.trunc((tenor * side) / 10_000);
+  return Math.min(Math.max(m, MIN_MARKUP_BPS), pool.markupCeilingBps);
+}
+
 /** Durations a pool can be asked for: a range for the open modes, a list otherwise. */
 export function durationsOffered(pool: { tenors: Tenor[]; durations?: DurationRule }): { range: { minDays: number; maxDays: number } | null; days: number[] } {
   const rule = pool.durations;

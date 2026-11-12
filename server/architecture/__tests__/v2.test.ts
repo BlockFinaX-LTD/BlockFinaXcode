@@ -409,3 +409,66 @@ test("settlement results read the same on every chain", () => {
     position: `stellar:${STELLAR_POOL}:position/3`, settlementPrice: "12", grossPayout: "3571.4285714", fee: "35.7142857", netPayout: "3535.7142857", status: "settled_claimable",
   });
 });
+
+// ── One market across pools (2026-11-12) ──────────────────────────────────────
+
+function sized(id: number, markup: number, capacity: string, extra: Partial<CurrencyPool> = {}): CurrencyPool {
+  const p = pool("stellar", 7, markup);
+  return { ...p, ref: { ...p.ref, id: `pool/${id}` }, poolId: id, liquidity: { ...p.liquidity, capacity }, ...extra };
+}
+
+function routed(pools: CurrencyPool[]) {
+  const r = new ChainRegistry(beginHubMigration(config(), "stellar"));
+  const st = { ...fakeAdapter("stellar", 7), listPools: async () => pools, signQuote: async (economic: EconomicQuote, buyer: string, poolId: number) => ({ economic, buyer, expiresAt: 100 + poolId, executable: { pool_id: poolId } }) };
+  return new QuoteService(r, new AdapterRegistry(r, { base: fakeAdapter("base", 6), stellar: st }), pricer);
+}
+
+test("one pool that fits takes the whole protection, cheapest first", async () => {
+  const q = await routed([sized(1, 12_000, "500000"), sized(2, 11_000, "500000")]).quote(request, { stellar: STELLAR_USER });
+  assert.equal(q.legs, undefined);
+  assert.equal(q.economic.pool.id, "pool/2");
+});
+
+test("a protection too big for one pool is split, cheapest pools first", async () => {
+  // 100,000 of cover reserves 8,035.71; pool 2 (cheapest) holds 4,000, pool 1 the rest.
+  const q = await routed([sized(1, 12_000, "500000"), sized(2, 11_000, "4000"), sized(3, 15_000, "500000")]).quote(request, { stellar: STELLAR_USER });
+  assert.equal(q.legs?.length, 2);
+  assert.deepEqual(q.legs!.map((l) => l.economic.pool.id), ["pool/2", "pool/1"]);
+  const notional = q.legs!.reduce((a, l) => a + Number(l.economic.notional), 0);
+  assert.equal(Math.round(notional), 100000);
+  assert.ok(Number(q.legs![0].economic.maxPayout) <= 4000);
+  // Every leg shares the same terms; the total is the sum of the legs.
+  assert.equal(new Set(q.legs!.map((l) => `${l.economic.strike}|${l.economic.cap}|${l.economic.spot}`)).size, 1);
+  const cost = q.legs!.reduce((a, l) => a + Number(l.economic.totalCost), 0);
+  assert.ok(Math.abs(cost - Number(q.economic.totalCost)) < 1e-6);
+  assert.equal(q.expiresAt, 101);
+});
+
+test("pools at the same price share an order in proportion to their room", async () => {
+  const q = await routed([sized(1, 11_000, "3000"), sized(2, 11_000, "6000")]).quote(request, { stellar: STELLAR_USER });
+  assert.equal(q.legs?.length, 2);
+  const [a, b] = q.legs!.map((l) => Number(l.economic.notional));
+  assert.ok(Math.abs(b / a - 2) < 0.001, `${a} ${b}`);
+});
+
+test("the pair's ceiling and side terms set the price a pool is ranked by", async () => {
+  // The pair's ceiling is 1.6x. Pool 1 lists 2.5x, so it sells at 1.6x; pool 2 lists 1.1x but
+  // charges Up cover 1.2x on top (1.32x), so pool 2 is cheaper and takes the order.
+  const capped = sized(1, 25_000, "500000", { markupCeilingBps: 16_000 });
+  const sided = sized(2, 11_000, "500000", { markupCeilingBps: 16_000, direction: "both", sideTerms: { upMaxReserve: "0", downMaxReserve: "0", upMarkupBps: 12_000, downMarkupBps: 10_000 } });
+  const q = await routed([capped, sided]).quote(request, { stellar: STELLAR_USER });
+  assert.equal(q.legs, undefined);
+  assert.equal(q.economic.pool.id, "pool/2");
+  assert.equal(q.economic.markupBps, 13_200);
+  // With pool 2 full, pool 1 sells at the ceiling, not its listed 2.5x.
+  const full = { ...sided, liquidity: { ...sided.liquidity, capacity: "0" } };
+  assert.equal((await routed([capped, full]).quote(request, { stellar: STELLAR_USER })).economic.markupBps, 16_000);
+});
+
+test("a side limit caps how much a pool can take", async () => {
+  const limited = sized(1, 10_000, "500000", { direction: "both", markupCeilingBps: 20_000, sideTerms: { upMaxReserve: "5000", downMaxReserve: "0", upMarkupBps: 10_000, downMarkupBps: 10_000 }, sideReserved: { up: "1000", down: "0" } });
+  const q = await routed([limited, sized(2, 12_000, "500000")]).quote(request, { stellar: STELLAR_USER });
+  assert.equal(q.legs?.length, 2);
+  assert.ok(Number(q.legs![0].economic.maxPayout) <= 4000);
+  await assert.rejects(routed([limited]).quote(request, { stellar: STELLAR_USER }), (e: ApplicationError) => e.code === "INSUFFICIENT_LIQUIDITY");
+});

@@ -137,10 +137,47 @@ export class StellarAdapter implements ChainAdapter {
   async getPool(poolId: number): Promise<CurrencyPool> {
     try {
       const c = await this.client(this.poolId);
-      const [p, l, rule] = await Promise.all([c.get_pool({ pool_id: poolId }), c.get_liquidity({ pool_id: poolId }), this.durationRule(c, poolId)]);
-      return { ...this.toPool(unwrap(p.result), unwrap(l.result)), durations: rule };
+      const [p, l, rule, sides] = await Promise.all([
+        c.get_pool({ pool_id: poolId }), c.get_liquidity({ pool_id: poolId }), this.durationRule(c, poolId), this.sides(c, poolId),
+      ]);
+      const pool = { ...this.toPool(unwrap(p.result), unwrap(l.result)), durations: rule, ...sides };
+      const ceiling = await this.markupCeiling(c, pool.pair);
+      return ceiling === undefined ? pool : { ...pool, markupCeilingBps: ceiling };
     } catch (err) {
       throw this.mapError(err);
+    }
+  }
+
+  /** A pool's per-side terms and what each side holds, on contracts that have them. */
+  private async sides(c: any, poolId: number): Promise<Pick<CurrencyPool, "sideTerms" | "sideReserved">> {
+    if (typeof c.get_side_terms !== "function") return {};
+    try {
+      const amt = (v: bigint) => fromUnits(BigInt(v), this.usdc.decimals);
+      const [t, r] = await Promise.all([c.get_side_terms({ pool_id: poolId }), c.get_side_reserved({ pool_id: poolId })]);
+      const st = t.result;
+      const [up, down] = r.result as [bigint, bigint];
+      return {
+        sideTerms: { upMaxReserve: amt(st.up_max_reserve), downMaxReserve: amt(st.down_max_reserve), upMarkupBps: Number(st.up_markup_bps), downMarkupBps: Number(st.down_markup_bps) },
+        sideReserved: { up: amt(up), down: amt(down) },
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /** Each pair's markup ceiling, kept for five minutes. Undefined on contracts without ceilings. */
+  private ceilings = new Map<string, { value: number; at: number }>();
+
+  private async markupCeiling(c: any, pair: string): Promise<number | undefined> {
+    if (typeof c.get_markup_ceiling !== "function") return undefined;
+    const hit = this.ceilings.get(pair);
+    if (hit && Date.now() - hit.at < 300_000) return hit.value;
+    try {
+      const value = Number((await c.get_markup_ceiling({ pair })).result);
+      this.ceilings.set(pair, { value, at: Date.now() });
+      return value;
+    } catch {
+      return undefined;
     }
   }
 
@@ -218,8 +255,18 @@ export class StellarAdapter implements ChainAdapter {
   }
 
   async listPositions(owner: string): Promise<ProtectionPosition[]> {
-    const page = unwrap((await (await this.client(this.poolId)).list_user_positions({ hedger: owner, start: 0, limit: 50 })).result);
-    return page.map((p: any) => this.toPosition(p));
+    const c = await this.client(this.poolId);
+    const [page, orders] = await Promise.all([
+      c.list_user_positions({ hedger: owner, start: 0, limit: 50 }),
+      typeof c.list_user_position_orders === "function"
+        ? c.list_user_position_orders({ hedger: owner, start: 0, limit: 50 }).then((r: any) => unwrap(r.result) as number[]).catch(() => [] as number[])
+        : Promise.resolve([] as number[]),
+    ]);
+    return unwrap(page.result).map((p: any, i: number) => {
+      const position = this.toPosition(p);
+      const order = Number(orders[i] ?? 0);
+      return order > 0 ? { ...position, orderId: order } : position;
+    });
   }
 
   async listActivePositions(poolId: number): Promise<ProtectionPosition[]> {
@@ -465,7 +512,7 @@ export class StellarAdapter implements ChainAdapter {
 
   prepareCreatePool(owner: string, input: CreatePoolInput) {
     return this.prepare("Create pool", "create_pool", {
-      creator: owner, pair: input.pair, direction: input.direction === "down" ? 2 : 1, allow_external_lp: input.allowExternalLp,
+      creator: owner, pair: input.pair, direction: input.direction === "down" ? 2 : input.direction === "both" ? 0 : 1, allow_external_lp: input.allowExternalLp,
       structures: {
         open_enabled: input.structures.open, capped_enabled: input.structures.capped,
         min_cap_distance_bps: input.structures.minCapDistanceBps, max_cap_distance_bps: input.structures.maxCapDistanceBps,
@@ -512,21 +559,36 @@ export class StellarAdapter implements ChainAdapter {
     return this.prepare(`Set ${t.tenorDays}-day tenor`, "set_tenor", { pool_id: poolId, tenor: { tenor_days: t.tenorDays, active: t.active, markup_bps: t.markupBps } });
   }
 
+  /** A pool's per-side limits (USDC, "0" = none) and prices (bps on top of the tenor markup). */
+  prepareSetSideTerms(_owner: string, poolId: number, t: { upMaxReserve: string; downMaxReserve: string; upMarkupBps: number; downMarkupBps: number }) {
+    const d = this.usdc.decimals;
+    return this.prepare("Set terms for each side", "set_side_terms", {
+      pool_id: poolId,
+      terms: { up_max_reserve: toUnits(t.upMaxReserve, d), down_max_reserve: toUnits(t.downMaxReserve, d), up_markup_bps: t.upMarkupBps, down_markup_bps: t.downMarkupBps },
+    });
+  }
+
   prepareDeposit(owner: string, poolId: number, amount: string) {
     return this.prepare("Add liquidity", "deposit", { pool_id: poolId, lp: owner, amount: toUnits(amount, this.usdc.decimals) });
   }
 
   prepareHedge(owner: string, quote: ProtectionQuote) {
-    const e = quote.executable as Record<string, any>;
-    return this.prepare("Buy protection", "buy_protection", {
-      hedger: owner,
-      params: {
-        pool_id: e.pool_id, notional: BigInt(e.notional), tenor_days: e.tenor_days, structure: e.structure, strike_above: e.strike_above,
-        spot: BigInt(e.spot), strike: BigInt(e.strike), cap: BigInt(e.cap), fair_rate: e.fair_rate, max_cost: BigInt(e.max_cost),
-        deadline: BigInt(e.deadline), quote_timestamp: BigInt(e.quote_timestamp), quote_nonce: Buffer.from(e.quote_nonce, "hex"),
-      },
-      signature: Buffer.from(e.signature, "hex"),
+    const params = (e: Record<string, any>) => ({
+      pool_id: e.pool_id, notional: BigInt(e.notional), tenor_days: e.tenor_days, structure: e.structure, strike_above: e.strike_above,
+      spot: BigInt(e.spot), strike: BigInt(e.strike), cap: BigInt(e.cap), fair_rate: e.fair_rate, max_cost: BigInt(e.max_cost),
+      deadline: BigInt(e.deadline), quote_timestamp: BigInt(e.quote_timestamp), quote_nonce: Buffer.from(e.quote_nonce, "hex"),
     });
+    // One protection from several pools: one all-or-nothing call, one total the buyer agreed to.
+    if (quote.legs && quote.legs.length > 1) {
+      const legs = quote.legs.map((l) => l.executable as Record<string, any>);
+      return this.prepare("Buy protection", "buy_order", {
+        hedger: owner,
+        legs: legs.map((e) => ({ params: params(e), signature: Buffer.from(e.signature, "hex") })),
+        max_total_cost: legs.reduce((sum, e) => sum + BigInt(e.max_cost), BigInt(0)),
+      });
+    }
+    const e = quote.executable as Record<string, any>;
+    return this.prepare("Buy protection", "buy_protection", { hedger: owner, params: params(e), signature: Buffer.from(e.signature, "hex") });
   }
 
   prepareWithdrawalRequest(owner: string, poolId: number, shares: string) {
@@ -537,7 +599,13 @@ export class StellarAdapter implements ChainAdapter {
     return this.prepare("Withdraw liquidity", "execute_withdrawal", { request_id: requestId });
   }
 
-  prepareClaim(_owner: string, positionId: number) {
+  /** A hedge bought as part of an order is claimed with the whole order: every leg that pays, in one call. */
+  async prepareClaim(_owner: string, positionId: number) {
+    const c = await this.client(this.poolId);
+    if (typeof c.get_position_order === "function") {
+      const order = Number((await c.get_position_order({ position_id: positionId })).result ?? 0);
+      if (order > 0) return this.prepare("Claim payout", "claim_order", { order_id: order });
+    }
     return this.prepare("Claim payout", "claim_payout", { position_id: positionId });
   }
 

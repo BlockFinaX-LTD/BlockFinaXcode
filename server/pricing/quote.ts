@@ -52,6 +52,11 @@ export interface QuoteRequest {
    * priced product with it.
    */
   dynamicPricing?: boolean;
+  /**
+   * An underwriter's own view of annual volatility (0.45 = 45%), used in place of the
+   * model's. For showing what that view means as a markup only; never signed into a quote.
+   */
+  sigmaOverride?: number;
 
   // ── v8: required for signed-quote attestation ────────────────────────
   // The signature is bound to the chain + diamond + creator so it can't be
@@ -191,6 +196,7 @@ function cacheKey(req: QuoteRequest): string {
     chainId: req.chainId ?? null,
     diamondAddress: req.diamondAddress ?? null,
     creator: req.creator ?? null,
+    sigmaOverride: req.sigmaOverride ?? null,
   });
 }
 
@@ -328,7 +334,7 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
     TYears: T_years,
     persistence,
   });
-  const sigma = integ.sigmaIntegrated;   // <-- this is what feeds the kernel
+  const sigma = req.sigmaOverride && req.sigmaOverride > 0 ? req.sigmaOverride : integ.sigmaIntegrated;   // <-- this is what feeds the kernel
 
   // ── Run the kernel (Merton jump-diffusion spread) ────────────────────────
   // λ=0 for g10 collapses this to plain GK; for frontier-EM the jump component

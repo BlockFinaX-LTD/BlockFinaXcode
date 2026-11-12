@@ -31,6 +31,7 @@ import { chainRegistry, registryLoadError } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
 import { QuoteService, enginePricer } from "../domain/quote-service";
 import { settlementResult } from "../domain/settlement";
+import { mergeOrderLegs } from "../domain/orders";
 import { routeView, routingService, type RoutingService } from "../routing/service";
 import { getSession } from "../auth-routes";
 import { registerRfqRoutes } from "../rfq/routes";
@@ -200,7 +201,17 @@ export function registerV2Routes(app: Express) {
     const direction = req.query.direction === "down" ? "down" : "up";
     const tenors = String(req.query.tenors ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 365).slice(0, 16);
     const distance = Math.min(Math.max(Number(req.query.distance ?? 200) || 0, 0), 5000);
-    res.json(await (await getServices()).quotes.fairTable(String(req.query.pair ?? ""), direction, tenors, distance));
+    const pair = String(req.query.pair ?? "");
+    const s = await getServices();
+    // An underwriter's volatility view (annual %, 1 to 300): the markups that would charge it.
+    const volPct = Number(req.query.vol);
+    let view: { vol: number; ceilingBps: number } | undefined;
+    if (req.query.vol !== undefined) {
+      if (!Number.isFinite(volPct) || volPct < 1 || volPct > 300) throw new ApplicationError("INVALID_REQUEST", "Volatility must be between 1% and 300% a year");
+      const pools = await s.adapters.adapterFor(chainRegistry()!.hub.key).listPools().catch(() => []);
+      view = { vol: volPct / 100, ceilingBps: pools.find((p) => p.pair === pair && p.markupCeilingBps)?.markupCeilingBps ?? 20_000 };
+    }
+    res.json(await s.quotes.fairTable(pair, direction, tenors, distance, view));
   }));
 
   /** Active cover sold by a pool, for the underwriter's risk view. */
@@ -439,10 +450,13 @@ export function registerV2Routes(app: Express) {
           const positions = await adapter.listPositions(owner);
           const ids = Array.from(new Set(positions.map((p) => p.poolId)));
           const meta = new Map(await Promise.all(ids.map(async (id) => [id, await poolMeta(chain.key, adapter, id)] as const)));
-          return positions.map((p) => {
+          const rows = positions.map((p) => {
             const m = meta.get(p.poolId)!;
             return { position: p, pair: m.pair, settlement: settlementResult(p, m.payoutFeeRateE6, m.decimals) };
           });
+          // One protection bought across pools shows as one.
+          const decimals = rows.length ? meta.get(rows[0].position.poolId)!.decimals : 7;
+          return mergeOrderLegs(rows, decimals);
         })());
       }
     }
@@ -468,7 +482,8 @@ export function registerV2Routes(app: Express) {
   app.post("/api/v2/pools/prepare", wrap(async (req, res) => {
     const s = await getServices();
     const chain = chainRegistry()!.require(chainRegistry()!.hub.key, "newPools");
-    if (!isOffered(req.body?.direction === "down" ? "down" : "up")) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
+    const dir = req.body?.direction;
+    if (dir === "both" ? !(isOffered("up") && isOffered("down")) : !isOffered(dir === "down" ? "down" : "up")) throw new ApplicationError("INVALID_REQUEST", NOT_OFFERED_MESSAGE);
     const uid = await userId(req);
     await enforceVerification(s, uid, { cashUsd: Number(req.body?.initialLiquidity ?? 0) || 0, exposureUsd: 0 });
     const owner = await ownerOn(s, uid, chain.key, req);
@@ -483,6 +498,25 @@ export function registerV2Routes(app: Express) {
     }
     const owner = await ownerOn(s, await userId(req), chain, req);
     res.json({ transactions: await s.adapters.adapterForContract(chain, contract).prepareSetTenor(owner, id, req.body) });
+  }));
+
+  /** A pool's per-side limits and prices (creator only, checked on chain). */
+  app.post("/api/v2/pools/:ref/sides/prepare", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    const adapter = s.adapters.adapterForContract(chain, contract) as any;
+    if (adapter !== s.adapters.adapterFor(chain) || typeof adapter.prepareSetSideTerms !== "function") {
+      throw new ApplicationError("INVALID_REQUEST", "This pool cannot set terms for each side.");
+    }
+    const b = req.body ?? {};
+    const money = (v: unknown) => typeof v === "string" && /^\d+(\.\d+)?$/.test(v) ? v : typeof v === "number" && v >= 0 ? String(v) : null;
+    const markup = (v: unknown) => Number.isInteger(v) && (v as number) >= 9_000 && (v as number) <= 30_000 ? (v as number) : null;
+    const terms = { upMaxReserve: money(b.upMaxReserve), downMaxReserve: money(b.downMaxReserve), upMarkupBps: markup(b.upMarkupBps), downMarkupBps: markup(b.downMarkupBps) };
+    if (Object.values(terms).some((v) => v === null)) {
+      throw new ApplicationError("INVALID_REQUEST", "Set a limit of 0 or more for each side, and a price for each side between 0.9x and 3x.");
+    }
+    const owner = await ownerOn(s, await userId(req), chain, req);
+    res.json({ transactions: await adapter.prepareSetSideTerms(owner, id, terms) });
   }));
 
   app.post("/api/v2/pools/:ref/durations/prepare", wrap(async (req, res) => {

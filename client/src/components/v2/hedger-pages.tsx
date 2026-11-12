@@ -8,7 +8,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronUp, LineChart as ChartIcon, Percent, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
-import { durationsOffered } from '@shared/domain/durations';
+import { durationsOffered, saleMarkup } from '@shared/domain/durations';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
@@ -89,74 +89,108 @@ function ChangeText({ change }: { change: number | null }) {
   return <span className={`num ${change >= 0 ? 'up' : 'down'}`} style={{ fontWeight: 600 }}>{change >= 0 ? '+' : ''}{(change * 100).toFixed(2)}%</span>;
 }
 
-// ── Markets: open pools a hedger can buy from ────────────────────────────────
+// ── Markets: one per currency, every pool behind it ─────────────────────────
 
 /**
- * A pool's price per tenor: BlockFinaX's fair price on a reference cover (protection
- * 2% from today, capped 10% beyond) times the pool's markup, plus its hedger fee.
+ * A market is a currency pair. Buyers never choose a pool: the server fills each order
+ * from the cheapest pools first, across several when one cannot take it all.
+ */
+interface Market { pair: string; pools: CurrencyPool[]; directions: Direction[]; capacity: number }
+
+function useMarkets() {
+  const pools = usePools();
+  const open = (pools.data ?? []).filter((p) => p.acceptingHedges && poolForSale(p.direction) && Number(p.liquidity.capacity) > 0 && p.tenors.some((t) => t.active));
+  const byPair = new Map<string, CurrencyPool[]>();
+  for (const p of open) byPair.set(p.pair, [...(byPair.get(p.pair) ?? []), p]);
+  const markets: Market[] = Array.from(byPair.entries()).map(([pair, ps]) => ({
+    pair, pools: ps,
+    directions: (['up', 'down'] as Direction[]).filter((d) => isOffered(d) && ps.some((p) => p.direction === d || p.direction === 'both')),
+    capacity: ps.reduce((sum, p) => sum + Number(p.liquidity.capacity), 0),
+  }));
+  return { pools, markets };
+}
+
+/**
+ * A market's price per duration and side: BlockFinaX's fair price on a reference cover
+ * (protection starting at the closest point any pool sells, limited 10% beyond) times the
+ * cheapest pool's markup for it, as the contract applies it.
  */
 type FairTable = { reference: { strike: string }; rows: { tenorDays: number; fairRateE6: number | null }[] };
-function usePoolOffers(pool: CurrencyPool) {
-  const direction = pool.direction === 'down' ? 'down' : 'up';
-  const tenors = pool.tenors.filter((t) => t.active).sort((a, b) => a.tenorDays - b.tenorDays);
-  // Priced at the closest strike this pool sells: its most protective cover.
-  const distance = pool.structures.minStrikeDistanceBps ?? 0;
-  const fairKey = `fair:${pool.pair}:${direction}:${tenors.map((t) => t.tenorDays).join(',')}:${distance}`;
+function useSideOffers(market: Market, direction: Direction) {
+  const pools = market.pools.filter((p) => p.direction === direction || p.direction === 'both');
+  const on = market.directions.includes(direction) && pools.length > 0;
+  const distance = pools.length ? Math.min(...pools.map((p) => p.structures.minStrikeDistanceBps ?? 0)) : 0;
+  const sellers = pools.filter((p) => (p.structures.minStrikeDistanceBps ?? 0) <= distance);
+  const tenors = Array.from(new Set(sellers.flatMap((p) => p.tenors.filter((t) => t.active).map((t) => t.tenorDays)))).sort((a, b) => a - b);
+  const fairKey = `fair:${market.pair}:${direction}:${tenors.join(',')}:${distance}`;
   const fair = useQuery({
-    queryKey: ['v2-fair', pool.pair, direction, tenors.map((t) => t.tenorDays).join(','), distance],
-    enabled: tenors.length > 0,
-    queryFn: async () => remember(fairKey, await api<FairTable>(`/api/v2/fair?pair=${encodeURIComponent(pool.pair)}&direction=${direction}&tenors=${tenors.map((t) => t.tenorDays).join(',')}&distance=${distance}`)),
+    queryKey: ['v2-fair', market.pair, direction, tenors.join(','), distance],
+    enabled: on && tenors.length > 0,
+    queryFn: async () => remember(fairKey, await api<FairTable>(`/api/v2/fair?pair=${encodeURIComponent(market.pair)}&direction=${direction}&tenors=${tenors.join(',')}&distance=${distance}`)),
     ...remembered<FairTable>(fairKey),
     staleTime: 60_000,
   });
-  const rows = tenors.map((t) => {
-    const f = fair.data?.rows.find((r) => r.tenorDays === t.tenorDays)?.fairRateE6 ?? null;
-    const price = f === null ? null : (f / 1e6) * (t.markupBps / 10000);
-    return { tenorDays: t.tenorDays, price };
-  });
-  const priced = rows.filter((r) => r.price !== null);
+  const rows = on ? tenors.map((tenorDays) => {
+    const f = fair.data?.rows.find((r) => r.tenorDays === tenorDays)?.fairRateE6 ?? null;
+    const markups = sellers.map((p) => saleMarkup(p, tenorDays, direction)).filter((m): m is number => m !== null);
+    const price = f === null || !markups.length ? null : (f / 1e6) * (Math.min(...markups) / 10000);
+    return { tenorDays, price };
+  }) : [];
+  return { rows, loading: on && fair.isLoading, distance, strike: fair.data?.reference.strike ?? null };
+}
+
+function useMarketOffers(market: Market) {
+  const up = useSideOffers(market, 'up');
+  const down = useSideOffers(market, 'down');
+  const priced = [...up.rows, ...down.rows].filter((r) => r.price !== null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.price! < a.price! ? b : a)) : null;
-  return { rows, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: fair.isLoading, distance, strike: fair.data?.reference.strike ?? null };
+  return { up, down, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: up.loading || down.loading };
 }
 
-/** The durations a pool sells: a range for pools that sell any day, otherwise the list. */
-function durationsLabel(pool: CurrencyPool) {
-  const { range, days } = durationsOffered(pool);
+/** The durations a market sells: any day in the widest range, otherwise the listed ones. */
+function durationsLabel(market: Market) {
+  let range: { minDays: number; maxDays: number } | null = null;
+  const days = new Set<number>();
+  for (const p of market.pools) {
+    const o = durationsOffered(p);
+    if (o.range) range = range ? { minDays: Math.min(range.minDays, o.range.minDays), maxDays: Math.max(range.maxDays, o.range.maxDays) } : o.range;
+    o.days.forEach((d) => days.add(d));
+  }
   if (range) return range.minDays === range.maxDays ? `${range.minDays} days` : `Any day, ${range.minDays} to ${range.maxDays}`;
-  return days.length ? `${days.join(', ')} days` : '-';
+  return days.size ? `${Array.from(days).sort((a, b) => a - b).join(', ')} days` : '-';
 }
-
-const startsLabel = (bps: number) => (bps === 0 ? "from today's rate" : `from ${bps / 100}% away`);
 
 const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 110px' };
 
 const isPhone = () => window.innerWidth < 860;
 
-function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false, chart }: {
-  pool: CurrencyPool; go: Go; expandable?: boolean; action?: string;
-  /** Clicking the row chooses the pool (Markets) rather than only opening its prices. */
+function MarketRow({ market, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false, chart }: {
+  market: Market; go: Go; expandable?: boolean; action?: string;
+  /** Clicking the row chooses the market (Markets) rather than only opening its prices. */
   selectOnClick?: boolean;
-  /** The pool chosen on Markets: shown open, without its Select button. */
+  /** The market chosen on Markets: shown open, without its Select button. */
   focused?: boolean;
-  /** On the chosen pool: the rate chart switch, shown in place of Select. */
+  /** On the chosen market: the rate chart switch, shown in place of Select. */
   chart?: { on: boolean; toggle: () => void };
 }) {
   // On a phone the buying form sits below, so the chosen market stays closed to keep it in view.
   const opensWhenChosen = focused && !isPhone();
   const [open, setOpen] = useState(opensWhenChosen);
-  // Opens when chosen, closes again when the full list returns.
   useEffect(() => { if (selectOnClick) setOpen(opensWhenChosen); }, [opensWhenChosen, selectOnClick]);
-  const offers = usePoolOffers(pool);
-  const direction = pool.direction === 'down' ? 'down' : 'up';
-  const buy = (days?: number) => go('h-protect', { pair: pool.pair, direction, pool: poolRef(pool), days });
-  const spot = useSpot(pool.pair);
+  const offers = useMarketOffers(market);
+  const pair = market.pair;
+  const buy = (days?: number, direction?: Direction) => go('h-protect', { pair, buy: true, days, direction });
+  const spot = useSpot(pair);
+  const both = market.directions.length > 1;
+  const sides = ([['up', offers.up], ['down', offers.down]] as const).filter(([d]) => market.directions.includes(d));
+  const SUB = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' };
   return (
     <>
       <div className={`bx-li bx-li-market${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
-        <div className="bx-who"><Flag pair={pool.pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pool.pair} direction={pool.direction} /></div><div className="d"><RefRate /> <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
-        <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(pool.liquidity.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
-        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `for ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
-        <div className="r bx-hide-sm" style={{ fontSize: 13 }}>{durationsLabel(pool)}</div>
+        <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={both ? 'both' : market.directions[0] ?? 'up'} /></div><div className="d"><RefRate /> <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(market.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `from, ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
+        <div className="r bx-hide-sm" style={{ fontSize: 13 }}>{durationsLabel(market)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
           {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{isPhone() ? 'Buy' : action}</button>}
           {focused && chart && (
@@ -168,17 +202,22 @@ function MarketRow({ pool, go, expandable = true, action = 'Buy cover', selectOn
       </div>
       {open && (
         <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
-          <div className="bx-list-h" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px' }}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span /></div>
-          {offers.rows.map((r) => (
-            <div key={r.tenorDays} className="bx-li bx-li-tenor click" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 96px', padding: '10px 0' }}
-              onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays); }}>
-              <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
-              <span className="r">{dateIn(r.tenorDays)}</span>
-              <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
-              <span className="r"><button className="bx-btn ghost small" onClick={(e) => { e.stopPropagation(); if (isPhone()) setOpen(false); buy(r.tenorDays); }}>Buy</button></span>
+          {sides.map(([d, side]) => (
+            <div key={d}>
+              {both && <div style={{ fontSize: 13, fontWeight: 600, paddingTop: 8 }}>{exposureLabel(pair, d).kind} <span className="muted" style={{ fontWeight: 400 }}>{exposureLabel(pair, d).who}</span></div>}
+              <div className="bx-list-h" style={SUB}><span>{hint("Length")}</span><span className="r">{hint("Ends")}</span><span className="r">{hint("Price")}</span><span /></div>
+              {side.rows.map((r) => (
+                <div key={r.tenorDays} className="bx-li bx-li-tenor click" style={{ ...SUB, padding: '10px 0' }}
+                  onClick={() => { if (isPhone()) setOpen(false); buy(r.tenorDays, d); }}>
+                  <span style={{ fontWeight: 600 }}>{r.tenorDays} {r.tenorDays === 1 ? 'day' : 'days'}</span>
+                  <span className="r">{dateIn(r.tenorDays)}</span>
+                  <span className="r num">{r.price === null ? '-' : pct(r.price)}</span>
+                  <span className="r"><button className="bx-btn ghost small" onClick={(e) => { e.stopPropagation(); if (isPhone()) setOpen(false); buy(r.tenorDays, d); }}>Buy</button></span>
+                </div>
+              ))}
             </div>
           ))}
-          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Prices are for this pool's closest cover: starting {offers.distance === 0 ? "at today's rate" : `${offers.distance / 100}% from today`}{offers.strike ? ` (${fmtRate(offers.strike)} ${quoteCcy(pool.pair)})` : ''}, with a limit 10% beyond, including the BlockFinaX fee. Cover starting further away costs less. Your exact price is shown before you buy.</div>
+          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Best prices across every pool, for the closest cover on sale{offers.up.strike && market.directions.includes('up') ? ` (Up cover from ${fmtRate(offers.up.strike)} ${quoteCcy(pair)})` : ''}{offers.down.strike && market.directions.includes('down') ? ` (Down cover from ${fmtRate(offers.down.strike)} ${quoteCcy(pair)})` : ''}, with a limit 10% beyond. Cover starting further away costs less. Your exact price, including the BlockFinaX fee, is shown before you buy.</div>
         </div>
       )}
     </>
@@ -189,34 +228,27 @@ function MarketHeader() {
   return <div className="bx-list-h" style={MARKET_COLS}><span>{hint("Cover")}</span><span className="r">{hint("Liquidity")}</span><span className="r">{hint("Premium")}</span><span className="r">{hint("Durations")}</span><span /></div>;
 }
 
-function useOpenPools() {
-  const pools = usePools();
-  const open = (pools.data ?? []).filter((p) => p.acceptingHedges && poolForSale(p.direction) && Number(p.liquidity.capacity) > 0 && p.tenors.some((t) => t.active));
-  return { pools, open };
-}
-
 /**
- * The pools on sale, at the top of Markets. Choosing one shows only that pool, open, and
- * loads it into the buying panel beside it; All markets brings the list back.
+ * The currencies on sale, at the top of Markets. Choosing one shows only that market, open,
+ * and loads it into the buying panel beside it; All markets brings the list back.
  */
 function MarketList({ go, selected, chart }: { go: Go; selected: string | null; chart?: { on: boolean; toggle: () => void } }) {
-  const { pools, open } = useOpenPools();
+  const { pools, markets } = useMarkets();
   const acting = useActingOrganisation();
-  const chosen = selected ? open.find((p) => poolRef(p) === selected) ?? null : null;
-  // Every row names its currency, so the list needs no currency tabs.
-  const shown = chosen ? [chosen] : open;
+  const chosen = selected ? markets.find((m) => m.pair === selected) ?? null : null;
+  const shown = chosen ? [chosen] : markets;
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
-        <div><h2>Markets</h2><div className="sub">{chosen ? 'Set your terms. Your exact price is shown before you buy.' : 'Choose a market to price your protection.'}</div></div>
-        {chosen && (
-          <button className="bx-link" onClick={() => go('h-protect', { pair: chosen.pair, buy: true })}>All markets</button>
+        <div><h2>Markets</h2><div className="sub">{chosen ? 'Set your terms. Your exact price is shown before you buy.' : 'Choose a currency to price your protection.'}</div></div>
+        {chosen && markets.length > 1 && (
+          <button className="bx-link" onClick={() => go('h-protect', { buy: false })}>All markets</button>
         )}
       </div>
       {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
           <MarketHeader />
-          {shown.map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} action="Select" selectOnClick focused={p === chosen} chart={p === chosen ? chart : undefined} />)}
+          {shown.map((m) => <MarketRow key={m.pair} market={m} go={go} action="Select" selectOnClick focused={m === chosen} chart={m === chosen ? chart : undefined} />)}
         </div></div>
       )}
       {!chosen && !acting && (
@@ -333,15 +365,15 @@ export function HedgerHome({ go }: { go: Go }) {
 }
 
 function AvailableCover({ go }: { go: Go }) {
-  const { pools, open } = useOpenPools();
+  const { pools, markets } = useMarkets();
   const [assetClass, setAssetClass] = useAssetClass();
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}><h2>Available cover</h2><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><AssetClassTabs small value={assetClass} onChange={setAssetClass} /><button className="bx-link" onClick={() => go('h-markets')}>All markets</button></div></div>
-      {assetClass === 'ir' ? <RateMarkets go={go} embedded limit={5} /> : pools.isLoading ? <Loading /> : !open.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
+      {assetClass === 'ir' ? <RateMarkets go={go} embedded limit={5} /> : pools.isLoading ? <Loading /> : !markets.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
           <MarketHeader />
-          {open.slice(0, 5).map((p) => <MarketRow key={poolRef(p)} pool={p} go={go} />)}
+          {markets.slice(0, 5).map((m) => <MarketRow key={m.pair} market={m} go={go} />)}
         </div></div>
       )}
     </div>
@@ -768,24 +800,20 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [direction, setDirection] = useState<Direction>(target?.direction ?? 'up');
   useEffect(() => { if (target?.direction) setDirection(target.direction); }, [target?.direction]);
   useEffect(() => { if (directions.length && !directions.includes(direction)) setDirection(directions[0]); }, [directions, direction]);
-  // The pool to buy from: one chosen in Markets, or null for the best price.
   const [rfqOpen, setRfqOpen] = useState(Boolean(target?.rfq));
   useEffect(() => { if (target?.rfq) setRfqOpen(true); }, [target?.rfq]);
   const acting = useActingOrganisation();
   const viewOnly = acting?.role === 'viewer';
-  const [poolChoice, setPoolChoice] = useState<string | null>(target?.pool ?? null);
-  useEffect(() => { setPoolChoice(target?.pool ?? null); }, [target?.pool]);
   // Markets shows only its list until someone means to buy: a market chosen, a duration's Buy,
-  // or a Protect button. Choosing "Best price" in the panel afterwards keeps the panel open.
+  // or a Protect button. Buyers never choose a pool: every order is filled at the best price.
   const [buying, setBuying] = useState(Boolean(target?.pool || target?.buy));
   useEffect(() => { setBuying(Boolean(target?.pool || target?.buy)); }, [target]);
   // Choosing a pool from the list: on phones the buying panel sits below it, so bring it into view.
   const panelRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (target?.pool && window.innerWidth < 860) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if ((target?.pool || target?.buy) && window.innerWidth < 860) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [target]);
   const matching = available.filter((p) => p.pair === pair && (p.direction === direction || p.direction === 'both'));
-  useEffect(() => { if (poolChoice && !matching.some((p) => poolRef(p) === poolChoice)) setPoolChoice(null); }, [poolChoice, matching]);
 
   const [range, setRange] = useState<Range>('1M');
   const spot = useSpot(pair);
@@ -806,13 +834,10 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [amount, setAmount] = useState('');
   const [days, setDays] = useState<number | null>(target?.days ?? null);
   useEffect(() => { if (target?.days) setDays(target.days); }, [target?.days]);
-  const chosenPool = matching.find((p) => poolRef(p) === poolChoice) ?? null;
-  // A chosen pool offers its own lengths and cover types; otherwise all pools combined.
-  const tenorList = chosenPool
-    ? durationsOffered(chosenPool).days.map((d) => ({ tenorDays: d, open: chosenPool.structures.open, capped: chosenPool.structures.capped }))
-    : options.data?.tenors ?? [];
+  // Every pool on this market and side combined.
+  const tenorList = options.data?.tenors ?? [];
   // Pools that sell any day in a range: the date picker replaces the duration buttons.
-  const dayRange = chosenPool ? durationsOffered(chosenPool).range : options.data?.anyDay ?? null;
+  const dayRange = options.data?.anyDay ?? null;
   const inRange = (d: number | null) => Boolean(dayRange && d && d >= dayRange.minDays && d <= dayRange.maxDays);
   useEffect(() => {
     if (dayRange) {
@@ -821,16 +846,16 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     }
     if (tenorList.length && !tenorList.some((t) => t.tenorDays === days)) setDays((tenorList.find((t) => t.tenorDays >= 14) ?? tenorList[0]).tenorDays);
   }, [tenorList.map((t) => t.tenorDays).join(','), days, dayRange?.minDays, dayRange?.maxDays]);
-  const rangeStructures = chosenPool ? chosenPool.structures : { open: matching.some((p) => p.structures.open), capped: matching.some((p) => p.structures.capped) };
+  const rangeStructures = { open: matching.some((p) => p.structures.open), capped: matching.some((p) => p.structures.capped) };
   const tenor = tenorList.find((t) => t.tenorDays === days)
     ?? (inRange(days) ? { tenorDays: days!, open: rangeStructures.open, capped: rangeStructures.capped } : undefined);
 
-  const pool = chosenPool ?? matching[0];
+  const pool = matching[0];
   const capMin = (pool?.structures.minCapDistanceBps ?? 300) / 100;
   const capMax = (pool?.structures.maxCapDistanceBps || 2000) / 100;
   const sign = direction === 'up' ? 1 : -1;
-  // The closest strike the pool(s) allow, set by their underwriters.
-  const minStartPct = (chosenPool ? chosenPool.structures.minStrikeDistanceBps ?? 0 : Math.min(...(matching.length ? matching.map((p) => p.structures.minStrikeDistanceBps ?? 0) : [0]))) / 100;
+  // The closest strike any pool sells, set by their underwriters.
+  const minStartPct = Math.min(...(matching.length ? matching.map((p) => p.structures.minStrikeDistanceBps ?? 0) : [0])) / 100;
   const startChoices = Array.from(new Set([minStartPct, minStartPct + 2, minStartPct + 5].map((v) => Math.round(v * 100) / 100)));
   // The strike, typed either as a % from today's rate or as a rate. Whichever the user typed
   // last stays fixed when the live rate moves; the other follows.
@@ -898,7 +923,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     : !Number.isFinite(startPct) ? 'Enter a number'
     : anchor === 'pct' && (pctText.split('.')[1]?.length ?? 0) > 4 ? 'Set the strike to at most 4 decimal places'
     : startPct < 0 ? `The strike must be ${direction === 'up' ? 'above' : 'below'} today's rate for this cover`
-    : startPct < minStartPct ? `This pool's closest strike is ${minStartPct}% from today's rate`
+    : startPct < minStartPct ? `The closest strike on sale is ${minStartPct}% from today's rate`
     : startPct > maxStartPct ? `The strike can be at most ${maxStartPct}% from today's rate`
     : null;
   const [capPct, setCapPct] = useState(10);
@@ -913,7 +938,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     pair, notional: amount, tenorDays: days, direction, strike: strike.toFixed(6),
     // In basis points with up to two decimals: 0.02% is 2, 0.0015% is 0.15.
     ...(anchor === 'rate' ? {} : { strikeDistanceBps: Math.round(startPct * 10_000) / 100 }),
-    ...(poolChoice ? { pool: poolChoice } : {}),
   } : null;
   const cappedReq = useDebounced(base && cap && tenor?.capped ? JSON.stringify({ ...base, structure: 'capped', cap: cap.toFixed(6), capDistanceBps: Math.round(capPct * 100) }) : null, 350);
   const openReq = useDebounced(base && tenor?.open ? JSON.stringify({ ...base, structure: 'open' }) : null, 350);
@@ -1018,7 +1042,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           </div>
         </div>}
 
-        <MarketList go={go} selected={poolChoice} chart={{ on: showChart, toggle: toggleChart }} />
+        <MarketList go={go} selected={pair} chart={{ on: showChart, toggle: toggleChart }} />
         <div className="bx-card bx-hide-sm">
           <h2 style={{ marginBottom: 14 }}>How protection works</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
@@ -1075,7 +1099,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 <div style={{ marginTop: 6 }}>
                   <Sum l="Fair price" v={pct(e.fairRateE6 / 1e6, 3)} />
                   <Sum l="Settlement network" v={chains.data?.chains.find((c) => c.key === e.executionChain)?.name ?? e.executionChain} />
-                  <Sum l="Pool" v={`${e.pool.contract.slice(0, 6)}...${e.pool.contract.slice(-4)} · ${e.pool.id}`} />
+                  <Sum l={chosen.data?.legs ? 'Pools' : 'Pool'} v={chosen.data?.legs ? `Filled from ${chosen.data.legs.length} pools, cheapest first` : `${e.pool.contract.slice(0, 6)}...${e.pool.contract.slice(-4)} · ${e.pool.id}`} />
                 </div>
               </details>
               {onHub < Number(e.totalCost) && <p className="bx-error">Your balance (${fmt(onHub)}) is too low. Add funds first.</p>}
@@ -1109,8 +1133,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <div className="bx-adjust">
                 <div className="bx-adjust-body">
                   {directions.length > 1 && (
-                    <div className="bx-seg">
-                      {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} onClick={() => setDirection(d)}>{exposureLabel(pair, d).kind}</button>)}
+                    <div>
+                      <span className="bx-label">What do you need to protect?</span>
+                      <div className="bx-seg">
+                        {directions.map((d) => <button key={d} className={direction === d ? 'on' : ''} title={exposureLabel(pair, d).cover} onClick={() => setDirection(d)}>{d === 'up' ? 'A dollar payment I make' : 'Dollar income I receive'}</button>)}
+                      </div>
                     </div>
                   )}
                   <div>
@@ -1144,15 +1171,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><label htmlFor="bx-cap" className="muted">Protection limit</label><span className="num" style={{ fontWeight: 600 }}>{cap ? fmtRate(cap) : '-'}</span></div>
                       <input id="bx-cap" className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(ev) => setCapPct(Number(ev.target.value))} />
                       <div className="muted" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>Closer limit: cheaper</span><span>Wider limit: more protection</span></div>
-                    </div>
-                  )}
-                  {matching.length > 0 && (
-                    <div>
-                      <label htmlFor="bx-pool" className="bx-label">Buying from</label>
-                      <select id="bx-pool" className="bx-select" value={poolChoice ?? ''} onChange={(ev) => setPoolChoice(ev.target.value || null)}>
-                        <option value="">Best price across pools</option>
-                        {matching.map((p) => <option key={poolRef(p)} value={poolRef(p)}>Pool {p.poolId} · ${fmt(p.liquidity.capacity, 0)} available · {startsLabel(p.structures.minStrikeDistanceBps ?? 0)}</option>)}
-                      </select>
                     </div>
                   )}
                 </div>

@@ -42,3 +42,15 @@ test("offered durations: a range for open pools, a list for specific ones", () =
   assert.deepEqual(durationsOffered({ tenors }), { range: null, days: [7, 30] });
   assert.deepEqual(durationsOffered({ tenors, durations: any }), { range: { minDays: 1, maxDays: 90 }, days: [7, 30] });
 });
+
+test("the sale markup is the tenor's times the side's, held between 0.9x and the pair's ceiling", async () => {
+  const { saleMarkup } = await import("../durations");
+  const tenors = [{ tenorDays: 7, active: true, markupBps: 12_000 }];
+  // Older contracts: the listed markup as is.
+  assert.equal(saleMarkup({ tenors }, 7, "up"), 12_000);
+  assert.equal(saleMarkup({ tenors, markupCeilingBps: 11_000 }, 7, "up"), 11_000);
+  const sides = { upMarkupBps: 12_000, downMarkupBps: 7_000 };
+  assert.equal(saleMarkup({ tenors, markupCeilingBps: 20_000, sideTerms: sides }, 7, "up"), 14_400);
+  assert.equal(saleMarkup({ tenors, markupCeilingBps: 20_000, sideTerms: sides }, 7, "down"), 9_000);
+  assert.equal(saleMarkup({ tenors, markupCeilingBps: 20_000 }, 9, "up"), null);
+});
