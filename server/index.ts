@@ -413,6 +413,8 @@ app.use((req, res, next) => {
   // Prospect discovery and drafting run on their own too. Approving and sending
   // stay manual, because a cold email goes out under Anthony's own name.
   {
+    const { ensureProspectTables } = await import("./prospects/tables");
+    await ensureProspectTables();
     const { startProspectScheduler } = await import("./prospects/scheduler");
     startProspectScheduler();
   }
