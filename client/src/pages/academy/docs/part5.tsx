@@ -74,7 +74,7 @@ export function Troubleshooting() {
             ['No pool is offering a 30-day limited USD/GHS Up cover. Request a quote instead. (with your own terms)', 'No open pool sells these terms. Change the end date or structure, or request a quote.'],
             ['Not enough free liquidity for that amount', 'The pool\'s free capital is smaller than the maximum payout. Lower the amount, narrow the limit or request a quote.'],
             ['Protection must start at least X% from today\'s rate for this cover', 'The pool sets a minimum distance for the strike. Move the strike further from today\'s rate.'],
-            ['This protection is too cheap for what it could pay', 'The maximum payout is more than 100 times the premium. Move the strike closer to today\'s rate or bring the limit closer.'],
+            ['This cover costs very little next to what it could pay (a warning, not an error)', 'The maximum payout is more than 100 times the premium, because a move that large is unlikely. You can still buy it. Starting closer to today\'s rate makes a payout more likely.'],
             ['This strike is too far from today\'s rate to price', 'The premium would be zero. Move the strike closer or choose a longer duration.'],
             ['Pricing for this currency is updating', 'The rate history is being refreshed. Try again in a few minutes.'],
           ]}

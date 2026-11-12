@@ -741,3 +741,6 @@
   .bx-sides.two { grid-template-columns: 1fr; }
   .bx-sides.two .bx-side-col + .bx-side-col { border-left: 0; padding-left: 0; margin-top: 6px; }
 }
+
+/* A note the buyer should read, which does not stop them buying. */
+.bx-warn { grid-column: 1 / -1; margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45; background: var(--amber-soft); color: var(--amber-text); }

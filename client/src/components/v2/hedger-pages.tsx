@@ -1137,6 +1137,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                   <Sum l={chosen.data?.legs ? 'Pools' : 'Pool'} v={chosen.data?.legs ? `Filled from ${chosen.data.legs.length} pools, cheapest first` : `${e.pool.contract.slice(0, 6)}...${e.pool.contract.slice(-4)} · ${e.pool.id}`} />
                 </div>
               </details>
+              {e.warning && <div className="bx-warn" role="note">{e.warning}</div>}
               {onHub < Number(e.totalCost) && <p className="bx-error">Your balance (${fmt(onHub)}) is too low. Add funds first.</p>}
               <button className="bx-btn block" disabled={!!busy} onClick={confirm}>{busy ? <><Spin /> {busy}</> : left < 5 ? 'Refresh price' : 'Confirm protection'}</button>
               <button className="bx-btn ghost block" disabled={!!busy} onClick={() => setMode('build')}>Back</button>
@@ -1223,6 +1224,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                     {structure === 'capped' && cap ? <>; the payout stops growing at <span className="num">{fmtRate(cap)}</span>.</> : ", up to the pool's maximum payout."}
                   </div>
                 )}
+                {e?.warning && <div className="bx-warn" role="note">{e.warning}</div>}
               </div>}
 
               {(strikeError || chosen.error) && (

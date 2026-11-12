@@ -36,7 +36,7 @@ import type { AdapterRegistry } from "../chain";
 /** The shared pricing engine, behind a seam so it can be replaced or stubbed. */
 export interface FairPricer {
   /** Fair premium rate (1e6 scale) for exact terms, and the spot it was priced at. */
-  fair(a: { pair: string; strike: string; cap: string; tenorDays: number; notional: string; direction: "up" | "down"; vol?: number }): Promise<{ fairRateE6: number; spot: string; vol?: number }>;
+  fair(a: { pair: string; strike: string; cap: string; tenorDays: number; notional: string; direction: "up" | "down"; vol?: number }): Promise<{ fairRateE6: number; spot: string; vol?: number; warning?: string }>;
   spot(pair: string): Promise<string>;
 }
 
@@ -262,7 +262,7 @@ export class QuoteService {
   }
 
   /** Price the terms once against a pool's rules: spot, exact strike and cap, fair rate. */
-  private async terms(req: ProtectionRequest, pool: CurrencyPool): Promise<{ priced: { fairRateE6: number; spot: string }; spot: bigint; strike: bigint; cap: bigint } | ApplicationError> {
+  private async terms(req: ProtectionRequest, pool: CurrencyPool): Promise<{ priced: { fairRateE6: number; spot: string; warning?: string }; spot: bigint; strike: bigint; cap: bigint } | ApplicationError> {
     const up = req.direction === "up";
     // A strike or limit given as a distance is measured from the rate actually priced at.
     const strikeFor = (spot: bigint) => req.strikeDistanceBps === undefined ? toRate(req.strike) : awayFrom(spot, req.strikeDistanceBps, up);
@@ -275,7 +275,7 @@ export class QuoteService {
     const first = toRate(await this.pricer.spot(req.pair));
     let strike = strikeFor(first);
     let cap = capFor(first, strike);
-    let priced: { fairRateE6: number; spot: string } | null = null;
+    let priced: { fairRateE6: number; spot: string; warning?: string } | null = null;
     for (let i = 0; i < 3 && !priced; i++) {
       const r = await this.pricer.fair({ pair: req.pair, strike: fromRate(strike), cap: fromRate(cap), tenorDays: req.tenorDays, notional: req.notional, direction: req.direction });
       const s = toRate(r.spot);
@@ -315,7 +315,7 @@ export class QuoteService {
 
   /** One pool's share of a protection, at terms already priced. */
   private leg(req: ProtectionRequest, pool: CurrencyPool, markupBps: number, chain: ChainKey,
-    t: { priced: { fairRateE6: number; spot: string }; spot: bigint; strike: bigint; cap: bigint }, notional: bigint): EconomicQuote {
+    t: { priced: { fairRateE6: number; spot: string; warning?: string }; spot: bigint; strike: bigint; cap: bigint }, notional: bigint): EconomicQuote {
     const d = pool.asset.decimals;
     const { priced, spot, strike, cap } = t;
     const reserve = maxPayout(notional, strike, cap, spot);
@@ -326,6 +326,7 @@ export class QuoteService {
       spot: priced.spot, strike: fromRate(strike), cap: fromRate(cap), fairRateE6: priced.fairRateE6, markupBps,
       offerRateE6: Number(offerRate(fair, BigInt(markupBps))), premium: fromUnits(cost.premium, d), hedgerFee: fromUnits(cost.platformFee, d),
       totalCost: fromUnits(cost.totalCost, d), maxPayout: fromUnits(reserve, d), pool: pool.ref, executionChain: chain,
+      ...(priced.warning ? { warning: priced.warning } : {}),
     };
   }
 }
@@ -344,9 +345,9 @@ export async function enginePricer(): Promise<FairPricer> {
       const q = await quote({
         pair: a.pair, strike: Number(a.strike), payoutCap: Number(a.cap),
         expiryUnixSeconds: expiryAt(Math.floor(Date.now() / 1000), a.tenorDays),
-        notional: Number(a.notional), strikeAbove: a.direction === "up", sigmaOverride: a.vol,
+        notional: Number(a.notional), strikeAbove: a.direction === "up", sigmaOverride: a.vol, leverageWarningOnly: true,
       });
-      return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot), vol: q.breakdown.inputs.sigma };
+      return { fairRateE6: Math.round(q.premiumRate * 1e6), spot: String(q.breakdown.spot), vol: q.breakdown.inputs.sigma, warning: q.leverageWarning };
     },
   };
 }

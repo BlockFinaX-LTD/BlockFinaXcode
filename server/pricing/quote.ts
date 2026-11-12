@@ -57,6 +57,12 @@ export interface QuoteRequest {
    * model's. For showing what that view means as a markup only; never signed into a quote.
    */
   sigmaOverride?: number;
+  /**
+   * A buyer's quote: cover that could pay more than MAX_LEVERAGE_RATIO times its price is
+   * still priced and returned with `leverageWarning` set, rather than refused. The buyer
+   * decides. Pool creation and other callers leave this off and keep the hard stop.
+   */
+  leverageWarningOnly?: boolean;
 
   // ── v8: required for signed-quote attestation ────────────────────────
   // The signature is bound to the chain + diamond + creator so it can't be
@@ -68,6 +74,8 @@ export interface QuoteRequest {
 }
 
 export interface QuoteResponse {
+  /** Set when the cover could pay more than MAX_LEVERAGE_RATIO times its price (warning-only quotes). */
+  leverageWarning?: string;
   premiumRate: number;     // premium / notional, e.g. 0.023 = 2.3%
   premiumUsd: number;      // dollar amount the hedger pays
   maxPayoutUsd: number;    // worst-case payout if settlement reaches the cap
@@ -197,6 +205,7 @@ function cacheKey(req: QuoteRequest): string {
     diamondAddress: req.diamondAddress ?? null,
     creator: req.creator ?? null,
     sigmaOverride: req.sigmaOverride ?? null,
+    leverageWarningOnly: req.leverageWarningOnly ?? null,
   });
 }
 
@@ -421,7 +430,10 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
   }
 
   const leverage = maxPayoutUsd / premiumUsd;
-  if (leverage > MAX_LEVERAGE_RATIO) {
+  const leverageWarning = leverage > MAX_LEVERAGE_RATIO && req.leverageWarningOnly
+    ? `This cover costs very little next to what it could pay (it could pay about ${Math.round(leverage)} times its price), because a move this large is unlikely. You can still buy it. Starting closer to today's rate makes a payout more likely.`
+    : undefined;
+  if (leverage > MAX_LEVERAGE_RATIO && !req.leverageWarningOnly) {
     throw new Error(
       `Quote rejected: max_payout/premium = ${leverage.toFixed(0)}× exceeds ` +
       `safety cap of ${MAX_LEVERAGE_RATIO}×. This usually means σ for ${req.pair} ` +
@@ -491,6 +503,7 @@ async function quoteImpl(req: QuoteRequest): Promise<QuoteResponse> {
   }
 
   return {
+    ...(leverageWarning ? { leverageWarning } : {}),
     premiumRate,
     premiumUsd,
     maxPayoutUsd,

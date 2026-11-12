@@ -242,6 +242,8 @@ export interface EconomicQuote {
   maxPayout: string;
   pool: ResourceId;
   executionChain: ChainKey;
+  /** Something the buyer should know before buying, which does not stop the purchase. */
+  warning?: string;
 }
 
 /** An economic quote plus the adapter's executable, signed payload for one buyer. */
