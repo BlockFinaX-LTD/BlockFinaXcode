@@ -1017,3 +1017,25 @@
 .bx-viewbtn { border: 1px solid var(--line-2); background: var(--panel); color: var(--text-2); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .bx-viewbtn:hover { border-color: var(--blue); color: var(--blue); }
 .bx-sheet .bx-viewbtn { width: 100%; padding: 10px; margin-bottom: 8px; }
+
+/* ── Settings pages: one column of sections split by lines, no floating cards ── */
+.bx .bx-btn { border-radius: 8px; }
+.bx .bx-tag { border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+.bx-main.bx-settings { display: block; max-width: 860px; margin: 0 auto; padding: 28px 24px 80px; }
+.bx-page-title { font-size: 22px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+.bx-settings .bx-card { background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 22px 0; margin: 0; }
+.bx-settings .bx-card h2 { font-size: 15px; font-weight: 600; }
+.bx-settings .bx-card .sub { font-size: 13px; max-width: 600px; line-height: 1.5; }
+.bx-settings .bx-card-h { align-items: flex-start; margin-bottom: 10px; }
+.bx-settings .bx-sums { padding-top: 0; }
+.bx-settings .bx-sum { padding: 8px 0; font-size: 13.5px; border-bottom: 1px solid var(--line); }
+.bx-settings .bx-sum:last-child { border-bottom: 0; }
+.bx-settings .bx-note { background: none; padding: 0; color: var(--text-2); font-size: 13px; }
+.bx-settings .bx-note.warn { color: var(--amber-text); }
+.bx-settings .bx-btn { min-height: 34px; padding: 7px 14px; font-size: 13px; margin-top: 12px; }
+.bx-settings .bx-btn svg { width: 15px; height: 15px; }
+.bx-settings .bx-input, .bx-settings .bx-select { border-radius: 8px; }
+.bx-settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bx-settings .bx-li { padding: 10px 0; }
+@media (max-width: 860px) { .bx-main.bx-settings { padding: 16px 16px calc(96px + env(safe-area-inset-bottom)); } }
+.bx-settings .bx-empty { text-align: left; padding: 6px 0; font-size: 13px; color: var(--muted); }

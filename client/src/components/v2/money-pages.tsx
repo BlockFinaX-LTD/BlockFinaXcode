@@ -560,33 +560,24 @@ export function AccountPage({ go }: { go: Go }) {
   }));
   const [, setLocation] = useLocation();
   return (
-    <main className="bx-main">
-      <section className="bx-col">
-        <div className="bx-card">
-          <h2 style={{ marginBottom: 6 }}>Profile settings</h2>
-          <div className="bx-sums" style={{ borderTop: 0 }}>
-            <Sum l="Name" v={session?.user.name || '-'} />
-            <Sum l="Email" v={session?.user.email || '-'} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-            <button className="bx-btn ghost" onClick={startTour}><Compass /> Take the product tour</button>
-            <button className="bx-btn ghost" onClick={async () => { await signOutPasskey(); setSession(null); setLocation('/auth'); }}><LogOut /> Sign out</button>
-          </div>
+    <main className="bx-main bx-settings">
+      <h1 className="bx-page-title">Profile settings</h1>
+      <div className="bx-card">
+        <div className="bx-card-h"><h2>Profile</h2></div>
+        <div className="bx-sums" style={{ borderTop: 0 }}>
+          <Sum l="Name" v={session?.user.name || '-'} />
+          <Sum l="Email" v={session?.user.email || '-'} />
+          {accounts.filter((a) => a.stellar).map((a) => <Sum key={a.chain} l={`${a.name} account`} v={<span className="num">{a.address.slice(0, 8)}...{a.address.slice(-6)}</span>} />)}
         </div>
-        <VerificationCard />
-        <PasskeysCard />
-        <OrganisationCard go={go} />
-        <YourDataCard />
-      </section>
-      <aside className="bx-aside">
-        <div className="bx-card tight">
-          <h2 style={{ marginBottom: 4 }}>Your accounts</h2>
-          <div className="bx-sums" style={{ borderTop: 0 }}>
-            {accounts.filter((a) => a.stellar).map((a) => <Sum key={a.chain} l={a.name} v={<span className="num" style={{ fontSize: 12 }}>{a.address.slice(0, 8)}...{a.address.slice(-6)}</span>} />)}
-          </div>
-          <div className="sub">Your passkeys control every account. BlockFinaX never holds your keys.</div>
+        <div className="bx-settings-actions">
+          <button className="bx-btn ghost small" onClick={startTour}><Compass /> Take the product tour</button>
+          <button className="bx-btn ghost small" onClick={async () => { await signOutPasskey(); setSession(null); setLocation('/auth'); }}><LogOut /> Sign out</button>
         </div>
-      </aside>
+      </div>
+      <VerificationCard />
+      <PasskeysCard />
+      <OrganisationCard go={go} />
+      <YourDataCard />
     </main>
   );
 }
