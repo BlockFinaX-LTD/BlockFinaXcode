@@ -211,7 +211,9 @@ export function registerV2Routes(app: Express) {
       const pools = await s.adapters.adapterFor(chainRegistry()!.hub.key).listPools().catch(() => []);
       view = { vol: volPct / 100, ceilingBps: pools.find((p) => p.pair === pair && p.markupCeilingBps)?.markupCeilingBps ?? 20_000 };
     }
-    res.json(await s.quotes.fairTable(pair, direction, tenors, distance, view));
+    // The limit beyond the strike, in bps (1% to 100%); 10% unless asked.
+    const limit = Math.min(Math.max(Math.round(Number(req.query.limit ?? 1000)) || 1000, 100), 10_000);
+    res.json(await s.quotes.fairTable(pair, direction, tenors, distance, view, limit));
   }));
 
   /** Active cover sold by a pool, for the underwriter's risk view. */

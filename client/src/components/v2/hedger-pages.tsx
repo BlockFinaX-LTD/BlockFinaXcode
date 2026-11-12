@@ -111,22 +111,44 @@ function useMarkets() {
 }
 
 /**
- * A market's price per duration and side: BlockFinaX's fair price on a reference cover
- * (protection starting at the closest point any pool sells, limited 10% beyond) times the
- * cheapest pool's markup for it, as the contract applies it.
+ * The cover Markets prices: where protection starts (bps from today's rate) and how far
+ * beyond it the payout stops growing. By default cover from today's rate with a 10% limit,
+ * the same cover the buying panel starts on; once the buyer changes the panel, the list
+ * follows it, so the two prices never disagree.
+ */
+export interface MarketTerms { distanceBps: number; limitBps: number; fromPanel: boolean }
+const DEFAULT_TERMS: MarketTerms = { distanceBps: 0, limitBps: 1_000, fromPanel: false };
+/** The duration the headline price is for: common supplier payment terms. */
+const HEADLINE_DAYS = 30;
+
+function termsLabel(t: MarketTerms) {
+  const start = t.distanceBps === 0 ? "today's rate" : `${t.distanceBps / 100}% from today's rate`;
+  return `Prices for cover starting at ${start}, with a ${t.limitBps / 100}% limit${t.fromPanel ? ', as set in the panel' : ''}.`;
+}
+
+/**
+ * A market's price per duration and side: BlockFinaX's fair price on that cover times the
+ * cheapest pool's markup for it, as the contract applies it. A pool whose closest strike is
+ * further than the cover asked for cannot sell it and is left out.
  */
 type FairTable = { reference: { strike: string }; rows: { tenorDays: number; fairRateE6: number | null }[] };
-function useSideOffers(market: Market, direction: Direction) {
+function useSideOffers(market: Market, direction: Direction, terms: MarketTerms) {
   const pools = market.pools.filter((p) => p.direction === direction || p.direction === 'both');
   const on = market.directions.includes(direction) && pools.length > 0;
-  const distance = pools.length ? Math.min(...pools.map((p) => p.structures.minStrikeDistanceBps ?? 0)) : 0;
+  // Never closer than every pool allows.
+  const closest = pools.length ? Math.min(...pools.map((p) => p.structures.minStrikeDistanceBps ?? 0)) : 0;
+  const distance = Math.max(terms.distanceBps, closest);
   const sellers = pools.filter((p) => (p.structures.minStrikeDistanceBps ?? 0) <= distance);
-  const tenors = Array.from(new Set(sellers.flatMap((p) => durationsOffered(p).days))).sort((a, b) => a - b);
-  const fairKey = `fair:${market.pair}:${direction}:${tenors.join(',')}:${distance}`;
+  // Listed durations, plus the headline duration where a pool sells any day around it.
+  const days = new Set(sellers.flatMap((p) => durationsOffered(p).days));
+  if (sellers.some((p) => { const r = durationsOffered(p).range; return r && r.minDays <= HEADLINE_DAYS && r.maxDays >= HEADLINE_DAYS; })) days.add(HEADLINE_DAYS);
+  const tenors = Array.from(days).sort((a, b) => a - b);
+  const limit = terms.limitBps;
+  const fairKey = `fair:${market.pair}:${direction}:${tenors.join(',')}:${distance}:${limit}`;
   const fair = useQuery({
-    queryKey: ['v2-fair', market.pair, direction, tenors.join(','), distance],
+    queryKey: ['v2-fair', market.pair, direction, tenors.join(','), distance, limit],
     enabled: on && tenors.length > 0,
-    queryFn: async () => remember(fairKey, await api<FairTable>(`/api/v2/fair?pair=${encodeURIComponent(market.pair)}&direction=${direction}&tenors=${tenors.join(',')}&distance=${distance}`)),
+    queryFn: async () => remember(fairKey, await api<FairTable>(`/api/v2/fair?pair=${encodeURIComponent(market.pair)}&direction=${direction}&tenors=${tenors.join(',')}&distance=${distance}&limit=${limit}`)),
     ...remembered<FairTable>(fairKey),
     staleTime: 60_000,
   });
@@ -139,12 +161,15 @@ function useSideOffers(market: Market, direction: Direction) {
   return { rows, loading: on && fair.isLoading, distance, strike: fair.data?.reference.strike ?? null };
 }
 
-function useMarketOffers(market: Market) {
-  const up = useSideOffers(market, 'up');
-  const down = useSideOffers(market, 'down');
-  const priced = [...up.rows, ...down.rows].filter((r) => r.price !== null);
-  const cheapest = priced.length ? priced.reduce((a, b) => (b.price! < a.price! ? b : a)) : null;
-  return { up, down, from: cheapest?.price ?? null, fromDays: cheapest?.tenorDays ?? null, loading: up.loading || down.loading };
+function useMarketOffers(market: Market, terms: MarketTerms) {
+  const up = useSideOffers(market, 'up', terms);
+  const down = useSideOffers(market, 'down', terms);
+  // The headline: the 30-day price (Up cover first, the side most buyers need), else the
+  // duration nearest 30 days. Never the cheapest short duration, which almost nobody buys.
+  const near = (rows: { tenorDays: number; price: number | null }[]) => rows.filter((r) => r.price !== null)
+    .sort((a, b) => Math.abs(a.tenorDays - HEADLINE_DAYS) - Math.abs(b.tenorDays - HEADLINE_DAYS))[0] ?? null;
+  const head = near(up.rows) ?? near(down.rows);
+  return { up, down, headline: head?.price ?? null, headlineDays: head?.tenorDays ?? null, loading: up.loading || down.loading };
 }
 
 /** The durations a market sells: any day in the widest range, otherwise the listed ones. */
@@ -164,8 +189,8 @@ const MARKET_COLS = { gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr) minm
 
 const isPhone = () => window.innerWidth < 860;
 
-function MarketRow({ market, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false, chart }: {
-  market: Market; go: Go; expandable?: boolean; action?: string;
+function MarketRow({ market, go, expandable = true, action = 'Buy cover', selectOnClick = false, focused = false, chart, terms = DEFAULT_TERMS }: {
+  market: Market; go: Go; expandable?: boolean; action?: string; terms?: MarketTerms;
   /** Clicking the row chooses the market (Markets) rather than only opening its prices. */
   selectOnClick?: boolean;
   /** The market chosen on Markets: shown open, without its Select button. */
@@ -177,7 +202,7 @@ function MarketRow({ market, go, expandable = true, action = 'Buy cover', select
   const opensWhenChosen = focused && !isPhone();
   const [open, setOpen] = useState(opensWhenChosen);
   useEffect(() => { if (selectOnClick) setOpen(opensWhenChosen); }, [opensWhenChosen, selectOnClick]);
-  const offers = useMarketOffers(market);
+  const offers = useMarketOffers(market, terms);
   const pair = market.pair;
   const buy = (days?: number, direction?: Direction) => go('h-protect', { pair, buy: true, days, direction });
   const spot = useSpot(pair);
@@ -189,7 +214,7 @@ function MarketRow({ market, go, expandable = true, action = 'Buy cover', select
       <div className={`bx-li bx-li-market${expandable || selectOnClick ? ' click' : ''}`} style={MARKET_COLS} onClick={() => (selectOnClick && !focused ? buy() : expandable && setOpen((o) => !o))}>
         <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={both ? 'both' : market.directions[0] ?? 'up'} /></div><div className="d"><RefRate /> <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span></div></div></div>
         <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(market.capacity, 0)}</div><div className="muted" style={{ fontSize: 12 }}>available</div></div>
-        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.from === null ? (offers.loading ? '...' : '-') : pct(offers.from)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.fromDays ? `from, ${offers.fromDays} ${offers.fromDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
+        <div className="r"><div className="num" style={{ fontWeight: 600 }}>{offers.headline === null ? (offers.loading ? '...' : '-') : pct(offers.headline)}</div><div className="muted" style={{ fontSize: 12 }}>{offers.headlineDays ? `for ${offers.headlineDays} ${offers.headlineDays === 1 ? 'day' : 'days'}` : 'price'}</div></div>
         <div className="r bx-hide-sm" style={{ fontSize: 13 }}>{durationsLabel(market)}</div>
         <div className="r" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
           {!focused && <button className="bx-btn small" onClick={(e) => { e.stopPropagation(); buy(); }}>{isPhone() ? 'Buy' : action}</button>}
@@ -202,6 +227,7 @@ function MarketRow({ market, go, expandable = true, action = 'Buy cover', select
       </div>
       {open && (
         <div style={{ background: '#f8f9fb', borderRadius: 12, padding: '6px 14px 10px', margin: '0 0 10px' }}>
+          <div className="muted" style={{ fontSize: 12, paddingTop: 8 }}>{termsLabel(terms)}</div>
           {/* Up and Down cover side by side; stacked on phones. */}
           <div className={`bx-sides${sides.length > 1 ? ' two' : ''}`}>
             {sides.map(([d, side]) => (
@@ -220,7 +246,7 @@ function MarketRow({ market, go, expandable = true, action = 'Buy cover', select
               </div>
             ))}
           </div>
-          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>Best prices across every pool, for the closest cover on sale{offers.up.strike && market.directions.includes('up') ? ` (Up cover from ${fmtRate(offers.up.strike)} ${quoteCcy(pair)})` : ''}{offers.down.strike && market.directions.includes('down') ? ` (Down cover from ${fmtRate(offers.down.strike)} ${quoteCcy(pair)})` : ''}, with a limit 10% beyond. Cover starting further away costs less. Your exact price, including the BlockFinaX fee, is shown before you buy.</div>
+          <div className="muted" style={{ fontSize: 12, paddingTop: 8 }}>The best price across every pool. Cover that starts further from today's rate, or has a closer limit, costs less. Your exact price, including the BlockFinaX fee, is shown before you buy.</div>
         </div>
       )}
     </>
@@ -235,7 +261,7 @@ function MarketHeader() {
  * The currencies on sale, at the top of Markets. Choosing one shows only that market, open,
  * and loads it into the buying panel beside it; All markets brings the list back.
  */
-function MarketList({ go, selected, chart }: { go: Go; selected: string | null; chart?: { on: boolean; toggle: () => void } }) {
+function MarketList({ go, selected, chart, terms = DEFAULT_TERMS }: { go: Go; selected: string | null; chart?: { on: boolean; toggle: () => void }; terms?: MarketTerms }) {
   const { pools, markets } = useMarkets();
   const acting = useActingOrganisation();
   const chosen = selected ? markets.find((m) => m.pair === selected) ?? null : null;
@@ -251,7 +277,7 @@ function MarketList({ go, selected, chart }: { go: Go; selected: string | null; 
       {pools.isLoading ? <Loading /> : !shown.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
           <MarketHeader />
-          {shown.map((m) => <MarketRow key={m.pair} market={m} go={go} action="Select" selectOnClick focused={m === chosen} chart={m === chosen ? chart : undefined} />)}
+          {shown.map((m) => <MarketRow key={m.pair} market={m} go={go} action="Select" selectOnClick focused={m === chosen} chart={m === chosen ? chart : undefined} terms={m === chosen ? terms : DEFAULT_TERMS} />)}
         </div></div>
       )}
       {!chosen && !acting && (
@@ -934,6 +960,12 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [structure, setStructure] = useState<'capped' | 'open'>('capped');
   useEffect(() => { if (tenor && !tenor[structure]) setStructure(tenor.capped ? 'capped' : 'open'); }, [tenor, structure]);
   const strike = spot.data && !strikeError ? (anchor === 'rate' ? Number(rateText) : spot.data * (1 + (sign * startPct) / 100)) : null;
+  // The list beside the panel prices the cover set here, once the buyer changes it.
+  const panelTerms: MarketTerms = !strikeError && Number.isFinite(startPct) && (strikeTouched || capPct !== 10)
+    ? { distanceBps: Math.max(0, Math.round(startPct * 100)), limitBps: Math.round(capPct * 100), fromPanel: true }
+    : DEFAULT_TERMS;
+  const listKey = useDebounced(JSON.stringify(panelTerms), 400);
+  const listTerms = useMemo(() => JSON.parse(listKey) as MarketTerms, [listKey]);
   const cap = strike ? strike * (1 + (sign * capPct) / 100) : null;
 
   // A strike set as a percentage is sent as one, so the server measures it from the rate it prices at.
@@ -1045,7 +1077,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           </div>
         </div>}
 
-        <MarketList go={go} selected={pair} chart={{ on: showChart, toggle: toggleChart }} />
+        <MarketList go={go} selected={pair} chart={{ on: showChart, toggle: toggleChart }} terms={listTerms} />
         <div className="bx-card bx-hide-sm">
           <h2 style={{ marginBottom: 14 }}>How protection works</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>

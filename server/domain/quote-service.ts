@@ -58,11 +58,11 @@ export class QuoteService {
    * a reference cover (protection `strikeDistanceBps` from today, default 2%, capped 10%
    * beyond, 1,000 notional) so tenors compare on the same terms. Returned as a fraction of notional.
    */
-  async fairTable(pair: string, direction: "up" | "down", tenors: number[], strikeDistanceBps = 200, view?: { vol: number; ceilingBps: number }) {
+  async fairTable(pair: string, direction: "up" | "down", tenors: number[], strikeDistanceBps = 200, view?: { vol: number; ceilingBps: number }, limitBps = 1_000) {
     const spot = Number(await this.pricer.spot(pair));
     const sign = direction === "up" ? 1 : -1;
     const strike = spot * (1 + (sign * strikeDistanceBps) / 10_000);
-    const cap = strike * (1 + sign * 0.1);
+    const cap = strike * (1 + (sign * limitBps) / 10_000);
     const rows = [];
     for (const tenorDays of tenors) {
       try {
