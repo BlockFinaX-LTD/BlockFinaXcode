@@ -16,44 +16,17 @@ const day = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateStrin
 interface Deletion { id: number; status: string; requested_at: string; completed_at: string | null }
 
 export function YourDataCard() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const request = useQuery({ queryKey: ['records-deletion'], queryFn: () => api<{ request: Deletion | null }>('/api/records/deletion') });
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
   const current = request.data?.request;
-
-  async function ask() {
-    setBusy(true);
-    try {
-      await api('/api/records/deletion', {});
-      toast({ title: 'Request received', description: 'We will confirm by email what we deleted and what the law requires us to keep.' });
-      setConfirming(false);
-      void qc.invalidateQueries({ queryKey: ['records-deletion'] });
-    } catch (e) {
-      toast({ title: 'Not sent', description: (e as Error).message, variant: 'destructive' });
-    } finally { setBusy(false); }
-  }
-
   return (
     <div className="bx-card">
       <h2 style={{ marginBottom: 6 }}>Your data</h2>
-      <div className="sub">What we keep and for how long is set out in our <a href="/privacy" target="_blank" rel="noreferrer" className="bx-link">Privacy Policy</a>.</div>
+      <div className="sub">What we keep, for how long, and how to ask us to delete it is set out in our <a href="/privacy" target="_blank" rel="noreferrer" className="bx-link">Privacy Policy</a>.</div>
       {current?.status === 'received' ? (
         <div className="bx-hint" style={{ textAlign: 'left', marginTop: 12 }}>You asked us to delete your data on {day(current.requested_at)}. We are handling it.</div>
       ) : current?.status === 'completed' ? (
         <div className="bx-hint" style={{ textAlign: 'left', marginTop: 12 }}>Your deletion request was completed on {day(current.completed_at)}.</div>
-      ) : !confirming ? (
-        <button className="bx-btn ghost small" style={{ marginTop: 12 }} onClick={() => setConfirming(true)}>Ask us to delete your data</button>
-      ) : (
-        <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 13 }}>We will delete your profile and conversations and close sign-in. The law requires us to keep identity and transaction records for the periods in our Privacy Policy, and records on the blockchain cannot be erased. Continue?</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="bx-btn" disabled={busy} onClick={ask}>{busy ? <Spin /> : null} Yes, send my request</button>
-            <button className="bx-btn ghost" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
