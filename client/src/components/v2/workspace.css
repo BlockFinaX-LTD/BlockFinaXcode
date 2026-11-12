@@ -927,3 +927,21 @@
 .bx-menu-net .bx-network { margin: 0; }
 .bx-top .bx-balance-pill { white-space: nowrap; }
 .bx-top .bx-btn { white-space: nowrap; }
+
+/* ── Two-row top bar: brand, role, wallet and account; then page tabs with Simple or Advanced ── */
+@media (min-width: 861px) {
+  .bx-top { flex-wrap: wrap; height: auto; padding: 0 20px; row-gap: 0; column-gap: 16px; }
+  .bx-top > .bx-tbrand, .bx-top > .bx-top-r { min-height: 60px; }
+  .bx-top > .bx-roles { align-self: center; }
+  .bx-top .bx-search { display: none; }
+  .bx-top .bx-top-r { margin-left: auto; }
+  .bx-top .bx-roles button.on { box-shadow: inset 0 0 0 1.5px var(--blue); }
+  .bx-top .bx-balance-pill.on { border-color: var(--blue); color: var(--blue); }
+  .bx-trow2 { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .bx-trow2 .bx-roles { margin: 0; }
+  .bx-topnav { gap: 0; }
+  .bx-tnav { padding: 10px 2px 9px; margin-right: 28px; border-radius: 0; border-bottom: 2px solid transparent; font-size: 15px; }
+  .bx-tnav:hover { background: none; color: var(--text); }
+  .bx-tnav.on { border-bottom-color: var(--blue); color: var(--blue); }
+  .bx-trade .bx-tpanel .bx-buy { top: 112px; }
+}
