@@ -198,7 +198,7 @@ export function UnderwriterRequests() {
   }
 
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
       <section className="bx-full">
         <div className="bx-card">
           <div className="bx-card-h"><div><h2>Quote requests</h2><div className="sub">Businesses asking for cover no pool sells today. Your offer is a firm price; your USDC is committed only if the business accepts.</div></div></div>

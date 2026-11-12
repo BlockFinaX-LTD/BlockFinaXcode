@@ -50,6 +50,11 @@ export const GLOSSARY: Record<string, string> = {
   'You pay': 'The premium plus the BlockFinaX fee, paid once in USDC. Network fees are covered.',
 
   // Pools and underwriting
+  'Capital committed': 'Your USDC in pools: free plus reserved.',
+  'Premium earned': 'Premiums your capital has earned from cover it backs.',
+  'Reserved': 'Your capital set aside behind running cover. It is released when that cover ends.',
+  'Capital releases': 'When your reserved capital is due back, as the cover it backs ends.',
+  'Exposure by duration': 'The most your capital could pay, grouped by how long the cover runs.',
   'Liquidity': 'The USDC in the pools that backs protection.',
   'Committed liquidity': 'The USDC the pool started with.',
   'In use': 'The share of the pool reserved for protection that is still running.',

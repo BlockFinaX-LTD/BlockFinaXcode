@@ -158,53 +158,45 @@ export function UnderwriterHome({ go }: { go: Go }) {
   const tenorMax = Math.max(1, ...tenorRows.map(([, v]) => v));
 
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
+      <div className="bx-mstrip bx-desk-strip">
+        <div className="bx-desk-title"><span className="n">Underwriting</span><span className="s">USDC across {yours.length} pool{yours.length === 1 ? '' : 's'}</span></div>
+        <div className="bx-stat"><span className="l">{hint('Capital committed')}</span><span className="v num">${fmt(committed)}</span></div>
+        <div className="bx-stat"><span className="l">{hint('Premium earned')}</span><span className={`v num ${earned > 0 ? 'up' : ''}`}>{earned > 0 ? '+' : ''}${fmt(earned)}</span></div>
+        <div className="bx-stat"><span className="l">{hint('Return')}</span><span className="v num">{committed > 0 ? pct(earned / committed) : '-'}</span></div>
+        <div className="bx-stat"><span className="l">{hint('Reserved')}</span><span className="v num">${fmt(reserved, 0)} <span className="muted">{pct(used, 0)}</span></span></div>
+        <div className="bx-stat"><span className="l">{hint('Available')}</span><span className="v num">${fmt(available, 0)}</span></div>
+        <div className="bx-stat"><span className="l">{hint('Active hedges')}</span><span className="v num">{hedges}</span></div>
+        <div className="bx-desk-actions">
+          <button className="bx-btn ghost small" onClick={() => go('u-create')}>Create pool</button>
+          <button className="bx-btn small" onClick={() => go('u-pools')}>Add liquidity</button>
+        </div>
+      </div>
       <section className="bx-col">
         <div className="bx-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-            <div>
-              <div className="bx-hero-k">Capital committed</div>
-              <div className="bx-hero-v num">${fmt(committed)}</div>
-              <div className="sub">USDC across {yours.length} pool{yours.length === 1 ? '' : 's'}</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div className="bx-hero-k">Premium earned</div>
-              <div className={`num ${earned >= 0 ? 'up' : 'down'}`} style={{ fontSize: 22, fontWeight: 600, marginTop: 10 }}>{earned >= 0 ? '+' : ''}${fmt(earned)}</div>
-              <div className="num up" style={{ fontSize: 13, fontWeight: 600 }}>{committed > 0 ? `${earned >= 0 ? '+' : ''}${pct(earned / committed)} on capital` : ''}</div>
-            </div>
-          </div>
-          <div style={{ marginTop: 24 }}>
-            <div className="bx-bar"><i style={{ width: `${used * 100}%`, background: 'var(--blue)' }} /><i style={{ width: `${(1 - used) * 100}%`, background: '#bcd0ff' }} /></div>
-            <div className="bx-strip" style={{ borderTop: 0, paddingTop: 0, marginTop: 16 }}>
-              <div><div className="k"><span className="bx-dot" style={{ background: 'var(--blue)' }} />Reserved</div><div className="v num">${fmt(reserved, 0)}</div></div>
-              <div><div className="k"><span className="bx-dot" style={{ background: '#bcd0ff' }} />Available</div><div className="v num">${fmt(available, 0)}</div></div>
-              <div><div className="k">{hint("Active hedges")}</div><div className="v num">{hedges}</div></div>
-            </div>
-          </div>
-        </div>
-        <div className="bx-card">
-          <div className="bx-card-h"><h2>Your pools</h2><button className="bx-link" onClick={() => go('u-pools')}>All pools</button></div>
-          {pools.isLoading ? <Loading /> : !yours.length ? <div className="bx-empty">No capital committed yet. <button className="bx-link" onClick={() => go('u-create')}>Create a pool</button> or <button className="bx-link" onClick={() => go('u-pools')}>add to one</button>.</div> : <PoolRows pools={yours} stakes={stakes} go={go} />}
+          <div className="bx-pane-h"><span>Your pools</span><button className="bx-link" onClick={() => go('u-pools')}>All pools</button></div>
+          {pools.isLoading ? <Loading /> : !yours.length ? <div className="bx-tempty">No capital committed yet. <button className="bx-link" onClick={() => go('u-pools')}>Add liquidity to a pool</button> or <button className="bx-link" onClick={() => go('u-create')}>create one</button>.</div> : <PoolRows pools={yours} stakes={stakes} go={go} />}
         </div>
       </section>
       <aside className="bx-aside">
-        <div className="bx-cta">
-          <h3>Earn premiums</h3>
-          <p>Back currency protection with USDC and earn the premiums businesses pay. Add liquidity to a pool, or create one for a new currency.</p>
-          <button onClick={() => go('u-pools')}>Get started</button>
+        <div className="bx-card">
+          <div className="bx-pane-h"><span>{hint('Capital releases')}</span></div>
+          {!upcoming.length ? <div className="bx-tempty">Nothing reserved right now.</div> : (
+            <>
+              <div className="bx-thead bx-desk-3"><span>Date</span><span className="r">In</span><span className="r">Amount</span></div>
+              {upcoming.map(([day, amount]) => (
+                <div key={day} className="bx-trow bx-desk-3" style={{ cursor: 'default' }}><span className="num">{shortDate(day)}</span><span className="r muted">{inDays(day)} days</span><span className="r num">${fmt(amount, 0)}</span></div>
+              ))}
+            </>
+          )}
         </div>
-        <div className="bx-card tight">
-          <h2 style={{ marginBottom: 4 }}>Upcoming capital releases</h2>
-          {!upcoming.length ? <div className="bx-empty">No capital is reserved right now.</div> : upcoming.map(([day, amount]) => (
-            <div key={day} className="bx-mini"><span className="bx-ic"><CalendarDays aria-hidden="true" /></span><div className="grow"><div className="t num">${fmt(amount, 0)}</div><div className="d">in {inDays(day)} days</div></div><span className="muted" style={{ fontSize: 13 }}>{shortDate(day)}</span></div>
-          ))}
-        </div>
-        <div className="bx-card tight">
-          <h2 style={{ marginBottom: 12 }}>Exposure by tenor</h2>
-          {!tenorRows.length ? <div className="bx-empty">No active cover.</div> : tenorRows.map(([d, v]) => (
-            <div key={d} style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>{d} days</span><span className="num" style={{ fontWeight: 600 }}>${fmt(v, 0)}</span></div>
-              <div className="bx-bar thin" style={{ marginTop: 6 }}><i style={{ width: `${(v / tenorMax) * 100}%`, background: 'var(--blue)' }} /></div>
+        <div className="bx-card">
+          <div className="bx-pane-h"><span>{hint('Exposure by duration')}</span></div>
+          {!tenorRows.length ? <div className="bx-tempty">No active cover.</div> : tenorRows.map(([d, v]) => (
+            <div key={d} className="bx-trow bx-desk-3" style={{ cursor: 'default' }}>
+              <span>{d} days</span>
+              <span className="bx-desk-bar"><i style={{ width: `${(v / tenorMax) * 100}%` }} /></span>
+              <span className="r num">${fmt(v, 0)}</span>
             </div>
           ))}
         </div>
@@ -219,11 +211,11 @@ export function UnderwriterHome({ go }: { go: Go }) {
 export function MyPools({ go }: { go: Go }) {
   const { pools, all, stakes, yours } = useBook();
   const [view, setView] = useState<'yours' | 'all' | null>(null);
-  if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
+  if (pools.isLoading) return <main className="bx-main bx-desk"><section className="bx-full"><Loading /></section></main>;
   const showing = view ?? (yours.length ? 'yours' : 'all');
   const rows = showing === 'yours' ? yours : all;
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
       <section className="bx-full">
         <div className="bx-card">
           <div className="bx-card-h" style={{ gap: 16, flexWrap: 'wrap' }}>
@@ -254,13 +246,13 @@ export function PoolPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
   useEffect(() => { if (initial) setRef(initial); }, [initial]);
   useEffect(() => { if ((!ref || !all.some((p) => poolRef(p) === ref)) && all[0]) setRef(poolRef(all.find(isCreator) ?? all[0])); }, [all, ref]);
   const pool = all.find((p) => poolRef(p) === ref) ?? null;
-  if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
-  if (!pool) return <main className="bx-main"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No pools yet. <button className="bx-link" onClick={() => go('u-create')}>Create the first one</button>.</div></div></section></main>;
+  if (pools.isLoading) return <main className="bx-main bx-desk"><section className="bx-full"><Loading /></section></main>;
+  if (!pool) return <main className="bx-main bx-desk"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No pools yet. <button className="bx-link" onClick={() => go('u-create')}>Create the first one</button>.</div></div></section></main>;
   const nav = Number(pool.liquidity.nav);
   const growth = sharePrice(pool) - 1;
   const creator = isCreator(pool);
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
       <section className="bx-col">
         <div className="bx-card">
           <button className="bx-link bx-back" onClick={() => go('u-pools')}><ChevronLeft aria-hidden="true" /> Pools</button>
@@ -836,11 +828,11 @@ export function CreatePool({ go }: { go: Go }) {
     } finally { setBusy(null); }
   }
 
-  if (setup.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
+  if (setup.isLoading) return <main className="bx-main bx-desk"><section className="bx-full"><Loading /></section></main>;
   const box = { border: '1px solid var(--line-2)', borderRadius: 12, padding: 16 } as const;
   const tcols = { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) 56px 36px' };
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
       <section className="bx-col">
         <div className="bx-card">
           <h2 style={{ marginBottom: 14 }}>Create pool</h2>
@@ -976,8 +968,8 @@ export function RiskPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
   useEffect(() => { if ((!ref || !all.some((p) => poolRef(p) === ref)) && all[0]) setRef(poolRef(all[0])); }, [all, ref]);
   const pool = all.find((p) => poolRef(p) === ref) ?? null;
   const positions = usePoolPositions(pool ? [pool] : []).get(ref ?? '') ?? [];
-  if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
-  if (!pool) return <main className="bx-main"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No pools yet.</div></div></section></main>;
+  if (pools.isLoading) return <main className="bx-main bx-desk"><section className="bx-full"><Loading /></section></main>;
+  if (!pool) return <main className="bx-main bx-desk"><section className="bx-full"><div className="bx-card"><div className="bx-empty">No pools yet.</div></div></section></main>;
   const nav = Number(pool.liquidity.nav), reserved = Number(pool.liquidity.reserved), available = Number(pool.liquidity.capacity);
   const held = Math.max(nav - reserved - available, 0);
   const byTenor = new Map<number, number>();
@@ -995,7 +987,7 @@ export function RiskPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
     );
   };
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
       <section className="bx-col">
         <div className="bx-card">
           <div className="bx-card-h"><div className="bx-who"><Flag pair={pool.pair} /><div><div className="t">{poolName(pool)}</div><div className="d">{pool.pair}</div></div></div>{all.length > 1 && <PoolPicker pools={all} value={ref} onChange={setRef} />}</div>
@@ -1028,9 +1020,9 @@ export function WithdrawCapital({ go, poolRef: initial }: { go: Go; poolRef: str
   const withdrawals = useQuery({ queryKey: ['v2-withdrawals'], queryFn: async () => (await api<{ withdrawals: Withdrawal[] }>('/api/v2/withdrawals')).withdrawals, refetchInterval: 30_000 });
   const poolOf = (w: Withdrawal) => all.find((p) => p.poolId === w.poolId && p.chain === w.chain && (!w.contract || p.ref.contract === w.contract));
   const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' };
-  if (pools.isLoading) return <main className="bx-main"><section className="bx-full"><Loading /></section></main>;
+  if (pools.isLoading) return <main className="bx-main bx-desk"><section className="bx-full"><Loading /></section></main>;
   return (
-    <main className="bx-main">
+    <main className="bx-main bx-desk">
       <section className="bx-col">
         <div className="bx-card">
           <div className="bx-card-h"><h2>Your withdrawals</h2></div>

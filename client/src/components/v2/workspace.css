@@ -1039,3 +1039,48 @@
 .bx-settings .bx-li { padding: 10px 0; }
 @media (max-width: 860px) { .bx-main.bx-settings { padding: 16px 16px calc(96px + env(safe-area-inset-bottom)); } }
 .bx-settings .bx-empty { text-align: left; padding: 6px 0; font-size: 13px; color: var(--muted); }
+
+/* ── Underwriting desk: strip of numbers, panels split by thin lines (like Markets) ── */
+.bx-main.bx-desk { max-width: none; padding: 0 0 72px; gap: 1px; background: var(--line); align-items: stretch; grid-template-columns: minmax(0, 1fr) 360px; }
+.bx-desk > .bx-col, .bx-desk > .bx-aside, .bx-desk > .bx-full { gap: 1px; background: var(--line); }
+.bx-desk .bx-card, .bx-desk .bx-panel { background: var(--panel); border: 0; border-radius: 0; margin: 0; box-shadow: none; }
+.bx-main.bx-desk .bx-card { padding: 14px 16px; }
+.bx-desk .bx-card:has(> .bx-pane-h) { padding: 0 0 8px; }
+.bx-desk .bx-card > .bx-pane-h { margin-bottom: 0; }
+.bx-desk .bx-card h2 { font-size: 14px; }
+.bx-desk .bx-card .bx-list-h, .bx-desk .bx-card .bx-li { padding-left: 16px; padding-right: 16px; }
+.bx-desk .bx-panel { position: static; }
+.bx-desk > .bx-mstrip { grid-area: auto; grid-column: 1 / -1; background: var(--panel); }
+.bx-desk-title { display: flex; flex-direction: column; padding-right: 8px; }
+.bx-desk-title .n { font-size: 16px; font-weight: 600; }
+.bx-desk-title .s { font-size: 12px; color: var(--muted); }
+.bx-desk-actions { margin-left: auto; display: flex; gap: 8px; }
+.bx-desk-actions .bx-btn { margin: 0; }
+.bx-desk-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
+.bx-desk-bar { display: block; height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.bx-desk-bar i { display: block; height: 100%; background: var(--blue); }
+.bx-desk .bx-strip { margin-top: 14px; padding-top: 12px; }
+.bx-desk .bx-strip .v { font-size: 16px; }
+.bx-desk .bx-dense-name { font-size: 16px; }
+.bx-desk .bx-bar { border-radius: 3px; height: 8px; }
+@media (max-width: 1100px) { .bx-main.bx-desk { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) { .bx-main.bx-desk { padding: 0 0 calc(96px + env(safe-area-inset-bottom)); } }
+
+/* Simple: the Advanced buy panel on its own, under the currency picker. */
+.bx-sbuy { display: flex; flex-direction: column; gap: 14px; }
+.bx-simple .bx-sbuy .bx-pills { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.bx-simple .bx-sbuy .bx-pill { min-height: 32px; padding: 4px; border-radius: 6px; font-size: 13px; }
+.bx-sbuy .bx-choice button { border-radius: 6px; padding: 8px 10px; }
+.bx-sbuy .bx-choice button.on { padding: 7px 9px; }
+.bx-sbuy .bx-tsum .bx-sum { padding: 4px 0; font-size: 13px; }
+.bx-sbuy .bx-tsum .bx-sum.total { font-size: 14px; padding-top: 8px; }
+.bx-sbuy .bx-until .bx-input { max-width: none !important; width: 100%; }
+.bx-simple .bx-sbuy .bx-btn { min-height: 44px; font-size: 14px; border-radius: 8px; }
+.bx-simple .bx-scard { gap: 16px; }
+
+/* Underwriting desk: the main column is one column, not two. */
+.bx-desk > .bx-col { grid-column: auto; }
+.bx-main.bx-desk { padding-bottom: 0; }
+.bx-simple .bx-sbuy { padding: 0; }
+.bx-desk > .bx-col, .bx-desk > .bx-aside, .bx-desk > .bx-full { gap: 0; background: var(--panel); }
+.bx-desk > .bx-col > .bx-card, .bx-desk > .bx-aside > .bx-card, .bx-desk > .bx-aside > .bx-panel, .bx-desk > .bx-full > .bx-card { border-bottom: 1px solid var(--line); }
