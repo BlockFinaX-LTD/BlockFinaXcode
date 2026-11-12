@@ -10,7 +10,7 @@ import { VerifyModal } from './verify';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Building2, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, Building2, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, usePools, useUsdcBalances } from './shared';
@@ -27,6 +27,7 @@ import { onActingOrganisationChange, pendingInviteToken } from '@/lib/acting-org
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
 import { AccountMenu } from './account-menu';
 import { OrganisationSettingsPage } from './organisation-card';
+import { useViewMode, type ViewMode } from './view-mode';
 import './workspace.css';
 
 export type Role = 'hedger' | 'underwriter';
@@ -56,6 +57,27 @@ const NAV: Record<Role, { page: Page; label: string; icon: ReactNode }[]> = {
     { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
   ],
 };
+
+/** Simple: for businesses. Buy cover, their cover, rates and wallet; nothing else. */
+const SIMPLE_NAV: { page: Page; label: string; icon: ReactNode }[] = [
+  { page: 'h-protect', label: 'Buy cover', icon: <ShieldCheck /> },
+  { page: 'h-protections', label: 'My cover', icon: <List /> },
+  { page: 'h-rates', label: 'Rates', icon: <LineChart /> },
+  { page: 'wallet', label: 'Wallet', icon: <Wallet /> },
+];
+const SIMPLE_TABS: Page[] = ['h-protect', 'h-protections', 'h-rates', 'wallet'];
+/** Pages Simple can show: its menu, plus settings and a rate or cover opened from a list. */
+const SIMPLE_PAGES: Page[] = [...SIMPLE_TABS, 'account', 'org-settings', 'pair'];
+
+/** The Simple or Advanced switch, styled like the Hedger and Underwriter switch. */
+function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (v: ViewMode) => void }) {
+  return (
+    <div className="bx-roles" role="group" aria-label="View">
+      <button className={mode === 'simple' ? 'on' : ''} aria-pressed={mode === 'simple'} onClick={() => onChange('simple')}>Simple</button>
+      <button className={mode === 'advanced' ? 'on' : ''} aria-pressed={mode === 'advanced'} onClick={() => onChange('advanced')}>Advanced</button>
+    </div>
+  );
+}
 
 /** Pages on the phone tab bar; everything else sits under More. */
 const TABS: Record<Role, Page[]> = {
@@ -104,9 +126,16 @@ function readRole(): Role {
 }
 
 export function Workspace() {
-  const [role, setRole] = useState<Role>(readRole);
+  const [viewMode, setViewMode] = useViewMode();
+  const simple = viewMode === 'simple';
+  const [chosenRole, setRole] = useState<Role>(readRole);
+  const role: Role = simple ? 'hedger' : chosenRole;
+  const nav = simple ? SIMPLE_NAV : NAV[role];
+  const tabs = simple ? SIMPLE_TABS : TABS[role];
   // An organisation invitation opened before sign-in waits on the Account page.
-  const [page, setPage] = useState<Page>(() => (pendingInviteToken() ? 'account' : role === 'hedger' ? 'h-home' : 'u-home'));
+  const [page, setPage] = useState<Page>(() => (pendingInviteToken() ? 'account' : simple ? 'h-protect' : role === 'hedger' ? 'h-home' : 'u-home'));
+  // Switching to Simple from a page it does not have opens Buy cover.
+  useEffect(() => { if (simple && !SIMPLE_PAGES.includes(page)) setPage('h-protect'); }, [simple, page]);
   const [pair, setPair] = useState<string | null>(null);
   const [pool, setPool] = useState<string | null>(null);
   const [buy, setBuy] = useState<Target>({});
@@ -169,12 +198,15 @@ export function Workspace() {
     <div className="bx" data-theme={theme}>
       <nav className="bx-rail" aria-label="Main">
         <div className="bx-brand"><img src={logoPath} alt="" />BlockFinaX</div>
-        <div className="bx-roles" data-tour="roles">
-          <button className={role === 'hedger' ? 'on' : ''} onClick={() => switchRole('hedger')}>Hedger</button>
-          <button className={role === 'underwriter' ? 'on' : ''} onClick={() => switchRole('underwriter')}>Underwriter</button>
-        </div>
+        <ViewSwitch mode={viewMode} onChange={setViewMode} />
+        {!simple && (
+          <div className="bx-roles" data-tour="roles">
+            <button className={role === 'hedger' ? 'on' : ''} onClick={() => switchRole('hedger')}>Hedger</button>
+            <button className={role === 'underwriter' ? 'on' : ''} onClick={() => switchRole('underwriter')}>Underwriter</button>
+          </div>
+        )}
         <div className="bx-navs">
-          {NAV[role].map((n) => (
+          {nav.map((n) => (
             <button key={n.page} data-tour={n.page} className={`bx-nav${page === n.page || parentPage === n.page ? ' on' : ''}`} onClick={() => go(n.page)}>{n.icon}{n.label}</button>
           ))}
         </div>
@@ -220,15 +252,15 @@ export function Workspace() {
       <ProductTour role={role} userId={session?.user.id} />
 
       <nav className="bx-tabs" aria-label="Main">
-        {TABS[role].map((p) => {
-          const n = NAV[role].find((x) => x.page === p)!;
+        {tabs.map((p) => {
+          const n = nav.find((x) => x.page === p)!;
           return (
             <button key={p} data-tour={p} className={`${(page === p || parentPage === p) && !more ? 'on' : ''}${p === 'h-protect' ? ' primary' : ''}`} onClick={() => goTab(p)}>
-              {n.icon}<span>{SHORT[p] ?? n.label}</span>
+              {n.icon}<span>{simple ? n.label : SHORT[p] ?? n.label}</span>
             </button>
           );
         })}
-        <button className={more || !(TABS[role].includes(page) || TABS[role].includes(parentPage as Page)) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
+        <button className={more || !(tabs.includes(page) || tabs.includes(parentPage as Page)) ? 'on' : ''} onClick={() => setMore((m) => !m)} aria-expanded={more}>
           {more ? <X /> : <Menu />}<span>More</span>
         </button>
       </nav>
@@ -236,16 +268,19 @@ export function Workspace() {
       {more && (
         <div className="bx-sheet-bg" onClick={() => setMore(false)}>
           <div className="bx-sheet" role="dialog" aria-label="More" onClick={(e) => e.stopPropagation()}>
-            <div className="bx-roles">
-              <button className={role === 'hedger' ? 'on' : ''} onClick={() => { switchRole('hedger'); setMore(false); }}>Hedger</button>
-              <button className={role === 'underwriter' ? 'on' : ''} onClick={() => { switchRole('underwriter'); setMore(false); }}>Underwriter</button>
-            </div>
-            {NAV[role].filter((n) => !TABS[role].includes(n.page)).map((n) => (
+            <ViewSwitch mode={viewMode} onChange={(v) => { setViewMode(v); setMore(false); }} />
+            {!simple && (
+              <div className="bx-roles">
+                <button className={role === 'hedger' ? 'on' : ''} onClick={() => { switchRole('hedger'); setMore(false); }}>Hedger</button>
+                <button className={role === 'underwriter' ? 'on' : ''} onClick={() => { switchRole('underwriter'); setMore(false); }}>Underwriter</button>
+              </div>
+            )}
+            {nav.filter((n) => !tabs.includes(n.page)).map((n) => (
               <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
             ))}
             {acting && <button className={`bx-nav${page === 'org-settings' ? ' on' : ''}`} onClick={() => goTab('org-settings')}><Building2 />Business settings</button>}
             <button className={`bx-nav${page === 'account' ? ' on' : ''}`} onClick={() => goTab('account')}><CircleUser />Profile settings</button>
-            <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>
+            {!simple && <button className="bx-nav" onClick={() => setLocation('/learn')}><GraduationCap />Academy</button>}
             <div style={{ marginTop: 8 }}><NetworkSwitch /></div>
           </div>
         </div>

@@ -22,6 +22,7 @@ import { RateCoverPanel, RateMarkets, RateProtections, useRateProtections } from
 import { MyQuoteRequests, RequestQuoteModal } from './rfq';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
 import { isOffered, poolForSale } from '@shared/domain/offered-directions';
+import { useViewMode } from './view-mode';
 
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
@@ -1003,11 +1004,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // last stays fixed when the live rate moves; the other follows.
   const [pctText, setPctText] = useState('0');
   const [checking, setChecking] = useState(false);
-  const [view, setView] = useState<'simple' | 'advanced'>(() => { try { return localStorage.getItem('bfx:markets-view') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } });
-  function chooseView(v: 'simple' | 'advanced') {
-    setView(v);
-    try { localStorage.setItem('bfx:markets-view', v); } catch { /* per-viewer convenience */ }
-  }
+  const [view] = useViewMode();
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
   const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
@@ -1213,14 +1210,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
             </>
   ) : null;
 
-  const viewSwitch = (
-    <div className="bx-viewswitch" role="group" aria-label="View">
-      {(['simple', 'advanced'] as const).map((v) => (
-        <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => chooseView(v)}>{v === 'simple' ? 'Simple' : 'Advanced'}</button>
-      ))}
-    </div>
-  );
-
   if (view === 'simple') {
     const ends = days ? endsAt(days) : null;
     const rises = direction === 'up';
@@ -1238,7 +1227,6 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 </select>
               )}
             </label>
-            {viewSwitch}
           </div>
 
           {mode === 'done' ? doneView : mode === 'review' && reviewView ? reviewView : (
@@ -1332,7 +1320,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 
   return (
     <main className="bx-main bx-trade">
-      <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} extra={viewSwitch} />
+      <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} />
 
       <section className="bx-tchart" aria-label="Rate chart">
         <div className="bx-pane-h">
@@ -1449,7 +1437,9 @@ export function MyProtections({ go }: { go: Go }) {
   const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
   const { busy, claim } = useClaimPayout();
   const cols = { gridTemplateColumns: 'minmax(0, 2.2fr) repeat(4, minmax(0, 1fr))' };
-  const [assetClass, setAssetClass] = useAssetClass();
+  const [assetClassChosen, setAssetClass] = useAssetClass();
+  const simple = useViewMode()[0] === 'simple';
+  const assetClass = simple ? 'fx' : assetClassChosen;
   // Running cover first, soonest to end at the top; ended cover most recent first.
   const running = all.filter((h) => h.settlement.status === 'pending').sort((x, y) => Number(x.position.expiry) - Number(y.position.expiry));
   const ended = all.filter((h) => h.settlement.status !== 'pending').sort((x, y) => Number(y.position.expiry) - Number(x.position.expiry));
@@ -1459,12 +1449,12 @@ export function MyProtections({ go }: { go: Go }) {
   return (
     <main className="bx-main">
       <section className="bx-full">
-        <MyQuoteRequests />
-        <AssetClassTabs value={assetClass} onChange={setAssetClass} />
+        {!simple && <MyQuoteRequests />}
+        {!simple && <AssetClassTabs value={assetClass} onChange={setAssetClass} />}
         {assetClass === 'ir' ? <RateProtections go={go} /> : <div className="bx-card">
           <div className="bx-card-h" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
             {/* With protections, the two tabs are the heading: the menu already says Protections. */}
-            {!all.length && <h2>{SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2>}
+            {!all.length && <h2>{simple ? 'My cover' : SHOW_INTEREST_RATES ? 'FX protections' : 'My protections'}</h2>}
             {all.length > 0 && (
               <div className="bx-seg small" role="group" aria-label="My protections">
                 <button className={showing === 'active' ? 'on' : ''} aria-pressed={showing === 'active'} onClick={() => setView('active')}>Active <span className="muted">{running.length}</span></button>
@@ -1736,6 +1726,8 @@ export function RatesPage({ go, target }: { go: Go; target?: Target }) {
     if (target?.rates) setTab(target.rates);
     if (target?.benchmark) setBenchmark(target.benchmark);
   }, [target]);
+  const simple = useViewMode()[0] === 'simple';
+  if (simple) return <main className="bx-main"><section className="bx-full"><FxRates go={go} /></section></main>;
   return (
     <main className="bx-main">
       <section className="bx-full">
