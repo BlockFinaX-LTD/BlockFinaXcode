@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { OutreachPeople } from "./outreach-people";
 import { OutreachMemory } from "./outreach-memory";
+import { FinderPanel, finderInput } from "./finder";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -133,8 +134,8 @@ function isStale(iso: string | null): boolean {
 }
 
 const INTENTS: { key: Intent; label: string; hint: string }[] = [
-  { key: "comment", label: "Insight comment", hint: "70–110 words — mechanism, a number, then the second-order effect" },
-  { key: "reply", label: "Public reply", hint: "under 60 words — has to add something to the thread" },
+  { key: "comment", label: "Insight comment", hint: "70 to 110 words: mechanism, a number, then the second-order effect" },
+  { key: "reply", label: "Public reply", hint: "under 60 words, has to add something to the thread" },
   { key: "insight_call", label: "Ask for their view", hint: "under 120 words, asks about their subject rather than ours" },
   { key: "connect", label: "Connection note", hint: "under 300 characters, LinkedIn's limit" },
   { key: "dm", label: "Direct message", hint: "under 120 words, one question worth answering" },
@@ -156,18 +157,15 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [sourceText, setSourceText] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
-  const [personName, setPersonName] = useState("");
-  const [personHeadline, setPersonHeadline] = useState("");
   const [intent, setIntent] = useState<Intent>("comment");
   /**
-   * "one"    = a single post, pasted.
-   * "scan"   = a whole page pasted at once.
-   * "search" = Finax searches LinkedIn itself, through a provider that uses its
-   *            own infrastructure rather than your session.
+   * "search" = Finax searches LinkedIn through a provider that uses its own
+   *            infrastructure rather than your session. Empty means Finax plans
+   *            the searches itself.
+   * "paste"  = one post (with its link) or a whole page pasted at once.
    */
-  const [mode, setMode] = useState<"auto" | "one" | "scan" | "search">("auto");
+  const [mode, setMode] = useState<"search" | "paste">("search");
   const [blob, setBlob] = useState("");
   const [query, setQuery] = useState("");
   const [postedLimit, setPostedLimit] = useState("month");
@@ -237,10 +235,10 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
     mutationFn: () =>
       api("/api/outreach/draft", token, {
         method: "POST",
-        body: JSON.stringify({ sourceText, sourceUrl, personName, personHeadline, intent }),
+        body: JSON.stringify({ sourceText: blob, sourceUrl, intent }),
       }),
     onSuccess: () => {
-      setSourceText(""); setSourceUrl(""); setPersonName(""); setPersonHeadline("");
+      setBlob(""); setSourceUrl("");
       setTab("waiting");
       qc.invalidateQueries({ queryKey: ["outreach"] });
       toast({ title: "Draft ready", description: "It's waiting below." });
@@ -392,7 +390,7 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
        : (
       <>
       <p className="max-w-[68ch] text-sm text-muted-foreground">
-        Finax finds posts worth answering and drafts against real market data — open pools, real premiums, what has
+        Finax finds posts worth answering and drafts against real market data: open pools, real premiums, what has
         settled. Give it one post, paste a whole page, or let it search LinkedIn itself. Drafts wait
         here for you to copy.{" "}
         <span className="text-foreground">Nothing is ever posted from here</span>: LinkedIn prohibits
@@ -476,54 +474,78 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
         </div>
       )}
 
-      {/* ── compose ── */}
-      <div className="rounded-lg border border-border bg-muted/20 p-4">
-        <div className="mb-3 flex gap-1.5">
-          {([["auto", "Scan for me"], ["one", "One post"], ["scan", "Scan a page"], ["search", "Search LinkedIn"]] as const).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setMode(k)}
-              disabled={!enabled}
-              className={cn(
-                "rounded-md border px-3 py-1.5 text-[12.5px] transition-colors disabled:opacity-50",
-                mode === k
-                  ? "border-primary bg-primary/10 font-medium text-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground",
-              )}
+      {/* ── find ── */}
+      <FinderPanel
+        sources={[
+          { key: "search", label: "Search LinkedIn", about: "Finds posts about currency risk and drafts for the strongest. Leave the box empty and Finax chooses the searches from what your currencies did this week." },
+          { key: "paste", label: "Paste", about: "Paste one post, or select a whole notifications page and paste it. Finax separates the items and drafts for each." },
+        ]}
+        source={mode}
+        onSource={setMode}
+        action={{
+          label: mode === "paste" ? "Draft" : query.trim() ? "Search and draft" : "Scan for me",
+          busy: draftIt.isPending || scan.isPending || search.isPending || auto.isPending,
+          busyLabel: auto.isPending ? "Reading the market, then searching…"
+            : search.isPending ? "Searching LinkedIn…" : "Finax is writing…",
+          disabled: !enabled || (mode === "paste" && blob.trim().length < 20),
+          onClick: () =>
+            mode === "search"
+              ? (query.trim().length >= 3 ? search.mutate() : auto.mutate())
+              // A link or a short paste is one post; anything longer is a page to separate.
+              : sourceUrl.trim() || blob.trim().length < 400 ? draftIt.mutate() : scan.mutate(),
+        }}
+        extra={
+          <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            Write as
+            <select
+              value={intent} onChange={e => setIntent(e.target.value as Intent)}
+              className="rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground"
             >
-              {label}
-            </button>
-          ))}
-          <span className="ml-auto self-center text-[11.5px] text-muted-foreground">
-            {mode === "auto"
-              ? "Finax decides what to look for, from what the market is doing"
-              : mode === "one"
-                ? "one reply, with who they are"
-                : mode === "scan"
-                  ? "select a whole notifications page and paste, Finax separates it"
-                  : "you choose the words, Finax searches"}
-          </span>
-        </div>
-
-        {mode === "auto" ? (
+              {INTENTS.map(i => <option key={i.key} value={i.key}>{i.label}</option>)}
+            </select>
+            <span className="hidden sm:inline">{INTENTS.find(i => i.key === intent)?.hint}</span>
+          </label>
+        }
+        note={mode === "search" && (
+          !schedule ? "Checking the schedule…"
+          : !schedule.configured ? "Also runs by itself every 5 hours once APIFY_TOKEN is set in Railway."
+          : schedule.lastScanAt
+            ? `Runs by itself every 5 hours. Last run ${howLongAgo(schedule.lastScanAt)}, next in about ${minutesUntil(schedule.nextScanAt)}. Your LinkedIn account is never used.`
+            : "Runs by itself every 5 hours. The first run is due within ten minutes."
+        )}
+      >
+        {mode === "search" ? (
           <>
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              No search words needed. Finax reads what your currencies have actually done this
-              week, works out which angles are worth hunting, runs those searches, and drafts for
-              the strongest posts it finds. It shows you the plan so you can see the reasoning.
-            </p>
-            <p className="mt-2 text-[12px] text-muted-foreground">
-              {!schedule
-                ? "Checking the schedule…"
-                : !schedule.configured
-                  ? "This also runs by itself every 5 hours, once APIFY_TOKEN is set in Railway."
-                  : schedule.lastScanAt
-                    ? `Runs by itself every 5 hours. Last run ${howLongAgo(schedule.lastScanAt)}, next in about ${minutesUntil(schedule.nextScanAt)}.`
-                    : "Runs by itself every 5 hours. No run recorded yet, the first is due within ten minutes."}
-            </p>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { if (query.trim().length >= 3) search.mutate(); else auto.mutate(); } }}
+              placeholder="Leave empty for Finax to choose, or type e.g. cedi depreciation importers"
+              disabled={!enabled}
+              className={finderInput}
+            />
+            {query.trim() && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[12px] text-muted-foreground">Posted within</span>
+                {([["24h", "a day"], ["week", "a week"], ["month", "a month"]] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => setPostedLimit(k)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[12px] transition-colors",
+                      postedLimit === k
+                        ? "border-primary bg-primary/10 font-medium text-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             {plan && (
               <div className="mt-3 space-y-2 rounded-md border border-border bg-background p-3">
-                <p className="text-[12px] font-medium text-foreground">What it went looking for</p>
+                <p className="text-[12px] font-medium text-foreground">What Finax went looking for</p>
                 {plan.map((p, i) => {
                   const outcome = searched?.find(s2 => s2.query === p.query);
                   return (
@@ -543,141 +565,26 @@ export function OutreachTab({ token, enabled }: { token: string; enabled: boolea
               </div>
             )}
           </>
-        ) : mode === "search" ? (
-          <>
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && query.trim().length >= 3) search.mutate(); }}
-              placeholder="What to search for, e.g. cedi depreciation importers"
-              disabled={!enabled}
-              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
-            />
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="text-[12px] text-muted-foreground">Posted within</span>
-              {([["24h", "a day"], ["week", "a week"], ["month", "a month"]] as const).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setPostedLimit(k)}
-                  disabled={!enabled}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-50",
-                    postedLimit === k
-                      ? "border-primary bg-primary/10 font-medium text-foreground"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[12px] text-muted-foreground">
-              Searches up to 50 posts through an outside provider, keeps the ones about currency
-              risk, and drafts the ten strongest.{" "}
-              <span className="text-foreground">Your LinkedIn account is never used</span> — the
-              provider runs its own infrastructure, so there is nothing of yours to restrict.
-              Each search costs a few cents.
-            </p>
-          </>
-        ) : mode === "scan" ? (
+        ) : (
           <>
             <textarea
               value={blob}
               onChange={e => setBlob(e.target.value)}
-              placeholder={"Paste a page of LinkedIn notifications, a thread of comments, or a forwarded digest email…"}
-              rows={9}
+              placeholder="Paste a post, a thread of comments, or a whole page of LinkedIn notifications…"
+              rows={6}
               disabled={!enabled}
-              className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 font-mono text-[12.5px] leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+              className={cn(finderInput, "resize-y leading-relaxed")}
             />
-            <p className="mt-2 text-[12px] text-muted-foreground">
-              Finax separates the items, drops LinkedIn's own chrome and anything you wrote yourself,
-              and drafts up to 15 at a time. Nothing leaves this server — the text is here because you
-              copied it from your screen.
-            </p>
-          </>
-        ) : (
-          <>
-        <textarea
-          value={sourceText}
-          onChange={e => setSourceText(e.target.value)}
-          placeholder="Paste the post or comment here…"
-          rows={5}
-          disabled={!enabled}
-          className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
-        />
-        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
-          {[
-            { v: sourceUrl, set: setSourceUrl, ph: "Link to the post" },
-            { v: personName, set: setPersonName, ph: "Their name" },
-            { v: personHeadline, set: setPersonHeadline, ph: "Their role, e.g. CFO, importer" },
-          ].map((f, i) => (
             <input
-              key={i}
-              value={f.v}
-              onChange={e => f.set(e.target.value)}
-              placeholder={f.ph}
+              value={sourceUrl}
+              onChange={e => setSourceUrl(e.target.value)}
+              placeholder="Link to the post, if it is just one (optional)"
               disabled={!enabled}
-              className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+              className={cn(finderInput, "mt-2.5")}
             />
-          ))}
-        </div>
-        </>
+          </>
         )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {INTENTS.map(i => (
-            <button
-              key={i.key}
-              onClick={() => setIntent(i.key)}
-              disabled={!enabled}
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-[12.5px] transition-colors disabled:opacity-50",
-                intent === i.key
-                  ? "border-primary bg-primary/10 font-medium text-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {i.label}
-            </button>
-          ))}
-          <span className="ml-auto text-[11.5px] text-muted-foreground">
-            {INTENTS.find(i => i.key === intent)?.hint}
-          </span>
-        </div>
-
-        <Button
-          onClick={() =>
-            mode === "auto" ? auto.mutate()
-            : mode === "search" ? search.mutate()
-            : mode === "scan" ? scan.mutate()
-            : draftIt.mutate()
-          }
-          disabled={
-            !enabled || draftIt.isPending || scan.isPending || search.isPending || auto.isPending ||
-            (mode === "auto" ? false
-             : mode === "search" ? query.trim().length < 3
-             : mode === "scan" ? blob.trim().length < 60
-             : sourceText.trim().length < 20)
-          }
-          className="mt-3.5"
-        >
-          {draftIt.isPending || scan.isPending || search.isPending || auto.isPending
-            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {auto.isPending ? "Reading the market, then searching…"
-                 : search.isPending ? "Finax is searching LinkedIn…"
-                 : scan.isPending ? "Finax is reading the page…"
-                 : "Finax is writing…"}</>
-            : <><Sparkles className="mr-2 h-4 w-4" />
-                {mode === "auto" ? "Scan for me"
-                 : mode === "search" ? "Search and draft"
-                 : mode === "scan" ? "Scan and draft" : "Draft it"}</>}
-        </Button>
-        {mode === "one" && sourceText.trim().length > 0 && sourceText.trim().length < 20 && (
-          <p className="mt-2 text-[12px] text-muted-foreground">
-            A bit more of the post — Finax needs the words to reply to.
-          </p>
-        )}
-      </div>
+      </FinderPanel>
 
       {/* ── the waiting room ── */}
       <div className="flex gap-1 border-b border-border">

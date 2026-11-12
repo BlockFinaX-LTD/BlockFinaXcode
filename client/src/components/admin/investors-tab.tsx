@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Sparkles, Send, Check, ExternalLink, Plus, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FinderPanel, finderInput } from "./finder";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -184,17 +185,23 @@ export function InvestorsTab({ token, enabled }: { token: string; enabled: boole
           Results go to Leads rather than here, because a profile search returns
           people and not addresses, and reaching an investor after commenting on
           their own post beats being one of forty cold emails that morning. */}
-      <div className="rounded-lg border border-border bg-muted/20 p-4">
-        <p className="mb-2.5 text-[12.5px] text-muted-foreground">
-          Search LinkedIn for people who actually write cheques: partners, principals and angels.
-          They land in <span className="text-foreground">Outreach, Leads</span> so you can reach
-          them there.
-        </p>
-        <div className="grid gap-2.5 sm:grid-cols-[1fr_1fr_auto]">
+      <FinderPanel
+        about="Searches LinkedIn for people who actually write cheques: partners, principals and angels. They land in Outreach, Leads so you can reach them there."
+        suggestions={seeds?.queries}
+        onSuggest={setScanQuery}
+        action={{
+          label: "Find investors",
+          busy: scan.isPending,
+          disabled: !enabled || !seeds?.configured,
+          onClick: () => scan.mutate(),
+        }}
+        note={seeds && !seeds.configured ? "Searching needs APIFY_TOKEN in Railway. Adding by hand works without it." : undefined}
+      >
+        <div className="grid gap-2.5 sm:grid-cols-[1fr_1fr]">
           <input
             value={scanQuery} onChange={e => setScanQuery(e.target.value)}
             placeholder="What they invest in"
-            className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className={finderInput}
           />
           <select
             value={scanLocation} onChange={e => setScanLocation(e.target.value)}
@@ -202,29 +209,8 @@ export function InvestorsTab({ token, enabled }: { token: string; enabled: boole
           >
             {(seeds?.locations ?? ["Lagos, Nigeria"]).map(l => <option key={l} value={l}>{l}</option>)}
           </select>
-          <Button size="sm" disabled={!enabled || scan.isPending || !seeds?.configured}
-                  onClick={() => scan.mutate()}>
-            {scan.isPending
-              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Searching…</>
-              : "Find investors"}
-          </Button>
         </div>
-        {seeds?.queries && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {seeds.queries.map(q => (
-              <button key={q} onClick={() => setScanQuery(q)}
-                      className="rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground hover:text-foreground">
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
-        {seeds && !seeds.configured && (
-          <p className="mt-2 text-[12px] text-muted-foreground">
-            Searching needs APIFY_TOKEN in Railway. Adding by hand works without it.
-          </p>
-        )}
-      </div>
+      </FinderPanel>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => setShowAdd(v => !v)}>

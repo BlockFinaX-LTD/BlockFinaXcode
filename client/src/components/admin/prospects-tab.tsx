@@ -26,6 +26,7 @@ import { Loader2, Search, Sparkles, Send, Check, ExternalLink, ShieldAlert, Ban,
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { FinderPanel, finderInput } from "./finder";
 
 /** Sources found by a signal, where the reason is worth showing next to the company. */
 const SOURCE_LABEL: Record<string, string> = { jobs: "Job post", news: "In the news", directory: "On a list" };
@@ -326,50 +327,43 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
       )}
 
       {/* ── find ── */}
-      <div className="rounded-lg border border-border bg-muted/20 p-4">
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
-          {([
-            ["places", "Google Maps"],
-            ["jobs", "Job posts"],
-            ["news", "News"],
-            ["list", "A list page"],
-          ] as const).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => pickKind(k)}
-              className={cn(
-                "rounded-md border px-2.5 py-1 text-[12px]",
-                kind === k ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="mb-2.5 text-[12px] text-muted-foreground">
-          {kind === "places" && "Businesses of a type in a city, from Google Maps."}
-          {kind === "jobs" && "Companies hiring for roles that mean paying in dollars, from LinkedIn job posts in the last month."}
-          {kind === "news" && "Companies named in recent news about exchange rate losses."}
-          {kind === "list" && "Paste a trade fair exhibitor list, a chamber of commerce member list or a directory page. Every business on it is read."}
-        </p>
+      <FinderPanel
+        sources={[
+          { key: "places", label: "Google Maps", about: "Businesses of a type in a city, from Google Maps." },
+          { key: "jobs", label: "Job posts", about: "Companies hiring for roles that mean paying in dollars, from LinkedIn job posts in the last month." },
+          { key: "news", label: "News", about: "Companies named in recent news about exchange rate losses." },
+          { key: "list", label: "A list page", about: "Paste a trade fair exhibitor list, a chamber of commerce member list or a directory page. Every business on it is read." },
+        ]}
+        source={kind}
+        onSource={pickKind}
+        suggestions={kind !== "list" ? seedList?.[seedSegment]?.slice(0, 9) : undefined}
+        onSuggest={setQuery}
+        action={{
+          label: kind === "list" ? "Read the list" : "Find businesses",
+          busy: discover.isPending,
+          disabled: !enabled || busy || !cfg?.discovery,
+          onClick: () => discover.mutate(),
+        }}
+        note={cfg && !cfg.discovery ? "Searching needs APIFY_TOKEN in Railway." : "Found businesses get an address looked up, then Finax drafts the email."}
+      >
         <div className={cn("grid gap-2.5", kind === "list" ? "sm:grid-cols-[1fr_auto]" : "sm:grid-cols-[1fr_1fr_auto]")}>
           {kind === "list" ? (
             <input
               value={listUrl} onChange={e => setListUrl(e.target.value)}
               placeholder="https://… the page that lists the businesses"
-              className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className={finderInput}
             />
           ) : (
             <>
               <input
                 value={query} onChange={e => setQuery(e.target.value)}
                 placeholder={kind === "jobs" ? "Job title, e.g. procurement manager" : kind === "news" ? "Topic, e.g. naira depreciation importers" : "What kind of business, e.g. freight forwarder"}
-                className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className={finderInput}
               />
               <input
                 value={location} onChange={e => setLocation(e.target.value)}
                 placeholder={kind === "news" ? "Country, e.g. Ghana" : "Where, e.g. Tema, Ghana"}
-                className="rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className={finderInput}
               />
             </>
           )}
@@ -383,27 +377,9 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
             <option value="bank">Bank</option>
           </select>
         </div>
+      </FinderPanel>
 
-        {kind !== "list" && seedList?.[seedSegment] && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {seedList[seedSegment].slice(0, 9).map(q => (
-              <button
-                key={q}
-                onClick={() => setQuery(q)}
-                className="rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground hover:text-foreground"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" disabled={!enabled || busy || !cfg?.discovery} onClick={() => discover.mutate()}>
-            {discover.isPending
-              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Searching…</>
-              : <><Search className="mr-1.5 h-3.5 w-3.5" /> {kind === "list" ? "Read the list" : "Find businesses"}</>}
-          </Button>
+      <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={!enabled || importContacts.isPending} asChild>
             <label className="cursor-pointer">
               {importContacts.isPending
@@ -445,7 +421,6 @@ export function ProspectsTab({ token, enabled }: { token: string; enabled: boole
               {cfg.replyTo ? ` · replies to ${cfg.replyTo}` : ""}
             </span>
           )}
-        </div>
       </div>
 
       {/* ── filters ── */}
