@@ -47,6 +47,7 @@ export const GLOSSARY: Record<string, string> = {
   '24h low': 'The lowest rate in the last 24 hours.',
   'Amount': 'The dollar payment or income you are protecting, usually an invoice.',
   'Cost': 'What you paid for this cover: the premium plus the BlockFinaX fee.',
+  'Breakeven': 'The rate at which the payout equals what the cover cost.',
   'Pays up to': 'The most this cover can pay you, if the rate reaches the limit.',
   'You pay': 'The premium plus the BlockFinaX fee, paid once in USDC. Network fees are covered.',
 

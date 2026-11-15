@@ -1324,3 +1324,23 @@
   .bx-trade .bx-covers .bx-trow .bx-btn.small .rl { font-size: 10px; font-weight: 500; }
 }
 @media (max-width: 860px) { .bx-trade .bx-covers .bx-trow > :nth-child(6) { white-space: nowrap; font-size: 11px !important; } .bx-trade .bx-covers .bx-trow > :nth-child(3) { white-space: nowrap; } }
+
+/* Positions on the Markets chart: Active or Ended, a button per position, and its details. */
+.bx-chpos { padding: 6px 14px 0; }
+.bx-chpos-tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--line); }
+.bx-chpos-tabs button { border: 0; border-bottom: 2px solid transparent; background: none; padding: 6px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.bx-chpos-tabs button.on { color: var(--text); border-bottom-color: var(--blue); }
+.bx-chpos-list { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; scrollbar-width: none; }
+.bx-chpos-list button { flex: none; border: 1px solid var(--line-2); background: var(--panel); color: var(--text-2); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.bx-chpos-list button.on { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+.bx-posd { margin: 10px 14px 4px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
+.bx-posd-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.bx-posd-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+.bx-posd-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bx-posd-grid span { font-size: 11px; color: var(--muted); }
+.bx-posd-grid b { font-size: 13px; font-weight: 600; }
+@media (max-width: 860px) {
+  .bx-chpos { padding: 6px 12px 0; }
+  .bx-posd { margin: 10px 12px 4px; }
+  .bx-posd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

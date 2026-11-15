@@ -371,7 +371,7 @@ function PriceLadder({ market, days, limitBps, direction, startBps, spot, onPick
 }
 
 /** The buyer's cover on this market, in tabs under the chart. */
-function CoverTable({ go }: { go: Go }) {
+function CoverTable({ go, onPick }: { go: Go; onPick?: (key: string, pair: string, open: boolean) => void }) {
   const hedges = useHedges();
   const { busy, claim } = useClaimPayout();
   const mine = hedges.data ?? [];
@@ -398,7 +398,8 @@ function CoverTable({ go }: { go: Go }) {
           const cost = Number(p.premium) + Number(p.fee);
           return (
             <div key={markKey(p)} className="bx-trow" style={cols} role="button" tabIndex={0}
-              onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(ev) => { if (ev.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
+              onClick={() => (onPick ? onPick(markKey(p), pair, isOpen(s.status)) : go('pair', { pair, position: markKey(p) }))}
+              onKeyDown={(ev) => { if (ev.key === 'Enter') (onPick ? onPick(markKey(p), pair, isOpen(s.status)) : go('pair', { pair, position: markKey(p) })); }}>
               <span className="bx-tcov">
                 <span className="n">{pair} <span className={p.direction === 'up' ? 'up' : 'down'}>{p.direction === 'up' ? 'Up cover' : 'Down cover'}{p.structure === 'open' ? ', Open' : ''}</span></span>
                 <span className="d">${fmt(p.notional, 0)} · cost ${fmt(cost)} · {s.status === 'pending' ? 'ends' : 'ended'} {dateOf(p.expiry)}</span>
@@ -1032,6 +1033,13 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [pctText, setPctText] = useState('0');
   const [checking, setChecking] = useState(false);
   const [view] = useViewMode();
+  // The chart can show one of the buyer's positions (strike, limit, details) in place of the cover being set up.
+  const myCover = useHedges();
+  const { busy: claiming, claim } = useClaimPayout();
+  const [chartKey, setChartKey] = useState<string | null>(null);
+  const [chartTab, setChartTab] = useState<'active' | 'ended'>('active');
+  const chartBox = useRef<HTMLElement | null>(null);
+  const chartFocus = (myCover.data ?? []).find((h) => markKey(h.position) === chartKey) ?? null;
   // Phones show one part of the trading screen at a time.
   const [phoneSection, setPhoneSection] = useState<'buy' | 'prices' | 'chart' | 'cover'>('buy');
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
@@ -1352,15 +1360,70 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
         ))}
       </div>
 
-      <section className="bx-tchart" aria-label="Rate chart">
+      <section className="bx-tchart" aria-label="Rate chart" ref={chartBox}>
         <div className="bx-pane-h">
           <span>{pair} <ChangeText change={periodChange} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
         </div>
-        <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy}
-          protection={strike ? { strike, cap: structure === 'capped' ? cap : null, tone: 'pay' } : null} />
+        {(myCover.data ?? []).length > 0 && (() => {
+          const all = myCover.data ?? [];
+          const list = all.filter((h) => isOpen(h.settlement.status) === (chartTab === 'active'));
+          return (
+            <div className="bx-chpos">
+              <div className="bx-chpos-tabs" role="tablist" aria-label="Positions on the chart">
+                <button role="tab" aria-selected={chartTab === 'active'} className={chartTab === 'active' ? 'on' : ''} onClick={() => setChartTab('active')}>Active ({all.filter((h) => isOpen(h.settlement.status)).length})</button>
+                <button role="tab" aria-selected={chartTab === 'ended'} className={chartTab === 'ended' ? 'on' : ''} onClick={() => setChartTab('ended')}>Ended ({all.filter((h) => !isOpen(h.settlement.status)).length})</button>
+              </div>
+              <div className="bx-chpos-list">
+                <button className={!chartFocus ? 'on' : ''} aria-pressed={!chartFocus} onClick={() => setChartKey(null)}>New cover</button>
+                {list.map((h) => {
+                  const k = markKey(h.position);
+                  return (
+                    <button key={k} className={chartKey === k ? 'on' : ''} aria-pressed={chartKey === k}
+                      onClick={() => { setChartKey(k); if (h.pair !== pair) setPair(h.pair); }}>
+                      {h.pair} {h.position.direction === 'up' ? 'Up' : 'Down'} ${fmt(Number(h.position.notional) / 1000, 0)}k
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+        <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy} keepStrike={Boolean(chartFocus)}
+          protection={chartFocus
+            ? { strike: Number(chartFocus.position.strike), cap: chartFocus.position.structure === 'capped' ? Number(chartFocus.position.cap) : null, tone: 'pay' }
+            : strike ? { strike, cap: structure === 'capped' ? cap : null, tone: 'pay' } : null} />
+        {chartFocus && (() => {
+          const { position: fp, settlement: fs } = chartFocus;
+          const n = Number(fp.notional), k = Number(fp.strike), entry = Number(fp.spot);
+          const cost = Number(fp.premium) + Number(fp.fee);
+          const breakeven = fp.direction === 'up' ? k + (cost * entry) / n : k - (cost * entry) / n;
+          const running = fs.status === 'pending';
+          const payout = running ? payoutToday(fp, spot.data) : Number(fs.netPayout);
+          return (
+            <div className="bx-posd">
+              <div className="bx-posd-h">
+                <b>{chartFocus.pair} <span className={fp.direction === 'up' ? 'up' : 'down'}>{fp.direction === 'up' ? 'Up cover' : 'Down cover'}</span>{fp.structure === 'open' ? ', Open' : ''}</b>
+                <button className="bx-link" onClick={() => setChartKey(null)}>Close</button>
+              </div>
+              <div className="bx-posd-grid">
+                <div><span>{hint('Protected')}</span><b className="num">${fmt(n, 0)}</b></div>
+                <div><span>{hint('Strike')}</span><b className="num">{fmtRate(k)}</b></div>
+                <div><span>{hint('Protection limit')}</span><b className="num">{fp.structure === 'open' ? 'Open' : fmtRate(fp.cap)}</b></div>
+                <div><span>{hint('Cost')}</span><b className="num">${fmt(cost)}</b></div>
+                <div><span>{running ? 'Ends' : 'Ended'}</span><b className="num">{dateOf(fp.expiry)}</b></div>
+                <div><span>{hint(running ? 'Payout today' : 'Payout')}</span><b className={`num${(payout ?? 0) > 0 ? ' up' : ''}`}>${fmt(payout ?? 0)}</b></div>
+                <div><span>{hint('Breakeven')}</span><b className="num">{fmtRate(breakeven)}</b></div>
+                <div><span>{hint('Status')}</span><b>{running ? 'Active' : fs.status === 'settled_claimable' ? 'Payout ready' : fs.status === 'claimed' ? 'Paid' : 'No payout'}</b></div>
+              </div>
+              {fs.status === 'settled_claimable' && (
+                <button className="bx-btn block" disabled={claiming === fs.position} onClick={() => void claim(fs.position)}>{claiming === fs.position ? <Spin /> : `Receive $${fmt(fs.netPayout)}`}</button>
+              )}
+            </div>
+          );
+        })()}
       </section>
 
       {market && (
@@ -1368,7 +1431,11 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           startBps={strikeError || anchor === 'rate' ? null : Math.round(startPct * 100)} />
       )}
 
-      <CoverTable go={go} />
+      <CoverTable go={go} onPick={(k, p, open) => {
+        setChartKey(k); setChartTab(open ? 'active' : 'ended');
+        if (p !== pair) setPair(p);
+        setTimeout(() => chartBox.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      }} />
 
       {/* Phones: Buy buttons fixed under the prices and the chart; each opens the Buy tab on that side. */}
       <div className="bx-mbuy" role="group" aria-label="Buy cover">
