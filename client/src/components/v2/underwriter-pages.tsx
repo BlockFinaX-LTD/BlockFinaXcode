@@ -103,20 +103,20 @@ function PoolRows({ pools, stakes, go }: { pools: CurrencyPool[]; stakes: Map<st
           const nav = Number(p.liquidity.nav);
           const used = nav > 0 ? Number(p.liquidity.reserved) / nav : 0;
           return (
-            <div key={poolRef(p)} className="bx-li click" style={POOL_COLS} onClick={() => go('u-pool', { pool: poolRef(p) })}>
-              <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={p.pair} direction={p.direction} />{p.legacy ? ' (earlier contract)' : ''}</div><div className="d">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Limited', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</div></div></div>
-              <div className="r num" style={{ fontWeight: 600 }}>${fmt(nav, 0)}</div>
-              <div className="r"><div className="num" style={{ fontWeight: 600 }}>{pct(used, 0)}</div><div className="bx-bar thin" style={{ width: 64, marginLeft: 'auto', marginTop: 6 }}><i style={{ width: `${used * 100}%`, background: 'var(--blue)' }} /></div></div>
+            <div key={poolRef(p)} className="bx-li bx-li-m click" style={POOL_COLS} onClick={() => go('u-pool', { pool: poolRef(p) })}>
+              <div className="bx-who"><Flag pair={p.pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={p.pair} direction={p.direction} />{p.legacy ? ' (earlier contract)' : ''}</div><div className="d"><span className="bx-dsub">{p.tenors.filter((t) => t.active).map((t) => t.tenorDays).join(', ')} days · {[p.structures.capped && 'Limited', p.structures.open && 'Open'].filter(Boolean).join(' and ')}</span><span className="bx-psub">${fmt(nav, 0)} pool · {pct(used, 0)} in use</span></div></div></div>
+              <div className="r num m-hide" style={{ fontWeight: 600 }}>${fmt(nav, 0)}</div>
+              <div className="r m-hide"><div className="num" style={{ fontWeight: 600 }}>{pct(used, 0)}</div><div className="bx-bar thin" style={{ width: 64, marginLeft: 'auto', marginTop: 6 }}><i style={{ width: `${used * 100}%`, background: 'var(--blue)' }} /></div></div>
               {(() => {
                 // Return = premiums earned as a share of your capital in this pool; 0 when you have none.
                 const st = stakes.get(poolRef(p));
                 const earned = Number(st?.account?.earned ?? 0), capital = Number(st?.value ?? 0);
                 const ret = capital > 0 ? earned / capital : 0;
                 return st?.account
-                  ? <div className="r num up" style={{ fontWeight: 600 }}>+${fmt(earned)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{pct(ret)} · paid out ${fmt(st.account.paid)}</div></div>
-                  : <div className="r num muted" style={{ fontWeight: 600 }}>$0.00<div style={{ fontSize: 12, fontWeight: 400 }}>0.00%</div></div>;
+                  ? <div className="r num up m-sub" style={{ fontWeight: 600 }}>+${fmt(earned)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{pct(ret)} · paid out ${fmt(st.account.paid)}</div></div>
+                  : <div className="r num muted m-sub m-zero" style={{ fontWeight: 600 }}>$0.00<div style={{ fontSize: 12, fontWeight: 400 }}>0.00%</div></div>;
               })()}
-              <div className="r num" style={{ fontWeight: 600 }}>${fmt(stakes.get(poolRef(p))?.value ?? 0)}</div>
+              <div className={`r num m-main${Number(stakes.get(poolRef(p))?.value ?? 0) > 0 ? '' : ' m-zero'}`} style={{ fontWeight: 600 }}>${fmt(stakes.get(poolRef(p))?.value ?? 0)}</div>
             </div>
           );
         })}

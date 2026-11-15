@@ -450,17 +450,17 @@ export function HedgerHome({ go }: { go: Go }) {
             <>
               <div className="bx-list-h" style={cols}><span>{hint("Exposure")}</span><span className="r">{hint("Protected")}</span><span className="r">{hint("Expires")}</span><span className="r">{hint("Payout today")}</span></div>
               {active.map(({ position: p, pair, settlement: s }) => (
-                <div key={s.position} className="bx-li click" style={cols} onClick={() => go('pair', { pair, position: markKey(p) })}>
+                <div key={s.position} className="bx-li bx-li-m click" style={cols} onClick={() => go('pair', { pair, position: markKey(p) })}>
                   <div className="bx-who">
                     <Flag pair={pair} />
                     <div style={{ minWidth: 0 }}>
                       <div className="t"><CoverName pair={pair} direction={p.direction} /></div>
-                      <div className="d">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}{p.structure === 'open' ? ', no limit' : ''}</div>
+                      <div className="d"><span className="bx-dsub">Covered {p.direction === 'up' ? 'above' : 'below'} {fmtRate(p.strike)}{p.structure === 'capped' ? `, up to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}{p.structure === 'open' ? ', no limit' : ''}</span><span className="bx-psub">${fmt(p.notional, 0)} · ends {dateOf(p.expiry)}</span></div>
                     </div>
                   </div>
-                  <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
-                  <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{daysLeft(p.expiry)} days</div></div>
-                  <div className="r"><div className="num" style={{ fontWeight: 600 }}>${fmt(payoutToday(p, spotOf(pair)) ?? 0)}</div><div className="up" style={{ fontSize: 12, fontWeight: 600 }}>Active</div></div>
+                  <div className="r num m-hide" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
+                  <div className="r m-hide"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{daysLeft(p.expiry)} days</div></div>
+                  <div className="r m-main"><div className="num" style={{ fontWeight: 600 }}>${fmt(payoutToday(p, spotOf(pair)) ?? 0)}</div><div className="up" style={{ fontSize: 12, fontWeight: 600 }}>Active</div></div>
                 </div>
               ))}
             </>
@@ -470,7 +470,7 @@ export function HedgerHome({ go }: { go: Go }) {
       </section>
 
       <aside className="bx-aside">
-        <div className="bx-cta">
+        <div className="bx-cta bx-hide-phone">
           <h3>Protect an exposure</h3>
           <p>Protect a dollar payment you make, or dollar income you receive, against the rate moving the wrong way. Pay a premium in USDC, and get paid if it does.</p>
           <button onClick={() => go('h-protect', { buy: true })}>Get started</button>
@@ -513,7 +513,7 @@ function AvailableCover({ go }: { go: Go }) {
   const { pools, markets } = useMarkets();
   const [assetClass, setAssetClass] = useAssetClass();
   return (
-    <div className="bx-card">
+    <div className="bx-card bx-hide-phone">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}><h2>Available cover</h2><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><AssetClassTabs small value={assetClass} onChange={setAssetClass} /><button className="bx-link" onClick={() => go('h-markets')}>All markets</button></div></div>
       {assetClass === 'ir' ? <RateMarkets go={go} embedded limit={5} /> : pools.isLoading ? <Loading /> : !markets.length ? <div className="bx-empty">No cover is on sale right now.</div> : (
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
@@ -1394,12 +1394,12 @@ export function MyProtections({ go }: { go: Go }) {
                       const active = s.status === 'pending';
                       const payout = active ? payoutToday(p, spotOf(pair)) : Number(s.netPayout);
                       return (
-                        <div key={s.position} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
-                          <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={p.direction} /></div><div className="d">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}{p.structure === 'open' ? ', no limit' : ''}</div></div></div>
-                          <div className="r num" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
-                          <div className="r"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
-                          <div className="r num" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>
-                          <div className="r">
+                        <div key={s.position} className="bx-li bx-li-m click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
+                          <div className="bx-who"><Flag pair={pair} /><div style={{ minWidth: 0 }}><div className="t"><CoverName pair={pair} direction={p.direction} /></div><div className="d"><span className="bx-dsub">From {fmtRate(p.strike)}{p.structure === 'capped' ? ` to ${fmtRate(p.cap)}` : ''} {quoteCcy(pair)}{p.structure === 'open' ? ', no limit' : ''}</span><span className="bx-psub">${fmt(p.notional, 0)} · {active ? 'ends' : 'ended'} {dateOf(p.expiry)}</span></div></div></div>
+                          <div className="r num m-hide" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
+                          <div className="r m-hide"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{active ? `${daysLeft(p.expiry)} days` : 'ended'}</div></div>
+                          <div className="r num m-main" style={{ fontWeight: 600 }}>${fmt(payout ?? 0)}<div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{active ? 'if it ended today' : ''}</div></div>
+                          <div className="r m-sub">
                             {active ? <Tag tone="green">Active</Tag> : s.status === 'settled_claimable'
                               ? <button className="bx-btn small" disabled={busy === s.position} onClick={(e) => { e.stopPropagation(); claim(s.position); }}>{busy === s.position ? <Spin /> : 'Receive payout'}</button>
                               : s.status === 'claimed' ? <Tag tone="grey">Paid</Tag> : <Tag tone="grey">Expired</Tag>}

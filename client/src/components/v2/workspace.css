@@ -1163,3 +1163,24 @@
   .bx-cta p { color: var(--text-2); }
   .bx-cta button { background: var(--blue); color: #fff; }
 }
+
+/* Two-line rows on phones: name and one summary on the left, the key figure on the right. */
+.bx-psub { display: none; }
+@media (max-width: 860px) {
+  .bx-li.bx-li-m { display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important; column-gap: 12px; row-gap: 2px; padding: 12px 2px !important; align-items: center; }
+  .bx-li.bx-li-m > * { position: static !important; flex: none; grid-column: auto; padding-right: 0 !important; }
+  .bx-li.bx-li-m > :first-child { grid-column: 1; grid-row: 1 / span 2; }
+  .bx-li.bx-li-m > .m-hide { display: none !important; }
+  .bx-li.bx-li-m > .m-main { grid-column: 2; grid-row: 1; text-align: right; }
+  .bx-li.bx-li-m > .m-sub { grid-column: 2; grid-row: 2; text-align: right; font-size: 12px; }
+  .bx-li.bx-li-m > [data-label]::before { display: none; }
+  .bx-li.bx-li-m .bx-dsub { display: none; }
+  .bx-li.bx-li-m .bx-psub { display: inline; }
+  .bx-li.bx-li-m > .m-main .muted, .bx-li.bx-li-m > .m-sub > div { display: none; }
+  .bx-li.bx-li-m .bx-tag { font-size: 11px; }
+  .bx-li.bx-li-m .bx-who .t { font-size: 14px; }
+  .bx-li.bx-li-m .bx-who .d { font-size: 12px; }
+  .bx-li.bx-li-m .bx-flag { width: 32px; height: 32px; }
+  .bx-li.bx-li-m .bx-flag svg { width: 32px; height: 32px; }
+}
+@media (max-width: 860px) { .bx-hide-phone { display: none !important; } .bx-li.bx-li-m > .m-zero { display: none !important; } }
