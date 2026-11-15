@@ -912,7 +912,7 @@ function ProtectUntil({ days, range, onChange }: { days: number | null; range: {
       />
       <div className="bx-pills wrap" style={{ marginTop: 8 }}>
         {QUICK_DAYS.filter(([d]) => d >= range.minDays && d <= range.maxDays).map(([d, label]) => (
-          <button key={d} className={`bx-pill${d === days ? ' on' : ''}`} onClick={() => onChange(d)}>{label}</button>
+          <button key={d} className={`bx-pill${d === days ? ' on' : ''}`} onClick={() => onChange(d)} aria-label={label}><span className="bx-dl">{label}</span><span className="bx-ds">{d}d</span></button>
         ))}
       </div>
       {weekday >= 5 && <div className="bx-hint" style={{ marginTop: 6 }}>Markets are closed at weekends, so this cover ends on Monday.</div>}

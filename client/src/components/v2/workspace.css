@@ -1261,3 +1261,14 @@
   .bx-trade .bx-ctabs { padding: 0 12px; }
   .bx-trade .bx-ctabs button { font-size: 13px; }
 }
+
+/* Durations: full labels normally, short ones (7d) where space is tight. */
+.bx-ds { display: none; }
+@media (max-width: 860px) {
+  /* Markets on phones: calendar and strike rate back, durations on one short row. */
+  .bx-trade .bx-tpanel .bx-until .bx-input { display: block !important; height: 34px; padding: 4px 8px; font-size: 12px; }
+  .bx-trade .bx-tpanel .bx-until .bx-pills { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 4px !important; }
+  .bx-trade .bx-tpanel .bx-until .bx-dl { display: none; }
+  .bx-trade .bx-tpanel .bx-until .bx-ds { display: inline; }
+  .bx-trade .bx-tpair > :nth-child(2) { display: flex; }
+}
