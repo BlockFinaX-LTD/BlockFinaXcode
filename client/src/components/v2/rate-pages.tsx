@@ -9,7 +9,7 @@ import { Percent } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
-import { dateOf, fmt, signAndSend, useUsdcBalances, usdcOn } from './shared';
+import { dateOf, fmt, signAndSend, useUsdcBalances, usdcOn, withCommas } from './shared';
 import { hint, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag } from './ui';
 import type { Go } from './workspace';
 
@@ -138,7 +138,7 @@ export function RateCoverPanel({ benchmark }: { benchmark: string }) {
       <div className="bx-pills" style={{ marginBottom: 8 }}>
         {AMOUNTS.map((a) => <button key={a} className={`bx-pill ${amount === a ? 'on' : ''}`} onClick={() => setAmount(a)}>${fmt(a, 0)}</button>)}
       </div>
-      <input className="bx-input" inputMode="decimal" aria-label="Amount protected" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
+      <input className="bx-input" inputMode="decimal" aria-label="Amount protected" value={withCommas(amount)} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
 
       <div className="muted" style={{ fontSize: 12, fontWeight: 600, margin: '16px 0 6px' }}>Length</div>
       <div className="bx-pills wrap">

@@ -11,7 +11,7 @@ import { QRCodeComponent } from '@/components/wallet/qr-code';
 import { usePasskeySession } from '@/lib/identity';
 import { addBackupPasskey, api, cancelBackupPasskey, currentPasskeySession, finalizeBackupPasskey, passkeySend, signOutPasskey, toScreenChain } from '@/lib/wallets/passkey-wallet';
 import { useWalletCheck, type WalletCheck } from '@/lib/wallets/verify-wallet';
-import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn } from './shared';
+import { fmt, runTransfer, useChains, useTransferQuote, useUsdcBalances, usdcOn, withCommas } from './shared';
 import { Loading, Note, Spin, Sum, Tag } from './ui';
 import { startTour } from './tour';
 import { YourDataCard } from './records';
@@ -143,7 +143,7 @@ function MoveToHub({ network, networkName }: { network: string; networkName: str
       <div className="sub" style={{ marginBottom: 14 }}>Protection and liquidity use USDC on {hubName}. USDC you send to {networkName} is moved there through Circle's Cross-Chain Transfer Protocol (CCTP).</div>
       <div className="bx-big">
         <label htmlFor="bx-move">Amount (USDC)</label>
-        <input id="bx-move" inputMode="decimal" value={`$${amount}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <input id="bx-move" inputMode="decimal" value={`$${withCommas(amount)}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
         <div className="muted" style={{ fontSize: 12 }}>On {networkName}: ${fmt(have)} · <button className="bx-link" style={{ fontSize: 12 }} onClick={() => setAmount(String(have))}>Max</button></div>
       </div>
       <div className="bx-sums">
@@ -246,7 +246,7 @@ function WithdrawPanel({ onCancel }: { onCancel: () => void }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div className="bx-big">
           <label htmlFor="bx-send">Amount (USDC)</label>
-          <input id="bx-send" inputMode="decimal" value={`$${amount}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
+          <input id="bx-send" inputMode="decimal" value={`$${withCommas(amount)}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
           <div className="muted" style={{ fontSize: 12 }}>Available ${fmt(have)} · <button className="bx-link" style={{ fontSize: 12 }} onClick={() => setAmount(String(have))}>Max</button></div>
         </div>
         <label className="bx-field" style={{ margin: 0 }}>

@@ -13,8 +13,7 @@ import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
   ccyName, dateIn, dateOf, endsAt, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
-  useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction,
-} from './shared';
+  useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction, withCommas } from './shared';
 import { usePasskeySession } from '@/lib/identity';
 import { AssetClassTabs, CoverName, Flag, hint, RefRate, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
@@ -1219,7 +1218,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 
               <label className="bx-tfield">
                 <span className="l">{hint('Amount')}</span>
-                <input id="bx-amount" className="num" inputMode="decimal" aria-label="Amount to protect in USD" placeholder="25,000" value={amount} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} />
+                <input id="bx-amount" className="num" inputMode="decimal" aria-label="Amount to protect in USD" placeholder="25,000" value={withCommas(amount)} onChange={(ev) => setAmount(ev.target.value.replace(/[^0-9.]/g, ''))} />
                 <span className="u">USD</span>
               </label>
 

@@ -29,6 +29,12 @@ export const quoteCcy = (pair: string) => pair.split('/')[1] ?? pair;
 export const ccyName = (pair: string) => CURRENCY_NAMES[quoteCcy(pair)] ?? quoteCcy(pair);
 export const fmt = (v: string | number | null | undefined, dp = 2) =>
   Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+/** An amount as it is typed, with commas: "100000.5" shows as "100,000.5". The stored value stays plain. */
+export const withCommas = (v: string) => {
+  if (!v) return v;
+  const [whole, dec] = v.split('.');
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (dec !== undefined ? `.${dec}` : '');
+};
 export const fmtRate = (v: string | number) => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const pct = (fraction: number, dp = 2) => `${(fraction * 100).toFixed(dp)}%`;
 export const dateOf = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });

@@ -16,8 +16,7 @@ import type { PreparedTransaction } from '@/lib/wallet-provider';
 import { usePasskeySession } from '@/lib/identity';
 import {
   ccyName, dateOf, exposureLabel, fmt, pct, poolRef, routeFunding, signAndSend, useChains, usePools, useUsdcBalances,
-  usdcOn, type Direction,
-} from './shared';
+  usdcOn, type Direction, withCommas } from './shared';
 import { CoverName, Flag, hint, Loading, Note, Spin, Steps, Sum, Tag, Toggle } from './ui';
 import type { Go } from './workspace';
 import { isOffered } from '@shared/domain/offered-directions';
@@ -722,7 +721,7 @@ function LiquidityPanel({ pool, initialMode = 'add' }: { pool: CurrencyPool; ini
       </div>
       <div className="bx-big">
         <label htmlFor="bx-liq">Amount (USDC)</label>
-        <input id="bx-liq" inputMode="decimal" value={`$${amount}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <input id="bx-liq" inputMode="decimal" value={`$${withCommas(amount)}`} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} />
         <div className="bx-pills" style={{ marginTop: 8 }}>
           {[0.25, 0.5, 0.75, 1].map((f) => <button key={f} className="bx-pill" onClick={() => setAmount((Math.floor(available * f * 100) / 100).toString())}>{f === 1 ? 'Max' : `${f * 100}%`}</button>)}
         </div>
@@ -860,7 +859,7 @@ export function CreatePool({ go }: { go: Go }) {
               {pair && <div className="sub" style={{ marginTop: -8, marginBottom: 16 }}>{side === 'both'
                 ? `You sell both sides. You pay out if the ${ccyName(pair)} moves past what buyers chose in either direction, and a sharp move one way is partly paid for by premiums from the other side. You can limit and price each side after creating the pool.`
                 : `You pay out if the ${ccyName(pair)} ${exposureLabel(pair, direction).verb} past what buyers chose, and earn their premiums otherwise.`}</div>}
-              <label className="bx-field"><span>{hint("Commit liquidity (USDC)")}</span><input className="bx-input num" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
+              <label className="bx-field"><span>{hint("Commit liquidity (USDC)")}</span><input className="bx-input num" inputMode="decimal" value={withCommas(amount)} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
               <div className="bx-pills" style={{ marginBottom: 16, marginTop: -8 }}>{[100, 250, 500, 1000].map((c) => <button key={c} className={`bx-pill${Number(amount) === c ? ' on' : ''}`} onClick={() => setAmount(String(c))}>${c.toLocaleString()}</button>)}</div>
               <FundingSelect value={network} onChange={setNetwork} />
             </>
