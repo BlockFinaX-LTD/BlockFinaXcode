@@ -1002,6 +1002,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [pctText, setPctText] = useState('0');
   const [checking, setChecking] = useState(false);
   const [view] = useViewMode();
+  // Phones show one part of the trading screen at a time.
+  const [phoneSection, setPhoneSection] = useState<'buy' | 'prices' | 'chart' | 'cover'>('buy');
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
   const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
@@ -1149,6 +1151,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const pick = (d: Direction, distanceBps: number) => {
     setDirection(d);
     choosePct(distanceBps / 100);
+    setPhoneSection('buy');
     if (window.innerWidth < 860) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -1274,7 +1277,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 </p>
               )}
               <button className="bx-btn block" disabled={!e || checking || viewOnly} onClick={review}>
-                {checking ? <Spin /> : null} {viewOnly ? 'Viewers cannot buy cover' : !(Number(amount) > 0) ? 'Enter an amount' : 'Review protection'}
+                {checking ? <Spin /> : null} {viewOnly ? 'Viewers cannot buy cover' : !(Number(amount) > 0) ? 'Enter an amount' : e ? `Review protection · $${fmt(e.totalCost)}` : 'Review protection'}
               </button>
               <div className="bx-tfoot">
                 <span>{e ? `Price held ${left}s` : 'Network fees covered'}</span>
@@ -1311,8 +1314,13 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   }
 
   return (
-    <main className="bx-main bx-trade">
+    <main className={`bx-main bx-trade m-${phoneSection}`}>
       <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} />
+      <div className="bx-msec" role="tablist" aria-label="Section">
+        {([['buy', 'Buy'], ['prices', 'Prices'], ['chart', 'Chart'], ['cover', 'My cover']] as const).map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={phoneSection === k} className={phoneSection === k ? 'on' : ''} onClick={() => setPhoneSection(k)}>{label}</button>
+        ))}
+      </div>
 
       <section className="bx-tchart" aria-label="Rate chart">
         <div className="bx-pane-h">
@@ -1490,7 +1498,7 @@ function FxRates({ go }: { go: Go }) {
     .sort((a, b) => Number(covered.has(b.pair)) - Number(covered.has(a.pair)));
   const cols = { gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr)) 150px' };
   return (
-    <div className="bx-card">
+    <div className="bx-card bx-ratelist">
       <div className="bx-card-h" style={{ flexWrap: 'wrap' }}>
         <div><h2>{SHOW_INTEREST_RATES ? 'FX rates' : 'Rates'}</h2><div className="sub">Live exchange rates for the currencies BlockFinaX customers trade in. Change is over the last 24 hours.</div></div>
         <input className="bx-input" style={{ maxWidth: 260 }} aria-label="Search FX rates" placeholder="Search currency" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -1499,7 +1507,7 @@ function FxRates({ go }: { go: Go }) {
         <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 620 }}>
           <div className="bx-list-h" style={cols}><span>Currency</span><span className="r">{hint("Rate")}</span><span className="r">{hint("Change")}</span><span /></div>
           {rows.map((r) => (
-            <div key={r.pair} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => go('pair', { pair: r.pair })} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair: r.pair }); }}>
+            <div key={r.pair} className="bx-li click" style={cols} role="button" tabIndex={0} onClick={() => (isPhone() && covered.has(r.pair) ? go('h-protect', { pair: r.pair, buy: true }) : go('pair', { pair: r.pair }))} onKeyDown={(e) => { if (e.key === 'Enter') go('pair', { pair: r.pair }); }}>
               <div className="bx-who"><Flag pair={r.pair} /><div><div className="t">{pairName(r.pair)}</div><div className="d">{r.pair} · 1 {r.pair.split('/')[0]} in {quoteCcy(r.pair)}</div></div></div>
               <div className="r num" style={{ fontWeight: 600 }}>{r.spot ? fmtRate(r.spot) : '-'}</div>
               <div className="r"><ChangeText change={r.change} /></div>

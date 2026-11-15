@@ -10,7 +10,7 @@ import { VerifyModal } from './verify';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Building2, Check, ChevronDown, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
+import { ArrowUp, Building2, Check, ChevronDown, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, MessageCircle, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
 import logoPath from '@/assets/logo.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, useChains, useIsDemo, usePools, useUsdcBalances } from './shared';
@@ -223,6 +223,7 @@ export function Workspace() {
             <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet · <span className="num">${fmt(balances.data?.total)} USDC</span></button>
             <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>
             {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
+            <button className="bx-ask-top bx-show-sm" aria-label="Ask Finax" data-tour="ask" onClick={() => window.dispatchEvent(new Event('bfx:ask-open'))}><MessageCircle /></button>
             <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
             <span className="bx-top-account"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
           </div>

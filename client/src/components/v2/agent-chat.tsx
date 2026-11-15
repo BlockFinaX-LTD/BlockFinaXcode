@@ -56,6 +56,12 @@ export function AgentChat() {
   }, [open, loaded, session, thread]);
 
   useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
+  // The top bar's Ask button on phones opens the same chat.
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener('bfx:ask-open', show);
+    return () => window.removeEventListener('bfx:ask-open', show);
+  }, []);
 
   async function send(message: string) {
     const m = message.trim();
