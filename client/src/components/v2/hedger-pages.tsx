@@ -372,7 +372,7 @@ function PriceLadder({ market, days, limitBps, direction, startBps, spot, onPick
 }
 
 /** The buyer's cover on this market, in tabs under the chart. */
-function CoverTable({ go }: { go: Go }) {
+function CoverTable({ go, onPick, selected }: { go: Go; onPick?: (key: string, pair: string) => void; selected?: string | null }) {
   const hedges = useHedges();
   const { busy, claim } = useClaimPayout();
   const mine = hedges.data ?? [];
@@ -398,8 +398,9 @@ function CoverTable({ go }: { go: Go }) {
         ) : rows.map(({ position: p, pair, settlement: s }) => {
           const cost = Number(p.premium) + Number(p.fee);
           return (
-            <div key={markKey(p)} className="bx-trow" style={cols} role="button" tabIndex={0}
-              onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(ev) => { if (ev.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
+            <div key={markKey(p)} className={`bx-trow${selected === markKey(p) ? ' sel' : ''}`} style={cols} role="button" tabIndex={0}
+              onClick={() => (onPick ? onPick(markKey(p), pair) : go('pair', { pair, position: markKey(p) }))}
+              onKeyDown={(ev) => { if (ev.key === 'Enter') (onPick ? onPick(markKey(p), pair) : go('pair', { pair, position: markKey(p) })); }}>
               <span className="bx-tcov">
                 <span className="n">{pair} <span className={p.direction === 'up' ? 'up' : 'down'}>{p.direction === 'up' ? 'Up cover' : 'Down cover'}{p.structure === 'open' ? ', Open' : ''}</span></span>
                 <span className="d">${fmt(p.notional, 0)} · cost ${fmt(cost)} · {s.status === 'pending' ? 'ends' : 'ended'} {dateOf(p.expiry)}</span>
@@ -836,65 +837,53 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
-          {focusedPos && ended && focusedSettlement && (
-            <div className="bx-pairstats-wrap">
-              <div className="bx-pairstats">
-                <div><span>Ended</span><b className="num">{dateOf(focusedPos.expiry)}</b></div>
-                <div><span>{hint('Settled at')}</span><b className="num">{focusedSettlement.settlementPrice ? fmtRate(focusedSettlement.settlementPrice) : '-'}</b></div>
-                <div><span>{hint('Payout')}</span><b className={`num${Number(focusedSettlement.netPayout) > 0 ? ' up' : ''}`}>${fmt(focusedSettlement.netPayout)}</b></div>
-                <div><span>{hint('Status')}</span><b>{focusedSettlement.status === 'settled_claimable' ? 'Payout ready' : focusedSettlement.status === 'claimed' ? 'Paid' : 'No payout'}</b></div>
-              </div>
-              {focusedSettlement.status === 'settled_claimable' && (
-                <button className="bx-btn block" disabled={claiming === focusedSettlement.position} onClick={() => claim(focusedSettlement.position)}>{claiming === focusedSettlement.position ? <Spin /> : `Receive $${fmt(focusedSettlement.netPayout)}`}</button>
-              )}
-            </div>
-          )}
-          {focusedPos && !ended && (() => {
+          {focusedPos && (() => {
             const m = marks.find((x) => x.key === focus);
-            if (!m?.payout) return null;
             const cost = Number(focusedPos.premium) + Number(focusedPos.fee);
-            const n = Number(focusedPos.notional), entry = Number(focusedPos.spot), k = Number(focusedPos.strike);
-            const breakeven = focusedPos.direction === 'up' ? k + (cost * entry) / n : k - (cost * entry) / n;
-            const today = spot.data ? m.payout(spot.data) : null;
+            const most = m?.maxPayout ?? Number(focusedPos.maxPayout);
             return (
-              <div className="bx-pairstats">
-                <div><span>{hint(role === 'hedger' ? 'Payout today' : 'Pool would pay today')}</span><b className="num" style={{ color: role === 'hedger' ? 'var(--green)' : 'var(--red)' }}>${fmt(today ?? 0)}</b></div>
-                <div><span>{hint('Cover type')}</span><b>{focusedPos.structure === 'open' ? 'Open' : 'Limited'}</b></div>
-                <div><span>{hint(role === 'hedger' ? 'Most it can pay' : 'Most your pool can pay')}</span><b className="num">${fmt(m.maxPayout ?? 0)}</b></div>
-                {role === 'hedger'
-                  ? <div><span>{hint('Breakeven')}</span><b className="num">{fmtRate(breakeven)}</b></div>
-                  : <div><span>{hint('Premium earned')}</span><b className="num">${fmt(focusedPos.premium)}</b></div>}
+              <div className="bx-pairstats-wrap">
+                <div className="bx-pairstats">
+                  <div><span>{hint('Cover type')}</span><b>{focusedPos.structure === 'open' ? 'Open' : 'Limited'}</b></div>
+                  <div><span>{hint('Strike')}</span><b className="num">{fmtRate(focusedPos.strike)}</b></div>
+                  <div><span>{hint('Limit')}</span><b className="num">{focusedPos.structure === 'open' ? 'None' : fmtRate(focusedPos.cap)}</b></div>
+                  <div><span>{hint('Notional')}</span><b className="num">${fmt(focusedPos.notional, 0)}</b></div>
+                  <div><span>{hint(role === 'hedger' ? 'Cost' : 'Premium earned')}</span><b className="num">${fmt(role === 'hedger' ? cost : Number(focusedPos.premium))}</b></div>
+                  <div><span>{hint(role === 'hedger' ? 'Most it can pay' : 'Most your pool can pay')}</span><b className="num">${fmt(most)}</b></div>
+                </div>
+                {focusedSettlement?.status === 'settled_claimable' && (
+                  <button className="bx-btn block" disabled={claiming === focusedSettlement.position} onClick={() => claim(focusedSettlement.position)}>{claiming === focusedSettlement.position ? <Spin /> : `Receive $${fmt(focusedSettlement.netPayout)}`}</button>
+                )}
               </div>
             );
           })()}
         </div>
 
+        {role === 'hedger' ? (
+          <div className="bx-card bx-covers-card">
+            <CoverTable go={go} selected={focus}
+              onPick={(k, p) => (p === pair ? setFocus(k) : go('pair', { pair: p, position: k }))} />
+          </div>
+        ) : (
         <div className="bx-card">
           <div className="bx-card-h" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <div><h2>{role === 'hedger' ? 'Your protections' : 'Protection your pools back on this pair'}</h2><div className="sub">Select one to show it on the chart.</div></div>
-            {role === 'hedger' && allHedges.length > 0 && (
-              <div className="bx-seg small" role="group" aria-label="Show">
-                <button className={listShowing === 'active' ? 'on' : ''} aria-pressed={listShowing === 'active'} onClick={() => setListView('active')}>Active <span className="muted">{runningCount}</span></button>
-                <button className={listShowing === 'ended' ? 'on' : ''} aria-pressed={listShowing === 'ended'} onClick={() => setListView('ended')}>Ended <span className="muted">{endedCount}</span></button>
-              </div>
-            )}
+            <div><h2>Protection your pools back on this pair</h2><div className="sub">Select one to show it on the chart.</div></div>
           </div>
-          {(role === 'hedger' ? hedges.isLoading : under.loading) ? <Loading /> : (role === 'hedger' ? allHedges.length === 0 : marks.length === 0) ? (
-            <div className="bx-empty">{role === 'hedger' ? 'You have no protection yet.' : 'Your pools have no running protection on this pair.'}</div>
+          {under.loading ? <Loading /> : marks.length === 0 ? (
+            <div className="bx-empty">Your pools have no running protection on this pair.</div>
           ) : (
             <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
               <div className="bx-list-h" style={POS_COLS}><span>{hint('Protection')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Expires')}</span></div>
-              {(role === 'hedger' ? allHedges.filter((h) => isOpen(h.settlement.status) === (listShowing === 'active')).map((h) => ({ pos: h.position, rowPair: h.pair, title: exposureLabel(h.pair, h.position.direction).title, status: h.settlement.status }))
-                : under.rows.map(({ pool, pos }) => ({ pos, rowPair: pair, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
-              ).map(({ pos, rowPair, title, status }) => {
+              {under.rows.map(({ pool, pos }) => ({ pos, rowPair: pair, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
+                .map(({ pos, rowPair, title, status }) => {
                 const k = markKey(pos);
                 // Cover on another pair opens that pair's chart with it drawn.
                 const show = () => (rowPair === pair ? setFocus(k) : go('pair', { pair: rowPair, position: k }));
                 return (
                   <div key={k} className={`bx-li bx-li-m click${focus === k ? ' sel' : ''}`} style={POS_COLS} role="button" tabIndex={0} aria-pressed={focus === k}
                     onClick={show} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); } }}>
-                    <div className="bx-who"><span className="bx-ic" style={{ color: role === 'hedger' ? 'var(--green)' : 'var(--red)' }}><Shield aria-hidden="true" /></span>
-                      <div style={{ minWidth: 0 }}><div className="t">{title}</div><div className="d"><span className="bx-dsub">{role === 'hedger' ? 'Bought' : 'Sold'} at {fmtRate(pos.spot)} · covered to {fmtRate(pos.cap)} {quoteCcy(rowPair)}</span><span className="bx-psub">${fmt(pos.notional, 0)} · strike {fmtRate(pos.strike)}</span></div></div></div>
+                    <div className="bx-who"><span className="bx-ic" style={{ color: 'var(--red)' }}><Shield aria-hidden="true" /></span>
+                      <div style={{ minWidth: 0 }}><div className="t">{title}</div><div className="d"><span className="bx-dsub">Sold at {fmtRate(pos.spot)} · covered to {fmtRate(pos.cap)} {quoteCcy(rowPair)}</span><span className="bx-psub">${fmt(pos.notional, 0)} · strike {fmtRate(pos.strike)}</span></div></div></div>
                     <div className="r num m-hide" style={{ fontWeight: 600 }}>${fmt(pos.notional, 0)}</div>
                     <div className="r num m-hide">{fmtRate(pos.strike)}</div>
                     <div className="r m-main"><div className="num">{dateOf(pos.expiry)}</div><div style={{ fontSize: 12 }}>{status === 'pending' ? <span className="up">Active</span> : status === 'settled_claimable' ? <span className="up">Payout ready</span> : <span className="muted">Ended</span>}</div></div>
@@ -904,6 +893,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
             </div></div>
           )}
         </div>
+        )}
       </section>
     </main>
   );

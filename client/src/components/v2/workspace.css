@@ -1255,11 +1255,11 @@
 }
 @media (max-width: 860px) {
   /* My cover under the trading form: name and payout only. */
-  .bx-trade .bx-covers .bx-thead { display: none; }
-  .bx-trade .bx-covers .bx-trow { grid-template-columns: minmax(0, 1fr) auto !important; }
-  .bx-trade .bx-covers .bx-trow > span:not(:first-child):not(:last-child) { display: none; }
-  .bx-trade .bx-ctabs { padding: 0 12px; }
-  .bx-trade .bx-ctabs button { font-size: 13px; }
+  .bx-covers .bx-thead { display: none; }
+  .bx-covers .bx-trow { grid-template-columns: minmax(0, 1fr) auto !important; }
+  .bx-covers .bx-trow > span:not(:first-child):not(:last-child) { display: none; }
+  .bx-covers .bx-ctabs { padding: 0 12px; }
+  .bx-covers .bx-ctabs button { font-size: 13px; }
 }
 
 /* Durations: full labels normally, short ones (7d) where space is tight. */
@@ -1301,29 +1301,29 @@
 .bx-tcov .d { display: none; font-size: 11.5px; color: var(--muted); }
 .bx-ctabs-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-left: 6px; vertical-align: 2px; }
 @media (max-width: 860px) {
-  .bx-trade .bx-covers .bx-trow { padding-top: 8px; padding-bottom: 8px; min-height: 52px; }
-  .bx-trade .bx-tcov .d { display: block; }
-  .bx-trade .bx-covers .bx-trow .bx-btn.small { min-height: 30px; padding: 5px 10px; font-size: 12px; }
+  .bx-covers .bx-trow { padding-top: 8px; padding-bottom: 8px; min-height: 52px; }
+  .bx-covers .bx-tcov .d { display: block; }
+  .bx-covers .bx-trow .bx-btn.small { min-height: 30px; padding: 5px 10px; font-size: 12px; }
 }
 
 @media (max-width: 860px) {
   /* Cover table on phones: one line per cover under small headers (Cover, Cost, Expires, Payout). */
-  .bx-trade .bx-covers .bx-thead, .bx-trade .bx-covers .bx-trow {
+  .bx-covers .bx-thead, .bx-covers .bx-trow {
     display: grid !important; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.8fr) minmax(0, 0.95fr) minmax(0, 1fr) !important; gap: 6px; padding: 0 12px;
   }
-  .bx-trade .bx-covers .bx-thead { font-size: 10.5px; padding-top: 8px; padding-bottom: 4px; }
-  .bx-trade .bx-covers .bx-thead > :nth-child(2), .bx-trade .bx-covers .bx-thead > :nth-child(4), .bx-trade .bx-covers .bx-thead > :nth-child(5),
-  .bx-trade .bx-covers .bx-trow > :nth-child(2), .bx-trade .bx-covers .bx-trow > :nth-child(4), .bx-trade .bx-covers .bx-trow > :nth-child(5) { display: none !important; }
-  .bx-trade .bx-covers .bx-trow > :nth-child(3), .bx-trade .bx-covers .bx-trow > :nth-child(6) { display: block !important; font-size: 12px; }
-  .bx-trade .bx-covers .bx-trow > :last-child { font-size: 12px; }
-  .bx-trade .bx-covers .bx-trow { min-height: 46px; padding-top: 6px; padding-bottom: 6px; }
-  .bx-trade .bx-tcov .d { display: none !important; }
-  .bx-trade .bx-tcov .n { font-size: 13px; line-height: 1.25; }
-  .bx-trade .bx-tcov .n > span { display: block; font-size: 11px; font-weight: 500; }
-  .bx-trade .bx-covers .bx-trow .bx-btn.small { flex-direction: column; gap: 0; line-height: 1.15; padding: 4px 6px; min-height: 0; font-size: 11px; width: 100%; }
-  .bx-trade .bx-covers .bx-trow .bx-btn.small .rl { font-size: 10px; font-weight: 500; }
+  .bx-covers .bx-thead { font-size: 10.5px; padding-top: 8px; padding-bottom: 4px; }
+  .bx-covers .bx-thead > :nth-child(2), .bx-covers .bx-thead > :nth-child(4), .bx-covers .bx-thead > :nth-child(5),
+  .bx-covers .bx-trow > :nth-child(2), .bx-covers .bx-trow > :nth-child(4), .bx-covers .bx-trow > :nth-child(5) { display: none !important; }
+  .bx-covers .bx-trow > :nth-child(3), .bx-covers .bx-trow > :nth-child(6) { display: block !important; font-size: 12px; }
+  .bx-covers .bx-trow > :last-child { font-size: 12px; }
+  .bx-covers .bx-trow { min-height: 46px; padding-top: 6px; padding-bottom: 6px; }
+  .bx-covers .bx-tcov .d { display: none !important; }
+  .bx-covers .bx-tcov .n { font-size: 13px; line-height: 1.25; }
+  .bx-covers .bx-tcov .n > span { display: block; font-size: 11px; font-weight: 500; }
+  .bx-covers .bx-trow .bx-btn.small { flex-direction: column; gap: 0; line-height: 1.15; padding: 4px 6px; min-height: 0; font-size: 11px; width: 100%; }
+  .bx-covers .bx-trow .bx-btn.small .rl { font-size: 10px; font-weight: 500; }
 }
-@media (max-width: 860px) { .bx-trade .bx-covers .bx-trow > :nth-child(6) { white-space: nowrap; font-size: 11px !important; } .bx-trade .bx-covers .bx-trow > :nth-child(3) { white-space: nowrap; } }
+@media (max-width: 860px) { .bx-covers .bx-trow > :nth-child(6) { white-space: nowrap; font-size: 11px !important; } .bx-covers .bx-trow > :nth-child(3) { white-space: nowrap; } }
 
 /* Chart button in the market strip. Phones: no chart on Markets; the button or a position opens the chart page. */
 .bx-mstrip-chart { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--blue); cursor: pointer; }
@@ -1350,3 +1350,9 @@
 .bx-pairstats span { font-size: 11px; color: var(--muted); }
 .bx-pairstats b { font-size: 14px; font-weight: 600; }
 @media (max-width: 860px) { .bx-pairstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Chart page: details in two rows of three (the cover's terms, then the money); its list matches Markets. */
+.bx-pairstats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+.bx-covers .bx-trow.sel { background: var(--blue-soft); }
+.bx-covers-card { padding: 0 !important; overflow: hidden; }
+.bx-covers .r { text-align: right; }
