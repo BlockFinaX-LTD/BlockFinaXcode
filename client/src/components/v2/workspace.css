@@ -1272,3 +1272,14 @@
   .bx-trade .bx-tpanel .bx-until .bx-ds { display: inline; }
   .bx-trade .bx-tpair > :nth-child(2) { display: flex; }
 }
+@media (max-width: 860px) {
+  /* Markets on phones: the date as a small box on the Duration line; % and strike rate side by side. */
+  .bx-trade .bx-tpanel .bx-until { position: relative; }
+  .bx-trade .bx-tpanel .bx-until .bx-input {
+    position: absolute; right: 0; top: -27px; width: 118px; height: 24px; padding: 0 6px; font-size: 11px; border-radius: 6px;
+  }
+  .bx-trade .bx-tpanel .bx-until .bx-pills { margin-top: 0 !important; }
+  .bx-trade .bx-tpair { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 4px; }
+  .bx-trade .bx-tpair .bx-tfield { padding: 0 6px; }
+  .bx-trade .bx-tpair .bx-tfield input { font-size: 12px; }
+}
