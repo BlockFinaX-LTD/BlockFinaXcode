@@ -1196,3 +1196,68 @@
   .bx-mbuy .bx-btn { min-height: 44px; font-size: 14px; border-radius: 8px; }
   .bx-main.bx-trade.m-prices, .bx-main.bx-trade.m-chart { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
+
+/* ── Phones, Markets (Advanced) like an exchange: buy form left, prices right, all on one screen ── */
+@media (max-width: 860px) {
+  .bx-main.bx-trade {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-areas: "strip strip" "panel ladder" "covers covers" "chart chart";
+    padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+  }
+  .bx-main.bx-trade .bx-msec, .bx-main.bx-trade .bx-mbuy { display: none !important; }
+  .bx-main.bx-trade.bx-trade > .bx-ladder { display: flex !important; }
+  .bx-main.bx-trade.bx-trade > .bx-tpanel, .bx-main.bx-trade.bx-trade > .bx-covers, .bx-main.bx-trade.bx-trade > .bx-tchart { display: block !important; }
+
+  /* Prices: rate and price only, compact rows. */
+  .bx-trade .bx-ladder .bx-pane-h { padding: 6px 8px; min-height: 0; font-size: 12px; flex-wrap: wrap; gap: 2px; }
+  .bx-trade .bx-ladder .bx-pane-h .muted { font-size: 10.5px; }
+  .bx-trade .bx-lhead, .bx-trade .bx-lrow { grid-template-columns: minmax(0, 1fr) auto; padding: 0 8px; gap: 6px; }
+  .bx-trade .bx-lhead > span:nth-of-type(2), .bx-trade .bx-lrow > span:nth-of-type(2) { display: none; }
+  .bx-trade .bx-lhead { font-size: 10.5px; padding-top: 6px; padding-bottom: 2px; }
+  .bx-trade .bx-lrow { height: 25px; font-size: 12px; }
+  .bx-trade .bx-lside { font-size: 10.5px; padding: 4px 8px 1px; }
+  .bx-trade .bx-lmid { padding: 6px 8px; margin: 2px 0; gap: 4px; flex-wrap: wrap; }
+  .bx-trade .bx-lmid .num { font-size: 15px; }
+  .bx-trade .bx-lmid .muted { font-size: 10.5px; }
+
+  /* The buy form, compact for the narrow column. */
+  .bx-trade .bx-tpanel .bx-buy { padding: 10px 8px 12px 12px !important; gap: 10px; position: static; }
+  .bx-trade .bx-sideswitch button { padding: 6px 2px; }
+  .bx-trade .bx-sideswitch b { font-size: 12px; }
+  .bx-trade .bx-sideswitch span { display: none; }
+  .bx-trade .bx-tpanel .bx-tfield { height: 34px; padding: 0 8px; gap: 4px; }
+  .bx-trade .bx-tpanel .bx-tfield .l { font-size: 11px; }
+  .bx-trade .bx-tpanel .bx-tfield input { font-size: 13px; }
+  .bx-trade .bx-tpanel .bx-tfield .u { font-size: 11px; }
+  .bx-trade .bx-trow-l { font-size: 11px; margin-bottom: 4px; }
+  .bx-trade .bx-trow-l > .muted { display: none; }
+  .bx-trade .bx-tpanel .bx-until .bx-input, .bx-trade .bx-tpanel .bx-until .bx-hint { display: none !important; }
+  .bx-trade .bx-tpanel .bx-until .bx-pills { margin-top: 0 !important; }
+  .bx-trade .bx-tpanel .bx-pills { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .bx-trade .bx-tpanel .bx-pill { min-height: 26px; padding: 2px; font-size: 11px; }
+  .bx-trade .bx-tpair { grid-template-columns: minmax(0, 1fr); }
+  .bx-trade .bx-tpair > :nth-child(2) { display: none; }
+  .bx-trade .bx-tpanel .bx-choice { gap: 4px; }
+  .bx-trade .bx-tpanel .bx-choice button { padding: 6px 8px; }
+  .bx-trade .bx-tpanel .bx-choice button.on { padding: 5px 7px; }
+  .bx-trade .bx-tpanel .bx-choice .t { font-size: 12px; }
+  .bx-trade .bx-tpanel .bx-choice .p { font-size: 11px; }
+  .bx-trade .bx-tsum .bx-sum { font-size: 12px; padding: 3px 0; }
+  .bx-trade .bx-tsum .bx-sum.total { font-size: 13px; padding-top: 6px; }
+  .bx-trade .bx-tpanel .bx-buy > .bx-btn.block { position: static; box-shadow: none; min-height: 40px; font-size: 13px; padding: 8px; }
+  .bx-trade .bx-tfoot { display: none; }
+  .bx-trade .bx-tpanel .bx-warn { font-size: 11px; padding: 6px 8px; }
+
+  /* Strip and chart. */
+  .bx-trade .bx-mstrip { padding: 8px 12px; gap: 10px; }
+  .bx-trade .bx-mstrip-pair .n { font-size: 15px; }
+  .bx-trade .bx-tchart .bx-chart { height: 200px !important; }
+}
+@media (max-width: 860px) {
+  /* My cover under the trading form: name and payout only. */
+  .bx-trade .bx-covers .bx-thead { display: none; }
+  .bx-trade .bx-covers .bx-trow { grid-template-columns: minmax(0, 1fr) auto !important; }
+  .bx-trade .bx-covers .bx-trow > span:not(:first-child):not(:last-child) { display: none; }
+  .bx-trade .bx-ctabs { padding: 0 12px; }
+  .bx-trade .bx-ctabs button { font-size: 13px; }
+}
