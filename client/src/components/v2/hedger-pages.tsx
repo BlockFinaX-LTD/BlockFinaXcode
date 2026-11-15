@@ -42,6 +42,12 @@ function useHedges() {
   });
 }
 
+/**
+ * Active until finished: cover still running, or expired with a payout not yet received.
+ * Ended: the payout was received, or the cover expired with nothing to pay.
+ */
+const isOpen = (status: string) => status === 'pending' || status === 'settled_claimable';
+
 function useSpot(pair: string | null) {
   return useQuery({
     queryKey: ['v2-spot', pair],
@@ -365,30 +371,30 @@ function PriceLadder({ market, days, limitBps, direction, startBps, spot, onPick
 }
 
 /** The buyer's cover on this market, in tabs under the chart. */
-function CoverTable({ pair, go, spot }: { pair: string; go: Go; spot: number | undefined }) {
+function CoverTable({ go }: { go: Go }) {
   const hedges = useHedges();
   const { busy, claim } = useClaimPayout();
-  const mine = (hedges.data ?? []).filter((h) => h.pair === pair);
-  const running = mine.filter((h) => h.settlement.status === 'pending');
-  const ended = mine.filter((h) => h.settlement.status !== 'pending');
-  const waiting = ended.filter((h) => h.settlement.status === 'settled_claimable').length;
-  const [tab, setTab] = useState<'active' | 'ended' | null>(null);
-  // Open on Ended when a payout is waiting to be received, so it is not missed.
-  const showing = tab ?? (waiting ? 'ended' : 'active');
-  const rows = showing === 'active' ? running : ended;
+  const mine = hedges.data ?? [];
+  const rates = useRates(Array.from(new Set(mine.map((h) => h.pair))));
+  const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
+  const running = mine.filter((h) => isOpen(h.settlement.status)).sort((x, y) => Number(x.position.expiry) - Number(y.position.expiry));
+  const ended = mine.filter((h) => !isOpen(h.settlement.status)).sort((x, y) => Number(y.position.expiry) - Number(x.position.expiry));
+  const waiting = running.filter((h) => h.settlement.status === 'settled_claimable').length;
+  const [tab, setTab] = useState<'active' | 'ended'>('active');
+  const rows = tab === 'active' ? running : ended;
   const cols = { gridTemplateColumns: 'minmax(0, 1.4fr) repeat(6, minmax(0, 1fr))' };
   return (
     <div className="bx-covers">
       <div className="bx-ctabs" role="tablist">
-        <button role="tab" aria-selected={showing === 'active'} className={showing === 'active' ? 'on' : ''} onClick={() => setTab('active')}>Active ({running.length})</button>
-        <button role="tab" aria-selected={showing === 'ended'} className={showing === 'ended' ? 'on' : ''} onClick={() => setTab('ended')}>Ended ({ended.length}){waiting ? <span className="bx-ctabs-dot" aria-label={`${waiting} payout ready`} /> : null}</button>
-        <button className="bx-ctabs-link" onClick={() => go('h-protections')}>All markets</button>
+        <button role="tab" aria-selected={tab === 'active'} className={tab === 'active' ? 'on' : ''} onClick={() => setTab('active')}>Active ({running.length}){waiting ? <span className="bx-ctabs-dot" aria-label={`${waiting} payout ready`} /> : null}</button>
+        <button role="tab" aria-selected={tab === 'ended'} className={tab === 'ended' ? 'on' : ''} onClick={() => setTab('ended')}>Ended ({ended.length})</button>
+        <button className="bx-ctabs-link" onClick={() => go('h-protections')}>View all</button>
       </div>
       <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
-        <div className="bx-thead" style={cols}><span>{hint('Cover')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Cost')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Protection limit')}</span><span className="r">{hint('Expires')}</span><span className="r">{hint(showing === 'active' ? 'Payout today' : 'Payout')}</span></div>
+        <div className="bx-thead" style={cols}><span>{hint('Cover')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Cost')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Protection limit')}</span><span className="r">{hint('Expires')}</span><span className="r">{hint(tab === 'active' ? 'Payout today' : 'Payout')}</span></div>
         {hedges.isLoading ? <Loading /> : !rows.length ? (
-          <div className="bx-tempty">{showing === 'active' ? 'No active cover on this market yet.' : 'No ended cover on this market.'}</div>
-        ) : rows.map(({ position: p, settlement: s }) => {
+          <div className="bx-tempty">{tab === 'active' ? 'No active cover yet.' : 'No ended cover yet.'}</div>
+        ) : rows.map(({ position: p, pair, settlement: s }) => {
           const cost = Number(p.premium) + Number(p.fee);
           return (
             <div key={markKey(p)} className="bx-trow" style={cols} role="button" tabIndex={0}
@@ -405,7 +411,7 @@ function CoverTable({ pair, go, spot }: { pair: string; go: Go; spot: number | u
               <span className="r num">
                 {s.status === 'settled_claimable'
                   ? <button className="bx-btn small" disabled={busy === s.position} onClick={(ev) => { ev.stopPropagation(); void claim(s.position); }}>{busy === s.position ? <Spin /> : `Receive $${fmt(s.netPayout)}`}</button>
-                  : s.status === 'pending' ? `$${fmt(payoutToday(p, spot) ?? 0)}` : s.status === 'claimed' ? <span className="up">${fmt(s.netPayout)} paid</span> : <span className="muted">No payout</span>}
+                  : s.status === 'pending' ? `$${fmt(payoutToday(p, spotOf(pair)) ?? 0)}` : s.status === 'claimed' ? <span className="up">${fmt(s.netPayout)} paid</span> : <span className="muted">No payout</span>}
               </span>
             </div>
           );
@@ -422,7 +428,7 @@ export function HedgerHome({ go }: { go: Go }) {
   const hedges = useHedges();
   const pools = usePools();
   const all = hedges.data ?? [];
-  const active = all.filter((h) => h.settlement.status === 'pending');
+  const active = all.filter((h) => isOpen(h.settlement.status));
   const pairs = useMemo(() => Array.from(new Set((pools.data ?? []).map((p) => p.pair))), [pools.data]);
   const rates = useRates(pairs);
   const spotOf = (pair: string) => rates.find((r) => r.pair === pair)?.spot;
@@ -434,7 +440,7 @@ export function HedgerHome({ go }: { go: Go }) {
   const [ratesClass, setRatesClass] = useAssetClass();
   const watchRows = [...(watch.data ?? [])].sort((a, b) => Number(pairs.includes(b.pair)) - Number(pairs.includes(a.pair))).slice(0, 6);
   const exposure = active.reduce((s, h) => s + Number(h.position.notional), 0) + rateActive.reduce((s, p) => s + Number(p.notional), 0);
-  const expiries = [...active.map((h) => h.position.expiry), ...rateActive.map((p) => p.expiry)];
+  const expiries = [...active.filter((h) => h.settlement.status === 'pending').map((h) => h.position.expiry), ...rateActive.map((p) => p.expiry)];
   const next = expiries.length ? Math.min(...expiries) : null;
   const activity = [...all].sort((a, b) => b.position.createdAt - a.position.createdAt).slice(0, 4);
   const cols = { gridTemplateColumns: 'minmax(0, 2.2fr) repeat(3, minmax(0, 1fr))' };
@@ -470,7 +476,7 @@ export function HedgerHome({ go }: { go: Go }) {
                   </div>
                   <div className="r num m-hide" style={{ fontWeight: 600 }}>${fmt(p.notional, 0)}</div>
                   <div className="r m-hide"><div className="num">{dateOf(p.expiry)}</div><div className="muted" style={{ fontSize: 12 }}>{daysLeft(p.expiry)} days</div></div>
-                  <div className="r m-main"><div className="num" style={{ fontWeight: 600 }}>${fmt(payoutToday(p, spotOf(pair)) ?? 0)}</div><div className="up" style={{ fontSize: 12, fontWeight: 600 }}>Active</div></div>
+                  <div className="r m-main"><div className="num" style={{ fontWeight: 600 }}>${fmt(s.status === 'settled_claimable' ? s.netPayout : payoutToday(p, spotOf(pair)) ?? 0)}</div><div className="up" style={{ fontSize: 12, fontWeight: 600 }}>{s.status === 'settled_claimable' ? 'Payout ready' : 'Active'}</div></div>
                 </div>
               ))}
             </>
@@ -790,7 +796,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
     ? mineHedges.map((h) => hedgeMark(h.position, exposureLabel(pair, h.position.direction).title))
     : under.rows.map(({ pool, pos }) => riskMark(pos, exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover));
   const activeKeys = role === 'hedger'
-    ? mineHedges.filter((h) => h.settlement.status === 'pending').map((h) => markKey(h.position))
+    ? mineHedges.filter((h) => isOpen(h.settlement.status)).map((h) => markKey(h.position))
     : under.rows.map((r) => markKey(r.pos));
   useEffect(() => { if (!focus && activeKeys[0]) setFocus(activeKeys[0]); }, [activeKeys.join(',')]);
   const allPositions = role === 'hedger' ? mineHedges.map((h) => h.position) : under.rows.map((r) => r.pos);
@@ -800,10 +806,10 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
   const ended = focusedSettlement !== null && focusedSettlement.status !== 'pending';
   const { busy: claiming, claim } = useClaimPayout();
   // Running and finished cover are listed apart; start on the group of the cover that was opened.
-  const runningCount = mineHedges.filter((h) => h.settlement.status === 'pending').length;
+  const runningCount = mineHedges.filter((h) => isOpen(h.settlement.status)).length;
   const endedCount = mineHedges.length - runningCount;
   const [listView, setListView] = useState<'active' | 'ended' | null>(null);
-  const listShowing = listView ?? (ended ? 'ended' : runningCount || !endedCount ? 'active' : 'ended');
+  const listShowing = listView ?? (focusedSettlement && !isOpen(focusedSettlement.status) ? 'ended' : runningCount || !endedCount ? 'active' : 'ended');
 
   return (
     <main className="bx-main">
@@ -872,7 +878,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           ) : (
             <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 600 }}>
               <div className="bx-list-h" style={POS_COLS}><span>{hint('Protection')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Expires')}</span></div>
-              {(role === 'hedger' ? mineHedges.filter((h) => (h.settlement.status === 'pending') === (listShowing === 'active')).map((h) => ({ pos: h.position, title: exposureLabel(pair, h.position.direction).title, status: h.settlement.status }))
+              {(role === 'hedger' ? mineHedges.filter((h) => isOpen(h.settlement.status) === (listShowing === 'active')).map((h) => ({ pos: h.position, title: exposureLabel(pair, h.position.direction).title, status: h.settlement.status }))
                 : under.rows.map(({ pool, pos }) => ({ pos, title: `${exposureLabel(pair, pool.direction === 'both' ? pos.direction : pool.direction).cover} · pool ${pool.poolId}${pool.legacy ? ' (earlier contract)' : ''}`, status: 'pending' }))
               ).map(({ pos, title, status }) => {
                 const k = markKey(pos);
@@ -1362,7 +1368,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
           startBps={strikeError || anchor === 'rate' ? null : Math.round(startPct * 100)} />
       )}
 
-      <CoverTable pair={pair} go={go} spot={spot.data} />
+      <CoverTable go={go} />
 
       {/* Phones: Buy buttons fixed under the prices and the chart; each opens the Buy tab on that side. */}
       <div className="bx-mbuy" role="group" aria-label="Buy cover">
@@ -1397,8 +1403,8 @@ export function MyProtections({ go }: { go: Go }) {
   const simple = useViewMode()[0] === 'simple';
   const assetClass = simple ? 'fx' : assetClassChosen;
   // Running cover first, soonest to end at the top; ended cover most recent first.
-  const running = all.filter((h) => h.settlement.status === 'pending').sort((x, y) => Number(x.position.expiry) - Number(y.position.expiry));
-  const ended = all.filter((h) => h.settlement.status !== 'pending').sort((x, y) => Number(y.position.expiry) - Number(x.position.expiry));
+  const running = all.filter((h) => isOpen(h.settlement.status)).sort((x, y) => Number(x.position.expiry) - Number(y.position.expiry));
+  const ended = all.filter((h) => !isOpen(h.settlement.status)).sort((x, y) => Number(y.position.expiry) - Number(x.position.expiry));
   const [view, setView] = useState<'active' | 'ended' | null>(null);
   const showing = view ?? (running.length || !ended.length ? 'active' : 'ended');
   const rows = showing === 'active' ? running : ended;
