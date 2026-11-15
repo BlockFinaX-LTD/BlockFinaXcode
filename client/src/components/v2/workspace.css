@@ -1294,3 +1294,14 @@
   .bx-trade .bx-tpanel .bx-until .bx-pills { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
   .bx-trade .bx-tpanel .bx-until .bx-pill { font-size: 10.5px; padding: 2px 0; }
 }
+
+/* Cover table under the buy form: pair and kind; on phones a second line with amount, cost and date. */
+.bx-tcov { display: flex; flex-direction: column; min-width: 0; }
+.bx-tcov .n { font-weight: 600; }
+.bx-tcov .d { display: none; font-size: 11.5px; color: var(--muted); }
+.bx-ctabs-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-left: 6px; vertical-align: 2px; }
+@media (max-width: 860px) {
+  .bx-trade .bx-covers .bx-trow { padding-top: 8px; padding-bottom: 8px; min-height: 52px; }
+  .bx-trade .bx-tcov .d { display: block; }
+  .bx-trade .bx-covers .bx-trow .bx-btn.small { min-height: 30px; padding: 5px 10px; font-size: 12px; }
+}

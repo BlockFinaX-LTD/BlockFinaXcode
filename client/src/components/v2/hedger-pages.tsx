@@ -371,35 +371,45 @@ function CoverTable({ pair, go, spot }: { pair: string; go: Go; spot: number | u
   const mine = (hedges.data ?? []).filter((h) => h.pair === pair);
   const running = mine.filter((h) => h.settlement.status === 'pending');
   const ended = mine.filter((h) => h.settlement.status !== 'pending');
-  const [tab, setTab] = useState<'active' | 'ended'>('active');
-  const rows = tab === 'active' ? running : ended;
-  const cols = { gridTemplateColumns: 'minmax(0, 1.3fr) repeat(5, minmax(0, 1fr))' };
+  const waiting = ended.filter((h) => h.settlement.status === 'settled_claimable').length;
+  const [tab, setTab] = useState<'active' | 'ended' | null>(null);
+  // Open on Ended when a payout is waiting to be received, so it is not missed.
+  const showing = tab ?? (waiting ? 'ended' : 'active');
+  const rows = showing === 'active' ? running : ended;
+  const cols = { gridTemplateColumns: 'minmax(0, 1.4fr) repeat(6, minmax(0, 1fr))' };
   return (
     <div className="bx-covers">
       <div className="bx-ctabs" role="tablist">
-        <button role="tab" aria-selected={tab === 'active'} className={tab === 'active' ? 'on' : ''} onClick={() => setTab('active')}>Active ({running.length})</button>
-        <button role="tab" aria-selected={tab === 'ended'} className={tab === 'ended' ? 'on' : ''} onClick={() => setTab('ended')}>Ended ({ended.length})</button>
+        <button role="tab" aria-selected={showing === 'active'} className={showing === 'active' ? 'on' : ''} onClick={() => setTab('active')}>Active ({running.length})</button>
+        <button role="tab" aria-selected={showing === 'ended'} className={showing === 'ended' ? 'on' : ''} onClick={() => setTab('ended')}>Ended ({ended.length}){waiting ? <span className="bx-ctabs-dot" aria-label={`${waiting} payout ready`} /> : null}</button>
         <button className="bx-ctabs-link" onClick={() => go('h-protections')}>All markets</button>
       </div>
-      <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 640 }}>
-        <div className="bx-thead" style={cols}><span>{hint('Cover')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Protection limit')}</span><span className="r">{hint('Expires')}</span><span className="r">{hint(tab === 'active' ? 'Payout today' : 'Payout')}</span></div>
+      <div style={{ overflowX: 'auto' }}><div style={{ minWidth: 700 }}>
+        <div className="bx-thead" style={cols}><span>{hint('Cover')}</span><span className="r">{hint('Protected')}</span><span className="r">{hint('Cost')}</span><span className="r">{hint('Strike')}</span><span className="r">{hint('Protection limit')}</span><span className="r">{hint('Expires')}</span><span className="r">{hint(showing === 'active' ? 'Payout today' : 'Payout')}</span></div>
         {hedges.isLoading ? <Loading /> : !rows.length ? (
-          <div className="bx-tempty">{tab === 'active' ? 'No active cover on this market yet.' : 'No ended cover on this market.'}</div>
-        ) : rows.map(({ position: p, settlement: s }) => (
-          <div key={markKey(p)} className="bx-trow" style={cols} role="button" tabIndex={0}
-            onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(ev) => { if (ev.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
-            <span className={p.direction === 'up' ? 'up' : 'down'}>{p.direction === 'up' ? 'Up cover' : 'Down cover'}{p.structure === 'open' ? ', Open' : ''}</span>
-            <span className="r num">${fmt(p.notional, 0)}</span>
-            <span className="r num">{fmtRate(p.strike)}</span>
-            <span className="r num">{p.structure === 'open' ? '-' : fmtRate(p.cap)}</span>
-            <span className="r num">{dateOf(p.expiry)}</span>
-            <span className="r num">
-              {s.status === 'settled_claimable'
-                ? <button className="bx-btn small" disabled={busy === s.position} onClick={(ev) => { ev.stopPropagation(); void claim(s.position); }}>{busy === s.position ? <Spin /> : `Receive $${fmt(s.netPayout)}`}</button>
-                : s.status === 'pending' ? `$${fmt(payoutToday(p, spot) ?? 0)}` : s.status === 'claimed' ? `$${fmt(s.netPayout)}` : '$0.00'}
-            </span>
-          </div>
-        ))}
+          <div className="bx-tempty">{showing === 'active' ? 'No active cover on this market yet.' : 'No ended cover on this market.'}</div>
+        ) : rows.map(({ position: p, settlement: s }) => {
+          const cost = Number(p.premium) + Number(p.fee);
+          return (
+            <div key={markKey(p)} className="bx-trow" style={cols} role="button" tabIndex={0}
+              onClick={() => go('pair', { pair, position: markKey(p) })} onKeyDown={(ev) => { if (ev.key === 'Enter') go('pair', { pair, position: markKey(p) }); }}>
+              <span className="bx-tcov">
+                <span className="n">{pair} <span className={p.direction === 'up' ? 'up' : 'down'}>{p.direction === 'up' ? 'Up cover' : 'Down cover'}{p.structure === 'open' ? ', Open' : ''}</span></span>
+                <span className="d">${fmt(p.notional, 0)} · cost ${fmt(cost)} · {s.status === 'pending' ? 'ends' : 'ended'} {dateOf(p.expiry)}</span>
+              </span>
+              <span className="r num">${fmt(p.notional, 0)}</span>
+              <span className="r num">${fmt(cost)}</span>
+              <span className="r num">{fmtRate(p.strike)}</span>
+              <span className="r num">{p.structure === 'open' ? '-' : fmtRate(p.cap)}</span>
+              <span className="r num">{dateOf(p.expiry)}</span>
+              <span className="r num">
+                {s.status === 'settled_claimable'
+                  ? <button className="bx-btn small" disabled={busy === s.position} onClick={(ev) => { ev.stopPropagation(); void claim(s.position); }}>{busy === s.position ? <Spin /> : `Receive $${fmt(s.netPayout)}`}</button>
+                  : s.status === 'pending' ? `$${fmt(payoutToday(p, spot) ?? 0)}` : s.status === 'claimed' ? <span className="up">${fmt(s.netPayout)} paid</span> : <span className="muted">No payout</span>}
+              </span>
+            </div>
+          );
+        })}
       </div></div>
     </div>
   );
