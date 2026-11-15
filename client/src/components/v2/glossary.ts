@@ -48,6 +48,8 @@ export const GLOSSARY: Record<string, string> = {
   'Amount': 'The dollar payment or income you are protecting, usually an invoice.',
   'Cost': 'What you paid for this cover: the premium plus the BlockFinaX fee.',
   'Breakeven': 'The rate at which the payout equals what the cover cost.',
+  'Settled at': 'The official rate on the end date, which decided the payout.',
+  'Most it can pay': 'The largest payout this cover can make, if the rate reaches the limit.',
   'Pays up to': 'The most this cover can pay you, if the rate reaches the limit.',
   'You pay': 'The premium plus the BlockFinaX fee, paid once in USDC. Network fees are covered.',
 

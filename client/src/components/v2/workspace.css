@@ -1341,3 +1341,12 @@
   .bx-trade .bx-mstrip .bx-stat .l { font-size: 10.5px; }
   .bx-trade .bx-mstrip .bx-mstrip-chart { width: 32px; height: 32px; }
 }
+
+/* Chart page: the figures under the chart as a small grid. */
+.bx-pairstats-wrap { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.bx-pairstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.bx-pairstats-wrap .bx-pairstats { margin-top: 0; }
+.bx-pairstats > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bx-pairstats span { font-size: 11px; color: var(--muted); }
+.bx-pairstats b { font-size: 14px; font-weight: 600; }
+@media (max-width: 860px) { .bx-pairstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
