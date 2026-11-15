@@ -1283,3 +1283,14 @@
   .bx-trade .bx-tpair .bx-tfield { padding: 0 6px; }
   .bx-trade .bx-tpair .bx-tfield input { font-size: 12px; }
 }
+
+/* Calendar button at the end of the duration row: only where the date box is hidden. */
+.bx-calbtn { display: none; }
+.bx-calbtn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+@media (max-width: 860px) {
+  .bx-trade .bx-tpanel .bx-until > .bx-input { display: none !important; }
+  .bx-trade .bx-tpanel .bx-until .bx-calbtn { display: inline-flex; position: relative; align-items: center; justify-content: center; color: var(--blue); border-color: var(--blue-line); }
+  .bx-trade .bx-tpanel .bx-until .bx-calbtn svg { width: 15px; height: 15px; }
+  .bx-trade .bx-tpanel .bx-until .bx-pills { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+  .bx-trade .bx-tpanel .bx-until .bx-pill { font-size: 10.5px; padding: 2px 0; }
+}

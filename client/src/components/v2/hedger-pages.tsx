@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronUp, LineChart as ChartIcon, Percent, Shield } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronUp, LineChart as ChartIcon, Percent, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CurrencyPool, ProtectionPosition, ProtectionQuote, SettlementResult } from '@shared/domain/types';
 import { durationsOffered, saleMarkup } from '@shared/domain/durations';
@@ -895,25 +895,39 @@ function ProtectUntil({ days, range, onChange }: { days: number | null; range: {
   const today = utcDay(Date.now());
   const picked = days ? today + days : null;
   const weekday = picked !== null ? (picked + 3) % 7 : -1; // Monday is 0
+  const dateProps = {
+    type: 'date',
+    min: isoDay(today + range.minDays),
+    max: isoDay(today + range.maxDays),
+    value: picked !== null ? isoDay(picked) : '',
+    onChange: (ev: { target: { value: string } }) => {
+      const d = utcDay(Date.parse(ev.target.value)) - today;
+      if (Number.isFinite(d) && d >= range.minDays && d <= range.maxDays) onChange(d);
+    },
+    'aria-label': 'Protect until',
+  };
+  // The quick buttons; a date picked from the calendar takes the place of the nearest one,
+  // so the chosen length is always shown and selected.
+  let chips = QUICK_DAYS.map(([d]) => d).filter((d) => d >= range.minDays && d <= range.maxDays);
+  if (days && !chips.includes(days)) {
+    if (!chips.length) chips = [days];
+    else {
+      const nearest = chips.reduce((best, d) => (Math.abs(d - days) < Math.abs(best - days) ? d : best), chips[0]);
+      chips = chips.map((d) => (d === nearest ? days : d)).sort((a, b) => a - b);
+    }
+  }
   return (
     <div className="bx-until">
-      <input
-        className="bx-input num"
-        type="date"
-        style={{ maxWidth: 220 }}
-        min={isoDay(today + range.minDays)}
-        max={isoDay(today + range.maxDays)}
-        value={picked !== null ? isoDay(picked) : ''}
-        onChange={(ev) => {
-          const d = utcDay(Date.parse(ev.target.value)) - today;
-          if (Number.isFinite(d) && d >= range.minDays && d <= range.maxDays) onChange(d);
-        }}
-        aria-label="Protect until"
-      />
+      <input className="bx-input num" style={{ maxWidth: 220 }} {...dateProps} />
       <div className="bx-pills wrap" style={{ marginTop: 8 }}>
-        {QUICK_DAYS.filter(([d]) => d >= range.minDays && d <= range.maxDays).map(([d, label]) => (
-          <button key={d} className={`bx-pill${d === days ? ' on' : ''}`} onClick={() => onChange(d)} aria-label={label}><span className="bx-dl">{label}</span><span className="bx-ds">{d}d</span></button>
+        {chips.map((d) => (
+          <button key={d} className={`bx-pill${d === days ? ' on' : ''}`} onClick={() => onChange(d)} aria-label={`${d} days`}><span className="bx-dl">{d} days</span><span className="bx-ds">{d}d</span></button>
         ))}
+        {/* Where space is tight the date box is hidden and this button opens the calendar instead. */}
+        <label className="bx-pill bx-calbtn" title="Pick a date">
+          <CalendarDays aria-hidden="true" />
+          <input className="num" {...dateProps} />
+        </label>
       </div>
       {weekday >= 5 && <div className="bx-hint" style={{ marginTop: 6 }}>Markets are closed at weekends, so this cover ends on Monday.</div>}
     </div>
