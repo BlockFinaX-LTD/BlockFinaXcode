@@ -410,7 +410,7 @@ function CoverTable({ go }: { go: Go }) {
               <span className="r num">{dateOf(p.expiry)}</span>
               <span className="r num">
                 {s.status === 'settled_claimable'
-                  ? <button className="bx-btn small" disabled={busy === s.position} onClick={(ev) => { ev.stopPropagation(); void claim(s.position); }}>{busy === s.position ? <Spin /> : `Receive $${fmt(s.netPayout)}`}</button>
+                  ? <button className="bx-btn small" disabled={busy === s.position} onClick={(ev) => { ev.stopPropagation(); void claim(s.position); }}>{busy === s.position ? <Spin /> : <><span className="rl">Receive </span><span>${fmt(s.netPayout)}</span></>}</button>
                   : s.status === 'pending' ? `$${fmt(payoutToday(p, spotOf(pair)) ?? 0)}` : s.status === 'claimed' ? <span className="up">${fmt(s.netPayout)} paid</span> : <span className="muted">No payout</span>}
               </span>
             </div>
