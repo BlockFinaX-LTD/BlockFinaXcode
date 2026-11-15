@@ -209,7 +209,14 @@ export function Workspace() {
         <ContactSales />
         <VerifyModal />
         <header className="bx-top">
-          <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
+          {simple ? (
+            <div className="bx-mbrand bx-show-sm"><img src={logoPath} alt="" />BlockFinaX</div>
+          ) : (
+            <div className="bx-roles bx-mroles bx-show-sm" role="group" aria-label="Side">
+              <button className={role === 'hedger' ? 'on' : ''} aria-pressed={role === 'hedger'} onClick={() => switchRole('hedger')}>Hedger</button>
+              <button className={role === 'underwriter' ? 'on' : ''} aria-pressed={role === 'underwriter'} onClick={() => switchRole('underwriter')}>Underwriter</button>
+            </div>
+          )}
           <div className="bx-tbrand bx-hide-sm"><img src={logoPath} alt="" />BlockFinaX{demo && <span className="bx-env">Testnet</span>}</div>
           {!simple && <RoleMenu role={role} onChange={switchRole} />}
           <nav className="bx-topnav bx-hide-sm" aria-label="Main">

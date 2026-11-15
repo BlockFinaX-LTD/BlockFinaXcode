@@ -1359,3 +1359,22 @@
 
 .bx-home-covers { margin: 0 -16px -14px; }
 @media (min-width: 861px) { .bx-home-covers { margin: 0 -16px; } }
+
+/* Home: balance with Deposit beside it. */
+.bx-hero-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.bx-hero-row .bx-btn { flex: none; }
+/* Phones: account and Ask left, Hedger | Underwriter (or the logo) centred, balance right; search full width below. */
+@media (max-width: 860px) {
+  .bx-top { display: grid !important; grid-template-columns: 1fr auto 1fr; grid-template-areas: "left mid right" "search search search"; row-gap: 10px; column-gap: 8px; padding: 10px 12px; align-items: center; }
+  .bx-top > .bx-top-r { display: contents; }
+  .bx-top .bx-top-account { grid-area: left; justify-self: start; display: inline-flex; gap: 6px; }
+  .bx-top .bx-ask-top { grid-area: left; justify-self: start; margin-left: 42px; }
+  .bx-top .bx-mbrand, .bx-top .bx-mroles { grid-area: mid; justify-self: center; }
+  .bx-top .bx-mbrand.bx-show-sm { font-size: 15px; gap: 6px; }
+  .bx-top .bx-mroles.bx-show-sm { display: inline-grid !important; grid-template-columns: auto auto; margin: 0; padding: 3px; border-radius: 10px; }
+  .bx-top .bx-mroles button { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+  .bx-top .bx-balance-pill.bx-show-sm { grid-area: right; justify-self: end; }
+  .bx-top .bx-search { grid-area: search; order: 0; max-width: none; padding: 9px 14px; border-radius: 10px; }
+  .bx-top .bx-search input { font-size: 14px; }
+  .bx-hero-row .bx-btn { min-height: 40px; padding: 8px 18px; border-radius: 8px; }
+}
