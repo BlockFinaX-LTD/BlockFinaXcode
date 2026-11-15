@@ -1340,6 +1340,16 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 
       <CoverTable pair={pair} go={go} spot={spot.data} />
 
+      {/* Phones: Buy buttons fixed under the prices and the chart; each opens the Buy tab on that side. */}
+      <div className="bx-mbuy" role="group" aria-label="Buy cover">
+        {(['up', 'down'] as Direction[]).map((d) => (
+          <button key={d} className={`bx-btn${d === 'up' ? '' : ' ghost'}`} disabled={!directions.includes(d)}
+            onClick={() => { setDirection(d); setPhoneSection('buy'); window.scrollTo(0, 0); }}>
+            Buy {d === 'up' ? 'Up' : 'Down'} cover
+          </button>
+        ))}
+      </div>
+
       <aside className="bx-tpanel" aria-label="Protect" ref={panelRef}>
         <div className="bx-buy">
           {panelBody}

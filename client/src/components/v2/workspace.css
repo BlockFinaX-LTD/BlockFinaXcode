@@ -1184,3 +1184,15 @@
   .bx-li.bx-li-m .bx-flag svg { width: 32px; height: 32px; }
 }
 @media (max-width: 860px) { .bx-hide-phone { display: none !important; } .bx-li.bx-li-m > .m-zero { display: none !important; } }
+
+/* Phones: Buy buttons fixed above the tab bar on the Prices and Chart tabs. */
+.bx-mbuy { display: none; }
+@media (max-width: 860px) {
+  .bx-trade.m-prices .bx-mbuy, .bx-trade.m-chart .bx-mbuy {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: fixed; left: 0; right: 0;
+    bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 30; padding: 8px 12px;
+    background: var(--panel); border-top: 1px solid var(--line);
+  }
+  .bx-mbuy .bx-btn { min-height: 44px; font-size: 14px; border-radius: 8px; }
+  .bx-main.bx-trade.m-prices, .bx-main.bx-trade.m-chart { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+}
