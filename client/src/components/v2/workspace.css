@@ -1356,3 +1356,6 @@
 .bx-covers .bx-trow.sel { background: var(--blue-soft); }
 .bx-covers-card { padding: 0 !important; overflow: hidden; }
 .bx-covers .r { text-align: right; }
+
+.bx-home-covers { margin: 0 -16px -14px; }
+@media (min-width: 861px) { .bx-home-covers { margin: 0 -16px; } }
