@@ -159,7 +159,18 @@ export function UnderwriterHome({ go }: { go: Go }) {
 
   return (
     <main className="bx-main bx-desk">
-      <div className="bx-mstrip bx-desk-strip">
+      <div className="bx-card bx-uhero bx-only-phone">
+        <div className="bx-hero-row">
+          <div><div className="bx-hero-k">Capital committed</div><div className="bx-hero-v num">${fmt(committed)}</div></div>
+          <button className="bx-btn" onClick={() => go('u-pools')}>Add liquidity</button>
+        </div>
+        <div className="bx-strip">
+          <div><div className="k">{hint('Premium earned')}</div><div className={`v num${earned > 0 ? ' up' : ''}`}>{earned > 0 ? '+' : ''}${fmt(earned)}</div></div>
+          <div><div className="k">{hint('Return')}</div><div className="v num">{committed > 0 ? pct(earned / committed) : '-'}</div></div>
+          <div><div className="k">{hint('Available')}</div><div className="v num">${fmt(available, 0)}</div></div>
+        </div>
+      </div>
+      <div className="bx-mstrip bx-desk-strip bx-hide-phone">
         <div className="bx-desk-title"><span className="n">Underwriting</span><span className="s">USDC across {yours.length} pool{yours.length === 1 ? '' : 's'}</span></div>
         <div className="bx-stat"><span className="l">{hint('Capital committed')}</span><span className="v num">${fmt(committed)}</span></div>
         <div className="bx-stat"><span className="l">{hint('Premium earned')}</span><span className={`v num ${earned > 0 ? 'up' : ''}`}>{earned > 0 ? '+' : ''}${fmt(earned)}</span></div>
@@ -178,7 +189,7 @@ export function UnderwriterHome({ go }: { go: Go }) {
           {pools.isLoading ? <Loading /> : !yours.length ? <div className="bx-tempty">No capital committed yet. <button className="bx-link" onClick={() => go('u-pools')}>Add liquidity to a pool</button> or <button className="bx-link" onClick={() => go('u-create')}>create one</button>.</div> : <PoolRows pools={yours} stakes={stakes} go={go} />}
         </div>
       </section>
-      <aside className="bx-aside">
+      <aside className="bx-aside bx-hide-phone">
         <div className="bx-card">
           <div className="bx-pane-h"><span>{hint('Capital releases')}</span></div>
           {!upcoming.length ? <div className="bx-tempty">Nothing reserved right now.</div> : (
@@ -343,11 +354,11 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
   return (
     <div className="bx-card">
       <div className="bx-card-h" style={{ alignItems: 'flex-end' }}>
-        <div><h2>Tenor pricing</h2><div className="sub">BlockFinaX calculates the fair price. {editable ? 'You set your offer.' : "The pool's creator sets the offer."} All tenors share this pool's liquidity.{range ? ` This pool sells any day from ${range.minDays} to ${range.maxDays}; the durations below are price points, and prices between them are blended.` : ''}</div></div>
+        <div><h2>Pricing</h2><div className="sub">BlockFinaX calculates the fair price. {editable ? 'You set your offer.' : "The pool's creator sets the offer."} All tenors share this pool's liquidity.{range ? ` This pool sells any day from ${range.minDays} to ${range.maxDays}; the durations below are price points, and prices between them are blended.` : ''}</div></div>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ minWidth: 640 }}>
-          <div className="bx-list-h" style={cols}><span>{hint("Tenor")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Offer")}</span><span className="r">{hint("Difference")}</span><span className="r">Filled</span><span className="r">{hint("Active cover")}</span><span className="r">On</span></div>
+          <div className="bx-list-h bx-ptab" style={cols}><span>{hint("Duration")}</span><span className="r">{hint("Fair price")}</span><span className="r">{hint("Offer")}</span><span className="r">{hint("Difference")}</span><span className="r">Filled</span><span className="r">{hint("Active cover")}</span><span className="r">On</span></div>
           {days.map((d) => {
             const t = pool.tenors.find((x) => x.tenorDays === d);
             const f = fairOf(d);
@@ -361,7 +372,7 @@ function TenorPricing({ pool, editable }: { pool: CurrencyPool; editable: boolea
             const edited = offers[d] !== undefined;
             const changed = !t || (edited && newMarkup !== t.markupBps);
             return (
-              <div key={d} className="bx-li" style={cols}>
+              <div key={d} className="bx-li bx-ptab" style={cols}>
                 <span style={{ fontWeight: 600 }}>{d} {d === 1 ? 'day' : 'days'}</span>
                 <span className="r num" style={{ color: 'var(--text-2)' }}>{f ? pct(f / 1e6) : fair.isLoading ? '...' : '-'}</span>
                 <span className="r">{editable ? <label className="bx-mini-input"><input aria-label={`Offer for ${d} days`} value={offer} onChange={(e) => setOffers((o) => ({ ...o, [d]: e.target.value.replace(/[^0-9.]/g, '') }))} /><span className="muted">%</span></label> : <span className="num" style={{ fontWeight: 600 }}>{offer}%</span>}</span>
@@ -463,16 +474,16 @@ function SideTerms({ pool, editable }: { pool: CurrencyPool; editable: boolean }
           : 'The most this pool will have set aside for running cover at once. 0 means no limit beyond the money in the pool.'}</div></div>
         {editable && dirty && <button className="bx-btn small" disabled={busy || !valid} onClick={save}>{busy ? <Spin /> : 'Save'}</button>}
       </div>
-      <div className="bx-list-h" style={cols}><span /> {sides.map((d) => <span key={d} className="r">{exposureLabel(pool.pair, d).kind}</span>)}</div>
-      <div className="bx-li" style={cols}><span>Set aside now</span>{sides.map((d) => <span key={d} className="r num">${fmt(held[d], 0)}</span>)}</div>
-      <div className="bx-li" style={cols}><span>Most to set aside (0 = no limit)</span>{sides.map((d) => (
+      <div className="bx-list-h bx-kv" style={cols}><span /> {sides.map((d) => <span key={d} className="r">{exposureLabel(pool.pair, d).kind}</span>)}</div>
+      <div className="bx-li bx-kv" style={cols}><span>Set aside now</span>{sides.map((d) => <span key={d} className="r num">${fmt(held[d], 0)}</span>)}</div>
+      <div className="bx-li bx-kv" style={cols}><span>Most to set aside (0 = no limit)</span>{sides.map((d) => (
         <span key={d} className="r">{editable ? <label className="bx-mini-input"><span className="muted">$</span><input aria-label={`Limit for ${exposureLabel(pool.pair, d).kind}`} value={d === 'up' ? upMax : downMax} onChange={(e) => (d === 'up' ? setUpMax : setDownMax)(e.target.value.replace(/[^0-9.]/g, ''))} /></label> : <span className="num">{Number(d === 'up' ? upMax : downMax) > 0 ? `$${fmt(d === 'up' ? upMax : downMax, 0)}` : 'No limit'}</span>}</span>
       ))}</div>
-      {two && <div className="bx-li" style={cols}><span>Price, % of your tenor offer</span>{sides.map((d) => (
+      {two && <div className="bx-li bx-kv" style={cols}><span>Price, % of your tenor offer</span>{sides.map((d) => (
         <span key={d} className="r">{editable ? <label className="bx-mini-input"><input aria-label={`Price for ${exposureLabel(pool.pair, d).kind}`} value={d === 'up' ? upPct : downPct} onChange={(e) => (d === 'up' ? setUpPct : setDownPct)(e.target.value.replace(/[^0-9.]/g, ''))} /><span className="muted">%</span></label> : <span className="num">{d === 'up' ? upPct : downPct}%</span>}</span>
       ))}</div>}
       {[0.1, 0.3].map((m) => (
-        <div key={m} className="bx-li" style={cols}><span>Pays out if the rate moves {m * 100}%</span>{sides.map((d) => <span key={d} className="r num">${fmt(payIf(d, m), 0)}</span>)}</div>
+        <div key={m} className="bx-li bx-kv" style={cols}><span>Pays out if the rate moves {m * 100}%</span>{sides.map((d) => <span key={d} className="r num">${fmt(payIf(d, m), 0)}</span>)}</div>
       ))}
       <div className="sub" style={{ marginTop: 8 }}>Moves are measured from the rate each cover was bought at.{two ? ' A side priced at 120% charges 1.2 times your tenor offer for that side, up to the pair ceiling.' : ''}</div>
     </div>
@@ -993,14 +1004,14 @@ export function RiskPage({ go, poolRef: initial }: { go: Go; poolRef: string | n
           <div className="bx-card-h"><div className="bx-who"><Flag pair={pool.pair} /><div><div className="t">{poolName(pool)}</div><div className="d">{pool.pair}</div></div></div>{all.length > 1 && <PoolPicker pools={all} value={ref} onChange={setRef} />}</div>
           <div style={{ marginTop: 16 }}><Bar parts={[{ label: 'Reserved', v: reserved, c: '#1f5fe0' }, { label: 'Available', v: available, c: '#bcd0ff' }, { label: 'Held back', v: held, c: '#dfe3ea' }]} /></div>
         </div>
-        <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Active exposure by tenor</h2>{byTenor.size ? <Bar parts={Array.from(byTenor.entries()).sort(([a], [b]) => a - b).map(([d, v], i) => ({ label: `${d} days`, v, c: colors[i % colors.length] }))} /> : <div className="bx-empty">No active cover.</div>}</div>
-        <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Active exposure by protection type</h2>{positions.length ? <Bar parts={[{ label: 'Limited', v: byType.capped, c: '#1f5fe0' }, { label: 'Open', v: byType.open, c: '#0f1729' }]} /> : <div className="bx-empty">No active cover.</div>}</div>
+        <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Exposure by duration</h2>{byTenor.size ? <Bar parts={Array.from(byTenor.entries()).sort(([a], [b]) => a - b).map(([d, v], i) => ({ label: `${d} days`, v, c: colors[i % colors.length] }))} /> : <div className="bx-empty">No active cover.</div>}</div>
+        <div className="bx-card"><h2 style={{ marginBottom: 14 }}>Exposure by cover type</h2>{positions.length ? <Bar parts={[{ label: 'Limited', v: byType.capped, c: '#1f5fe0' }, { label: 'Open', v: byType.open, c: '#0f1729' }]} /> : <div className="bx-empty">No active cover.</div>}</div>
       </section>
       <aside className="bx-aside">
         <div className="bx-card tight">
           <h2 style={{ marginBottom: 4 }}>Upcoming capital releases</h2>
           {!releases.length ? <div className="bx-empty">Nothing reserved right now.</div> : releases.map(([day, amount]) => (
-            <div key={day} className="bx-mini"><span className="bx-ic"><CalendarDays aria-hidden="true" /></span><div className="grow"><div className="t num">${fmt(amount, 0)}</div><div className="d">in {inDays(day)} days</div></div><span className="muted" style={{ fontSize: 13 }}>{shortDate(day)}</span></div>
+            <div key={day} className="bx-mini"><span className="bx-ic"><CalendarDays aria-hidden="true" /></span><div className="grow"><div className="t num">${fmt(amount, 0)}</div><div className="d">{inDays(day) <= 0 ? 'today' : `in ${inDays(day)} days`}</div></div><span className="muted" style={{ fontSize: 13 }}>{shortDate(day)}</span></div>
           ))}
         </div>
         <button className="bx-btn ghost" onClick={() => go('u-pool', { pool: poolRef(pool) })}>Open pool</button>

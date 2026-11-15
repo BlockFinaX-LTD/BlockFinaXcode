@@ -1378,3 +1378,36 @@
   .bx-top .bx-search input { font-size: 14px; }
   .bx-hero-row .bx-btn { min-height: 40px; padding: 8px 18px; border-radius: 8px; }
 }
+
+@media (max-width: 860px) {
+  /* The profile button takes the left slot; no balance on the right. */
+  .bx-top .bx-mavatar.bx-show-sm { display: inline-grid !important; place-items: center; grid-area: left; justify-self: start; width: 34px; height: 34px; font-size: 12px; }
+  .bx-top .bx-mavatar.on { box-shadow: inset 0 0 0 1.5px var(--blue); }
+  .bx-top .bx-balance-pill { display: none !important; }
+}
+
+/* Phone-only blocks; underwriter pages leave room for the tab bar. */
+.bx-only-phone { display: none; }
+@media (max-width: 860px) {
+  .bx-only-phone { display: block; }
+  .bx-desk > .bx-uhero { grid-column: 1 / -1; }
+  .bx-main.bx-desk.bx-desk { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .bx-desk .bx-aside > .bx-btn { margin: 12px 16px; }
+}
+@media (max-width: 860px) {
+  /* Pool page tables stay as one-line rows on phones. */
+  .bx-li.bx-kv, .bx-list-h.bx-kv { display: grid !important; padding: 10px 0 !important; }
+  .bx-li.bx-kv > :first-child { grid-column: auto; }
+  .bx-li.bx-kv > .r { text-align: right; }
+  .bx-li.bx-kv > [data-label]::before { display: none; }
+  .bx-list-h.bx-ptab, .bx-li.bx-ptab { display: grid !important; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1fr) 48px !important; gap: 6px; padding: 8px 0 !important; align-items: center; }
+  .bx-list-h.bx-ptab > :nth-child(2), .bx-list-h.bx-ptab > :nth-child(4), .bx-li.bx-ptab > :nth-child(2), .bx-li.bx-ptab > :nth-child(4) { display: none !important; }
+  .bx-li.bx-ptab > * { grid-column: auto !important; flex: none; position: static !important; text-align: right; font-size: 12px; }
+  .bx-li.bx-ptab > :first-child { text-align: left; font-size: 13px; }
+  .bx-li.bx-ptab > [data-label]::before { display: none; }
+  .bx-li.bx-ptab .muted { display: none; }
+  .bx-list-h.bx-ptab { font-size: 10.5px; }
+  .bx-list-h.bx-ptab > * { text-align: right; }
+  .bx-list-h.bx-ptab > :first-child { text-align: left; }
+}
+@media (max-width: 860px) { .bx-main.bx-desk, .bx-desk > .bx-col, .bx-desk > .bx-full { background: transparent; } .bx-desk > .bx-col { gap: 8px; } }

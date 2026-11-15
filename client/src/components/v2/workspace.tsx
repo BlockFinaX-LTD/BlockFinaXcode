@@ -231,8 +231,8 @@ export function Workspace() {
             <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>
             {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             <button className="bx-ask-top bx-show-sm" aria-label="Ask Finax" data-tour="ask" onClick={() => window.dispatchEvent(new Event('bfx:ask-open'))}><MessageCircle /></button>
-            <button className="bx-balance-pill num bx-show-sm" data-tour="balance" onClick={() => go('wallet')}>${fmt(balances.data?.total, 2)}</button>
-            <span className="bx-top-account"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
+            <span className="bx-top-account bx-hide-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
+            <button className={`bx-avatar bx-mavatar bx-show-sm${page === 'account' ? ' on' : ''}`} aria-label="Profile" onClick={() => go('account')}>{initialsOf(session?.user.name ?? session?.user.email ?? '')}</button>
           </div>
         </header>
 
@@ -275,12 +275,6 @@ export function Workspace() {
         <div className="bx-sheet-bg" onClick={() => setMore(false)}>
           <div className="bx-sheet" role="dialog" aria-label="More" onClick={(e) => e.stopPropagation()}>
             <ViewSwitch mode={viewMode} onChange={(v) => { setViewMode(v); setMore(false); }} />
-            {!simple && (
-              <div className="bx-roles">
-                <button className={role === 'hedger' ? 'on' : ''} onClick={() => { switchRole('hedger'); setMore(false); }}>Hedger</button>
-                <button className={role === 'underwriter' ? 'on' : ''} onClick={() => { switchRole('underwriter'); setMore(false); }}>Underwriter</button>
-              </div>
-            )}
             {nav.filter((n) => !tabs.includes(n.page)).map((n) => (
               <button key={n.page} className={`bx-nav${page === n.page ? ' on' : ''}`} onClick={() => goTab(n.page)}>{n.icon}{n.label}</button>
             ))}
@@ -387,4 +381,10 @@ function RoleMenu({ role, onChange }: { role: Role; onChange: (r: Role) => void 
       )}
     </div>
   );
+}
+
+/** Up to two initials for the profile button. */
+function initialsOf(name: string) {
+  const parts = name.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
 }
