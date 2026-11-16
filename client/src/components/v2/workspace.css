@@ -1411,3 +1411,10 @@
   .bx-list-h.bx-ptab > :first-child { text-align: left; }
 }
 @media (max-width: 860px) { .bx-main.bx-desk, .bx-desk > .bx-col, .bx-desk > .bx-full { background: transparent; } .bx-desk > .bx-col { gap: 8px; } }
+
+/* Rates: liquidity per pair (Up and Down together). Its own column on desktop, under the name on phones. */
+.bx-rliq-m { display: none; }
+@media (max-width: 860px) {
+  .bx-ratelist .bx-li > .bx-rliq { display: none; }
+  .bx-rliq-m { display: inline; }
+}
