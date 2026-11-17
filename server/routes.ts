@@ -16,7 +16,7 @@ import { registerSalesRoutes } from "./routes/sales";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { generalApiLimiter, financialMutationLimiter, walletLimiter } from "./middleware/rate-limiter";
+import { generalApiLimiter, ipCeilingLimiter, signInLimiter, financialMutationLimiter, walletLimiter } from "./middleware/rate-limiter";
 import { requireSignature, type AuthenticatedRequest } from "./middleware/signature-auth";
 import { registerAuthRoutes } from "./auth-routes";
 import { registerInvestorRoutes } from "./routes/investor";
@@ -53,7 +53,7 @@ import { registerNotificationRoutes } from "./routes/notifications";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ── Rate limiters ──────────────────────────────────────────────────────────
-  app.use("/api/", generalApiLimiter);
+  app.use("/api/", signInLimiter, ipCeilingLimiter, generalApiLimiter);
   app.use("/api/hedge/", financialMutationLimiter);
   app.use("/api/wallets/", walletLimiter);
 

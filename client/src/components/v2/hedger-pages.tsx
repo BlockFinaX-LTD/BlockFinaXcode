@@ -327,20 +327,26 @@ function PriceLadder({ market, days, limitBps, direction, startBps, spot, onPick
       d, distance, sellers: pools.filter((p) => (p.structures.minStrikeDistanceBps ?? 0) <= distance),
     }));
   });
+  // One request per direction for every step, not one per step.
+  const sides = Array.from(new Set(plan.map((r) => r.d)));
   const fair = useQueries({
-    queries: plan.map((r) => ({
-      queryKey: ['v2-fair', market.pair, r.d, String(days), r.distance, limitBps],
-      enabled: days !== null,
-      staleTime: 60_000,
-      queryFn: () => api<FairTable>(`/api/v2/fair?pair=${encodeURIComponent(market.pair)}&direction=${r.d}&tenors=${days}&distance=${r.distance}&limit=${limitBps}`),
-    })),
+    queries: sides.map((d) => {
+      const distances = plan.filter((r) => r.d === d).map((r) => r.distance);
+      return {
+        queryKey: ['v2-fair-ladder', market.pair, d, String(days), distances.join(','), limitBps],
+        enabled: days !== null,
+        staleTime: 60_000,
+        queryFn: () => api<{ tables: (FairTable & { distance: number })[] }>(`/api/v2/fair?pair=${encodeURIComponent(market.pair)}&direction=${d}&tenors=${days}&distances=${distances.join(',')}&limit=${limitBps}`),
+      };
+    }),
   });
-  const rows = plan.map((r, i) => {
-    const f = fair[i].data?.rows[0]?.fairRateE6 ?? null;
+  const rows = plan.map((r) => {
+    const side = fair[sides.indexOf(r.d)];
+    const f = side?.data?.tables.find((t) => t.distance === r.distance)?.rows[0]?.fairRateE6 ?? null;
     const markups = r.sellers.map((p) => saleMarkup(p, days!, r.d)).filter((m): m is number => m !== null);
     const price = f === null || !markups.length ? null : (f / 1e6) * (Math.min(...markups) / 10000);
     const rate = spot ? spot * (1 + ((r.d === 'up' ? 1 : -1) * r.distance) / 10000) : null;
-    return { ...r, price, rate, loading: fair[i].isLoading };
+    return { ...r, price, rate, loading: Boolean(side?.isLoading) };
   });
   const top = Math.max(0, ...rows.map((r) => r.price ?? 0)) || 1;
   const row = (r: (typeof rows)[number]) => {

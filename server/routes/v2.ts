@@ -216,6 +216,15 @@ export function registerV2Routes(app: Express) {
     }
     // The limit beyond the strike, in bps (1% to 100%); 10% unless asked.
     const limit = Math.min(Math.max(Math.round(Number(req.query.limit ?? 1000)) || 1000, 100), 10_000);
+    // Several starts in one request (the Markets price ladder): one table per distance.
+    if (req.query.distances !== undefined) {
+      const distances = Array.from(new Set(String(req.query.distances).split(",").map(Number)
+        .filter((n) => Number.isFinite(n) && n >= 0 && n <= 5000).map(Math.round))).slice(0, 8);
+      if (!distances.length) throw new ApplicationError("INVALID_REQUEST", "distances must list 1 to 8 values between 0 and 5000");
+      const tables = await Promise.all(distances.map((d) => s.quotes.fairTable(pair, direction, tenors, d, view, limit)));
+      res.json({ tables: tables.map((t, i) => ({ distance: distances[i], ...t })) });
+      return;
+    }
     res.json(await s.quotes.fairTable(pair, direction, tenors, distance, view, limit));
   }));
 
