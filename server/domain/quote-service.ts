@@ -81,8 +81,24 @@ export class QuoteService {
     return { pair, direction, spot: String(spot), reference: { strike: strike.toFixed(6), cap: cap.toFixed(6) }, rows };
   }
 
-  /** Tenors and structures on sale for a pair, optionally for one direction only. */
-  async options(pair: string, direction?: "up" | "down") {
+  /**
+   * Tenors and structures on sale for a pair, optionally for one direction only. The buying
+   * screen waits on this before it can show durations or prices, so each answer is kept for
+   * 20 seconds. The figures are a guide only: a quote checks capacity again when it is made.
+   */
+  private optionsCache = new Map<string, { at: number; value: Promise<Awaited<ReturnType<QuoteService["readOptions"]>>> }>();
+
+  options(pair: string, direction?: "up" | "down") {
+    const key = `${pair}|${direction ?? ""}`;
+    const hit = this.optionsCache.get(key);
+    if (hit && Date.now() - hit.at < 20_000) return hit.value;
+    const value = this.readOptions(pair, direction);
+    this.optionsCache.set(key, { at: Date.now(), value });
+    value.catch(() => this.optionsCache.delete(key)); // a failed read is not kept
+    return value;
+  }
+
+  private async readOptions(pair: string, direction?: "up" | "down") {
     const chain = this.chains.executionNetworkFor();
     const pools = (await this.adapters.adapterFor(chain.key).listPools())
       .filter((p) => p.pair === pair && p.acceptingHedges && poolForSale(p.direction)
@@ -90,17 +106,25 @@ export class QuoteService {
     const rows = new Map<number, { open: boolean; capped: boolean; capacity: number }>();
     // Pools that sell any day in a range: the widest range on sale.
     let range: { minDays: number; maxDays: number } | null = null;
+    const checks: { p: CurrencyPool; tenorDays: number }[] = [];
     for (const p of pools) {
       const offered = durationsOffered(p);
       if (offered.range) range = range ? { minDays: Math.min(range.minDays, offered.range.minDays), maxDays: Math.max(range.maxDays, offered.range.maxDays) } : offered.range;
-      for (const t of p.tenors.filter((x) => x.active && offered.days.includes(x.tenorDays))) {
-        const r = rows.get(t.tenorDays) ?? { open: false, capped: false, capacity: 0 };
-        r.open ||= p.structures.open;
-        r.capped ||= p.structures.capped;
-        r.capacity = Math.max(r.capacity, Number((await this.capacityFor(p, t.tenorDays)) ?? p.liquidity.capacity));
-        rows.set(t.tenorDays, r);
-      }
+      for (const t of p.tenors.filter((x) => x.active && offered.days.includes(x.tenorDays))) checks.push({ p, tenorDays: t.tenorDays });
     }
+    // Each capacity is its own network read: run them side by side, eight at a time.
+    const capacities: number[] = [];
+    for (let i = 0; i < checks.length; i += 8) {
+      capacities.push(...(await Promise.all(checks.slice(i, i + 8).map(async ({ p, tenorDays }) =>
+        Number((await this.capacityFor(p, tenorDays)) ?? p.liquidity.capacity)))));
+    }
+    checks.forEach(({ p, tenorDays }, i) => {
+      const r = rows.get(tenorDays) ?? { open: false, capped: false, capacity: 0 };
+      r.open ||= p.structures.open;
+      r.capped ||= p.structures.capped;
+      r.capacity = Math.max(r.capacity, capacities[i]);
+      rows.set(tenorDays, r);
+    });
     return {
       pair,
       anyDay: range,
