@@ -270,12 +270,17 @@ export class StellarAdapter implements ChainAdapter {
   }
 
   async listActivePositions(poolId: number): Promise<ProtectionPosition[]> {
+    return (await this.listPoolPositions(poolId)).filter((p) => p.status === "active");
+  }
+
+  /** Every position a pool has sold, whatever its status (admin dashboard, oracle engine). */
+  async listPoolPositions(poolId: number): Promise<ProtectionPosition[]> {
     const c = await this.client(this.poolId);
     const total: number = unwrap((await c.get_pool({ pool_id: poolId })).result).position_count;
     const out: ProtectionPosition[] = [];
     for (let start = 0; start < total; start += 50) {
       const page = unwrap((await c.list_pool_positions({ pool_id: poolId, start, limit: 50 })).result);
-      for (const p of page) if (String(p.status?.tag) === "Active") out.push(this.toPosition(p));
+      for (const p of page) out.push(this.toPosition(p));
     }
     return out;
   }

@@ -189,19 +189,21 @@ function ResetTestnetDialog({ token, onReset }: { token: string; onReset: () => 
 
 function DashboardSection() {
   const { token } = useAdminToken();
-  const { data, isLoading, refetch, dataUpdatedAt } = useQuery({ queryKey: ["/api/admin/overview"], queryFn: () => adminFetch("/api/admin/overview", token).then(r => r.json()), refetchInterval: 30000 });
+  const { data, isLoading, isError, error, refetch, dataUpdatedAt } = useQuery({ queryKey: ["/api/admin/v2/overview"], queryFn: async () => { const r = await adminFetch("/api/admin/v2/overview", token); if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error?.message || `Request failed (${r.status})`); return r.json(); }, refetchInterval: 30000 });
   const { data: health } = useQuery({ queryKey: ["/api/admin/health"], queryFn: () => adminFetch("/api/admin/health", token).then(r => r.json()), refetchInterval: 60000 });
 
   if (isLoading) return <LoadingSkeleton />;
-  const s = data as any || {};
-  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—';
+  const s = (data as any) || {};
+  const u = s.users || {}, pl = s.pools || {}, ps = s.positions || {};
+  const usd = (v: number | undefined) => `$${(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '-';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Platform Overview</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Live on-chain data · Last updated {lastUpdated}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Sign-ups from the app, pools and positions read from the Stellar contracts · Last updated {lastUpdated}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
@@ -213,16 +215,19 @@ function DashboardSection() {
           </Badge>
         </div>
       </div>
+      {isError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Could not load the overview: {(error as Error).message}</div>}
+      {s.errors?.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Some chain reads failed, so figures may be incomplete: {s.errors.join("; ")}</div>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={s.totalUsers || 0} sub="Registered wallets" icon={Users} color="text-blue-600" />
-        <StatCard title="Hedge Events" value={s.totalHedgeEvents || 0} sub={`${s.activeHedgeEvents || 0} active`} icon={Shield} color="text-purple-600" />
-        <StatCard title="Tasks" value={s.totalTaskCompletions || 0} sub={`${s.totalPointsAwarded || 0} points awarded`} icon={ListChecks} color="text-orange-600" />
+        <StatCard title="Sign-ups" value={u.total || 0} sub={`${u.last7 || 0} in the last 7 days · ${u.withWallet || 0} with a wallet`} icon={Users} color="text-blue-600" />
+        <StatCard title="Positions" value={ps.total || 0} sub={`${ps.active || 0} running · ${ps.awaitingSettlement || 0} awaiting settlement`} icon={Shield} color="text-purple-600" />
+        <StatCard title="Hedgers" value={ps.hedgers || 0} sub={`${ps.settled || 0} settled · ${ps.claimed || 0} claimed`} icon={Activity} />
+        <StatCard title="Pools" value={pl.total || 0} sub={`${pl.selling || 0} selling · ${pl.underwriters || 0} underwriters`} icon={Layers} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Hedge Positions" value={s.totalPositions || 0} sub={`Premiums: $${parseFloat(s.totalPremiumsCollected || 0).toFixed(2)}`} icon={Shield} />
-        <StatCard title="LP Deposits" value={s.totalLpDeposits || 0} sub={`Liquidity: $${parseFloat(s.totalLiquidity || 0).toFixed(2)}`} icon={Layers} />
-        <StatCard title="Active Events" value={s.activeHedgeEvents || 0} sub="Currently open" icon={Clock} />
-        <StatCard title="Platform Revenue" value={`$${s.hedgeFeeRevenue || "0.00"}`} sub="All hedge fees collected" icon={DollarSign} color="text-green-600" />
+        <StatCard title="Notional covered" value={usd(ps.notional)} sub={`Premiums paid: ${usd(ps.premiums)}`} icon={DollarSign} />
+        <StatCard title="Pool liquidity" value={usd(pl.liquidity)} sub={`Available to sell: ${usd(pl.available)}`} icon={Layers} />
+        <StatCard title="Reserved for payouts" value={usd(pl.reserved)} sub={`Paid out so far: ${usd(ps.payouts)}`} icon={Clock} />
+        <StatCard title="Protocol fees" value={usd(ps.fees)} sub="Charged on positions bought" icon={DollarSign} color="text-green-600" />
       </div>
 
       {/* Danger zone */}
@@ -529,74 +534,40 @@ function UsersSection() {
 
 function HedgeSection() {
   const { token } = useAdminToken();
-  const { data, isLoading, refetch: refetchHedge, dataUpdatedAt: hedgeUpdatedAt } = useQuery({ queryKey: ["/api/admin/hedge"], queryFn: () => adminFetch("/api/admin/hedge", token).then(r => r.json()), refetchInterval: 30000 });
-  const [tab, setTab] = useState<"events" | "positions" | "deposits">("events");
+  const { data, isLoading, isError, error, refetch: refetchHedge, dataUpdatedAt: hedgeUpdatedAt } = useQuery({ queryKey: ["/api/admin/v2/book"], queryFn: async () => { const r = await adminFetch("/api/admin/v2/book", token); if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error?.message || `Request failed (${r.status})`); return r.json(); }, refetchInterval: 30000 });
+  const [tab, setTab] = useState<"positions" | "pools">("positions");
+  const [search, setSearch] = useState("");
 
   if (isLoading) return <LoadingSkeleton />;
-  const { events = [], positions = [], deposits = [] } = (data as any) || {};
+  const { pools = [], positions = [], errors = [] } = (data as any) || {};
+  const term = search.trim().toLowerCase();
+  const shownPositions = positions.filter((p: any) => !term || [p.pair, p.hedger, p.owner?.email, p.owner?.name, p.status, String(p.positionId)].some((v) => v && String(v).toLowerCase().includes(term)));
+  const nowS = Date.now() / 1000;
+  const money = (v: any) => `$${(Number(v) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const date = (t: number) => (t ? new Date(t * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "-");
+  const statusOf = (p: any) => p.status === "active" ? (p.expiry <= nowS ? "awaiting settlement" : "running") : p.status === "settled" ? (Number(p.payout) > 0 ? "payout to claim" : "ended, no payout") : p.status;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Hedge Management</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Live on-chain data · Last updated {hedgeUpdatedAt ? new Date(hedgeUpdatedAt).toLocaleTimeString() : '—'}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Read from the Stellar currency pool contracts · Last updated {hedgeUpdatedAt ? new Date(hedgeUpdatedAt).toLocaleTimeString() : '-'}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetchHedge()} className="gap-1.5">
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
       </div>
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
-        <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-        <span>Hedge events and positions are permanent on-chain records on <strong>Base and BSC Mainnets</strong>. Resetting the platform database does not affect on-chain data.</span>
-      </div>
-      <div className="flex gap-2">
-        {(["events", "positions", "deposits"] as const).map(t => (
+      {isError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Could not load pools and positions: {(error as Error).message}</div>}
+      {errors.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Some chain reads failed, so the lists may be incomplete: {errors.join("; ")}</div>}
+      <div className="flex flex-wrap items-center gap-2">
+        {(["positions", "pools"] as const).map(t => (
           <Button key={t} variant={tab === t ? "default" : "outline"} size="sm" onClick={() => setTab(t)} className="capitalize">
-            {t} ({t === "events" ? events.length : t === "positions" ? positions.length : deposits.length})
+            {t} ({t === "positions" ? positions.length : pools.length})
           </Button>
         ))}
+        {tab === "positions" && <Input placeholder="Search pair, email, wallet or status" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs ml-auto" />}
       </div>
-
-      {tab === "events" && (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="text-left p-3 font-medium">ID</th>
-                    <th className="text-left p-3 font-medium">Pair</th>
-                    <th className="text-left p-3 font-medium">Strike</th>
-                    <th className="text-left p-3 font-medium">Premium</th>
-                    <th className="text-left p-3 font-medium">Token</th>
-                    <th className="text-left p-3 font-medium">Status</th>
-                    <th className="text-left p-3 font-medium hidden md:table-cell">Expiry</th>
-                    <th className="text-left p-3 font-medium hidden md:table-cell">Triggered</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((e: any) => (
-                    <tr key={e.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3">{e.id}</td>
-                      <td className="p-3 font-semibold">{e.underlying}</td>
-                      <td className="p-3 font-mono">{parseFloat(e.strike).toLocaleString()}</td>
-                      <td className="p-3 font-mono text-green-600">{(parseFloat(e.premiumRate) * 100).toFixed(1)}%</td>
-                      <td className="p-3"><TokenBadge address={e.paymentToken} /></td>
-                      <td className="p-3">
-                        <Badge variant={e.status === "open" ? "default" : e.status === "settled" ? "secondary" : "outline"} className="text-xs capitalize">{e.status}</Badge>
-                      </td>
-                      <td className="p-3 text-xs text-gray-500 hidden md:table-cell">{new Date(e.expiryDate).toLocaleDateString()}</td>
-                      <td className="p-3 hidden md:table-cell">{e.triggered ? <CheckCircle className="h-4 w-4 text-red-500" /> : <span className="text-gray-300">-</span>}</td>
-                    </tr>
-                  ))}
-                  {events.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-gray-400">No hedge events</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {tab === "positions" && (
         <Card>
@@ -606,27 +577,33 @@ function HedgeSection() {
                 <thead>
                   <tr className="border-b bg-gray-50">
                     <th className="text-left p-3 font-medium">ID</th>
-                    <th className="text-left p-3 font-medium">Event</th>
+                    <th className="text-left p-3 font-medium">Cover</th>
                     <th className="text-left p-3 font-medium">Hedger</th>
                     <th className="text-left p-3 font-medium">Notional</th>
+                    <th className="text-left p-3 font-medium">Strike</th>
                     <th className="text-left p-3 font-medium">Premium</th>
+                    <th className="text-left p-3 font-medium">Bought</th>
+                    <th className="text-left p-3 font-medium">Expires</th>
                     <th className="text-left p-3 font-medium">Status</th>
-                    <th className="text-left p-3 font-medium hidden md:table-cell">Payout</th>
+                    <th className="text-left p-3 font-medium">Payout</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {positions.map((p: any) => (
-                    <tr key={p.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3">{p.id}</td>
-                      <td className="p-3">#{p.eventId}</td>
-                      <td className="p-3 font-mono text-xs">{shortenAddr(p.hedger || p.hedgerWallet)}</td>
-                      <td className="p-3 font-mono">${parseFloat(p.notional).toFixed(2)}</td>
-                      <td className="p-3 font-mono text-green-600">${parseFloat(p.premiumPaid).toFixed(2)}</td>
-                      <td className="p-3"><Badge variant="outline" className="text-xs capitalize">{p.status}</Badge></td>
-                      <td className="p-3 font-mono hidden md:table-cell">{p.payoutAmount ? `$${parseFloat(p.payoutAmount).toFixed(2)}` : "-"}</td>
+                  {shownPositions.map((p: any) => (
+                    <tr key={p.ref} className="border-b hover:bg-gray-50">
+                      <td className="p-3">{p.positionId}{p.legacy && <span className="text-xs text-gray-400"> (earlier contract)</span>}</td>
+                      <td className="p-3 font-semibold whitespace-nowrap">{p.pair} {p.direction === "up" ? "Up" : "Down"} <span className="text-xs font-normal text-gray-500">{p.structure === "capped" ? "Limited" : "Open"}</span></td>
+                      <td className="p-3 text-xs">{p.owner?.email || p.owner?.name || <span className="font-mono">{shortenAddr(p.hedger)}</span>}</td>
+                      <td className="p-3 font-mono">{money(p.notional)}</td>
+                      <td className="p-3 font-mono">{Number(p.strike).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+                      <td className="p-3 font-mono text-green-600">{money(p.premium)}</td>
+                      <td className="p-3 text-xs text-gray-500 whitespace-nowrap">{date(p.createdAt)}</td>
+                      <td className="p-3 text-xs text-gray-500 whitespace-nowrap">{date(p.expiry)}</td>
+                      <td className="p-3"><Badge variant="outline" className="text-xs whitespace-nowrap">{statusOf(p)}</Badge></td>
+                      <td className="p-3 font-mono">{Number(p.payout) > 0 ? money(p.payout) : "-"}</td>
                     </tr>
                   ))}
-                  {positions.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-gray-400">No positions</td></tr>}
+                  {shownPositions.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-gray-400">No positions</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -634,33 +611,39 @@ function HedgeSection() {
         </Card>
       )}
 
-      {tab === "deposits" && (
+      {tab === "pools" && (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-gray-50">
-                    <th className="text-left p-3 font-medium">ID</th>
-                    <th className="text-left p-3 font-medium">Event</th>
-                    <th className="text-left p-3 font-medium">LP Wallet</th>
-                    <th className="text-left p-3 font-medium">Amount</th>
-                    <th className="text-left p-3 font-medium">Premiums Earned</th>
-                    <th className="text-left p-3 font-medium">Withdrawn</th>
+                    <th className="text-left p-3 font-medium">Pool</th>
+                    <th className="text-left p-3 font-medium">Pair</th>
+                    <th className="text-left p-3 font-medium">Covers</th>
+                    <th className="text-left p-3 font-medium">Creator</th>
+                    <th className="text-left p-3 font-medium">Liquidity</th>
+                    <th className="text-left p-3 font-medium">Reserved</th>
+                    <th className="text-left p-3 font-medium">Available</th>
+                    <th className="text-left p-3 font-medium">Running</th>
+                    <th className="text-left p-3 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {deposits.map((d: any) => (
-                    <tr key={d.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3">{d.id}</td>
-                      <td className="p-3">#{d.eventId}</td>
-                      <td className="p-3 font-mono text-xs">{shortenAddr(d.lp || d.lpWallet)}</td>
-                      <td className="p-3 font-mono">${parseFloat(d.amount).toFixed(2)}</td>
-                      <td className="p-3 font-mono text-green-600">${parseFloat(d.premiumsEarned || 0).toFixed(2)}</td>
-                      <td className="p-3">{d.withdrawn ? <Badge variant="secondary" className="text-xs">Yes</Badge> : <span className="text-gray-300">No</span>}</td>
+                  {pools.map((p: any) => (
+                    <tr key={p.ref} className="border-b hover:bg-gray-50">
+                      <td className="p-3">{p.poolId}{p.legacy && <span className="text-xs text-gray-400"> (earlier contract)</span>}</td>
+                      <td className="p-3 font-semibold">{p.pair}</td>
+                      <td className="p-3">{p.direction === "both" ? "Up and Down" : p.direction === "up" ? "Up" : "Down"}</td>
+                      <td className="p-3 font-mono text-xs">{shortenAddr(p.creator)}</td>
+                      <td className="p-3 font-mono">{money(p.nav)}</td>
+                      <td className="p-3 font-mono">{money(p.reserved)}</td>
+                      <td className="p-3 font-mono">{money(p.capacity)}</td>
+                      <td className="p-3">{p.activePositions}</td>
+                      <td className="p-3"><Badge variant={p.acceptingHedges && !p.legacy ? "default" : "outline"} className="text-xs">{p.legacy ? "Closed" : p.acceptingHedges ? "Selling" : "Paused"}</Badge></td>
                     </tr>
                   ))}
-                  {deposits.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-gray-400">No LP deposits</td></tr>}
+                  {pools.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-gray-400">No pools</td></tr>}
                 </tbody>
               </table>
             </div>

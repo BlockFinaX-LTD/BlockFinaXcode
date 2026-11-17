@@ -28,6 +28,7 @@ import { hedgePairs } from "@shared/domain/hedge-pairs";
 import { ApplicationError, parseResourceId, type ApplicationErrorCode, type ChainKey, type CurrencyPool, type ProtectionPosition, type ProtectionQuote, type ProtectionRequest } from "@shared/domain/types";
 import { AdapterRegistry } from "../chain";
 import { chainRegistry, registryLoadError } from "../chain/config";
+import { registerAdminV2Routes } from "./admin-v2";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
 import { QuoteService, enginePricer } from "../domain/quote-service";
 import { settlementResult } from "../domain/settlement";
@@ -167,6 +168,8 @@ function poolMeta(chain: string, adapter: { getPool(id: number): Promise<Currenc
 }
 
 export function registerV2Routes(app: Express) {
+  // Admin dashboard figures from the Stellar pools and positions (server/routes/admin-v2.ts).
+  registerAdminV2Routes(app, async () => (await getServices()).adapters);
   // Request a quote acts on personal accounts only, for now: refuse rather than quietly use one.
   app.use("/api/v2/rfq", (req, res, next) =>
     req.header("x-bfx-organisation")

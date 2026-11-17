@@ -94,6 +94,8 @@ export interface ChainAdapter {
   listPositions(owner: string): Promise<ProtectionPosition[]>;
   /** Positions in a pool that are still active, for the oracle engine. */
   listActivePositions(poolId: number): Promise<ProtectionPosition[]>;
+  /** Every position in a pool, whatever its status. Stellar only, for the admin dashboard. */
+  listPoolPositions?(poolId: number): Promise<ProtectionPosition[]>;
   getBalance(owner: string, symbol: string): Promise<string>;
   getOracleState(positionId: number): Promise<OracleRoundState>;
 
