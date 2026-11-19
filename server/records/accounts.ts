@@ -54,20 +54,23 @@ async function existing(db: Db, names: string[]): Promise<Set<string>> {
  */
 export async function listAccounts(search = "", limit = 200) {
   const db = await getDb();
-  const has = await existing(db, ["auth_sessions", "chain_wallet_accounts", "webauthn_credentials", "legal_acceptances", "business_account_members", "user_profiles"]);
+  const has = await existing(db, ["auth_sessions", "chain_wallet_accounts", "webauthn_credentials", "wallet_passkeys", "account_onboarding", "legal_acceptances", "business_account_members", "user_profiles"]);
   const q = `%${search.trim().toLowerCase()}%`;
+  const onb = has.has("account_onboarding");
   const withWallets = has.has("chain_wallet_accounts");
   const withProfiles = has.has("user_profiles") && withWallets;
   const { rows: list } = await db.query(`
     SELECT u.id, u.email, u.created_at,
-           COALESCE(NULLIF(u.name, ''), NULLIF(p.display_name, ''), NULLIF(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), '')) AS name,
-           p.country, p.kyc_tier,
+           COALESCE(${onb ? "NULLIF(o.full_name, ''), " : ""}NULLIF(u.name, ''), NULLIF(p.display_name, ''), NULLIF(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), '')) AS name,
+           COALESCE(${onb ? "o.country, " : ""}p.country) AS country, p.kyc_tier,
            ${has.has("auth_sessions") ? "(SELECT max(s.created_at) FROM auth_sessions s WHERE s.user_id = u.id)" : "NULL"} AS last_sign_in,
            ${withWallets ? "(SELECT w.address FROM chain_wallet_accounts w WHERE w.user_id = u.id AND w.status = 'active' ORDER BY w.id LIMIT 1)" : "NULL"} AS wallet,
-           ${has.has("webauthn_credentials") ? "(SELECT count(*)::int FROM webauthn_credentials c WHERE c.user_id = u.id)" : "0"} AS passkeys,
+           (${has.has("wallet_passkeys") ? "(SELECT count(*)::int FROM wallet_passkeys k WHERE k.user_id = u.id)" : "0"}
+             + ${has.has("webauthn_credentials") ? "(SELECT count(*)::int FROM webauthn_credentials c WHERE c.user_id = u.id)" : "0"}) AS passkeys,
            ${has.has("legal_acceptances") ? "(SELECT max(l.accepted_at) FROM legal_acceptances l WHERE l.user_id = u.id)" : "NULL"} AS terms_accepted_at,
            ${has.has("business_account_members") ? "(SELECT count(*)::int FROM business_account_members m WHERE m.user_id = u.id AND m.status = 'active')" : "0"} AS businesses
     FROM user_accounts u
+    ${onb ? "LEFT JOIN account_onboarding o ON o.user_id = u.id" : ""}
     ${withProfiles
       ? `LEFT JOIN LATERAL (SELECT pr.display_name, pr.first_name, pr.last_name, pr.country, pr.kyc_tier FROM user_profiles pr
            JOIN chain_wallet_accounts w ON lower(w.address) = lower(pr.wallet_address) WHERE w.user_id = u.id ORDER BY pr.id DESC LIMIT 1) p ON true`
