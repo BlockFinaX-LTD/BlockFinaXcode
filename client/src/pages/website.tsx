@@ -591,7 +591,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
                 <div className="nav-dropdown-menu">
                   <Link href="/hedger">Hedge</Link>
                   <Link href="/trade">Trade</Link>
-                  <Link href="/otc">OTC</Link>
+                  <Link href="/otc">Swap</Link>
                   <Link href="/liquidity-provider">Underwrite</Link>
                 </div>
               )}
@@ -672,7 +672,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
               <div className="nav-mobile-resources">
                 <Link href="/hedger" onClick={closeMobile}>Hedge</Link>
                 <Link href="/trade" onClick={closeMobile}>Trade</Link>
-                <Link href="/otc" onClick={closeMobile}>OTC</Link>
+                <Link href="/otc" onClick={closeMobile}>Swap</Link>
                 <Link href="/liquidity-provider" onClick={closeMobile}>Underwrite</Link>
               </div>
             )}
@@ -1067,7 +1067,7 @@ function CurrenciesSection() {
         <div className="assets-head">
           <span className="tx-eyebrow">Markets</span>
           <h2>Currencies you can use today.</h2>
-          <p>Cover on 23 currency pairs, perps on the Naira, Cedi, Shilling and Rand, and OTC swaps in five currencies at launch. Need a pair that isn&apos;t listed? Request a quote in the app.</p>
+          <p>Cover on 23 currency pairs, perps on the Naira, Cedi, Shilling and Rand, and swaps in five currencies at launch. Need a pair that isn&apos;t listed? Request a quote in the app.</p>
         </div>
         <div className="cur-row">
           {CURRENCIES.map((c) => (
@@ -1364,7 +1364,7 @@ function Footer() {
               <h5>Product</h5>
               <Link href="/hedger">Hedge</Link>
               <Link href="/trade">Trade</Link>
-              <Link href="/otc">OTC</Link>
+              <Link href="/otc">Swap</Link>
               <Link href="/liquidity-provider">Underwrite</Link>
             </div>
             <div className="foot-col">
@@ -1628,7 +1628,7 @@ const TRADE: AudienceCopy = {
 
 const OTC: AudienceCopy = {
   product: 'otc',
-  eyebrow: 'OTC',
+  eyebrow: 'Swap',
   title: ['Swap USDC and', 'local currency'],
   lede: 'Buy or sell USDC for Cedi, Naira, Shilling, Rand and Egyptian Pound with approved merchants. Pay by bank transfer or mobile money. A smart contract holds the USDC until both sides are done.',
   primary: { label: 'See rates in the app', href: LAUNCH_APP_HREF },
@@ -1656,7 +1656,7 @@ type ProductKey = 'hedge' | 'trade' | 'otc' | 'earn';
 const PRODUCT_LINKS: { key: ProductKey; name: string; line: string; href: string }[] = [
   { key: 'hedge', name: 'Hedge', line: 'Cover a foreign currency payment for one premium.', href: '/hedger' },
   { key: 'trade', name: 'Trade', line: 'Go long or short with perpetual futures.', href: '/trade' },
-  { key: 'otc', name: 'OTC', line: 'Swap USDC and local currency.', href: '/otc' },
+  { key: 'otc', name: 'Swap', line: 'Swap USDC and local currency.', href: '/otc' },
   { key: 'earn', name: 'Underwrite', line: 'Back cover and earn the premiums.', href: '/liquidity-provider' },
 ];
 
@@ -2138,9 +2138,9 @@ const PRODUCTS: { key: string; href: string; name: string; title: string; text: 
   { key: 'trade', href: '/trade', name: 'Trade', title: 'Perpetual futures',
     text: 'Go long or short on exotic currencies with an order book, hourly funding and on-chain settlement.',
     points: ['USD/NGN, USD/GHS, USD/KES, USD/ZAR', 'Margin and liquidations run by a smart contract', 'Prices track the official rate'], cta: 'Open Trade' },
-  { key: 'otc', href: '/otc', name: 'OTC', title: 'Swap USDC and local currency',
+  { key: 'otc', href: '/otc', name: 'Swap', title: 'Swap USDC and local currency',
     text: 'Buy or sell USDC for Cedi, Naira, Shilling and more with approved merchants, by bank transfer or mobile money.',
-    points: ['USDC held safely until both sides are done', 'Live indicative rates', 'Personal and business accounts'], cta: 'See OTC' },
+    points: ['USDC held safely until both sides are done', 'Live indicative rates', 'Personal and business accounts'], cta: 'Swap now' },
   { key: 'earn', href: '/liquidity-provider', name: 'Underwrite', title: 'Back cover, earn premiums',
     text: 'Your USDC backs the cover businesses buy, and earns the premiums they pay.',
     points: ['Choose the currency you back', 'Pays out only if the rate moves', 'Withdraw free USDC any time'], cta: 'Underwrite' },
@@ -2197,7 +2197,7 @@ const TOURS: { key: string; name: string; steps: TourStep[] }[] = [
     { title: 'Watch your position', line: 'Profit or loss, margin and liquidation price update live.' },
     { title: 'Every fill on record', line: 'Each trade settles onchain and shows in your history.' },
   ] },
-  { key: 'otc', name: 'OTC', steps: [
+  { key: 'otc', name: 'Swap', steps: [
     { title: 'Enter the amount', line: 'Type what you send and see what you receive at the live rate.' },
     { title: 'Pick your currency', line: 'Cedi, Naira, Shilling, Rand or Egyptian Pound.' },
     { title: 'Buy or sell', line: 'Switch sides to sell USDC for local currency.' },
