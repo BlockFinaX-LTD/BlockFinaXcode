@@ -309,3 +309,6 @@
   .px-lsbar .buy { background: var(--green); }
   .px-lsbar .sell { background: var(--red); }
 }
+
+/* Leverage badge beside Long / Short in positions */
+.px-poslev { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 700; font-family: 'Geist Mono', monospace; background: var(--blue-soft); color: var(--blue); vertical-align: 1px; }

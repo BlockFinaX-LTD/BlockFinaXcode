@@ -637,6 +637,13 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
   const config = useQuery({ queryKey: ['perps-config'], queryFn: () => api<PerpConfig>('/api/perps/config') });
   const [busy, setBusy] = useState<string | null>(null);
   const dec = (id: number) => markets.find((m) => m.id === id)?.decimals ?? 2;
+  // Real leverage of a position under cross margin: its size over the account's equity.
+  const posLev = (notional: number) => {
+    const eq = account?.equity ?? 0;
+    if (!(eq > 0) || !(notional > 0)) return null;
+    const x = notional / eq;
+    return `${x >= 10 ? Math.round(x) : Math.round(x * 10) / 10}x`;
+  };
   const close = async (p: PositionView) => {
     const m = markets.find((x) => x.id === p.market);
     if (!kp || !account || !m || !config.data?.contractId) return;
@@ -682,7 +689,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <thead><tr><th>Market</th><th>Size</th><th>Value</th><th>Entry</th><th>Mark</th><th>PnL (ROE)</th><th>Liq. price</th><th>Margin</th><th>Funding</th><th title="Auto-deleveraging queue">ADL</th><th /></tr></thead>
               <tbody>{account.positions.map((p) => (
                 <tr key={p.market}>
-                  <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{p.pair}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
+                  <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{p.pair}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{posLev(p.notional) && <span className="px-poslev" title="This position's size divided by your account equity (cross margin)">{posLev(p.notional)}</span>}{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
                   <td className="num">{px(Math.abs(p.size), 4)}</td>
                   <td className="num">{usd(p.notional)}</td>
                   <td className="num">{px(p.entry, dec(p.market))}</td>
