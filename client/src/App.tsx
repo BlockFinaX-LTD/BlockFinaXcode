@@ -22,7 +22,7 @@ import { MethodChooser } from "@/components/wallet/method-chooser";
 import { useToast } from "@/hooks/use-toast";
 
 // Public pages
-import Website, { AboutPage, ConnectorsPage, ConnectorsGuidePage, HedgersPage, UnderwritersPage } from "@/pages/website";
+import Website, { AboutPage, ConnectorsPage, ConnectorsGuidePage, HedgersPage, UnderwritersPage, TradePage, OtcPage, DevelopersPage } from "@/pages/website";
 import PitchDeck from "@/pages/pitch-deck";
 import Whitepaper from "@/pages/whitepaper";
 import { InvestorGate } from "@/components/investor-gate";
@@ -212,6 +212,9 @@ function Router() {
       <Route path="/docs/request" component={DocsRequestPage} />
       <Route path="/liquidity-provider" component={UnderwritersPage} />
       <Route path="/hedger" component={HedgersPage} />
+      <Route path="/trade" component={TradePage} />
+      <Route path="/otc" component={OtcPage} />
+      <Route path="/developers" component={DevelopersPage} />
       <Route path="/connectors" component={ConnectorsPage} />
       <Route path="/connectors/guide" component={ConnectorsGuidePage} />
 
