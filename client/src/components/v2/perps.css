@@ -220,4 +220,16 @@
 .px-style button { border: 0; background: none; border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .px-style button.on { background: var(--panel); color: var(--text); }
 /* Positions sit right under the chart; the order book runs down beside them. */
-@media (min-width: 1241px) { .px-grid { grid-template-areas: "chart book side" "bottom book side"; grid-template-rows: auto 1fr; align-items: start; } .px-book { align-self: stretch; } }
+/* Wide screens: the order book is exactly as tall as the chart, so positions run the full
+   width under both. Asks and bids trim from the far end, keeping the levels near the spread. */
+@media (min-width: 1241px) {
+  .px-grid { grid-template-areas: "chart book side" "bottom bottom side"; grid-template-rows: auto 1fr; align-items: start; }
+  .px-book { align-self: stretch; height: 0; min-height: 100%; overflow: hidden; }
+  .px-book-in { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
+  .px-book .px-ob { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .px-ob-side { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .px-ob-side.asks { justify-content: flex-end; }
+  /* Six whole levels a side, no half-cut rows. */
+  .px-ob-side .px-ob-row { padding-top: 2px; padding-bottom: 2px; }
+  .px-ob-side.asks .px-ob-row:nth-last-child(n+7), .px-ob-side.bids .px-ob-row:nth-child(n+7) { display: none; }
+}

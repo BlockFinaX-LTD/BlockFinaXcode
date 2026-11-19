@@ -332,22 +332,22 @@ function BookPanel({ market, book, onPrice, showTrades }: { market: MarketView; 
       {t === 'book' ? (
         <div className="px-ob">
           <div className="px-ob-h"><span>Price</span><span>Size ({market.base})</span><span>Total</span></div>
-          {asks.map((l, i) => (
+          <div className="px-ob-side asks">{asks.map((l, i) => (
             <button key={`a${l.price}`} className="px-ob-row ask" onClick={() => onPrice(l.price)}>
               <i style={{ width: `${(asksCum[i] / maxCum) * 100}%` }} />
               <span className="num">{px(l.price, market.decimals)}</span><span className="num">{px(l.size * l.price, 0)}</span><span className="num">{compact(asksCum[i])}</span>
             </button>
-          ))}
+          ))}</div>
           <div className="px-ob-mid">
             <span className="num">{px(market.mark, market.decimals)}</span>
             <span className="muted">Spread {spread != null ? `${px(spread, market.decimals)} (${((spread / market.mark) * 100).toFixed(3)}%)` : '-'}</span>
           </div>
-          {bids.map((l, i) => (
+          <div className="px-ob-side bids">{bids.map((l, i) => (
             <button key={`b${l.price}`} className="px-ob-row bid" onClick={() => onPrice(l.price)}>
               <i style={{ width: `${(bidsCum[i] / maxCum) * 100}%` }} />
               <span className="num">{px(l.price, market.decimals)}</span><span className="num">{px(l.size * l.price, 0)}</span><span className="num">{compact(bidsCum[i])}</span>
             </button>
-          ))}
+          ))}</div>
           <div className="px-ob-note muted">Sizes in USD notional. The liquidity vault quotes on published rules.</div>
         </div>
       ) : (
