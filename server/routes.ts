@@ -49,6 +49,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/hedge/", financialMutationLimiter);
   app.use("/api/wallets/", walletLimiter);
 
+  // ── Website live market figures ──────────────────────────────────────────
+  // The homepage shows live rates, cover and perps prices from the testnet app. They are
+  // read here, on the server, so the visitor's browser only talks to blockfinax.com.
+  // Read-only public feeds, reused for 30 seconds.
+  const SITE_FEEDS: Record<string, string> = {
+    rates: "/api/v2/rates", pools: "/api/v2/pools", "cover-prices": "/api/v2/cover-prices", "perps-markets": "/api/perps/markets",
+  };
+  const siteCache = new Map<string, { at: number; body: string }>();
+  app.get("/api/site/:feed", async (req, res) => {
+    const path = SITE_FEEDS[req.params.feed];
+    if (!path) return res.status(404).json({ message: "Not found" });
+    const hit = siteCache.get(path);
+    res.set("Cache-Control", "public, max-age=30");
+    if (hit && Date.now() - hit.at < 30_000) return res.type("application/json").send(hit.body);
+    try {
+      const base = (process.env.TESTNET_APP_URL || "https://testnet.blockfinax.com").replace(/\/+$/, "");
+      const r = await fetch(base + path, { signal: AbortSignal.timeout(20_000) });
+      if (!r.ok) throw new Error(String(r.status));
+      const body = await r.text();
+      siteCache.set(path, { at: Date.now(), body });
+      res.type("application/json").send(body);
+    } catch {
+      if (hit) return res.type("application/json").send(hit.body);
+      res.status(502).json({ message: "Live figures are unavailable right now" });
+    }
+  });
+
   // ── Auth routes (magic link, Google, WebAuthn, sessions) ──────────────────
   registerAuthRoutes(app);
 

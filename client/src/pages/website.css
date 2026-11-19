@@ -1422,3 +1422,13 @@
 .bfx-landing .tx-markets .tx-panel { max-width: none; }
 .bfx-landing .tx-pitch-title { font-size: clamp(24px, 2.6vw, 34px); font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; margin: 0 0 14px; text-wrap: balance; }
 .bfx-landing .tx-pitch-line { font-size: 16.5px; line-height: 1.55; opacity: 0.75; margin: 0 0 18px; }
+
+/* Phones: the three hero facts on one line; a smaller surface */
+@media (max-width: 600px) {
+  .bfx-landing .tx-points { flex-wrap: nowrap; gap: 12px; margin-top: 26px; justify-content: space-between; }
+  .bfx-landing .tx-points li { flex: 1 1 0; min-width: 0; }
+  .bfx-landing .tx-points b { font-size: 17px; }
+  .bfx-landing .tx-points span { font-size: 11px; line-height: 1.35; }
+  .bfx-landing .tx-surface { height: 220px; }
+  .bfx-landing .tx-hero-grid { gap: 8px; padding-bottom: 24px; }
+}
