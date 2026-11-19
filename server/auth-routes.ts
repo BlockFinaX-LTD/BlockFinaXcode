@@ -218,6 +218,20 @@ export function getRpId(req: any): string {
   }
 }
 
+/**
+ * Passkey domains used before the current one (PASSKEY_LEGACY_RP_IDS, comma-separated).
+ * A passkey belongs to the domain it was made for; passkeys made on an earlier domain keep
+ * working because sign-in and approvals use each passkey's own domain.
+ */
+export function getLegacyRpIds(): string[] {
+  return (process.env.PASSKEY_LEGACY_RP_IDS || '').split(',').map((d) => d.trim()).filter(Boolean);
+}
+
+/** Every passkey domain this server accepts: the current one first, then earlier ones. */
+export function getAcceptedRpIds(req: any): string[] {
+  return Array.from(new Set([getRpId(req), ...getLegacyRpIds()]));
+}
+
 /** Origins allowed to use the passkey domain: the app, plus PASSKEY_RELATED_ORIGINS (comma-separated). */
 export function getPasskeyOrigins(req: any): string[] {
   const extra = (process.env.PASSKEY_RELATED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean).map((o) => new URL(o).origin);
@@ -593,7 +607,7 @@ export function registerAuthRoutes(app: Express) {
         response: registrationResponse,
         expectedChallenge: challenge,
         expectedOrigin: getAppOrigin(req),
-        expectedRPID: getRpId(req),
+        expectedRPID: getAcceptedRpIds(req),
         requireUserVerification: false,
       });
       if (!verification.verified || !verification.registrationInfo) {
@@ -643,7 +657,7 @@ export function registerAuthRoutes(app: Express) {
         response: authResponse,
         expectedChallenge: challenge,
         expectedOrigin: getAppOrigin(req),
-        expectedRPID: getRpId(req),
+        expectedRPID: getAcceptedRpIds(req),
         requireUserVerification: false,
         credential: {
           id: storedCred.credentialId,

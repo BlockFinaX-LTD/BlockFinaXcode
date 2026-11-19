@@ -31,7 +31,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { userAccounts } from "@shared/auth-core-schema";
 import { walletPasskeys, type WalletPasskey } from "@shared/chain-wallet-schema";
-import { createSession, findOrCreateUser, getPasskeyOrigins, getRpId, getSession } from "../auth-routes";
+import { createSession, findOrCreateUser, getAcceptedRpIds, getLegacyRpIds, getPasskeyOrigins, getRpId, getSession } from "../auth-routes";
 import { EmailOtp, sendCode } from "./email-otp";
 import { chainRegistry } from "../chain/config";
 import { AccountService, drizzleAccountRepository } from "../accounts/service";
@@ -113,6 +113,10 @@ function ensurePasskeyColumns() {
     await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS evm_owner_index integer NOT NULL DEFAULT 0`);
     await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS evm_owner boolean NOT NULL DEFAULT true`);
     await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS stellar_signer boolean NOT NULL DEFAULT true`);
+    await db.execute(sql`ALTER TABLE wallet_passkeys ADD COLUMN IF NOT EXISTS rp_id text`);
+    // Passkeys made before the domain moved belong to the earlier domain.
+    const earlier = getLegacyRpIds()[0];
+    if (earlier) await db.execute(sql`UPDATE wallet_passkeys SET rp_id = ${earlier} WHERE rp_id IS NULL`);
   })().catch((err) => { columnsReady = null; throw err; });
   return columnsReady;
 }
@@ -136,8 +140,11 @@ async function activePasskeys(userId: number): Promise<WalletPasskey[]> {
 
 const passkeyView = (p: WalletPasskey) => ({
   credentialId: p.credentialId, label: p.label ?? (p.role === "primary" ? "First passkey" : "Backup passkey"),
-  role: p.role, status: p.status, createdAt: p.createdAt, onBase: p.evmOwner, onStellar: p.stellarSigner,
+  role: p.role, status: p.status, createdAt: p.createdAt, onBase: p.evmOwner, onStellar: p.stellarSigner, rpId: p.rpId,
 });
+
+/** The domain a passkey belongs to (older rows without one use the current domain). */
+const rpOf = (p: WalletPasskey, req: any) => p.rpId || getRpId(req);
 
 async function passkeyFor(userId: number): Promise<WalletPasskey> {
   const row = await findPasskey(userId);
@@ -196,6 +203,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     res.json({
       enabled: true,
       rpId: getRpId(req),
+      rpIds: getAcceptedRpIds(req),
       evm: evm ? { chain: evm.key, chainId: Number(evm.networkId), name: evm.name } : null,
       stellar: stellar ? { chain: stellar.key, rpcUrl: stellar.rpcUrls[0], networkPassphrase: stellar.networkId, walletWasmHash: PASSKEY_WALLET_WASM } : null,
     });
@@ -283,7 +291,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       response: req.body?.response,
       expectedChallenge: pending.challenge,
       expectedOrigin: getPasskeyOrigins(req),
-      expectedRPID: getRpId(req),
+      expectedRPID: getAcceptedRpIds(req),
       requireUserVerification: true,
     });
     if (!verified.verified || !verified.registrationInfo) throw httpError(400, "Passkey registration failed");
@@ -301,13 +309,16 @@ export function registerPasskeyWalletRoutes(app: Express) {
       y: ethers.hexlify(y),
       counter: credential.counter,
       transports: JSON.stringify(credential.transports ?? []),
+      rpId: getRpId(req),
     }).returning();
     res.json({ credentialId: passkey.credentialId, ...(await provision(userId, passkey)) });
   }));
 
   app.post("/api/wallet/passkey/signin/options", wrap(async (req, res) => {
     await ensurePasskeyColumns();
-    const options = await generateAuthenticationOptions({ rpID: getRpId(req), userVerification: "required" });
+    const asked = String(req.body?.rpId ?? "");
+    const rpID = getAcceptedRpIds(req).includes(asked) ? asked : getRpId(req);
+    const options = await generateAuthenticationOptions({ rpID, userVerification: "required" });
     res.json({ flow: putChallenge({ challenge: options.challenge }), options });
   }));
 
@@ -321,7 +332,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       response,
       expectedChallenge: pending.challenge,
       expectedOrigin: getPasskeyOrigins(req),
-      expectedRPID: getRpId(req),
+      expectedRPID: getAcceptedRpIds(req),
       requireUserVerification: true,
       credential: { id: passkey.credentialId, publicKey: new Uint8Array(Buffer.from(passkey.publicKey, "base64")), counter: passkey.counter, transports: JSON.parse(passkey.transports) },
     });
@@ -330,7 +341,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const sessionToken = await createSession(passkey.userId, undefined, PASSKEY_SESSION_HOURS);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, passkey.userId));
     const provisioned = await provision(passkey.userId, (await findPasskey(passkey.userId)) ?? passkey);
-    res.json({ sessionToken, user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey.credentialId, ...provisioned });
+    res.json({ sessionToken, user: { id: user.id, name: user.name, email: user.email }, credentialId: passkey.credentialId, rpId: rpOf(passkey, req), ...provisioned });
   }));
 
   app.get("/api/wallet/passkey/me", wrap(async (req, res) => {
@@ -354,10 +365,14 @@ export function registerPasskeyWalletRoutes(app: Express) {
       target: ethers.getAddress(String(c.to)), value: BigInt(c.value ?? 0), data: String(c.data ?? "0x"),
     }));
     const prepared = await evmRelayer(evm).prepare({ userId, sender, owner: passkeyOwner(passkey.x, passkey.y), calls });
+    const owners = (await activePasskeys(userId)).filter((p) => p.evmOwner);
+    const device = owners.find((p) => p.credentialId === req.body?.credentialId) ?? owners[0];
+    // A request names one domain, so offer the owners that belong to this device's domain.
+    const rpID = device ? rpOf(device, req) : getRpId(req);
     const options = await generateAuthenticationOptions({
-      rpID: getRpId(req),
+      rpID,
       challenge: ethers.getBytes(prepared.hash),
-      allowCredentials: (await activePasskeys(userId)).filter((p) => p.evmOwner).map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
+      allowCredentials: owners.filter((p) => rpOf(p, req) === rpID).map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
       userVerification: "required",
     });
     res.json({ id: prepared.id, hash: prepared.hash, options });
@@ -376,7 +391,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       response,
       expectedChallenge: Buffer.from(ethers.getBytes(pending.hash)).toString("base64url"),
       expectedOrigin: getPasskeyOrigins(req),
-      expectedRPID: getRpId(req),
+      expectedRPID: getAcceptedRpIds(req),
       requireUserVerification: true,
       credential: { id: passkey.credentialId, publicKey: new Uint8Array(Buffer.from(passkey.publicKey, "base64")), counter: passkey.counter, transports: JSON.parse(passkey.transports) },
     });
@@ -422,7 +437,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
       response: req.body?.response,
       expectedChallenge: pending.challenge,
       expectedOrigin: getPasskeyOrigins(req),
-      expectedRPID: getRpId(req),
+      expectedRPID: getAcceptedRpIds(req),
       requireUserVerification: true,
     });
     if (!verified.verified || !verified.registrationInfo) throw httpError(400, "Passkey registration failed");
@@ -435,7 +450,7 @@ export function registerPasskeyWalletRoutes(app: Express) {
     await ensurePasskeyColumns();
     const [row] = await db.insert(walletPasskeys).values({
       userId, credentialId: credential.id, publicKey: Buffer.from(credential.publicKey).toString("base64"),
-      x: ethers.hexlify(x), y: ethers.hexlify(y), counter: credential.counter, transports: JSON.stringify(credential.transports ?? []),
+      x: ethers.hexlify(x), y: ethers.hexlify(y), counter: credential.counter, transports: JSON.stringify(credential.transports ?? []), rpId: getRpId(req),
       label: pending.name ?? "Backup passkey", role: "backup", status: "pending", evmOwner: false, stellarSigner: false,
     }).returning();
     // The Stellar wallet needs the uncompressed key (0x04 || x || y) to add it as a signer.
@@ -465,10 +480,14 @@ export function registerPasskeyWalletRoutes(app: Express) {
     const prepared = await evmRelayer(evm).prepare({
       userId, sender, owner: passkeyOwner(primary.x, primary.y), calls: [{ target: sender, value: BigInt(0), data }], ownerChange: true,
     });
+    const owners = (await activePasskeys(userId)).filter((p) => p.evmOwner);
+    const device = owners.find((p) => p.credentialId === req.body?.credentialId) ?? owners[0];
+    // A request names one domain, so offer the owners that belong to this device's domain.
+    const rpID = device ? rpOf(device, req) : getRpId(req);
     const options = await generateAuthenticationOptions({
-      rpID: getRpId(req),
+      rpID,
       challenge: ethers.getBytes(prepared.hash),
-      allowCredentials: (await activePasskeys(userId)).filter((p) => p.evmOwner).map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
+      allowCredentials: owners.filter((p) => rpOf(p, req) === rpID).map((p) => ({ id: p.credentialId, transports: JSON.parse(p.transports) })),
       userVerification: "required",
     });
     res.json({ done: false, id: prepared.id, hash: prepared.hash, options });

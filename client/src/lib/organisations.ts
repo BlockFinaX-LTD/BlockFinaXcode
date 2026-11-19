@@ -19,7 +19,7 @@ import {
 } from "@shared/smart-accounts";
 import { signersEqual } from "@shared/vendor/oz-auth-payload";
 import { actingOrganisation, setActingOrganisation, type ActingOrganisation } from "./acting-organisation";
-import { api, walletConfig } from "./wallets/passkey-wallet";
+import { api, rpIdFor, walletConfig } from "./wallets/passkey-wallet";
 
 export interface OrganisationsConfig {
   available: boolean;
@@ -90,7 +90,7 @@ async function myPasskeySigner(view: OrganisationView, verifier: string): Promis
       const assertion = await startAuthentication({
         optionsJSON: {
           challenge: toBase64Url(digest),
-          rpId: cfg.rpId,
+          rpId: (await rpIdFor(credentialId)) ?? cfg.rpId,
           userVerification: "required",
           timeout: 60_000,
           allowCredentials: [{ id: credentialId, type: "public-key" }],

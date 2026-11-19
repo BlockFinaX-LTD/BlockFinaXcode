@@ -33,6 +33,8 @@ export interface PasskeyInfo {
   createdAt: string;
   onBase: boolean;
   onStellar: boolean;
+  /** The domain this passkey belongs to (null: the current one). */
+  rpId?: string | null;
 }
 
 export interface PasskeySession {
@@ -53,9 +55,34 @@ function deviceCredential(): string | null {
   try { return localStorage.getItem(DEVICE_CREDENTIAL_KEY); } catch { return null; }
 }
 
+/** The passkey domain this device signed in with last, so sign-in asks for that one first. */
+const DEVICE_RP_KEY = "bfx:device-passkey-rp";
+function rememberDeviceRp(rpId: string | null | undefined) {
+  try { if (rpId) localStorage.setItem(DEVICE_RP_KEY, rpId); } catch { /* per-device convenience */ }
+}
+function deviceRp(): string | null {
+  try { return localStorage.getItem(DEVICE_RP_KEY); } catch { return null; }
+}
+
+/** The domain a given passkey belongs to: its own, else the server's current one. */
+export async function rpIdFor(credentialId: string | null | undefined): Promise<string | undefined> {
+  const cfg = await walletConfig();
+  const session = await currentPasskeySession();
+  const own = session?.passkeys?.find((p) => p.credentialId === credentialId)?.rpId;
+  return own || cfg.rpId;
+}
+
+/** Earlier passkey domains, for a "passkey made before" sign-in on a new device. */
+export async function earlierPasskeyDomains(): Promise<string[]> {
+  const cfg = await walletConfig();
+  return (cfg.rpIds ?? []).filter((d) => d !== cfg.rpId);
+}
+
 interface WalletConfig {
   enabled: boolean;
   rpId?: string;
+  /** Every passkey domain the server accepts: the current one first, then earlier ones. */
+  rpIds?: string[];
   evm?: { chain: string; chainId: number; name: string } | null;
   stellar?: { chain: string; rpcUrl: string; networkPassphrase: string; walletWasmHash: string } | null;
 }
@@ -168,11 +195,21 @@ export function inAppBrowser(): boolean {
   return /FBAN|FBAV|Instagram|LinkedInApp|GSA\/|Line\/|Twitter|Snapchat|TikTok|; wv\)/i.test(navigator.userAgent);
 }
 
+/** A link that opens this page in the phone's own browser, from inside another app. */
+export function openInBrowserLink(): { href: string; label: string } | null {
+  if (typeof navigator === "undefined") return null;
+  const url = window.location.href;
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return { href: url.replace(/^https:/, "x-safari-https:"), label: "Open in Safari" };
+  if (/Android/i.test(navigator.userAgent)) return { href: `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`, label: "Open in Chrome" };
+  return null;
+}
+
 export async function createWalletPasskey(): Promise<PasskeySession & { errors?: string[] }> {
   const { flow, options } = await passkeyOptions("register");
   const response = await startRegistration({ optionsJSON: options });
   const created = await api<{ errors?: string[]; credentialId?: string }>("/api/wallet/passkey/register/verify", { flow, response });
   rememberDeviceCredential(created.credentialId ?? response.id);
+  rememberDeviceRp((await walletConfig()).rpId);
   const session = await currentPasskeySession();
   if (!session) throw new Error("Your session ended. Sign in again.");
   // Check, from the chain, that the new wallet's signer is this passkey's own key.
@@ -182,12 +219,24 @@ export async function createWalletPasskey(): Promise<PasskeySession & { errors?:
 }
 
 /** Sign in with an existing passkey (the browser offers the user's saved passkeys). */
-export async function signInWithPasskey(): Promise<PasskeySession> {
-  const { flow, options } = await passkeyOptions("signin");
+export async function signInWithPasskey(opts: { earlier?: boolean } = {}): Promise<PasskeySession> {
+  const cfg = await walletConfig();
+  const accepted = cfg.rpIds ?? (cfg.rpId ? [cfg.rpId] : []);
+  const remembered = deviceRp();
+  const earlierDomain = accepted.find((d) => d !== cfg.rpId);
+  // A device that used a passkey here before domains were remembered made it on the earlier domain.
+  const rpId = opts.earlier ? earlierDomain
+    : remembered && accepted.includes(remembered) ? remembered
+    : !remembered && deviceCredential() && earlierDomain ? earlierDomain
+    : cfg.rpId;
+  const { flow, options } = rpId && rpId !== cfg.rpId
+    ? await api<PasskeyOptions>("/api/wallet/passkey/signin/options", { rpId })
+    : await passkeyOptions("signin");
   const response = await startAuthentication({ optionsJSON: options });
-  const session = await api<PasskeySession>("/api/wallet/passkey/signin/verify", { flow, response });
+  const session = await api<PasskeySession & { rpId?: string }>("/api/wallet/passkey/signin/verify", { flow, response });
   storeSessionToken(session.sessionToken);
   rememberDeviceCredential(session.credentialId);
+  rememberDeviceRp(session.rpId ?? options.rpId);
   const { recordPasskeyProof } = await import("./verify-wallet");
   void recordPasskeyProof(session.accounts?.find((a) => a.chain.startsWith("stellar"))?.address, session.credentialId, response as any);
   return session;
@@ -224,7 +273,7 @@ async function signStellarAuth(transactionXdr: string, credentialId: string, con
   const cfg = config.stellar;
   if (!cfg) throw new Error("Stellar is not enabled for this wallet");
   // The server's passkey domain, which may be an earlier address (related origins).
-  const kit = new PasskeyKit({ rpcUrl: cfg.rpcUrl, networkPassphrase: cfg.networkPassphrase, walletWasmHash: cfg.walletWasmHash, rpId: config.rpId });
+  const kit = new PasskeyKit({ rpcUrl: cfg.rpcUrl, networkPassphrase: cfg.networkPassphrase, walletWasmHash: cfg.walletWasmHash, rpId: await rpIdFor(credentialId) ?? config.rpId });
   await kit.connectWallet({ keyId: credentialId, getContractId: async () => contract });
   if (kit.contractId !== contract) throw new Error("This passkey does not control the expected Stellar account");
 
@@ -265,7 +314,7 @@ export async function addBackupPasskey(label: string, onStep?: WalletStep): Prom
   const id = encodeURIComponent(passkey.credentialId);
 
   if (cfg.evm) {
-    const base = await api<{ done: boolean; id?: string; options?: any }>(`/api/wallet/passkeys/${id}/base/prepare`, {});
+    const base = await api<{ done: boolean; id?: string; options?: any }>(`/api/wallet/passkeys/${id}/base/prepare`, { credentialId: session.credentialId });
     if (!base.done) {
       onStep?.("Approve with your current passkey...");
       const approval = await startAuthentication({ optionsJSON: base.options });
@@ -282,7 +331,7 @@ export async function addBackupPasskey(label: string, onStep?: WalletStep): Prom
     const { Buffer } = await import("buffer");
     (globalThis as any).Buffer ??= Buffer;
     const { PasskeyKit, SignerStore } = await import("passkey-kit");
-    const kit = new PasskeyKit({ rpcUrl: cfg.stellar.rpcUrl, networkPassphrase: cfg.stellar.networkPassphrase, walletWasmHash: cfg.stellar.walletWasmHash, rpId: cfg.rpId });
+    const kit = new PasskeyKit({ rpcUrl: cfg.stellar.rpcUrl, networkPassphrase: cfg.stellar.networkPassphrase, walletWasmHash: cfg.stellar.walletWasmHash, rpId: await rpIdFor(session.credentialId) ?? cfg.rpId });
     await kit.connectWallet({ keyId: session.credentialId, getContractId: async () => stellar.address });
     const tx = await kit.addSecp256r1(passkey.credentialId, stellarPublicKey, undefined, SignerStore.Persistent);
     const signed = await signStellarAuth(tx.built!.toXDR(), session.credentialId, stellar.address);
@@ -342,6 +391,7 @@ class PasskeyWalletProvider implements WalletProvider {
     if (request.kind === "evm_transaction") {
       onStep?.("Preparing transaction...");
       const prepared = await api<{ id: string; options: any }>("/api/wallet/evm/prepare", {
+        credentialId: (await currentPasskeySession())?.credentialId,
         calls: request.calls?.length ? request.calls : [{ to: request.to, data: request.data ?? "0x", value: request.value ?? "0" }],
       });
       onStep?.("Approve with your passkey...");

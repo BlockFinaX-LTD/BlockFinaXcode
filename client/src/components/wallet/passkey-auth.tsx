@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
 import { takeReturnPath, usePasskeySession } from "@/lib/identity";
 import {
-  acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, finishEmailSignIn, inAppBrowser,
+  acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, earlierPasskeyDomains, finishEmailSignIn, inAppBrowser, openInBrowserLink,
   preparePasskeyOptions, signInWithPasskey, signOutPasskey, startEmailSignIn, startGoogleSignIn,
 } from "@/lib/wallets/passkey-wallet";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@shared/legal";
@@ -72,6 +72,20 @@ export function PasskeyAuth() {
   useEffect(() => { if (passkeyScreen) preparePasskeyOptions("register"); }, [passkeyScreen]);
   useEffect(() => { if (!signedIn && !forConnectors) preparePasskeyOptions("signin"); }, [signedIn]);
   const embedded = inAppBrowser();
+  const openHere = embedded ? openInBrowserLink() : null;
+  // Passkeys made before the passkey domain moved: offer them on a device that has not used one yet.
+  const [earlier, setEarlier] = useState(false);
+  useEffect(() => { void earlierPasskeyDomains().then((d) => setEarlier(d.length > 0)).catch(() => {}); }, []);
+  const inAppNotice = (
+    <div className="w-full rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-left text-[11.5px] leading-snug">
+      Passkeys cannot be used inside another app&apos;s built-in browser. Open this page in Safari or Chrome to sign in.
+      {openHere && <a href={openHere.href} className="mt-2 flex h-8 w-full items-center justify-center rounded-md bg-primary text-[12px] font-semibold text-primary-foreground">{openHere.label}</a>}
+      <Button size="sm" variant="outline" className="mt-2 h-8 w-full" onClick={() => void navigator.clipboard?.writeText(window.location.origin).then(() => setCopied(true))}>
+        {copied ? "Link copied. Paste it in Safari or Chrome" : "Copy link"}
+      </Button>
+    </div>
+  );
+
 
   async function run(label: string, action: () => Promise<void>) {
     setBusy(label);
@@ -141,14 +155,7 @@ export function PasskeyAuth() {
             {spinner("create") ?? <><KeyRound className="h-4 w-4 mr-2" />Create wallet passkey</>}
           </Button>
           {busy === "create" && <p className="text-[11px] text-muted-foreground">Creating your accounts. This takes about 10 seconds.</p>}
-          {embedded && (
-            <div className="w-full rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-left text-[11.5px] leading-snug">
-              You are in another app's built-in browser, where passkeys often do not work. Open this page in Safari or Chrome.
-              <Button size="sm" variant="outline" className="mt-2 h-8 w-full" onClick={() => void navigator.clipboard?.writeText(window.location.origin).then(() => setCopied(true))}>
-                {copied ? "Link copied. Paste it in Safari or Chrome" : "Copy link"}
-              </Button>
-            </div>
-          )}
+          {embedded && inAppNotice}
           <button className="text-[11.5px] text-muted-foreground underline mt-2" onClick={signOut}>
             Use a different account
           </button>
@@ -207,12 +214,21 @@ export function PasskeyAuth() {
           <Button variant="outline" className="w-full h-11 rounded-xl" disabled={!!busy} onClick={startGoogleSignIn}>
             Continue with Google
           </Button>
+          {embedded && inAppNotice}
           <Button variant="ghost" className="w-full h-10 rounded-xl text-[12.5px]" disabled={!!busy} onClick={() => run("passkey", async () => {
             const s = await signInWithPasskey();
             setSession(s);
           })}>
             {spinner("passkey") ?? <><KeyRound className="h-4 w-4 mr-2" />Sign in with your passkey</>}
           </Button>
+          {earlier && (
+            <button className="text-[11px] text-muted-foreground underline" disabled={!!busy} onClick={() => run("passkey", async () => {
+              const s = await signInWithPasskey({ earlier: true });
+              setSession(s);
+            })}>
+              Use a passkey made before 20 Nov 2026
+            </button>
+          )}
         </div>
         {forConnectors ? (
           <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">

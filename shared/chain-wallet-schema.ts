@@ -162,6 +162,8 @@ export const walletPasskeys = pgTable(
     evmOwnerIndex: integer("evm_owner_index").notNull().default(0),
     evmOwner: boolean("evm_owner").notNull().default(true),
     stellarSigner: boolean("stellar_signer").notNull().default(true),
+    /** The domain (WebAuthn rpId) this passkey was made for; null means the current one. */
+    rpId: text("rp_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
