@@ -45,7 +45,7 @@ interface AccountView {
   orderHistory: { hash: string; market: number; pair: string; isBuy: boolean; price: number; size: number; filled: number; tif: string; status: string; at: string }[];
   funding: { market: number; pair: string; rate: number; at: string; tx: string | null }[];
 }
-interface PerpConfig { enabled: boolean; running?: boolean; contractId?: string; explorer?: string; insurance?: number; vault?: { address: string; equity: number | null } }
+interface PerpConfig { enabled: boolean; running?: boolean; contractId?: string; explorer?: string; insurance?: number; vault?: { address: string; equity: number | null }; fees?: { takerBps: number; makerBps: number } }
 
 const KEY_PREFIX = 'bfx:perp-key:';
 function storedKey(wallet: string | undefined): Keypair | null {
@@ -99,6 +99,7 @@ export function PerpsPage() {
   const [priceClick, setPriceClick] = useState<number | null>(null);
   // Phones: the chart opens on a tap (Binance style), so the first screen is form and book.
   const [showChart, setShowChart] = useState(false);
+  const [showFunding, setShowFunding] = useState(false);
   // Long or Short tapped in the phone chart view: close the chart and open the form on that side.
   const [sideReq, setSideReq] = useState<{ side: 'buy' | 'sell'; at: number } | null>(null);
   const trade = (side: 'buy' | 'sell') => { setSideReq({ side, at: Date.now() }); setShowChart(false); window.scrollTo({ top: 0 }); };
@@ -109,11 +110,11 @@ export function PerpsPage() {
 
   return (
     <div className={`px-wrap${showChart ? ' px-chartmode' : ''}`}>
-      <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} chartOpen={showChart} onChart={() => setShowChart(!showChart)} />
+      <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} chartOpen={showChart} onChart={() => setShowChart(!showChart)} onFunding={() => setShowFunding(true)} />
       <div className="px-grid">
         <section className={`px-panel px-chart ${showChart ? '' : 'px-hide-sm'}`}><Chart market={market} /></section>
         <section className="px-panel px-book">
-          <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={false} />
+          <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={false} onFunding={() => setShowFunding(true)} />
         </section>
         <aside className="px-side">
           <OrderForm market={market} account={account.data} kp={kp} priceClick={priceClick} sideReq={sideReq}
@@ -129,6 +130,7 @@ export function PerpsPage() {
         <span>Insurance fund {usd(config.data.insurance, 0)}</span>
         {config.data.vault?.equity != null && <span>Liquidity vault {usd(config.data.vault.equity, 0)}</span>}
       </div>
+      {showFunding && <FundingSheet market={market} explorer={config.data.explorer} onClose={() => setShowFunding(false)} />}
       {showChart && (
         <div className="px-lsbar">
           <button className="buy" onClick={() => trade('buy')}>Long</button>
@@ -141,7 +143,7 @@ export function PerpsPage() {
 
 // ── Market bar ────────────────────────────────────────────────────────────────
 
-function MarketBar({ markets, market, onPick, chartOpen, onChart }: { markets: MarketView[]; market: MarketView; onPick: (id: number) => void; chartOpen: boolean; onChart: () => void }) {
+function MarketBar({ markets, market, onPick, chartOpen, onChart, onFunding }: { markets: MarketView[]; market: MarketView; onPick: (id: number) => void; chartOpen: boolean; onChart: () => void; onFunding: () => void }) {
   const [open, setOpen] = useState(false);
   const countdown = useCountdown(market.nextFundingAt);
   const ref = useRef<HTMLDivElement>(null);
@@ -179,8 +181,8 @@ function MarketBar({ markets, market, onPick, chartOpen, onChart }: { markets: M
       <div className="px-stat px-x-sm"><div className="k">24h change</div><div className={`v num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</div></div>
       <div className="px-stat px-x-sm"><div className="k">24h volume</div><div className="v num">{compact(market.volume24h)}</div></div>
       <div className="px-stat px-x-sm"><div className="k">Open interest</div><div className="v num">{compact(market.openInterest)}</div></div>
-      <div className="px-stat px-x-sm"><div className="k" title="Paid every hour between longs and shorts. Positive: longs pay shorts.">Funding / countdown</div>
-        <div className="v num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> <span className="muted">{countdown}</span></div></div>
+      <button className="px-stat px-x-sm px-fundbtn" onClick={onFunding} title="See how funding works and its recent history"><div className="k">Funding / countdown</div>
+        <div className="v num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> <span className="muted">{countdown}</span></div></button>
       {market.weekend && <span className="px-pill amber" title="Official rates do not fix at weekends. The index holds at Friday's rate and funding is interest only.">Weekend mode</span>}
       {market.status === 2 && <span className="px-pill amber">Reduce-only</span>}
     </div>
@@ -322,7 +324,7 @@ function Chart({ market }: { market: MarketView }) {
 
 // ── Order book and trades ─────────────────────────────────────────────────────
 
-function BookPanel({ market, book, onPrice, showTrades }: { market: MarketView; book?: BookView; onPrice: (p: number) => void; showTrades: boolean }) {
+function BookPanel({ market, book, onPrice, showTrades, onFunding }: { market: MarketView; book?: BookView; onPrice: (p: number) => void; showTrades: boolean; onFunding: () => void }) {
   const fundCountdown = useCountdown(market.nextFundingAt);
   const [tab, setTab] = useState<'book' | 'trades'>('book');
   const t = showTrades ? 'trades' : tab;
@@ -337,7 +339,7 @@ function BookPanel({ market, book, onPrice, showTrades }: { market: MarketView; 
   void max;
   return (
     <div className="px-book-in">
-      <div className="px-ob-fund"><span>Funding / countdown</span><b className="num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> / {fundCountdown}</b></div>
+      <div className="px-ob-fund" role="button" tabIndex={0} onClick={onFunding} onKeyDown={(e) => { if (e.key === 'Enter') onFunding(); }}><span>Funding / countdown ›</span><b className="num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> / {fundCountdown}</b></div>
       <div className="px-tabs bx-hide-sm">
         <button className={t === 'book' ? 'on' : ''} onClick={() => setTab('book')}>Order book</button>
         <button className={t === 'trades' ? 'on' : ''} onClick={() => setTab('trades')}>Trades</button>
@@ -400,6 +402,7 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
   const { toast } = useToast();
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['perps-config'], queryFn: () => api<PerpConfig>('/api/perps/config') });
+  const takerBps = config.data?.fees?.takerBps ?? 5, makerBps = config.data?.fees?.makerBps ?? 0;
   const [type, setType] = useState<'market' | 'limit'>('market');
   const [side, setSide] = useState<'buy' | 'sell'>(sideReq?.side ?? 'buy');
   useEffect(() => { if (sideReq) setSide(sideReq.side); }, [sideReq?.at]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -525,7 +528,6 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
         <input id="px-size" className="num" inputMode="decimal" value={sizeUsd} placeholder="0" onChange={(e) => { setSizeUsd(e.target.value.replace(/[^0-9.]/g, '')); setPctFill(0); }} />
         <span className="px-unit">USD</span>
       </label>
-      <div className="px-units muted num px-x-sm">{units > 0 ? `${px(units, 4)} units · ${px(notional, 0)} USD of ${market.base} vs ${market.quote}` : ' '}</div>
       <input id="px-pct" type="range" min={0} max={100} step={1} value={pctFill} disabled={maxUsd <= 0} onChange={(e) => setFromPct(Number(e.target.value))} aria-label="Share of what you can open" className="px-pct" />
       <div className="px-pct-l muted"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
       <div className="px-opts">
@@ -549,7 +551,7 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
         <div className="px-x-sm"><span>Order value</span><b className="num">{notional ? usd(notional) : '-'}</b></div>
         <div><span>Margin required</span><b className="num">{notional ? usd(margin) : '-'}</b></div>
         {type === 'market' && <div className="px-x-sm"><span>Slippage limit</span><b className="num">2.00%</b></div>}
-        <div className="px-x-sm"><span>Fees</span><b className="num">{type === 'market' ? '0.050% taker' : '0.000% maker'}</b></div>
+        <div><span>Fees</span><b className="num">{type === 'market' ? `${(takerBps / 100).toFixed(3)}% taker` : `${(makerBps / 100).toFixed(3)}% maker`}{notional ? ` · ${usd(notional * ((type === 'market' ? takerBps : makerBps) / 10_000))}` : ''}</b></div>
       </div>
       {!keyOk && account && <div className="px-hint"><ShieldCheck size={14} /> Your passkey approves a trading key once. It can place and cancel orders, but can never withdraw your USDC.</div>}
       {notional > maxUsd && keyOk && <div className="px-hint warn">Above what your margin allows at {lev}x ({usd(maxUsd, 0)}).</div>}
@@ -625,6 +627,39 @@ function AccountPanel({ account, kp, config, market, onForget }: { account?: Acc
   );
 }
 
+
+// ── Funding sheet: opened from the funding rate at the top ───────────────────
+
+function FundingSheet({ market, explorer, onClose }: { market: MarketView; explorer?: string; onClose: () => void }) {
+  const hist = useQuery({ queryKey: ['perps-funding', market.id], queryFn: () => api<{ funding: { rate: number; at: string; tx: string | null }[] }>(`/api/perps/markets/${market.id}/funding`), refetchInterval: 60_000 });
+  const countdown = useCountdown(market.nextFundingAt);
+  const rate = market.fundingPredicted;
+  return (
+    <div className="px-sheet-bg" onClick={onClose}>
+      <div className="px-sheet px-fsheet" role="dialog" aria-modal="true" aria-label="Funding" onClick={(e) => e.stopPropagation()}>
+        <i className="px-sheet-grab" aria-hidden="true" />
+        <h3>Funding · {market.base}{market.quote}</h3>
+        <div className="px-sheet-row total"><span>Next hourly rate</span><b className={`num ${rate >= 0 ? 'up' : 'down'}`}>{(rate * 100).toFixed(4)}%</b></div>
+        <div className="px-sheet-row"><span>Paid in</span><b className="num">{countdown}</b></div>
+        <p className="px-sheet-note">Every hour, longs and shorts pay each other to keep the perp close to the official rate. {rate >= 0 ? 'Right now longs pay shorts.' : 'Right now shorts pay longs.'} BlockFinaX takes no part of it.</p>
+        <div className="px-fhist">
+          <div className="px-fhist-h"><span>Time</span><span>Hourly rate</span><span>Who paid</span></div>
+          {hist.isLoading && <div className="muted px-fhist-empty"><Spin /> Loading</div>}
+          {hist.data && !hist.data.funding.length && <div className="muted px-fhist-empty">No funding paid yet on this market.</div>}
+          {hist.data?.funding.map((f, i) => (
+            <div key={i} className="px-fhist-row">
+              <span className="num muted">{new Date(f.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+              <span className={`num ${f.rate >= 0 ? 'up' : 'down'}`}>{(f.rate * 100).toFixed(4)}%</span>
+              <span>{f.tx && explorer ? <a href={`${explorer}/tx/${f.tx}`} target="_blank" rel="noreferrer">{f.rate >= 0 ? 'Longs' : 'Shorts'}</a> : (f.rate >= 0 ? 'Longs' : 'Shorts')}</span>
+            </div>
+          ))}
+        </div>
+        <button className="px-pcard-close" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Positions, orders, history ────────────────────────────────────────────────
 
 function AdlLights({ n }: { n: number }) {
@@ -687,18 +722,16 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
         <button className={tab === 'positions' ? 'on' : ''} onClick={() => setTab('positions')}>Positions{n(account?.positions)}</button>
         <button className={tab === 'orders' ? 'on' : ''} onClick={() => setTab('orders')}>Open orders{n(account?.openOrders)}</button>
         <button className={tab === 'trades' ? 'on' : ''} onClick={() => setTab('trades')}>Trade history</button>
-        <button className={tab === 'funding' ? 'on' : ''} onClick={() => setTab('funding')}>Funding</button>
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>Order history</button>
       </div>
       <div className="px-table">
         {tab === 'positions' && (
           !account?.positions.length ? <div className="bx-empty">No open positions.</div> : (<>
             <table className="px-pos-table">
-              <thead><tr><th>Market</th><th>Size</th><th>Value</th><th>Entry</th><th>Mark</th><th>PnL (ROE)</th><th>Liq. price</th><th>Margin</th><th>Funding</th><th title="Auto-deleveraging queue">ADL</th><th /></tr></thead>
+              <thead><tr><th>Market</th><th title="Position size in USD: margin x leverage">Size (USD)</th><th>Entry</th><th>Mark</th><th>PnL (ROE)</th><th>Liq. price</th><th>Margin</th><th>Funding</th><th title="Auto-deleveraging queue">ADL</th><th /></tr></thead>
               <tbody>{account.positions.map((p) => (
                 <tr key={p.market}>
                   <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{p.pair}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{posLev(p.market) && <span className="px-poslev" title="Margin is the position's value divided by this leverage">{posLev(p.market)}</span>}{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
-                  <td className="num">{px(Math.abs(p.size), 4)}</td>
                   <td className="num">{usd(p.notional)}</td>
                   <td className="num">{px(p.entry, dec(p.market))}</td>
                   <td className="num">{px(p.mark, dec(p.market))}</td>
@@ -716,8 +749,8 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               return (
                 <div key={p.market} className="px-pcard">
                   <div className="px-pcard-h">
-                    <span className={`px-pside ${p.size > 0 ? 'long' : 'short'}`}>{p.size > 0 ? 'Long' : 'Short'}</span>
-                    <b>{p.pair}</b><span className="px-ptag">Perp</span>
+                    <span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} />
+                    <b>{p.pair}</b><span className={`px-pdir ${p.size > 0 ? 'up' : 'down'}`}>{p.size > 0 ? 'Long' : 'Short'}</span><span className="px-ptag">Perp</span>
                     {posLev(p.market) && <span className="px-ptag">Cross {posLev(p.market)}</span>}
                     <AdlLights n={p.adl} />
                     {!p.settled && <span className="px-pill tiny">settling</span>}
@@ -792,20 +825,6 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                   <td><b>{f.pair}</b></td><td className={f.side === 'buy' ? 'up' : 'down'}>{f.side === 'buy' ? 'Buy' : 'Sell'}</td>
                   <td className="num">{px(f.price, dec(f.market))}</td><td className="num">{usd(f.size * f.price)}</td><td>{f.role === 'taker' ? 'Taker' : 'Maker'}</td>
                   <td>{f.status === 'settled' && f.tx ? <a href={`${config.data?.explorer}/tx/${f.tx}`} target="_blank" rel="noreferrer">Settled</a> : f.status === 'failed' ? <span className="down">Refused on chain</span> : <span className="muted">Settling</span>}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )
-        )}
-        {tab === 'funding' && (
-          !account?.funding.length ? <div className="bx-empty">Funding is paid every hour on markets where you hold a position.</div> : (
-            <table>
-              <thead><tr><th>Time</th><th>Market</th><th>Hourly rate</th><th>Who paid</th><th /></tr></thead>
-              <tbody>{account.funding.map((f, i) => (
-                <tr key={i}>
-                  <td className="num muted">{new Date(f.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td><b>{f.pair}</b></td><td className="num">{(f.rate * 100).toFixed(4)}%</td><td>{f.rate >= 0 ? 'Longs paid shorts' : 'Shorts paid longs'}</td>
-                  <td>{f.tx && <a href={`${config.data?.explorer}/tx/${f.tx}`} target="_blank" rel="noreferrer">On chain</a>}</td>
                 </tr>
               ))}</tbody>
             </table>

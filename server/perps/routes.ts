@@ -101,9 +101,11 @@ export function registerPerpsRoutes(app: Express, d: Deps) {
     const insurance = await e.chain.insurance().catch(() => 0n);
     const vault = e.vaultAddress() || (await e.chain.vaultAddress().catch(() => ""));
     const va = vault ? await e.chainAccount(vault, 15_000).catch(() => null) : null;
+    const fees = await e.feeRates();
     res.json({
       enabled: true, running: e.started, contractId: e.chain.contractId, explorer: e.chain.explorer,
       insurance: usd(insurance), vault: { address: vault, equity: va ? usd(va.value) : null },
+      fees,
       lastError: e.started ? null : e.lastError,
     });
   }));
@@ -119,6 +121,15 @@ export function registerPerpsRoutes(app: Express, d: Deps) {
     const s = market(e, req.params.id);
     const depth = e.depth(s.chain.id, 20);
     res.json({ ...depth, trades: s.trades.slice(-40).reverse(), mark: s.mark, index: s.index });
+  }));
+
+  /** The market's recent hourly funding, newest first (public, like the book). */
+  app.get("/api/perps/markets/:id/funding", d.wrap(async (req, res) => {
+    const e = await need();
+    const s = market(e, req.params.id);
+    const { pool } = await import("../db");
+    const r = await pool!.query(`SELECT rate_ppm, applied_at, tx FROM perp_funding WHERE market = $1 ORDER BY id DESC LIMIT 24`, [s.chain.id]);
+    res.json({ funding: r.rows.map((f: any) => ({ rate: Number(f.rate_ppm) / 1e6, at: f.applied_at, tx: f.tx })) });
   }));
 
   app.get("/api/perps/markets/:id/candles", d.wrap(async (req, res) => {
