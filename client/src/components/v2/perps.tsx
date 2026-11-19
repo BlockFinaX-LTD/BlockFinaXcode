@@ -9,7 +9,7 @@
 import { Buffer } from 'buffer';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, KeyRound, ShieldCheck, X } from 'lucide-react';
+import { CandlestickChart, ChevronDown, KeyRound, ShieldCheck, X } from 'lucide-react';
 import { Keypair } from '@stellar/stellar-sdk';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -105,10 +105,7 @@ export function PerpsPage() {
 
   return (
     <div className="px-wrap">
-      <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} />
-      <button className="px-charttoggle" aria-expanded={showChart} onClick={() => setShowChart(!showChart)}>
-        {market.base}{market.quote} chart <ChevronDown size={15} className={showChart ? 'flip' : ''} />
-      </button>
+      <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} chartOpen={showChart} onChart={() => setShowChart(!showChart)} />
       <div className="px-grid">
         <section className={`px-panel px-chart ${showChart ? '' : 'px-hide-sm'}`}><Chart market={market} /></section>
         <section className="px-panel px-book">
@@ -134,7 +131,7 @@ export function PerpsPage() {
 
 // ── Market bar ────────────────────────────────────────────────────────────────
 
-function MarketBar({ markets, market, onPick }: { markets: MarketView[]; market: MarketView; onPick: (id: number) => void }) {
+function MarketBar({ markets, market, onPick, chartOpen, onChart }: { markets: MarketView[]; market: MarketView; onPick: (id: number) => void; chartOpen: boolean; onChart: () => void }) {
   const [open, setOpen] = useState(false);
   const countdown = useCountdown(market.nextFundingAt);
   const ref = useRef<HTMLDivElement>(null);
@@ -164,12 +161,15 @@ function MarketBar({ markets, market, onPick }: { markets: MarketView[]; market:
           </div>
         )}
       </div>
-      <div className="px-stat"><div className="k">Mark</div><div className="v num">{px(market.mark, market.decimals)}</div></div>
+      {/* Phones: 24h change under the market name and a chart button beside it (Binance style). */}
+      <span className={`px-mchange num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</span>
+      <button className={`px-chartbtn${chartOpen ? ' on' : ''}`} onClick={onChart} aria-label={chartOpen ? 'Hide chart' : 'Show chart'} aria-pressed={chartOpen}><CandlestickChart size={20} /></button>
+      <div className="px-stat px-x-sm"><div className="k">Mark</div><div className="v num">{px(market.mark, market.decimals)}</div></div>
       <div className="px-stat px-x-sm"><div className="k" title="The official rate the market tracks">Index</div><div className="v num">{px(market.index, market.decimals)}</div></div>
-      <div className="px-stat"><div className="k">24h change</div><div className={`v num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</div></div>
+      <div className="px-stat px-x-sm"><div className="k">24h change</div><div className={`v num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</div></div>
       <div className="px-stat px-x-sm"><div className="k">24h volume</div><div className="v num">{compact(market.volume24h)}</div></div>
       <div className="px-stat px-x-sm"><div className="k">Open interest</div><div className="v num">{compact(market.openInterest)}</div></div>
-      <div className="px-stat"><div className="k" title="Paid every hour between longs and shorts. Positive: longs pay shorts.">Funding / countdown</div>
+      <div className="px-stat px-x-sm"><div className="k" title="Paid every hour between longs and shorts. Positive: longs pay shorts.">Funding / countdown</div>
         <div className="v num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> <span className="muted">{countdown}</span></div></div>
       {market.weekend && <span className="px-pill amber" title="Official rates do not fix at weekends. The index holds at Friday's rate and funding is interest only.">Weekend mode</span>}
       {market.status === 2 && <span className="px-pill amber">Reduce-only</span>}
@@ -313,6 +313,7 @@ function Chart({ market }: { market: MarketView }) {
 // ── Order book and trades ─────────────────────────────────────────────────────
 
 function BookPanel({ market, book, onPrice, showTrades }: { market: MarketView; book?: BookView; onPrice: (p: number) => void; showTrades: boolean }) {
+  const fundCountdown = useCountdown(market.nextFundingAt);
   const [tab, setTab] = useState<'book' | 'trades'>('book');
   const t = showTrades ? 'trades' : tab;
   const asks = (book?.asks ?? []).slice(0, 11).reverse();
@@ -326,6 +327,7 @@ function BookPanel({ market, book, onPrice, showTrades }: { market: MarketView; 
   void max;
   return (
     <div className="px-book-in">
+      <div className="px-ob-fund"><span>Funding / countdown</span><b className="num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> / {fundCountdown}</b></div>
       <div className="px-tabs bx-hide-sm">
         <button className={t === 'book' ? 'on' : ''} onClick={() => setTab('book')}>Order book</button>
         <button className={t === 'trades' ? 'on' : ''} onClick={() => setTab('trades')}>Trades</button>
