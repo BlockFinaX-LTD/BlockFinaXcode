@@ -399,3 +399,58 @@
 
 /* PC section menu: the current section is highlighted on every page */
 .bx-nm-btn.on { color: var(--blue); background: var(--blue-soft); }
+
+/* ── PC trading terminal (1241px and wider): one surface, clear hierarchy, larger type ── */
+.px-price, .px-bar-sep, .px-oi-split { display: none; }
+@media (min-width: 1241px) {
+  /* one surface split by hairlines instead of separate boxes */
+  .px-wrap { gap: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--line); }
+  .px-wrap > .px-panel, .px-grid .px-panel { border: 0; border-radius: 0; }
+  .px-grid { gap: 1px; background: var(--line); grid-template-columns: minmax(0, 1fr) 300px 360px; }
+  .px-side { gap: 1px; background: var(--line); }
+  .px-grid > .px-bottom { align-self: stretch; }
+  .px-side > .px-panel:last-child { flex: 1; }
+  .px-wrap > .px-bar { border-bottom: 1px solid var(--line); }
+  .px-foot { background: var(--panel); margin: 0; padding: 10px 16px; border-top: 1px solid var(--line); }
+
+  /* market bar: pair, big price, grouped stats */
+  .px-bar { gap: 34px; padding: 14px 20px; flex-wrap: nowrap; overflow-x: auto; }
+  .px-pick-btn { background: var(--soft); border-radius: 12px; padding: 8px 14px; gap: 10px; }
+  .px-sym { font-size: 18px; }
+  .px-price { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+  .px-price .v { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+  .px-price > div:last-child { font-size: 13.5px; font-weight: 600; }
+  .px-bar-sep { display: block; width: 1px; align-self: stretch; background: var(--line); margin: 2px 0; }
+  .px-stat .k { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .px-stat .v { font-size: 16px; font-weight: 600; margin-top: 3px; }
+  .px-oi-split { display: inline; margin-left: 4px; letter-spacing: 0; }
+  .px-fundbtn .k { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+  /* chart: quieter watermark */
+  .px-watermark { opacity: 0.035; font-size: 56px !important; }
+  .px-chart-in { padding: 12px 16px 8px; }
+  .px-ivs button { font-size: 13px; padding: 5px 9px; }
+
+  /* order book: readable rows, aligned numbers */
+  .px-tabs { padding: 4px 14px; }
+  .px-tabs button { font-size: 14px; padding: 10px 12px; }
+  .px-ob-h { font-size: 11.5px; padding: 10px 16px 6px; }
+  .px-ob-h, .px-ob-row { padding-left: 16px; padding-right: 16px; gap: 10px; }
+  .px-ob-row { font-size: 13px; padding-top: 4px; padding-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .px-ob-mid { padding: 9px 16px; }
+  .px-ob-mid .num { font-size: 17px; }
+
+  /* order form: wider, more breathing room */
+  .px-form { padding: 16px 18px 18px; gap: 12px; }
+  .px-seg button, .px-side-toggle button { font-size: 14px; padding: 9px; }
+  .px-kv { font-size: 13.5px; }
+  .px-in { padding: 0 12px; font-size: 13.5px; }
+  .px-in input { font-size: 16px; padding: 12px 0; }
+  .px-cta { font-size: 15px; padding: 14px; border-radius: 11px; }
+  .px-sum div { font-size: 13px; }
+
+  /* positions: room for every column */
+  .px-table table { font-size: 13.5px; }
+  .px-table th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 11px 14px !important; }
+  .px-table td { padding: 13px 14px !important; font-variant-numeric: tabular-nums; }
+}

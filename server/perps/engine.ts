@@ -799,6 +799,8 @@ export class PerpEngine {
       high24h: dayCandles.length ? Math.max(...dayCandles.map((c) => c.h)) : s.mark,
       low24h: dayCandles.length ? Math.min(...dayCandles.map((c) => c.l)) : s.mark,
       openInterest: (num(s.chain.longOi, SIZE_SCALE) + num(s.chain.shortOi, SIZE_SCALE)) / 2 * s.mark,
+      longOi: num(s.chain.longOi, SIZE_SCALE) * s.mark,
+      shortOi: num(s.chain.shortOi, SIZE_SCALE) * s.mark,
       oiCap: Number(s.chain.oiCap) / USDC_SCALE,
       maxLeverage: s.chain.maxLeverage, maintBps: s.chain.maintBps,
       fundingLast: s.fundingRatePpm / 1e6,

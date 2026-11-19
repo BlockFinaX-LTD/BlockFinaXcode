@@ -26,6 +26,7 @@ interface MarketView {
   index: number; mark: number; weekend: boolean; change24h: number; volume24h: number; high24h: number; low24h: number;
   openInterest: number; oiCap: number; maxLeverage: number; maintBps: number; fundingLast: number; fundingPredicted: number;
   nextFundingAt: number; lastTrade: number | null;
+  longOi?: number; shortOi?: number;
 }
 interface Level { price: number; size: number; count: number; vault: number }
 interface BookView { bids: Level[]; asks: Level[]; trades: { price: number; size: number; takerBuy: boolean; t: number }[]; mark: number; index: number }
@@ -176,12 +177,21 @@ function MarketBar({ markets, market, onPick, chartOpen, onChart, onFunding }: {
       {/* Phones: 24h change under the market name and a chart button beside it (Binance style). */}
       <span className={`px-mchange num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</span>
       <button className={`px-chartbtn${chartOpen ? ' on' : ''}`} onClick={onChart} aria-label={chartOpen ? 'Hide chart' : 'Show chart'} aria-pressed={chartOpen}><CandlestickChart size={20} /></button>
-      <div className="px-stat px-x-sm"><div className="k">Mark</div><div className="v num">{px(market.mark, market.decimals)}</div></div>
-      <div className="px-stat px-x-sm"><div className="k" title="The official rate the market tracks">Index</div><div className="v num">{px(market.index, market.decimals)}</div></div>
-      <div className="px-stat px-x-sm"><div className="k">24h change</div><div className={`v num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</div></div>
+      <div className="px-price px-x-sm">
+        <div className="v num">{px(market.mark, market.decimals)}</div>
+        <div className={`num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</div>
+      </div>
+      <span className="px-bar-sep px-x-sm" aria-hidden="true" />
+      <div className="px-stat px-x-sm"><div className="k" title="The official rate the market tracks">Index price</div><div className="v num">{px(market.index, market.decimals)}</div></div>
       <div className="px-stat px-x-sm"><div className="k">24h volume</div><div className="v num">{compact(market.volume24h)}</div></div>
-      <div className="px-stat px-x-sm"><div className="k">Open interest</div><div className="v num">{compact(market.openInterest)}</div></div>
-      <button className="px-stat px-x-sm px-fundbtn" onClick={onFunding} title="See how funding works and its recent history"><div className="k">Funding / countdown</div>
+      {(() => {
+        const l = market.longOi ?? market.openInterest, sh = market.shortOi ?? market.openInterest, t = l + sh;
+        return (
+          <div className="px-stat px-x-sm"><div className="k">Open interest {t > 0 && <span className="px-oi-split"><span className="up">{Math.round((l / t) * 100)}%</span>/<span className="down">{Math.round((sh / t) * 100)}%</span></span>}</div>
+            <div className="v num"><span className="up">↗ {compact(l)}</span> <span className="muted">/</span> <span className="down">↘ {compact(sh)}</span></div></div>
+        );
+      })()}
+      <button className="px-stat px-x-sm px-fundbtn" onClick={onFunding} title="See how funding works and its recent history"><div className="k">Funding / 1h</div>
         <div className="v num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> <span className="muted">{countdown}</span></div></button>
       {market.weekend && <span className="px-pill amber" title="Official rates do not fix at weekends. The index holds at Friday's rate and funding is interest only.">Weekend mode</span>}
       {market.status === 2 && <span className="px-pill amber">Reduce-only</span>}
