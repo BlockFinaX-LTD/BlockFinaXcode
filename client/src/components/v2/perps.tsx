@@ -98,13 +98,16 @@ export function PerpsPage() {
   const [priceClick, setPriceClick] = useState<number | null>(null);
   // Phones: the chart opens on a tap (Binance style), so the first screen is form and book.
   const [showChart, setShowChart] = useState(false);
+  // Long or Short tapped in the phone chart view: close the chart and open the form on that side.
+  const [sideReq, setSideReq] = useState<{ side: 'buy' | 'sell'; at: number } | null>(null);
+  const trade = (side: 'buy' | 'sell') => { setSideReq({ side, at: Date.now() }); setShowChart(false); window.scrollTo({ top: 0 }); };
 
   if (config.isLoading) return <div className="bx-empty"><Spin /> Loading perps...</div>;
   if (!config.data?.enabled) return <div className="bx-card"><div className="bx-empty">Perps are not available on this network yet.</div></div>;
   if (!market) return <div className="bx-empty"><Spin /> Loading markets...</div>;
 
   return (
-    <div className="px-wrap">
+    <div className={`px-wrap${showChart ? ' px-chartmode' : ''}`}>
       <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} chartOpen={showChart} onChart={() => setShowChart(!showChart)} />
       <div className="px-grid">
         <section className={`px-panel px-chart ${showChart ? '' : 'px-hide-sm'}`}><Chart market={market} /></section>
@@ -112,7 +115,7 @@ export function PerpsPage() {
           <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={false} />
         </section>
         <aside className="px-side">
-          <OrderForm market={market} account={account.data} kp={kp} priceClick={priceClick}
+          <OrderForm market={market} account={account.data} kp={kp} priceClick={priceClick} sideReq={sideReq}
             onKey={(k) => { if (wallet) { saveKey(wallet, k); setKp(k); } }} accountError={account.error as Error | null} />
           <AccountPanel account={account.data} kp={kp} config={config.data} market={market} onForget={() => { if (wallet) { try { localStorage.removeItem(KEY_PREFIX + wallet); } catch { /* ignore */ } setKp(null); } }} />
         </aside>
@@ -125,6 +128,12 @@ export function PerpsPage() {
         <span>Insurance fund {usd(config.data.insurance, 0)}</span>
         {config.data.vault?.equity != null && <span>Liquidity vault {usd(config.data.vault.equity, 0)}</span>}
       </div>
+      {showChart && (
+        <div className="px-lsbar">
+          <button className="buy" onClick={() => trade('buy')}>Long</button>
+          <button className="sell" onClick={() => trade('sell')}>Short</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -384,14 +393,15 @@ async function sendOrder(kp: Keypair, contractId: string, wallet: string, m: Mar
   return api<{ hash: string; status: string; filled: number; fills: { price: number; size: number }[] }>('/api/perps/orders', { order: orderToJson(order), sig, tif: a.tif });
 }
 
-function OrderForm({ market, account, kp, priceClick, onKey, accountError }: {
-  market: MarketView; account?: AccountView; kp: Keypair | null; priceClick: number | null; onKey: (k: Keypair) => void; accountError: Error | null;
+function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountError }: {
+  market: MarketView; account?: AccountView; kp: Keypair | null; priceClick: number | null; sideReq?: { side: 'buy' | 'sell'; at: number } | null; onKey: (k: Keypair) => void; accountError: Error | null;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['perps-config'], queryFn: () => api<PerpConfig>('/api/perps/config') });
   const [type, setType] = useState<'market' | 'limit'>('market');
-  const [side, setSide] = useState<'buy' | 'sell'>('buy');
+  const [side, setSide] = useState<'buy' | 'sell'>(sideReq?.side ?? 'buy');
+  useEffect(() => { if (sideReq) setSide(sideReq.side); }, [sideReq?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lev, setLev] = useState(Math.min(3, market.maxLeverage));
   const [showLev, setShowLev] = useState(false);
   const [price, setPrice] = useState('');

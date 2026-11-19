@@ -293,3 +293,19 @@
   .px-bottom tbody td:last-child button { width: 100%; justify-content: center; padding: 8px; }
   .px-bottom tbody td[colspan] { grid-column: 1 / -1; }
 }
+
+/* Phones, chart view (Binance style): chart, book and positions with Long / Short fixed at
+   the bottom. The order form appears once Long or Short is tapped. */
+.px-lsbar { display: none; }
+@media (max-width: 860px) {
+  .px-chartmode .px-form, .px-chartmode .px-acct { display: none !important; }
+  .px-chartmode .px-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "chart" "book" "bottom"; }
+  .px-chartmode { padding-bottom: 76px; }
+  .px-chartmode .px-ob-h, .px-chartmode .px-ob-row { grid-template-columns: 1fr 1fr 1fr; padding-left: 12px; padding-right: 12px; }
+  .px-chartmode .px-ob-h span:nth-of-type(3), .px-chartmode .px-ob-row span:nth-of-type(3) { display: inline; }
+  .px-chartmode .px-ob-mid .muted { display: inline; }
+  .px-lsbar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(15, 23, 41, 0.08); }
+  .px-lsbar button { border: 0; border-radius: 10px; padding: 13px; font: inherit; font-size: 15px; font-weight: 700; color: #fff; cursor: pointer; }
+  .px-lsbar .buy { background: var(--green); }
+  .px-lsbar .sell { background: var(--red); }
+}
