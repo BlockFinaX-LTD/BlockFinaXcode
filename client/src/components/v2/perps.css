@@ -337,3 +337,17 @@
   .px-pcard-close { width: 100%; border: 0; border-radius: 8px; background: var(--soft); padding: 11px; font: inherit; font-weight: 700; color: var(--text); cursor: pointer; }
   .px-pcard-close:disabled { opacity: 0.6; }
 }
+
+/* Realized PnL: tappable row on the card and a bottom sheet with the breakdown */
+.px-pcard-row { width: 100%; font: inherit; color: inherit; background: none; cursor: pointer; }
+.px-pcard-row b { display: inline-flex; align-items: center; gap: 4px; }
+.px-sheet-bg { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 41, 0.45); display: flex; align-items: flex-end; justify-content: center; }
+.px-sheet { width: 100%; max-width: 520px; background: var(--panel); border-radius: 18px 18px 0 0; padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(15, 23, 41, 0.2); }
+.px-sheet-grab { display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
+.px-sheet h3 { font-size: 20px; margin: 0 0 14px; }
+.px-sheet-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; font-size: 14px; color: var(--muted); }
+.px-sheet-row small { display: block; font-size: 11px; opacity: 0.8; }
+.px-sheet-row b { color: var(--text); font-size: 14px; }
+.px-sheet-row.total { color: var(--text); font-weight: 600; font-size: 15px; }
+.px-sheet-row.total b { font-size: 17px; }
+.px-sheet-note { font-size: 12px; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; margin: 10px 0 14px; }

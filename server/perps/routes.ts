@@ -71,6 +71,13 @@ export function startPerpsInBackground() {
 const usd = (b: bigint) => Number(b) / USDC_SCALE;
 
 export function registerPerpsRoutes(app: Express, d: Deps) {
+  // The contract's trading fee rates, read once (they change only by owner action).
+  let feeCache: { takerBps: number; makerBps: number } | null = null;
+  const feeRatesOnce = async (e: { chain: { feeRates(): Promise<{ takerBps: number; makerBps: number }> } }) => {
+    if (feeCache) return feeCache;
+    try { feeCache = await e.chain.feeRates(); return feeCache; } catch { return { takerBps: 5, makerBps: 0 }; }
+  };
+
   const need = async () => {
     const e = await getEngine();
     if (!e) throw new ApplicationError("CHAIN_NOT_ENABLED", "Perps are not available on this network yet");
@@ -184,11 +191,57 @@ export function registerPerpsRoutes(app: Express, d: Deps) {
         fundingOwed: onChain ? usd(onChain.fundingOwed) : 0,
         adl: e.adlLights(id, p.size, p.entry, h.value),
         settled: Boolean(onChain && Number(onChain.size) / SIZE_SCALE === p.size),
+        realized: null as null | { total: number; closing: number; fees: number; funding: number },
       };
     });
     const { pool } = await import("../db");
+    // Realized PnL for each open position, Binance style: closing PnL from partial closes,
+    // trading fees and funding paid since the position opened. Rebuilt from this account's
+    // fills and the hourly funding events, in time order.
+    const fees = await feeRatesOnce(e);
+    const realized = new Map<number, { closing: number; fees: number; funding: number }>();
+    if (m.positions.size) {
+      const ids = [...m.positions.keys()];
+      const fl = await pool!.query(
+        `SELECT market, maker, taker, price, size, taker_buy, created_at FROM perp_fills WHERE (maker = $1 OR taker = $1) AND market = ANY($2::int[]) AND status <> 'failed' ORDER BY id`, [wallet, ids]);
+      const fe = await pool!.query(`SELECT market, rate_ppm, applied_at FROM perp_funding WHERE market = ANY($1::int[]) ORDER BY id`, [ids]);
+      type Ev = { at: number; kind: "fill"; f: any } | { at: number; kind: "fund"; f: any };
+      const events: Ev[] = [
+        ...fl.rows.map((f: any) => ({ at: new Date(f.created_at).getTime(), kind: "fill" as const, f })),
+        ...fe.rows.map((f: any) => ({ at: new Date(f.applied_at).getTime(), kind: "fund" as const, f })),
+      ].sort((a, b) => a.at - b.at);
+      for (const id of ids) {
+        let size = 0, entry = 0, r = { closing: 0, fees: 0, funding: 0 };
+        for (const ev of events) {
+          if (Number(ev.f.market) !== id) continue;
+          if (ev.kind === "fund") { if (size) r.funding -= size * entry * (Number(ev.f.rate_ppm) / 1e6); continue; }
+          const f = ev.f;
+          const isTaker = f.taker === wallet;
+          const buy = isTaker === f.taker_buy;
+          const q = Number(f.size) / SIZE_SCALE, price = Number(f.price) / PRICE_SCALE;
+          const delta = buy ? q : -q;
+          r.fees -= q * price * ((isTaker ? fees.takerBps : fees.makerBps) / 10_000);
+          if (size === 0 || Math.sign(size) === Math.sign(delta)) {
+            entry = (Math.abs(size) * entry + q * price) / (Math.abs(size) + q);
+            size += delta;
+          } else {
+            const closed = Math.min(Math.abs(delta), Math.abs(size)) * Math.sign(size);
+            r.closing += closed * (price - entry);
+            const next = size + delta;
+            if (Math.abs(next) < 1e-12) { size = 0; entry = 0; r = { closing: 0, fees: 0, funding: 0 }; }
+            else if (Math.sign(next) !== Math.sign(size)) { size = next; entry = price; r = { closing: 0, fees: r.fees, funding: 0 }; }
+            else size = next;
+          }
+        }
+        realized.set(id, r);
+      }
+    }
     const fills = await pool!.query(
       `SELECT id, market, maker, taker, price, size, taker_buy, status, tx, created_at FROM perp_fills WHERE maker = $1 OR taker = $1 ORDER BY id DESC LIMIT 60`, [wallet]);
+    for (const p of positions) {
+      const r = realized.get(p.market);
+      if (r) p.realized = { total: r.closing + r.fees + r.funding, closing: r.closing, fees: r.fees, funding: r.funding };
+    }
     const orders = await pool!.query(
       `SELECT hash, market, is_buy, price, size, remaining, tif, reduce_only, status, created_at FROM perp_orders WHERE account = $1 ORDER BY created_at DESC LIMIT 60`, [wallet]);
     const funding = await pool!.query(`SELECT market, rate_ppm, applied_at, tx FROM perp_funding WHERE market = ANY($1::int[]) ORDER BY id DESC LIMIT 48`, [[...m.positions.keys()]]);

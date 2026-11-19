@@ -138,6 +138,10 @@ export class PerpChain {
     return Number(await this.read("key_expiry", { who, key: Buffer.from(keyHex, "hex") }));
   }
   async insurance(): Promise<bigint> { return big(await this.read("insurance")); }
+  async feeRates(): Promise<{ takerBps: number; makerBps: number }> {
+    const c = (await this.read("get_config")) as { taker_fee_bps: number; maker_fee_bps: number };
+    return { takerBps: Number(c.taker_fee_bps), makerBps: Number(c.maker_fee_bps) };
+  }
   async vaultAddress(): Promise<string> { return String(await this.read("vault_address")); }
   async escapeOpen(): Promise<boolean> { return Boolean(await this.read("escape_open")); }
   async filled(digestHex: string): Promise<bigint> { return big(await this.read("filled", { hash: Buffer.from(digestHex, "hex") })); }

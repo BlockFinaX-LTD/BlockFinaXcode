@@ -9,7 +9,7 @@
 import { Buffer } from 'buffer';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CandlestickChart, ChevronDown, KeyRound, ShieldCheck, X } from 'lucide-react';
+import { CandlestickChart, ChevronDown, ChevronRight, KeyRound, ShieldCheck, X } from 'lucide-react';
 import { Keypair } from '@stellar/stellar-sdk';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -33,6 +33,7 @@ interface Candle { t: number; o: number; h: number; l: number; c: number; v: num
 interface PositionView {
   market: number; pair: string; symbol: string; size: number; entry: number; mark: number; notional: number; upnl: number; roe: number;
   liquidationPrice: number | null; margin: number; fundingOwed: number; adl: number; settled: boolean;
+  realized?: { total: number; closing: number; fees: number; funding: number } | null;
 }
 interface AccountView {
   wallet: string; key: { approved: boolean; expiry: number } | null;
@@ -632,17 +633,17 @@ function AdlLights({ n }: { n: number }) {
 
 function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: MarketView[]; kp: Keypair | null }) {
   const [tab, setTab] = useState<'positions' | 'orders' | 'trades' | 'funding' | 'history'>('positions');
+  const [pnlSheet, setPnlSheet] = useState<number | null>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['perps-config'], queryFn: () => api<PerpConfig>('/api/perps/config') });
   const [busy, setBusy] = useState<string | null>(null);
   const dec = (id: number) => markets.find((m) => m.id === id)?.decimals ?? 2;
-  // Real leverage of a position under cross margin: its size over the account's equity.
-  const posLev = (notional: number) => {
-    const eq = account?.equity ?? 0;
-    if (!(eq > 0) || !(notional > 0)) return null;
-    const x = notional / eq;
-    return `${x >= 10 ? Math.round(x) : Math.round(x * 10) / 10}x`;
+  // The leverage the position's margin is worked out from (Binance's "Cross 20X"):
+  // value = margin x this. The contract sets margin at the market's maximum leverage.
+  const posLev = (market: number) => {
+    const m = markets.find((x) => x.id === market);
+    return m ? `${m.maxLeverage}x` : null;
   };
   const close = async (p: PositionView) => {
     const m = markets.find((x) => x.id === p.market);
@@ -689,7 +690,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <thead><tr><th>Market</th><th>Size</th><th>Value</th><th>Entry</th><th>Mark</th><th>PnL (ROE)</th><th>Liq. price</th><th>Margin</th><th>Funding</th><th title="Auto-deleveraging queue">ADL</th><th /></tr></thead>
               <tbody>{account.positions.map((p) => (
                 <tr key={p.market}>
-                  <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{p.pair}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{posLev(p.notional) && <span className="px-poslev" title="This position's size divided by your account equity (cross margin)">{posLev(p.notional)}</span>}{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
+                  <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{p.pair}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{posLev(p.market) && <span className="px-poslev" title="Margin is the position's value divided by this leverage">{posLev(p.market)}</span>}{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
                   <td className="num">{px(Math.abs(p.size), 4)}</td>
                   <td className="num">{usd(p.notional)}</td>
                   <td className="num">{px(p.entry, dec(p.market))}</td>
@@ -711,7 +712,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                   <div className="px-pcard-h">
                     <span className={`px-pside ${p.size > 0 ? 'long' : 'short'}`}>{p.size > 0 ? 'Long' : 'Short'}</span>
                     <b>{p.pair}</b><span className="px-ptag">Perp</span>
-                    {posLev(p.notional) && <span className="px-ptag">Cross {posLev(p.notional)}</span>}
+                    {posLev(p.market) && <span className="px-ptag">Cross {posLev(p.market)}</span>}
                     <AdlLights n={p.adl} />
                     {!p.settled && <span className="px-pill tiny">settling</span>}
                   </div>
@@ -727,11 +728,37 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                     <div><span>Mark price</span><b className="num">{px(p.mark, dec(p.market))}</b></div>
                     <div className="r"><span>Liq. price</span><b className="num">{p.liquidationPrice != null ? px(p.liquidationPrice, dec(p.market)) : '-'}</b></div>
                   </div>
-                  <div className="px-pcard-row"><span>Funding (USD)</span><b className={`num ${p.fundingOwed > 0 ? 'down' : 'up'}`}>{p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}</b></div>
+                  <button className="px-pcard-row" onClick={() => setPnlSheet(p.market)}>
+                    <span>Realized PnL (USD)</span>
+                    <b className={`num ${(p.realized?.total ?? 0) >= 0 ? 'up' : 'down'}`}>{p.realized ? signed(p.realized.total) : '-'} <ChevronRight size={15} className="muted" /></b>
+                  </button>
                   <button className="px-pcard-close" disabled={busy !== null || !kp} onClick={() => close(p)}>{busy === `close-${p.market}` ? <Spin /> : 'Close'}</button>
                 </div>
               );
             })}</div>
+            {pnlSheet != null && (() => {
+              const p = account.positions.find((x) => x.market === pnlSheet);
+              const r = p?.realized;
+              if (!p) return null;
+              const money = (v: number | undefined) => (v == null ? '-' : `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(2)}`);
+              const line = (label: string, v: number | undefined, note?: string) => (
+                <div className="px-sheet-row"><span>{label}{note && <small>{note}</small>}</span><b className="num">{money(v)}</b></div>
+              );
+              return (
+                <div className="px-sheet-bg" onClick={() => setPnlSheet(null)}>
+                  <div className="px-sheet" role="dialog" aria-modal="true" aria-label="Realized PnL" onClick={(e) => e.stopPropagation()}>
+                    <i className="px-sheet-grab" aria-hidden="true" />
+                    <h3>Realized PnL</h3>
+                    <div className="px-sheet-row total"><span>Realized PnL</span><b className={`num ${(r?.total ?? 0) >= 0 ? 'up' : 'down'}`}>{money(r?.total)}</b></div>
+                    {line('Closing PnL', r?.closing, 'from parts of this position already closed')}
+                    {line('Funding fee', r?.funding)}
+                    {line('Trading fee', r?.fees)}
+                    <p className="px-sheet-note">For your {p.pair} {p.size > 0 ? 'long' : 'short'} since it was opened. Funding not yet settled: {p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}.</p>
+                    <button className="px-pcard-close" onClick={() => setPnlSheet(null)}>Done</button>
+                  </div>
+                </div>
+              );
+            })()}
           </>
           )
         )}
