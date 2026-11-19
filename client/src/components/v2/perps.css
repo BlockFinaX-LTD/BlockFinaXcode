@@ -233,3 +233,60 @@
   .px-ob-side .px-ob-row { padding-top: 2px; padding-bottom: 2px; }
   .px-ob-side.asks .px-ob-row:nth-last-child(n+7), .px-ob-side.bids .px-ob-row:nth-child(n+7) { display: none; }
 }
+
+/* ── Phones: Binance-style trade screen. Form and book side by side, chart on a tap,
+   positions as cards, account last. Wide screens are untouched. ── */
+.px-charttoggle { display: none; }
+@media (max-width: 860px) {
+  .px-x-sm, .px-hide-sm { display: none !important; }
+  .px-wrap .px-mtabs { display: none; }
+  .px-charttoggle { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 600; font-size: 13px; color: var(--text); cursor: pointer; }
+  .px-charttoggle svg { transition: transform .2s; }
+  .px-charttoggle svg.flip { transform: rotate(180deg); }
+
+  /* market bar: picker, mark, change and funding on two tidy rows */
+  .px-bar { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; align-items: end; }
+  .px-bar .px-pick { grid-column: 1 / -1; }
+  .px-bar .px-stat .v { font-size: 13px; }
+
+  /* layout: chart (when open), then form | book, positions, account */
+  .px-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "chart chart" "form book" "bottom bottom" "acct acct"; gap: 8px; align-items: start; }
+  .px-side { display: contents; }
+  .px-form { grid-area: form; padding: 10px !important; }
+  .px-acct { grid-area: acct; }
+  .px-book { grid-area: book; align-self: stretch; }
+
+  /* compact order form */
+  .px-form { font-size: 12.5px; }
+  .px-form .px-side-toggle button, .px-form .px-seg button { padding: 7px 4px; font-size: 12.5px; }
+  .px-form .px-cta { font-size: 13.5px; padding: 11px 6px; }
+  .px-form .px-in input { font-size: 14px; }
+  .px-form .px-pct-l { font-size: 10px; }
+  .px-form .px-hint { font-size: 11px; }
+
+  /* compact order book: price and size, six levels a side */
+  .px-book-in { padding: 4px 0 6px; }
+  .px-ob { font-size: 11.5px; }
+  .px-ob-h, .px-ob-row { grid-template-columns: 1fr 1fr; padding: 2px 8px; gap: 4px; }
+  .px-ob-row { font-size: 11.5px; }
+  .px-ob-h span:nth-of-type(3), .px-ob-row span:nth-of-type(3) { display: none; }
+  .px-ob-mid { padding: 6px 8px; }
+  .px-ob-mid .num { font-size: 14px; }
+  .px-ob-mid .muted, .px-ob-note { display: none; }
+  .px-ob-side.asks .px-ob-row:nth-last-child(n+7), .px-ob-side.bids .px-ob-row:nth-child(n+7) { display: none; }
+
+  /* positions and history as cards */
+  .px-bottom .px-table { overflow: visible; }
+  .px-bottom table, .px-bottom tbody { display: block; width: 100%; min-width: 0 !important; }
+  .px-bottom .px-tabs { overflow-x: auto; scrollbar-width: none; }
+  .px-panel.px-bottom { min-width: 0; overflow: hidden; }
+  .px-bottom thead { display: none; }
+  .px-bottom tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; padding: 12px; border-bottom: 1px solid var(--line); }
+  .px-bottom tbody td { display: flex; flex-direction: column; gap: 2px; padding: 0 !important; border: 0 !important; text-align: left !important; min-width: 0; font-size: 12.5px; }
+  .px-bottom tbody td::before { content: attr(data-label); font-size: 10.5px; color: var(--muted); font-family: inherit; font-weight: 400; }
+  .px-bottom tbody td:first-child { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 6px; font-size: 14px; }
+  .px-bottom tbody td:first-child::before, .px-bottom tbody td:last-child::before { content: none; }
+  .px-bottom tbody td:last-child:has(button) { grid-column: 1 / -1; }
+  .px-bottom tbody td:last-child button { width: 100%; justify-content: center; padding: 8px; }
+  .px-bottom tbody td[colspan] { grid-column: 1 / -1; }
+}

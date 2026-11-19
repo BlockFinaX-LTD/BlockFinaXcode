@@ -7,7 +7,7 @@
  * place and cancel orders, never withdraw). The key lives in this browser only.
  */
 import { Buffer } from 'buffer';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, KeyRound, ShieldCheck, X } from 'lucide-react';
 import { Keypair } from '@stellar/stellar-sdk';
@@ -96,7 +96,8 @@ export function PerpsPage() {
   }, [account.data?.wallet, wallet]);
 
   const [priceClick, setPriceClick] = useState<number | null>(null);
-  const [mobileTab, setMobileTab] = useState<'chart' | 'book' | 'trades'>('chart');
+  // Phones: the chart opens on a tap (Binance style), so the first screen is form and book.
+  const [showChart, setShowChart] = useState(false);
 
   if (config.isLoading) return <div className="bx-empty"><Spin /> Loading perps...</div>;
   if (!config.data?.enabled) return <div className="bx-card"><div className="bx-empty">Perps are not available on this network yet.</div></div>;
@@ -105,13 +106,13 @@ export function PerpsPage() {
   return (
     <div className="px-wrap">
       <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} />
-      <div className="px-mtabs">
-        {(['chart', 'book', 'trades'] as const).map((t) => <button key={t} className={mobileTab === t ? 'on' : ''} onClick={() => setMobileTab(t)}>{t === 'chart' ? 'Chart' : t === 'book' ? 'Order book' : 'Trades'}</button>)}
-      </div>
+      <button className="px-charttoggle" aria-expanded={showChart} onClick={() => setShowChart(!showChart)}>
+        {market.base}{market.quote} chart <ChevronDown size={15} className={showChart ? 'flip' : ''} />
+      </button>
       <div className="px-grid">
-        <section className={`px-panel px-chart ${mobileTab !== 'chart' ? 'px-hide-sm' : ''}`}><Chart market={market} /></section>
-        <section className={`px-panel px-book ${mobileTab === 'chart' ? 'px-hide-sm' : ''}`}>
-          <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={mobileTab === 'trades'} />
+        <section className={`px-panel px-chart ${showChart ? '' : 'px-hide-sm'}`}><Chart market={market} /></section>
+        <section className="px-panel px-book">
+          <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={false} />
         </section>
         <aside className="px-side">
           <OrderForm market={market} account={account.data} kp={kp} priceClick={priceClick}
@@ -164,10 +165,10 @@ function MarketBar({ markets, market, onPick }: { markets: MarketView[]; market:
         )}
       </div>
       <div className="px-stat"><div className="k">Mark</div><div className="v num">{px(market.mark, market.decimals)}</div></div>
-      <div className="px-stat"><div className="k" title="The official rate the market tracks">Index</div><div className="v num">{px(market.index, market.decimals)}</div></div>
+      <div className="px-stat px-x-sm"><div className="k" title="The official rate the market tracks">Index</div><div className="v num">{px(market.index, market.decimals)}</div></div>
       <div className="px-stat"><div className="k">24h change</div><div className={`v num ${up ? 'up' : 'down'}`}>{pctS(market.change24h)}</div></div>
-      <div className="px-stat"><div className="k">24h volume</div><div className="v num">{compact(market.volume24h)}</div></div>
-      <div className="px-stat"><div className="k">Open interest</div><div className="v num">{compact(market.openInterest)}</div></div>
+      <div className="px-stat px-x-sm"><div className="k">24h volume</div><div className="v num">{compact(market.volume24h)}</div></div>
+      <div className="px-stat px-x-sm"><div className="k">Open interest</div><div className="v num">{compact(market.openInterest)}</div></div>
       <div className="px-stat"><div className="k" title="Paid every hour between longs and shorts. Positive: longs pay shorts.">Funding / countdown</div>
         <div className="v num"><span className={market.fundingPredicted >= 0 ? 'up' : 'down'}>{(market.fundingPredicted * 100).toFixed(4)}%</span> <span className="muted">{countdown}</span></div></div>
       {market.weekend && <span className="px-pill amber" title="Official rates do not fix at weekends. The index holds at Friday's rate and funding is interest only.">Weekend mode</span>}
@@ -497,10 +498,10 @@ function OrderForm({ market, account, kp, priceClick, onKey, accountError }: {
         <button className={type === 'market' ? 'on' : ''} onClick={() => setType('market')}>Market</button>
         <button className={type === 'limit' ? 'on' : ''} onClick={() => setType('limit')}>Limit</button>
       </div>
-      <div className="px-kv"><span>Perps balance</span><b className="num">{usd(account?.onChain.collateral ?? 0)}</b></div>
+      <div className="px-kv px-x-sm"><span>Perps balance</span><b className="num">{usd(account?.onChain.collateral ?? 0)}</b></div>
       <div className="px-kv"><span>Available to trade</span><b className="num">{usd(available)}</b></div>
-      <div className="px-kv"><span>In your wallet</span><b className="num">{usd(walletUsdc)}{walletUsdc > 0 && !hasMoney && <button className="px-link inline" onClick={() => document.getElementById('px-deposit-btn')?.click()}>Move to perps</button>}</b></div>
-      <div className="px-kv"><span>Current position</span><b className={`num ${pos ? (pos.size > 0 ? 'up' : 'down') : ''}`}>{pos ? `${pos.size > 0 ? '' : '-'}${usd(pos.notional, 0)}` : '-'}</b></div>
+      <div className="px-kv px-x-sm"><span>In your wallet</span><b className="num">{usd(walletUsdc)}{walletUsdc > 0 && !hasMoney && <button className="px-link inline" onClick={() => document.getElementById('px-deposit-btn')?.click()}>Move to perps</button>}</b></div>
+      <div className="px-kv px-x-sm"><span>Current position</span><b className={`num ${pos ? (pos.size > 0 ? 'up' : 'down') : ''}`}>{pos ? `${pos.size > 0 ? '' : '-'}${usd(pos.notional, 0)}` : '-'}</b></div>
       {type === 'limit' && (
         <label className="px-in"><span>Price ({market.quote})</span>
           <input id="px-price" className="num" inputMode="decimal" value={price} placeholder={px(market.mark, market.decimals)} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} />
@@ -511,7 +512,7 @@ function OrderForm({ market, account, kp, priceClick, onKey, accountError }: {
         <input id="px-size" className="num" inputMode="decimal" value={sizeUsd} placeholder="0" onChange={(e) => { setSizeUsd(e.target.value.replace(/[^0-9.]/g, '')); setPctFill(0); }} />
         <span className="px-unit">USD</span>
       </label>
-      <div className="px-units muted num">{units > 0 ? `${px(units, 4)} units · ${px(notional, 0)} USD of ${market.base} vs ${market.quote}` : ' '}</div>
+      <div className="px-units muted num px-x-sm">{units > 0 ? `${px(units, 4)} units · ${px(notional, 0)} USD of ${market.base} vs ${market.quote}` : ' '}</div>
       <input id="px-pct" type="range" min={0} max={100} step={1} value={pctFill} disabled={maxUsd <= 0} onChange={(e) => setFromPct(Number(e.target.value))} aria-label="Share of what you can open" className="px-pct" />
       <div className="px-pct-l muted"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
       <div className="px-opts">
@@ -532,10 +533,10 @@ function OrderForm({ market, account, kp, priceClick, onKey, accountError }: {
 
       <div className="px-sum">
         <div><span>Liquidation price</span><b className="num">{estLiq ? px(estLiq, market.decimals) : '-'}</b></div>
-        <div><span>Order value</span><b className="num">{notional ? usd(notional) : '-'}</b></div>
+        <div className="px-x-sm"><span>Order value</span><b className="num">{notional ? usd(notional) : '-'}</b></div>
         <div><span>Margin required</span><b className="num">{notional ? usd(margin) : '-'}</b></div>
-        {type === 'market' && <div><span>Slippage limit</span><b className="num">2.00%</b></div>}
-        <div><span>Fees</span><b className="num">{type === 'market' ? '0.050% taker' : '0.000% maker'}</b></div>
+        {type === 'market' && <div className="px-x-sm"><span>Slippage limit</span><b className="num">2.00%</b></div>}
+        <div className="px-x-sm"><span>Fees</span><b className="num">{type === 'market' ? '0.050% taker' : '0.000% maker'}</b></div>
       </div>
       {!keyOk && account && <div className="px-hint"><ShieldCheck size={14} /> Your passkey approves a trading key once. It can place and cancel orders, but can never withdraw your USDC.</div>}
       {notional > maxUsd && keyOk && <div className="px-hint warn">Above what your margin allows at {lev}x ({usd(maxUsd, 0)}).</div>}
@@ -644,8 +645,17 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
     } catch (e) { toast({ title: 'Cancel failed', description: (e as Error).message, variant: 'destructive' }); }
   };
   const n = (x?: unknown[]) => (x?.length ? ` (${x.length})` : '');
+  // Phones show each row as a card: copy the column headings onto the cells as labels.
+  const tablesRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    tablesRef.current?.querySelectorAll('table').forEach((t) => {
+      const heads = Array.from(t.querySelectorAll('thead th')).map((th) => th.textContent?.trim() ?? '');
+      t.querySelectorAll('tbody tr').forEach((tr) => Array.from(tr.children).forEach((td, i) => { (td as HTMLElement).dataset.label = heads[i] ?? ''; }));
+    });
+  });
+
   return (
-    <div>
+    <div ref={tablesRef}>
       <div className="px-tabs">
         <button className={tab === 'positions' ? 'on' : ''} onClick={() => setTab('positions')}>Positions{n(account?.positions)}</button>
         <button className={tab === 'orders' ? 'on' : ''} onClick={() => setTab('orders')}>Open orders{n(account?.openOrders)}</button>
