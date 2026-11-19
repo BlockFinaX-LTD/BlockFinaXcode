@@ -14,7 +14,7 @@
  * root so the rest of the app stays unaffected.
  */
 
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { FlagSvg } from '@/components/app-glyphs';
@@ -23,6 +23,8 @@ import './website.css';
 // Launch App opens the Stellar testnet app; Apply opens the connector portal.
 const clean = (v: string | undefined, fallback: string) => (v || fallback).trim().replace(/\/$/, '');
 const LAUNCH_APP_HREF = `${clean(import.meta.env.VITE_TESTNET_APP_URL, 'https://testnet.blockfinax.com')}/hedge`;
+const DOCS_URL = 'https://docs.blockfinax.com/stellar/intro';
+const DEV_DOCS_URL = 'https://docs.blockfinax.com/stellar/developers';
 const CONNECTOR_PORTAL_URL = clean(import.meta.env.VITE_CONNECTOR_PORTAL_URL, 'https://connector.blockfinax.com');
 
 const logoPath = '/favicon.png';
@@ -145,7 +147,7 @@ function useHeroSurface(ref: React.RefObject<HTMLCanvasElement>) {
 
 const ROTATOR_WORDS = ['Hedging', 'Managing', 'Pricing', 'Underwriting'];
 
-function HeroRotator() {
+function HeroRotator({ words = ROTATOR_WORDS }: { words?: string[] }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [idx, setIdx] = useState(0);
   useEffect(() => {
@@ -158,7 +160,7 @@ function HeroRotator() {
       el.style.opacity = '0';
       el.style.transform = 'translateY(-10px)';
       timeout = window.setTimeout(() => {
-        setIdx((i) => (i + 1) % ROTATOR_WORDS.length);
+        setIdx((i) => (i + 1) % words.length);
         el.style.transform = 'translateY(10px)';
         requestAnimationFrame(() => {
           el.style.opacity = '1';
@@ -168,7 +170,7 @@ function HeroRotator() {
     }, 2300);
     return () => { clearInterval(id); clearTimeout(timeout); };
   }, []);
-  return <span ref={ref} className="rotator">{ROTATOR_WORDS[idx]}</span>;
+  return <span ref={ref} className="rotator">{words[idx]}</span>;
 }
 
 // ── Hedge viz: value line caught at the protection floor ────────────────
@@ -538,6 +540,8 @@ function SunIcon() {
 function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const [scrolled, setScrolled] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(false);
+  const [mobileProductsOpen, setMobileProductsOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileResourcesOpen, setMobileResourcesOpen] = useState(false);
 
@@ -564,7 +568,7 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen]);
 
-  const closeMobile = () => { setMobileOpen(false); setMobileResourcesOpen(false); };
+  const closeMobile = () => { setMobileOpen(false); setMobileResourcesOpen(false); setMobileProductsOpen(false); };
 
   return (
     <>
@@ -575,11 +579,25 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             BlockFinaX
           </Link>
           <div className="nav-links">
-            <a href="/#use">Products</a>
-            <Link href="/hedger">Hedgers</Link>
-            <Link href="/liquidity-provider">Underwriters</Link>
-            <Link href="/connectors">Connectors</Link>
-            <Link href="/about">About</Link>
+            <div
+              className="nav-dropdown"
+              onMouseEnter={() => setProductsOpen(true)}
+              onMouseLeave={() => setProductsOpen(false)}
+            >
+              <a href="/#products" className="nav-dropdown-trigger" aria-expanded={productsOpen} onClick={() => setProductsOpen(false)}>
+                Products <ChevronDown />
+              </a>
+              {productsOpen && (
+                <div className="nav-dropdown-menu">
+                  <Link href="/hedger">Hedge</Link>
+                  <Link href="/trade">Trade</Link>
+                  <Link href="/otc">OTC</Link>
+                  <Link href="/liquidity-provider">Underwrite</Link>
+                </div>
+              )}
+            </div>
+            <a href="/#markets">Markets</a>
+            <Link href="/developers">Developers</Link>
             <div
               className="nav-dropdown"
               onMouseEnter={() => setResourcesOpen(true)}
@@ -593,9 +611,11 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
                   <Link href="/learn">Academy</Link>
                   <Link href="/blog">Blog</Link>
                   <Link href="/faq">FAQ</Link>
+                  <a href={DOCS_URL}>Docs</a>
                 </div>
               )}
             </div>
+            <Link href="/about">About</Link>
           </div>
           <div className="nav-cta">
             <button
@@ -639,20 +659,28 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
             </button>
           </div>
           <div className="nav-mobile-body">
-            <a href="#use" className="nav-mobile-link" onClick={closeMobile}>
+            <button
+              type="button"
+              className="nav-mobile-link"
+              onClick={() => setMobileProductsOpen((o) => !o)}
+              aria-expanded={mobileProductsOpen}
+            >
               Products
+              <ChevronDown className={`chev${mobileProductsOpen ? ' open' : ''}`} />
+            </button>
+            {mobileProductsOpen && (
+              <div className="nav-mobile-resources">
+                <Link href="/hedger" onClick={closeMobile}>Hedge</Link>
+                <Link href="/trade" onClick={closeMobile}>Trade</Link>
+                <Link href="/otc" onClick={closeMobile}>OTC</Link>
+                <Link href="/liquidity-provider" onClick={closeMobile}>Underwrite</Link>
+              </div>
+            )}
+            <a href="/#markets" className="nav-mobile-link" onClick={closeMobile}>
+              Markets
             </a>
-            <Link href="/hedger" className="nav-mobile-link" onClick={closeMobile}>
-              Hedgers
-            </Link>
-            <Link href="/liquidity-provider" className="nav-mobile-link" onClick={closeMobile}>
-              Underwriters
-            </Link>
-            <Link href="/connectors" className="nav-mobile-link" onClick={closeMobile}>
-              Connectors
-            </Link>
-            <Link href="/about" className="nav-mobile-link" onClick={closeMobile}>
-              About
+            <Link href="/developers" className="nav-mobile-link" onClick={closeMobile}>
+              Developers
             </Link>
             <button
               type="button"
@@ -668,8 +696,12 @@ function TopNav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => v
                 <Link href="/learn" onClick={closeMobile}>Academy</Link>
                 <Link href="/blog" onClick={closeMobile}>Blog</Link>
                 <Link href="/faq" onClick={closeMobile}>FAQ</Link>
+                <a href={DOCS_URL} onClick={closeMobile}>Docs</a>
               </div>
             )}
+            <Link href="/about" className="nav-mobile-link" onClick={closeMobile}>
+              About
+            </Link>
             <button
               type="button"
               className="nav-mobile-theme"
@@ -892,8 +924,8 @@ const TRUST = [
 ];
 
 const RECEIPT: { step: number; k: string; v: string; proof?: string }[] = [
-  { step: 0, k: 'Contract', v: 'USD/GHS Cap · $500,000' },
-  { step: 0, k: 'Strike and limit', v: '11.83 to 13.01' },
+  { step: 0, k: 'Contract', v: 'USD/GHS Up cover · $500,000' },
+  { step: 0, k: 'Your level', v: '11.83' },
   { step: 0, k: 'Reserve', v: '$50,862.07', proof: 'Locked at purchase' },
   { step: 1, k: 'USD/GHS at 14:00 UTC', v: '12.40', proof: 'Agreed by 2 operators' },
   { step: 2, k: 'Payout', v: '$24,077.59', proof: 'Claimed with your passkey' },
@@ -912,8 +944,9 @@ function TrustSection() {
     <section className="trust" id="trust" aria-labelledby="trust-title">
       <div className="wrap">
         <div className="assets-head">
+          <span className="tx-eyebrow">Hedge, step by step</span>
           <h2 id="trust-title">Why you can trust the payout.</h2>
-          <p>Protection is only worth buying if it pays. At every step, the rules are written into the contracts and recorded on a public ledger.</p>
+          <p>Cover is only worth buying if it pays. Here is one cover from purchase to payout. Every step follows rules written into the contract and is recorded on a public ledger.</p>
         </div>
         <div className="trust-split" onMouseLeave={() => setPaused(false)}>
           <ol className="trust-steps">
@@ -1032,8 +1065,9 @@ function CurrenciesSection() {
     <section className="cur" id="currencies">
       <div className="wrap">
         <div className="assets-head">
-          <h2>Currencies we underwrite.</h2>
-          <p>A few of the emerging-market pairs we cover today. If you need a pair that isn&apos;t in this list, request a quote and we&apos;ll structure it.</p>
+          <span className="tx-eyebrow">Markets</span>
+          <h2>Currencies you can use today.</h2>
+          <p>Cover on 23 currency pairs, perps on the Naira, Cedi, Shilling and Rand, and OTC swaps in five currencies at launch. Need a pair that isn&apos;t listed? Request a quote in the app.</p>
         </div>
         <div className="cur-row">
           {CURRENCIES.map((c) => (
@@ -1321,23 +1355,25 @@ function Footer() {
               BlockFinaX
             </Link>
             <p>
-              FX risk solutions for emerging markets. Hedge currency risk, or
-              underwrite it to earn premiums.
+              Hedge, trade and swap exotic currencies, or underwrite cover
+              to earn premiums. Settled onchain in USDC.
             </p>
           </div>
           <div className="foot-cols">
             <div className="foot-col">
               <h5>Product</h5>
-              <Link href="/apply">Request access</Link>
-              <Link href="/hedger">For buyers</Link>
-              <Link href="/liquidity-provider">For capital partners</Link>
-              <Link href="/connectors">Connector Programme</Link>
+              <Link href="/hedger">Hedge</Link>
+              <Link href="/trade">Trade</Link>
+              <Link href="/otc">OTC</Link>
+              <Link href="/liquidity-provider">Underwrite</Link>
             </div>
             <div className="foot-col">
               <h5>Resources</h5>
               <Link href="/about">About</Link>
               <Link href="/learn">Academy</Link>
               <Link href="/faq">FAQ</Link>
+              <a href={DOCS_URL}>Docs</a>
+              <Link href="/developers">Developers</Link>
               <Link href="/blog">Blog</Link>
               <Link href="/contact">Contact</Link>
             </div>
@@ -1412,6 +1448,13 @@ export default function Website() {
   useGeistFont();
   const [theme, setTheme] = useState<Theme>('light');
   useEffect(() => { setTheme(readStoredTheme()); }, []);
+  // Links like /#products arrive before the sections exist, so scroll once they render.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) { window.scrollTo(0, 0); return; }
+    const t = window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }), 150);
+    return () => clearTimeout(t);
+  }, []);
   const toggleTheme = () => {
     setTheme((t) => {
       const next: Theme = t === 'dark' ? 'light' : 'dark';
@@ -1423,15 +1466,12 @@ export default function Website() {
   return (
     <div className="bfx-landing" data-theme={theme}>
       <TopNav theme={theme} onToggleTheme={toggleTheme} />
-      <Hero />
-      <PillarsSection />
-      <WhoSection />
-      <UseSection theme={theme} />
-      <TrustSection />
-      <CurrenciesSection />
-      <SignalSection />
-      <LearnSection />
-      <BookCallCushion />
+      <TradeHero />
+      <LiveMarkets />
+      <ProductsSection />
+      <HowItWorks />
+      <StartBand />
+      <RiskNote />
       <Footer />
     </div>
   );
@@ -1453,17 +1493,22 @@ interface AudienceCopy {
   note?: { t: string; d: string };
   faqs: { q: string; a: string }[];
   close: string;
+  /** Product pages show links to the other products. */
+  product?: ProductKey;
+  /** Skip the points section. */
+  brief?: boolean;
 }
 
 const HEDGERS: AudienceCopy = {
-  eyebrow: 'For businesses',
+  product: 'hedge',
+  eyebrow: 'Hedge',
   title: ['Protect your', 'margin'],
-  lede: 'When you pay or earn in another currency, a move in the rate can erase your profit. BlockFinaX lets you set the worst case in advance, for a known cost.',
+  lede: 'Earn in local currency and pay in foreign currency? A move in the rate can erase your margin. Cover lets you set the worst case in advance, for a known cost.',
   primary: { label: 'Launch App', href: LAUNCH_APP_HREF },
   steps: [
     { t: 'Choose your cover', d: 'The currency, the amount, the end date and the move that worries you.' },
     { t: 'Pay once', d: 'One premium in USDC, shown in full before you approve. No credit line, no further calls.' },
-    { t: 'Get paid if it moves', d: 'If the rate passes your strike at expiry, you receive the difference, up to your limit.' },
+    { t: 'Get paid if it moves', d: 'If the rate moves past your level by the end date, you receive the full move, up to 20% of the amount.' },
   ],
   pointsTitle: 'Why businesses use it',
   points: [
@@ -1480,7 +1525,8 @@ const HEDGERS: AudienceCopy = {
 };
 
 const UNDERWRITERS: AudienceCopy = {
-  eyebrow: 'For capital partners',
+  product: 'earn',
+  eyebrow: 'Underwrite',
   title: ['Earn from', 'currency risk'],
   lede: 'Businesses pay premiums to protect their payments. As an underwriter, your USDC backs that protection and earns those premiums.',
   primary: { label: 'Launch App', href: LAUNCH_APP_HREF },
@@ -1495,11 +1541,11 @@ const UNDERWRITERS: AudienceCopy = {
     { t: 'How long', d: 'Set the longest cover your money backs, or stop backing new sales at any time.' },
     { t: 'Fully reserved', d: 'The most each contract can pay is set aside when it is sold, never more than you put in.' },
   ],
-  note: { t: 'The risk you take', d: 'If a covered rate moves past the strike, part of your reserve pays the business, up to the most that cover can pay. Only commit money you can leave in a pool until the cover it backs ends.' },
+  note: { t: 'The risk you take', d: 'If a covered rate moves past the level, part of your reserve pays the business, up to the most that cover can pay. Only commit money you can leave in a pool until the cover it backs ends.' },
   faqs: [
     { q: 'Who is it for?', a: 'Funds, treasuries and individuals with USDC who want returns tied to real economic risk.' },
     { q: 'Where do returns come from?', a: 'Only from premiums businesses pay for protection, never from new deposits.' },
-    { q: 'Can I lose money?', a: 'Yes, when covered rates move past strikes. Your loss on any contract is limited to what was reserved for it.' },
+    { q: 'Can I lose money?', a: 'Yes, when covered rates move past the levels. Your loss on any contract is limited to what was reserved for it.' },
   ],
   close: 'Ready to put your USDC to work?',
 };
@@ -1531,6 +1577,103 @@ const CONNECTORS: AudienceCopy = {
   ],
   close: 'Ready to join?',
 };
+
+const DEVELOPERS: AudienceCopy = {
+  brief: true,
+  eyebrow: 'Developers',
+  title: ['Build on', 'BlockFinaX'],
+  lede: 'Add cover, perps and swaps for exotic currencies to your own app, through our API and onchain contracts.',
+  primary: { label: 'Read the developer docs', href: DEV_DOCS_URL },
+  steps: [
+    { t: 'Connect to the API', d: 'Get prices, sell cover and follow positions from your own product.' },
+    { t: 'Choose the wallet', d: 'Your users sign with their own wallet, or with a BlockFinaX passkey wallet.' },
+    { t: 'Add your fee', d: 'Set your own fee on each sale you make.' },
+  ],
+  pointsTitle: '',
+  points: [],
+  faqs: [
+    { q: 'Who is it for?', a: 'Banks, payment apps, treasury tools and marketplaces whose customers pay or earn in foreign currency.' },
+    { q: 'Do I hold my users’ money?', a: 'No. USDC stays in your users’ wallets or in the contracts until it is used.' },
+    { q: 'Which network?', a: 'Stellar. USDC from other networks arrives through Circle CCTP.' },
+  ],
+  close: 'Ready to build?',
+};
+
+const TRADE: AudienceCopy = {
+  product: 'trade',
+  eyebrow: 'Trade',
+  title: ['Trade the rate on', 'exotic currencies'],
+  lede: 'Perpetual futures let you go long or short on the Naira, Cedi, Shilling and Rand, with no end date. An onchain smart contract runs margin, funding and liquidations, and everything settles in USDC.',
+  primary: { label: 'Start trading', href: LAUNCH_APP_HREF },
+  steps: [
+    { t: 'Add margin', d: 'Move USDC into your trading balance. It sits in the trading contract, not with BlockFinaX.' },
+    { t: 'Open a position', d: 'Go long if you think the rate will rise, short if you think it will fall. Pick the size and the leverage, then place a market or limit order.' },
+    { t: 'Close when you choose', d: 'A perp never expires. Close it whenever you like, and your profit or loss lands in your trading balance in USDC.' },
+  ],
+  pointsTitle: 'How the market works',
+  points: [
+    { t: 'Prices follow the official rate', d: 'Each market tracks the official rate for its currency, taken from more than one source.' },
+    { t: 'Funding every hour', d: 'When the perp trades above the official rate, longs pay shorts, and the other way round. This keeps the two close.' },
+    { t: 'Always a price', d: 'A liquidity vault quotes both sides of every market, so you can trade even when few others are.' },
+  ],
+  note: { t: 'The risk you take', d: 'Leverage makes losses bigger as well as gains. If your margin falls too low, your position is closed automatically and you can lose the margin on it. You never owe more than the margin you put in.' },
+  faqs: [
+    { q: 'What is a perpetual future?', a: 'A contract that follows a rate with no end date. You gain if the rate moves your way and lose if it moves against you.' },
+    { q: 'Can I lose money?', a: 'Yes. If your margin falls too low, the position closes and you lose that margin, never more.' },
+    { q: 'How is this different from cover?', a: 'Cover is protection: you pay one premium, and that is the most it can cost you. A perp is a trade: there is no premium, but your gains and losses both follow the rate.' },
+    { q: 'Which markets can I trade?', a: 'USD/NGN and USD/GHS up to 5x, USD/KES up to 10x and USD/ZAR up to 20x. More markets will follow.' },
+  ],
+  close: 'Ready to place your first trade?',
+};
+
+const OTC: AudienceCopy = {
+  product: 'otc',
+  eyebrow: 'OTC',
+  title: ['Swap USDC and', 'local currency'],
+  lede: 'Buy or sell USDC for Cedi, Naira, Shilling, Rand and Egyptian Pound with approved merchants. Pay by bank transfer or mobile money. A smart contract holds the USDC until both sides are done.',
+  primary: { label: 'See rates in the app', href: LAUNCH_APP_HREF },
+  steps: [
+    { t: 'Choose your swap', d: 'Pick the currency, the amount and whether you buy or sell USDC. You see the rate before you commit.' },
+    { t: 'Pay or receive locally', d: 'Send or receive the local currency by bank transfer or mobile money, using the details shown in the app.' },
+    { t: 'USDC is released', d: 'When the payment is confirmed, the contract releases the USDC to the buyer.' },
+  ],
+  pointsTitle: 'Why use it',
+  points: [
+    { t: 'Held safely', d: 'The USDC sits in a contract, not with the merchant and not with BlockFinaX, until the swap is complete.' },
+    { t: 'Personal and business', d: 'Swap as an individual or through your business account.' },
+    { t: 'Works with cover', d: 'Swap the local currency you earn into USDC, then protect the payments you owe with cover.' },
+  ],
+  faqs: [
+    { q: 'Which currencies?', a: 'Ghanaian Cedi, Nigerian Naira, Kenyan Shilling, South African Rand and Egyptian Pound at launch.' },
+    { q: 'Who are the merchants?', a: 'Businesses that BlockFinaX checks and approves before they can take swaps.' },
+    { q: 'What if the other side does not pay?', a: 'The USDC stays locked in the contract. The case is reviewed and the USDC goes to the side that kept to the deal.' },
+    { q: 'Do I need crypto experience?', a: 'No. You sign in with email or Google and approve with a passkey. Network fees are covered.' },
+  ],
+  close: 'Ready to swap?',
+};
+
+type ProductKey = 'hedge' | 'trade' | 'otc' | 'earn';
+const PRODUCT_LINKS: { key: ProductKey; name: string; line: string; href: string }[] = [
+  { key: 'hedge', name: 'Hedge', line: 'Cover a foreign currency payment for one premium.', href: '/hedger' },
+  { key: 'trade', name: 'Trade', line: 'Go long or short with perpetual futures.', href: '/trade' },
+  { key: 'otc', name: 'OTC', line: 'Swap USDC and local currency.', href: '/otc' },
+  { key: 'earn', name: 'Underwrite', line: 'Back cover and earn the premiums.', href: '/liquidity-provider' },
+];
+
+function OtherProducts({ current }: { current: ProductKey }) {
+  return (
+    <section className="aud-section">
+      <div className="wrap">
+        <h2 className="aud-h2">More from BlockFinaX</h2>
+        <div className="tx-more">
+          {PRODUCT_LINKS.filter((p) => p.key !== current).map((p) => (
+            <Link key={p.key} href={p.href} className="tx-more-card"><b>{p.name}</b><span>{p.line}</span><i>Read more →</i></Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function AudiencePage({ copy }: { copy: AudienceCopy }) {
   useGeistFont();
@@ -1570,7 +1713,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
           </ol>
         </div>
       </section>
-      <section className="aud-section">
+      {!copy.product && !copy.brief && <section className="aud-section">
         <div className="wrap">
           <h2 className="aud-h2">{copy.pointsTitle}</h2>
           <div className="aud-points">
@@ -1578,7 +1721,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
           </div>
           {copy.note && <div className="aud-note"><b>{copy.note.t}.</b> {copy.note.d}</div>}
         </div>
-      </section>
+      </section>}
       <section className="aud-section">
         <div className="wrap">
           <h2 className="aud-h2">Questions</h2>
@@ -1587,6 +1730,7 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
           </div>
         </div>
       </section>
+      {copy.product && <OtherProducts current={copy.product} />}
       <section className="tail">
         <div className="wrap">
           <h2>{copy.close}</h2>
@@ -1608,6 +1752,9 @@ function AudiencePage({ copy }: { copy: AudienceCopy }) {
 export function HedgersPage() { return <AudiencePage copy={HEDGERS} />; }
 export function UnderwritersPage() { return <AudiencePage copy={UNDERWRITERS} />; }
 export function ConnectorsPage() { return <AudiencePage copy={CONNECTORS} />; }
+export function DevelopersPage() { return <AudiencePage copy={DEVELOPERS} />; }
+export function TradePage() { return <AudiencePage copy={TRADE} />; }
+export function OtcPage() { return <AudiencePage copy={OTC} />; }
 
 // One page with everything needed before applying, so nobody has to go through the full docs.
 const GUIDE_STEPS = [
@@ -1746,8 +1893,9 @@ export function ConnectorsGuidePage() {
 // ── About ───────────────────────────────────────────────────────────────
 
 const APPROACH = [
-  { t: 'A protocol, not a counterparty', d: 'BlockFinaX connects businesses that need protection with underwriters who provide it. We build the pricing, the records and the settlement; underwriters carry the risk and earn the premiums.' },
-  { t: 'Simple to use', d: 'Sign in with email, approve with a passkey and pay in USDC. No credit line, no dealer and no network fees to manage.' },
+  { t: 'A protocol, not a counterparty', d: 'We run the contracts. Underwriters and traders take the risk, and your USDC stays in your wallet or the contract.' },
+  { t: 'Open and onchain', d: 'Every cover, trade and payout is recorded onchain, where anyone can check it.' },
+  { t: 'Simple to use', d: 'Sign in with email or Google, approve with a passkey and pay in USDC. Network fees are covered.' },
 ];
 
 export function AboutPage() {
@@ -1766,16 +1914,18 @@ export function AboutPage() {
         <Guilloche />
         <div className="wrap">
           <div className="aud-eyebrow">About BlockFinaX</div>
-          <h1 className="aud-title">FX risk solutions for <span className="accent">emerging markets</span></h1>
+          <h1 className="aud-title">Bringing exotic finance <span className="accent">onchain</span></h1>
           <div className="about-why">
             <p>
-              Businesses and investors make commitments today whose costs and returns can change tomorrow. An exchange-rate
-              move can make a supplier payment more expensive, increase the burden of foreign-currency debt or reduce the value
-              of an investment.
+              Businesses in Lagos, Accra and Nairobi earn in local currency and pay in foreign currency. One sharp move in the
+              rate can wipe out their margin, yet the tools to manage that risk are slow, costly or out of reach.
             </p>
             <p>
-              Protection lets people make those commitments with confidence. Yet the tools to manage this risk remain out of
-              reach for many. <strong>BlockFinaX exists to make that protection accessible.</strong>
+              <strong>BlockFinaX brings exotic currency finance onchain.</strong> Hedge, trade, swap and underwrite, all settled
+              onchain in USDC, for a single invoice or a whole treasury.
+            </p>
+            <p>
+              We start with currencies. Our aim is to become the derivatives platform for exotic currencies and assets.
             </p>
           </div>
         </div>
@@ -1799,6 +1949,343 @@ export function AboutPage() {
         </div>
       </section>
       <Footer />
+    </div>
+  );
+}
+
+// ── Trading-platform homepage sections ─────────────────────────────────
+const HERO_WORDS = ['Hedge', 'Trade', 'Swap', 'Underwrite'];
+// Live numbers come from the testnet app's public, read-only endpoints. If they cannot be
+// reached, the panels show the currency list without prices; nothing else depends on them.
+
+const APP = clean(import.meta.env.VITE_TESTNET_APP_URL, 'https://testnet.blockfinax.com');
+const LAUNCH = `${APP}/hedge`;
+
+type Rate = { pair: string; spot: number | null; change: number | null };
+type Pool = { pair: string; direction: string; acceptingHedges: boolean; legacy?: boolean; liquidity: { capacity: string } };
+type Perp = { id: number; pair: string; base: string; quote: string; decimals: number; mark: number; change24h: number; maxLeverage: number };
+
+const NAMES: Record<string, string> = {
+  NGN: 'Nigerian Naira', GHS: 'Ghanaian Cedi', KES: 'Kenyan Shilling', ZAR: 'South African Rand', EGP: 'Egyptian Pound',
+  UGX: 'Ugandan Shilling', TZS: 'Tanzanian Shilling', MAD: 'Moroccan Dirham', XOF: 'West African CFA franc', ZMW: 'Zambian Kwacha', ETB: 'Ethiopian Birr', RWF: 'Rwandan Franc',
+  XAF: 'Central African CFA franc', MZN: 'Mozambican Metical', BWP: 'Botswana Pula', MUR: 'Mauritian Rupee', TND: 'Tunisian Dinar',
+};
+const COUNTRY: Record<string, string> = { NGN: 'ng', GHS: 'gh', KES: 'ke', ZAR: 'za', EGP: 'eg', UGX: 'ug', TZS: 'tz', MAD: 'ma', XOF: 'sn', ZMW: 'zm', ETB: 'et', RWF: 'rw', XAF: 'cm', MZN: 'mz', BWP: 'bw', MUR: 'mu', TND: 'tn' };
+const FALLBACK: Rate[] = ['NGN', 'GHS', 'KES', 'ZAR', 'EGP', 'UGX', 'TZS', 'MAD'].map((c) => ({ pair: `USD/${c}`, spot: null, change: null }));
+
+function useJson<T>(path: string, pick: (j: any) => T, every = 60_000) {
+  const [data, setData] = useState<T | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetch(`${APP}${path}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => { if (alive) setData(pick(j)); }).catch(() => undefined);
+    load();
+    const t = setInterval(load, every);
+    return () => { alive = false; clearInterval(t); };
+  }, [path]);
+  return data;
+}
+
+const quote = (pair: string) => pair.split('/')[1] ?? pair;
+const fmtRate = (v: number | null) => (v == null ? '-' : v.toLocaleString(undefined, { maximumFractionDigits: v >= 100 ? 2 : 4 }));
+const fmtChange = (v: number | null) => (v == null ? '' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`);
+const compact = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(0)}K` : `$${v.toFixed(0)}`);
+
+function Flag({ code }: { code: string }) {
+  const c = COUNTRY[code];
+  return c ? <img className="tx-flag" src={`https://flagcdn.com/w40/${c}.png`} alt="" loading="lazy" /> : <span className="tx-flag" />;
+}
+
+// ── Hero ───────────────────────────────────────────────────────────────────
+
+function TradeHero() {
+  const rates = useJson<Rate[]>('/api/v2/rates', (j) => j.rates ?? []);
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  useHeroSurface(cvRef);
+  return (
+    <header className="tx-hero">
+      <div className="wrap tx-hero-grid">
+        <div className="tx-hero-copy">
+          <span className="tx-eyebrow">Onchain · settled in USDC</span>
+          <h1><HeroRotator words={HERO_WORDS} /><br />exotic currencies.</h1>
+          <p className="tx-sub">Earn in local currency, pay in foreign currency? Protect your margin from devaluation. Trade the rate with perpetual futures, or swap USDC for local currency.</p>
+          <div className="tx-ctas">
+            <a className="btn btn-primary" href={LAUNCH}>Launch App <span className="arrow">→</span></a>
+            <a className="btn tx-btn-ghost" href="#markets">See markets</a>
+          </div>
+          <ul className="tx-points">
+            <li><b>{(rates ?? FALLBACK).length}</b><span>currency pairs</span></li>
+            <li><b>USDC</b><span>only, network fees covered</span></li>
+            <li><b>Passkey</b><span>wallet, no seed phrase</span></li>
+          </ul>
+        </div>
+        <div className="tx-hero-side">
+          <canvas ref={cvRef} className="tx-surface" aria-hidden="true" />
+        </div>
+      </div>
+      <Ticker rates={rates ?? FALLBACK} />
+    </header>
+  );
+}
+
+const PITCH: Record<Tab, { title: string; line: string; href: string; cta: string }> = {
+  rates: { title: 'Follow the official rate for every pair.', line: 'Live rates for 23 currency pairs, taken from more than one source.', href: LAUNCH, cta: 'Open the app' },
+  cover: { title: 'Lock in an exchange rate to protect your margin from volatility.', line: 'Pay one premium. If the rate moves past your level, you get the difference.', href: '/hedger', cta: 'How cover works' },
+  perps: { title: 'Go long or short on exotic currencies.', line: 'Trade the rate with leverage, settled onchain in USDC.', href: '/trade', cta: 'How trading works' },
+};
+
+function LiveMarkets() {
+  const rates = useJson<Rate[]>('/api/v2/rates', (j) => j.rates ?? []);
+  const [tab, setTab] = useState<Tab>('rates');
+  const pitch = PITCH[tab];
+  return (
+    <section className="tx-markets">
+      <div className="wrap">
+        <div className="tx-sec-head">
+          <span className="tx-eyebrow">Markets</span>
+          <h2>Live rates, cover and perps.</h2>
+        </div>
+        <div className="tx-mgrid">
+          <div className="tx-pitch" aria-live="polite">
+            <p className="tx-pitch-title">{pitch.title}</p>
+            <p className="tx-pitch-line">{pitch.line}</p>
+            <a className="tx-plink" href={pitch.href}>{pitch.cta} →</a>
+          </div>
+          <MarketsPanel rates={rates} tab={tab} setTab={setTab} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+type Tab = 'rates' | 'cover' | 'perps';
+
+function MarketsPanel({ rates, tab, setTab }: { rates: Rate[] | null; tab: Tab; setTab: (t: Tab) => void }) {
+  const pools = useJson<Pool[]>('/api/v2/pools', (j) => j.pools ?? [], 120_000);
+  const perps = useJson<Perp[]>('/api/perps/markets', (j) => j.markets ?? [], 15_000);
+  const prices = useJson<Record<string, number>>('/api/v2/cover-prices', (j) => Object.fromEntries((j.prices ?? []).map((x: { pair: string; premium: number }) => [x.pair, x.premium])), 300_000);
+  const list = rates ?? FALLBACK;
+  const cover = (() => {
+    const by = new Map<string, number>();
+    for (const p of pools ?? []) if (p.acceptingHedges && !p.legacy) by.set(p.pair, (by.get(p.pair) ?? 0) + Number(p.liquidity.capacity || 0));
+    return Array.from(by.entries()).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  })();
+  const rateOf = (pair: string) => list.find((r) => r.pair === pair);
+  const twoCol = tab === 'rates' && list.every((r) => r.change == null);
+  return (
+    <div className="tx-panel" id="markets">
+      <div className="tx-tabs" role="tablist">
+        {(['rates', 'cover', 'perps'] as Tab[]).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+            {t === 'rates' ? 'Index' : t === 'cover' ? 'Cover' : 'Perps'}
+          </button>
+        ))}
+        <a className="tx-all" href={LAUNCH}>Open app →</a>
+      </div>
+      <div className={`tx-head${twoCol ? ' tx-2' : ''}`}><span>Market</span><span>{tab === 'perps' ? 'Price' : tab === 'cover' ? 'Premium' : 'Index'}</span>{!twoCol && <span>{tab === 'cover' ? 'Liquidity' : '24h'}</span>}</div>
+      {tab === 'rates' && list.slice(0, 7).map((r) => (
+        <a key={r.pair} className={`tx-row${twoCol ? ' tx-2' : ''}`} href={LAUNCH}>
+          <span className="tx-name"><Flag code={quote(r.pair)} /><b>{r.pair}</b><small>{NAMES[quote(r.pair)] ?? ''}</small></span>
+          <span className="tx-num">{fmtRate(r.spot)}</span>
+          {!twoCol && <span className={`tx-num ${r.change == null ? 'tx-muted' : r.change >= 0 ? 'tx-up' : 'tx-down'}`}>{fmtChange(r.change) || '-'}</span>}
+        </a>
+      ))}
+      {tab === 'cover' && (cover.length ? cover.slice(0, 7).map(([pair, liq]) => (
+        <a key={pair} className="tx-row" href={LAUNCH}>
+          <span className="tx-name"><Flag code={quote(pair)} /><b>{pair}</b><small>Up and Down cover</small></span>
+          <span className="tx-num">{prices?.[pair] != null ? `${(prices[pair] * 100).toFixed(2)}%` : '-'}</span>
+          <span className="tx-num">{compact(liq)}</span>
+        </a>
+      )) : <div className="tx-empty">Cover markets load from the app. <a href={LAUNCH}>Open the app</a> to see live liquidity.</div>)}
+      {tab === 'perps' && (perps && perps.length ? perps.map((m) => (
+        <a key={m.id} className="tx-row" href={LAUNCH}>
+          <span className="tx-name"><Flag code={m.quote} /><b>{m.base}{m.quote}-PERP</b><small>up to {m.maxLeverage}x</small></span>
+          <span className="tx-num">{m.mark.toLocaleString(undefined, { maximumFractionDigits: m.decimals })}</span>
+          <span className={`tx-num ${m.change24h >= 0 ? 'tx-up' : 'tx-down'}`}>{fmtChange(m.change24h)}</span>
+        </a>
+      )) : <div className="tx-empty">Perpetual futures on the Naira, Cedi, Shilling and Rand. <a href={LAUNCH}>Open the app</a> to see live prices.</div>)}
+      <div className="tx-foot">{tab === 'cover' ? 'Premium: lowest price for 30 days of cover, as a share of the amount' : tab === 'rates' ? 'Index: the official reference rate, taken from more than one source' : 'Prices are indicative'}</div>
+    </div>
+  );
+}
+
+function Ticker({ rates }: { rates: Rate[] }) {
+  const items = [...rates, ...rates];
+  return (
+    <div className="tx-ticker" aria-label="Live rates">
+      <div className="tx-ticker-track">
+        {items.map((r, i) => (
+          <span key={`${r.pair}-${i}`} className="tx-tick">
+            <Flag code={quote(r.pair)} /><b>{r.pair}</b><span className="tx-num">{fmtRate(r.spot)}</span>
+            {r.change != null && <span className={`tx-num ${r.change >= 0 ? 'tx-up' : 'tx-down'}`}>{fmtChange(r.change)}</span>}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Products ───────────────────────────────────────────────────────────────
+
+const PRODUCTS: { key: string; href: string; name: string; title: string; text: string; points: string[]; cta: string }[] = [
+  { key: 'hedge', href: '/hedger', name: 'Hedge', title: 'Cover a foreign currency payment',
+    text: 'Choose the amount and the end date. Pay one premium in USDC. If the rate moves past your level, you are paid the difference.',
+    points: ['Any end date, 1 to 90 days', 'Pays the full move, up to 20% of the amount', 'Up and Down cover on every pair'], cta: 'Buy cover' },
+  { key: 'trade', href: '/trade', name: 'Trade', title: 'Perpetual futures',
+    text: 'Go long or short on exotic currencies with an order book, hourly funding and on-chain settlement.',
+    points: ['USD/NGN, USD/GHS, USD/KES, USD/ZAR', 'Margin and liquidations run by a smart contract', 'Prices track the official rate'], cta: 'Open Trade' },
+  { key: 'otc', href: '/otc', name: 'OTC', title: 'Swap USDC and local currency',
+    text: 'Buy or sell USDC for Cedi, Naira, Shilling and more with approved merchants, by bank transfer or mobile money.',
+    points: ['USDC held safely until both sides are done', 'Live indicative rates', 'Personal and business accounts'], cta: 'See OTC' },
+  { key: 'earn', href: '/liquidity-provider', name: 'Underwrite', title: 'Back cover, earn premiums',
+    text: 'Your USDC backs the cover businesses buy, and earns the premiums they pay.',
+    points: ['Choose the currency you back', 'Pays out only if the rate moves', 'Withdraw free USDC any time'], cta: 'Underwrite' },
+];
+
+function ProductsSection() {
+  const [, go] = useLocation();
+  return (
+    <section className="tx-products" id="products">
+      <div className="wrap">
+        <div className="tx-sec-head">
+          <span className="tx-eyebrow">Products</span>
+          <h2>Four products, one wallet.</h2>
+          <p className="tx-sec-sub">Protect a payment, trade the rate, swap into local currency, or earn by backing other people&apos;s cover. Each one uses the same USDC balance.</p>
+        </div>
+        <div className="tx-pgrid">
+          {PRODUCTS.map((p) => (
+            <article key={p.key} className={`tx-pcard tx-${p.key}`} role="link" tabIndex={0} aria-label={`${p.name}: read more`}
+              onClick={() => go(p.href)} onKeyDown={(e) => { if (e.key === 'Enter') go(p.href); }}>
+              <div className="tx-pcard-top"><span className="tx-pname">{p.name}</span></div>
+              <h3>{p.title}</h3>
+              <p>{p.text}</p>
+              <ul>{p.points.map((x) => <li key={x}>{x}</li>)}</ul>
+              <div className="tx-plinks"><Link className="tx-plink" href={p.href} onClick={(e) => e.stopPropagation()}>Learn more →</Link><a className="tx-plink2" href={LAUNCH} onClick={(e) => e.stopPropagation()}>{p.cta}</a></div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── How to start ──────────────────────────────────────────────────────────
+
+const START = [
+  { t: 'Sign in', d: 'With email or Google. A passkey becomes your wallet.' },
+  { t: 'Add USDC', d: 'Deposit, or move it in from another network.' },
+  { t: 'Hedge, trade or swap', d: 'One balance for every product. Fees covered.' },
+];
+
+
+// ── How each product works: one example per product, step by step ─────────
+
+type TourStep = { title: string; line: string };
+/** Real screens from the app, captured by scripts/website-shots/capture.ts in the app repo. */
+const TOURS: { key: string; name: string; steps: TourStep[] }[] = [
+  { key: 'hedge', name: 'Hedge', steps: [
+    { title: 'Choose your cover', line: 'Pick the currency, the amount and the end date. The price shows straight away.' },
+    { title: 'Review and approve', line: 'See what you pay and what the cover can pay you, then approve with your passkey.' },
+    { title: 'Follow it to the end', line: 'Your cover sits in your list with its payout today, until the end date.' },
+  ] },
+  { key: 'trade', name: 'Trade', steps: [
+    { title: 'Set your order', line: 'Go long or short, pick the size and trade against a live order book.' },
+    { title: 'Watch your position', line: 'Profit or loss, margin and liquidation price update live.' },
+    { title: 'Every fill on record', line: 'Each trade settles onchain and shows in your history.' },
+  ] },
+  { key: 'otc', name: 'OTC', steps: [
+    { title: 'Enter the amount', line: 'Type what you send and see what you receive at the live rate.' },
+    { title: 'Pick your currency', line: 'Cedi, Naira, Shilling, Rand or Egyptian Pound.' },
+    { title: 'Buy or sell', line: 'Switch sides to sell USDC for local currency.' },
+  ] },
+  { key: 'earn', name: 'Underwrite', steps: [
+    { title: 'Pick a pool', line: 'See each pool’s price, size and past results before you add money.' },
+    { title: 'Add liquidity', line: 'Your USDC joins the pool and starts backing cover.' },
+    { title: 'See what it earns', line: 'Every cover bought from the pool, with the premium it paid.' },
+  ] },
+];
+
+const prefersReduced = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+
+function HowItWorks() {
+  const [tab, setTab] = useState(0);
+  const [step, setStep] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused || prefersReduced()) return;
+    const id = window.setInterval(() => setStep((x) => (x + 1) % 3), 3600);
+    return () => clearInterval(id);
+  }, [paused, tab]);
+  const t = TOURS[tab];
+  const pick = (k: number) => { setPaused(true); setStep(k); };
+  return (
+    <section className="trust" id="how" aria-labelledby="how-title">
+      <div className="wrap">
+        <div className="assets-head">
+          <span className="tx-eyebrow">How it works</span>
+          <h2 id="how-title">How each product works.</h2>
+          <p>Real screens from the app. Pick a product and follow it step by step.</p>
+        </div>
+        <div className="tx-tourtabs" role="tablist">
+          {TOURS.map((x, i) => (
+            <button key={x.key} role="tab" aria-selected={tab === i} className={tab === i ? 'on' : ''}
+              onClick={() => { setTab(i); setStep(0); setPaused(false); }}>{x.name}</button>
+          ))}
+        </div>
+        <div className="trust-split tx-tour" onMouseLeave={() => setPaused(false)}>
+          <ol className="trust-steps">
+            {t.steps.map((x, k) => (
+              <li key={x.title}>
+                <button type="button" className={step === k ? 'on' : ''} aria-pressed={step === k}
+                  onMouseEnter={() => pick(k)} onFocus={() => pick(k)} onClick={() => pick(k)}>
+                  <span className="trust-when">{String(k + 1).padStart(2, '0')}</span>
+                  <span className="trust-title">{x.title}</span>
+                  <span className="trust-text">{x.line}</span>
+                  <span className="trust-bar" aria-hidden="true"><i key={`${tab}-${paused ? 'p' : step}`} className={!paused && step === k ? 'run' : ''} /></span>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <figure className="tx-shot" aria-label={`${t.name}: ${t.steps[step].title}`}>
+            <div className="tx-shot-bar" aria-hidden="true"><i /><i /><i /><span>BlockFinaX app</span></div>
+            <div className="tx-shot-view">
+              {TOURS.map((x, i) => [0, 1, 2].map((k) => (
+                <img key={`${x.key}-${k}`} src={`/product/${x.key}-${k + 1}.webp`} alt={i === tab && k === step ? `${x.name}: ${x.steps[k].title}` : ''}
+                  loading="lazy" decoding="async" width={1440} height={900}
+                  className={i === tab && k === step ? 'on' : ''} />
+              )))}
+            </div>
+          </figure>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Closing call to action ─────────────────────────────────────────────────
+
+function StartBand() {
+  return (
+    <section className="tx-start">
+      <div className="wrap tx-start-in">
+        <div className="tx-start-copy">
+          <h2>Open your wallet in a minute.</h2>
+          <ol className="tx-start-steps">
+            {START.map((x, i) => <li key={x.t}><span>{String(i + 1).padStart(2, '0')}</span><b>{x.t}</b><small>{x.d}</small></li>)}
+          </ol>
+        </div>
+        <div className="tx-ctas">
+          <a className="btn btn-primary" href={LAUNCH}>Launch App <span className="arrow">→</span></a>
+          <a className="btn tx-btn-ghost" href="/contact">Talk to us</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RiskNote() {
+  return (
+    <div className="wrap tx-risk">
+      Perpetual futures use leverage: a small move in the rate can cause a large loss, and positions can be liquidated. Cover pays up to its stated limit. Nothing on this site is financial advice.
     </div>
   );
 }
