@@ -396,3 +396,6 @@
   .bx-sections.compact button { gap: 4px; padding: 6px 7px; font-size: 12.5px; }
   .bx-sections.compact button svg { width: 13px; height: 13px; }
 }
+
+/* PC section menu: the current section is highlighted on every page */
+.bx-nm-btn.on { color: var(--blue); background: var(--blue-soft); }

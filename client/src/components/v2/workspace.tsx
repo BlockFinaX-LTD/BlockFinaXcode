@@ -298,12 +298,10 @@ export function Workspace() {
         <ContactSales />
         <VerifyModal />
         <header className="bx-top">
-          {page === 'dash'
-            ? <span className="bx-show-sm bx-msections"><SectionTabs section={section} onChange={switchSection} compact /></span>
-            : <span className="bx-show-sm bx-msections"><button className="bx-mhome" onClick={() => go('dash')}><ChevronLeft size={16} />Home</button><b className="bx-mtitle">{PAGE_TITLE[page] ?? SECTION_NAME[section]}</b></span>}
+          <span className="bx-show-sm bx-msections"><SectionTabs section={section} onChange={switchSection} compact /></span>
           <button className="bx-tbrand bx-homebtn bx-hide-sm" onClick={() => go('dash')} aria-label="Home"><img src={logoPath} alt="" />BlockFinaX{demo && <span className="bx-env">Testnet</span>}</button>
-          {page === 'dash' ? (
           <nav className="bx-nmbar bx-hide-sm" aria-label="Main">
+              <button className={`bx-nm-btn${section === 'home' ? ' on' : ''}`} onClick={() => go('dash')}>Home</button>
               <NavMenu label="Hedge" active={section === 'hedge'} onOpen={() => switchSection('hedge')} items={[
                 { label: 'Buy cover', onClick: () => go('h-protect') },
                 ...(simple ? [] : [{ label: 'Underwrite', onClick: () => go('u-home') }]),
@@ -314,14 +312,6 @@ export function Workspace() {
               ]} />
               <button className={`bx-nm-btn${section === 'otc' ? ' on' : ''}`} onClick={() => switchSection('otc')}>OTC</button>
             </nav>
-          ) : (
-            <div className="bx-crumb bx-hide-sm">
-              <button className="bx-crumb-home" onClick={() => go('dash')}><ChevronLeft size={16} />Home</button>
-              <span className="bx-crumb-sep">/</span>
-              <span className="bx-crumb-cur">{PAGE_TITLE[page] ?? SECTION_NAME[section]}</span>
-
-            </div>
-          )}
           <span className="bx-hide-sm bx-searchwrap"><SearchBox role={role} go={go} /></span>
           <span style={{ flex: 1 }} />
           <div className="bx-top-r">
