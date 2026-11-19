@@ -1973,11 +1973,16 @@ const NAMES: Record<string, string> = {
 const COUNTRY: Record<string, string> = { NGN: 'ng', GHS: 'gh', KES: 'ke', ZAR: 'za', EGP: 'eg', UGX: 'ug', TZS: 'tz', MAD: 'ma', XOF: 'sn', ZMW: 'zm', ETB: 'et', RWF: 'rw', XAF: 'cm', MZN: 'mz', BWP: 'bw', MUR: 'mu', TND: 'tn' };
 const FALLBACK: Rate[] = ['NGN', 'GHS', 'KES', 'ZAR', 'EGP', 'UGX', 'TZS', 'MAD'].map((c) => ({ pair: `USD/${c}`, spot: null, change: null }));
 
+const SITE_FEED: Record<string, string> = {
+  '/api/v2/rates': 'rates', '/api/v2/pools': 'pools', '/api/v2/cover-prices': 'cover-prices', '/api/perps/markets': 'perps-markets',
+};
+
 function useJson<T>(path: string, pick: (j: any) => T, every = 60_000) {
   const [data, setData] = useState<T | null>(null);
   useEffect(() => {
     let alive = true;
-    const load = () => fetch(`${APP}${path}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => { if (alive) setData(pick(j)); }).catch(() => undefined);
+    // Read through blockfinax.com's own server (/api/site/...), which fetches from the app.
+    const load = () => fetch(`/api/site/${SITE_FEED[path] ?? ''}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => { if (alive) setData(pick(j)); }).catch(() => undefined);
     load();
     const t = setInterval(load, every);
     return () => { alive = false; clearInterval(t); };
