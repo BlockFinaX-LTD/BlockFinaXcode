@@ -487,9 +487,11 @@ function UsersSection() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-gray-50">
-                    <th className="text-left p-3 font-medium">Address</th>
-                    <th className="text-left p-3 font-medium hidden sm:table-cell">Name</th>
+                    <th className="text-left p-3 font-medium">Name</th>
                     <th className="text-left p-3 font-medium hidden md:table-cell">Email</th>
+                    <th className="text-left p-3 font-medium hidden sm:table-cell">Country</th>
+                    <th className="text-left p-3 font-medium hidden md:table-cell">Stage</th>
+                    <th className="text-left p-3 font-medium hidden lg:table-cell">Stellar address</th>
                     <th className="text-left p-3 font-medium hidden md:table-cell">Joined</th>
                     <th className="text-left p-3 font-medium">KYC</th>
                     <th className="p-3"></th>
@@ -497,23 +499,25 @@ function UsersSection() {
                 </thead>
                 <tbody>
                   {filtered.map((u: any) => (
-                    <tr key={u.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedUser(u)}>
-                      <td className="p-3 font-mono text-xs">{shortenAddr(u.address)}</td>
-                      <td className="p-3 hidden sm:table-cell">{u.name || "-"}</td>
+                    <tr key={u.id} className={`border-b hover:bg-gray-50 ${u.source === "v1" ? "cursor-pointer" : ""}`} onClick={() => { if (u.source === "v1") setSelectedUser(u); }}>
+                      <td className="p-3">{u.name || "-"}{u.source === "v1" && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">v1</span>}</td>
                       <td className="p-3 hidden md:table-cell text-gray-500">{u.email || "-"}</td>
+                      <td className="p-3 hidden sm:table-cell text-gray-500">{u.country || "-"}</td>
+                      <td className="p-3 hidden md:table-cell text-xs">{u.stage || "-"}</td>
+                      <td className="p-3 hidden lg:table-cell font-mono text-xs">{u.address ? shortenAddr(u.address) : "-"}</td>
                       <td className="p-3 hidden md:table-cell text-gray-500 text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}</td>
                       <td className="p-3">
                         <KycBadge status={u.kyc?.kycStatus || "not_started"} />
                       </td>
                       <td className="p-3">
-                        <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(u.address); toast({ title: "Copied", description: "Address copied" }); }}>
+                        <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); if (!u.address) return; navigator.clipboard.writeText(u.address); toast({ title: "Copied", description: "Address copied" }); }}>
                           <Copy className="h-3 w-3" />
                         </Button>
                       </td>
                     </tr>
                   ))}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">No users found</td></tr>
+                    <tr><td colSpan={8} className="p-6 text-center text-gray-400">No users found</td></tr>
                   )}
                 </tbody>
               </table>

@@ -228,9 +228,37 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
     }
   });
 
+  /**
+   * Users: everyone who signed up with the current app (user_accounts, with the name and
+   * country from onboarding, passkey and Stellar address), then legacy v1 wallets.
+   */
   app.get("/api/admin/users", async (req, res) => {
     try {
       const search = (req.query.search as string || "").toLowerCase();
+      const has = async (t: string) => Boolean(((await db.execute(sql`SELECT to_regclass(${t}) IS NOT NULL AS ok`)) as any).rows?.[0]?.ok);
+      const [onb, pk, cw] = await Promise.all([has("account_onboarding"), has("wallet_passkeys"), has("chain_wallet_accounts")]);
+      const rows = ((await db.execute(sql.raw(`
+        SELECT u.id, u.email, u.name, u.created_at,
+          ${onb ? "o.full_name, o.country, o.account_type, o.screening_status, o.completed_at" : "NULL AS full_name, NULL AS country, NULL AS account_type, NULL AS screening_status, NULL AS completed_at"},
+          ${pk ? "(SELECT count(*) FROM wallet_passkeys p WHERE p.user_id = u.id)::int" : "0"} AS passkeys,
+          ${cw ? "(SELECT a.address FROM chain_wallet_accounts a WHERE a.user_id = u.id AND a.network_key LIKE 'stellar%' ORDER BY a.is_primary DESC, a.id LIMIT 1)" : "NULL"} AS stellar
+        FROM user_accounts u
+        ${onb ? "LEFT JOIN account_onboarding o ON o.user_id = u.id" : ""}
+        ORDER BY u.created_at DESC NULLS LAST, u.id DESC
+      `))) as any).rows as any[];
+      const current = rows.map((r) => ({
+        id: `u${r.id}`,
+        source: "app",
+        address: r.stellar ?? "",
+        name: r.full_name || r.name || null,
+        email: r.email || null,
+        country: r.country || null,
+        accountType: r.account_type || null,
+        passkey: Number(r.passkeys) > 0,
+        stage: Number(r.passkeys) > 0 ? "Wallet created" : r.completed_at ? "Profile done, no passkey" : "Signed in only",
+        createdAt: r.created_at,
+        kyc: { kycStatus: r.screening_status === "clear" ? "approved" : r.screening_status || "not_started", kycTier: 0, submittedAt: r.completed_at ?? null },
+      }));
       const allWallets = await db.select().from(wallets).orderBy(desc(wallets.createdAt));
       const allProfiles = await db.select({
         walletAddress: userProfiles.walletAddress,
@@ -239,17 +267,22 @@ export function registerAdminRoutes(app: Express, wss: WebSocketServer) {
         submittedAt: userProfiles.submittedAt,
       }).from(userProfiles);
       const profileMap = new Map(allProfiles.map(p => [p.walletAddress.toLowerCase(), p]));
-      const result = allWallets
-        .filter(w => !search || w.address.toLowerCase().includes(search) || (w.name && w.name.toLowerCase().includes(search)) || (w.email && w.email.toLowerCase().includes(search)))
-        .map(w => ({
-          id: w.id,
-          address: w.address,
-          name: w.name,
-          email: w.email || null,
-          isImported: w.isImported,
-          createdAt: w.createdAt,
-          kyc: profileMap.get(w.address.toLowerCase()) || { kycStatus: "not_started", kycTier: 0, submittedAt: null },
-        }));
+      const legacy = allWallets.map(w => ({
+        id: w.id,
+        source: "v1",
+        address: w.address,
+        name: w.name,
+        email: w.email || null,
+        country: null,
+        accountType: null,
+        passkey: false,
+        stage: "v1 wallet",
+        isImported: w.isImported,
+        createdAt: w.createdAt,
+        kyc: profileMap.get(w.address.toLowerCase()) || { kycStatus: "not_started", kycTier: 0, submittedAt: null },
+      }));
+      const result = [...current, ...legacy].filter((u) => !search
+        || [u.address, u.name, u.email, u.country].some((v) => v && String(v).toLowerCase().includes(search)));
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch users" });
