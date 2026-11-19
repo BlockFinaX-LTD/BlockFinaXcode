@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownToLine, ArrowLeftRight, Eye, EyeOff, LineChart, Megaphone, ShieldCheck } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, CalendarDays, CircleDollarSign, Eye, EyeOff, Layers, LineChart, Megaphone, PlusCircle, Repeat, ShieldCheck, Wallet } from 'lucide-react';
 import type { ProtectionPosition, SettlementResult } from '@shared/domain/types';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
@@ -18,11 +18,14 @@ interface PerpAccount { equity: number; onChain: { collateral: number }; positio
 type Hedge = { position: ProtectionPosition; pair: string; settlement: SettlementResult };
 
 /** Short notices for everyone. Newest first. */
-const NOTICES: { text: string; date: string }[] = [
-  { text: 'Simpler cover: every cover now pays the full move, up to 20% of the amount. No limits to choose.', date: '18 Nov 2026' },
-  { text: 'Perps are live on testnet: USD/NGN, USD/GHS, USD/KES and USD/ZAR, up to 20x.', date: '18 Nov 2026' },
-  { text: 'Cover now sells on any day from 1 to 90, ending at 14:00 UTC.', date: '24 Oct 2026' },
+const NOTICES: { title: string; text: string; date: string }[] = [
+  { title: 'Simpler cover', text: 'Every cover now pays the full move, up to 20% of the amount. No limits to choose.', date: '18 Nov 2026' },
+  { title: 'Perps are live on testnet', text: 'USD/NGN, USD/GHS, USD/KES and USD/ZAR, up to 20x.', date: '18 Nov 2026' },
+  { title: 'Cover on any day', text: 'Cover now sells for any end date from 1 to 90 days, ending at 14:00 UTC.', date: '24 Oct 2026' },
 ];
+
+/** Ring colours for cover by pair (brand blues and a few accents). */
+const RING = ['#2563eb', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'];
 
 const HIDE_KEY = 'bfx:hide-balance';
 const money = (v: number, hide: boolean, dp = 2) => (hide ? '••••••' : `$${v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}`);
@@ -58,33 +61,93 @@ export function Dashboard({ go }: { go: Go }) {
   return (
     <div className="dx">
       <section className="dx-left">
-        <div className="dx-bal-k">Your total balance
-          <button className="dx-eye" onClick={() => setHide(!hide)} aria-label={hide ? 'Show balances' : 'Hide balances'}>{hide ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+        <div className="dx-hero">
+          <svg className="dx-wave" viewBox="0 0 400 160" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0 120 C 90 60, 160 150, 250 80 S 360 20, 400 40" fill="none" stroke="url(#dxw)" strokeWidth="2" />
+            <path d="M0 135 C 100 80, 170 160, 260 95 S 370 40, 400 58" fill="none" stroke="url(#dxw)" strokeWidth="1.2" opacity="0.6" />
+            <defs><linearGradient id="dxw" x1="0" x2="1"><stop offset="0" stopColor="#60a5fa" stopOpacity="0" /><stop offset="0.6" stopColor="#60a5fa" stopOpacity="0.9" /><stop offset="1" stopColor="#a5b4fc" stopOpacity="0.6" /></linearGradient></defs>
+          </svg>
+          <div className="dx-bal-k">Portfolio
+            <button className="dx-eye" onClick={() => setHide(!hide)} aria-label={hide ? 'Show balances' : 'Hide balances'}>{hide ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+          </div>
+          <div className="dx-bal num">{money(total, hide)} <span className="dx-unit">USDC</span></div>
+          <div className="dx-pnl">Open PnL <span className={`num ${openPnl >= 0 ? 'up' : 'down'}`}>{signedMoney(openPnl, hide)} {!hide && base > 0 ? `(${pctS(openPnl / base)})` : ''}</span></div>
         </div>
-        <div className="dx-bal num">{money(total, hide)} <span className="dx-unit">USDC</span></div>
-        <div className="dx-pnl">Open PnL <span className={`num ${openPnl >= 0 ? 'up' : 'down'}`}>{signedMoney(openPnl, hide)} {!hide && base > 0 ? `(${pctS(openPnl / base)})` : ''}</span></div>
 
         <div className="dx-split">
-          <button onClick={() => go('wallet')}><span>Wallet</span><b className="num">{money(walletUsd, hide)}</b></button>
-          <button onClick={() => go('perps')}><span>Trading</span><b className="num">{money(tradingUsd, hide)}</b></button>
-          <button onClick={() => go('h-protections')}><span>Cover in force</span><b className="num">{hide ? '••••' : `${compact(protectedUsd)}`}</b><small>{activeCover.length} active</small></button>
+          <button onClick={() => go('wallet')}><span><Wallet size={15} />Wallet</span><b className="num">{money(walletUsd, hide)}</b></button>
+          <button onClick={() => go('perps')}><span><ArrowLeftRight size={15} />Trading</span><b className="num">{money(tradingUsd, hide)}</b></button>
+          <button onClick={() => go('h-protections')}><span><Layers size={15} />Cover in force</span><b className="num">{hide ? '••••' : `${compact(protectedUsd)}`}</b><small>{activeCover.length} active</small></button>
         </div>
 
-        <div className="dx-actions">
-          <button className="dx-btn primary" onClick={() => go('wallet', { wallet: 'deposit' })}><ArrowDownToLine size={17} />Deposit</button>
-          <button className="dx-btn" onClick={() => go('perps')}><LineChart size={17} />Trade</button>
-          <button className="dx-btn" onClick={() => go('h-protect')}><ShieldCheck size={17} />Hedge</button>
-          <button className="dx-btn" onClick={() => go('otc')}><ArrowLeftRight size={17} />Convert</button>
+        <div className="dx-card dx-quick">
+          <div className="dx-card-h"><b>Quick actions</b></div>
+          <div className="dx-qgrid">
+            <button className="primary" onClick={() => go('wallet', { wallet: 'deposit' })}><PlusCircle size={20} /><b>Deposit</b><small>Add USDC</small></button>
+            <button onClick={() => go('h-protect')}><ShieldCheck size={20} /><b>Hedge</b><small>Buy cover</small></button>
+            <button onClick={() => go('perps')}><LineChart size={20} /><b>Trade</b><small>Perps</small></button>
+            <button onClick={() => go('otc')}><Repeat size={20} /><b>Convert</b><small>Swap USDC</small></button>
+          </div>
         </div>
 
-        <div className="dx-notices">
+        <CoverCard go={go} hide={hide} active={activeCover} />
+
+        <div className="dx-card dx-updates">
+          <div className="dx-card-h"><b>Updates</b></div>
           {NOTICES.map((n) => (
-            <div key={n.text} className="dx-notice"><Megaphone size={15} /><span>{n.text}</span><time>{n.date}</time></div>
+            <div key={n.title} className="dx-update">
+              <span className="dx-update-i"><Megaphone size={16} /></span>
+              <div><b>{n.title}</b><p>{n.text}</p></div>
+              <time>{n.date}</time>
+            </div>
           ))}
         </div>
       </section>
 
       <section className="dx-right"><MarketsPanel go={go} /></section>
+    </div>
+  );
+}
+
+
+/** Cover in force: a ring split by pair, with the count, next expiry and payout waiting to be claimed. */
+function CoverCard({ go, hide, active }: { go: Go; hide: boolean; active: Hedge[] }) {
+  const byPair = new Map<string, number>();
+  for (const h of active) byPair.set(h.pair, (byPair.get(h.pair) ?? 0) + Number(h.position.notional));
+  const parts = [...byPair.entries()].sort((a, b) => b[1] - a[1]);
+  const total = parts.reduce((x, [, v]) => x + v, 0);
+  const pending = active.filter((h) => h.settlement.status === 'pending');
+  const next = pending.length ? Math.min(...pending.map((h) => Number(h.position.expiry))) : null;
+  const toClaim = active.filter((h) => h.settlement.status === 'settled_claimable').reduce((x, h) => x + Number(h.settlement.netPayout), 0);
+  const R = 42, C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div className="dx-card dx-cover">
+      <div className="dx-card-h"><b>Your cover</b><button className="dx-link" onClick={() => go('h-protections')}>View all <ArrowRight size={14} /></button></div>
+      {!active.length ? (
+        <div className="dx-cover-empty">No cover in force. <button className="dx-link" onClick={() => go('h-protect')}>Buy cover <ArrowRight size={14} /></button></div>
+      ) : (
+        <div className="dx-cover-in">
+          <div className="dx-ring">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r={R} fill="none" stroke="var(--soft)" strokeWidth="9" />
+              {parts.map(([pair, v], i) => {
+                const len = total ? (v / total) * C : 0;
+                const el = <circle key={pair} cx="50" cy="50" r={R} fill="none" stroke={RING[i % RING.length]} strokeWidth="9" strokeDasharray={`${Math.max(0, len - 1.5)} ${C}`} strokeDashoffset={-offset} transform="rotate(-90 50 50)" />;
+                offset += len;
+                return el;
+              })}
+            </svg>
+            <div className="dx-ring-c"><b className="num">{hide ? '••••' : compact(total)}</b><small>In force</small></div>
+          </div>
+          <div className="dx-cover-list">
+            <div><span><ShieldCheck size={15} />Active covers</span><b className="num">{active.length}</b></div>
+            <div><span><CalendarDays size={15} />Next expiry</span><b>{next ? new Date(next * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</b></div>
+            <div><span><CircleDollarSign size={15} />Payout to claim</span><b className={`num ${toClaim > 0 ? 'up' : ''}`}>{hide ? '••••' : `$${toClaim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</b></div>
+            <div className="dx-pairs">{parts.slice(0, 4).map(([pair], i) => <span key={pair}><i style={{ background: RING[i % RING.length] }} />{pair}</span>)}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

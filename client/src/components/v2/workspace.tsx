@@ -108,7 +108,10 @@ function SectionTabs({ section, onChange, compact }: { section: Section | null; 
   return (
     <nav className={`bx-sections${compact ? ' compact' : ''}`} aria-label="Sections">
       {(['home', 'hedge', 'trade', 'otc'] as Section[]).map((k) => (
-        <button key={k} className={section === k ? 'on' : ''} aria-current={section === k ? 'page' : undefined} onClick={() => onChange(k)}>{SECTION_NAME[k]}</button>
+        <button key={k} className={section === k ? 'on' : ''} aria-current={section === k ? 'page' : undefined} onClick={() => onChange(k)}>
+          {compact && (k === 'home' ? <Home size={15} /> : k === 'hedge' ? <ShieldCheck size={15} /> : k === 'trade' ? <LineChart size={15} /> : <Layers size={15} />)}
+          {SECTION_NAME[k]}
+        </button>
       ))}
     </nav>
   );
