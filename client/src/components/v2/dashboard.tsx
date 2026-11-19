@@ -81,7 +81,7 @@ export function Dashboard({ go }: { go: Go }) {
             <button className="primary" onClick={() => go('wallet', { wallet: 'deposit' })}><PlusCircle size={20} /><b>Deposit</b><small>Add USDC</small></button>
             <button onClick={() => go('h-protect')}><ShieldCheck size={20} /><b>Hedge</b><small>Buy cover</small></button>
             <button onClick={() => go('perps')}><LineChart size={20} /><b>Trade</b><small>Perps</small></button>
-            <button onClick={() => go('otc')}><Repeat size={20} /><b>Convert</b><small>Swap USDC</small></button>
+            <button onClick={() => go('otc')}><Repeat size={20} /><b>Swap</b><small>USDC and cash</small></button>
           </div>
         </div>
 

@@ -93,7 +93,7 @@ export function OtcPage() {
         <div className="bx-card">
           <div className="bx-card-h">
             <div>
-              <h2>OTC</h2>
+              <h2>Swap</h2>
               <div className="sub">Buy or sell USDC for Naira, Cedi, Shillings, Rand or Egyptian pounds with approved merchants. The USDC stays in escrow on Stellar until the money arrives.</div>
               {r.org && <div className="sub" style={{ marginTop: 4 }}>Trading for <b>{r.org.name}</b> as {r.role === 'admin' ? 'an admin' : r.role === 'operator' ? 'an operator: you can buy USDC, and an admin sells or releases it' : 'a viewer: you can see orders but not trade'}.</div>}
             </div>
@@ -453,7 +453,7 @@ function MyOrders({ onOpen }: { onOpen: (id: number) => void }) {
   const orders = useMyOrders();
   return (
     <div className="bx-card">
-      <div className="bx-card-h"><div><h2>My orders</h2><div className="sub">Every OTC order you are in, as a buyer, a seller or a merchant.</div></div></div>
+      <div className="bx-card-h"><div><h2>My orders</h2><div className="sub">Every swap order you are in, as a buyer, a seller or a merchant.</div></div></div>
       {orders.isLoading ? <Loading /> : !orders.data?.length ? <div className="bx-empty"><Inbox /> No orders yet.</div> : <OrderRows orders={orders.data} onOpen={onOpen} />}
     </div>
   );
@@ -534,7 +534,7 @@ function OrderDetail({ id, onBack }: { id: number; onBack: () => void }) {
     <main className="bx-main">
       <section className="bx-full">
         <div className="bx-card">
-          <button className="bx-btn ghost small" onClick={onBack}>Back to OTC</button>
+          <button className="bx-btn ghost small" onClick={onBack}>Back to Swap</button>
           <div className="bx-card-h" style={{ marginTop: 10 }}>
             <div>
               <h2>{userBuys ? 'Buy' : 'Sell'} {fmt(o.amount)} USDC · order {o.id}</h2>
