@@ -215,8 +215,6 @@ export function Workspace() {
   });
   const [section, setSection] = useState<Section>(() => (saved?.page ? sectionOf(saved.page) ?? 'home' : 'home'));
   useEffect(() => { const s2 = sectionOf(page); if (s2) setSection(s2); }, [page]);
-  const lastHedgePage = useRef<Page | null>(null);
-  useEffect(() => { if (sectionOf(page) === 'hedge') lastHedgePage.current = page; }, [page]);
   // Switching to Simple from a page it does not have opens Buy cover.
   useEffect(() => { if (simple && !SIMPLE_PAGES.includes(page)) setPage('h-protect'); }, [simple, page]);
   const [pair, setPair] = useState<string | null>(saved?.pair ?? null);
@@ -254,7 +252,8 @@ export function Workspace() {
     if (next === 'home') go('dash');
     else if (next === 'trade') go('perps');
     else if (next === 'otc') go('otc');
-    else go(lastHedgePage.current ?? (role === 'underwriter' && !simple ? 'u-home' : 'h-protect'));
+    // Hedge always opens Buy cover; Underwrite is its own item in the Hedge menu.
+    else go('h-protect');
   };
   const switchRole = (r: Role) => {
     setRole(r);
