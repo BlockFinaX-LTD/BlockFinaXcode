@@ -684,8 +684,8 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
       </div>
       <div className="px-table">
         {tab === 'positions' && (
-          !account?.positions.length ? <div className="bx-empty">No open positions.</div> : (
-            <table>
+          !account?.positions.length ? <div className="bx-empty">No open positions.</div> : (<>
+            <table className="px-pos-table">
               <thead><tr><th>Market</th><th>Size</th><th>Value</th><th>Entry</th><th>Mark</th><th>PnL (ROE)</th><th>Liq. price</th><th>Margin</th><th>Funding</th><th title="Auto-deleveraging queue">ADL</th><th /></tr></thead>
               <tbody>{account.positions.map((p) => (
                 <tr key={p.market}>
@@ -703,6 +703,36 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                 </tr>
               ))}</tbody>
             </table>
+            {/* Phones: one card per position, laid out like Binance. */}
+            <div className="px-pos-cards">{account.positions.map((p) => {
+              const ratio = account.equity > 0 ? account.maintenance / account.equity : 0;
+              return (
+                <div key={p.market} className="px-pcard">
+                  <div className="px-pcard-h">
+                    <span className={`px-pside ${p.size > 0 ? 'long' : 'short'}`}>{p.size > 0 ? 'Long' : 'Short'}</span>
+                    <b>{p.pair}</b><span className="px-ptag">Perp</span>
+                    {posLev(p.notional) && <span className="px-ptag">Cross {posLev(p.notional)}</span>}
+                    <AdlLights n={p.adl} />
+                    {!p.settled && <span className="px-pill tiny">settling</span>}
+                  </div>
+                  <div className="px-pcard-pnl">
+                    <div><span>PnL (USD)</span><b className={`num ${p.upnl >= 0 ? 'up' : 'down'}`}>{signed(p.upnl)}</b></div>
+                    <div className="r"><span>ROE</span><b className={`num ${p.roe >= 0 ? 'up' : 'down'}`}>{pctS(p.roe)}</b></div>
+                  </div>
+                  <div className="px-pcard-grid">
+                    <div><span>Size (USD)</span><b className="num">{px(p.notional, 2)}</b></div>
+                    <div><span>Margin (USD)</span><b className="num">{px(p.margin, 2)}</b></div>
+                    <div className="r"><span>Margin ratio</span><b className={`num ${ratio > 0.7 ? 'down' : 'up'}`}>{(ratio * 100).toFixed(2)}%</b></div>
+                    <div><span>Entry price</span><b className="num">{px(p.entry, dec(p.market))}</b></div>
+                    <div><span>Mark price</span><b className="num">{px(p.mark, dec(p.market))}</b></div>
+                    <div className="r"><span>Liq. price</span><b className="num">{p.liquidationPrice != null ? px(p.liquidationPrice, dec(p.market)) : '-'}</b></div>
+                  </div>
+                  <div className="px-pcard-row"><span>Funding (USD)</span><b className={`num ${p.fundingOwed > 0 ? 'down' : 'up'}`}>{p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}</b></div>
+                  <button className="px-pcard-close" disabled={busy !== null || !kp} onClick={() => close(p)}>{busy === `close-${p.market}` ? <Spin /> : 'Close'}</button>
+                </div>
+              );
+            })}</div>
+          </>
           )
         )}
         {tab === 'orders' && (
