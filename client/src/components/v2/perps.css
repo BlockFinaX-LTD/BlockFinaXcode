@@ -404,7 +404,9 @@
 .px-price, .px-bar-sep, .px-oi-split { display: none; }
 @media (min-width: 1241px) {
   /* one surface split by hairlines instead of separate boxes */
-  .px-wrap { gap: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--line); }
+  .px-wrap { gap: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--line); }
+  .px-wrap > .px-bar { border-radius: 13px 13px 0 0; position: relative; z-index: 20; }
+  .px-wrap > .px-foot { border-radius: 0 0 13px 13px; }
   .px-wrap > .px-panel, .px-grid .px-panel { border: 0; border-radius: 0; }
   .px-grid { gap: 1px; background: var(--line); grid-template-columns: minmax(0, 1fr) 300px 360px; }
   .px-side { gap: 1px; background: var(--line); }
@@ -414,7 +416,7 @@
   .px-foot { background: var(--panel); margin: 0; padding: 10px 16px; border-top: 1px solid var(--line); }
 
   /* market bar: pair, big price, grouped stats */
-  .px-bar { gap: 34px; padding: 14px 20px; flex-wrap: nowrap; overflow-x: auto; }
+  .px-bar { gap: 14px 34px; padding: 14px 20px; flex-wrap: wrap; }
   .px-pick-btn { background: var(--soft); border-radius: 12px; padding: 8px 14px; gap: 10px; }
   .px-sym { font-size: 18px; }
   .px-price { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
