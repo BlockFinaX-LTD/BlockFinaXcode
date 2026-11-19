@@ -454,3 +454,11 @@
   .px-table th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 11px 14px !important; }
   .px-table td { padding: 13px 14px !important; font-variant-numeric: tabular-nums; }
 }
+
+/* Softer long / short colours for the big buttons (text keeps the theme's green and red) */
+.bx { --long: #3cbf7f; --long-h: #34b274; --short: #ee6a7e; --short-h: #e65c71; }
+.bx[data-theme="dark"] { --long: #34b878; --long-h: #2fad6f; --short: #ec6b80; --short-h: #e15f74; }
+.px-side-toggle button.buy.on, .px-cta.buy, .px-lsbar .buy { background: var(--long); }
+.px-side-toggle button.sell.on, .px-cta.sell, .px-lsbar .sell { background: var(--short); }
+.px-cta.buy:hover:not(:disabled), .px-lsbar .buy:hover { background: var(--long-h); }
+.px-cta.sell:hover:not(:disabled), .px-lsbar .sell:hover { background: var(--short-h); }
