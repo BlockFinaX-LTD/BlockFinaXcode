@@ -195,15 +195,6 @@ export function inAppBrowser(): boolean {
   return /FBAN|FBAV|Instagram|LinkedInApp|GSA\/|Line\/|Twitter|Snapchat|TikTok|; wv\)/i.test(navigator.userAgent);
 }
 
-/** A link that opens this page in the phone's own browser, from inside another app. */
-export function openInBrowserLink(): { href: string; label: string } | null {
-  if (typeof navigator === "undefined") return null;
-  const url = window.location.href;
-  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return { href: url.replace(/^https:/, "x-safari-https:"), label: "Open in Safari" };
-  if (/Android/i.test(navigator.userAgent)) return { href: `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`, label: "Open in Chrome" };
-  return null;
-}
-
 export async function createWalletPasskey(): Promise<PasskeySession & { errors?: string[] }> {
   const { flow, options } = await passkeyOptions("register");
   const response = await startRegistration({ optionsJSON: options });

@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import logoPath from "@/assets/logo.png";
 import { takeReturnPath, usePasskeySession } from "@/lib/identity";
 import {
-  acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, earlierPasskeyDomains, finishEmailSignIn, inAppBrowser, openInBrowserLink,
+  acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, earlierPasskeyDomains, finishEmailSignIn,
   preparePasskeyOptions, signInWithPasskey, signOutPasskey, startEmailSignIn, startGoogleSignIn,
 } from "@/lib/wallets/passkey-wallet";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@shared/legal";
@@ -42,7 +42,6 @@ export function PasskeyAuth() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   // Whether a signed-in account without a wallet still has to give its profile.
   // If the check fails, carry on to the passkey: the profile must never lock anyone out.
   const [profile, setProfile] = useState<"checking" | "needed" | "done">("checking");
@@ -71,21 +70,9 @@ export function PasskeyAuth() {
   const passkeyScreen = needsWallet && profile === "done";
   useEffect(() => { if (passkeyScreen) preparePasskeyOptions("register"); }, [passkeyScreen]);
   useEffect(() => { if (!signedIn && !forConnectors) preparePasskeyOptions("signin"); }, [signedIn]);
-  const embedded = inAppBrowser();
-  const openHere = embedded ? openInBrowserLink() : null;
   // Passkeys made before the passkey domain moved: offer them on a device that has not used one yet.
   const [earlier, setEarlier] = useState(false);
   useEffect(() => { void earlierPasskeyDomains().then((d) => setEarlier(d.length > 0)).catch(() => {}); }, []);
-  const inAppNotice = (
-    <div className="w-full rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-left text-[11.5px] leading-snug">
-      Passkeys cannot be used inside another app&apos;s built-in browser. Open this page in Safari or Chrome to sign in.
-      {openHere && <a href={openHere.href} className="mt-2 flex h-8 w-full items-center justify-center rounded-md bg-primary text-[12px] font-semibold text-primary-foreground">{openHere.label}</a>}
-      <Button size="sm" variant="outline" className="mt-2 h-8 w-full" onClick={() => void navigator.clipboard?.writeText(window.location.origin).then(() => setCopied(true))}>
-        {copied ? "Link copied. Paste it in Safari or Chrome" : "Copy link"}
-      </Button>
-    </div>
-  );
-
 
   async function run(label: string, action: () => Promise<void>) {
     setBusy(label);
@@ -96,9 +83,7 @@ export function PasskeyAuth() {
       const err = e as Error;
       const message = err.message || "Something went wrong";
       if (err.name === "NotAllowedError" || /not allowed|cancel|timed out/i.test(message)) {
-        setError(embedded
-          ? "This app's built-in browser blocked the passkey. Open testnet.blockfinax.com in Safari or Chrome and sign in there."
-          : "The passkey was not created. Tap the button again and approve with Face ID, Touch ID or your device PIN. If it keeps failing, open the page in Safari or Chrome.");
+        setError("The passkey was not approved. Tap the button again and approve with Face ID, Touch ID or your device PIN.");
       } else {
         setError(message);
       }
@@ -155,7 +140,6 @@ export function PasskeyAuth() {
             {spinner("create") ?? <><KeyRound className="h-4 w-4 mr-2" />Create wallet passkey</>}
           </Button>
           {busy === "create" && <p className="text-[11px] text-muted-foreground">Creating your accounts. This takes about 10 seconds.</p>}
-          {embedded && inAppNotice}
           <button className="text-[11.5px] text-muted-foreground underline mt-2" onClick={signOut}>
             Use a different account
           </button>
@@ -214,7 +198,6 @@ export function PasskeyAuth() {
           <Button variant="outline" className="w-full h-11 rounded-xl" disabled={!!busy} onClick={startGoogleSignIn}>
             Continue with Google
           </Button>
-          {embedded && inAppNotice}
           <Button variant="ghost" className="w-full h-10 rounded-xl text-[12.5px]" disabled={!!busy} onClick={() => run("passkey", async () => {
             const s = await signInWithPasskey();
             setSession(s);
