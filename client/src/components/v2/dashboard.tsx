@@ -62,11 +62,6 @@ export function Dashboard({ go }: { go: Go }) {
     <div className="dx">
       <section className="dx-left">
         <div className="dx-hero">
-          <svg className="dx-wave" viewBox="0 0 400 160" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M0 120 C 90 60, 160 150, 250 80 S 360 20, 400 40" fill="none" stroke="url(#dxw)" strokeWidth="2" />
-            <path d="M0 135 C 100 80, 170 160, 260 95 S 370 40, 400 58" fill="none" stroke="url(#dxw)" strokeWidth="1.2" opacity="0.6" />
-            <defs><linearGradient id="dxw" x1="0" x2="1"><stop offset="0" stopColor="#60a5fa" stopOpacity="0" /><stop offset="0.6" stopColor="#60a5fa" stopOpacity="0.9" /><stop offset="1" stopColor="#a5b4fc" stopOpacity="0.6" /></linearGradient></defs>
-          </svg>
           <div className="dx-bal-k">Portfolio
             <button className="dx-eye" onClick={() => setHide(!hide)} aria-label={hide ? 'Show balances' : 'Hide balances'}>{hide ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div>
@@ -117,7 +112,9 @@ function CoverCard({ go, hide, active }: { go: Go; hide: boolean; active: Hedge[
   const parts = [...byPair.entries()].sort((a, b) => b[1] - a[1]);
   const total = parts.reduce((x, [, v]) => x + v, 0);
   const pending = active.filter((h) => h.settlement.status === 'pending');
-  const next = pending.length ? Math.min(...pending.map((h) => Number(h.position.expiry))) : null;
+  const nowS = Date.now() / 1000;
+  const upcoming = pending.map((h) => Number(h.position.expiry)).filter((x) => x > nowS);
+  const next = upcoming.length ? Math.min(...upcoming) : null;
   const toClaim = active.filter((h) => h.settlement.status === 'settled_claimable').reduce((x, h) => x + Number(h.settlement.netPayout), 0);
   const R = 42, C = 2 * Math.PI * R;
   let offset = 0;

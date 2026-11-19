@@ -302,7 +302,7 @@
  * tables stack into cards with each value labelled (labels come from useListLabels).
  */
 @media (max-width: 860px) {
-  .bx { display: block; overflow-x: hidden; }
+  .bx { display: block; overflow-x: clip; }
   .bx-rail { display: none; }
 
   /* Header */

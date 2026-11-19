@@ -114,3 +114,13 @@
   .dx-update { grid-template-columns: 34px minmax(0, 1fr); }
   .dx-update time { grid-column: 2; }
 }
+
+/* Plain balance card, like the other cards */
+.dx-hero { background: var(--panel); border: 1px solid var(--line); box-shadow: none; color: var(--text); border-radius: 16px; }
+.dx-hero .dx-bal-k { color: var(--text-2); }
+.dx-hero .dx-eye { color: var(--muted); }
+.dx-hero .dx-bal { color: var(--text); }
+.dx-hero .dx-unit { color: var(--muted); }
+.dx-hero .dx-pnl { color: var(--text-2); }
+.dx-hero .up { color: var(--green); }
+.dx-hero .down { color: var(--red); }
