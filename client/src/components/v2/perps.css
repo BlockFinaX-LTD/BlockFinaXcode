@@ -298,8 +298,8 @@
    the bottom. The order form appears once Long or Short is tapped. */
 .px-lsbar { display: none; }
 @media (max-width: 860px) {
-  .px-chartmode .px-form, .px-chartmode .px-acct { display: none !important; }
-  .px-chartmode .px-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "chart" "book" "bottom"; }
+  .px-chartmode .px-form, .px-chartmode .px-acct, .px-chartmode .px-bottom { display: none !important; }
+  .px-chartmode .px-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "chart" "book"; }
   .px-chartmode { padding-bottom: 76px; }
   .px-chartmode .px-ob-h, .px-chartmode .px-ob-row { grid-template-columns: 1fr 1fr 1fr; padding-left: 12px; padding-right: 12px; }
   .px-chartmode .px-ob-h span:nth-of-type(3), .px-chartmode .px-ob-row span:nth-of-type(3) { display: inline; }
