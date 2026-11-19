@@ -517,7 +517,7 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
       <div className="px-kv px-x-sm"><span>Perps balance</span><b className="num">{usd(account?.onChain.collateral ?? 0)}</b></div>
       <div className="px-kv"><span>Available to trade</span><b className="num">{usd(available)}</b></div>
       <div className="px-kv px-x-sm"><span>In your wallet</span><b className="num">{usd(walletUsdc)}{walletUsdc > 0 && !hasMoney && <button className="px-link inline" onClick={() => document.getElementById('px-deposit-btn')?.click()}>Move to perps</button>}</b></div>
-      <div className="px-kv px-x-sm"><span>Current position</span><b className={`num ${pos ? (pos.size > 0 ? 'up' : 'down') : ''}`}>{pos ? `${pos.size > 0 ? '' : '-'}${usd(pos.notional, 0)}` : '-'}</b></div>
+      <div className="px-kv px-x-sm"><span>Current position</span><b className={`num ${pos ? (pos.size > 0 ? 'up' : 'down') : ''}`}>{pos ? `${pos.size > 0 ? 'Long' : 'Short'} ${usd(pos.notional, 0)}` : '-'}</b></div>
       {type === 'limit' && (
         <label className="px-in"><span>Price ({market.quote})</span>
           <input id="px-price" className="num" inputMode="decimal" value={price} placeholder={px(market.mark, market.decimals)} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} />
