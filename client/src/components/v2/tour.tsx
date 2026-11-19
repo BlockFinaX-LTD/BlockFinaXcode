@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import type { Role } from './workspace';
+import { FINAX_IN_APP, UNDERWRITING_IN_APP } from './features';
 
 interface Step { target?: string; title: string; body: string }
 
@@ -52,7 +53,8 @@ export function ProductTour({ role, userId }: { role: Role; userId?: number | st
   const [open, setOpen] = useState(false);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const steps = STEPS[role];
+  const steps = STEPS[role].filter((st) =>
+    !(st.target === '[data-tour="ask"]' && !FINAX_IN_APP) && !(st.target === '[data-tour="roles"]' && !UNDERWRITING_IN_APP));
   const step = steps[Math.min(i, steps.length - 1)];
 
   // First sign-in: show once per user.

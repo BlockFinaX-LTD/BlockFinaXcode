@@ -19,6 +19,7 @@ import { HedgerHome, MyProtections, PairPage, ProtectPage, RatesPage } from './h
 import { CreatePool, UnderwriteDesk } from './underwriter-pages';
 import { AccountPage, WalletPage, type WalletMode } from './money-pages';
 import { AgentChat } from './agent-chat';
+import { FINAX_IN_APP, UNDERWRITING_IN_APP } from './features';
 import { ProductTour } from './tour';
 import { UnderwriterRequests } from './rfq';
 import { OtcPage } from './otc';
@@ -94,6 +95,7 @@ function readView(): { page: Page; pair: string | null; pool: string | null } | 
   try {
     const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? 'null');
     if (!v || !RESTORABLE.includes(v.page) || (v.page === 'pair' && !v.pair)) return null;
+    if (!UNDERWRITING_IN_APP && String(v.page).startsWith('u-')) return { page: 'h-protect', pair: v.pair ?? null, pool: null };
     return { page: v.page, pair: v.pair ?? null, pool: v.pool ?? null };
   } catch { return null; }
 }
@@ -194,6 +196,7 @@ function readTheme(): Theme {
 }
 
 function readRole(): Role {
+  if (!UNDERWRITING_IN_APP) return 'hedger';
   try { return localStorage.getItem('bfx:cover-role') === 'underwriter' ? 'underwriter' : 'hedger'; } catch { return 'hedger'; }
 }
 
@@ -230,6 +233,7 @@ export function Workspace() {
 
   const go: Go = (p, target) => {
     if (p === 'h-markets') p = 'h-protect'; // Markets and buying are one page
+    if (!UNDERWRITING_IN_APP && p.startsWith('u-')) { p = 'h-protect'; target = undefined; }
     if (target?.pair !== undefined) setPair(target.pair);
     if (target?.pool !== undefined) setPool(target.pool);
     if (p === 'h-protect') setBuy(target ?? {});
@@ -304,7 +308,7 @@ export function Workspace() {
               <button className={`bx-nm-btn${section === 'home' ? ' on' : ''}`} onClick={() => go('dash')}>Home</button>
               <NavMenu label="Hedge" active={section === 'hedge'} onOpen={() => switchSection('hedge')} items={[
                 { label: 'Buy cover', onClick: () => go('h-protect') },
-                ...(simple ? [] : [{ label: 'Underwrite', onClick: () => go('u-home') }]),
+                ...(simple || !UNDERWRITING_IN_APP ? [] : [{ label: 'Underwrite', onClick: () => go('u-home') }]),
               ]} />
               <NavMenu label="Trade" active={section === 'trade'} onOpen={() => switchSection('trade')} items={[
                 { heading: 'Perpetual futures' },
@@ -318,12 +322,12 @@ export function Workspace() {
             <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet · <span className="num">${fmt(balances.data?.total)} USDC</span></button>
             {section === 'hedge' && <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>}
             {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
-            <button className="bx-ask-top bx-show-sm" aria-label="Ask Finax" data-tour="ask" onClick={() => window.dispatchEvent(new Event('bfx:ask-open'))}><MessageCircle /></button>
+            {FINAX_IN_APP && <button className="bx-ask-top bx-show-sm" aria-label="Ask Finax" data-tour="ask" onClick={() => window.dispatchEvent(new Event('bfx:ask-open'))}><MessageCircle /></button>}
             <span className="bx-top-account bx-hide-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>
             <button className={`bx-avatar bx-mavatar bx-show-sm${page === 'account' ? ' on' : ''}`} aria-label="Profile" onClick={() => go('account')}>{initialsOf(session?.user.name ?? session?.user.email ?? '')}</button>
           </div>
         </header>
-        {section === 'hedge' && !simple && (
+        {section === 'hedge' && !simple && UNDERWRITING_IN_APP && (
           <div className="bx-rolebar">
             <div className="bx-roles bx-mroles" role="group" aria-label="Side">
               <button className={role === 'hedger' ? 'on' : ''} aria-pressed={role === 'hedger'} onClick={() => switchRole('hedger')}>Hedger</button>
@@ -350,7 +354,7 @@ export function Workspace() {
         <StatusBar />
       </div>
 
-      <AgentChat />
+      {FINAX_IN_APP && <AgentChat />}
       <ProductTour role={role} userId={session?.user.id} />
 
       <nav className="bx-tabs" aria-label="Main" hidden={section !== 'hedge'}>
