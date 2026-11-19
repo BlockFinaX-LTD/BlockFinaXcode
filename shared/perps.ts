@@ -109,3 +109,24 @@ export const unitsForNotional = (usd: number, price: number) => (price > 0 ? usd
 export function adlLights(scorePercentile: number) {
   return Math.max(1, Math.min(5, Math.ceil(scorePercentile * 5)));
 }
+
+/**
+ * Apply one fill to a position (linear contract: profit = size x (exit - entry)).
+ * Adding averages the entry; reducing realises profit on the closed part; crossing zero
+ * flips the position, opening the remainder at the fill price. Used by the engine's margin
+ * mirror and by the realized PnL replay, so the two always agree.
+ */
+export function applyFill(pos: { size: number; entry: number }, delta: number, price: number) {
+  const old = pos.size, next = old + delta;
+  let entry = pos.entry, realized = 0, flipped = false, opened = 0;
+  if (old === 0 || Math.sign(old) === Math.sign(delta)) {
+    entry = (Math.abs(old) * entry + Math.abs(delta) * price) / Math.abs(next);
+    opened = Math.abs(delta);
+  } else {
+    const closed = Math.abs(delta) >= Math.abs(old) ? old : -delta;
+    realized = closed * (price - entry);
+    if (Math.abs(next) < 1e-12) entry = 0;
+    else if (Math.sign(next) !== Math.sign(old)) { entry = price; flipped = true; opened = Math.abs(next); }
+  }
+  return { size: Math.abs(next) < 1e-12 ? 0 : next, entry, realized, flipped, opened };
+}

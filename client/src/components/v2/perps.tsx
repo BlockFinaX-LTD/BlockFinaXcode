@@ -634,6 +634,13 @@ function AdlLights({ n }: { n: number }) {
 function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: MarketView[]; kp: Keypair | null }) {
   const [tab, setTab] = useState<'positions' | 'orders' | 'trades' | 'funding' | 'history'>('positions');
   const [pnlSheet, setPnlSheet] = useState<number | null>(null);
+  // Cross margin ratio for the whole account; with no equity left it is past 100% (liquidation).
+  const ratio = account ? (account.equity > 0 ? account.maintenance / account.equity : Infinity) : 0;
+  // 7: the sheet belongs to one open position; close it when that position goes or the tab changes.
+  useEffect(() => { setPnlSheet(null); }, [tab]);
+  useEffect(() => {
+    if (pnlSheet != null && !account?.positions.some((x) => x.market === pnlSheet)) setPnlSheet(null);
+  }, [account, pnlSheet]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['perps-config'], queryFn: () => api<PerpConfig>('/api/perps/config') });
@@ -706,7 +713,6 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
             </table>
             {/* Phones: one card per position, laid out like Binance. */}
             <div className="px-pos-cards">{account.positions.map((p) => {
-              const ratio = account.equity > 0 ? account.maintenance / account.equity : 0;
               return (
                 <div key={p.market} className="px-pcard">
                   <div className="px-pcard-h">
@@ -723,7 +729,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                   <div className="px-pcard-grid">
                     <div><span>Size (USD)</span><b className="num">{px(p.notional, 2)}</b></div>
                     <div><span>Margin (USD)</span><b className="num">{px(p.margin, 2)}</b></div>
-                    <div className="r"><span>Margin ratio</span><b className={`num ${ratio > 0.7 ? 'down' : 'up'}`}>{(ratio * 100).toFixed(2)}%</b></div>
+                    <div className="r"><span>Margin ratio</span><b className={`num ${ratio > 0.7 ? 'down' : 'up'}`}>{Number.isFinite(ratio) ? `${(ratio * 100).toFixed(2)}%` : '>100%'}</b></div>
                     <div><span>Entry price</span><b className="num">{px(p.entry, dec(p.market))}</b></div>
                     <div><span>Mark price</span><b className="num">{px(p.mark, dec(p.market))}</b></div>
                     <div className="r"><span>Liq. price</span><b className="num">{p.liquidationPrice != null ? px(p.liquidationPrice, dec(p.market)) : '-'}</b></div>
@@ -740,20 +746,19 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               const p = account.positions.find((x) => x.market === pnlSheet);
               const r = p?.realized;
               if (!p) return null;
-              const money = (v: number | undefined) => (v == null ? '-' : `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(2)}`);
               const line = (label: string, v: number | undefined, note?: string) => (
-                <div className="px-sheet-row"><span>{label}{note && <small>{note}</small>}</span><b className="num">{money(v)}</b></div>
+                <div className="px-sheet-row"><span>{label}{note && <small>{note}</small>}</span><b className="num">{usd(v)}</b></div>
               );
               return (
                 <div className="px-sheet-bg" onClick={() => setPnlSheet(null)}>
                   <div className="px-sheet" role="dialog" aria-modal="true" aria-label="Realized PnL" onClick={(e) => e.stopPropagation()}>
                     <i className="px-sheet-grab" aria-hidden="true" />
                     <h3>Realized PnL</h3>
-                    <div className="px-sheet-row total"><span>Realized PnL</span><b className={`num ${(r?.total ?? 0) >= 0 ? 'up' : 'down'}`}>{money(r?.total)}</b></div>
+                    <div className="px-sheet-row total"><span>Realized PnL</span><b className={`num ${(r?.total ?? 0) >= 0 ? 'up' : 'down'}`}>{usd(r?.total)}</b></div>
                     {line('Closing PnL', r?.closing, 'from parts of this position already closed')}
                     {line('Funding fee', r?.funding)}
                     {line('Trading fee', r?.fees)}
-                    <p className="px-sheet-note">For your {p.pair} {p.size > 0 ? 'long' : 'short'} since it was opened. Funding not yet settled: {p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}.</p>
+                    <p className="px-sheet-note">{r ? <>For your {p.pair} {p.size > 0 ? 'long' : 'short'} since it was opened.</> : <>Not available for this position: part of it changed through a liquidation or an emergency close.</>} Funding not yet settled: {p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}.</p>
                     <button className="px-pcard-close" onClick={() => setPnlSheet(null)}>Done</button>
                   </div>
                 </div>

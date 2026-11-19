@@ -17,7 +17,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import {
   PRICE_SCALE, SIZE_SCALE, USDC_SCALE, marketInfo, orderDigest, toHex,
-  type PerpOrder, type TimeInForce,
+  type PerpOrder, type TimeInForce, applyFill,
 } from "@shared/perps";
 import { ApplicationError } from "@shared/domain/types";
 import type { ChainAccount, ChainFill, ChainMarket, PerpChain } from "./chain";
@@ -77,6 +77,7 @@ const SCHEMA = `
     commitment text NOT NULL,
     tx text
   );
+  ALTER TABLE perp_funding ADD COLUMN IF NOT EXISTS index_price double precision;
   CREATE TABLE IF NOT EXISTS perp_candles (
     market integer NOT NULL,
     t bigint NOT NULL,
@@ -353,18 +354,21 @@ export class PerpEngine {
   }
 
   private applyToMirror(m: Mirror, market: number, delta: number, price: number, fee: number) {
-    const p = m.positions.get(market) ?? { size: 0, entry: 0 };
-    const old = p.size, next = old + delta;
-    if (old === 0 || Math.sign(old) === Math.sign(delta)) {
-      p.entry = (Math.abs(old) * p.entry + Math.abs(delta) * price) / Math.abs(next);
-    } else {
-      const closed = Math.abs(delta) >= Math.abs(old) ? old : -delta;
-      m.collateral += closed * (price - p.entry);
-      if (Math.abs(next) < 1e-12) p.entry = 0; else if (Math.sign(next) !== Math.sign(old)) p.entry = price;
+    const r = applyFill(m.positions.get(market) ?? { size: 0, entry: 0 }, delta, price);
+    m.collateral += r.realized - fee;
+    if (r.size === 0) m.positions.delete(market); else m.positions.set(market, { size: r.size, entry: r.entry });
+  }
+
+  /** The contract's trading fee rates: re-read every 10 minutes, or after a minute if a read failed. */
+  private fees = { takerBps: 5, makerBps: 0 };
+  private feesAt = 0;
+  private feesOk = false;
+  async feeRates() {
+    if (Date.now() - this.feesAt > (this.feesOk ? 10 * 60_000 : 60_000)) {
+      this.feesAt = Date.now();
+      try { this.fees = await this.chain.feeRates(); this.feesOk = true; } catch { this.feesOk = false; }
     }
-    p.size = Math.abs(next) < 1e-12 ? 0 : next;
-    m.collateral -= fee;
-    if (p.size === 0) m.positions.delete(market); else m.positions.set(market, p);
+    return this.fees;
   }
 
   /** Value, initial and maintenance margin of a mirror at current marks. */
@@ -520,8 +524,8 @@ export class PerpEngine {
     const notional = p * z;
     const mm = await this.mirror(maker.order.account);
     const tm = await this.mirror(taker.order.account);
-    this.applyToMirror(mm, s.chain.id, maker.order.isBuy ? z : -z, p, 0);
-    this.applyToMirror(tm, s.chain.id, takerBuy ? z : -z, p, notional * 0.0005);
+    this.applyToMirror(mm, s.chain.id, maker.order.isBuy ? z : -z, p, notional * (this.fees.makerBps / 10_000));
+    this.applyToMirror(tm, s.chain.id, takerBuy ? z : -z, p, notional * (this.fees.takerBps / 10_000));
     s.lastTrade = p;
     s.trades.push({ price: p, size: z, takerBuy, t: Date.now() });
     if (s.trades.length > 100) s.trades.splice(0, s.trades.length - 100);
@@ -658,8 +662,8 @@ export class PerpEngine {
     const tx = await this.chain.applyFunding(s.chain.id, ratePpm, commitment);
     s.chain.fundingAt = Math.floor(Date.now() / 1000);
     s.fundingRatePpm = Number(ratePpm);
-    await this.db.query(`INSERT INTO perp_funding (market, rate_ppm, premium, readings, weekend, commitment, tx) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [s.chain.id, String(ratePpm), premium, readings.length, s.weekend, commitment, tx]);
+    await this.db.query(`INSERT INTO perp_funding (market, rate_ppm, premium, readings, weekend, commitment, tx, index_price) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [s.chain.id, String(ratePpm), premium, readings.length, s.weekend, commitment, tx, s.index]);
     this.chainAccounts.clear();
     for (const k of this.mirrors.keys()) this.mirrors.get(k)!.syncedAt = 0;
   }
