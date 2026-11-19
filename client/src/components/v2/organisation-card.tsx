@@ -9,7 +9,7 @@
  * own address on Stellar. Its members are people with their own sign-in and passkey; their
  * role decides what their passkey can approve for the business:
  *   admin     everything, including withdrawals and members
- *   operator  buy cover and manage liquidity, never send money out
+ *   operator  buy cover, manage liquidity and buy USDC over the counter, never send money out
  *   viewer    see balances, cover and statements, approve nothing
  * Which account you act as is chosen in the account menu.
  */
@@ -33,7 +33,7 @@ import { BusinessVerificationCard } from './records';
 const ROLE_LABEL: Record<OrganisationRole, string> = { admin: 'Admin', operator: 'Operator', viewer: 'Viewer' };
 const ROLE_HELP: Record<OrganisationRole, string> = {
   admin: 'Can do everything, including withdrawals and managing members.',
-  operator: 'Can buy cover and manage liquidity. Cannot send money out.',
+  operator: 'Can buy cover, manage liquidity and buy USDC over the counter. Cannot send money out.',
   viewer: 'Can see balances, cover and statements. Approves nothing.',
 };
 const STATUS_LABEL: Record<MemberView['status'], string> = {

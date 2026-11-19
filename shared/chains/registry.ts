@@ -42,6 +42,10 @@ export interface ChainConfig {
      * withdraw.
      */
     legacy?: { currencyPool: string; poolOracle?: string }[];
+    /** Stellar only: the OTC escrow, where approved merchants trade USDC for local currency. */
+    otcEscrow?: string;
+    /** Perpetual futures clearinghouse (margin, fills, funding, liquidation). */
+    perpClearinghouse?: string;
   };
   /** Settlement assets on this chain, by symbol. */
   assets: Record<string, Omit<Asset, "chain" | "symbol">>;

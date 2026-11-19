@@ -184,7 +184,8 @@ export function MyQuoteRequests() {
 interface OpenRequest extends Omit<MyRequest, 'offers'> { myOffer: { status: string; valid_until: string } | null; offerValidSeconds: number }
 interface MyOffer { id: string; pair: string; direction: Direction; notional: string; tenorDays: number; strike: string; cap: string; premium: string; maxPayout: string; status: string; validUntil: string; poolId: number | null; error: string | null }
 
-export function UnderwriterRequests() {
+/** Requests to quote on, and your offers. `embedded` drops the page frame so it can sit inside a tab. */
+export function UnderwriterRequests({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const open = useQuery({ queryKey: ['v2-rfq-open'], queryFn: () => api<{ approved: boolean; requests: OpenRequest[] }>('/api/v2/rfq/open'), refetchInterval: 30_000 });
@@ -197,10 +198,9 @@ export function UnderwriterRequests() {
     toast({ title: 'Offer withdrawn' });
   }
 
-  return (
-    <main className="bx-main bx-desk">
-      <section className="bx-full">
-        <div className="bx-card">
+  const body = (
+    <>
+        <div className={embedded ? 'ux-sub' : 'bx-card'}>
           <div className="bx-card-h"><div><h2>Quote requests</h2><div className="sub">Businesses asking for cover no pool sells today. Your offer is a firm price; your USDC is committed only if the business accepts.</div></div></div>
           {open.isLoading ? <Loading /> : open.data && !open.data.approved ? (
             <Note warn>Your account is not approved to answer requests.</Note>
@@ -216,7 +216,7 @@ export function UnderwriterRequests() {
             </div>
           ))}
         </div>
-        <div className="bx-card">
+        <div className={embedded ? 'ux-sub' : 'bx-card'}>
           <div className="bx-card-h"><div><h2>Your offers</h2></div></div>
           {!mine.data?.length ? <div className="bx-empty">You have not made any offers yet.</div> : mine.data.map((o) => (
             <div key={o.id} className="bx-li" style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto', alignItems: 'center' }}>
@@ -228,10 +228,10 @@ export function UnderwriterRequests() {
             </div>
           ))}
         </div>
-      </section>
       {answering && <OfferModal request={answering} onClose={() => setAnswering(null)} onSent={() => { setAnswering(null); for (const k of ['v2-rfq-offers', 'v2-rfq-open']) void qc.invalidateQueries({ queryKey: [k] }); }} />}
-    </main>
+    </>
   );
+  return embedded ? body : <main className="bx-main bx-desk"><section className="bx-full">{body}</section></main>;
 }
 
 function OfferModal({ request: r, onClose, onSent }: { request: OpenRequest; onClose: () => void; onSent: () => void }) {

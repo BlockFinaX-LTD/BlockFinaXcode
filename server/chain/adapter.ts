@@ -96,6 +96,8 @@ export interface ChainAdapter {
   listActivePositions(poolId: number): Promise<ProtectionPosition[]>;
   /** Every position in a pool, whatever its status. Stellar only, for the admin dashboard. */
   listPoolPositions?(poolId: number): Promise<ProtectionPosition[]>;
+  /** Every underwriter in a pool with their balances in USDC (per-underwriter pools only). */
+  listPoolLps?(poolId: number): Promise<{ address: string; free: string; reserved: string; earned: string; paid: string }[]>;
   getBalance(owner: string, symbol: string): Promise<string>;
   getOracleState(positionId: number): Promise<OracleRoundState>;
 

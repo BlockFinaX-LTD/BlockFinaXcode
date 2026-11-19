@@ -56,6 +56,7 @@ export const RULE_NAMES = {
   operatorsPool: "Operators: pool",
   operatorsRatePool: "Operators: rates",
   operatorsUsdc: "Operators: USDC",
+  operatorsOtc: "Operators: OTC",
 } as const;
 
 /** The on-chain ids of an organisation's rules. Operator rules exist only while it has operators. */
@@ -64,6 +65,8 @@ export interface OrganisationRuleIds {
   operatorsPool: number | null;
   operatorsRatePool: number | null;
   operatorsUsdc: number | null;
+  /** The OTC escrow, when this deployment runs one. Accounts created before it have none until an operator is next added. */
+  operatorsOtc?: number | null;
 }
 
 export interface OrganisationContracts {
@@ -71,9 +74,16 @@ export interface OrganisationContracts {
   /** The rate pool, when this deployment runs one. */
   ratePool: string | null;
   usdc: string;
+  /** The OTC escrow, when this deployment runs one. */
+  otcEscrow?: string | null;
   thresholdPolicy: string;
   transferAllowlistPolicy: string;
+  /** Limits the operators' OTC rule to buying. Required for operators to use OTC. */
+  functionAllowlistPolicy?: string;
 }
+
+/** What operators may call on the OTC escrow: buying USDC only. Kept in step with OTC_OPERATOR_METHODS. */
+export const OPERATOR_OTC_FUNCTIONS = ["open_order", "mark_paid", "cancel", "dispute"] as const;
 
 /** A member as the planner sees them: their passkey identity and role. */
 export interface MemberSigner {
@@ -89,7 +99,8 @@ export type PlannedContext =
 
 export type PlannedPolicy =
   | { kind: "threshold"; policy: string; threshold: number }
-  | { kind: "transferAllowlist"; policy: string; recipients: string[] };
+  | { kind: "transferAllowlist"; policy: string; recipients: string[] }
+  | { kind: "functionAllowlist"; policy: string; functions: string[] };
 
 /** One on-chain step. Each is its own transaction: the account allows one change per authorisation. */
 export type ChainStep =
@@ -118,7 +129,12 @@ const fail = (code: string, message: string): never => {
 
 /** The rule a role's passkey sits on, for each target the role can sign for. */
 function operatorRules(contracts: OrganisationContracts): Array<Exclude<keyof OrganisationRuleIds, "admins">> {
-  return contracts.ratePool ? ["operatorsPool", "operatorsRatePool", "operatorsUsdc"] : ["operatorsPool", "operatorsUsdc"];
+  return [
+    "operatorsPool",
+    ...(contracts.ratePool ? (["operatorsRatePool"] as const) : []),
+    "operatorsUsdc",
+    ...(contracts.otcEscrow && contracts.functionAllowlistPolicy ? (["operatorsOtc"] as const) : []),
+  ];
 }
 
 function operatorRuleSpec(rule: Exclude<keyof OrganisationRuleIds, "admins">, contracts: OrganisationContracts, credentialIds: string[]): ChainStep {
@@ -133,6 +149,14 @@ function operatorRuleSpec(rule: Exclude<keyof OrganisationRuleIds, "admins">, co
       // The allow-list policy also requires at least one authenticated signer, so no
       // threshold policy is needed: any one operator may pay a listed pool.
       return { op: "add_context_rule", rule, name: RULE_NAMES.operatorsUsdc, context: { tag: "CallContract", contract: contracts.usdc }, credentialIds, policies: [{ kind: "transferAllowlist", policy: contracts.transferAllowlistPolicy, recipients }] };
+    case "operatorsOtc":
+      // The escrow only, and on it only the buying functions: the function allow-list
+      // policy refuses release and every merchant function on chain. The USDC rule above
+      // also stops operators locking company USDC, because the escrow is not on its list.
+      // Like the transfer allow-list, the policy itself requires an authenticated signer.
+      if (!contracts.otcEscrow) return fail("NO_OTC", "This deployment has no OTC escrow");
+      if (!contracts.functionAllowlistPolicy) return fail("NO_FUNCTION_POLICY", "The function allow-list policy is not deployed on this network yet");
+      return { op: "add_context_rule", rule, name: RULE_NAMES.operatorsOtc, context: { tag: "CallContract", contract: contracts.otcEscrow! }, credentialIds, policies: [{ kind: "functionAllowlist", policy: contracts.functionAllowlistPolicy!, functions: [...OPERATOR_OTC_FUNCTIONS] }] };
   }
 }
 
@@ -163,9 +187,12 @@ export function planAddMember(state: OrganisationState, member: MemberSigner): C
     return [{ op: "add_signer", rule: "admins", credentialId: member.credentialId }];
   }
   if (countRole(state, "operator") >= MAX_SIGNERS_PER_RULE) fail("TOO_MANY_OPERATORS", `An organisation can have at most ${MAX_SIGNERS_PER_RULE} operators`);
+  // A rule that does not exist yet is created with every operator on it: normally just
+  // this one, but an account set up before a rule existed (OTC) gets its other operators too.
+  const operators = state.active.filter((m) => m.role === "operator").map((m) => m.credentialId);
   return operatorRules(state.contracts).map((rule) =>
-    state.ruleIds[rule] === null
-      ? operatorRuleSpec(rule, state.contracts, [member.credentialId])
+    state.ruleIds[rule] == null
+      ? operatorRuleSpec(rule, state.contracts, [...operators, member.credentialId])
       : ({ op: "add_signer", rule, credentialId: member.credentialId } as ChainStep),
   );
 }
@@ -193,7 +220,7 @@ export function planRemoveMember(state: OrganisationState, member: MemberSigner)
     return steps;
   }
   const lastOperator = countRole(state, "operator") === 1;
-  return operatorRules(state.contracts).map((rule) =>
+  return operatorRules(state.contracts).filter((rule) => state.ruleIds[rule] != null).map((rule) =>
     lastOperator ? ({ op: "remove_context_rule", rule } as ChainStep) : ({ op: "remove_signer", rule, credentialId: member.credentialId } as ChainStep),
   );
 }
@@ -238,8 +265,9 @@ export function contextRuleIdsFor(role: OrganisationRole, targets: readonly stri
     const rule = target === contracts.currencyPool ? ruleIds.operatorsPool
       : contracts.ratePool && target === contracts.ratePool ? ruleIds.operatorsRatePool
       : target === contracts.usdc ? ruleIds.operatorsUsdc
+      : contracts.otcEscrow && target === contracts.otcEscrow ? ruleIds.operatorsOtc ?? null
       : null;
-    if (rule === null || rule === undefined) return fail("OUTSIDE_OPERATOR_SCOPE", "Operators can only buy cover and manage liquidity. Ask an admin for anything else.");
+    if (rule === null || rule === undefined) return fail("OUTSIDE_OPERATOR_SCOPE", "Operators can buy cover, manage liquidity and buy USDC over the counter. Ask an admin for anything else.");
     return rule;
   });
 }

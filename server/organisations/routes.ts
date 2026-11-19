@@ -53,7 +53,7 @@ const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) =>
 
 const ROLE_WORDS: Record<string, string> = {
   admin: "an admin, who can manage the account, its members and its money",
-  operator: "an operator, who can buy cover and manage liquidity for the business",
+  operator: "an operator, who can buy cover, manage liquidity and buy USDC over the counter for the business",
   viewer: "a viewer, who can see balances, cover and statements",
 };
 

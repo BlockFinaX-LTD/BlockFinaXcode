@@ -39,6 +39,8 @@ import { getSession } from "../auth-routes";
 import { registerRfqRoutes } from "../rfq/routes";
 import { registerOnboardingRoutes } from "../onboarding/routes";
 import { registerConnectorRoutes } from "../connectors/routes";
+import { registerOtcRoutes } from "../otc/routes";
+import { registerPerpsRoutes, startPerpsInBackground } from "../perps/routes";
 import { isOffered, NOT_OFFERED_MESSAGE } from "@shared/domain/offered-directions";
 import { checkProtectionLimits, verificationRequired, verifiedTier } from "../compliance/protection-limits";
 import { RATE_POOL_CHAIN, RatePoolService, type RatePoolView } from "../rates/pools";
@@ -179,6 +181,16 @@ export function registerV2Routes(app: Express) {
   registerRfqRoutes(app, { getServices, userId, ownerOn, wrap });
   registerOnboardingRoutes(app, { userId, wrap });
   registerConnectorRoutes(app, { getServices, userId, wrap });
+  registerOtcRoutes(app, {
+    getServices, userId, wrap,
+    ownerOn: (s, uid, chain) => ownerOn(s, uid, chain as ChainKey),
+    acting: async (req, uid, chain) => {
+      const org = await actingOrganisation(req, uid, chain as ChainKey);
+      return org ? { id: Number(req.header("x-bfx-organisation")), account: org.account, role: org.role } : null;
+    },
+  });
+  registerPerpsRoutes(app, { getServices, userId, wrap, ownerOn: (s, uid, chain) => ownerOn(s, uid, chain as ChainKey) });
+  startPerpsInBackground();
   app.get("/api/v2/chains", wrap(async (_req, res) => {
     const chains = chainRegistry();
     if (!chains) throw new ApplicationError("CHAIN_NOT_ENABLED", `Chain registry not configured: ${registryLoadError()}`);
@@ -268,7 +280,10 @@ export function registerV2Routes(app: Express) {
   app.get("/api/v2/pools/:ref/positions", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");
-    res.json({ positions: await s.adapters.adapterForContract(chain, contract).listActivePositions(id) });
+    const adapter = s.adapters.adapterForContract(chain, contract);
+    // ?all=1: every position the pool ever sold, for its premium and payout history.
+    const all = req.query.all === "1" && adapter.listPoolPositions;
+    res.json({ positions: all ? await adapter.listPoolPositions!(id) : await adapter.listActivePositions(id) });
   }));
 
   /** Change a pool's protection types and limits. */
@@ -345,6 +360,14 @@ export function registerV2Routes(app: Express) {
   }));
 
   /** The signed-in user's stake in a pool. */
+  /** Every underwriter in a pool, for its details page. */
+  app.get("/api/v2/pools/:ref/lps", wrap(async (req, res) => {
+    const s = await getServices();
+    const { chain, id, contract } = idOf(req.params.ref, "pool");
+    const adapter = s.adapters.adapterForContract(chain, contract);
+    res.json({ lps: adapter.listPoolLps ? await adapter.listPoolLps(id) : [] });
+  }));
+
   app.get("/api/v2/pools/:ref/lp", wrap(async (req, res) => {
     const s = await getServices();
     const { chain, id, contract } = idOf(req.params.ref, "pool");

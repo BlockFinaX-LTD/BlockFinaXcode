@@ -31,7 +31,7 @@ export function stellarGateway(env: NodeJS.ProcessEnv = process.env): Organisati
     rpcUrl: chain.rpcUrls[0], networkPassphrase: chain.networkId, smartAccounts: sa, sponsorPublicKey: Keypair.fromSecret(secret).publicKey(),
   };
   const contracts = organisationContracts({
-    currencyPool: chain.contracts.currencyPool!, ratePool: env.STELLAR_RATE_POOL_CONTRACT || null, usdc: chain.assets.USDC.addressOrContract, smartAccounts: sa,
+    currencyPool: chain.contracts.currencyPool!, ratePool: env.STELLAR_RATE_POOL_CONTRACT || null, usdc: chain.assets.USDC.addressOrContract, otcEscrow: chain.contracts.otcEscrow ?? null, smartAccounts: sa,
   });
 
   return {

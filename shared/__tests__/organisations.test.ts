@@ -159,3 +159,54 @@ test("organisation names are trimmed and bounded", () => {
   assert.equal(code(() => validateOrganisationName("A")), "BAD_NAME");
   assert.equal(code(() => validateOrganisationName("x".repeat(81))), "BAD_NAME");
 });
+
+// ── OTC escrow ──
+
+const withOtc: OrganisationContracts = { ...contracts, otcEscrow: "COTC", functionAllowlistPolicy: "CFUNC" };
+
+test("OTC: the first operator gets an escrow-only rule alongside the others", () => {
+  const steps = planAddMember(state([admin(1)], { contracts: withOtc }), operator(2));
+  const otc = steps.find((s) => s.op === "add_context_rule" && s.rule === "operatorsOtc");
+  assert.ok(otc && otc.op === "add_context_rule");
+  assert.deepEqual(otc.context, { tag: "CallContract", contract: "COTC" });
+  assert.deepEqual(otc.credentialIds, ["cred-2"]);
+  assert.deepEqual(otc.policies, [{ kind: "functionAllowlist", policy: "CFUNC", functions: ["open_order", "mark_paid", "cancel", "dispute"] }]);
+});
+
+test("OTC: the functions installed on chain are exactly what the relay lets operators send", async () => {
+  const { OPERATOR_OTC_FUNCTIONS } = await import("../organisations");
+  const { OTC_OPERATOR_METHODS } = await import("../otc");
+  assert.deepEqual([...OPERATOR_OTC_FUNCTIONS], [...OTC_OPERATOR_METHODS]);
+});
+
+test("OTC: no operator OTC rule until the function policy is deployed", () => {
+  const steps = planAddMember(state([admin(1)], { contracts: { ...contracts, otcEscrow: "COTC" } }), operator(2));
+  assert.ok(!steps.some((s) => "rule" in s && s.rule === "operatorsOtc"));
+});
+
+test("OTC: an account whose operators predate the escrow gets the rule with all of them on it", () => {
+  const s = state([admin(1), operator(2), operator(3)], { contracts: withOtc });
+  const steps = planAddMember(s, operator(4));
+  const otc = steps.find((x) => x.op === "add_context_rule" && x.rule === "operatorsOtc");
+  assert.ok(otc && otc.op === "add_context_rule");
+  assert.deepEqual(otc.credentialIds, ["cred-2", "cred-3", "cred-4"]);
+  assert.ok(steps.some((x) => x.op === "add_signer" && x.rule === "operatorsPool"));
+});
+
+test("OTC: removing an operator skips a rule the account never had", () => {
+  const s = state([admin(1), operator(2), operator(3)], { contracts: withOtc });
+  const steps = planRemoveMember(s, operator(2));
+  assert.ok(!steps.some((x) => "rule" in x && x.rule === "operatorsOtc"));
+  const last = planRemoveMember(state([admin(1), operator(2)], { contracts: withOtc, ruleIds: { admins: 0, operatorsPool: 1, operatorsRatePool: 2, operatorsUsdc: 3, operatorsOtc: 4 } }), operator(2));
+  assert.ok(last.some((x) => x.op === "remove_context_rule" && x.rule === "operatorsOtc"));
+});
+
+test("OTC: operators sign escrow calls with the OTC rule; admins with theirs; without the rule they are refused", () => {
+  const ids = { admins: 0, operatorsPool: 1, operatorsRatePool: 2, operatorsUsdc: 3, operatorsOtc: 4 };
+  assert.deepEqual(contextRuleIdsFor("operator", ["COTC"], ids, withOtc), [4]);
+  // Locking company USDC in the escrow is two contexts; the USDC one goes to the allow-list rule, which refuses it on chain.
+  assert.deepEqual(contextRuleIdsFor("operator", ["COTC", "CUSDC"], ids, withOtc), [4, 3]);
+  assert.deepEqual(contextRuleIdsFor("admin", ["COTC", "CUSDC"], ids, withOtc), [0, 0]);
+  assert.equal(code(() => contextRuleIdsFor("operator", ["COTC"], { ...ids, operatorsOtc: null }, withOtc)), "OUTSIDE_OPERATOR_SCOPE");
+  assert.equal(code(() => contextRuleIdsFor("operator", ["COTC"], ids, contracts)), "OUTSIDE_OPERATOR_SCOPE");
+});

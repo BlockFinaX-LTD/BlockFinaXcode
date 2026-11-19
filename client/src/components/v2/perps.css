@@ -1,0 +1,223 @@
+/* Perps screen. Uses the workspace tokens (.bx), so light and dark themes both work. */
+.px-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.px-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.px-wrap .up { color: var(--green); }
+.px-wrap .down { color: var(--red); }
+.px-wrap .muted { color: var(--muted); }
+
+/* market bar */
+.px-bar { display: flex; align-items: center; gap: 22px; padding: 10px 16px; flex-wrap: wrap; }
+.px-pick { position: relative; }
+.px-pick-btn { display: flex; align-items: center; gap: 8px; background: none; border: 0; cursor: pointer; color: var(--text); padding: 4px 0; font: inherit; }
+.px-sym { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+.px-lev { font-size: 11px; font-weight: 700; color: var(--blue); background: var(--blue-soft); border-radius: 5px; padding: 1px 6px; }
+.px-stat .k { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.px-stat .v { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.px-pill { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: var(--soft); color: var(--text-2); }
+.px-pill.amber { background: var(--amber-soft); color: var(--amber-text); }
+.px-pill.tiny { font-size: 10.5px; padding: 1px 7px; margin-left: 6px; }
+.px-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; width: min(460px, 92vw); background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 40px rgba(15, 23, 41, 0.16); padding: 6px; }
+.px-menu-h, .px-menu-row { display: grid; grid-template-columns: 1.6fr 1fr 0.8fr 0.9fr; gap: 8px; align-items: center; padding: 8px 10px; }
+.px-menu-h { font-size: 11px; color: var(--muted); }
+.px-menu-row { width: 100%; background: none; border: 0; border-radius: 8px; cursor: pointer; color: var(--text); font: inherit; font-size: 13px; text-align: left; }
+.px-menu-row:hover, .px-menu-row.on { background: var(--soft); }
+.px-mm { display: flex; align-items: center; gap: 8px; }
+.px-mm small { color: var(--muted); }
+
+/* grid */
+.px-grid { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) 290px 320px; grid-template-areas: "chart book side" "bottom bottom side"; }
+.px-chart { grid-area: chart; }
+.px-book { grid-area: book; }
+.px-side { grid-area: side; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.px-bottom { grid-area: bottom; }
+@media (max-width: 1240px) { .px-grid { grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "chart side" "book side" "bottom bottom"; } }
+@media (max-width: 860px) {
+  .px-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "chart" "book" "side" "bottom"; }
+  .px-hide-sm { display: none; }
+  .px-bar { gap: 14px; }
+  .px-wrap .px-mtabs { display: flex; }
+}
+.px-mtabs { display: none; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.px-mtabs button { flex: 1; border: 0; background: none; padding: 8px; border-radius: 7px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; }
+.px-mtabs button.on { background: var(--soft); color: var(--text); }
+
+/* chart */
+.px-chart-in { padding: 10px 12px 6px; }
+.px-chart-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+.px-ivs { display: flex; gap: 2px; }
+.px-ivs button { border: 0; background: none; color: var(--muted); font: inherit; font-family: 'Geist Mono', monospace; font-size: 12px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.px-ivs button.on { background: var(--blue-soft); color: var(--blue); }
+.px-chart-svg { width: 100%; min-height: 380px; overflow: hidden; }
+.px-chart-svg svg { display: block; }
+.px-grid-l { stroke: var(--line); stroke-width: 1; }
+.px-axis { fill: var(--muted); font-size: 11px; font-family: 'Geist Mono', monospace; }
+.px-cu line, .px-cu rect { stroke: var(--green); fill: var(--green); }
+.px-cd line, .px-cd rect { stroke: var(--red); fill: var(--red); }
+.px-markline { stroke: var(--blue); stroke-dasharray: 4 4; stroke-width: 1; }
+.px-marktag { fill: var(--blue); }
+.px-marktxt { fill: #fff; font-size: 11px; font-weight: 600; font-family: 'Geist Mono', monospace; }
+
+/* book */
+.px-book-in { padding: 6px 0 8px; }
+.px-tabs { display: flex; gap: 2px; padding: 4px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.px-tabs button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); padding: 8px 10px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.px-tabs button.on { color: var(--text); border-bottom-color: var(--blue); }
+.px-ob { font-size: 12.5px; }
+.px-ob-h, .px-ob-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 3px 12px; }
+.px-ob-h { color: var(--muted); font-size: 11px; padding-top: 8px; padding-bottom: 6px; }
+.px-ob-h span:not(:first-child), .px-ob-row span:not(:first-child) { text-align: right; }
+.px-ob-row { position: relative; width: 100%; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; text-align: left; }
+.px-ob-row:hover { background: var(--soft); }
+.px-ob-row i { position: absolute; right: 0; top: 1px; bottom: 1px; opacity: 0.14; }
+.px-ob-row.ask i { background: var(--red); }
+.px-ob-row.bid i { background: var(--green); }
+.px-ob-row.ask span:first-child { color: var(--red); }
+.px-ob-row.bid span:first-child { color: var(--green); }
+.px-ob-row span { position: relative; }
+.px-ob-mid { display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; margin: 3px 0; background: var(--soft); font-size: 12px; }
+.px-ob-mid .num { font-size: 15px; font-weight: 700; }
+.px-ob-note { font-size: 11px; padding: 8px 12px 0; }
+
+/* order form */
+.px-form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+.px-form-top { display: flex; gap: 6px; align-items: center; }
+.px-chip { font-size: 12.5px; font-weight: 600; background: var(--soft); border: 1px solid var(--line); border-radius: 7px; padding: 5px 12px; color: var(--text); font-family: inherit; }
+.px-chip.lev { cursor: pointer; color: var(--blue); }
+.px-lev-box { background: var(--soft); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.px-lev-row { display: flex; justify-content: space-between; font-size: 13px; }
+.px-lev-box input, .px-pct { width: 100%; accent-color: var(--blue); }
+.px-seg, .px-side-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--soft); border-radius: 9px; padding: 3px; }
+.px-seg button, .px-side-toggle button { border: 0; background: none; font: inherit; font-weight: 600; font-size: 13px; color: var(--muted); padding: 7px; border-radius: 7px; cursor: pointer; }
+.px-seg button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(15, 23, 41, 0.08); }
+.px-side-toggle button.buy.on { background: var(--green); color: #fff; }
+.px-side-toggle button.sell.on { background: var(--red); color: #fff; }
+.px-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.px-kv b { color: var(--text); font-weight: 600; }
+.px-in { display: flex; align-items: center; gap: 8px; background: var(--soft); border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; font-size: 12.5px; color: var(--muted); }
+.px-in:focus-within { border-color: var(--blue); }
+.px-in input { flex: 1; min-width: 0; border: 0; background: none; padding: 10px 0; text-align: right; font-size: 14px; color: var(--text); outline: none; }
+.px-unit { font-weight: 600; color: var(--text-2); }
+.px-units { font-size: 11.5px; text-align: right; min-height: 14px; margin-top: -4px; }
+.px-pct-l { display: flex; justify-content: space-between; font-size: 10.5px; margin-top: -6px; }
+.px-opts { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+.px-opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.px-opts select { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 7px; font: inherit; font-size: 12px; padding: 4px 6px; }
+.px-cta { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 0; border-radius: 10px; padding: 12px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; color: #fff; background: var(--blue); }
+.px-cta.buy { background: var(--green); }
+.px-cta.sell { background: var(--red); }
+.px-cta:disabled { opacity: 0.6; cursor: default; }
+.px-sum { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--line); padding-top: 9px; }
+.px-sum div { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.px-sum b { color: var(--text); font-weight: 600; }
+.px-hint { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--text-2); background: var(--blue-soft); border-radius: 8px; padding: 8px 10px; }
+.px-hint.warn { background: var(--amber-soft); color: var(--amber-text); }
+.px-mini { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); border-radius: 7px; font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.px-mini.on { border-color: var(--blue); color: var(--blue); }
+.px-mini:disabled { opacity: 0.5; cursor: default; }
+.px-link { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 4px 0 0; text-align: left; }
+
+/* account */
+.px-acct { padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; }
+.px-acct-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.px-acct-btns { display: flex; gap: 6px; }
+.px-move { display: flex; flex-direction: column; gap: 8px; background: var(--soft); border-radius: 10px; padding: 10px; margin-bottom: 4px; }
+.px-move .px-in { background: var(--panel); }
+
+/* bottom tables */
+.px-table { overflow-x: auto; }
+.px-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 820px; }
+.px-table th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.px-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; color: var(--text); }
+.px-table tr:last-child td { border-bottom: 0; }
+.px-table a { color: var(--blue); }
+.px-side-bar { display: inline-block; width: 3px; height: 14px; border-radius: 2px; margin-right: 8px; vertical-align: -2px; }
+.px-side-bar.long { background: var(--green); }
+.px-side-bar.short { background: var(--red); }
+.px-adl { display: inline-flex; gap: 2px; }
+.px-adl i { width: 5px; height: 12px; border-radius: 2px; background: var(--line-2); }
+.px-adl i.on { background: var(--green); }
+.px-adl i.on.l4 { background: var(--amber-text); }
+.px-adl i.on.l5 { background: var(--red); }
+
+.px-foot { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11.5px; color: var(--muted); padding: 2px 4px 8px; }
+.px-foot a { color: var(--blue); }
+
+/* The trading screen uses the whole width of the main area. */
+.bx-main > .px-wrap { grid-column: 1 / -1; }
+.bx-main:has(> .px-wrap) { max-width: 1840px; padding-top: 10px; }
+
+.px-link.inline { padding: 0 0 0 8px; font-size: 11.5px; color: var(--blue); }
+
+/* Sections in the top bar: Hedge, Trade, OTC. The open one is outlined. */
+.bx-dsections { display: flex; align-items: center; align-self: center; }
+.bx-sections { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
+.bx-sections button { border: 1px solid transparent; background: none; border-radius: 8px; padding: 8px 18px; font: inherit; font-size: 14.5px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+.bx-sections button:hover { color: var(--text); background: var(--soft); }
+.bx-sections button.on { color: var(--text); border-color: var(--line-2); background: var(--soft); }
+.bx-sections.compact { margin-left: 0; gap: 2px; }
+.bx-sections.compact button { padding: 6px 12px; font-size: 13.5px; }
+@media (max-width: 860px) { .bx-msections.bx-show-sm { display: inline-block !important; order: 0; } }
+/* Hedge's own pages, in a row under the top bar. */
+.bx-tabs[hidden] { display: none !important; }
+
+/* Top bar dropdown menus: Hedge, Trade; OTC is a plain link. */
+.bx-nmbar { display: flex; align-items: center; gap: 2px; margin-left: 14px; align-self: stretch; }
+.bx-nm { position: relative; display: flex; align-items: center; align-self: stretch; }
+.bx-nm-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; font: inherit; font-size: 14.5px; font-weight: 600; color: var(--text-2); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.bx-nm-btn:hover { color: var(--text); background: var(--soft); }
+.bx-nm-btn.on { color: var(--blue); }
+.bx-nm-menu { position: absolute; top: 100%; left: 0; z-index: 50; min-width: 250px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 40px rgba(15, 23, 41, 0.16); padding: 6px; display: flex; flex-direction: column; }
+.bx-nm-h { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 10px 10px 4px; }
+.bx-nm-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 0; background: none; font: inherit; text-align: left; color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.bx-nm-item span { font-size: 13.5px; font-weight: 600; }
+.bx-nm-item small { font-size: 12px; color: var(--muted); }
+.bx-nm-item:hover, .bx-nm-item.on { background: var(--soft); }
+.bx-nm-item.on span { color: var(--blue); }
+/* The Hedger / Underwriter row is for phones; on desktop the Hedge menu covers it. */
+.bx-rolebar { display: none; }
+@media (max-width: 860px) { .bx-rolebar { display: flex; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); } .bx-rolebar .bx-mroles { display: grid !important; width: 100%; margin: 0; } }
+.bx-searchwrap { display: flex; flex: 1; justify-content: flex-end; min-width: 0; max-width: 380px; margin-left: auto; }
+@media (max-width: 860px) { .bx-searchwrap { display: none; } }
+
+/* Away from home: "‹ Home / Section" and the section's own pages. */
+.bx-crumb { display: flex; align-items: center; gap: 8px; margin-left: 18px; font-size: 14.5px; font-weight: 600; min-width: 0; }
+.bx-crumb-home { display: inline-flex; align-items: center; gap: 2px; border: 0; background: none; font: inherit; color: var(--muted); cursor: pointer; border-radius: 8px; padding: 6px 10px 6px 6px; }
+.bx-crumb-home:hover { color: var(--text); background: var(--soft); }
+.bx-crumb-sep { color: var(--line-2); }
+.bx-crumb-cur { color: var(--text); white-space: nowrap; }
+.bx-local { display: flex; gap: 2px; margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--line); }
+.bx-local button { border: 0; background: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--text-2); padding: 7px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.bx-local button:hover { color: var(--text); background: var(--soft); }
+.bx-local button.on { color: var(--blue); font-weight: 600; }
+.bx-mhome { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line-2); background: var(--panel); font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text); border-radius: 8px; padding: 5px 10px 5px 6px; cursor: pointer; }
+.bx-mtitle { margin-left: 10px; font-size: 15px; }
+.bx-msections { align-items: center; }
+
+/* Chart: fills its panel, brand tint and watermark, timeframes underneath. */
+.px-chart { display: flex; flex-direction: column; }
+.px-chart-in { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; padding: 10px 12px 8px; }
+.px-chart-svg { position: relative; flex: 1; min-height: 360px; cursor: grab; touch-action: pan-y; border-radius: 10px;
+  background: radial-gradient(900px 400px at 85% 0%, color-mix(in srgb, var(--blue) 9%, transparent), transparent 60%), linear-gradient(180deg, color-mix(in srgb, var(--blue) 3%, var(--panel)), var(--panel)); }
+.px-chart-svg:active { cursor: grabbing; }
+.px-chart-svg svg { position: relative; z-index: 1; }
+.px-watermark { position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(40px, 7vw, 84px); font-weight: 800; letter-spacing: -0.03em; color: var(--blue); opacity: 0.06; pointer-events: none; user-select: none; }
+.px-chart-f { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); margin-top: 6px; }
+.px-hint-s { font-size: 11.5px; }
+.px-ohlc { font-size: 12px; }
+.px-ohlc b { font-weight: 600; margin-right: 6px; }
+.px-cross { stroke: var(--muted); stroke-dasharray: 3 3; stroke-width: 1; }
+.px-latest { border: 1px solid var(--line-2); background: var(--panel); color: var(--blue); border-radius: 7px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+@media (max-width: 860px) { .px-hint-s { display: none; } }
+/* Chart keeps the original height; it no longer stretches with the panel. */
+.px-chart-in { height: auto; flex: none; }
+.px-chart-svg { flex: none; height: 400px; min-height: 0; }
+@media (max-width: 860px) { .px-chart-svg { height: 320px; } }
+.px-lline { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.px-lu .px-lline { stroke: var(--blue); }
+.px-ld .px-lline { stroke: var(--blue); }
+.px-larea { fill: var(--blue); opacity: 0.08; stroke: none; }
+.px-style { display: inline-flex; gap: 2px; background: var(--soft); border-radius: 7px; padding: 2px; }
+.px-style button { border: 0; background: none; border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.px-style button.on { background: var(--panel); color: var(--text); }
+/* Positions sit right under the chart; the order book runs down beside them. */
+@media (min-width: 1241px) { .px-grid { grid-template-areas: "chart book side" "bottom book side"; grid-template-rows: auto 1fr; align-items: start; } .px-book { align-self: stretch; } }

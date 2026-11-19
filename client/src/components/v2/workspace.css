@@ -1418,3 +1418,4 @@
   .bx-ratelist .bx-li > .bx-rliq { display: none; }
   .bx-rliq-m { display: inline; }
 }
+.bx-payrule { background: var(--blue-soft); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 500; }

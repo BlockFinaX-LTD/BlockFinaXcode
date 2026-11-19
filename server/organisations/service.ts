@@ -91,7 +91,7 @@ export class OrganisationService {
     const email = (await this.passkeys.emailOf(userId)) ?? `user-${userId}`;
     const org = await this.repo.createOrganisation({
       name: clean, networkKey: this.gateway.networkKey, accountAddress: null, accountWasmHash: null, status: "deploying",
-      adminApprovals: 1, ruleIds: { admins: 0, operatorsPool: null, operatorsRatePool: null, operatorsUsdc: null }, createdBy: userId,
+      adminApprovals: 1, ruleIds: { admins: 0, operatorsPool: null, operatorsRatePool: null, operatorsUsdc: null, operatorsOtc: null }, createdBy: userId,
     });
     await this.repo.addMember({
       organisationId: org.id, userId, email, role: "admin", status: "active", credentialId: passkey.credentialId,

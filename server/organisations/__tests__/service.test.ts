@@ -121,7 +121,7 @@ test("activating the first operator creates their rules and records the rule ids
   assert.deepEqual(w.prepared.map((s) => s.op), ["add_context_rule", "add_context_rule"]);
   const acting = await w.service.acting(2, w.org.id);
   assert.equal(acting.role, "operator");
-  assert.deepEqual(acting.ruleIds, { admins: 0, operatorsPool: 1, operatorsRatePool: null, operatorsUsdc: 2 });
+  assert.deepEqual(acting.ruleIds, { admins: 0, operatorsPool: 1, operatorsRatePool: null, operatorsUsdc: 2, operatorsOtc: null });
 });
 
 test("a second operator is added to the existing rules", async () => {
@@ -147,7 +147,7 @@ test("removing a member cuts their access before the chain steps finish", async 
   assert.equal(await code(w.service.acting(2, w.org.id)), "NOT_A_MEMBER", "access ends at once");
   const done = await approveAll(w.service, 1, w.org.id, op, first);
   assert.equal(done.member.status, "removed");
-  assert.deepEqual((await w.service.acting(1, w.org.id)).ruleIds, { admins: 0, operatorsPool: null, operatorsRatePool: null, operatorsUsdc: null }, "last operator's rules are gone");
+  assert.deepEqual((await w.service.acting(1, w.org.id)).ruleIds, { admins: 0, operatorsPool: null, operatorsRatePool: null, operatorsUsdc: null, operatorsOtc: null }, "last operator's rules are gone");
 });
 
 test("the last admin cannot be removed or demoted", async () => {

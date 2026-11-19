@@ -27,6 +27,8 @@ import { mapStellarError } from "./errors";
 import { stellarQuoteDigest, type StellarBuyParams } from "./stellar-quote";
 import { inspectPoolCall, relay } from "./stellar-relay";
 import { ACCOUNT_ADMIN_FUNCTIONS } from "@shared/smart-accounts";
+import { OTC_OPERATOR_METHODS, OTC_USER_METHODS, OTC_WALLET_ARG } from "@shared/otc";
+import { PERP_USER_METHODS, PERP_WALLET_ARG } from "@shared/perps";
 import { mapRatePoolError, RATE_POOL_POLICY } from "../rates/pools";
 
 const QUOTE_TTL_SECONDS = 120;
@@ -355,6 +357,15 @@ export class StellarAdapter implements ChainAdapter {
     if (typeof c.get_capacity_for !== "function") return null;
     const v = unwrap((await c.get_capacity_for({ pool_id: poolId, tenor_days: tenorDays })).result);
     return fromUnits(BigInt(v ?? 0), this.usdc.decimals);
+  }
+
+  /** Every underwriter in a pool and their balances (USDC, 7 decimals on chain). */
+  async listPoolLps(poolId: number): Promise<{ address: string; free: string; reserved: string; earned: string; paid: string }[]> {
+    const c = await this.client(this.poolId);
+    if (typeof c.list_pool_lps !== "function") return [];
+    const rows: [string, any][] = unwrap((await c.list_pool_lps({ pool_id: poolId })).result) ?? [];
+    const u = (v: unknown) => (Number(BigInt(String(v ?? 0))) / 1e7).toFixed(7);
+    return rows.map(([address, a]) => ({ address: String(address), free: u(a.free), reserved: u(a.reserved), earned: u(a.earned), paid: u(a.paid) }));
   }
 
   /** Whether `owner` may take over the pool: its creator has no money left in it and `owner` has the most. */
@@ -697,9 +708,23 @@ export class StellarAdapter implements ChainAdapter {
     if (!role) {
       // A personal smart wallet may add a backup passkey as a signer (authorized by itself).
       extra.push({ contract: wallet, methods: new Set(["add_signer"]), walletArg: {}, permissionless: new Set<string>() });
+      // OTC escrow (personal accounts only, for now). Methods naming a party must name this
+      // wallet; the rest are authorised by the escrow's own checks on who may call them.
+      const otc = this.chain.contracts.otcEscrow;
+      if (otc) extra.push({ contract: otc, methods: new Set(OTC_USER_METHODS), walletArg: OTC_WALLET_ARG, permissionless: new Set<string>() });
+      // Perps (personal accounts only, for now): margin in and out, trading keys, the escape hatch.
+      const perps = this.chain.contracts.perpClearinghouse;
+      if (perps) extra.push({ contract: perps, methods: new Set(PERP_USER_METHODS), walletArg: PERP_WALLET_ARG, permissionless: new Set<string>() });
     } else if (role === "admin") {
       // An organisation account's admins change who controls it. Upgrades and `execute` are never relayed.
       extra.push({ contract: wallet, methods: new Set(ACCOUNT_ADMIN_FUNCTIONS), walletArg: {}, permissionless: new Set<string>() });
+    }
+    // OTC escrow for organisations: admins do everything a personal wallet can; operators
+    // only buy USDC (open an order, mark it paid, cancel, dispute). On chain, the operators'
+    // USDC rule also stops them locking company USDC, because the escrow is not on its allow-list.
+    const otcEscrow = this.chain.contracts.otcEscrow;
+    if (otcEscrow && role) { // viewers were refused above
+      extra.push({ contract: otcEscrow, methods: new Set(role === "admin" ? OTC_USER_METHODS : OTC_OPERATOR_METHODS), walletArg: OTC_WALLET_ARG, permissionless: new Set<string>() });
     }
     // Circle CCTP: the wallet burns its own USDC to move it to another network. Not for organisation operators.
     const cctp = role === "operator" ? undefined : this.chain.cctp?.tokenMessenger;

@@ -157,8 +157,8 @@ export async function prepareStep(
       return (await c.remove_signer({ context_rule_id: ruleId(step.rule), signer_id: id })).toXDR();
     }
     case "add_context_rule": {
-      if (step.policies.some((p) => p.kind === "transferAllowlist" && !p.policy)) {
-        throw new Error("Operators need the transfer allow-list policy, which is not deployed on this network yet");
+      if (step.policies.some((p) => (p.kind === "transferAllowlist" || p.kind === "functionAllowlist") && !p.policy)) {
+        throw new Error("Operators need BlockFinaX's allow-list policies, which are not deployed on this network yet");
       }
       return (await c.add_context_rule({
         context_type: bindingsContext(step.context) as never,

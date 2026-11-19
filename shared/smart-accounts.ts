@@ -34,6 +34,8 @@ export interface SmartAccountChainConfig {
   spendingLimitPolicy: string;
   /** BlockFinaX's transfer allow-list policy. Null until it is deployed: operators cannot be added before then. */
   transferAllowlistPolicy: string | null;
+  /** BlockFinaX's function allow-list policy, limiting operators to buying on the OTC escrow. */
+  functionAllowlistPolicy?: string | null;
 }
 
 export function authDigestScheme(wasmHash: string): AuthDigestScheme {
@@ -102,6 +104,12 @@ export function transferAllowlistParams(recipients: readonly string[]): xdr.ScVa
   return xdr.ScVal.scvMap([field("recipients", xdr.ScVal.scvVec(recipients.map((r) => Address.fromString(r).toScVal())))]);
 }
 
+/** BlockFinaX FunctionAllowlistParams { functions: Vec<Symbol> }. */
+export function functionAllowlistParams(functions: readonly string[]): xdr.ScVal {
+  if (functions.length === 0) throw new Error("At least one function is required");
+  return xdr.ScVal.scvMap([field("functions", xdr.ScVal.scvVec(functions.map((f) => xdr.ScVal.scvSymbol(f))))]);
+}
+
 /** OpenZeppelin SpendingLimitAccountParams { period_ledgers: u32, spending_limit: i128 } (keys in name order). */
 export function spendingLimitParams(limitUnits: bigint, periodLedgers: number): xdr.ScVal {
   if (limitUnits <= BigInt(0) || !Number.isInteger(periodLedgers) || periodLedgers <= 0) throw new Error("A spending limit and period must be positive");
@@ -112,7 +120,9 @@ export function spendingLimitParams(limitUnits: bigint, periodLedgers: number): 
 }
 
 export function policyParams(p: PlannedPolicy): xdr.ScVal {
-  return p.kind === "threshold" ? thresholdParams(p.threshold) : transferAllowlistParams(p.recipients);
+  return p.kind === "threshold" ? thresholdParams(p.threshold)
+    : p.kind === "functionAllowlist" ? functionAllowlistParams(p.functions)
+    : transferAllowlistParams(p.recipients);
 }
 
 /** A planned context in the shape the account bindings take. */
@@ -124,14 +134,16 @@ export function bindingsContext(c: PlannedContext) {
 
 /** The contracts an organisation account deals with, from chain config. */
 export function organisationContracts(input: {
-  currencyPool: string; ratePool: string | null; usdc: string; smartAccounts: SmartAccountChainConfig;
+  currencyPool: string; ratePool: string | null; usdc: string; otcEscrow?: string | null; smartAccounts: SmartAccountChainConfig;
 }): OrganisationContracts {
   return {
     currencyPool: input.currencyPool,
     ratePool: input.ratePool,
     usdc: input.usdc,
+    otcEscrow: input.otcEscrow ?? null,
     thresholdPolicy: input.smartAccounts.thresholdPolicy,
     transferAllowlistPolicy: input.smartAccounts.transferAllowlistPolicy ?? "",
+    functionAllowlistPolicy: input.smartAccounts.functionAllowlistPolicy ?? "",
   };
 }
 

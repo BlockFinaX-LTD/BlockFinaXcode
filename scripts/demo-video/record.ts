@@ -54,17 +54,16 @@ const EMAIL = `amara.${Date.now().toString(36).slice(-4)}@okaforimports.com`;
 // ── What is said and shown ──────────────────────────────────────────────────
 /** A caption on screen (`show`) and the words spoken with it (`say`). Edit the words here. */
 const LINE = {
-  signup: { show: "Sign up with email or Google. No seed phrase, nothing to install.", say: "Sign up with just an email. No seed phrase, and nothing to install." },
+  signup: { show: "Sign up with email or Google. Nothing to install.", say: "Sign up with just an email. No seed phrase, and nothing to install." },
   passkey: { show: "A passkey on this device becomes the wallet.", say: "A passkey on your device becomes your wallet." },
-  account: { show: "Who is the account for?", say: "Tell us who the account is for," },
-  details: { show: "A few company details. No documents to start.", say: "add a few company details, and you're in." },
+  profile: { show: "Your name and country. No documents to start.", say: "Add your name and country. No documents to start." },
   workspace: { show: "Live rates for the Naira, Cedi, Shilling and more.", say: "Live rates for the Naira, the Cedi, the Shilling and more." },
   fund: { show: "Try it free: claim test USDC here.", say: "To try it free, claim test USDC here. With real money, you deposit USDC from an exchange or a wallet." },
   funded: { show: "10,000 test USDC, ready. Network fees are covered.", say: "Ten thousand test USDC. And the network fees are on us." },
   exposure: { show: "Protect the $25,000 invoice for 30 days.", say: "Now, protect the twenty five thousand dollar invoice for thirty days." },
   price: { show: "One premium, paid once, covers the whole period.", say: "The price appears instantly. One premium covers the whole period." },
   review: { show: "Review, then approve with the passkey.", say: "Review, and approve with the passkey." },
-  done: { show: "Protected. A contract on Stellar, backed by USDC.", say: "Done. The cover lives on Stellar, backed by USDC from underwriters." },
+  done: { show: "Protected: USD/NGN Up cover, on Stellar, backed by USDC.", say: "Done. That's USD/NGN Up cover, live on Stellar and backed by USDC from underwriters." },
   payout: { show: "If the Naira weakens past the strike, the payout lands in the wallet.", say: "If the Naira weakens past the strike, the payout lands right in the wallet." },
 };
 type Line = (typeof LINE)[keyof typeof LINE];
@@ -132,6 +131,7 @@ function encode(dir: string, out: string) {
   let lastEnd = 0;
   for (const v of [...spoken].sort((a, b) => a.at - b.at)) {
     const start = videoTime(v.at);
+    console.log(`  ${start.toFixed(1).padStart(6)}s to ${(start + v.seconds).toFixed(1).padStart(6)}s  voice`);
     if (start < lastEnd - 0.05) console.warn(`Warning: a voice line at ${start.toFixed(1)}s starts before the previous one ends (${lastEnd.toFixed(1)}s).`);
     lastEnd = start + v.seconds;
   }
@@ -296,7 +296,7 @@ async function scene(page: Page, s: { html: string; say: string; dark?: boolean 
 
 // ── The demo ────────────────────────────────────────────────────────────────
 async function demo(page: Page) {
-  const nav = (name: string) => page.locator("nav, aside").getByRole("button", { name, exact: true }).or(page.locator("nav, aside").getByRole("link", { name, exact: true })).first();
+  const nav = (name: string) => page.locator("nav.bx-topnav, nav, aside").getByRole("button", { name, exact: true }).or(page.locator("nav, aside").getByRole("link", { name, exact: true })).first();
 
   await page.goto(`${BASE}/auth`);
   await page.waitForLoadState("networkidle");
@@ -309,30 +309,20 @@ async function demo(page: Page) {
   await click(page, page.getByRole("button", { name: "Email me a code" }));
   await type(page, page.getByPlaceholder("123456"), "482913");
   await click(page, page.getByRole("button", { name: "Sign in", exact: true }));
-  await page.getByRole("button", { name: /Create wallet passkey/ }).waitFor();
+  await page.getByPlaceholder("As on your ID").waitFor({ timeout: 30_000 });
+
+  await caption(page, LINE.profile);
+  await type(page, page.getByPlaceholder("As on your ID"), "Amara Okafor");
+  await choose(page, page.locator("label:has-text('Country of residence') select"), "NG");
+  await moveTo(page, page.locator("label:has-text('I want to') select"));
+  await pause(page, 600);
+  await click(page, page.getByRole("button", { name: "Continue", exact: true }));
+  await page.getByRole("button", { name: /Create wallet passkey/ }).waitFor({ timeout: 30_000 });
 
   await caption(page, LINE.passkey);
   await pause(page, 800);
   await click(page, page.getByRole("button", { name: /Create wallet passkey/ }));
-  await fast(() => page.getByRole("button", { name: /For an organisation/ }).waitFor({ timeout: 120_000 }));
-
-  await caption(page, LINE.account);
-  await click(page, page.getByRole("button", { name: /For an organisation/ }));
-  await caption(page, LINE.details);
-  await fast(async () => {
-    await type(page, page.locator("label:has-text('Your full name') input"), "Amara Okafor");
-    await type(page, page.locator("label:has-text('Your job title') input"), "Finance Director");
-    await choose(page, page.locator("label:has-text('Your country of residence') select"), "NG");
-    await type(page, page.locator("label:has-text('legal name') input"), "Okafor Imports Ltd");
-    await choose(page, page.locator("label:has-text('Country of registration') select"), "NG");
-    await type(page, page.locator("label:has-text('Registration number') input"), "RC 1482736");
-    await choose(page, page.locator("label:has-text('Industry') select"), "Import and distribution");
-    await choose(page, page.locator("label:has-text('Expected monthly amount') select"), "$100,000 to $1 million");
-    await click(page, page.getByRole("button", { name: /Protect payments we make/ }));
-  }, 3);
-  await click(page, page.getByRole("button", { name: "Continue" }));
-
-  await page.getByRole("button", { name: "Skip tour" }).waitFor({ timeout: 30_000 });
+  await fast(() => page.getByRole("button", { name: "Skip tour" }).waitFor({ timeout: 120_000 }));
   await click(page, page.getByRole("button", { name: "Skip tour" }));
   await caption(page, LINE.workspace);
   await pause(page, 1500);
@@ -346,14 +336,16 @@ async function demo(page: Page) {
   await pause(page, 1200);
 
   await caption(page, LINE.exposure);
-  await click(page, page.getByRole("button", { name: "Protect an exposure" }).first());
+  await click(page, nav("Home"));
+  await pause(page, 900);
+  await click(page, page.locator(".bx-cta").getByRole("button", { name: "Get started" }));
   await page.locator("#bx-amount").waitFor();
   await pause(page, 800);
   await type(page, page.locator("#bx-amount"), "25000");
   await click(page, page.getByRole("button", { name: "30 days" }));
   await page.getByRole("button", { name: /Review protection/ }).and(page.locator(":enabled")).waitFor({ timeout: 30_000 });
   await caption(page, LINE.price);
-  await moveTo(page, page.locator(".bx-quote"));
+  await moveTo(page, page.getByText("You pay", { exact: true }).first());
   await pause(page, 1500);
 
   await caption(page, LINE.review);
@@ -366,7 +358,7 @@ async function demo(page: Page) {
   await caption(page, LINE.done);
   await pause(page, 1500);
 
-  await click(page, nav("My protections"));
+  await click(page, nav("My cover"));
   await caption(page, LINE.payout);
   await pause(page, 1500);
   await caption(page, null);

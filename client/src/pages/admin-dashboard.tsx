@@ -18,6 +18,7 @@ import {
   CheckCircle, AlertTriangle, ChevronRight, Award, Layers, Plus, Pencil, LogOut,
   FileText, Trash2, X, GripVertical, Save, RefreshCw, Settings, ExternalLink, Download, Info, Send, FileSignature, Bot, Scale,
   Handshake,
+  ArrowLeftRight,
   Radar,
   FileCode2,
   ShieldCheck,
@@ -30,6 +31,7 @@ import { ComplianceSection } from "@/components/admin/compliance-section";
 import { ConnectorsSection } from "@/components/admin/connectors-section";
 import { RecordsSection } from "@/components/admin/records-section";
 import { AccountsSection } from "@/components/admin/accounts-section";
+import { OtcSection } from "@/components/admin/otc-section";
 import { XSignalsSection } from "@/components/admin/x-signals-section";
 import { InternalDocsSection } from "@/components/admin/internal-docs-section";
 import { SecurityChecksSection } from "@/components/admin/security-checks-section";
@@ -49,7 +51,7 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "docs" | "dashboard" | "accounts" | "agent" | "compliance" | "records" | "connectors" | "xsignals" | "devdocs" | "security" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "docs" | "dashboard" | "accounts" | "agent" | "compliance" | "records" | "connectors" | "otc" | "xsignals" | "devdocs" | "security" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -58,6 +60,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "compliance", label: "Compliance", icon: Scale },
   { key: "records", label: "Records", icon: FileSignature },
   { key: "connectors", label: "Connectors", icon: Handshake },
+  { key: "otc", label: "OTC", icon: ArrowLeftRight },
   { key: "xsignals", label: "X signals", icon: Radar },
   { key: "users", label: "Users (old app)", icon: Users },
   { key: "hedge", label: "Hedge", icon: Shield },
@@ -2949,6 +2952,7 @@ function AdminLayout({
         {section === "records" && <RecordsSection token={adminToken} />}
         {section === "accounts" && <AccountsSection token={adminToken} />}
         {section === "connectors" && <ConnectorsSection token={adminToken} />}
+        {section === "otc" && <OtcSection token={adminToken} />}
         {section === "xsignals" && <XSignalsSection token={adminToken} />}
         {section === "devdocs" && <InternalDocsSection token={adminToken} />}
         {section === "security" && <SecurityChecksSection token={adminToken} />}

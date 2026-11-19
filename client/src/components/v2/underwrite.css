@@ -1,0 +1,190 @@
+/* Underwrite: one screen. Workspace tokens, so both themes work. */
+.ux .up { color: var(--green); }
+.ux .down { color: var(--red); }
+.ux-sum { grid-column: 1 / -1; display: flex; align-items: center; gap: 28px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 20px; }
+.ux-sum-t { display: flex; flex-direction: column; gap: 2px; margin-right: 6px; }
+.ux-sum-t b { font-size: 16px; }
+.ux-sum-t span { font-size: 12.5px; }
+.ux-k { display: flex; flex-direction: column; gap: 2px; }
+.ux-k span { font-size: 12px; color: var(--muted); }
+.ux-k b { font-size: 16px; font-weight: 700; }
+.ux-create { margin-left: auto; }
+.ux-head { display: flex; flex-direction: column; gap: 16px; }
+.ux-head-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ux-head-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ux-head-name .muted { font-size: 13px; }
+.ux-pool-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ux-pool-pick b { font-size: 18px; letter-spacing: -0.01em; }
+.ux-pool-pick select { font-size: 13px; padding: 6px 10px; }
+.ux-head-r { display: flex; align-items: center; gap: 8px; }
+.ux-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ux-stats div { background: var(--panel); padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ux-stats span { font-size: 12px; color: var(--muted); }
+.ux-stats b { font-size: 15px; font-weight: 700; }
+@media (max-width: 1100px) { .ux-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ux-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px 0 16px; overflow-x: auto; }
+.ux-tabs button { border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); padding: 8px 10px 12px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.ux-tabs button.on { color: var(--text); border-bottom-color: var(--blue); }
+.ux-badge { background: var(--blue); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; }
+.ux-pricing { display: flex; flex-direction: column; gap: 14px; }
+.ux-pricing > .bx-card { border: 1px solid var(--line); box-shadow: none; margin: 0; }
+.ux-risk { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 860px) { .ux-risk { grid-template-columns: minmax(0, 1fr); } .ux-sum { gap: 16px; } .ux-create { margin-left: 0; } }
+.ux-risk-l { display: flex; flex-direction: column; gap: 22px; }
+.ux-bar-h { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.ux-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12.5px; color: var(--text-2); }
+.ux-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ux-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.ux-rel { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.ux-rel svg { color: var(--muted); }
+.ux-rel:last-child { border-bottom: 0; }
+.ux-sub { padding: 4px 0 12px; }
+.ux-sub + .ux-sub { border-top: 1px solid var(--line); padding-top: 16px; }
+.bx-li.ux-sel { background: var(--blue-soft); }
+.ux-pick-big select { font-size: 17px !important; font-weight: 700; padding: 6px 30px 6px 10px !important; border-radius: 10px; }
+.ux-panel-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ux-panel-h b { font-size: 15.5px; flex: 1; min-width: 0; }
+.ux-details { font-size: 13px; white-space: nowrap; }
+.ux-pool-title { display: flex; align-items: center; gap: 12px; margin: 10px 0 16px; }
+.ux-pool-title b { font-size: 18px; letter-spacing: -0.01em; }
+.ux-pool-title .muted { font-size: 13px; margin-top: 2px; }
+/* Create pool: everything on one screen, two columns. */
+.bx-main .bx-full:has(> .cp) { display: flex; justify-content: center; background: none; }
+.bx-main .cp { max-width: 1100px; width: 100%; margin: 4px auto 0; border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; }
+.cp-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 14px; }
+.bx-main .cp .cp-title { font-size: 19px; margin: 0; }
+.cp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 28px; }
+@media (max-width: 900px) { .cp-grid { grid-template-columns: minmax(0, 1fr); } }
+.cp-col { display: flex; flex-direction: column; min-width: 0; }
+.cp-pills { margin: -8px 0 14px; }
+.cp-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-top: 1px solid var(--line); padding: 12px 0; margin-top: 4px; font-size: 13px; color: var(--text-2); }
+.cp-total b { font-size: 18px; color: var(--text); }
+.cp-foot { font-size: 12px; margin-top: 8px; text-align: center; }
+.cp-set { gap: 10px; border-left: 1px solid var(--line); padding-left: 24px; }
+@media (max-width: 900px) { .cp-set { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 16px; } }
+.cp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 34px; font-size: 13.5px; }
+.cp-k { font-weight: 600; color: var(--text); white-space: nowrap; }
+.cp-inline { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); margin-left: auto; }
+.cp-seg button { padding: 5px 10px; font-size: 12.5px; }
+.cp-pct { display: inline-flex; align-items: center; gap: 4px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; font-size: 12.5px; color: var(--muted); }
+.cp-pct:focus-within { border-color: var(--blue); }
+.cp-pct input { width: 46px; border: 0; background: none; padding: 6px 0; text-align: right; font-size: 13px; color: var(--text); outline: none; }
+.cp-pct input:disabled { color: var(--muted); }
+.cp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cp-table th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.cp-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.cp-table tr:last-child td { border-bottom: 0; }
+.cp-add { display: flex; gap: 8px; align-items: center; }
+.cp-add input { width: 70px; border: 1px solid var(--line); background: var(--soft); border-radius: 8px; padding: 6px 8px; font-size: 13px; color: var(--text); }
+.bx-main:has(.cp) { margin-left: auto; margin-right: auto; }
+/* Settings rows: switch, name, values; every value box ends on the same line. */
+.cp-line { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 36px; font-size: 13.5px; }
+.cp-line .cp-k .muted { font-weight: 400; margin-left: 4px; }
+.cp-vals { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.cp-pct input { width: 52px; }
+.cp-table td:nth-child(3), .cp-table th:nth-child(3) { text-align: right; }
+.cp-table td:nth-child(4), .cp-table th:nth-child(4), .cp-table td:nth-child(5), .cp-table th:nth-child(5) { text-align: right; width: 56px; }
+.cp-row > label.cp-pct:first-of-type { margin-left: auto; }
+/* One column: basics, settings, then the total and button. */
+.bx-main .cp { max-width: 640px; }
+.cp-stack { display: flex; flex-direction: column; gap: 6px; }
+.cp-stack .cp-set { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.cp-end { margin-top: 8px; }
+.bx-main:has(.cp) { display: flex !important; justify-content: center; max-width: none !important; }
+.bx-main:has(.cp) > .bx-full { width: 100%; max-width: 640px; }
+.cp-rule { background: var(--blue-soft); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-weight: 500; }
+/* Create pool: the form, and the pair's chart beside it. */
+.bx-main:has(.cp) > .bx-full { max-width: 1240px !important; }
+.bx-main .cp { max-width: 1240px; }
+.cp-wrap { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 1000px) { .cp-wrap { grid-template-columns: minmax(0, 1fr); } }
+.cp-chart { position: sticky; top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px; min-width: 0; }
+.cp-chart-note { font-size: 12.5px; margin-top: 8px; }
+.cp-side { margin: -6px 0 16px; }
+
+/* Create pool: review before creating. */
+.cp-review { max-width: 560px; width: calc(100% - 32px); }
+.cp-review h2 { margin: 0 0 12px; font-size: 19px; }
+.cp-r-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 15px; }
+.cp-r-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; font-size: 13.5px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cp-r-grid span { color: var(--muted); }
+.cp-r-grid b { text-align: right; font-weight: 600; }
+.cp-r-risk { background: var(--amber-soft); color: var(--amber-text); border-radius: 10px; padding: 12px 14px; margin: 14px 0; font-size: 13px; }
+.cp-r-risk ul { margin: 6px 0 0; padding-left: 18px; }
+.cp-r-risk li { margin: 4px 0; }
+.cp-r-agree { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; cursor: pointer; }
+.cp-r-agree input { margin-top: 3px; }
+.cp-r-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.cp-r-risk ul { list-style: disc; }
+/* Create pool: the chart on the left, the form on the right. */
+.cp-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 560px); }
+.cp-wrap > .cp-chart { order: -1; }
+@media (max-width: 1000px) { .cp-wrap { grid-template-columns: minmax(0, 1fr); } .cp-wrap > .cp-chart { order: 0; } }
+
+/* Pool view: money strip and tables, in the Trade / Buy cover format. */
+.ux-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ux-strip div { background: var(--panel); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.ux-strip span { font-size: 12px; color: var(--muted); }
+.ux-strip b { font-size: 15px; font-weight: 700; }
+@media (max-width: 700px) { .ux-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ux-table { overflow-x: auto; }
+.ux-table table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+.ux-table th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ux-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ux-table tr:last-child td { border-bottom: 0; }
+.ux-table th:not(:first-child), .ux-table td:not(:first-child) { text-align: right; }
+
+.ux-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .ux-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.ux-past { font-size: 12px; margin-top: 8px; }
+.ux-strip small { font-size: 11.5px; }
+@keyframes uxFlash { from { box-shadow: 0 0 0 3px var(--blue-line); } to { box-shadow: 0 0 0 0 transparent; } }
+.ux-flash { animation: uxFlash 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .ux-flash { animation: none; } }
+
+.ux-terms { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--text-2); margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ux-backbtn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); border-radius: 8px; padding: 6px 12px 6px 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ux-backbtn:hover { border-color: var(--blue); color: var(--blue); }
+.ux-backbtn svg { width: 16px; height: 16px; }
+.ux-tabs .ux-tab-back { color: var(--blue); border-right: 1px solid var(--line); border-radius: 0; padding-right: 14px; margin-right: 4px; }
+
+/* Pool title as a dropdown of the open pools in its market. */
+.ux-switch { position: relative; margin: 10px 0 16px; }
+.ux-switch-btn { display: flex; align-items: center; gap: 12px; border: 1px solid transparent; background: none; border-radius: 12px; padding: 6px 10px 6px 4px; cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+.ux-switch-btn:hover { border-color: var(--line-2); background: var(--soft); }
+.ux-switch-t { display: flex; flex-direction: column; gap: 2px; }
+.ux-switch-t b { font-size: 18px; letter-spacing: -0.01em; }
+.ux-switch-t .muted { font-size: 13px; }
+.ux-switch-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 420px; max-width: 92vw; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 40px rgba(15, 23, 41, 0.16); padding: 6px; }
+.ux-switch-h, .ux-switch-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; align-items: center; padding: 9px 10px; }
+.ux-switch-h { font-size: 11.5px; color: var(--muted); }
+.ux-switch-h span:not(:first-child), .ux-switch-row span:not(:first-child) { text-align: right; }
+.ux-switch-row { width: 100%; border: 0; background: none; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13.5px; color: var(--text); text-align: left; }
+.ux-switch-row:hover, .ux-switch-row.on { background: var(--soft); }
+.ux-switch-row.on b { color: var(--blue); }
+.ux-switch-row small { color: var(--muted); }
+
+.ux-viewall { display: block; margin: 10px auto 2px; border: 1px solid var(--line-2); background: var(--panel); color: var(--blue); border-radius: 8px; padding: 7px 16px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ux-viewall:hover { border-color: var(--blue); }
+.ux-addr { color: var(--blue); text-decoration: none; }
+.ux-addr:hover { text-decoration: underline; }
+
+.ux-switch-all { display: block; width: 100%; margin-top: 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--blue); font: inherit; font-size: 13.5px; font-weight: 600; padding: 11px 10px 7px; text-align: center; cursor: pointer; }
+.ux-switch-all:hover { text-decoration: underline; }
+
+/* My pools, one click away in the top strip. */
+.ux-mine { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: 12px; }
+.ux-mine > .muted { font-size: 12px; margin-right: 2px; }
+.ux-mine button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-2); background: var(--panel); border-radius: 999px; padding: 4px 10px 4px 4px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text); cursor: pointer; }
+.ux-mine button .bx-flag { width: 20px; height: 20px; }
+.ux-mine button.on { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+.ux-switch-menu { max-height: 70vh; overflow-y: auto; min-width: 480px; }
+.ux-switch-g { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 10px 10px 4px; }
+.ux-switch-row span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.ux-switch-row .bx-flag { width: 20px; height: 20px; }
+
+.ux-mybtn { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; border: 1px solid var(--line-2); background: var(--panel); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+.ux-mybtn .num { background: var(--soft); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+.ux-mybtn:hover, .ux-mybtn.on { border-color: var(--blue); color: var(--blue); }
+.ux-page-h { margin: 12px 0 10px; font-size: 19px; }

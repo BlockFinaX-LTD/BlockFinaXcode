@@ -123,13 +123,15 @@ function useMarkets() {
  * follows it, so the two prices never disagree.
  */
 interface MarketTerms { distanceBps: number; limitBps: number; fromPanel: boolean }
-const DEFAULT_TERMS: MarketTerms = { distanceBps: 0, limitBps: 1_000, fromPanel: false };
+/** Every cover pays the full move, up to this share of the amount. Short-dated cover is the focus; review later. */
+export const MAX_PAYOUT_PCT = 20;
+const DEFAULT_TERMS: MarketTerms = { distanceBps: 0, limitBps: MAX_PAYOUT_PCT * 100, fromPanel: false };
 /** The duration the headline price is for: common supplier payment terms. */
 const HEADLINE_DAYS = 30;
 
 function termsLabel(t: MarketTerms) {
   const start = t.distanceBps === 0 ? "today's rate" : `${t.distanceBps / 100}% from today's rate`;
-  return `Prices for cover starting at ${start}, with a ${t.limitBps / 100}% limit${t.fromPanel ? ', as set in the panel' : ''}.`;
+  return `Prices for cover starting at ${start}. Every cover pays the full move, up to ${t.limitBps / 100}% of the amount.`;
 }
 
 /**
@@ -364,7 +366,7 @@ function PriceLadder({ market, days, limitBps, direction, startBps, spot, onPick
   const down = rows.filter((r) => r.d === 'down');
   return (
     <div className="bx-ladder">
-      <div className="bx-pane-h"><span>Prices</span><span className="muted">{days ? `${days} days` : '...'} · {limitBps / 100}% limit</span></div>
+      <div className="bx-pane-h"><span>Prices</span><span className="muted">{days ? `${days} days` : '...'} · pays up to {limitBps / 100}%</span></div>
       <div className="bx-lhead"><span>{hint('Starts at')}</span><span className="r">{hint('From today')}</span><span className="r">{hint('Price')}</span></div>
       {up.length > 0 && <div className="bx-lside up">{hint('Up cover')}</div>}
       {up.map(row)}
@@ -1065,14 +1067,16 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
     : startPct < minStartPct ? `The closest strike on sale is ${minStartPct}% from today's rate`
     : startPct > maxStartPct ? `The strike can be at most ${maxStartPct}% from today's rate`
     : null;
-  const [capPct, setCapPct] = useState(10);
+  const [capPct, setCapPct] = useState(MAX_PAYOUT_PCT);
   useEffect(() => { setCapPct((c) => Math.min(Math.max(c, capMin), capMax)); }, [capMin, capMax]);
+  // One kind of cover: the full move, up to MAX_PAYOUT_PCT of the amount. Pools carry it as a
+  // limit that far from the strike; a pool that sells only Open cover uses its own maximum.
   const [structure, setStructure] = useState<'capped' | 'open'>('capped');
-  useEffect(() => { if (tenor && !tenor[structure]) setStructure(tenor.capped ? 'capped' : 'open'); }, [tenor, structure]);
+  useEffect(() => { if (tenor) setStructure(tenor.capped ? 'capped' : 'open'); }, [tenor]);
   const strike = spot.data && !strikeError ? (anchor === 'rate' ? Number(rateText) : spot.data * (1 + (sign * startPct) / 100)) : null;
   // The list beside the panel prices the cover set here, once the buyer changes it.
-  const panelTerms: MarketTerms = !strikeError && Number.isFinite(startPct) && (strikeTouched || capPct !== 10)
-    ? { distanceBps: Math.max(0, Math.round(startPct * 100)), limitBps: Math.round(capPct * 100), fromPanel: true }
+  const panelTerms: MarketTerms = !strikeError && Number.isFinite(startPct) && strikeTouched
+    ? { distanceBps: Math.max(0, Math.round(startPct * 100)), limitBps: MAX_PAYOUT_PCT * 100, fromPanel: true }
     : DEFAULT_TERMS;
   const listKey = useDebounced(JSON.stringify(panelTerms), 400);
   const listTerms = useMemo(() => JSON.parse(listKey) as MarketTerms, [listKey]);
@@ -1183,8 +1187,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
               <div className="bx-sums" style={{ borderTop: 0, paddingTop: 0 }}>
                 <Sum l="Current rate" v={<span className="num">{fmtRate(e.spot)}</span>} />
                 <Sum l="Protection starts" v={<span className="num">{fmtRate(e.strike)}</span>} />
-                <Sum l="Protection type" v={e.structure === 'open' ? 'Open' : 'Limited'} />
-                {e.structure === 'capped' && <Sum l="Protection limit" v={<span className="num">{fmtRate(e.cap)}</span>} />}
+                <Sum l="Pays" v={`The full move, up to ${MAX_PAYOUT_PCT}% of the amount`} />
                 <Sum l="Duration" v={`${e.tenorDays} days`} />
                 <Sum l="Expiry" v={endsAt(e.tenorDays)} />
                 <Sum l="Most you can receive" v={<span className="num">${fmt(e.maxPayout)}</span>} />
@@ -1256,19 +1259,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 </div>
               </div>
 
-              <div>
-                <div className="bx-trow-l"><span>{hint('Cover type')}</span></div>
-                <div className="bx-choice">
-                  {tenor?.capped !== false && <button className={structure === 'capped' ? 'on' : ''} onClick={() => setStructure('capped')}><div className="t">Limited</div><div className="p num">{capped.data ? `$${fmt(capped.data.economic.totalCost)}` : capped.isFetching ? '...' : '-'}</div></button>}
-                  {tenor?.open !== false && <button className={structure === 'open' ? 'on' : ''} onClick={() => setStructure('open')}><div className="t">Open</div><div className="p num">{open.data ? `$${fmt(open.data.economic.totalCost)}` : open.isFetching ? '...' : '-'}</div></button>}
-                </div>
-              </div>
-              {structure === 'capped' && (
-                <div>
-                  <div className="bx-trow-l"><label htmlFor="bx-cap">{hint('Protection limit')}</label><span className="num">{capPct}% · {cap ? fmtRate(cap) : '-'}</span></div>
-                  <input id="bx-cap" className="bx-range" type="range" min={capMin} max={capMax} step={1} value={capPct} onChange={(ev) => setCapPct(Number(ev.target.value))} />
-                </div>
-              )}
+              <div className="bx-payrule">Pays the full move, up to {MAX_PAYOUT_PCT}% of the amount.</div>
 
               <div className="bx-tsum" aria-live="polite">
                 <Sum l="Price" v={<span className="num">{e ? pct(e.offerRateE6 / 1e6) : chosen.isFetching ? '...' : '-'}</span>} />
@@ -1634,5 +1625,25 @@ export function RatesPage({ go, target }: { go: Go; target?: Target }) {
           : <InterestRates open={setBenchmark} />}
       </section>
     </main>
+  );
+}
+
+/** A pair's rate chart with its range buttons, for screens outside Buy cover (e.g. Create pool). */
+export function PairRateChart({ pair }: { pair: string }) {
+  const [range, setRange] = useState<Range>('1M');
+  const chart = useChart(pair, range);
+  const points = chart.data ?? [];
+  const first = points[0]?.v, last = points[points.length - 1]?.v;
+  const change = first && last ? (last - first) / first : null;
+  return (
+    <section className="bx-tchart" aria-label="Rate chart">
+      <div className="bx-pane-h">
+        <span>{pair} <ChangeText change={change} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
+        <div className="bx-ranges" role="group" aria-label="Chart range">
+          {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
+        </div>
+      </div>
+      <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={pair.split('/')[1]} />
+    </section>
   );
 }
