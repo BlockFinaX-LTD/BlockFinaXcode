@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } 
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftRight, ArrowUp, Building2, Check, ChevronDown, ChevronLeft, CircleUser, GraduationCap, Home, Inbox, Layers, LineChart, List, Menu, MessageCircle, Search, ShieldCheck, Store, Wallet, X } from 'lucide-react';
-import logoPath from '@/assets/logo.png';
+import logoPath from '@/assets/logo-mark.png';
 import { usePasskeySession } from '@/lib/identity';
 import { ccyName, exposureLabel, fmt, poolRef, quoteCcy, useChains, useIsDemo, usePools, useUsdcBalances } from './shared';
 import { Flag, Spin } from './ui';
@@ -85,7 +85,7 @@ const SECTION_KEY = 'bfx:section';
 const NEUTRAL: Page[] = ['wallet', 'account', 'org-settings'];
 const sectionOf = (p: Page): Section | null => (NEUTRAL.includes(p) ? null : p === 'dash' ? 'home' : p === 'perps' ? 'trade' : p === 'otc' ? 'otc' : 'hedge');
 const PAGE_TITLE: Partial<Record<Page, string>> = { wallet: 'Wallet', account: 'Profile', 'org-settings': 'Business settings' };
-const SECTION_NAME: Record<Section, string> = { home: 'Home', hedge: 'Hedge', trade: 'Trade', otc: 'OTC' };
+const SECTION_NAME: Record<Section, string> = { home: 'Home', hedge: 'Hedge', trade: 'Trade', otc: 'Swap' };
 
 /** The page this browser tab was on, so a refresh returns to it. Session storage: a new tab starts at Home. */
 const VIEW_KEY = 'bfx:view';
@@ -314,7 +314,7 @@ export function Workspace() {
                 { heading: 'Perpetual futures' },
                 ...(perpMarkets.data?.markets ?? []).map((m) => ({ label: `${m.base}${m.quote}-PERP`, sub: `${m.mark.toLocaleString(undefined, { maximumFractionDigits: m.decimals })} · up to ${m.maxLeverage}x`, onClick: () => openPerpMarket(go, m.id) })),
               ]} />
-              <button className={`bx-nm-btn${section === 'otc' ? ' on' : ''}`} onClick={() => switchSection('otc')}>OTC</button>
+              <button className={`bx-nm-btn${section === 'otc' ? ' on' : ''}`} onClick={() => switchSection('otc')}>Swap</button>
             </nav>
           <span className="bx-hide-sm bx-searchwrap"><SearchBox role={role} go={go} /></span>
           <span style={{ flex: 1 }} />

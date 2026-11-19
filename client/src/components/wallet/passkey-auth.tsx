@@ -17,8 +17,7 @@ import { useLocation } from "wouter";
 import { KeyRound, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import logoPath from "@/assets/logo.png";
-import logoMark from "@/assets/logo-transparent.png";
+import logoPath from "@/assets/logo-mark.png";
 import { takeReturnPath, usePasskeySession } from "@/lib/identity";
 import {
   acceptGoogleRedirect, api, createWalletPasskey, currentPasskeySession, finishEmailSignIn,
@@ -160,7 +159,7 @@ export function PasskeyAuth() {
   return (
     <div className="bfx-signin min-h-screen flex flex-col items-center justify-start sm:justify-center px-5 pt-10 pb-10 sm:py-10" style={{ background: "radial-gradient(600px 420px at 100% 0%, rgba(37,99,235,0.10), transparent 70%), radial-gradient(520px 380px at 0% 100%, rgba(37,99,235,0.07), transparent 70%), hsl(var(--background))" }}>
       <div className="flex flex-col items-center text-center">
-        <img src={logoMark} alt="" className="h-16 w-16 object-contain" />
+        <img src={logoPath} alt="" className="h-16 w-16 object-contain" />
         <h1 className="bfx-display mt-3 text-[26px] font-bold tracking-tight">BlockFinaX</h1>
         <p className="mt-1 text-[14px] text-muted-foreground">Cross-border payments &amp; FX cover</p>
         {import.meta.env.VITE_NETWORK_MODE !== "mainnet" && <span className="mt-3 rounded-full bg-amber-100 px-3 py-0.5 text-[11.5px] font-semibold tracking-wider text-amber-700">TESTNET</span>}

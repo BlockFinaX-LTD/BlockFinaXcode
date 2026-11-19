@@ -1419,3 +1419,10 @@
   .bx-rliq-m { display: inline; }
 }
 .bx-payrule { background: var(--blue-soft); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 500; }
+
+/* One logo mark everywhere: no box behind it, same proportions, centred on the wordmark */
+.bx-brand img, .bx-tbrand img { border-radius: 0 !important; background: none !important; object-fit: contain; flex: none; display: block; }
+.bx-brand img { width: 30px; height: 30px; }
+.bx-tbrand img { width: 28px; height: 28px; }
+.bx-brand, .bx-tbrand { align-items: center; line-height: 1; }
+.bx-tbrand .bx-env { margin-left: 2px; }

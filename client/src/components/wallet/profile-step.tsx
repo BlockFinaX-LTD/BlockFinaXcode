@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import logoPath from "@/assets/logo.png";
+import logoPath from "@/assets/logo-mark.png";
 import { api } from "@/lib/wallets/passkey-wallet";
 import { COUNTRIES, PRIORITY_COUNTRIES, validateOnboarding } from "@shared/onboarding";
 
