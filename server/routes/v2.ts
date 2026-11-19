@@ -25,6 +25,7 @@
  */
 import type { Express, NextFunction, Request, Response } from "express";
 import { hedgePairs } from "@shared/domain/hedge-pairs";
+import { saleMarkup } from "@shared/domain/durations";
 import { ApplicationError, parseResourceId, type ApplicationErrorCode, type ChainKey, type CurrencyPool, type ProtectionPosition, type ProtectionQuote, type ProtectionRequest } from "@shared/domain/types";
 import { AdapterRegistry } from "../chain";
 import { chainRegistry, registryLoadError } from "../chain/config";
@@ -189,6 +190,41 @@ export function registerV2Routes(app: Express) {
     const keys = req.query.chain ? [String(req.query.chain)] : chainRegistry()!.settlementNetworks().map((c) => c.key);
     const pools = (await Promise.all(keys.flatMap((k) => s.adapters.adaptersFor(k).map((a) => a.listPools())))).flat();
     res.json({ pools });
+  }));
+
+  /**
+   * Cheapest 30-day cover price per pair, as a share of the amount, for the public website.
+   * Pricing every pair takes a while, so the answer is worked out at most once every 5 minutes.
+   */
+  let coverPrices: { at: number; body: Promise<{ tenorDays: number; prices: { pair: string; premium: number }[] }> } | null = null;
+  app.get("/api/v2/cover-prices", wrap(async (_req, res) => {
+    if (!coverPrices || Date.now() - coverPrices.at > 5 * 60_000) {
+      const build = (async () => {
+        const s = await getServices();
+        const pools = (await s.adapters.adapterFor(chainRegistry()!.hub.key).listPools().catch(() => []))
+          .filter((p) => p.acceptingHedges && Number(p.liquidity.capacity) > 0);
+        const best = new Map<string, number>();
+        for (const p of pools) {
+          const dir = p.direction === "down" ? "down" : "up";
+          const m = saleMarkup(p, 30, dir);
+          const key = `${p.pair}|${dir}`;
+          if (m && (!best.has(key) || m < best.get(key)!)) best.set(key, m);
+        }
+        const byPair = new Map<string, number>();
+        await Promise.all(Array.from(best.entries()).map(async ([key, markup]) => {
+          const [pair, dir] = key.split("|");
+          const table = await s.quotes.fairTable(pair, dir as "up" | "down", [30], 0, undefined, 2000).catch(() => null);
+          const fair = table?.rows?.[0]?.fairRateE6;
+          if (!fair) return;
+          const premium = (fair / 1e6) * (markup / 10_000);
+          if (!byPair.has(pair) || premium < byPair.get(pair)!) byPair.set(pair, premium);
+        }));
+        return { tenorDays: 30, prices: Array.from(byPair.entries()).map(([pair, premium]) => ({ pair, premium })) };
+      })();
+      coverPrices = { at: Date.now(), body: build };
+      build.catch(() => { coverPrices = null; });
+    }
+    res.json(await coverPrices.body);
   }));
 
   /** What creating a pool on the hub involves: the pairs on offer and the creation fee. */

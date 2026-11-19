@@ -197,6 +197,19 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "same-site" },
 }));
 
+// The public website (blockfinax.com) shows live rates, cover liquidity and perps prices.
+// Allow cross-site reads for those read-only GET routes only, from our own sites.
+const PUBLIC_READ_PATHS = new Set(['/api/v2/rates', '/api/v2/pools', '/api/v2/cover-prices', '/api/perps/markets']);
+const PUBLIC_READ_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*blockfinax\.com$|^http:\/\/localhost:\d+$/;
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (req.method === 'GET' && origin && PUBLIC_READ_PATHS.has(req.path) && PUBLIC_READ_ORIGIN.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
