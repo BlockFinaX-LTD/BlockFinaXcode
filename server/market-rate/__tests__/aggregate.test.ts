@@ -41,8 +41,12 @@ test("an outlier is dropped and cannot move the rate", () => {
   assert.equal(r.rate, 1438);
 });
 
-test("too few sources gives no rate", () => {
-  assert.equal(aggregate("USD/NGN", [q({ source: "only", mid: 1435 })], now), null);
+test("one source is enough", () => {
+  assert.equal(aggregate("USD/NGN", [q({ source: "only", mid: 1435 })], now)?.rate, 1435);
+});
+
+test("no fresh source gives no live rate (the last good one is held instead)", () => {
+  assert.equal(aggregate("USD/NGN", [q({ source: "old", mid: 1435, at: now - 60 * 60_000 })], now), null);
 });
 
 test("no source carries more than the cap", () => {

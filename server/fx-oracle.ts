@@ -416,12 +416,20 @@ async function refreshAllRates(): Promise<Record<string, FXRate>> {
 }
 
 /** Pairs that can use the market (parallel) rate. */
-const MARKET_RATE_PAIRS = new Set(["USD/NGN", "USD/GHS", "USD/KES"]);
+export const MARKET_RATE_PAIRS = new Set(["USD/NGN", "USD/GHS", "USD/KES"]);
+/** True when this pair prices and settles on the market rate. */
+export const usesMarketRate = (pair: string) => process.env.RATE_SOURCE === "market" && MARKET_RATE_PAIRS.has(pair);
+
+/** The official reference rate, whatever the pair settles on (for comparison only). */
+export async function officialRate(pair: string): Promise<FXRate | null> {
+  return (await fetchAllRates())[pair] || null;
+}
 
 /**
  * The rate everything prices and settles on. With RATE_SOURCE=market, the naira, cedi and
- * shilling use the market rate aggregated from trading platforms (server/market-rate); other
- * pairs, and any pair with no usable market rate, use the official rate.
+ * shilling use the market rate aggregated from trading platforms (server/market-rate), held at
+ * its last value when no source answers. They never fall back to the official rate: the gap
+ * between the two would move every perp, cover and swap at once. Other pairs use the official rate.
  */
 export async function getRate(pair: string): Promise<FXRate | null> {
   const rates = await fetchAllRates();
@@ -439,7 +447,8 @@ export async function getRate(pair: string): Promise<FXRate | null> {
         lastUpdated: new Date(m.at).toISOString(),
       } as FXRate;
     }
-    console.warn(`[rates] no usable market rate for ${pair}; using the official rate`);
+    console.error(`[rates] no market rate has been recorded yet for ${pair}; no rate given`);
+    return null;
   }
   return official;
 }

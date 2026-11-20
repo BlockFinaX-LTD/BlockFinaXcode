@@ -27,6 +27,26 @@ interface Db { query(sql: string, params?: unknown[]): Promise<{ rows: any[] }> 
 const latest = new Map<string, SourceQuote[]>();      // source id -> its last quotes
 const lastRate = new Map<string, CompositeRate>();     // pair -> last good composite
 const errors = new Map<string, { at: number; message: string }>();
+const ticks = new Map<string, { t: number; rate: number }[]>(); // pair -> live composite, last 3 hours
+const TICK_KEEP_MS = 3 * 3600_000;
+
+/** Work out each pair from the latest quotes and keep the result as a live tick for the chart. */
+function tick() {
+  const now = Date.now();
+  const all = [...latest.values()].flat();
+  for (const c of CURRENCIES) {
+    const pair = `USD/${c}`;
+    const r = aggregate(pair, all, now);
+    if (!r) continue;
+    lastRate.set(pair, r);
+    const list = ticks.get(pair) ?? [];
+    list.push({ t: now, rate: r.rate });
+    while (list.length && list[0].t < now - TICK_KEEP_MS) list.shift();
+    ticks.set(pair, list);
+  }
+}
+/** Live composite values for one pair since `since` (ms), oldest first. */
+export const marketTicks = (pair: string, since: number) => (ticks.get(pair) ?? []).filter((x) => x.t >= since);
 let started = false;
 
 export function marketRates() {
@@ -39,10 +59,11 @@ export function marketRates() {
   });
 }
 /**
- * The market rate for one pair, for pricing and settlement: the live composite, or the last
- * good one if it is under `maxHoldMs` old. Null means no usable market rate.
+ * The market rate for one pair, for pricing and settlement: the live composite, or else the last
+ * good one, however old (never the official rate, whose gap would move every price at once).
+ * Null only before any market rate has ever been recorded.
  */
-export function marketRateFor(pair: string, maxHoldMs = 6 * 3600_000): { rate: number; sources: number; at: number; held: boolean } | null {
+export function marketRateFor(pair: string, maxHoldMs = Infinity): { rate: number; sources: number; at: number; held: boolean } | null {
   const live = aggregate(pair, [...latest.values()].flat(), Date.now());
   if (live) { lastRate.set(pair, live); return { rate: live.rate, sources: live.sources, at: live.at, held: false }; }
   const last = lastRate.get(pair);
@@ -58,9 +79,9 @@ export async function startMarketRates(): Promise<void> {
   const { pool } = await import("../db");
   const db = pool as unknown as Db | null;
   if (db) await db.query(SCHEMA).catch((e) => console.warn("[market-rate] schema:", e.message));
-  // Start from the last recorded rate per pair, so prices do not fall back while sources connect.
+  // Start from the last recorded rate per pair, so prices hold steady while sources connect.
   if (db) {
-    const prior = await db.query(`SELECT DISTINCT ON (pair) pair, rate, sources, extract(epoch from at) * 1000 AS at FROM market_rates WHERE at > now() - interval '6 hours' ORDER BY pair, at DESC`).catch(() => ({ rows: [] as any[] }));
+    const prior = await db.query(`SELECT DISTINCT ON (pair) pair, rate, sources, extract(epoch from at) * 1000 AS at FROM market_rates ORDER BY pair, at DESC`).catch(() => ({ rows: [] as any[] }));
     for (const r of prior.rows) lastRate.set(r.pair, { pair: r.pair, rate: Number(r.rate), sources: Number(r.sources), quotes: [], at: Number(r.at) });
   }
 
@@ -69,6 +90,7 @@ export async function startMarketRates(): Promise<void> {
       try {
         latest.set(s.id, await s.read());
         errors.delete(s.id);
+        tick();
       } catch (e) {
         errors.set(s.id, { at: Date.now(), message: (e as Error).message.slice(0, 200) });
       }
@@ -108,5 +130,13 @@ export async function startMarketRates(): Promise<void> {
     void db.query(`DELETE FROM market_rate_quotes WHERE at < now() - interval '30 days'`).catch(() => {});
     void db.query(`DELETE FROM market_rates WHERE at < now() - interval '30 days'`).catch(() => {});
   }, 6 * 3600_000).unref();
+  // Market-rate history for the chart, from Monierate, topped up every 6 hours.
+  if (db) {
+    const { backfillHistory, HISTORY_SCHEMA } = await import("./history");
+    await db.query(HISTORY_SCHEMA).catch((e) => console.warn("[market-rate] history schema:", e.message));
+    const fill = () => void backfillHistory(db).catch((e) => console.warn("[market-rate] history:", (e as Error).message));
+    setTimeout(fill, 30_000).unref();
+    setInterval(fill, 6 * 3600_000).unref();
+  }
   console.log("[market-rate] recording started:", SOURCES.map((s) => s.id).join(", "));
 }

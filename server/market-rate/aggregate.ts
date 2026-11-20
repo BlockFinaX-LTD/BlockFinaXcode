@@ -56,7 +56,7 @@ export interface AggregateRules {
   weightCap: number;
 }
 
-export const DEFAULT_RULES: AggregateRules = { maxAgeMs: 5 * 60_000, maxAgeCompositeMs: 45 * 60_000, maxDeviation: 0.03, minSources: 2, weightCap: 0.4 };
+export const DEFAULT_RULES: AggregateRules = { maxAgeMs: 5 * 60_000, maxAgeCompositeMs: 45 * 60_000, maxDeviation: 0.03, minSources: 1, weightCap: 0.4 };
 
 /** Mid price from a buy and sell, or null if either is missing or they are crossed badly. */
 export function midOf(bid: number | null, ask: number | null): number | null {

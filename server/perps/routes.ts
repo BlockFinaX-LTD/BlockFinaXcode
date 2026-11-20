@@ -137,6 +137,13 @@ export function registerPerpsRoutes(app: Express, d: Deps) {
     const s = market(e, req.params.id);
     // Minutes per candle. 43200 = monthly; 0 = MAX (all history, monthly).
     const i = [0, 1, 5, 15, 30, 60, 120, 240, 1440, 10080, 43200].includes(Number(req.query.i)) ? Number(req.query.i) : 5;
+    // Pairs that settle on the market rate chart it on every timeframe, live.
+    const { usesMarketRate } = await import("../fx-oracle");
+    if (usesMarketRate(s.pair)) {
+      const { marketCandles } = await import("../market-rate/history");
+      const m = await marketCandles(s.pair, i).catch((err) => { console.warn("[perps] market candles:", (err as Error).message); return []; });
+      if (m.length) { res.json({ candles: m, source: "market" }); return; }
+    }
     const live = e.candles(s.chain.id, i > 0 && i < 1440 ? i : 1440);
     if (i > 0 && i < 1440) {
       // Short timeframes: delayed market quotes, since the official rate fixes about once a day.

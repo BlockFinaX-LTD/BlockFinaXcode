@@ -43,7 +43,7 @@
 
 /* chart */
 .px-chart-in { padding: 10px 12px 6px; }
-.px-chart-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+.px-chart-h { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 6px; font-size: 12px; }
 .px-ivs { display: flex; gap: 2px; }
 .px-ivs button { border: 0; background: none; color: var(--muted); font: inherit; font-family: 'Geist Mono', monospace; font-size: 12px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
 .px-ivs button.on { background: var(--blue-soft); color: var(--blue); }
@@ -496,3 +496,18 @@
 /* Focus rings for keyboards only, not after a click */
 .px-form button:focus { outline: none; }
 .px-form button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* KLineChart: the canvas sits over the watermark; tools above, indicators below. */
+.px-chart-svg { cursor: default; }
+.px-kline { position: absolute; inset: 0; z-index: 1; }
+.px-chart-empty { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; }
+.px-chart-src { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.px-tools { display: inline-flex; gap: 2px; flex: none; }
+.px-tools button { display: inline-grid; place-items: center; width: 28px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.px-tools button:hover { background: var(--soft); color: var(--text); }
+.px-tools button.on { background: var(--blue-soft); color: var(--blue); }
+.px-tool-t { font-size: 11px; font-weight: 700; }
+.px-inds { display: inline-flex; gap: 2px; flex-wrap: wrap; }
+.px-inds button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 11.5px; font-weight: 600; padding: 3px 7px; border-radius: 6px; cursor: pointer; }
+.px-inds button.on { background: var(--blue-soft); color: var(--blue); }
+@media (max-width: 860px) { .px-tools button { width: 26px; } }

@@ -78,9 +78,9 @@ export function registerAdminV2Routes(app: Express, getAdapters: () => Promise<A
   /** Market (parallel) rate: the live composite per pair, every source behind it, and the official rate beside it. */
   app.get("/api/admin/v2/market-rates", requireAdmin, wrap(async (_req, res) => {
     const { marketRates, marketRateErrors } = await import("../market-rate/service");
-    const { getRate } = await import("../fx-oracle");
+    const { officialRate } = await import("../fx-oracle");
     const rates = await Promise.all(marketRates().map(async (r) => {
-      const official = await getRate(r.pair).catch(() => null);
+      const official = await officialRate(r.pair).catch(() => null);
       const off = official?.rate ?? null;
       return { ...r, official: off, gap: r.rate && off ? r.rate / off - 1 : null };
     }));

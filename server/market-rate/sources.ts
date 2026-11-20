@@ -100,9 +100,9 @@ export async function monierate(): Promise<SourceQuote[]> {
 
 /** Every source with how often it is read. Monierate is paid per call, so it is read less often. */
 export const SOURCES: { id: string; everyMs: number; read: () => Promise<SourceQuote[]> }[] = [
-  { id: "luno", everyMs: 30_000, read: luno },
-  { id: "quidax", everyMs: 30_000, read: quidax },
-  { id: "bybit_p2p", everyMs: 30_000, read: bybitP2p },
-  { id: "binance_p2p", everyMs: 60_000, read: binanceP2p },
+  { id: "luno", everyMs: 10_000, read: luno },
+  { id: "quidax", everyMs: 10_000, read: quidax },
+  { id: "bybit_p2p", everyMs: 15_000, read: bybitP2p },
+  { id: "binance_p2p", everyMs: 30_000, read: binanceP2p },
   { id: "monierate", everyMs: Number(process.env.MONIERATE_EVERY_MS) || 15 * 60_000, read: monierate },
 ];

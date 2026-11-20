@@ -9,7 +9,8 @@
 import { Buffer } from 'buffer';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CandlestickChart, ChevronDown, ChevronRight, KeyRound, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, CandlestickChart, ChevronDown, ChevronRight, Equal, KeyRound, Minus, MoveUpRight, ShieldCheck, Slash, Trash2, Type, X } from 'lucide-react';
+import { CandleType, LineType, TooltipShowRule, dispose, init, type Chart as KChart, type KLineData } from 'klinecharts';
 import { Keypair } from '@stellar/stellar-sdk';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -203,130 +204,153 @@ function MarketBar({ markets, market, onPick, chartOpen, onChart, onFunding }: {
 
 const INTERVALS: [number, string][] = [[1, '1m'], [5, '5m'], [15, '15m'], [30, '30m'], [60, '1h'], [120, '2h'], [240, '4h'], [1440, '1D'], [10080, '1W'], [43200, '1M'], [0, 'MAX']];
 
+/** Indicators the viewer can switch on. Main ones draw over the candles; the rest get their own pane. */
+const MAIN_IND = ['MA', 'EMA', 'BOLL'];
+const SUB_IND = ['VOL', 'MACD', 'RSI'];
+const IND_PARAMS: Record<string, number[]> = { MA: [5, 10, 30], EMA: [9, 21] };
+const IND_KEY = 'bfx:chart-ind';
+const IND_DEFAULT = ['MA'];
+
+/** Drawing tools, by KLineChart overlay name. */
+const TOOLS: { name: string; label: string; icon: React.ReactNode }[] = [
+  { name: 'segment', label: 'Trend line', icon: <Slash size={15} /> },
+  { name: 'rayLine', label: 'Ray', icon: <MoveUpRight size={15} /> },
+  { name: 'horizontalStraightLine', label: 'Horizontal line', icon: <Minus size={15} /> },
+  { name: 'parallelStraightLine', label: 'Parallel channel', icon: <Equal size={15} /> },
+  { name: 'fibonacciLine', label: 'Fibonacci levels', icon: <span className="px-tool-t">Fib</span> },
+  { name: 'simpleAnnotation', label: 'Note', icon: <Type size={15} /> },
+];
+
+const alpha = (hex: string, a: number) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
+
 /**
- * Candle chart that fills its panel. Drag sideways to move through history, scroll (or pinch) to
- * zoom, double-click to reset. Timeframes sit underneath. BlockFinaX tint and watermark behind.
+ * Candle chart (KLineChart, open source) that fills its panel: drag to move, scroll or pinch to
+ * zoom. Indicators and drawing tools on our own candles. Colours follow the app's theme tokens.
  */
 function Chart({ market }: { market: MarketView }) {
   const [interval, setIntervalMin] = useState(1440);
-  const candles = useQuery({ queryKey: ['perps-candles', market.id, interval], queryFn: () => api<{ candles: Candle[]; source?: 'market' | 'mark' | 'official' }>(`/api/perps/markets/${market.id}/candles?i=${interval}`), refetchInterval: 10_000 });
+  const candles = useQuery({ queryKey: ['perps-candles', market.id, interval], queryFn: () => api<{ candles: Candle[]; source?: 'market' | 'mark' | 'official' }>(`/api/perps/markets/${market.id}/candles?i=${interval}`), refetchInterval: interval > 0 && interval < 1440 ? 5_000 : 15_000 });
   const box = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 700, h: 380 });
-  useEffect(() => {
-    const el = box.current; if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: Math.max(320, el.clientHeight) }));
-    ro.observe(el); setSize({ w: el.clientWidth, h: Math.max(320, el.clientHeight) });
-    return () => ro.disconnect();
-  }, []);
-  const all = candles.data?.candles ?? [];
-  const W = size.w, H = size.h, padR = 74, padB = 24, padT = 12;
-  const [count, setCount] = useState<number | null>(null); // candles shown; null = fit
-  const [end, setEnd] = useState(0); // candles hidden on the right (0 = latest)
-  useEffect(() => { setCount(null); setEnd(0); }, [interval, market.id]);
-  const shown = Math.min(all.length, Math.max(15, count ?? Math.floor((W - padR) / 9)));
-  const maxEnd = Math.max(0, all.length - shown);
-  const e = Math.min(end, maxEnd);
-  const data = all.slice(Math.max(0, all.length - e - shown), all.length - e);
-  const step = (W - padR) / Math.max(1, data.length);
-
-  // Drag to pan
-  const drag = useRef<{ x: number; end: number } | null>(null);
-  const onDown = (ev: React.PointerEvent) => { drag.current = { x: ev.clientX, end: e }; (ev.target as Element).setPointerCapture?.(ev.pointerId); };
-  const onMove = (ev: React.PointerEvent) => {
-    if (drag.current) { setEnd(Math.max(0, Math.min(maxEnd, drag.current.end + Math.round((ev.clientX - drag.current.x) / step)))); setHover(null); return; }
-    const r = box.current?.getBoundingClientRect(); if (!r) return;
-    const i = Math.floor((ev.clientX - r.left) / step);
-    setHover(i >= 0 && i < data.length ? i : null);
-  };
-  const onUp = () => { drag.current = null; };
-  // Wheel to zoom (needs a non-passive listener to stop the page scrolling)
-  useEffect(() => {
-    const el = box.current; if (!el) return;
-    const wheel = (ev: WheelEvent) => {
-      if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) { setEnd((x) => Math.max(0, Math.min(maxEnd, x - Math.round(ev.deltaX / 12)))); ev.preventDefault(); return; }
-      ev.preventDefault();
-      setCount((c) => Math.max(15, Math.min(all.length || 15, Math.round((c ?? shown) * (ev.deltaY > 0 ? 1.12 : 0.89)))));
-    };
-    el.addEventListener('wheel', wheel, { passive: false });
-    return () => el.removeEventListener('wheel', wheel);
-  }, [all.length, shown, maxEnd]);
-  const [hover, setHover] = useState<number | null>(null);
-  // Candles unless the viewer picks Line (useful for thinly traded currencies).
+  const chart = useRef<KChart | null>(null);
   const [style, setStyle] = useState<'candles' | 'line'>('candles');
-  const asLine = style === 'line';
+  const [tool, setTool] = useState<string | null>(null);
+  const [inds, setInds] = useState<string[]>(() => {
+    try { const s = JSON.parse(localStorage.getItem(IND_KEY) ?? 'null'); if (Array.isArray(s)) return s.filter((x) => MAIN_IND.includes(x) || SUB_IND.includes(x)); } catch { /* use defaults */ }
+    return IND_DEFAULT;
+  });
+  const applied = useRef(new Map<string, string>()); // indicator -> pane id
+  const loaded = useRef<{ key: string; lastT: number }>({ key: '', lastT: 0 });
+  const [theme, setTheme] = useState(0);
+  const [narrow, setNarrow] = useState(false);
 
-  const view = useMemo(() => {
-    if (!data.length) return null;
-    let lo = Math.min(...data.map((c) => c.l)), hi = Math.max(...data.map((c) => c.h));
-    if (e === 0) { lo = Math.min(lo, market.mark); hi = Math.max(hi, market.mark); }
-    if (hi - lo < hi * 0.0005) { hi *= 1.0005; lo *= 0.9995; }
-    const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-    const y = (p: number) => padT + (1 - (p - lo) / (hi - lo)) * (H - padT - padB);
-    const ticks = Array.from({ length: 6 }, (_, i) => lo + ((hi - lo) * (i + 0.5)) / 6);
-    return { y, ticks };
-  }, [data, H, market.mark, e]);
-  const h = hover != null ? data[hover] : null;
-  const label = (t: number) => {
-    const d = new Date(t);
-    if (interval >= 10080 || interval === 0) return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-    return interval >= 1440 ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  // Create once; follow the panel's size and the app's light or dark theme.
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    const c = init(el, { locale: 'en-US' });
+    chart.current = c;
+    const ro = new ResizeObserver(() => { c?.resize(); setNarrow(el.clientWidth < 600); });
+    ro.observe(el);
+    const root = el.closest('.bx');
+    const mo = new MutationObserver(() => setTheme((x) => x + 1));
+    if (root) mo.observe(root, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+    return () => { ro.disconnect(); mo.disconnect(); dispose(el); chart.current = null; applied.current.clear(); loaded.current = { key: '', lastT: 0 }; };
+  }, []);
+
+  // Colours from the theme tokens.
+  useEffect(() => {
+    const c = chart.current, el = box.current; if (!c || !el) return;
+    const s = getComputedStyle(el);
+    const v = (n: string, f: string) => s.getPropertyValue(n).trim() || f;
+    const t = { blue: v('--blue', '#1f5fe0'), green: v('--green', '#1aa866'), red: v('--red', '#e8526a'), muted: v('--muted', '#6a7280'), line: v('--line', '#eceef2'), text: v('--text', '#0f1729'), panel: v('--panel', '#fbfcff') };
+    const axis = { axisLine: { color: t.line }, tickLine: { color: t.line }, tickText: { color: t.muted } };
+    const cross = { line: { color: t.muted }, text: { color: t.panel, backgroundColor: t.text, borderColor: t.text } };
+    c.setStyles({
+      grid: { horizontal: { color: t.line }, vertical: { show: false } },
+      candle: {
+        type: style === 'line' ? CandleType.Area : CandleType.CandleSolid,
+        bar: { upColor: t.green, downColor: t.red, noChangeColor: t.muted, upBorderColor: t.green, downBorderColor: t.red, noChangeBorderColor: t.muted, upWickColor: t.green, downWickColor: t.red, noChangeWickColor: t.muted },
+        area: { lineColor: t.blue, backgroundColor: [{ offset: 0, color: alpha(t.blue, 0.01) }, { offset: 1, color: alpha(t.blue, 0.16) }] },
+        priceMark: { high: { color: t.muted }, low: { color: t.muted }, last: { upColor: t.green, downColor: t.red, noChangeColor: t.muted, line: { style: LineType.Dashed } } },
+        // On a phone the legend would cover the candles, so it shows only while touching the chart.
+        tooltip: { showRule: narrow ? TooltipShowRule.FollowCross : TooltipShowRule.Always, text: { color: t.muted } },
+      },
+      indicator: {
+        tooltip: { showRule: narrow ? TooltipShowRule.FollowCross : TooltipShowRule.Always, text: { color: t.muted } },
+        bars: [{ upColor: alpha(t.green, 0.45), downColor: alpha(t.red, 0.45), noChangeColor: alpha(t.muted, 0.45) }],
+      },
+      xAxis: axis, yAxis: axis,
+      separator: { color: t.line },
+      crosshair: { horizontal: cross, vertical: cross },
+      overlay: { line: { color: t.blue }, point: { color: t.blue, borderColor: alpha(t.blue, 0.3), activeColor: t.blue, activeBorderColor: alpha(t.blue, 0.3) } },
+    } as Parameters<KChart['setStyles']>[0]);
+  }, [style, theme, narrow]);
+
+  // Indicators: add or remove only what changed, and remember the choice.
+  useEffect(() => {
+    const c = chart.current; if (!c) return;
+    for (const name of [...MAIN_IND, ...SUB_IND]) {
+      const want = inds.includes(name), pane = applied.current.get(name);
+      const main = MAIN_IND.includes(name);
+      if (want && !pane) {
+        const id = c.createIndicator({ name, ...(IND_PARAMS[name] ? { calcParams: IND_PARAMS[name] } : {}) }, main, main ? { id: 'candle_pane' } : { height: 72 });
+        if (id) applied.current.set(name, main ? 'candle_pane' : id);
+      } else if (!want && pane) {
+        c.removeIndicator(pane, name);
+        applied.current.delete(name);
+      }
+    }
+    try { localStorage.setItem(IND_KEY, JSON.stringify(inds)); } catch { /* private window */ }
+  }, [inds]);
+
+  // Data: a fresh load when the market or timeframe changes; otherwise only the newest candles move.
+  useEffect(() => {
+    const c = chart.current; if (!c) return;
+    c.setPriceVolumePrecision(market.decimals, 0);
+    const list: KLineData[] = (candles.data?.candles ?? []).map((k) => ({ timestamp: k.t, open: k.o, high: k.h, low: k.l, close: k.c, volume: k.v ?? 0 }));
+    const key = `${market.id}:${interval}`;
+    if (!list.length) { if (loaded.current.key !== key) { c.clearData(); loaded.current = { key, lastT: 0 }; } return; }
+    const from = loaded.current.key === key ? list.findIndex((k) => k.timestamp === loaded.current.lastT) : -1;
+    if (from >= 0 && list.length - from <= 5) for (const k of list.slice(from)) c.updateData(k);
+    else c.applyNewData(list);
+    loaded.current = { key, lastT: list[list.length - 1].timestamp };
+  }, [candles.data, market.id, market.decimals, interval]);
+
+  const draw = (name: string) => {
+    const c = chart.current; if (!c) return;
+    if (tool === name) { setTool(null); return; }
+    setTool(name);
+    c.createOverlay({ name, onDrawEnd: () => { setTool(null); return false; } });
   };
+  const toggle = (name: string) => setInds((xs) => (xs.includes(name) ? xs.filter((x) => x !== name) : [...xs, name]));
+  const empty = !candles.data?.candles?.length;
+
   return (
     <div className="px-chart-in">
       <div className="px-chart-h">
-        <span className="num px-ohlc">{h ? <>O <b>{px(h.o, market.decimals)}</b> H <b>{px(h.h, market.decimals)}</b> L <b>{px(h.l, market.decimals)}</b> C <b className={h.c >= h.o ? 'up' : 'down'}>{px(h.c, market.decimals)}</b> <span className="muted">{new Date(h.t).toLocaleString(undefined, { day: 'numeric', month: 'short', year: interval >= 10080 || interval === 0 ? 'numeric' : undefined, hour: interval > 0 && interval < 1440 ? '2-digit' : undefined, minute: interval > 0 && interval < 1440 ? '2-digit' : undefined })}</span></> : <span className="muted">{candles.data?.source === 'market' ? `${market.pair} market quotes, delayed` : candles.data?.source === 'official' ? `${market.pair} daily rate` : `${market.pair} mark price`}. The dashed line is the mark price.</span>}</span>
-        {e > 0 && <button className="px-latest" onClick={() => setEnd(0)}>Back to latest</button>}
+        <div className="px-tools" role="toolbar" aria-label="Drawing tools">
+          {TOOLS.map((t) => <button key={t.name} className={tool === t.name ? 'on' : ''} onClick={() => draw(t.name)} title={t.label} aria-label={t.label} aria-pressed={tool === t.name}>{t.icon}</button>)}
+          <button onClick={() => { chart.current?.removeOverlay(); setTool(null); }} title="Clear drawings" aria-label="Clear drawings"><Trash2 size={15} /></button>
+        </div>
       </div>
-      <div ref={box} className="px-chart-svg" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => { onUp(); setHover(null); }} onDoubleClick={() => { setCount(null); setEnd(0); }}>
+      <div className="px-chart-svg">
         <div className="px-watermark" aria-hidden="true">BlockFinaX</div>
-        {!view ? <div className="bx-empty">{candles.isLoading ? 'Loading chart...' : 'The chart fills in as the market runs.'}</div> : (
-          <svg width={W} height={H} role="img" aria-label={`${market.pair} candles`}>
-            {view.ticks.map((t) => (
-              <g key={t}><line x1={0} x2={W - padR} y1={view.y(t)} y2={view.y(t)} className="px-grid-l" />
-                <text x={W - padR + 6} y={view.y(t) + 4} className="px-axis">{px(t, market.decimals)}</text></g>
-            ))}
-            {asLine && (() => {
-              const pts = data.map((c, i) => `${(i * step + step / 2).toFixed(1)},${view.y(c.c).toFixed(1)}`);
-              const first = data[0], last = data[data.length - 1];
-              const up = last.c >= first.o;
-              return (
-                <g className={up ? 'px-lu' : 'px-ld'}>
-                  <polygon points={`${step / 2},${H - padB} ${pts.join(' ')} ${(data.length - 1) * step + step / 2},${H - padB}`} className="px-larea" />
-                  <polyline points={pts.join(' ')} className="px-lline" />
-                </g>
-              );
-            })()}
-            {!asLine && data.map((c, i) => {
-              const x = i * step + step / 2, up = c.c >= c.o;
-              const bw = Math.max(1, step * 0.66);
-              const y1 = view.y(Math.max(c.o, c.c)), y2 = view.y(Math.min(c.o, c.c));
-              return (
-                <g key={c.t} className={up ? 'px-cu' : 'px-cd'} opacity={hover == null || hover === i ? 1 : 0.85}>
-                  <line x1={x} x2={x} y1={view.y(c.h)} y2={view.y(c.l)} />
-                  <rect x={x - bw / 2} y={y1} width={bw} height={Math.max(1, y2 - y1)} />
-                </g>
-              );
-            })}
-            {hover != null && <line x1={hover * step + step / 2} x2={hover * step + step / 2} y1={padT} y2={H - padB} className="px-cross" />}
-            {(() => { const yy = view.y(market.mark); return yy > padT && yy < H - padB ? (
-              <g><line x1={0} x2={W - padR} y1={yy} y2={yy} className="px-markline" />
-                <rect x={W - padR + 2} y={yy - 9} width={padR - 4} height={18} rx={4} className="px-marktag" />
-                <text x={W - padR + 6} y={yy + 4} className="px-marktxt">{px(market.mark, market.decimals)}</text></g>
-            ) : null; })()}
-            {data.filter((_, i) => i % Math.max(1, Math.floor(data.length / 7)) === 0).map((c) => {
-              const i = data.indexOf(c);
-              return <text key={c.t} x={i * step + step / 2} y={H - 6} className="px-axis" textAnchor="middle">{label(c.t)}</text>;
-            })}
-          </svg>
-        )}
+        <div ref={box} className="px-kline" />
+        {empty && <div className="bx-empty px-chart-empty">{candles.isLoading ? 'Loading chart...' : 'The chart fills in as the market runs.'}</div>}
       </div>
       <div className="px-chart-f">
         <div className="px-ivs">{INTERVALS.map(([m, l]) => <button key={m} className={interval === m ? 'on' : ''} onClick={() => setIntervalMin(m)}>{l}</button>)}</div>
-        <div className="px-style" role="group" aria-label="Chart style">
-          <button className={!asLine ? 'on' : ''} onClick={() => setStyle('candles')}>Candles</button>
-          <button className={asLine ? 'on' : ''} onClick={() => setStyle('line')}>Line</button>
+        <div className="px-inds" role="group" aria-label="Indicators">
+          {[...MAIN_IND, ...SUB_IND].map((n) => <button key={n} className={inds.includes(n) ? 'on' : ''} onClick={() => toggle(n)} aria-pressed={inds.includes(n)}>{n}</button>)}
         </div>
-        <span className="muted px-hint-s">Drag to move, scroll to zoom</span>
+        <div className="px-style" role="group" aria-label="Chart style">
+          <button className={style === 'candles' ? 'on' : ''} onClick={() => setStyle('candles')}>Candles</button>
+          <button className={style === 'line' ? 'on' : ''} onClick={() => setStyle('line')}>Line</button>
+        </div>
       </div>
     </div>
   );
