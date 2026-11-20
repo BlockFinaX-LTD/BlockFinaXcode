@@ -415,9 +415,33 @@ async function refreshAllRates(): Promise<Record<string, FXRate>> {
   return result;
 }
 
+/** Pairs that can use the market (parallel) rate. */
+const MARKET_RATE_PAIRS = new Set(["USD/NGN", "USD/GHS", "USD/KES"]);
+
+/**
+ * The rate everything prices and settles on. With RATE_SOURCE=market, the naira, cedi and
+ * shilling use the market rate aggregated from trading platforms (server/market-rate); other
+ * pairs, and any pair with no usable market rate, use the official rate.
+ */
 export async function getRate(pair: string): Promise<FXRate | null> {
   const rates = await fetchAllRates();
-  return rates[pair] || null;
+  const official = rates[pair] || null;
+  if (process.env.RATE_SOURCE === "market" && MARKET_RATE_PAIRS.has(pair)) {
+    const { marketRateFor } = await import("./market-rate/service");
+    const m = marketRateFor(pair);
+    if (m) {
+      return {
+        ...(official ?? {}),
+        pair,
+        rate: m.rate,
+        source: `market rate, ${m.sources} sources${m.held ? ", held" : ""}`,
+        timestamp: m.at,
+        lastUpdated: new Date(m.at).toISOString(),
+      } as FXRate;
+    }
+    console.warn(`[rates] no usable market rate for ${pair}; using the official rate`);
+  }
+  return official;
 }
 
 export function getSupportedPairsWithClass(): Array<{ pair: string; assetClass: AssetClass }> {

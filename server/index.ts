@@ -370,6 +370,9 @@ app.use((req, res, next) => {
   // Pricing-engine daily close refresh (TwelveData → historical_fx_closes table).
   // No-op if TWELVEDATA_API_KEY is not configured.
   startDailyRefresh();
+  // Market (parallel) rate: aggregate several trading platforms and record every source.
+  // Recording only for now; MARKET_RATE=off turns it off.
+  void import("./market-rate/service").then((m) => m.startMarketRates());
   // Testnet has its own empty database: load the pricing history it needs, in the background.
   if (process.env.APP_ENV === "testnet") {
     void import("./pricing/testnet-bootstrap").then((m) => m.startTestnetPricing());
