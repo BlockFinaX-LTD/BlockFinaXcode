@@ -669,7 +669,7 @@
 .bx-top .bx-search { padding: 7px 14px; }
 
 /* My protections: running cover and ended cover as separate groups. */
-.bx-prot-group-h { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-2); padding: 4px 4px 0; display: flex; gap: 6px; align-items: baseline; }
+.bx-prot-group-h { font-size: 13px; font-weight: 600; color: var(--text-2); padding: 4px 4px 0; display: flex; gap: 6px; align-items: baseline; }
 .bx-prot-group.ended .bx-li .bx-who .t, .bx-prot-group.ended .bx-li .num { color: var(--muted); }
 .bx-prot-group.ended .bx-li .bx-who img, .bx-prot-group.ended .bx-li .bx-who svg { opacity: 0.6; }
 

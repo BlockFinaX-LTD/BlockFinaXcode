@@ -312,14 +312,14 @@ export function Workspace() {
               ]} />
               <NavMenu label="Trade" active={section === 'trade'} onOpen={() => switchSection('trade')} items={[
                 { heading: 'Perpetual futures' },
-                ...(perpMarkets.data?.markets ?? []).map((m) => ({ label: `${m.base}${m.quote}-PERP`, sub: `${m.mark.toLocaleString(undefined, { maximumFractionDigits: m.decimals })} · up to ${m.maxLeverage}x`, onClick: () => openPerpMarket(go, m.id) })),
+                ...(perpMarkets.data?.markets ?? []).map((m) => ({ label: `${m.base}${m.quote}-PERP`, sub: `${m.mark.toLocaleString(undefined, { maximumFractionDigits: m.decimals })}, up to ${m.maxLeverage}x`, onClick: () => openPerpMarket(go, m.id) })),
               ]} />
               <button className={`bx-nm-btn${section === 'otc' ? ' on' : ''}`} onClick={() => switchSection('otc')}>Swap</button>
             </nav>
           <span className="bx-hide-sm bx-searchwrap"><SearchBox role={role} go={go} /></span>
           <span style={{ flex: 1 }} />
           <div className="bx-top-r">
-            <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet · <span className="num">${fmt(balances.data?.total)} USDC</span></button>
+            <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet <span className="num">${fmt(balances.data?.total)} USDC</span></button>
             {section === 'hedge' && <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>}
             {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             {FINAX_IN_APP && <button className="bx-ask-top bx-show-sm" aria-label="Ask Finax" data-tour="ask" onClick={() => window.dispatchEvent(new Event('bfx:ask-open'))}><MessageCircle /></button>}
@@ -445,7 +445,7 @@ function StatusBar() {
     <footer className="bx-status bx-hide-sm">
       <span><i className="bx-dot" aria-hidden="true" />Live rates</span>
       {env && <span>{env === 'testnet' ? 'Testnet, test USDC only' : 'Mainnet'}</span>}
-      <span className="r">{utc} UTC · cover ends at 14:00 UTC</span>
+      <span className="r">{utc} UTC. Cover ends at 14:00 UTC.</span>
     </footer>
   );
 }

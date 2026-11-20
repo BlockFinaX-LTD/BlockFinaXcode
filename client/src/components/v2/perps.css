@@ -167,7 +167,7 @@
 .bx-nm-btn:hover { color: var(--text); background: var(--soft); }
 .bx-nm-btn.on { color: var(--blue); }
 .bx-nm-menu { position: absolute; top: 100%; left: 0; z-index: 50; min-width: 250px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 40px rgba(15, 23, 41, 0.16); padding: 6px; display: flex; flex-direction: column; }
-.bx-nm-h { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 10px 10px 4px; }
+.bx-nm-h { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 10px 4px; }
 .bx-nm-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 0; background: none; font: inherit; text-align: left; color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
 .bx-nm-item span { font-size: 13.5px; font-weight: 600; }
 .bx-nm-item small { font-size: 12px; color: var(--muted); }
@@ -423,7 +423,7 @@
   .px-price .v { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
   .px-price > div:last-child { font-size: 13.5px; font-weight: 600; }
   .px-bar-sep { display: block; width: 1px; align-self: stretch; background: var(--line); margin: 2px 0; }
-  .px-stat .k { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .px-stat .k { font-size: 12.5px; font-weight: 500; }
   .px-stat .v { font-size: 16px; font-weight: 600; margin-top: 3px; }
   .px-oi-split { display: inline; margin-left: 4px; letter-spacing: 0; }
   .px-fundbtn .k { text-decoration: underline dotted; text-underline-offset: 3px; }
@@ -453,7 +453,7 @@
 
   /* positions: room for every column */
   .px-table table { font-size: 13.5px; }
-  .px-table th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 11px 14px !important; }
+  .px-table th { font-size: 12.5px; font-weight: 500; padding: 11px 14px !important; }
   .px-table td { padding: 13px 14px !important; font-variant-numeric: tabular-nums; }
 }
 
@@ -464,3 +464,35 @@
 .px-side-toggle button.sell.on, .px-cta.sell, .px-lsbar .sell { background: var(--short); }
 .px-cta.buy:hover:not(:disabled), .px-lsbar .buy:hover { background: var(--long-h); }
 .px-cta.sell:hover:not(:disabled), .px-lsbar .sell:hover { background: var(--short-h); }
+
+/* The chart caption is words, not figures: normal type */
+.px-ohlc > .muted:only-child { font-family: Geist, system-ui, -apple-system, Segoe UI, sans-serif; font-size: 12.5px; }
+
+/* Light order form: Long / Short as a pale-tinted switch with an underline, Market / Limit as
+   text tabs, flat inputs. Works in both themes and on phones. */
+.px-side-toggle { background: var(--soft); border-radius: 12px; padding: 0; gap: 0; overflow: hidden; }
+.px-side-toggle button { border-radius: 0 !important; padding: 11px 6px !important; color: var(--muted); border-bottom: 2px solid transparent !important; font-weight: 600; }
+.px-side-toggle button.buy.on { background: color-mix(in srgb, var(--long) 16%, var(--panel)) !important; color: var(--text) !important; border-bottom-color: var(--long) !important; }
+.px-side-toggle button.sell.on { background: color-mix(in srgb, var(--short) 16%, var(--panel)) !important; color: var(--text) !important; border-bottom-color: var(--short) !important; }
+.px-seg { background: none !important; padding: 0 !important; gap: 18px !important; display: flex !important; border-bottom: 1px solid var(--line); border-radius: 0 !important; }
+.px-seg button { background: none !important; box-shadow: none !important; border-radius: 0 !important; padding: 8px 0 9px !important; color: var(--muted); border-bottom: 2px solid transparent !important; margin-bottom: -1px; font-weight: 600; }
+.px-seg button.on { color: var(--text) !important; border-bottom-color: var(--text) !important; }
+.px-in { background: var(--soft); border: 1px solid transparent; border-radius: 12px; }
+.px-in:focus-within { border-color: var(--blue-line, var(--line-2)); }
+
+/* Folded sections in the order form */
+.px-fold { border-top: 1px solid var(--line); padding-top: 8px; }
+.px-fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--text-2); padding: 2px 0 6px; }
+.px-fold > summary::-webkit-details-marker { display: none; }
+.px-fold > summary::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .15s; }
+.px-fold[open] > summary::after { transform: rotate(225deg) translateY(-1px); }
+.px-fold > .px-kv, .px-fold > .px-sum { margin-top: 6px; }
+.px-fold .px-sum { border-top: 0; padding-top: 0; }
+.px-ro { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); margin-top: 10px; cursor: pointer; }
+/* Not enough liquidity */
+.px-liq-warn { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; color: var(--text);
+  background: color-mix(in srgb, var(--short) 13%, var(--panel)); border-left: 3px solid var(--short); }
+.px-liq-warn svg { color: var(--short); flex: none; margin-top: 1px; }
+/* Focus rings for keyboards only, not after a click */
+.px-form button:focus { outline: none; }
+.px-form button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

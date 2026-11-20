@@ -9,7 +9,7 @@
 import { Buffer } from 'buffer';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CandlestickChart, ChevronDown, ChevronRight, KeyRound, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, CandlestickChart, ChevronDown, ChevronRight, KeyRound, ShieldCheck, X } from 'lucide-react';
 import { Keypair } from '@stellar/stellar-sdk';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
@@ -118,7 +118,7 @@ export function PerpsPage() {
           <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={false} onFunding={() => setShowFunding(true)} />
         </section>
         <aside className="px-side">
-          <OrderForm market={market} account={account.data} kp={kp} priceClick={priceClick} sideReq={sideReq}
+          <OrderForm market={market} account={account.data} kp={kp} priceClick={priceClick} sideReq={sideReq} book={book.data}
             onKey={(k) => { if (wallet) { saveKey(wallet, k); setKp(k); } }} accountError={account.error as Error | null} />
           <AccountPanel account={account.data} kp={kp} config={config.data} market={market} onForget={() => { if (wallet) { try { localStorage.removeItem(KEY_PREFIX + wallet); } catch { /* ignore */ } setKp(null); } }} />
         </aside>
@@ -274,8 +274,8 @@ function Chart({ market }: { market: MarketView }) {
   return (
     <div className="px-chart-in">
       <div className="px-chart-h">
-        <span className="num px-ohlc">{h ? <>O <b>{px(h.o, market.decimals)}</b> H <b>{px(h.h, market.decimals)}</b> L <b>{px(h.l, market.decimals)}</b> C <b className={h.c >= h.o ? 'up' : 'down'}>{px(h.c, market.decimals)}</b> <span className="muted">{new Date(h.t).toLocaleString(undefined, { day: 'numeric', month: 'short', year: interval >= 10080 || interval === 0 ? 'numeric' : undefined, hour: interval > 0 && interval < 1440 ? '2-digit' : undefined, minute: interval > 0 && interval < 1440 ? '2-digit' : undefined })}</span></> : <span className="muted">{candles.data?.source === 'market' ? `${market.pair} market quotes, delayed` : candles.data?.source === 'official' ? `${market.pair} daily rate` : `${market.pair} mark price`} · dashed line is mark</span>}</span>
-        {e > 0 && <button className="px-latest" onClick={() => setEnd(0)}>Latest →</button>}
+        <span className="num px-ohlc">{h ? <>O <b>{px(h.o, market.decimals)}</b> H <b>{px(h.h, market.decimals)}</b> L <b>{px(h.l, market.decimals)}</b> C <b className={h.c >= h.o ? 'up' : 'down'}>{px(h.c, market.decimals)}</b> <span className="muted">{new Date(h.t).toLocaleString(undefined, { day: 'numeric', month: 'short', year: interval >= 10080 || interval === 0 ? 'numeric' : undefined, hour: interval > 0 && interval < 1440 ? '2-digit' : undefined, minute: interval > 0 && interval < 1440 ? '2-digit' : undefined })}</span></> : <span className="muted">{candles.data?.source === 'market' ? `${market.pair} market quotes, delayed` : candles.data?.source === 'official' ? `${market.pair} daily rate` : `${market.pair} mark price`}. The dashed line is the mark price.</span>}</span>
+        {e > 0 && <button className="px-latest" onClick={() => setEnd(0)}>Back to latest</button>}
       </div>
       <div ref={box} className="px-chart-svg" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => { onUp(); setHover(null); }} onDoubleClick={() => { setCount(null); setEnd(0); }}>
         <div className="px-watermark" aria-hidden="true">BlockFinaX</div>
@@ -326,7 +326,7 @@ function Chart({ market }: { market: MarketView }) {
           <button className={!asLine ? 'on' : ''} onClick={() => setStyle('candles')}>Candles</button>
           <button className={asLine ? 'on' : ''} onClick={() => setStyle('line')}>Line</button>
         </div>
-        <span className="muted px-hint-s">Drag to move · scroll to zoom</span>
+        <span className="muted px-hint-s">Drag to move, scroll to zoom</span>
       </div>
     </div>
   );
@@ -406,13 +406,21 @@ async function sendOrder(kp: Keypair, contractId: string, wallet: string, m: Mar
   return api<{ hash: string; status: string; filled: number; fills: { price: number; size: number }[] }>('/api/perps/orders', { order: orderToJson(order), sig, tif: a.tif });
 }
 
-function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountError }: {
-  market: MarketView; account?: AccountView; kp: Keypair | null; priceClick: number | null; sideReq?: { side: 'buy' | 'sell'; at: number } | null; onKey: (k: Keypair) => void; accountError: Error | null;
+function OrderForm({ market, account, kp, priceClick, sideReq, book, onKey, accountError }: {
+  market: MarketView; account?: AccountView; kp: Keypair | null; priceClick: number | null; sideReq?: { side: 'buy' | 'sell'; at: number } | null; book?: BookView; onKey: (k: Keypair) => void; accountError: Error | null;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['perps-config'], queryFn: () => api<PerpConfig>('/api/perps/config') });
   const takerBps = config.data?.fees?.takerBps ?? 5, makerBps = config.data?.fees?.makerBps ?? 0;
+  // Folded sections remember their state on this device.
+  const readFold = (k: string) => { try { return localStorage.getItem(`bfx:perp-fold:${k}`) === '1'; } catch { return false; } };
+  const [foldBalances, setFoldBalances] = useState(() => readFold('balances'));
+  const [foldDetails, setFoldDetails] = useState(() => readFold('details'));
+  const keepFold = (k: 'balances' | 'details', open: boolean) => {
+    (k === 'balances' ? setFoldBalances : setFoldDetails)(open);
+    try { localStorage.setItem(`bfx:perp-fold:${k}`, open ? '1' : '0'); } catch { /* per-device convenience */ }
+  };
   const [type, setType] = useState<'market' | 'limit'>('market');
   const [side, setSide] = useState<'buy' | 'sell'>(sideReq?.side ?? 'buy');
   useEffect(() => { if (sideReq) setSide(sideReq.side); }, [sideReq?.at]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -435,6 +443,9 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
   const notional = Number(sizeUsd) || 0;
   const units = notional / refPrice;
   const margin = notional / lev;
+  // What the book can fill now on the side this order takes from (market orders only).
+  const depthUsd = (isBuy ? book?.asks : book?.bids)?.reduce((t, l) => t + l.size * l.price, 0) ?? 0;
+  const noLiquidity = type === 'market' && !!book && notional > 0 && notional > depthUsd;
   const fee = type === 'market' ? notional * 0.0005 : 0;
   const keyOk = !!kp && account?.key?.approved === true;
   const hasMoney = (account?.onChain.collateral ?? 0) > 0;
@@ -524,9 +535,12 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
         <button className={type === 'market' ? 'on' : ''} onClick={() => setType('market')}>Market</button>
         <button className={type === 'limit' ? 'on' : ''} onClick={() => setType('limit')}>Limit</button>
       </div>
-      <div className="px-kv px-x-sm"><span>Perps balance</span><b className="num">{usd(account?.onChain.collateral ?? 0)}</b></div>
       <div className="px-kv"><span>Available to trade</span><b className="num">{usd(available)}</b></div>
-      <div className="px-kv px-x-sm"><span>In your wallet</span><b className="num">{usd(walletUsdc)}{walletUsdc > 0 && !hasMoney && <button className="px-link inline" onClick={() => document.getElementById('px-deposit-btn')?.click()}>Move to perps</button>}</b></div>
+      <details key={`bal-${foldBalances || !hasMoney}`} className="px-fold px-x-sm" open={foldBalances || !hasMoney}>
+        <summary onClick={(e) => { e.preventDefault(); keepFold('balances', !(foldBalances || !hasMoney)); }}>Balances</summary>
+        <div className="px-kv"><span>Perps balance</span><b className="num">{usd(account?.onChain.collateral ?? 0)}</b></div>
+        <div className="px-kv"><span>In your wallet</span><b className="num">{usd(walletUsdc)}{walletUsdc > 0 && !hasMoney && <button className="px-link inline" onClick={() => document.getElementById('px-deposit-btn')?.click()}>Move to perps</button>}</b></div>
+      </details>
       {type === 'limit' && (
         <label className="px-in"><span>Price ({market.quote})</span>
           <input id="px-price" className="num" inputMode="decimal" value={price} placeholder={px(market.mark, market.decimals)} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} />
@@ -540,7 +554,6 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
       <input id="px-pct" type="range" min={0} max={100} step={1} value={pctFill} disabled={maxUsd <= 0} onChange={(e) => setFromPct(Number(e.target.value))} aria-label="Share of what you can open" className="px-pct" />
       <div className="px-pct-l muted"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
       <div className="px-opts">
-        <label><input id="px-ro" type="checkbox" checked={reduceOnly} onChange={(e) => setReduceOnly(e.target.checked)} /> Reduce only</label>
         {type === 'limit' && (
           <select id="px-tif" value={tif} onChange={(e) => setTif(e.target.value as TimeInForce)} aria-label="Time in force">
             <option value="gtc">Good till cancelled</option>
@@ -550,18 +563,31 @@ function OrderForm({ market, account, kp, priceClick, sideReq, onKey, accountErr
         )}
       </div>
 
+      {noLiquidity && (
+        <div className="px-liq-warn" role="alert"><AlertCircle size={16} />
+          <span>{depthUsd > 0
+            ? <>Not enough liquidity for this size. The order book can fill up to {usd(depthUsd, 0)} now. Lower the size or use a limit order.</>
+            : <>No liquidity on the {isBuy ? 'sell' : 'buy'} side of the book right now. Try again shortly or use a limit order.</>}</span>
+        </div>
+      )}
       {!account ? <button className="px-cta" disabled><Spin /> Loading account</button>
         : !keyOk ? <button className="px-cta blue" disabled={!!busy} onClick={enable}>{busy ? <><Spin /> {busy}</> : <><KeyRound size={16} /> Enable trading</>}</button>
         : !hasMoney ? <button className="px-cta blue" onClick={() => { const b = document.getElementById('px-deposit-btn'); b?.click(); b?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>Deposit USDC to trade</button>
-        : <button className={`px-cta ${isBuy ? 'buy' : 'sell'}`} disabled={!!busy} onClick={submit}>{busy ? <><Spin /> {busy}</> : `${isBuy ? 'Buy / Long' : 'Sell / Short'} ${market.base}${market.quote}`}</button>}
+        : <button className={`px-cta ${isBuy ? 'buy' : 'sell'}`} disabled={!!busy || noLiquidity} onClick={submit}>{busy ? <><Spin /> {busy}</> : `${isBuy ? 'Buy / Long' : 'Sell / Short'} ${market.base}${market.quote}`}</button>}
 
       <div className="px-sum">
         <div><span>Liquidation price</span><b className="num">{estLiq ? px(estLiq, market.decimals) : '-'}</b></div>
-        <div className="px-x-sm"><span>Order value</span><b className="num">{notional ? usd(notional) : '-'}</b></div>
-        <div><span>Margin required</span><b className="num">{notional ? usd(margin) : '-'}</b></div>
-        {type === 'market' && <div className="px-x-sm"><span>Slippage limit</span><b className="num">2.00%</b></div>}
-        <div><span>Fees</span><b className="num">{type === 'market' ? `${(takerBps / 100).toFixed(3)}% taker` : `${(makerBps / 100).toFixed(3)}% maker`}{notional ? ` · ${usd(notional * ((type === 'market' ? takerBps : makerBps) / 10_000))}` : ''}</b></div>
       </div>
+      <details key={`det-${foldDetails}`} className="px-fold" open={foldDetails}>
+        <summary onClick={(e) => { e.preventDefault(); keepFold('details', !foldDetails); }}>Order details</summary>
+        <div className="px-sum">
+          <div><span>Order value</span><b className="num">{notional ? usd(notional) : '-'}</b></div>
+          <div><span>Margin required</span><b className="num">{notional ? usd(margin) : '-'}</b></div>
+          {type === 'market' && <div><span>Slippage limit</span><b className="num">2.00%</b></div>}
+          <div><span>Fees</span><b className="num">{type === 'market' ? `${(takerBps / 100).toFixed(3)}% taker` : `${(makerBps / 100).toFixed(3)}% maker`}{notional ? `, ${usd(notional * ((type === 'market' ? takerBps : makerBps) / 10_000))}` : ''}</b></div>
+        </div>
+        <label className="px-ro"><input id="px-ro" type="checkbox" checked={reduceOnly} onChange={(e) => setReduceOnly(e.target.checked)} /> Reduce only</label>
+      </details>
       {!keyOk && account && <div className="px-hint"><ShieldCheck size={14} /> Your passkey approves a trading key once. It can place and cancel orders, but can never withdraw your USDC.</div>}
       {notional > maxUsd && keyOk && <div className="px-hint warn">Above what your margin allows at {lev}x ({usd(maxUsd, 0)}).</div>}
     </div>
@@ -647,7 +673,7 @@ function FundingSheet({ market, explorer, onClose }: { market: MarketView; explo
     <div className="px-sheet-bg" onClick={onClose}>
       <div className="px-sheet px-fsheet" role="dialog" aria-modal="true" aria-label="Funding" onClick={(e) => e.stopPropagation()}>
         <i className="px-sheet-grab" aria-hidden="true" />
-        <h3>Funding · {market.base}{market.quote}</h3>
+        <h3>{market.base}{market.quote} funding</h3>
         <div className="px-sheet-row total"><span>Next hourly rate</span><b className={`num ${rate >= 0 ? 'up' : 'down'}`}>{(rate * 100).toFixed(4)}%</b></div>
         <div className="px-sheet-row"><span>Paid in</span><b className="num">{countdown}</b></div>
         <p className="px-sheet-note">Every hour, longs and shorts pay each other to keep the perp close to the official rate. {rate >= 0 ? 'Right now longs pay shorts.' : 'Right now shorts pay longs.'} BlockFinaX takes no part of it.</p>
@@ -815,7 +841,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <thead><tr><th>Market</th><th>Side</th><th>Price</th><th>Size</th><th>Filled</th><th>Type</th><th><button className="px-mini" onClick={() => cancel()}>Cancel all</button></th></tr></thead>
               <tbody>{account.openOrders.map((o) => (
                 <tr key={o.hash}>
-                  <td><b>{o.pair}</b></td><td className={o.isBuy ? 'up' : 'down'}>{o.isBuy ? 'Buy' : 'Sell'}{o.reduceOnly ? ' · reduce only' : ''}</td>
+                  <td><b>{o.pair}</b></td><td className={o.isBuy ? 'up' : 'down'}>{o.isBuy ? 'Buy' : 'Sell'}{o.reduceOnly ? ', reduce only' : ''}</td>
                   <td className="num">{px(o.price, dec(o.market))}</td><td className="num">{usd(o.size * o.price, 0)}</td>
                   <td className="num">{(((o.size - o.remaining) / o.size) * 100).toFixed(0)}%</td><td>{o.tif === 'alo' ? 'Post only' : o.tif === 'ioc' ? 'IOC' : 'GTC'}</td>
                   <td><button className="px-mini" onClick={() => cancel(o.hash)}><X size={13} /> Cancel</button></td>

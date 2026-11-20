@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, ArrowRight, CalendarDays, CircleDollarSign, Eye, EyeOff, Layers, LineChart, Megaphone, PlusCircle, Repeat, ShieldCheck, Wallet } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, CircleDollarSign, Eye, EyeOff, Layers, LineChart, Megaphone, PlusCircle, Repeat, ShieldCheck, Wallet } from 'lucide-react';
 import type { ProtectionPosition, SettlementResult } from '@shared/domain/types';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
@@ -120,9 +120,9 @@ function CoverCard({ go, hide, active }: { go: Go; hide: boolean; active: Hedge[
   let offset = 0;
   return (
     <div className="dx-card dx-cover">
-      <div className="dx-card-h"><b>Your cover</b><button className="dx-link" onClick={() => go('h-protections')}>View all <ArrowRight size={14} /></button></div>
+      <div className="dx-card-h"><b>Your cover</b><button className="dx-link" onClick={() => go('h-protections')}>View all</button></div>
       {!active.length ? (
-        <div className="dx-cover-empty">No cover in force. <button className="dx-link" onClick={() => go('h-protect')}>Buy cover <ArrowRight size={14} /></button></div>
+        <div className="dx-cover-empty">No cover in force. <button className="dx-link" onClick={() => go('h-protect')}>Buy cover</button></div>
       ) : (
         <div className="dx-cover-in">
           <div className="dx-ring">
@@ -176,7 +176,7 @@ function MarketsPanel({ go }: { go: Go }) {
 
   const perpRow = (m: PerpMarket) => (
     <button key={`p${m.id}`} className="dx-row" onClick={() => openPerpMarket(go, m.id)}>
-      <span className="dx-name"><Flag pair={m.pair} /><b>{m.base}{m.quote}</b><small>Perp · {m.maxLeverage}x</small></span>
+      <span className="dx-name"><Flag pair={m.pair} /><b>{m.base}{m.quote}</b><small>Perp, up to {m.maxLeverage}x</small></span>
       <span className="num dx-px">{px(m.mark, m.decimals)}</span>
       <span className={`num dx-ch ${m.change24h >= 0 ? 'up' : 'down'}`}>{pctS(m.change24h)}</span>
     </button>
