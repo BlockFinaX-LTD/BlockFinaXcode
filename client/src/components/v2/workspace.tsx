@@ -320,7 +320,6 @@ export function Workspace() {
           <span style={{ flex: 1 }} />
           <div className="bx-top-r">
             <button className={`bx-balance-pill bx-hide-sm${page === 'wallet' ? ' on' : ''}`} data-tour="balance" onClick={() => go('wallet')}>Wallet <span className="num">${fmt(balances.data?.total)} USDC</span></button>
-            {section === 'hedge' && <span className="bx-hide-sm"><ViewSwitch mode={viewMode} onChange={setViewMode} /></span>}
             {viewOnly ? null : <button className="bx-btn bx-hide-sm" onClick={() => go('wallet', { wallet: 'deposit' })}>Deposit</button>}
             {FINAX_IN_APP && <button className="bx-ask-top bx-show-sm" aria-label="Ask Finax" data-tour="ask" onClick={() => window.dispatchEvent(new Event('bfx:ask-open'))}><MessageCircle /></button>}
             <span className="bx-top-account bx-hide-sm"><AccountMenu go={go} page={page} theme={theme} onTheme={chooseTheme} placement="top" /></span>

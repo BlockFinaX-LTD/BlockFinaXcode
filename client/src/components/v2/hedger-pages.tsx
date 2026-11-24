@@ -881,6 +881,20 @@ const utcDay = (ms: number) => Math.floor(ms / DAY_MS);
 const isoDay = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
 
 /** "Protect until" a date, for pools that sell any day in a range. */
+/** Simple or Advanced, shown on the Hedge page itself so the fuller view is easy to find. */
+function ViewToggle({ view, onChange }: { view: 'simple' | 'advanced'; onChange: (v: 'simple' | 'advanced') => void }) {
+  return (
+    <div className="bx-viewtoggle" role="group" aria-label="View">
+      {(['simple', 'advanced'] as const).map((v) => (
+        <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => onChange(v)}
+          title={v === 'advanced' ? 'Chart, prices for every start and your cover beside the order' : 'Just the order'}>
+          {v === 'simple' ? 'Simple' : 'Advanced'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ProtectUntil({ days, range, onChange }: { days: number | null; range: { minDays: number; maxDays: number }; onChange: (d: number) => void }) {
   const today = utcDay(Date.now());
   const picked = days ? today + days : null;
@@ -1005,7 +1019,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   // last stays fixed when the live rate moves; the other follows.
   const [pctText, setPctText] = useState('0');
   const [checking, setChecking] = useState(false);
-  const [view] = useViewMode();
+  const [view, setView] = useViewMode();
   // Phones show one part of the trading screen at a time.
   const [phoneSection, setPhoneSection] = useState<'buy' | 'prices' | 'chart' | 'cover'>('buy');
   // Until the buyer changes it, protection starts at the closest rate the pool allows.
@@ -1305,6 +1319,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 </select>
               )}
             </label>
+            <ViewToggle view={view} onChange={setView} />
           </div>
           <div className="bx-buy bx-sbuy" ref={panelRef as unknown as React.RefObject<HTMLDivElement>}>
             {panelBody}
@@ -1317,7 +1332,7 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 
   return (
     <main className={`bx-main bx-trade m-${phoneSection}`}>
-      <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} onChart={() => go('pair', { pair })} />
+      <MarketStrip pair={pair} markets={markets} onPair={setPair} spot={spot.data} onChart={() => go('pair', { pair })} extra={<ViewToggle view={view} onChange={setView} />} />
       <div className="bx-msec" role="tablist" aria-label="Section">
         {([['buy', 'Buy'], ['prices', 'Prices'], ['chart', 'Chart'], ['cover', 'My cover']] as const).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={phoneSection === k} className={phoneSection === k ? 'on' : ''} onClick={() => setPhoneSection(k)}>{label}</button>
