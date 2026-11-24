@@ -413,7 +413,20 @@ export function registerV2Routes(app: Express) {
     const HOURS: Record<string, number> = { "1H": 1, "6H": 6, "24H": 24 };
     const DAYS: Record<string, number> = { "1M": 31, "3M": 92, "6M": 183, "1Y": 366, "5Y": 1827, "MAX": 20_000 };
     let points: { t: string; v: number }[] = [];
-    if (HOURS[range]) {
+    // Pairs that settle on the market rate chart it too: the same rate quotes and settlement use.
+    const { usesMarketRate } = await import("../fx-oracle");
+    if (usesMarketRate(pair)) {
+      const { marketCandles } = await import("../market-rate/history");
+      const minutes = range === "1H" ? 1 : range === "6H" ? 5 : range === "24H" ? 15 : range === "5Y" ? 10080 : range === "MAX" ? 0 : 1440;
+      const cutoff = HOURS[range] ? Date.now() - HOURS[range] * 3_600_000
+        : range === "YTD" ? Date.UTC(new Date().getUTCFullYear(), 0, 1)
+        : DAYS[range] ? Date.now() - DAYS[range] * 86_400_000 : 0;
+      const candles = await marketCandles(pair, minutes).catch(() => []);
+      points = candles.filter((c) => c.t >= cutoff).map((c) => ({ t: new Date(c.t).toISOString(), v: c.c }));
+    }
+    if (points.length) {
+      // Market-rate points are already in place.
+    } else if (HOURS[range]) {
       const { db } = await import("../db");
       const { rateSnapshots } = await import("@shared/schema");
       const { and, asc, eq, gte } = await import("drizzle-orm");

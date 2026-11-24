@@ -1,5 +1,5 @@
 /**
- * Simple or Advanced, for the whole workspace (Advanced unless the viewer chose Simple). Simple is for businesses: buy cover, my cover,
+ * Simple or Advanced, for the whole workspace (Simple unless the viewer chose Advanced). Simple is for businesses: buy cover, my cover,
  * rates and wallet, with everything else out of sight. Advanced is the full workspace,
  * underwriting and the trading screen included. Remembered per viewer; every part of the
  * page that reads it updates together.
@@ -13,8 +13,8 @@ const EVENT = 'bfx:view-change';
 function read(): ViewMode {
   try {
     const v = localStorage.getItem(KEY) ?? localStorage.getItem('bfx:markets-view');
-    return v === 'simple' ? 'simple' : 'advanced';
-  } catch { return 'advanced'; }
+    return v === 'advanced' ? 'advanced' : 'simple';
+  } catch { return 'simple'; }
 }
 
 export function useViewMode(): [ViewMode, (v: ViewMode) => void] {

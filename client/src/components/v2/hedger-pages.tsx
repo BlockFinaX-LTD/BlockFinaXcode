@@ -279,8 +279,6 @@ function Stat({ l, v }: { l: string; v: ReactNode }) {
 
 /** The market's numbers along the top, with the market switcher. */
 function MarketStrip({ pair, markets, onPair, spot, extra, onChart }: { pair: string; markets: Market[]; onPair: (p: string) => void; spot: number | undefined; extra?: ReactNode; onChart?: () => void }) {
-  const day = useChart(pair, '24H');
-  const values = (day.data ?? []).map((p) => p.v);
   const watch = useWatchlist();
   const change = watch.data?.find((r) => r.pair === pair)?.change ?? null;
   const market = markets.find((m) => m.pair === pair);
@@ -299,8 +297,6 @@ function MarketStrip({ pair, markets, onPair, spot, extra, onChart }: { pair: st
       <div className={`bx-mstrip-rate num${change === null ? '' : change < 0 ? ' down' : ' up'}`}>{spot ? fmtRate(spot) : '...'}</div>
       <Stat l="Change today" v={<ChangeText change={change} />} />
       {onChart && <button className="bx-icon-btn bx-mstrip-chart" aria-label={`Open the ${pair} chart`} title="Chart" onClick={onChart}><ChartIcon /></button>}
-      <Stat l="24h high" v={<span className="num">{values.length ? fmtRate(Math.max(...values)) : '-'}</span>} />
-      <Stat l="24h low" v={<span className="num">{values.length ? fmtRate(Math.min(...values)) : '-'}</span>} />
       <Stat l="Liquidity" v={<span className="num">{market ? `$${fmt(market.capacity, 0)}` : '-'}</span>} />
       <Stat l="Durations" v={market ? durationsLabel(market) : '-'} />
       {extra && <div style={{ marginLeft: 'auto' }}>{extra}</div>}
@@ -1016,6 +1012,8 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
   const [strikeTouched, setStrikeTouched] = useState(false);
   const [rateText, setRateText] = useState('');
   const [anchor, setAnchor] = useState<'pct' | 'rate'>('pct');
+  // Protection starts at today's rate unless the buyer opens this to choose another.
+  const [startOpen, setStartOpen] = useState(false);
   const rateDp = (v: number) => (v >= 100 ? 2 : 4);
   // A strike can be set to 0.0001% (hundredths of a basis point), so percentages keep 4 decimals.
   const roundPct = (v: number) => Math.round(v * 10_000) / 10_000;
@@ -1242,6 +1240,13 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                 )}
               </div>
 
+              {!startOpen && startPct === 0 && anchor !== 'rate' && !strikeError ? (
+                <div className="bx-startrow">
+                  <span>{hint('Protection starts')}</span>
+                  <span className="num">{spot.data ? fmtRate(spot.data) : '...'} <span className="muted">today's rate</span></span>
+                  <button className="bx-link" onClick={() => setStartOpen(true)}>Change</button>
+                </div>
+              ) : (
               <div>
                 <div className="bx-trow-l"><span>{hint('Protection starts')}</span></div>
                 <div className="bx-tpair">
@@ -1258,14 +1263,14 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
                   {startChoices.map((m) => <button key={m} className={`bx-pill${startPct === m ? ' on' : ''}`} onClick={() => choosePct(m)}>{m === 0 ? 'Today' : `${m}%`}</button>)}
                 </div>
               </div>
-
-              <div className="bx-payrule">Pays the full move, up to {MAX_PAYOUT_PCT}% of the amount.</div>
+              )}
 
               <div className="bx-tsum" aria-live="polite">
                 <Sum l="Price" v={<span className="num">{e ? pct(e.offerRateE6 / 1e6) : chosen.isFetching ? '...' : '-'}</span>} />
                 <Sum l="Pays up to" v={<span className="num">{e ? `$${fmt(e.maxPayout)}` : '-'}</span>} />
                 <Sum l="You pay" v={<span className="num">{e ? `$${fmt(e.totalCost)}` : chosen.isFetching ? '...' : '-'}</span>} total />
               </div>
+              <div className="bx-payrule-s">Pays the full move past your rate, up to {MAX_PAYOUT_PCT}% of the amount.</div>
               {e?.warning && <div className="bx-warn" role="note">{e.warning}</div>}
               {(strikeError || chosen.error) && (
                 <p className="bx-error" style={{ margin: 0 }}>
