@@ -923,29 +923,41 @@ function ShareSheet({ p, lev, dp, onClose }: { p: PositionView; lev: string | nu
   const { toast } = useToast();
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [showAmount, setShowAmount] = useState(true);
-  const [url, setUrl] = useState<string | null>(null);
+  const name = `blockfinax-${p.pair.replace('/', '').toLowerCase()}-${p.size > 0 ? 'long' : 'short'}.png`;
+  // The image is turned into a file as soon as it is drawn, so Save and Share act at once on
+  // the tap: browsers (Safari above all) refuse to share or download after waiting on anything.
+  const [img, setImg] = useState<{ url: string; file: File } | null>(null);
   useEffect(() => {
     const c = canvas.current ?? (canvas.current = document.createElement('canvas'));
     let live = true;
-    void drawShareCard(c, p, lev, dp, showAmount).then(() => { if (live) setUrl(c.toDataURL('image/png')); });
+    void drawShareCard(c, p, lev, dp, showAmount).then(() => c.toBlob((b) => {
+      if (!live || !b) return;
+      const url = URL.createObjectURL(b);
+      setImg((old) => { if (old) URL.revokeObjectURL(old.url); return { url, file: new File([b], name, { type: 'image/png' }) }; });
+    }, 'image/png'));
     return () => { live = false; };
     // Redraw when the result moves, not on every poll of the same numbers.
   }, [p.market, p.roe.toFixed(4), p.mark, showAmount, lev, dp]);
+  useEffect(() => () => { setImg((old) => { if (old) URL.revokeObjectURL(old.url); return null; }); }, []);
+  const url = img?.url ?? null;
 
-  const name = `blockfinax-${p.pair.replace('/', '').toLowerCase()}-${p.size > 0 ? 'long' : 'short'}.png`;
-  const blob = () => new Promise<Blob | null>((ok) => canvas.current?.toBlob(ok, 'image/png') ?? ok(null));
-  const save = async () => {
-    const b = await blob(); if (!b) return;
-    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  const save = () => {
+    if (!img) return;
+    const a = document.createElement('a');
+    a.href = img.url; a.download = name; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
   };
-  const share = async () => {
-    const b = await blob(); if (!b) return;
-    const file = new File([b], name, { type: 'image/png' });
-    try {
-      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `${p.pair} ${p.size > 0 ? 'long' : 'short'} on BlockFinaX` });
-      else { await save(); toast({ title: 'Image saved', description: 'Sharing is not available in this browser, so the image was downloaded.' }); }
-    } catch (e) { if ((e as Error).name !== 'AbortError') toast({ title: 'Could not share', description: (e as Error).message, variant: 'destructive' }); }
+  const share = () => {
+    if (!img) return;
+    const data: ShareData = { files: [img.file], title: `${p.pair} ${p.size > 0 ? 'long' : 'short'} on BlockFinaX` };
+    if (typeof navigator.share === 'function' && navigator.canShare?.(data)) {
+      navigator.share(data).catch((e: Error) => {
+        if (e.name !== 'AbortError') toast({ title: 'Could not share', description: e.message, variant: 'destructive' });
+      });
+      return;
+    }
+    save();
+    toast({ title: 'Image saved', description: 'This browser cannot share images, so it was downloaded instead.' });
   };
 
   return (
@@ -956,8 +968,8 @@ function ShareSheet({ p, lev, dp, onClose }: { p: PositionView; lev: string | nu
         <div className="px-share-img">{url ? <img src={url} alt={`${p.pair} ${p.size > 0 ? 'long' : 'short'}, ${pctS(p.roe)}`} /> : <Spin />}</div>
         <label className="px-share-opt"><input type="checkbox" checked={showAmount} onChange={(e) => setShowAmount(e.target.checked)} /> Show amount in USD</label>
         <div className="px-share-btns">
-          <button className="px-mini" onClick={save}><Download size={15} /> Save image</button>
-          <button className="px-pcard-close" onClick={share}><Share2 size={15} /> Share</button>
+          <button className="px-mini" disabled={!img} onClick={save}><Download size={15} /> Save image</button>
+          <button className="px-pcard-close" disabled={!img} onClick={share}><Share2 size={15} /> Share</button>
         </div>
       </div>
     </div>
