@@ -485,9 +485,10 @@ function OrderForm({ market, account, kp, priceClick, sideReq, book, onKey, acco
     if (Math.abs(next) < 1e-9) return null;
     const mm = market.maintBps / 10_000;
     const otherValue = account.equity - (pos ? pos.upnl : 0) - fee;
-    const entry = cur === 0 || Math.sign(cur) === Math.sign(d) ? ((Math.abs(cur) * (pos?.entry ?? 0)) + units * refPrice) / Math.abs(next) : (Math.sign(next) === Math.sign(cur) ? pos!.entry : refPrice);
+    // Value at price P = otherValue + cur·(P − old entry) + d·(P − order price). This holds for
+    // adding, reducing and flipping alike, and includes profit realised on any part closed.
     const othersMaint = account.maintenance - (pos ? pos.notional * mm : 0);
-    const p = (othersMaint - otherValue + next * entry) / (next - Math.abs(next) * mm);
+    const p = (othersMaint - otherValue + cur * (pos?.entry ?? 0) + d * refPrice) / (next - Math.abs(next) * mm);
     return p > 0 && Number.isFinite(p) ? p : null;
   }, [account, notional, units, isBuy, pos, market.maintBps, refPrice, fee]);
 

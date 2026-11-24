@@ -90,6 +90,10 @@ const SCHEMA = `
     index_price double precision NOT NULL,
     at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE IF NOT EXISTS perp_accounts (
+    account text PRIMARY KEY,
+    first_seen timestamptz NOT NULL DEFAULT now()
+  );
   CREATE TABLE IF NOT EXISTS perp_liquidations (
     id serial PRIMARY KEY,
     account text NOT NULL,
@@ -170,6 +174,8 @@ export class PerpEngine {
   private timers: NodeJS.Timeout[] = [];
   private keyCache = new Map<string, { expiry: number; at: number }>();
   private chainAccounts = new Map<string, { at: number; value: ChainAccount }>();
+  /** Every account the engine has seen, so the keeper watches them all, also after a restart. */
+  private knownAccounts = new Set<string>();
   started = false;
   lastError: string | null = null;
 
@@ -221,6 +227,7 @@ export class PerpEngine {
     every(4_000, () => this.vaultTick(), "vault");
     every(3_000, () => this.settleTick(), "batcher");
     every(10_000, () => this.keeperTick(), "keeper");
+    void this.loadAccounts().catch((e) => this.note("accounts", e));
     every(60_000, () => this.refreshMarkets(), "markets");
     console.log(`[perps] engine started: ${this.markets.size} markets, vault ${this.vaultAddr}${this.vaultKey ? "" : " (no vault key: vault will not quote)"}`);
   }
@@ -341,9 +348,16 @@ export class PerpEngine {
     const pending = await this.db.query(`SELECT market, maker, taker, price, size, taker_buy FROM perp_fills WHERE status = 'pending' AND (maker = $1 OR taker = $1) ORDER BY id`, [who]);
     for (const f of pending.rows) {
       const buy = (f.taker === who) === f.taker_buy;
-      this.applyToMirror(m, Number(f.market), buy ? num(BigInt(f.size), SIZE_SCALE) : -num(BigInt(f.size), SIZE_SCALE), num(BigInt(f.price), PRICE_SCALE), 0);
+      const q = num(BigInt(f.size), SIZE_SCALE), price = num(BigInt(f.price), PRICE_SCALE);
+      // The contract charges the fee when the fill settles, so count it now, as place() does.
+      const fee = q * price * ((f.taker === who ? this.fees.takerBps : this.fees.makerBps) / 10_000);
+      this.applyToMirror(m, Number(f.market), buy ? q : -q, price, fee);
     }
     this.mirrors.set(who, m);
+    if (!this.knownAccounts.has(who)) {
+      this.knownAccounts.add(who);
+      void this.db.query(`INSERT INTO perp_accounts (account) VALUES ($1) ON CONFLICT DO NOTHING`, [who]).catch(() => undefined);
+    }
     return m;
   }
 
@@ -764,9 +778,34 @@ export class PerpEngine {
 
   // ── liquidations ────────────────────────────────────────────────────────
 
+  /**
+   * Load every account that could hold a position: ones seen before, anyone with fills or
+   * orders, and every wallet on this network. Accounts with positions stay in memory, so the
+   * keeper watches them even if their owner never opens the app after a restart.
+   */
+  private async loadAccounts() {
+    const r = await this.db.query(
+      `SELECT account FROM perp_accounts
+       UNION SELECT maker FROM perp_fills UNION SELECT taker FROM perp_fills
+       UNION SELECT account FROM perp_orders
+       UNION SELECT address FROM chain_wallet_accounts WHERE network_key = $1`, [this.chain.chainKey]).catch(() => ({ rows: [] as any[] }));
+    let open = 0;
+    for (const row of r.rows) {
+      const who = String(row.account ?? "");
+      if (!who || who === this.vaultAddr) continue;
+      this.knownAccounts.add(who);
+      const m = await this.sync(who).catch(() => null);
+      if (!m) continue;
+      if (m.positions.size === 0) this.mirrors.delete(who); else open++;
+    }
+    console.log(`[perps] watching ${open} accounts with open positions (of ${r.rows.length} known)`);
+  }
+
   private async keeperTick() {
-    for (const [who, m] of this.mirrors) {
-      if (who === this.vaultAddr || m.positions.size === 0) continue;
+    for (const [who, cached] of this.mirrors) {
+      if (who === this.vaultAddr || cached.positions.size === 0) continue;
+      // Funding moves value every hour, so judge on a copy no older than a minute.
+      const m = Date.now() - cached.syncedAt > 60_000 ? await this.sync(who).catch(() => cached) : cached;
       const h = this.health(m);
       if (h.notional === 0 || h.value >= h.maintenance) continue;
       // Confirm on chain before acting: the contract decides.

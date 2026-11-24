@@ -252,7 +252,8 @@ export function registerPerpsRoutes(app: Express, d: Deps) {
         notional: Math.abs(p.size) * s.mark, upnl: p.size * (s.mark - p.entry),
         roe: p.entry ? (p.size * (s.mark - p.entry)) / ((Math.abs(p.size) * p.entry) / s.chain.maxLeverage) : 0,
         liquidationPrice: e.liquidationPrice(m, id),
-        margin: (Math.abs(p.size) * s.mark) / s.chain.maxLeverage,
+        // Margin at entry, the same base ROE uses, so ROE = PnL / margin as shown.
+        margin: (Math.abs(p.size) * p.entry) / s.chain.maxLeverage,
         fundingOwed: onChain ? usd(onChain.fundingOwed) : 0,
         adl: e.adlLights(id, p.size, p.entry, h.value),
         settled: Boolean(onChain && Number(onChain.size) / SIZE_SCALE === p.size),
