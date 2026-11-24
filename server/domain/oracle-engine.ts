@@ -89,7 +89,8 @@ export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngin
     try {
       if ((await adapter.getOracleState(position.positionId)).resolved) {
         const s = await adapter.settle(position.positionId, signer);
-        if (s.state === "CONFIRMED") report.settled.push(key);
+        // A settlement the contract refuses must show up, or the hedge waits unseen.
+        if (s.state === "CONFIRMED") report.settled.push(key); else report.failed.push({ position: key, error: `settle: ${s.error ?? "UNKNOWN"}` });
         continue;
       }
       const last = state.submittedAt.get(key);
@@ -113,7 +114,7 @@ export async function runOracleEngine(deps: OracleEngineDeps, state: OracleEngin
       deps.onSubmitted?.({ chain, contract: contract ?? null, positionId: String(position.positionId), pair, price: price.toFixed(6), hash: (sent as { hash?: string }).hash ?? null });
       if ((await adapter.getOracleState(position.positionId)).resolved) {
         const s = await adapter.settle(position.positionId, signer);
-        if (s.state === "CONFIRMED") report.settled.push(key);
+        if (s.state === "CONFIRMED") report.settled.push(key); else report.failed.push({ position: key, error: `settle: ${s.error ?? "UNKNOWN"}` });
       }
     } catch (err) {
       report.failed.push({ position: key, error: (err as Error).message });

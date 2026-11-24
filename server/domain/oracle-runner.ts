@@ -60,6 +60,9 @@ export function startPoolOracleRunner(): void {
           now: () => Math.floor(Date.now() / 1000),
           log: (m) => console.warn(`[PoolOracle] ${m}`),
         }, states[i]);
+        // Skips that are not routine timing (a missing price, the deviation guard) are worth seeing.
+        const notable = report.skipped.filter((x) => x.reason !== "cooldown" && x.reason !== "own price still fresh");
+        if (notable.length) console.warn(`[PoolOracle] operator ${i + 1}: skipped ${notable.map((x) => `${x.position} (${x.reason})`).join(", ")}`);
         if (report.submitted.length || report.settled.length || report.failed.length) {
           console.log(`[PoolOracle] operator ${i + 1}: submitted ${report.submitted.join(", ") || "none"}; settled ${report.settled.join(", ") || "none"}`
             + (report.failed.length ? `; failed ${report.failed.map((f) => `${f.position} (${f.error})`).join(", ")}` : ""));
