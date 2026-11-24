@@ -9,7 +9,8 @@
 import { Buffer } from 'buffer';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CandlestickChart, ChevronDown, ChevronRight, Equal, KeyRound, Minus, MoveUpRight, ShieldCheck, Slash, Trash2, Type, X } from 'lucide-react';
+import { AlertCircle, CandlestickChart, ChevronDown, ChevronRight, Download, Equal, KeyRound, Minus, MoveUpRight, Share2, ShieldCheck, Slash, Trash2, Type, X } from 'lucide-react';
+import { drawShareCard } from './share-card';
 import { CandleType, LineType, TooltipShowRule, dispose, init, type Chart as KChart, type KLineData } from 'klinecharts';
 import { Keypair } from '@stellar/stellar-sdk';
 import { useToast } from '@/hooks/use-toast';
@@ -701,7 +702,7 @@ function FundingSheet({ market, explorer, onClose }: { market: MarketView; explo
         <h3>{market.base}{market.quote} funding</h3>
         <div className="px-sheet-row total"><span>Next hourly rate</span><b className={`num ${rate >= 0 ? 'up' : 'down'}`}>{(rate * 100).toFixed(4)}%</b></div>
         <div className="px-sheet-row"><span>Paid in</span><b className="num">{countdown}</b></div>
-        <p className="px-sheet-note">Every hour, longs and shorts pay each other to keep the perp close to the official rate. {rate >= 0 ? 'Right now longs pay shorts.' : 'Right now shorts pay longs.'} BlockFinaX takes no part of it.</p>
+        <p className="px-sheet-note">Every hour, longs and shorts pay each other to keep the perp close to the index price. {rate >= 0 ? 'Right now longs pay shorts.' : 'Right now shorts pay longs.'} BlockFinaX takes no part of it.</p>
         <div className="px-fhist">
           <div className="px-fhist-h"><span>Time</span><span>Hourly rate</span><span>Who paid</span></div>
           {hist.isLoading && <div className="muted px-fhist-empty"><Spin /> Loading</div>}
@@ -729,6 +730,7 @@ function AdlLights({ n }: { n: number }) {
 function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: MarketView[]; kp: Keypair | null }) {
   const [tab, setTab] = useState<'positions' | 'orders' | 'trades' | 'funding' | 'history'>('positions');
   const [pnlSheet, setPnlSheet] = useState<number | null>(null);
+  const [shareFor, setShareFor] = useState<number | null>(null);
   // Cross margin ratio for the whole account; with no equity left it is past 100% (liquidation).
   const ratio = account ? (account.equity > 0 ? account.maintenance / account.equity : Infinity) : 0;
   // 7: the sheet belongs to one open position; close it when that position goes or the tab changes.
@@ -800,7 +802,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                   <td className="num">{usd(p.margin)}</td>
                   <td className={`num ${p.fundingOwed > 0 ? 'down' : 'up'}`}>{p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}</td>
                   <td><AdlLights n={p.adl} /></td>
-                  <td><button className="px-mini" disabled={busy !== null || !kp} onClick={() => close(p)}>{busy === `close-${p.market}` ? <Spin /> : 'Close'}</button></td>
+                  <td className="px-pos-act"><button className="px-mini px-icon" onClick={() => setShareFor(p.market)} title="Share position" aria-label={`Share ${p.pair} position`}><Share2 size={14} /></button><button className="px-mini" disabled={busy !== null || !kp} onClick={() => close(p)}>{busy === `close-${p.market}` ? <Spin /> : 'Close'}</button></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -814,6 +816,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                     {posLev(p.market) && <span className="px-ptag">Cross {posLev(p.market)}</span>}
                     <AdlLights n={p.adl} />
                     {!p.settled && <span className="px-pill tiny">settling</span>}
+                    <button className="px-pcard-share" onClick={() => setShareFor(p.market)} aria-label={`Share ${p.pair} position`}><Share2 size={16} /></button>
                   </div>
                   <div className="px-pcard-pnl">
                     <div><span>PnL (USD)</span><b className={`num ${p.upnl >= 0 ? 'up' : 'down'}`}>{signed(p.upnl)}</b></div>
@@ -856,6 +859,10 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                   </div>
                 </div>
               );
+            })()}
+            {shareFor != null && (() => {
+              const p = account.positions.find((x) => x.market === shareFor);
+              return p ? <ShareSheet p={p} lev={posLev(p.market)} dp={dec(p.market)} onClose={() => setShareFor(null)} /> : null;
             })()}
           </>
           )
@@ -905,6 +912,53 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
             </table>
           )
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Share a position ──────────────────────────────────────────────────────────
+
+function ShareSheet({ p, lev, dp, onClose }: { p: PositionView; lev: string | null; dp: number; onClose: () => void }) {
+  const { toast } = useToast();
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const [showAmount, setShowAmount] = useState(true);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const c = canvas.current ?? (canvas.current = document.createElement('canvas'));
+    let live = true;
+    void drawShareCard(c, p, lev, dp, showAmount).then(() => { if (live) setUrl(c.toDataURL('image/png')); });
+    return () => { live = false; };
+    // Redraw when the result moves, not on every poll of the same numbers.
+  }, [p.market, p.roe.toFixed(4), p.mark, showAmount, lev, dp]);
+
+  const name = `blockfinax-${p.pair.replace('/', '').toLowerCase()}-${p.size > 0 ? 'long' : 'short'}.png`;
+  const blob = () => new Promise<Blob | null>((ok) => canvas.current?.toBlob(ok, 'image/png') ?? ok(null));
+  const save = async () => {
+    const b = await blob(); if (!b) return;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const share = async () => {
+    const b = await blob(); if (!b) return;
+    const file = new File([b], name, { type: 'image/png' });
+    try {
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `${p.pair} ${p.size > 0 ? 'long' : 'short'} on BlockFinaX` });
+      else { await save(); toast({ title: 'Image saved', description: 'Sharing is not available in this browser, so the image was downloaded.' }); }
+    } catch (e) { if ((e as Error).name !== 'AbortError') toast({ title: 'Could not share', description: (e as Error).message, variant: 'destructive' }); }
+  };
+
+  return (
+    <div className="px-sheet-bg" onClick={onClose}>
+      <div className="px-sheet px-share" role="dialog" aria-modal="true" aria-label="Share position" onClick={(e) => e.stopPropagation()}>
+        <i className="px-sheet-grab" aria-hidden="true" />
+        <h3>Share position</h3>
+        <div className="px-share-img">{url ? <img src={url} alt={`${p.pair} ${p.size > 0 ? 'long' : 'short'}, ${pctS(p.roe)}`} /> : <Spin />}</div>
+        <label className="px-share-opt"><input type="checkbox" checked={showAmount} onChange={(e) => setShowAmount(e.target.checked)} /> Show amount in USD</label>
+        <div className="px-share-btns">
+          <button className="px-mini" onClick={save}><Download size={15} /> Save image</button>
+          <button className="px-pcard-close" onClick={share}><Share2 size={15} /> Share</button>
+        </div>
       </div>
     </div>
   );

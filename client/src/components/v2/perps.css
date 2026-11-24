@@ -511,3 +511,17 @@
 .px-inds button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 11.5px; font-weight: 600; padding: 3px 7px; border-radius: 6px; cursor: pointer; }
 .px-inds button.on { background: var(--blue-soft); color: var(--blue); }
 @media (max-width: 860px) { .px-tools button { width: 26px; } }
+
+/* Share a position */
+.px-pos-act { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.px-mini.px-icon { display: inline-grid; place-items: center; padding: 4px 7px; }
+.px-pcard-share { margin-left: auto; display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.px-pcard-share:hover { background: var(--soft); color: var(--text); }
+.px-share { max-width: 440px; }
+.px-share-img { display: grid; place-items: center; min-height: 240px; margin: 4px 0 12px; }
+.px-share-img img { display: block; width: 100%; max-width: 360px; border-radius: 14px; box-shadow: 0 6px 24px rgba(9, 16, 34, 0.25); }
+.px-share-opt { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); margin-bottom: 12px; cursor: pointer; }
+.px-share-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.px-share-btns button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.px-share-btns .px-pcard-close { margin: 0; }
+@media (max-width: 860px) { .px-share-img img { max-width: 300px; } }
