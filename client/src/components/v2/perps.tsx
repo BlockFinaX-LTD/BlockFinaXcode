@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import { orderDigest, orderToJson, priceFromNumber, sizeFromNumber, toHex, type PerpOrder, type TimeInForce } from '@shared/perps';
-import { fmt, signAndSend, useUsdcBalances } from './shared';
+import { fmt, pairLabel, perpSymbol, signAndSend, useUsdcBalances } from './shared';
 import { Flag, Spin } from './ui';
 import './perps.css';
 
@@ -160,14 +160,14 @@ function MarketBar({ markets, market, onPick, chartOpen, onChart, onFunding }: {
     <div className="px-panel px-bar">
       <div className="px-pick" ref={ref}>
         <button className="px-pick-btn" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <Flag pair={market.pair} /><span className="px-sym">{market.base}{market.quote}-PERP</span><span className="px-lev">{market.maxLeverage}x</span><ChevronDown size={16} />
+          <Flag pair={(market.pair)} /><span className="px-sym">{perpSymbol(market.pair)}</span><span className="px-lev">{market.maxLeverage}x</span><ChevronDown size={16} />
         </button>
         {open && (
           <div className="px-menu" role="listbox">
             <div className="px-menu-h"><span>Market</span><span>Mark</span><span>24h</span><span>Funding</span></div>
             {markets.map((m) => (
               <button key={m.id} className={`px-menu-row${m.id === market.id ? ' on' : ''}`} onClick={() => { onPick(m.id); setOpen(false); }}>
-                <span className="px-mm"><Flag pair={m.pair} /><b>{m.base}{m.quote}</b><small>{m.maxLeverage}x</small></span>
+                <span className="px-mm"><Flag pair={m.pair} /><b>{perpSymbol(m.pair)}</b><small>{m.maxLeverage}x</small></span>
                 <span className="num">{px(m.mark, m.decimals)}</span>
                 <span className={`num ${m.change24h >= 0 ? 'up' : 'down'}`}>{pctS(m.change24h)}</span>
                 <span className="num">{(m.fundingPredicted * 100).toFixed(4)}%</span>
@@ -550,7 +550,7 @@ function OrderForm({ market, account, kp, priceClick, sideReq, book, onKey, acco
         <div className="px-lev-box">
           <div className="px-lev-row"><span>Leverage</span><b className="num">{lev}x</b></div>
           <input id="px-lev" type="range" min={1} max={market.maxLeverage} step={1} value={lev} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" />
-          <div className="muted" style={{ fontSize: 12 }}>Sets the most you can open with your margin. Maintenance margin on {market.pair} is {(market.maintBps / 100).toFixed(1)}%.</div>
+          <div className="muted" style={{ fontSize: 12 }}>Sets the most you can open with your margin. Maintenance margin on {pairLabel(market.pair)} is {(market.maintBps / 100).toFixed(1)}%.</div>
         </div>
       )}
       <div className="px-side-toggle">
@@ -699,7 +699,7 @@ function FundingSheet({ market, explorer, onClose }: { market: MarketView; explo
     <div className="px-sheet-bg" onClick={onClose}>
       <div className="px-sheet px-fsheet" role="dialog" aria-modal="true" aria-label="Funding" onClick={(e) => e.stopPropagation()}>
         <i className="px-sheet-grab" aria-hidden="true" />
-        <h3>{market.base}{market.quote} funding</h3>
+        <h3>{perpSymbol(market.pair)} funding</h3>
         <div className="px-sheet-row total"><span>Next hourly rate</span><b className={`num ${rate >= 0 ? 'up' : 'down'}`}>{(rate * 100).toFixed(4)}%</b></div>
         <div className="px-sheet-row"><span>Paid in</span><b className="num">{countdown}</b></div>
         <p className="px-sheet-note">Every hour, longs and shorts pay each other to keep the perp close to the index price. {rate >= 0 ? 'Right now longs pay shorts.' : 'Right now shorts pay longs.'} BlockFinaX takes no part of it.</p>
@@ -756,7 +756,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
     try {
       const isBuy = p.size < 0;
       const r = await sendOrder(kp, config.data.contractId, account.wallet, m, { isBuy, price: m.mark * (isBuy ? 1.02 : 0.98), units: Math.abs(p.size), tif: 'ioc', reduceOnly: true });
-      toast({ title: r.filled > 0 ? `${p.pair} position closed` : 'Not closed', description: r.filled > 0 ? 'Settling on Stellar.' : 'No liquidity at that price.' });
+      toast({ title: r.filled > 0 ? `${pairLabel(p.pair)} position closed` : 'Not closed', description: r.filled > 0 ? 'Settling on Stellar.' : 'No liquidity at that price.' });
       await qc.invalidateQueries({ queryKey: ['perps-account'] });
     } catch (e) {
       toast({ title: 'Close refused', description: (e as Error).message, variant: 'destructive' });
@@ -793,7 +793,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <thead><tr><th>Market</th><th title="Position size in USD: margin x leverage">Size (USD)</th><th>Entry</th><th>Mark</th><th>PnL (ROE)</th><th>Liq. price</th><th>Margin</th><th>Funding</th><th title="Auto-deleveraging queue">ADL</th><th /></tr></thead>
               <tbody>{account.positions.map((p) => (
                 <tr key={p.market}>
-                  <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{p.pair}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{posLev(p.market) && <span className="px-poslev" title="Margin is the position's value divided by this leverage">{posLev(p.market)}</span>}{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
+                  <td><span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} /><b>{pairLabel(p.pair)}</b> <span className={p.size > 0 ? 'up' : 'down'}>{p.size > 0 ? 'Long' : 'Short'}</span>{posLev(p.market) && <span className="px-poslev" title="Margin is the position's value divided by this leverage">{posLev(p.market)}</span>}{!p.settled && <span className="px-pill tiny" title="Filled; settling on Stellar">settling</span>}</td>
                   <td className="num">{usd(p.notional)}</td>
                   <td className="num">{px(p.entry, dec(p.market))}</td>
                   <td className="num">{px(p.mark, dec(p.market))}</td>
@@ -802,7 +802,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                   <td className="num">{usd(p.margin)}</td>
                   <td className={`num ${p.fundingOwed > 0 ? 'down' : 'up'}`}>{p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}</td>
                   <td><AdlLights n={p.adl} /></td>
-                  <td className="px-pos-act"><button className="px-mini px-icon" onClick={() => setShareFor(p.market)} title="Share position" aria-label={`Share ${p.pair} position`}><Share2 size={14} /></button><button className="px-mini" disabled={busy !== null || !kp} onClick={() => close(p)}>{busy === `close-${p.market}` ? <Spin /> : 'Close'}</button></td>
+                  <td className="px-pos-act"><button className="px-mini px-icon" onClick={() => setShareFor(p.market)} title="Share position" aria-label={`Share ${pairLabel(p.pair)} position`}><Share2 size={14} /></button><button className="px-mini" disabled={busy !== null || !kp} onClick={() => close(p)}>{busy === `close-${p.market}` ? <Spin /> : 'Close'}</button></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -812,11 +812,11 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                 <div key={p.market} className="px-pcard">
                   <div className="px-pcard-h">
                     <span className={`px-side-bar ${p.size > 0 ? 'long' : 'short'}`} />
-                    <b>{p.pair}</b><span className={`px-pdir ${p.size > 0 ? 'up' : 'down'}`}>{p.size > 0 ? 'Long' : 'Short'}</span><span className="px-ptag">Perp</span>
+                    <b>{pairLabel(p.pair)}</b><span className={`px-pdir ${p.size > 0 ? 'up' : 'down'}`}>{p.size > 0 ? 'Long' : 'Short'}</span><span className="px-ptag">Perp</span>
                     {posLev(p.market) && <span className="px-ptag">Cross {posLev(p.market)}</span>}
                     <AdlLights n={p.adl} />
                     {!p.settled && <span className="px-pill tiny">settling</span>}
-                    <button className="px-pcard-share" onClick={() => setShareFor(p.market)} aria-label={`Share ${p.pair} position`}><Share2 size={16} /></button>
+                    <button className="px-pcard-share" onClick={() => setShareFor(p.market)} aria-label={`Share ${pairLabel(p.pair)} position`}><Share2 size={16} /></button>
                   </div>
                   <div className="px-pcard-pnl">
                     <div><span>PnL (USD)</span><b className={`num ${p.upnl >= 0 ? 'up' : 'down'}`}>{signed(p.upnl)}</b></div>
@@ -854,7 +854,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
                     {line('Closing PnL', r?.closing, 'from parts of this position already closed')}
                     {line('Funding fee', r?.funding)}
                     {line('Trading fee', r?.fees)}
-                    <p className="px-sheet-note">{r ? <>For your {p.pair} {p.size > 0 ? 'long' : 'short'} since it was opened.</> : <>Not available for this position: part of it changed through a liquidation or an emergency close.</>} Funding not yet settled: {p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}.</p>
+                    <p className="px-sheet-note">{r ? <>For your {pairLabel(p.pair)} {p.size > 0 ? 'long' : 'short'} since it was opened.</> : <>Not available for this position: part of it changed through a liquidation or an emergency close.</>} Funding not yet settled: {p.fundingOwed ? signed(-p.fundingOwed) : '$0.00'}.</p>
                     <button className="px-pcard-close" onClick={() => setPnlSheet(null)}>Done</button>
                   </div>
                 </div>
@@ -873,7 +873,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <thead><tr><th>Market</th><th>Side</th><th>Price</th><th>Size</th><th>Filled</th><th>Type</th><th><button className="px-mini" onClick={() => cancel()}>Cancel all</button></th></tr></thead>
               <tbody>{account.openOrders.map((o) => (
                 <tr key={o.hash}>
-                  <td><b>{o.pair}</b></td><td className={o.isBuy ? 'up' : 'down'}>{o.isBuy ? 'Buy' : 'Sell'}{o.reduceOnly ? ', reduce only' : ''}</td>
+                  <td><b>{pairLabel(o.pair)}</b></td><td className={o.isBuy ? 'up' : 'down'}>{o.isBuy ? 'Buy' : 'Sell'}{o.reduceOnly ? ', reduce only' : ''}</td>
                   <td className="num">{px(o.price, dec(o.market))}</td><td className="num">{usd(o.size * o.price, 0)}</td>
                   <td className="num">{(((o.size - o.remaining) / o.size) * 100).toFixed(0)}%</td><td>{o.tif === 'alo' ? 'Post only' : o.tif === 'ioc' ? 'IOC' : 'GTC'}</td>
                   <td><button className="px-mini" onClick={() => cancel(o.hash)}><X size={13} /> Cancel</button></td>
@@ -889,7 +889,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <tbody>{account.fills.map((f) => (
                 <tr key={f.id}>
                   <td className="num muted">{new Date(f.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td><b>{f.pair}</b></td><td className={f.side === 'buy' ? 'up' : 'down'}>{f.side === 'buy' ? 'Buy' : 'Sell'}</td>
+                  <td><b>{pairLabel(f.pair)}</b></td><td className={f.side === 'buy' ? 'up' : 'down'}>{f.side === 'buy' ? 'Buy' : 'Sell'}</td>
                   <td className="num">{px(f.price, dec(f.market))}</td><td className="num">{usd(f.size * f.price)}</td><td>{f.role === 'taker' ? 'Taker' : 'Maker'}</td>
                   <td>{f.status === 'settled' && f.tx ? <a href={`${config.data?.explorer}/tx/${f.tx}`} target="_blank" rel="noreferrer">Settled</a> : f.status === 'failed' ? <span className="down">Refused on chain</span> : <span className="muted">Settling</span>}</td>
                 </tr>
@@ -904,7 +904,7 @@ function BottomTabs({ account, markets, kp }: { account?: AccountView; markets: 
               <tbody>{account.orderHistory.map((o) => (
                 <tr key={o.hash}>
                   <td className="num muted">{new Date(o.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td><b>{o.pair}</b></td><td className={o.isBuy ? 'up' : 'down'}>{o.isBuy ? 'Buy' : 'Sell'}</td>
+                  <td><b>{pairLabel(o.pair)}</b></td><td className={o.isBuy ? 'up' : 'down'}>{o.isBuy ? 'Buy' : 'Sell'}</td>
                   <td className="num">{px(o.price, dec(o.market))}</td><td className="num">{usd(o.size * o.price, 0)}</td>
                   <td className="num">{((o.filled / o.size) * 100).toFixed(0)}%</td><td style={{ textTransform: 'capitalize' }}>{o.status}</td>
                 </tr>
@@ -949,7 +949,7 @@ function ShareSheet({ p, lev, dp, onClose }: { p: PositionView; lev: string | nu
   };
   const share = () => {
     if (!img) return;
-    const data: ShareData = { files: [img.file], title: `${p.pair} ${p.size > 0 ? 'long' : 'short'} on BlockFinaX` };
+    const data: ShareData = { files: [img.file], title: `${pairLabel(p.pair)} ${p.size > 0 ? 'long' : 'short'} on BlockFinaX` };
     if (typeof navigator.share === 'function' && navigator.canShare?.(data)) {
       navigator.share(data).catch((e: Error) => {
         if (e.name !== 'AbortError') toast({ title: 'Could not share', description: e.message, variant: 'destructive' });
@@ -965,7 +965,7 @@ function ShareSheet({ p, lev, dp, onClose }: { p: PositionView; lev: string | nu
       <div className="px-sheet px-share" role="dialog" aria-modal="true" aria-label="Share position" onClick={(e) => e.stopPropagation()}>
         <i className="px-sheet-grab" aria-hidden="true" />
         <h3>Share position</h3>
-        <div className="px-share-img">{url ? <img src={url} alt={`${p.pair} ${p.size > 0 ? 'long' : 'short'}, ${pctS(p.roe)}`} /> : <Spin />}</div>
+        <div className="px-share-img">{url ? <img src={url} alt={`${pairLabel(p.pair)} ${p.size > 0 ? 'long' : 'short'}, ${pctS(p.roe)}`} /> : <Spin />}</div>
         <label className="px-share-opt"><input type="checkbox" checked={showAmount} onChange={(e) => setShowAmount(e.target.checked)} /> Show amount in USD</label>
         <div className="px-share-btns">
           <button className="px-mini" disabled={!img} onClick={save}><Download size={15} /> Save image</button>

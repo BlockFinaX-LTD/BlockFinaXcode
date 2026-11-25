@@ -28,6 +28,26 @@ const latest = new Map<string, SourceQuote[]>();      // source id -> its last q
 const lastRate = new Map<string, CompositeRate>();     // pair -> last good composite
 const errors = new Map<string, { at: number; message: string }>();
 const ticks = new Map<string, { t: number; rate: number }[]>(); // pair -> live composite, last 3 hours
+
+/**
+ * Sources price USDT; the rate is shown and paid in USDC. USDT per USDC, from the median of
+ * Kraken, Binance and Coinbase, refreshed every minute. Outside 0.98 to 1.02 it is ignored
+ * (treated as 1) rather than trusted, and a reading older than 15 minutes is not used.
+ */
+let usdc = { factor: 1, at: 0 };
+async function readUsdcFactor() {
+  const get = async (url: string) => (await fetch(url, { signal: AbortSignal.timeout(8000) })).json() as Promise<any>;
+  const vals = (await Promise.all([
+    get("https://api.kraken.com/0/public/Ticker?pair=USDCUSDT").then((d) => { const t = d?.result?.USDCUSDT; return (Number(t?.a?.[0]) + Number(t?.b?.[0])) / 2; }).catch(() => NaN),
+    get("https://api.binance.com/api/v3/ticker/bookTicker?symbol=USDCUSDT").then((d) => (Number(d?.bidPrice) + Number(d?.askPrice)) / 2).catch(() => NaN),
+    get("https://api.exchange.coinbase.com/products/USDT-USDC/ticker").then((d) => 1 / ((Number(d?.bid) + Number(d?.ask)) / 2)).catch(() => NaN),
+  ])).filter((v) => Number.isFinite(v) && v > 0.98 && v < 1.02).sort((a, b) => a - b);
+  if (vals.length) usdc = { factor: vals[Math.floor(vals.length / 2)], at: Date.now() };
+}
+const usdcFactor = () => (Date.now() - usdc.at < 15 * 60_000 ? usdc.factor : 1);
+/** A USDT-priced composite as a USDC rate. */
+const inUsdc = (r: CompositeRate): CompositeRate => ({ ...r, rate: r.rate * usdcFactor() });
+export const usdcPerUsdt = () => ({ factor: usdcFactor(), at: usdc.at || null });
 const TICK_KEEP_MS = 3 * 3600_000;
 
 /** Work out each pair from the latest quotes and keep the result as a live tick for the chart. */
@@ -36,8 +56,9 @@ function tick() {
   const all = [...latest.values()].flat();
   for (const c of CURRENCIES) {
     const pair = `USD/${c}`;
-    const r = aggregate(pair, all, now);
-    if (!r) continue;
+    const raw = aggregate(pair, all, now);
+    if (!raw) continue;
+    const r = inUsdc(raw);
     lastRate.set(pair, r);
     const list = ticks.get(pair) ?? [];
     list.push({ t: now, rate: r.rate });
@@ -53,7 +74,8 @@ export function marketRates() {
   const now = Date.now();
   return CURRENCIES.map((c) => {
     const pair = `USD/${c}`;
-    const live = aggregate(pair, [...latest.values()].flat(), now);
+    const raw = aggregate(pair, [...latest.values()].flat(), now);
+    const live = raw ? inUsdc(raw) : null;
     const good = live ?? lastRate.get(pair) ?? null;
     return { pair, rate: good?.rate ?? null, sources: good?.sources ?? 0, held: !live && !!good, at: good?.at ?? null, quotes: (live ?? good)?.quotes ?? [] };
   });
@@ -64,7 +86,8 @@ export function marketRates() {
  * Null only before any market rate has ever been recorded.
  */
 export function marketRateFor(pair: string, maxHoldMs = Infinity): { rate: number; sources: number; at: number; held: boolean } | null {
-  const live = aggregate(pair, [...latest.values()].flat(), Date.now());
+  const raw = aggregate(pair, [...latest.values()].flat(), Date.now());
+  const live = raw ? inUsdc(raw) : null;
   if (live) { lastRate.set(pair, live); return { rate: live.rate, sources: live.sources, at: live.at, held: false }; }
   const last = lastRate.get(pair);
   if (last && Date.now() - last.at <= maxHoldMs) return { rate: last.rate, sources: last.sources, at: last.at, held: true };
@@ -84,6 +107,9 @@ export async function startMarketRates(): Promise<void> {
     const prior = await db.query(`SELECT DISTINCT ON (pair) pair, rate, sources, extract(epoch from at) * 1000 AS at FROM market_rates ORDER BY pair, at DESC`).catch(() => ({ rows: [] as any[] }));
     for (const r of prior.rows) lastRate.set(r.pair, { pair: r.pair, rate: Number(r.rate), sources: Number(r.sources), quotes: [], at: Number(r.at) });
   }
+
+  void readUsdcFactor();
+  setInterval(() => void readUsdcFactor(), 60_000).unref();
 
   for (const s of SOURCES) {
     const run = async () => {
@@ -105,7 +131,8 @@ export async function startMarketRates(): Promise<void> {
     const all = [...latest.values()].flat();
     for (const c of CURRENCIES) {
       const pair = `USD/${c}`;
-      const r = aggregate(pair, all, now);
+      const raw = aggregate(pair, all, now);
+      const r = raw ? inUsdc(raw) : null;
       if (r) lastRate.set(pair, r);
       if (!db) continue;
       try {

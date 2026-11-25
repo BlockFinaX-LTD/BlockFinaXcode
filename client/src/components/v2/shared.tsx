@@ -26,6 +26,8 @@ export const pairName = (pair: string) => {
   return base === 'USD' ? name : `${name} per ${base === 'EUR' ? 'euro' : base === 'GBP' ? 'pound' : base}`;
 };
 export const quoteCcy = (pair: string) => pair.split('/')[1] ?? pair;
+import { pairLabel } from '@shared/market-pairs';
+export { pairLabel, perpSymbol } from '@shared/market-pairs';
 export const ccyName = (pair: string) => CURRENCY_NAMES[quoteCcy(pair)] ?? quoteCcy(pair);
 export const fmt = (v: string | number | null | undefined, dp = 2) =>
   Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -52,8 +54,8 @@ export const poolRef = (p: CurrencyPool) => `${p.ref.chain}:${p.ref.contract}:${
  */
 export function exposureLabel(pair: string, d: Direction | 'both') {
   return d === 'down'
-    ? { title: `${pair} Down cover`, kind: 'Down cover', flow: 'receipts', who: 'For USD you will receive', cover: `${pair} Down cover`, verb: 'strengthens' }
-    : { title: `${pair} Up cover`, kind: 'Up cover', flow: 'payments', who: 'For USD you have to pay', cover: `${pair} Up cover`, verb: 'weakens' };
+    ? { title: `${pairLabel(pair)} Down cover`, kind: 'Down cover', flow: 'receipts', who: 'For USD you will receive', cover: `${pairLabel(pair)} Down cover`, verb: 'strengthens' }
+    : { title: `${pairLabel(pair)} Up cover`, kind: 'Up cover', flow: 'payments', who: 'For USD you have to pay', cover: `${pairLabel(pair)} Up cover`, verb: 'weakens' };
 }
 
 

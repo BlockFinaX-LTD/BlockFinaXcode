@@ -13,7 +13,7 @@ import { api } from '@/lib/wallets/passkey-wallet';
 import type { PreparedTransaction } from '@/lib/wallet-provider';
 import {
   ccyName, dateIn, dateOf, endsAt, exposureLabel, fmt, fmtRate, pairName, pct, poolRef, quoteCcy, signAndSend, useChains, useDebounced, usePools,
-  useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction, withCommas } from './shared';
+  useUsdcBalances, usdcOn, useIsDemo, openContactSales, remember, remembered, type Direction, withCommas, pairLabel } from './shared';
 import { usePasskeySession } from '@/lib/identity';
 import { AssetClassTabs, CoverName, Flag, hint, RefRate, Loading, SHOW_INTEREST_RATES, Spin, Sum, Tag, useAssetClass } from './ui';
 import type { Go, Target } from './workspace';
@@ -286,11 +286,11 @@ function MarketStrip({ pair, markets, onPair, spot, extra, onChart }: { pair: st
     <div className="bx-mstrip">
       <label className="bx-mstrip-pair">
         <Flag pair={pair} />
-        <span><span className="n">{pair}</span><span className="s">{ccyName(pair)}</span></span>
+        <span><span className="n">{pairLabel(pair)}</span><span className="s">{ccyName(pair)}</span></span>
         {markets.length > 1 && <ChevronDown size={16} aria-hidden="true" />}
         {markets.length > 1 && (
           <select aria-label="Market" value={pair} onChange={(ev) => onPair(ev.target.value)}>
-            {markets.map((m) => <option key={m.pair} value={m.pair}>{m.pair} · {ccyName(m.pair)}</option>)}
+            {markets.map((m) => <option key={m.pair} value={m.pair}>{pairLabel(m.pair)} · {ccyName(m.pair)}</option>)}
           </select>
         )}
       </label>
@@ -405,7 +405,7 @@ function CoverTable({ go, onPick, selected, noViewAll }: { go: Go; onPick?: (key
               onClick={() => (onPick ? onPick(markKey(p), pair) : go('pair', { pair, position: markKey(p) }))}
               onKeyDown={(ev) => { if (ev.key === 'Enter') (onPick ? onPick(markKey(p), pair) : go('pair', { pair, position: markKey(p) })); }}>
               <span className="bx-tcov">
-                <span className="n">{pair} <span className={p.direction === 'up' ? 'up' : 'down'}>{p.direction === 'up' ? 'Up cover' : 'Down cover'}{p.structure === 'open' ? ', Open' : ''}</span></span>
+                <span className="n">{pairLabel(pair)} <span className={p.direction === 'up' ? 'up' : 'down'}>{p.direction === 'up' ? 'Up cover' : 'Down cover'}{p.structure === 'open' ? ', Open' : ''}</span></span>
                 <span className="d">${fmt(p.notional, 0)} · cost ${fmt(cost)} · {s.status === 'pending' ? 'ends' : 'ended'} {dateOf(p.expiry)}</span>
               </span>
               <span className="r num">${fmt(p.notional, 0)}</span>
@@ -483,7 +483,7 @@ export function HedgerHome({ go }: { go: Go }) {
           {ratesClass === 'fx' ? (watch.isLoading ? <Loading /> : watchRows.map((r) => (
             <div key={r.pair} className="bx-mini" style={{ cursor: 'pointer' }} onClick={() => go('pair', { pair: r.pair })}>
               <Flag pair={r.pair} />
-              <div className="grow"><div className="t">{r.pair}</div><div className="d">{pairName(r.pair)}</div></div>
+              <div className="grow"><div className="t">{pairLabel(r.pair)}</div><div className="d">{pairName(r.pair)}</div></div>
               <div style={{ textAlign: 'right' }}><div className="num t">{r.spot ? fmtRate(r.spot) : '-'}</div><div style={{ fontSize: 12 }}><ChangeText change={r.change} /></div></div>
             </div>
           ))) : benchmarks.isLoading ? <Loading /> : !(benchmarks.data ?? []).length ? <div className="bx-empty">No benchmarks yet.</div> : (benchmarks.data ?? []).map((b) => (
@@ -800,7 +800,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           </button>
           <div className="bx-dense-head">
             <Flag pair={pair} />
-            <div><div className="bx-dense-name">{ccyName(pair)}</div><div className="muted">{pair}</div></div>
+            <div><div className="bx-dense-name">{ccyName(pair)}</div><div className="muted">{pairLabel(pair)}</div></div>
             <div className="bx-dense-spot">
               <span className="num">{spot.data ? fmtRate(spot.data) : '...'}</span>
               <ChangeText change={periodChange} /><span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span>
@@ -808,7 +808,7 @@ export function PairPage({ go, pair, role, focus: initialFocus }: { go: Go; pair
           </div>
           {(() => {
             const m = marks.find((x) => x.key === focus) ?? (marks.length === 1 ? marks[0] : null);
-            return <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy} protection={m ? { strike: m.strike, cap: m.cap, tone: m.tone } : null} keepStrike={Boolean(focusedPos)} />;
+            return <RateChart points={points} loading={chart.isLoading} label={`${pairLabel(pair)} · ${range}`} unit={ccy} protection={m ? { strike: m.strike, cap: m.cap, tone: m.tone } : null} keepStrike={Boolean(focusedPos)} />;
           })()}
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
@@ -1341,12 +1341,12 @@ export function ProtectPage({ go, pair: initialPair, target }: { go: Go; pair: s
 
       <section className="bx-tchart" aria-label="Rate chart">
         <div className="bx-pane-h">
-          <span>{pair} <ChangeText change={periodChange} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
+          <span>{pairLabel(pair)} <ChangeText change={periodChange} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
           <div className="bx-ranges" role="group" aria-label="Chart range">
             {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
           </div>
         </div>
-        <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={ccy}
+        <RateChart points={points} loading={chart.isLoading} label={`${pairLabel(pair)} · ${range}`} unit={ccy}
           protection={strike ? { strike, cap: structure === 'capped' ? cap : null, tone: 'pay' } : null} />
       </section>
 
@@ -1658,12 +1658,12 @@ export function PairRateChart({ pair }: { pair: string }) {
   return (
     <section className="bx-tchart" aria-label="Rate chart">
       <div className="bx-pane-h">
-        <span>{pair} <ChangeText change={change} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
+        <span>{pairLabel(pair)} <ChangeText change={change} /> <span className="muted">{range === 'MAX' ? 'all time' : range === 'YTD' ? 'this year' : range}</span></span>
         <div className="bx-ranges" role="group" aria-label="Chart range">
           {RANGES.map((r) => <button key={r} className={range === r ? 'on' : ''} aria-pressed={range === r} onClick={() => setRange(r)}>{r}</button>)}
         </div>
       </div>
-      <RateChart points={points} loading={chart.isLoading} label={`${pair} · ${range}`} unit={pair.split('/')[1]} />
+      <RateChart points={points} loading={chart.isLoading} label={`${pairLabel(pair)} · ${range}`} unit={pair.split('/')[1]} />
     </section>
   );
 }

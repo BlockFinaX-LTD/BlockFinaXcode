@@ -8,7 +8,7 @@ import { ArrowLeftRight, CalendarDays, CircleDollarSign, Eye, EyeOff, Layers, Li
 import type { ProtectionPosition, SettlementResult } from '@shared/domain/types';
 import { api } from '@/lib/wallets/passkey-wallet';
 import { useActingOrganisation } from '@/lib/use-acting-organisation';
-import { pairName, usePools, useUsdcBalances } from './shared';
+import { pairName, usePools, useUsdcBalances, pairLabel, perpSymbol } from './shared';
 import { Flag } from './ui';
 import type { Go } from './workspace';
 import './dashboard.css';
@@ -20,7 +20,7 @@ type Hedge = { position: ProtectionPosition; pair: string; settlement: Settlemen
 /** Short notices for everyone. Newest first. */
 const NOTICES: { title: string; text: string; date: string }[] = [
   { title: 'Simpler cover', text: 'Every cover now pays the full move, up to 20% of the amount. No limits to choose.', date: '18 Nov 2026' },
-  { title: 'Perps are live on testnet', text: 'USD/NGN, USD/GHS, USD/KES and USD/ZAR, up to 20x.', date: '18 Nov 2026' },
+  { title: 'Perps are live on testnet', text: 'USDC/NGN, USDC/GHS, USDC/KES and USDC/ZAR, up to 20x.', date: '18 Nov 2026' },
   { title: 'Cover on any day', text: 'Cover now sells for any end date from 1 to 90 days, ending at 14:00 UTC.', date: '24 Oct 2026' },
 ];
 
@@ -176,7 +176,7 @@ function MarketsPanel({ go }: { go: Go }) {
 
   const perpRow = (m: PerpMarket) => (
     <button key={`p${m.id}`} className="dx-row" onClick={() => openPerpMarket(go, m.id)}>
-      <span className="dx-name"><Flag pair={m.pair} /><b>{m.base}{m.quote}</b><small>Perp, up to {m.maxLeverage}x</small></span>
+      <span className="dx-name"><Flag pair={m.pair} /><b>{perpSymbol(m.pair)}</b><small>Perp, up to {m.maxLeverage}x</small></span>
       <span className="num dx-px">{px(m.mark, m.decimals)}</span>
       <span className={`num dx-ch ${m.change24h >= 0 ? 'up' : 'down'}`}>{pctS(m.change24h)}</span>
     </button>
@@ -184,14 +184,14 @@ function MarketsPanel({ go }: { go: Go }) {
   const rateOf = (pair: string) => rates.data?.find((r) => r.pair === pair);
   const coverLpRow = (c: (typeof cover)[number]) => (
     <button key={`l${c.pair}`} className="dx-row" onClick={() => go('h-protect', { pair: c.pair })}>
-      <span className="dx-name"><Flag pair={c.pair} /><b>{c.pair}</b>{c.capacity <= 0 && <small>Not selling</small>}</span>
+      <span className="dx-name"><Flag pair={c.pair} /><b>{pairLabel(c.pair)}</b>{c.capacity <= 0 && <small>Not selling</small>}</span>
       <span className="num dx-px">{rateOf(c.pair)?.spot != null ? rateOf(c.pair)!.spot!.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</span>
       <span className="num dx-ch">{compact(c.capacity)}</span>
     </button>
   );
   const rateRows = (rates.data ?? []).slice(0, 8).map((r) => (
     <button key={`r${r.pair}`} className="dx-row" onClick={() => go('pair', { pair: r.pair })}>
-      <span className="dx-name"><Flag pair={r.pair} /><b>{r.pair}</b><small>{pairName(r.pair)}</small></span>
+      <span className="dx-name"><Flag pair={r.pair} /><b>{pairLabel(r.pair)}</b><small>{pairName(r.pair)}</small></span>
       <span className="num dx-px">{r.spot != null ? r.spot.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</span>
       <span className={`num dx-ch ${r.change == null ? 'muted' : r.change >= 0 ? 'up' : 'down'}`}>{r.change == null ? '-' : pctS(r.change)}</span>
     </button>

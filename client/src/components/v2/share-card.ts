@@ -3,6 +3,7 @@
  */
 import QRCode from 'qrcode';
 import logoPath from '@/assets/logo-mark.png';
+import { pairLabel } from '@shared/market-pairs';
 
 export interface ShareInput { pair: string; size: number; entry: number; mark: number; upnl: number; roe: number }
 
@@ -38,7 +39,7 @@ export async function drawShareCard(c: HTMLCanvasElement, p: ShareInput, lev: st
 
   // Market and side
   g.fillStyle = text; g.font = `700 78px ${sans}`;
-  g.fillText(`${p.pair} Perpetual`, 80, 420);
+  g.fillText(`${pairLabel(p.pair)} Perpetual`, 80, 420);
   g.font = `500 44px ${sans}`;
   g.fillStyle = long ? green : red; g.fillText(long ? 'Long' : 'Short', 80, 500);
   const w = g.measureText(long ? 'Long' : 'Short').width;

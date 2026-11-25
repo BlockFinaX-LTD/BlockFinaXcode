@@ -416,7 +416,8 @@ async function refreshAllRates(): Promise<Record<string, FXRate>> {
 }
 
 /** Pairs that can use the market (parallel) rate. */
-export const MARKET_RATE_PAIRS = new Set(["USD/NGN", "USD/GHS", "USD/KES", "USD/ZAR"]);
+export { MARKET_RATE_PAIRS } from "@shared/market-pairs";
+import { MARKET_RATE_PAIRS } from "@shared/market-pairs";
 /** True when this pair prices and settles on the market rate. */
 export const usesMarketRate = (pair: string) => process.env.RATE_SOURCE === "market" && MARKET_RATE_PAIRS.has(pair);
 

@@ -1,5 +1,6 @@
 /** Building blocks for the BlockFinaX workspace. Styles live in workspace.css. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { pairLabel } from '@shared/market-pairs';
 import { createPortal } from 'react-dom';
 import { explain } from './glossary';
 import { Info, Loader2 } from 'lucide-react';
@@ -62,8 +63,8 @@ export function CoverName({ pair, direction }: { pair: string; direction: 'up' |
   const down = `pays you if the dollar falls below your strike rate by the end date, meaning ${local} strengthens. For dollars you will receive.`;
   const tip = direction === 'down' ? `${kind} ${down}` : direction === 'both' ? `Up cover ${up} Down cover ${down}` : `${kind} ${up}`;
   return (
-    <Term tip={tip} label={`${pair} ${kind}`} plain>
-      <span className="bx-cover-name">{pair}<span className="bx-cover-kind">{kind}</span></span>
+    <Term tip={tip} label={`${pairLabel(pair)} ${kind}`} plain>
+      <span className="bx-cover-name">{pairLabel(pair)}<span className="bx-cover-kind">{kind}</span></span>
     </Term>
   );
 }
