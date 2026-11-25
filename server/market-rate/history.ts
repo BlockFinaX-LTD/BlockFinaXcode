@@ -49,7 +49,8 @@ const pause = () => new Promise((ok) => setTimeout(ok, 250));
  */
 export async function backfillHistory(db: Db): Promise<void> {
   const key = process.env.Rate_API || process.env.MONIERATE_API_KEY;
-  if (!key || process.env.MARKET_HISTORY === "off") return;
+  // Paid per call, and a full download is a few hundred calls: only when switched on on purpose.
+  if (!key || process.env.MARKET_HISTORY !== "on") return;
   for (const c of CURRENCIES) {
     const pair = `USD/${c}`;
     const have = await db.query(`SELECT extract(epoch from max(at)) * 1000 AS at FROM market_rate_history WHERE pair = $1`, [pair]);

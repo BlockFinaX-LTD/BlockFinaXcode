@@ -130,7 +130,7 @@ export async function startMarketRates(): Promise<void> {
     void db.query(`DELETE FROM market_rate_quotes WHERE at < now() - interval '30 days'`).catch(() => {});
     void db.query(`DELETE FROM market_rates WHERE at < now() - interval '30 days'`).catch(() => {});
   }, 6 * 3600_000).unref();
-  // Market-rate history for the chart, from Monierate, topped up every 6 hours.
+  // Market-rate history for the chart, from Monierate (paid per call): only with MARKET_HISTORY=on.
   if (db) {
     const { backfillHistory, HISTORY_SCHEMA } = await import("./history");
     await db.query(HISTORY_SCHEMA).catch((e) => console.warn("[market-rate] history schema:", e.message));

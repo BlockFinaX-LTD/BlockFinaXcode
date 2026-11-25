@@ -12,7 +12,8 @@
  *   6. too few sources left: no rate (the caller keeps the last good one).
  */
 
-export type SourceKind = "exchange" | "p2p" | "composite";
+/** dealer: a platform that quotes its own buy and sell prices to customers, with no public volume. */
+export type SourceKind = "exchange" | "p2p" | "composite" | "dealer";
 
 export interface SourceQuote {
   source: string;
@@ -65,9 +66,12 @@ export function midOf(bid: number | null, ask: number | null): number | null {
   return (bid + ask) / 2;
 }
 
-/** Median of the middle of a list of P2P advert prices, ignoring the extremes. */
-export function advertsMid(prices: number[], keep = 5): number | null {
-  const xs = prices.filter((p) => p > 0).sort((a, b) => a - b);
+/**
+ * Median of the best few P2P advert prices on one side: the cheapest sellers (ask) or the
+ * highest buyers (bid), so stray far-off adverts are ignored.
+ */
+export function advertsMid(prices: number[], keep = 5, side: "ask" | "bid" = "ask"): number | null {
+  const xs = prices.filter((p) => p > 0).sort((a, b) => (side === "bid" ? b - a : a - b));
   if (!xs.length) return null;
   const take = xs.slice(0, Math.max(1, Math.min(keep, xs.length)));
   return median(take);
@@ -83,6 +87,7 @@ export function median(xs: number[]): number {
 export function activityWeight(q: SourceQuote): number {
   if (q.kind === "exchange") return q.volumeUsd && q.volumeUsd > 0 ? Math.sqrt(q.volumeUsd) : 0;
   if (q.kind === "p2p") return q.ads && q.ads > 0 ? Math.sqrt(q.ads) * 10 : 0;
+  if (q.kind === "dealer") return 150; // one platform's own quotes: counted, but below a composite
   return 300; // a published composite of many providers
 }
 

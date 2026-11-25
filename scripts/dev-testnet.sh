@@ -22,5 +22,7 @@ exec railway run -e testnet -s blockfinax-testnet -- env \
   PASSKEY_RP_ID=localhost \
   PASSKEY_RELATED_ORIGINS= \
   PORT=5173 \
+  MONIERATE=off \
+  MARKET_HISTORY=off \
   NODE_OPTIONS='--dns-result-order=ipv4first --no-network-family-autoselection' \
   npm run dev
