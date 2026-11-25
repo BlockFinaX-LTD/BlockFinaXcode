@@ -525,3 +525,16 @@
 .px-share-btns button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .px-share-btns .px-pcard-close { margin: 0; }
 @media (max-width: 860px) { .px-share-img img { max-width: 300px; } }
+
+/* Perp names (USDCGHS-PERP) never break across lines; smaller where space is tight. */
+.px-menu-h, .px-menu-row { grid-template-columns: minmax(max-content, 1.8fr) 1fr 0.8fr 0.9fr; }
+.px-mm { gap: 7px; min-width: 0; }
+.px-mm b { white-space: nowrap; font-size: 13px; letter-spacing: -0.01em; }
+.px-mm small { white-space: nowrap; font-size: 11.5px; }
+.px-mm .bx-flag { width: 22px; height: 22px; flex: none; }
+.px-sym { white-space: nowrap; }
+@media (max-width: 860px) {
+  .px-mm b { font-size: 12.5px; }
+  .px-menu-h, .px-menu-row { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  .px-sym { font-size: 15px !important; }
+}
