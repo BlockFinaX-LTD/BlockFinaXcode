@@ -146,6 +146,16 @@ export async function finishEmailSignIn(email: string, requestId: string, code: 
   return currentPasskeySession();
 }
 
+/**
+ * Testnet demo invitation: the invitation link starts a session in place of the email code.
+ * The reviewer then creates their own wallet passkey, as any new user does.
+ */
+export async function acceptDemoInvite(inviteToken: string): Promise<PasskeySession | null> {
+  const { sessionToken } = await api<{ sessionToken: string }>(`/api/demo/invites/${encodeURIComponent(inviteToken)}/accept`, {});
+  storeSessionToken(sessionToken);
+  return currentPasskeySession();
+}
+
 /** Google sign-in starts on the server and returns to /auth/google/done#token=... */
 export function startGoogleSignIn() {
   window.location.assign("/api/auth/google/start");

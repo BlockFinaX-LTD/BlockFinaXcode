@@ -337,6 +337,10 @@ export function registerPasskeyWalletRoutes(app: Express) {
       credential: { id: passkey.credentialId, publicKey: new Uint8Array(Buffer.from(passkey.publicKey, "base64")), counter: passkey.counter, transports: JSON.parse(passkey.transports) },
     });
     if (!result.verified) throw httpError(401, "Passkey verification failed");
+    // Testnet demo accounts sign in only while their invitation is open (always yes otherwise).
+    const { demoAccessAllowed } = await import("../demo-invites/service");
+    const { pool: rawPool } = await import("../db");
+    if (!(await demoAccessAllowed(rawPool as any, passkey.userId))) throw httpError(403, "This demo access has ended. Ask the BlockFinaX team for a new invitation.");
     await db.update(walletPasskeys).set({ counter: result.authenticationInfo.newCounter }).where(eq(walletPasskeys.id, passkey.id));
     const sessionToken = await createSession(passkey.userId, undefined, PASSKEY_SESSION_HOURS);
     const [user] = await db.select().from(userAccounts).where(eq(userAccounts.id, passkey.userId));

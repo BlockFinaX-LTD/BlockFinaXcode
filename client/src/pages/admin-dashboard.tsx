@@ -22,6 +22,7 @@ import {
   Radar,
   FileCode2,
   ShieldCheck,
+  Link2,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
@@ -37,6 +38,7 @@ import { InternalDocsSection } from "@/components/admin/internal-docs-section";
 import { SecurityChecksSection } from "@/components/admin/security-checks-section";
 
 import { DocumentsSection } from "@/components/admin/documents-section";
+import { DemoInvitesSection } from "@/components/admin/demo-invites-section";
 
 const AdminTokenContext = createContext<{ token: string; logout: () => void }>({ token: "", logout: () => {} });
 function useAdminToken() { return useContext(AdminTokenContext); }
@@ -51,11 +53,12 @@ async function adminFetch(url: string, token: string, options?: RequestInit) {
   return res;
 }
 
-type Section = "docs" | "dashboard" | "accounts" | "agent" | "compliance" | "records" | "connectors" | "otc" | "xsignals" | "devdocs" | "security" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
+type Section = "docs" | "dashboard" | "accounts" | "invites" | "agent" | "compliance" | "records" | "connectors" | "otc" | "xsignals" | "devdocs" | "security" | "users" | "hedge" | "revenue" | "tasks" | "analytics" | "content" | "agreements" | "protocol";
 
 const NAV_ITEMS: { key: Section; label: string; icon: any }[] = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   { key: "accounts", label: "Accounts", icon: Users },
+  { key: "invites", label: "Invitations", icon: Link2 },
   { key: "agent", label: "Agent", icon: Bot },
   { key: "compliance", label: "Compliance", icon: Scale },
   { key: "records", label: "Records", icon: FileSignature },
@@ -2955,6 +2958,7 @@ function AdminLayout({
         {section === "compliance" && <ComplianceSection token={adminToken} />}
         {section === "records" && <RecordsSection token={adminToken} />}
         {section === "accounts" && <AccountsSection token={adminToken} />}
+        {section === "invites" && <DemoInvitesSection token={adminToken} />}
         {section === "connectors" && <ConnectorsSection token={adminToken} />}
         {section === "otc" && <OtcSection token={adminToken} />}
         {section === "xsignals" && <XSignalsSection token={adminToken} />}

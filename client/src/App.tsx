@@ -35,6 +35,7 @@ import Auth from "@/pages/auth";
 // Core features
 import Hedge from "@/pages/hedge";
 import { OrganisationInviteLanding } from "@/components/v2/organisation-card";
+import DemoInvitePage from "@/pages/demo-invite";
 
 // Admin
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -203,6 +204,8 @@ function Router() {
       ))}
       <Route path="/hedge" component={Hedge} />
       <Route path="/organisations/invite" component={OrganisationInviteLanding} />
+      {/* Testnet invitation links for outside reviewers (the server answers only on testnet). */}
+      <Route path="/invite/:token" component={DemoInvitePage} />
 
       {/* Admin */}
       <Route path="/admin" component={AdminDashboard} />
@@ -227,7 +230,7 @@ function FinaxMount() {
   const { isAuthenticated } = useIdentity();
   const [location] = useLocation();
 
-  const hidden = ["/admin", "/auth", "/sign/", "/connector"].some((p) => location.startsWith(p));
+  const hidden = ["/admin", "/auth", "/sign/", "/connector", "/invite/"].some((p) => location.startsWith(p));
   if (hidden || isWalletSandbox || isConnectorHost) return null;
 
   const inApp = PROTECTED_ROUTES.some((p) => location === p || location.startsWith(p + "/"));

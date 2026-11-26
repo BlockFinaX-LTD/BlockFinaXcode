@@ -33,6 +33,7 @@ import { registerPricingRoutes } from "./routes/pricing";
 import { registerV2Routes } from "./routes/v2";
 import { registerRateOracleRoutes } from "./routes/rate-oracle";
 import { registerPasskeyWalletRoutes } from "./wallet/passkey-routes";
+import { registerDemoInviteRoutes } from "./demo-invites/routes";
 import { registerOrganisationRoutes } from "./organisations/routes";
 import { registerLegalRoutes } from "./legal/routes";
 import { registerRecordsRoutes } from "./records/routes";
@@ -79,6 +80,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerV2Routes(app);
   registerRateOracleRoutes(app);
   registerPasskeyWalletRoutes(app);
+  // Testnet only: invitation links for outside reviewers (registers nothing elsewhere).
+  registerDemoInviteRoutes(app);
   registerOrganisationRoutes(app);
   registerLegalRoutes(app);
   registerRecordsRoutes(app);
