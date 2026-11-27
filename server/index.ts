@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
+import { randomBytes } from "node:crypto";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
@@ -106,12 +107,17 @@ if (isProd && CANONICAL_HOST) {
     next();
   });
 }
+// A fresh nonce for every response: index.html carries it (server/vite.ts), and only scripts
+// with it may run inline. TradingView's chart frame uses it for its own small inline scripts.
+app.use((_req, res, next) => { res.locals.cspNonce = randomBytes(16).toString("base64"); next(); });
 app.use(helmet({
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc:     ["'self'"],
       // Google sign-in scripts.
-      scriptSrc:      ["'self'", "https://accounts.google.com", "https://apis.google.com"],
+      scriptSrc:      ["'self'", "https://accounts.google.com", "https://apis.google.com", (_req: any, res: any) => `'nonce-${res.locals.cspNonce}'`],
+      // TradingView's chart starts background workers from blob: URLs it creates itself.
+      workerSrc:      ["'self'", "blob:"],
       // style-src needs Google Fonts because index.html loads Inter + Geist
       // Mono from fonts.googleapis.com. Without it the page renders with
       // system fonts and the stylesheet is blocked.
@@ -166,6 +172,8 @@ app.use(helmet({
         "https://res.cloudinary.com",
       ],
       frameSrc: [
+        // TradingView draws its chart in a frame from our own site.
+        "'self'",
         "https://accounts.google.com",
         // WalletConnect's verification prompt is embedded by the Reown modal.
         "https://verify.walletconnect.org",

@@ -122,10 +122,14 @@ export function serveStatic(app: Express) {
    * derived from size and mtime, and a rebuild that happens to produce the
    * same length gives the same validator.
    */
+  // The page carries this response's CSP nonce (see server/index.ts), so its inline script runs.
+  let indexHtml: string | null = null;
   app.use("*", (_req, res) => {
     res.setHeader("Cache-Control", "no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.removeHeader("ETag");
-    res.sendFile(path.resolve(distPath, "index.html"));
+    indexHtml ??= fs.readFileSync(path.resolve(distPath, "index.html"), "utf8");
+    const nonce = String(res.locals.cspNonce ?? "");
+    res.type("html").send(indexHtml.replace(/__CSP_NONCE__/g, nonce));
   });
 }
