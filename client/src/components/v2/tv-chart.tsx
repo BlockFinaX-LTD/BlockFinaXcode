@@ -87,6 +87,20 @@ function datafeed(symbols: TvSymbol[]) {
   };
 }
 
+/** Blend two #rrggbb colours: `share` of `a` over `b`. Anything else comes back as `b`. */
+function mix(a: string, b: string, share: number): string {
+  const p = (h: string) => (/^#([0-9a-f]{6})$/i.test(h) ? [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) : null);
+  const x = p(a), y = p(b);
+  if (!x || !y) return b;
+  return "#" + x.map((v, i) => Math.round(v * share + y[i] * (1 - share)).toString(16).padStart(2, "0")).join("");
+}
+const rgba = (hex: string, alpha: number) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
+
 /** The app's colour tokens, read from the element so light and dark both match. */
 function tokens(el: HTMLElement) {
   const s = getComputedStyle(el);
@@ -132,8 +146,10 @@ export function TvChart({ symbols, symbol, interval = "1D", height = "100%" }: {
         // Drawing tools open on wide screens; on a phone they stay one tap away.
         enabled_features: el.clientWidth < 600 ? ["hide_left_toolbar_by_default"] : [],
         overrides: {
-          "paneProperties.background": t.panel,
-          "paneProperties.backgroundType": "solid",
+          // The BlockFinaX background: a faint blue at the top fading into the panel colour.
+          "paneProperties.backgroundType": "gradient",
+          "paneProperties.backgroundGradientStartColor": mix(t.blue, t.panel, dark ? 0.06 : 0.04),
+          "paneProperties.backgroundGradientEndColor": t.panel,
           "paneProperties.vertGridProperties.color": t.line,
           "paneProperties.horzGridProperties.color": t.line,
           "scalesProperties.textColor": t.muted,
@@ -146,6 +162,19 @@ export function TvChart({ symbols, symbol, interval = "1D", height = "100%" }: {
         },
       });
       widget.current = w;
+      // The BlockFinaX watermark behind the candles, with the market's name under it.
+      w.onChartReady(() => {
+        try {
+          const wm = w.watermark();
+          wm.color().setValue(rgba(t.blue, dark ? 0.09 : 0.07));
+          wm.setContentProvider((data: { symbolInfo?: { description?: string } }) => [
+            { text: "BlockFinaX", fontSize: el.clientWidth < 600 ? 48 : 84, lineHeight: el.clientWidth < 600 ? 56 : 96, vertOffset: 0 },
+            { text: data.symbolInfo?.description ?? "", fontSize: el.clientWidth < 600 ? 13 : 16, lineHeight: 22, vertOffset: 0 },
+          ]);
+          wm.visibility().setValue(true);
+          wm.customVisibility().setValue(true);
+        } catch { /* an older library without the watermark API: the chart still works */ }
+      });
     });
     return () => { disposed = true; try { widget.current?.remove(); } catch { /* already gone */ } widget.current = null; };
     // The widget is rebuilt when the market list or theme changes; symbol changes go through setSymbol below.
