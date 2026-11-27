@@ -172,8 +172,10 @@ app.use(helmet({
         "https://res.cloudinary.com",
       ],
       frameSrc: [
-        // TradingView draws its chart in a frame from our own site.
+        // TradingView draws its chart in a frame from our own site, built as a blob: page by
+        // the library itself (only code already running on our page can create one).
         "'self'",
+        "blob:",
         "https://accounts.google.com",
         // WalletConnect's verification prompt is embedded by the Reown modal.
         "https://verify.walletconnect.org",
