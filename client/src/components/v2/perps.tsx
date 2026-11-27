@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CandlestickChart, ChevronDown, ChevronRight, Download, Equal, KeyRound, Minus, MoveUpRight, Share2, ShieldCheck, Slash, Trash2, Type, X } from 'lucide-react';
 import { drawShareCard } from './share-card';
+import { TvChart, useTradingView, type TvSymbol } from './tv-chart';
 import { CandleType, LineType, TooltipShowRule, dispose, init, type Chart as KChart, type KLineData } from 'klinecharts';
 import { Keypair } from '@stellar/stellar-sdk';
 import { useToast } from '@/hooks/use-toast';
@@ -115,7 +116,7 @@ export function PerpsPage() {
     <div className={`px-wrap${showChart ? ' px-chartmode' : ''}`}>
       <MarketBar markets={markets.data?.markets ?? []} market={market} onPick={setMarketId} chartOpen={showChart} onChart={() => setShowChart(!showChart)} onFunding={() => setShowFunding(true)} />
       <div className="px-grid">
-        <section className={`px-panel px-chart ${showChart ? '' : 'px-hide-sm'}`}><Chart market={market} /></section>
+        <section className={`px-panel px-chart ${showChart ? '' : 'px-hide-sm'}`}><Chart market={market} markets={markets.data?.markets ?? []} /></section>
         <section className="px-panel px-book">
           <BookPanel market={market} book={book.data} onPrice={setPriceClick} showTrades={false} onFunding={() => setShowFunding(true)} />
         </section>
@@ -233,7 +234,23 @@ const alpha = (hex: string, a: number) => {
  * Candle chart (KLineChart, open source) that fills its panel: drag to move, scroll or pinch to
  * zoom. Indicators and drawing tools on our own candles. Colours follow the app's theme tokens.
  */
-function Chart({ market }: { market: MarketView }) {
+/**
+ * The Trade chart: TradingView Advanced Charts when the library is deployed (full drawing tools
+ * and indicators on our own candles), otherwise the built-in chart below.
+ */
+function Chart({ market, markets }: { market: MarketView; markets: MarketView[] }) {
+  const tv = useTradingView();
+  const symbols = useMemo<TvSymbol[]>(() => markets.map((m) => ({
+    name: perpSymbol(m.pair), description: `${pairLabel(m.pair)} perpetual`, decimals: m.decimals,
+    candles: (minutes: number) => `/api/perps/markets/${m.id}/candles?i=${minutes}`,
+  })), [markets.map((m) => `${m.id}:${m.decimals}`).join(',')]);
+  if (tv === null) return <div className="px-chart-in"><div className="bx-empty"><Spin /> Loading chart...</div></div>;
+  if (tv && symbols.length) return <div className="px-chart-in px-chart-tv"><TvChart symbols={symbols} symbol={perpSymbol(market.pair)} interval="1D" /></div>;
+  return <KlineChart market={market} />;
+}
+
+/** The built-in chart (KLineChart), used where TradingView's library is not deployed. */
+function KlineChart({ market }: { market: MarketView }) {
   const [interval, setIntervalMin] = useState(1440);
   const candles = useQuery({ queryKey: ['perps-candles', market.id, interval], queryFn: () => api<{ candles: Candle[]; source?: 'market' | 'mark' | 'official' }>(`/api/perps/markets/${market.id}/candles?i=${interval}`), refetchInterval: interval > 0 && interval < 1440 ? 5_000 : 15_000 });
   const box = useRef<HTMLDivElement>(null);

@@ -538,3 +538,9 @@
   .px-menu-h, .px-menu-row { gap: 6px; padding-left: 8px; padding-right: 8px; }
   .px-sym { font-size: 15px !important; }
 }
+
+/* TradingView chart fills the chart panel; it brings its own toolbars. */
+.px-chart-tv { padding: 0 !important; }
+.px-chart-tv { height: 520px; }
+.px-chart-tv .px-tv { height: 100% !important; }
+@media (max-width: 860px) { .px-chart-tv { height: 420px; } }

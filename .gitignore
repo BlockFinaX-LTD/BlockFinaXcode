@@ -104,3 +104,6 @@ BlockFinaX-Audit-V2-Report.html
 /tmp/sandbox/
 t.mts
 amschel_photo.jpeg
+
+# TradingView Advanced Charts: licensed, private; downloaded at build time (scripts/fetch-charting-library.sh)
+client/public/charting_library/
