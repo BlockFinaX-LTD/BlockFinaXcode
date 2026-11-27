@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/wallets/passkey-wallet";
+import logoPath from "@/assets/logo-mark.png";
 
 type TV = any;
 let loading: Promise<TV | false> | null = null;
@@ -167,8 +168,9 @@ export function TvChart({ symbols, symbol, interval = "1D", height = "100%" }: {
         try {
           const wm = w.watermark();
           wm.color().setValue(rgba(t.blue, dark ? 0.09 : 0.07));
+          // The logo and name are drawn by the overlay below; the chart adds the market under them.
           wm.setContentProvider((data: { symbolInfo?: { description?: string } }) => [
-            { text: "BlockFinaX", fontSize: el.clientWidth < 600 ? 48 : 84, lineHeight: el.clientWidth < 600 ? 56 : 96, vertOffset: 0 },
+            { text: " ", fontSize: el.clientWidth < 600 ? 48 : 84, lineHeight: el.clientWidth < 600 ? 64 : 104, vertOffset: 0 },
             { text: data.symbolInfo?.description ?? "", fontSize: el.clientWidth < 600 ? 13 : 16, lineHeight: 22, vertOffset: 0 },
           ]);
           wm.visibility().setValue(true);
@@ -188,5 +190,11 @@ export function TvChart({ symbols, symbol, interval = "1D", height = "100%" }: {
     try { w.onChartReady(() => w.activeChart().setSymbol(symbol)); } catch { /* not ready yet: the next build uses it */ }
   }, [symbol]);
 
-  return <div ref={box} className="px-tv" style={{ width: "100%", height }} />;
+  return (
+    <div className="px-tv-wrap" style={{ width: "100%", height }}>
+      <div ref={box} className="px-tv" style={{ width: "100%", height: "100%" }} />
+      {/* The BlockFinaX mark, faint over the plot area like the old chart; clicks pass through. */}
+      <div className="px-tv-mark" aria-hidden="true"><img src={logoPath} alt="" /><span>BlockFinaX</span></div>
+    </div>
+  );
 }
