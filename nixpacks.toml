@@ -1,3 +1,8 @@
+[phases.setup]
+# git and ssh: the build downloads the licensed chart library from a private repository
+# with a read-only deploy key (scripts/fetch-charting-library.sh). "..." keeps the defaults.
+nixPkgs = ["...", "git", "openssh"]
+
 [phases.install]
 cmds = ["npm install --legacy-peer-deps"]
 

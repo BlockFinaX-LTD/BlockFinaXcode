@@ -34,6 +34,10 @@ install_from() {
 
 DONE=""
 # 1. Deploy key over SSH, checked against GitHub's published host key.
+if [ -n "${CHARTING_LIBRARY_DEPLOY_KEY:-}" ]; then
+  command -v git >/dev/null 2>&1 || echo "[charting-library] git is not installed in this build"
+  command -v ssh >/dev/null 2>&1 || echo "[charting-library] ssh is not installed in this build"
+fi
 if [ -n "${CHARTING_LIBRARY_DEPLOY_KEY:-}" ] && command -v git >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
   printf '%s' "$CHARTING_LIBRARY_DEPLOY_KEY" | base64 -d > "$TMP/key" 2>/dev/null && chmod 600 "$TMP/key"
   printf 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n' > "$TMP/known_hosts"
